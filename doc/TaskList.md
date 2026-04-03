@@ -1,5 +1,32 @@
 # 📋 开发任务列表（Task List）
 
+## Phase 0：运行闭环 MVP（3-7 天）
+
+> 目标：先跑通“盘前建议 + 盘后考核复盘”的日常闭环（可手动、可配置定时），再逐步完善爬虫与策略反推能力。
+
+
+### Config & Contracts（配置与数据契约）
+- [x] P0-101 定义配置文件规范（建议 YAML）：timezone、schedule.*、evaluation.*、traders[]、llm.*
+- [x] P0-102 实现配置加载与优先级（文件 < 环境变量 < DB覆盖(可选) < 手动触发参数）
+- [x] P0-103 定义并实现 Pydantic 契约：DataRequest/DataResponse、TradeIdea、EvaluationRequest/EvaluationResult、DailyReport
+- [x] P0-104 定义幂等键与重复运行策略（同日重复运行不重复入库）
+
+
+### Orchestration（编排与调度）
+- [x] P0-105 实现 ManagerAgent 最小编排：run_pre_market / run_after_close（先 CLI 手动触发）
+- [x] P0-106 实现轻量 scheduler（建议 APScheduler）：按 schedule.* 定时触发 Manager
+- [x] P0-107 实现 DataAgent 最小能力（例如：行情 OHLCV + 常用指标）；缺能力返回 capability_missing
+- [x] P0-108 实现 1 个 TraderAgent 样本：请求数据 -> 输出结构化 TradeIdea -> 上报 Manager
+- [x] P0-109 实现 Task 机制：capability_missing 自动生成 agent_tasks 待办
+
+
+### Reporting（报告最小闭环）
+- [x] P0-110 生成盘前日报（DailyReport）
+- [x] P0-111 生成盘后考核报告（EvaluationResult 汇总）
+- [x] P0-V01 Phase 0 验收：手动触发可完成“盘前日报 + 盘后考核”，未配置 schedule 不自动跑
+
+---
+
 ## Phase 1：数据层（2-3 周）
 
 ### Data Architecture (数据架构)
@@ -16,12 +43,19 @@
 - [ ] P1-005 集成 Nginx + Proxy 池实现反爬虫防护
 - [ ] P1-006 建立爬虫错误重试和日志机制
 
+补充（面向增量更新的必须项）：
+- [ ] P1-006A 建立“按交易员来源配置”的增量抓取机制（last_seen + content_hash/URL 去重）
+- [ ] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（可异步）
+
 ### Trade Log Parser (交易记录解析)
 - [ ] P1-007 定义交易记录 Schema（时间、标的、方向、价格、仓位）
 - [ ] P1-008 开发 HTML/Table 交易记录解析器
 - [ ] P1-009 开发 PDF 交易记录解析器
 - [ ] P1-010 实现交易数据验证（重复、冲突、缺失）
 - [ ] P1-011 建立交易数据导入流程（CSV/Excel 支持）
+
+补充（多交易员绑定）：
+- [ ] P1-011A 增加 trader_id/account_id 绑定策略（导入时能归属到 TraderAgent）
 
 ### Market Data Integration (市场数据接入)
 - [ ] P1-012 集成股票 K线数据源（TuShare / AKShare）
@@ -51,6 +85,10 @@
 - [ ] P1-030 实现市场数据查询接口
 - [ ] P1-031 实现数据导出接口（CSV/JSON/Parquet）
 
+补充（运行闭环接口）：
+- [ ] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
+- [ ] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告
+
 ### Phase 1 Verification (验收检查)
 - [ ] P1-V01 单元测试覆盖率 >80%
 - [ ] P1-V02 爬虫成功率 >95%，数据缺失率 <5%
@@ -61,6 +99,21 @@
 ---
 
 ## Phase 2：认知与行为建模（2-3 周）
+
+> 更新：Phase 2 优先服务于 TraderAgent 画像与建议生成；原 Knowledge/Behavior 任务仍保留，但可以分批落地。
+
+### TraderAgent（交易员画像与建议生成，新增核心）
+- [ ] P2-101 定义 traders 配置结构（trader_id、display_name、article_sources、trade_log_sources）
+- [ ] P2-102 实现 Trader 画像（文章 + 交易记录 → 风格/纪律/偏好标签）
+- [ ] P2-103 实现 Trader 记忆存储结构（成功/失败案例、复盘结论，可检索）
+- [ ] P2-104 实现盘前 TradeIdea 生成（结构化输出 + 校验）
+- [ ] P2-105 实现复盘任务处理：接收 EvaluationRequest，输出复盘结论并写回记忆
+
+### ManagerAgent（日常汇总与编排，新增核心）
+- [ ] P2-106 实现 TradeIdea 收集与去重/冲突处理
+- [ ] P2-107 生成盘前汇总日报（DailyReport）
+- [ ] P2-108 盘后触发评估：拉取最新行情并计算建议收益（含 MFE/MAE 口径定义）
+- [ ] P2-109 阈值触发复盘：evaluation.* 配置化
 
 ### Knowledge Agent - 文章理解 (NLP & 策略提取)
 - [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
@@ -103,6 +156,17 @@
 ---
 
 ## Phase 3：策略对齐（⭐ 核心，2 周）
+
+> 更新：Phase 3 分两条线并行：
+> 1）面向日常系统的“建议考核与复盘闭环”
+> 2）面向策略反推的“文章策略 vs 行为”对齐（原计划保留）
+
+### Daily Evaluation（建议考核与复盘闭环，新增核心）
+- [ ] P3-101 定义建议考核指标口径（收益率、触发止损/止盈、最大不利波动等）
+- [ ] P3-102 实现盘后建议评分与汇总报告（EvaluationResult + 总结）
+- [ ] P3-103 实现不达标/亏损的复盘任务生成与追踪
+- [ ] P3-104 将复盘结论写回 Trader 记忆，并在下一次生成中显式引用
+- [ ] P3-V01 验收：连续运行 5-20 天回放数据能稳定产生“日报 + 考核 + 复盘”
 
 ### Alignment Analysis Framework (对齐分析框架)
 - [ ] P3-001 定义规则匹配评分算法 `rule_match_score()`

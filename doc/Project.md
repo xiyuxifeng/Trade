@@ -2,6 +2,10 @@
 
 ## 项目名称：`trade-strategy-ai`
 
+本项目将同时支持两种运行形态（共享同一套核心应用层，避免逻辑分叉）：
+- 交互式模式：通过 CLI/脚本手动触发盘前/盘后任务，便于快速迭代
+- 长期运行模式：作为独立程序运行（FastAPI + scheduler/worker），按配置定时自动跑批
+
 ---
 
 ## 一、项目目录结构
@@ -22,6 +26,12 @@ trade-strategy-ai/
 │   ├── database.py                    # 数据库连接配置
 │   ├── redis.py                       # Redis 缓存配置
 │   └── logging.py                     # 日志配置
+│
+├── doc/                               # 项目文档（需求/计划/任务）
+│   ├── 需求.md
+│   ├── Plan.md
+│   ├── Project.md
+│   └── TaskList.md
 │
 ├── src/                               # 核心源码
 │   ├── __init__.py
@@ -74,6 +84,15 @@ trade-strategy-ai/
 │   │   ├── base.py                    # Agent 基类
 │   │   ├── registry.py                # Agent 注册与发现
 │   │   ├── coordinator.py             # 多 Agent 调度协调器
+│   │   │
+│   │   ├── manager_agent/              # 🧾 Manager Agent（编排/汇总/考核/复盘）
+│   │   │   ├── __init__.py
+│   │   │   └── agent.py
+│   │   │
+│   │   ├── trader_agent/               # 👤 Trader Agent（每交易员独立画像/记忆/建议）
+│   │   │   ├── __init__.py
+│   │   │   ├── agent.py
+│   │   │   └── templates/              # 交易员提示词模板/策略偏好模板（可选）
 │   │   │
 │   │   ├── data_agent/                # 📦 Data Agent（数据采集）
 │   │   │   ├── __init__.py
@@ -258,7 +277,7 @@ trade-strategy-ai/
 │   └── samples/                       # 样本数据（可提交）
 │       ├── sample_blog.json
 │       ├── sample_trades.csv
-│       └── sample_market.parquet
+
 │
 ├── docs/                              # 项目文档
 │   ├── architecture.md                # 架构设计文档
@@ -296,29 +315,48 @@ trade-strategy-ai/
 
 ---
 
-## 二、核心模块说明
+  ## 二、关键设计约定（面向新需求）
 
-### 2.1 Agent 层（`src/agents/`）
+  ### 1）配置驱动（不写死）
+  盘前/盘后时间、收益阈值等关键参数必须来自配置（建议 YAML + 环境变量覆盖），例如：
+  - `schedule.enable`
+  - `schedule.pre_market_time`
+  - `schedule.after_close_time`
+  - `evaluation.min_expected_return`
+
+  ### 2）DataAgent 以 skills 扩展能力
+  DataAgent 对外提供统一的 DataRequest/DataResponse 接口，内部通过 skills 注册表路由到具体数据能力；当能力缺失时返回 `capability_missing`，由 Manager 记录为待办任务。
+
+  ### 3）日常运行闭环产物
+  系统将产生两类核心产物（建议落库）：
+  - 盘前：Trader 的 TradeIdea + Manager 的 DailyReport
+  - 盘后：EvaluationResult + 触发的复盘报告（写回 Trader 记忆）
+
+  ---
+
+  ## 三、核心模块说明
+
+### 3.1 Agent 层（`src/agents/`）
 
 所有 Agent 继承自 `base.py` 中的 `BaseAgent`，统一接口：
 
 ```python
 class BaseAgent:
     """Agent 基类"""
-    
+
     def __init__(self, name: str, config: AgentConfig):
         self.name = name
         self.config = config
         self.skills: dict[str, Skill] = {}
-    
+
     async def execute(self, task: Task) -> Result:
         """执行任务的入口方法"""
         ...
-    
+
     def register_skill(self, skill: Skill):
         """注册技能"""
         ...
-    
+
     async def call_skill(self, skill_name: str, **kwargs) -> Any:
         """调用指定技能"""
         ...
@@ -336,7 +374,7 @@ class BaseAgent:
 | Risk Agent | `risk_agent/` | 风险控制 | `position_sizing`, `stop_loss`, `drawdown_control` |
 | Backtest Agent | `backtest_agent/` | 策略回测验证 | `run_backtest`, `evaluate_metrics`, `parameter_search` |
 
-### 2.2 DSL 引擎（`src/dsl/`）
+### 3.2 DSL 引擎（`src/dsl/`）
 
 策略 DSL（Domain Specific Language）用于将自然语言策略描述转换为可执行的交易规则。
 

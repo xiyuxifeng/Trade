@@ -1,0 +1,1 @@
+"""Manager agent package."""

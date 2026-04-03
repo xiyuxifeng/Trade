@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 from datetime import date, datetime
 from pathlib import Path
 
@@ -15,6 +14,49 @@ from src.common.logger import configure_logging
 
 
 app = typer.Typer(add_completion=False)
+
+
+_DEFAULT_CONFIG_YAML = """timezone: Asia/Shanghai
+run_mode: interactive
+
+schedule:
+  enable: false
+  pre_market_time: "08:30"
+  after_close_time: "15:30"
+
+evaluation:
+  min_expected_return: 0.0
+  loss_trigger: true
+
+data:
+  providers: ["mock"]
+  mock_prices:
+    000001.SZ: 10.0
+    510300.SH: 3.5
+
+storage:
+  output_dir: data/processed/phase0
+
+llm:
+  provider: null
+  model: null
+  url: null
+  api_key: null
+
+traders:
+  - trader_id: trader_a
+    display_name: Trader A
+    article_sources:
+      urls: []
+      rss: []
+      site_type: null
+      crawl_frequency_minutes: null
+    trade_log_sources:
+      csv_paths: []
+    watchlist: ["000001.SZ", "510300.SH"]
+    default_target_pct: 0.05
+    default_stop_pct: 0.03
+"""
 
 
 def _parse_date(value: str | None) -> date:
@@ -38,16 +80,12 @@ def init_config(
 	),
 	force: bool = typer.Option(False, help="覆盖已存在文件"),
 ):
-	example = Path("config/app.example.yaml")
-	if not example.exists():
-		raise typer.Exit(code=2)
-
 	if dest.exists() and not force:
 		typer.echo(f"Config already exists: {dest}")
 		raise typer.Exit(code=1)
 
 	dest.parent.mkdir(parents=True, exist_ok=True)
-	shutil.copyfile(example, dest)
+	dest.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
 	typer.echo(f"Wrote config: {dest}")
 
 
@@ -56,6 +94,7 @@ def run_pre_market(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
 	as_of: str | None = typer.Option(None, help="日期 YYYY-MM-DD，默认今天"),
 	force: bool = typer.Option(False, help="强制重跑并覆盖输出"),
+	export_html: bool = typer.Option(False, help="同时导出 HTML 日报"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ):
 	configure_logging(log_level)
@@ -67,6 +106,9 @@ def run_pre_market(
 
 	report = asyncio.run(mgr.run_pre_market(as_of_date=as_of_date, force=force))
 	typer.echo(f"Daily report written. ideas={len(report.ideas)}")
+	if export_html:
+		html_path = mgr.export_daily_report_html(report=report)
+		typer.echo(f"Daily report HTML written: {html_path}")
 	typer.echo(f"Output dir: {mgr.output_dir}")
 
 
@@ -75,6 +117,7 @@ def run_after_close(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
 	as_of: str | None = typer.Option(None, help="日期 YYYY-MM-DD，默认今天"),
 	force: bool = typer.Option(False, help="强制重跑并覆盖输出"),
+	export_html: bool = typer.Option(False, help="同时导出 HTML 考核报告"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ):
 	configure_logging(log_level)
@@ -86,6 +129,9 @@ def run_after_close(
 
 	result = asyncio.run(mgr.run_after_close(as_of_date=as_of_date, force=force))
 	typer.echo(f"Evaluation written. items={len(result.evaluations)}")
+	if export_html:
+		html_path = mgr.export_evaluation_html(result=result)
+		typer.echo(f"Evaluation HTML written: {html_path}")
 	typer.echo(f"Output dir: {mgr.output_dir}")
 
 

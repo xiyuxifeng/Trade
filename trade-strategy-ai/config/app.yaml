@@ -3,19 +3,19 @@ run_mode: interactive
 
 schedule:
   enable: false
-  # 盘前/盘后时间必须通过 config 提供；未配置时不自动定时
+  # 盘前/盘后时间需通过 config 配置，未配置时不自动定时
   pre_market_time: "08:30"
   after_close_time: "15:30"
 
 evaluation:
-  # 收益率不达标阈值（例如 0.01 表示 1%）
+  # 收益率不达标阈值（如 0.01 表示 1%）
   min_expected_return: 0.0
   # 是否“亏损即触发复盘”
   loss_trigger: true
 
 data:
   providers: ["mock"]
-  # Phase 0：用 mock_prices 让系统可演示闭环（后续可接入 akshare/tushare 等）
+  # mock_prices 用于演示闭环，后续可接入 akshare/tushare 等
   mock_prices:
     000001.SZ: 10.0
     510300.SH: 3.5
@@ -26,6 +26,10 @@ storage:
 llm:
   provider: null
   model: null
+  # 第三方大模型 API Base URL（可选）。例如 OpenAI 兼容接口可配置为 https://api.openai.com/v1
+  url: null
+  # 大模型 API Key（建议通过环境变量注入；此处仅占位）
+  api_key: null
 
 traders:
   - trader_id: trader_a

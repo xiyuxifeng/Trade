@@ -16,6 +16,7 @@ from src.agents.trader_agent.agent import TraderAgent
 from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.utils import append_jsonl, ensure_dir, read_json, write_json
+from src.reporting.html_reports import write_daily_report_html, write_evaluation_html
 from src.schemas.contracts import (
 	AgentTask,
 	DailyReport,
@@ -37,11 +38,39 @@ class ManagerAgent:
 
 		self.data_agent = DataAgent(config=config)
 
+	def _templates_dir(self) -> Path:
+		# Keep template lookup relative to project root for both CLI and service runs.
+		return self.base_dir / "src" / "reporting" / "templates"
+
 	def _daily_report_path(self, as_of_date: date) -> Path:
 		return self.output_dir / f"daily_report_{as_of_date.isoformat()}.json"
 
+	def _daily_report_html_path(self, as_of_date: date) -> Path:
+		return self.output_dir / f"daily_report_{as_of_date.isoformat()}.html"
+
 	def _evaluation_path(self, as_of_date: date) -> Path:
 		return self.output_dir / f"evaluation_{as_of_date.isoformat()}.json"
+
+	def _evaluation_html_path(self, as_of_date: date) -> Path:
+		return self.output_dir / f"evaluation_{as_of_date.isoformat()}.html"
+
+	def export_daily_report_html(self, *, report: DailyReport) -> Path:
+		path = self._daily_report_html_path(report.as_of_date)
+		write_daily_report_html(
+			report=report,
+			templates_dir=self._templates_dir(),
+			dest_path=path,
+		)
+		return path
+
+	def export_evaluation_html(self, *, result: EvaluationResult) -> Path:
+		path = self._evaluation_html_path(result.as_of_date)
+		write_evaluation_html(
+			result=result,
+			templates_dir=self._templates_dir(),
+			dest_path=path,
+		)
+		return path
 
 	def _append_task(self, task: AgentTask) -> None:
 		append_jsonl(self.tasks_path, task.model_dump())

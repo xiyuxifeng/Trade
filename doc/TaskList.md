@@ -21,9 +21,12 @@
 
 
 ### Reporting（报告最小闭环）
-- [x] P0-110 生成盘前日报（DailyReport）
-- [x] P0-111 生成盘后考核报告（EvaluationResult 汇总）
-- [x] P0-V01 Phase 0 验收：手动触发可完成“盘前日报 + 盘后考核”，未配置 schedule 不自动跑
+ - [x] P0-110 生成盘前日报（DailyReport）
+ - [x] P0-111 生成盘后考核报告（EvaluationResult 汇总）
+ - [x] P0-112 输出每日分析报告（HTML）：DailyReport / EvaluationResult 渲染为静态 HTML 文件
+ - [x] P0-113 增加日报/考核 HTML 模板：`src/reporting/templates/daily_report.html`、`src/reporting/templates/evaluation.html`
+ - [x] P0-114 CLI 增加报告导出参数（可选）：运行盘前/盘后时同时生成 HTML 版本报告
+ - [x] P0-V01 Phase 0 验收：手动触发可完成“盘前日报 + 盘后考核”，未配置 schedule 不自动跑
 
 ---
 

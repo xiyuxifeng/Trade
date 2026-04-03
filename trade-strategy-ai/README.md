@@ -1,33 +1,15 @@
 # trade-strategy-ai
 
-面向“多交易员文章 + 交易记录”的多 Agent 交易研究与复盘系统。
+## 系统介绍
 
-Phase 0-3 的核心闭环：
-- 每个交易员对应一个独立 `TraderAgent`
-- `DataAgent` 通过可插拔 skills 提供数据能力（接口可持续增加）
-- `ManagerAgent` 负责盘前/盘后编排、汇总日报、盘后考核与复盘反馈写回
-- 盘前/盘后时间、收益阈值等关键参数全部通过 config 配置
+trade-strategy-ai 是一个面向“多交易员文章 + 交易记录”的多 Agent 交易研究与复盘系统。
 
-当前优先：不做自动下单，只做建议/报告/复盘闭环；无 GPU 场景通过第三方大模型 API（OpenAI/Anthropic 等）增强画像与总结。
+## 项目目标
 
-## Phase 0 快速开始
-
-前置：Python 3.11+。
-
-1）生成配置：
-
-```bash
-python -m cli.main init-config
-```
-
-2）手动触发盘前/盘后：
-
-```bash
-python -m cli.main run-pre-market --config config/app.yaml
-python -m cli.main run-after-close --config config/app.yaml
-```
-
-输出默认目录：`data/processed/phase0/`（由 `storage.output_dir` 配置）。
+1. 支持多交易员独立分析与复盘。
+2. 通过多智能体协作，实现自动化数据处理、策略分析与报告生成。
+3. 强化盘前/盘后总结、考核与反馈闭环。
+4. 兼容第三方大模型 API，提升智能分析能力。
 
 ## 配置键（节选）
 

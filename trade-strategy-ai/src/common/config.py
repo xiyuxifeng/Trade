@@ -56,6 +56,8 @@ class StorageConfig(BaseModel):
 class LLMConfig(BaseModel):
     provider: str | None = None  # openai/anthropic
     model: str | None = None
+    url: str | None = None
+    api_key: str | None = None
 
 
 class AppConfig(BaseModel):

@@ -45,9 +45,9 @@
   - EvaluationRequest/EvaluationResult
 
 ### 0.2 最小可运行编排
-- ManagerAgent：
-  - 手动触发 `run_pre_market()` 生成日报
-  - 手动触发 `run_after_close()` 生成考核与复盘任务
+ManagerAgent：
+  - 手动触发 `run_pre_market()` 生成日报，自动生成每日分析报告并支持HTML展示
+  - 手动触发 `run_after_close()` 生成考核与复盘任务，报告可通过HTML模板渲染，便于后续Web/静态浏览
 - DataAgent：
   - 先实现最小数据能力（例如行情 OHLCV + 常用指标），能力不足返回 `capability_missing`
 - TraderAgent（至少 1 个样本）：

@@ -44,7 +44,16 @@ dependencies = [
     # Phase 0
     "PyYAML>=6.0",
     "APScheduler>=3.10",
+    # Market data
+    "akshare>=1.12",
 ]
+
+[tool.hatch.build.targets.wheel]
+# Project uses a multi-package layout at repo root.
+packages = ["src", "cli", "api", "config"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/**", "cli/**", "api/**", "config/**", "pyproject.toml", "README.md"]
 
 [project.optional-dependencies]
 dev = [

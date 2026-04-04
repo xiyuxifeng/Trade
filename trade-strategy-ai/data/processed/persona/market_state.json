@@ -1,0 +1,20 @@
+{
+  "as_of_date": "2026-04-04",
+  "market": "CN",
+  "scope": "market",
+  "regime": "trend_down",
+  "volatility": "high",
+  "liquidity": "unknown",
+  "breadth": "unknown",
+  "event_risk": false,
+  "features": {
+    "symbol": "510300.SH",
+    "close": 4.454,
+    "ma20": 4.5723,
+    "ma60": 4.690383333333333,
+    "ma20_rising": false,
+    "ret5": -0.011978704525288486,
+    "vol20": 0.011331206797851339,
+    "vol_level": "high"
+  }
+}

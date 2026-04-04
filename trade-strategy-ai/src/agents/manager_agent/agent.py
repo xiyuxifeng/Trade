@@ -17,6 +17,10 @@ from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.utils import append_jsonl, ensure_dir, read_json, write_json
 from src.reporting.html_reports import write_daily_report_html, write_evaluation_html
+from src.persona.router import PersonaRouter
+from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
+from src.persona.schemas import InstrumentFocus, MarketState
+from src.persona.storage import load_persona_clusters_file
 from src.schemas.contracts import (
 	AgentTask,
 	DailyReport,
@@ -37,6 +41,47 @@ class ManagerAgent:
 		self.tasks_path = self.output_dir / "agent_tasks.jsonl"
 
 		self.data_agent = DataAgent(config=config)
+
+		self._persona_router: PersonaRouter | None = None
+		if getattr(self.config, "persona", None) is not None and self.config.persona.enable:
+			self._persona_router = PersonaRouter(top_k=max(1, int(self.config.persona.top_k)))
+
+	def _resolve_path(self, value: str | None) -> Path | None:
+		if not value:
+			return None
+		p = Path(value)
+		if p.is_absolute():
+			return p
+		return self.base_dir / p
+
+	def _guess_instrument_focus(self, symbol: str) -> InstrumentFocus:
+		# Heuristic for CN market. Keep it conservative.
+		code = symbol.split(".")[0]
+		if code.startswith(("110", "111", "112", "113", "118", "123", "127", "128")):
+			return InstrumentFocus.cb
+		if code.startswith(("51", "58", "56", "15")):
+			return InstrumentFocus.etf
+		return InstrumentFocus.stock
+
+	def _load_market_state(self, *, as_of_date: date) -> MarketState:
+		p = self._resolve_path(getattr(self.config.persona, "market_state_path", None))
+		if p and p.exists():
+			try:
+				return MarketState.model_validate(read_json(p))
+			except Exception:  # noqa: BLE001
+				self.logger.warning("persona.market_state_path invalid, using default", path=str(p))
+
+		# Phase 0.5: build from benchmark daily CSV (index/ETF)
+		bench_csv = self._resolve_path(getattr(self.config.persona, "market_state_benchmark_csv", None))
+		bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
+		if bench_csv and bench_csv.exists() and bench_symbol:
+			try:
+				src = DailySeriesSource(symbol=bench_symbol, csv_path=bench_csv)
+				df = load_daily_close_series(src)
+				return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
+			except Exception as exc:  # noqa: BLE001
+				self.logger.warning("failed to build MarketState from benchmark CSV", error=str(exc))
+		return MarketState(as_of_date=as_of_date)
 
 	def _templates_dir(self) -> Path:
 		# Keep template lookup relative to project root for both CLI and service runs.
@@ -107,6 +152,46 @@ class ManagerAgent:
 			ideas=ideas,
 			highlights=[f"Generated {len(ideas)} trade ideas"],
 		)
+
+		# Optional: persona style routing (Phase 1 MVP)
+		if self._persona_router and self.config.persona.clusters_path:
+			clusters_path = self._resolve_path(self.config.persona.clusters_path)
+			if clusters_path and clusters_path.exists():
+				clusters_file = load_persona_clusters_file(clusters_path)
+				market_state = self._load_market_state(as_of_date=as_of_date)
+				decisions = []
+				for idea in ideas:
+					clusters = clusters_file.clusters_by_trader.get(idea.trader_id, [])
+					if not clusters:
+						continue
+					decision = self._persona_router.route_symbol(
+						trader_id=idea.trader_id,
+						symbol=idea.symbol,
+						as_of_date=as_of_date,
+						instrument_focus=self._guess_instrument_focus(idea.symbol),
+						market_state=market_state,
+						clusters=clusters,
+					)
+					idea.style_cluster_id = decision.selected_cluster_id
+					idea.style_cluster_label = decision.selected_cluster_label
+					idea.style_score = decision.score
+					idea.style_reasons = list(decision.explanation.reasons or [])
+					decisions.append(decision.model_dump())
+
+				route_path = self.output_dir / f"persona_route_{as_of_date.isoformat()}.json"
+				write_json(
+					route_path,
+					{
+						"as_of_date": as_of_date.isoformat(),
+						"clusters_path": str(clusters_path),
+						"decisions": decisions,
+					},
+				)
+				report.highlights.append(
+					f"Persona router enabled: decisions={len(decisions)} clusters={clusters_path}"
+				)
+			else:
+				report.risks.append("persona.enable=true but clusters_path missing or not found")
 		write_json(report_path, report.model_dump())
 		return report
 

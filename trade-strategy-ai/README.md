@@ -21,4 +21,16 @@ trade-strategy-ai 是一个面向“多交易员文章 + 交易记录”的多 A
 - `traders[].watchlist`
 - `data.mock_prices`（Phase 0 演示用，后续可接入 akshare/tushare 等）
 
+Phase 0.5（Persona Router MVP，可选）：
+
+- `persona.enable`
+- `persona.clusters_path`
+- `persona.top_k`
+
+生成样例 clusters 文件：
+
+```bash
+python -m cli.main persona-init-sample --config config/app.yaml
+```
+
 文档入口：workspace 根目录 `doc/`。

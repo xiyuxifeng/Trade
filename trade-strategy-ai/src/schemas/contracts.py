@@ -60,6 +60,12 @@ class TradeIdea(BaseModel):
     invalidation: str | None = None
     confidence: float | None = None  # 0-1
 
+    # Persona routing (Phase 1+)
+    style_cluster_id: str | None = None
+    style_cluster_label: str | None = None
+    style_score: float | None = None
+    style_reasons: list[str] = Field(default_factory=list)
+
 
 class DailyReport(BaseModel):
     report_id: UUID = Field(default_factory=uuid4)

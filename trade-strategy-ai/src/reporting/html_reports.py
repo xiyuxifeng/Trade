@@ -39,10 +39,12 @@ def _load_template(*, templates_dir: Path, filename: str) -> str:
 def render_daily_report_html(*, report: DailyReport, templates_dir: Path) -> str:
 	ideas_rows: list[str] = []
 	for idea in report.ideas:
+		style = idea.style_cluster_label or idea.style_cluster_id or "-"
 		ideas_rows.append(
 			"<tr>"
 			+ f"<td>{escape(idea.trader_id)}</td>"
 			+ f"<td>{escape(idea.symbol)}</td>"
+			+ f"<td>{escape(style)}</td>"
 			+ f"<td>{escape(idea.side)}</td>"
 			+ f"<td>{escape(idea.entry.type)}</td>"
 			+ f"<td>{escape(_fmt_float(idea.entry.price))}</td>"

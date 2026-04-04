@@ -40,6 +40,14 @@ python -m cli.main init-config
 - `traders[].watchlist`
 - `data.mock_prices`（Phase 0 使用 mock price 让闭环可跑）
 
+可选（Phase 0.5：Persona Router MVP）：
+
+```bash
+python -m cli.main persona-init-sample --config config/app.yaml
+```
+
+然后把 `persona.enable` 改为 `true`（并确认 `persona.clusters_path` 指向生成的 clusters 文件）。
+
 3）手动跑盘前与盘后：
 
 ```bash

@@ -1,0 +1,159 @@
+{
+  "schema_version": "v0",
+  "generated_at": "2026-04-04 03:20:24.941894",
+  "clusters_by_trader": {
+    "trader_a": [
+      {
+        "cluster_id": "trader_a:etf_trend",
+        "label": "ETF 趋势突破",
+        "instrument_focus": "etf",
+        "applicability": {
+          "preferred_regimes": [
+            "trend_up",
+            "range"
+          ],
+          "volatility_preference": "unknown",
+          "liquidity_requirement": "unknown",
+          "timeframe_preference": "any"
+        },
+        "rules": [
+          {
+            "schema_version": "v0",
+            "claim_key": "entry.trigger",
+            "rule_type": "entry",
+            "instrument_focus": "etf",
+            "condition": {
+              "op": "trend_up"
+            },
+            "action": {
+              "type": "enter",
+              "side": "buy",
+              "order": "limit",
+              "price": {
+                "var": "close"
+              },
+              "params": {}
+            },
+            "params": {
+              "target_pct": 0.06,
+              "stop_pct": 0.03
+            },
+            "confidence": 0.6,
+            "source_url": null,
+            "quoted_text": null,
+            "published_at": "2026-04-04 03:20:24.941770"
+          }
+        ],
+        "preconditions": [],
+        "activity_score": 0.7,
+        "coherence_score": 0.6,
+        "confidence_score": 0.6,
+        "evidence_refs": []
+      },
+      {
+        "cluster_id": "trader_a:cb_mean_revert",
+        "label": "可转债 低吸均值回归",
+        "instrument_focus": "cb",
+        "applicability": {
+          "preferred_regimes": [
+            "range",
+            "panic"
+          ],
+          "volatility_preference": "unknown",
+          "liquidity_requirement": "unknown",
+          "timeframe_preference": "any"
+        },
+        "rules": [
+          {
+            "schema_version": "v0",
+            "claim_key": "entry.trigger",
+            "rule_type": "entry",
+            "instrument_focus": "cb",
+            "condition": {
+              "op": "pullback"
+            },
+            "action": {
+              "type": "enter",
+              "side": "buy",
+              "order": "limit",
+              "price": {
+                "var": "close"
+              },
+              "params": {}
+            },
+            "params": {
+              "target_pct": 0.08,
+              "stop_pct": 0.04
+            },
+            "confidence": 0.55,
+            "source_url": null,
+            "quoted_text": null,
+            "published_at": "2026-04-04 03:20:24.941827"
+          }
+        ],
+        "preconditions": [
+          {
+            "schema_version": "v0",
+            "claim_key": "filter.market_regime",
+            "instrument_focus": "cb",
+            "condition": {
+              "op": "range_or_panic"
+            },
+            "confidence": 0.5,
+            "source_url": null,
+            "quoted_text": null,
+            "published_at": "2026-04-04 03:20:24.941844"
+          }
+        ],
+        "activity_score": 0.6,
+        "coherence_score": 0.55,
+        "confidence_score": 0.55,
+        "evidence_refs": []
+      },
+      {
+        "cluster_id": "trader_a:stock_event",
+        "label": "A股 事件驱动",
+        "instrument_focus": "stock",
+        "applicability": {
+          "preferred_regimes": [
+            "trend_up",
+            "euphoria"
+          ],
+          "volatility_preference": "unknown",
+          "liquidity_requirement": "unknown",
+          "timeframe_preference": "any"
+        },
+        "rules": [
+          {
+            "schema_version": "v0",
+            "claim_key": "filter.event_risk",
+            "rule_type": "filter",
+            "instrument_focus": "stock",
+            "condition": {
+              "op": "event"
+            },
+            "action": {
+              "type": "filter",
+              "side": null,
+              "order": null,
+              "price": null,
+              "params": {
+                "allow": true
+              }
+            },
+            "params": {},
+            "confidence": 0.5,
+            "source_url": null,
+            "quoted_text": null,
+            "published_at": "2026-04-04 03:20:24.941875"
+          }
+        ],
+        "preconditions": [],
+        "activity_score": 0.5,
+        "coherence_score": 0.5,
+        "confidence_score": 0.5,
+        "evidence_refs": []
+      }
+    ]
+  }
+}

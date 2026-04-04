@@ -203,6 +203,17 @@ trade-strategy-ai/
 │       └── templates/                 # 报告 HTML 模板
 │           ├── alignment.html
 │           └── backtest.html
+
+│   ├── persona/                        # 🧬 Persona（多风格画像 + 路由）
+│   │   ├── schemas.py                  # strategy_rules/preconditions 标准 schema
+│   │   ├── claim_keys.py               # claim_key 字典
+│   │   ├── router.py                   # 收益导向风格路由
+│   │   ├── storage.py                  # clusters 文件读写
+│   │   └── sample.py                   # 未完成抽取前的样例 clusters 生成
+
+│   ├── host/                           # 🧩 宿主薄壳接口（Claude Code/Openclaw 预留）
+│   │   ├── contracts.py                # JSON 命令契约
+│   │   └── handler.py                  # 命令处理入口（稳定 JSON IO）
 │
 ├── api/                               # FastAPI Web 服务
 │   ├── __init__.py

@@ -60,6 +60,24 @@ class LLMConfig(BaseModel):
     api_key: str | None = None
 
 
+class PersonaConfig(BaseModel):
+    """Persona & style routing config.
+
+    Phase 0 can keep this disabled. When enabled, router will annotate TradeIdea
+    with selected style cluster info.
+    """
+
+    enable: bool = False
+    objective: str = "return_max"  # return_max/risk_min (reserved)
+    clusters_path: str | None = None  # JSON file path
+    top_k: int = 2
+    market_state_path: str | None = None  # optional JSON file for MarketState
+
+    # Phase 0.5: build MarketState from local daily CSV (index/ETF daily)
+    market_state_benchmark_symbol: str | None = None
+    market_state_benchmark_csv: str | None = None
+
+
 class AppConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
     run_mode: str = "interactive"  # interactive/service
@@ -69,6 +87,7 @@ class AppConfig(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    persona: PersonaConfig = Field(default_factory=PersonaConfig)
 
     traders: list[TraderConfig] = Field(default_factory=list)
 

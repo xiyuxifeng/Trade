@@ -30,6 +30,38 @@
 
 ---
 
+## Phase 0.5：Persona Router MVP（3-7 天）
+
+> 目标：在不依赖完整爬虫/LLM 抽取/DSL 的情况下，把“多风格 persona + 市场态势路由 + 收益最大化”接入盘前闭环，并输出可解释/可回放的决策。
+
+### Persona Schema（规则契约与字段标准化）
+- [x] P0-115 定义 `strategy_rules/preconditions` JSON schema（字段标准化）
+- [x] P0-116 定义 claim_key 字典（v0）并写入文档
+
+### StyleCluster & Router（多风格与路由）
+- [x] P0-117 定义 StyleCluster/MarketState 数据结构（可回放）
+- [x] P0-118 实现收益最大化路由（Hard Filter + Scoring Router + Top-2 备选）
+- [x] P0-119 CLI 增加 `persona-init-sample`（无爬虫时生成样例 clusters 文件）
+
+### MarketState（指数/ETF 日线 → regime/vol）
+- [x] P0-123 从本地指数/ETF 日线 CSV 生成 MarketState（regime/vol 规则化分类）
+- [x] P0-124 CLI 增加 `market-state-build`（输出 MarketState JSON）
+- [x] P0-125 ManagerAgent 在缺省 market_state_path 时可从 benchmark CSV 自动构建 MarketState
+- [x] P0-126 AkShare 日线拉取工具类（可复用），并支持 `market-state-build --from-akshare`
+
+### Run Loop Integration（闭环接入）
+- [x] P0-120 盘前 TradeIdea 标注风格选择结果（cluster_id/label/score/reasons）
+- [x] P0-121 输出路由决策 JSON（persona_route_YYYY-MM-DD.json）
+- [x] P0-122 日报 HTML 增加“风格簇”列
+
+### Phase 0.5 Verification（验收）
+- [x] P0.5-V01 persona.enable=true 时，盘前日报包含风格簇列且可生成 persona_route 文件
+- [x] P0.5-V02 Top-1/Top-2 选择理由可解释、可人工调参
+
+备注：已在本机完成一次 CLI 端到端运行验证（见 data/processed 输出）。
+
+---
+
 ## Phase 1：数据层（2-3 周）
 
 ### Data Architecture (数据架构)
@@ -91,6 +123,11 @@
 补充（运行闭环接口）：
 - [ ] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
 - [ ] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告
+
+补充（宿主薄壳接口，规划）：
+- [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）
+- [ ] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
+- [ ] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
 
 ### Phase 1 Verification (验收检查)
 - [ ] P1-V01 单元测试覆盖率 >80%

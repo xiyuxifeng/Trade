@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>盘前日报 {{as_of_date}}</title>
+    <title>盘后考核 2026-04-04</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif;
@@ -21,16 +21,11 @@
             margin: 0 0 16px 0;
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
         .card {
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             padding: 12px 14px;
+            margin-bottom: 16px;
         }
 
         table {
@@ -60,41 +55,30 @@
 </head>
 
 <body>
-    <h1>盘前日报</h1>
-    <p class="meta">日期：<code>{{as_of_date}}</code>｜生成时间：<code>{{generated_at}}</code></p>
+    <h1>盘后考核</h1>
+    <p class="meta">日期：<code>2026-04-04</code>｜生成时间：<code>2026-04-04T03:21:44.912805</code></p>
 
-    <div class="grid">
-        <div class="card">
-            <h2>要点</h2>
-            {{highlights}}
-        </div>
-        <div class="card">
-            <h2>风险提示</h2>
-            {{risks}}
-        </div>
+    <div class="card">
+        <h2>汇总</h2>
+        <ul><li>Evaluated 2 ideas</li><li>Output dir: /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/phase0</li></ul>
     </div>
 
-    <div class="card" style="margin-top:16px;">
-        <h2>交易想法</h2>
+    <div class="card">
+        <h2>逐条评估</h2>
         <table>
             <thead>
                 <tr>
-                    <th>交易员</th>
                     <th>标的</th>
-                    <th>风格簇</th>
-                    <th>方向</th>
-                    <th>入场类型</th>
                     <th>入场价</th>
-                    <th>目标价</th>
-                    <th>止损价</th>
-                    <th>仓位</th>
-                    <th>置信度</th>
-                    <th>理由</th>
-                    <th>失效条件</th>
+                    <th>现价</th>
+                    <th>收益率</th>
+                    <th>状态</th>
+                    <th>备注</th>
                 </tr>
             </thead>
             <tbody>
-                {{ideas_rows}}
+                <tr><td>000001.SZ</td><td>10.0000</td><td>10.0000</td><td>0.00%</td><td>ok</td><td>-</td></tr>
+<tr><td>510300.SH</td><td>3.5000</td><td>3.5000</td><td>0.00%</td><td>ok</td><td>-</td></tr>
             </tbody>
         </table>
     </div>

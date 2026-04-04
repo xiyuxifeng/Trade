@@ -1,0 +1,92 @@
+{
+  "as_of_date": "2026-04-04",
+  "clusters_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/persona/clusters.sample.json",
+  "decisions": [
+    {
+      "trader_id": "trader_a",
+      "symbol": "000001.SZ",
+      "as_of_date": "2026-04-04",
+      "selected_cluster_id": "trader_a:stock_event",
+      "selected_cluster_label": "A股 事件驱动",
+      "score": 0.495,
+      "explanation": {
+        "reasons": [
+          "E=0.30 expected-return proxy",
+          "A=0.50 applicability(regime/vol/liquidity)",
+          "F=1.00 instrument-fit(InstrumentFocus.stock)"
+        ],
+        "score_breakdown": {
+          "E": 0.3,
+          "A": 0.5,
+          "F": 1.0,
+          "R": 0.5,
+          "C": 0.5,
+          "P": 0.0
+        }
+      },
+      "candidates": [
+        {
+          "cluster_id": "trader_a:stock_event",
+          "label": "A股 事件驱动",
+          "score": 0.495,
+          "breakdown": {
+            "E": 0.3,
+            "A": 0.5,
+            "F": 1.0,
+            "R": 0.5,
+            "C": 0.5,
+            "P": 0.0
+          },
+          "reasons": [
+            "E=0.30 expected-return proxy",
+            "A=0.50 applicability(regime/vol/liquidity)",
+            "F=1.00 instrument-fit(InstrumentFocus.stock)"
+          ]
+        }
+      ]
+    },
+    {
+      "trader_id": "trader_a",
+      "symbol": "510300.SH",
+      "as_of_date": "2026-04-04",
+      "selected_cluster_id": "trader_a:etf_trend",
+      "selected_cluster_label": "ETF 趋势突破",
+      "score": 0.565,
+      "explanation": {
+        "reasons": [
+          "E=0.40 expected-return proxy",
+          "A=0.50 applicability(regime/vol/liquidity)",
+          "F=1.00 instrument-fit(InstrumentFocus.etf)"
+        ],
+        "score_breakdown": {
+          "E": 0.4,
+          "A": 0.5,
+          "F": 1.0,
+          "R": 0.7,
+          "C": 0.6,
+          "P": 0.0
+        }
+      },
+      "candidates": [
+        {
+          "cluster_id": "trader_a:etf_trend",
+          "label": "ETF 趋势突破",
+          "score": 0.565,
+          "breakdown": {
+            "E": 0.4,
+            "A": 0.5,
+            "F": 1.0,
+            "R": 0.7,
+            "C": 0.6,
+            "P": 0.0
+          },
+          "reasons": [
+            "E=0.40 expected-return proxy",
+            "A=0.50 applicability(regime/vol/liquidity)",
+            "F=1.00 instrument-fit(InstrumentFocus.etf)"
+          ]
+        }
+      ]
+    }
+  ]
+}

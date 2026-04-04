@@ -16,6 +16,7 @@
 | 阶段 | 目标 | 工作量 | 预期周期 |
 |------|------|--------|----------|
 | Phase 0 | 运行闭环 MVP（盘前建议 + 盘后考核复盘） | 中 | 3-7 天 |
+| Phase 0.5 | Persona Router MVP（可执行规则画像 + 多风格路由） | 中 | 3-7 天 |
 | Phase 1 | 数据采集与存储（增量抓取/导入/新鲜度） | 重 | 2-3 周 |
 | Phase 2 | 多 TraderAgent 画像与建议生成（结构化 TradeIdea） | 重 | 1.5-2.5 周 |
 | Phase 3 | Manager 考核与复盘反馈（阈值触发 + 记忆写回） | 中 | 1-2 周 |
@@ -57,6 +58,35 @@ ManagerAgent：
 - 同一天重复运行不重复入库（幂等键）
 - 未配置 schedule 时不自动定时（仅允许手动）
 - 生成一份盘前日报 + 一份盘后考核报告（可落库）
+
+---
+
+## 0️⃣.5 Phase 0.5：Persona Router MVP（3-7 天）
+
+目标：在不依赖完整爬虫/LLM 抽取/DSL 的情况下，把“多风格 persona + 市场态势路由 + 收益最大化”能力接入日常闭环，并可回放/可解释。
+
+交付：
+
+- 定义 `strategy_rules/preconditions` 的标准 JSON schema + claim_key 字典（用于后续抽取与聚合）
+- StyleCluster 数据结构与 clusters 文件格式（可先用样例文件跑通）
+- MarketState（市场态势）对象与路由评分函数（无回测时用代理收益项 E）
+- 盘前 TradeIdea 标注 style 选择结果（cluster_id/label/score/reasons），并输出路由决策 JSON
+
+验收：
+
+- persona.enable=true 时，盘前日报可看到风格簇列；输出 persona_route_YYYY-MM-DD.json
+- Top-1/Top-2 选择有可解释理由，便于后续人工调参
+
+相关规格：doc/PersonaRouterSpec.md
+
+---
+
+## Claude Code/Openclaw 薄壳集成路径（规划）
+
+原则：核心逻辑仍是独立应用；宿主只负责交互、触发、展示。
+
+- 提供稳定 JSON 命令接口（例如 run_pre_market/run_after_close/persona_init_sample）
+- 宿主通过该接口触发任务并拉取结果，不直接承载业务状态
 
 ---
 

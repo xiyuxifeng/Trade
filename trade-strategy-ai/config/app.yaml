@@ -31,6 +31,15 @@ llm:
   # 大模型 API Key（建议通过环境变量注入；此处仅占位）
   api_key: null
 
+persona:
+  enable: true
+  objective: "return_max"
+  clusters_path: data/processed/persona/clusters.sample.json
+  top_k: 2
+  market_state_path: null
+  market_state_benchmark_symbol: "510300.SH"
+  market_state_benchmark_csv: null
+
 traders:
   - trader_id: trader_a
     display_name: Trader A

@@ -56,3 +56,26 @@ python -m cli.main run-after-close --config config/app.yaml
 ```
 
 输出默认落在 `trade-strategy-ai/data/processed/phase0/`（由 `storage.output_dir` 配置）。
+
+## Phase 1 快速开始（数据链路：抓取→入库→抽取→聚类→回归）
+
+更详细说明见：
+- [doc/使用说明.md](doc/使用说明.md)
+- [trade-strategy-ai/README.md](trade-strategy-ai/README.md)
+
+最小步骤（本地 PostgreSQL + 迁移 + 一键回归）：
+
+```bash
+cd trade-strategy-ai
+docker compose up -d db
+cp .env.example .env
+
+# 可选：激活虚拟环境
+source ../.venv/bin/activate
+
+python -m cli.main db-check
+python -m cli.main db-migrate
+
+# 端到端回归：crawl→store→extract→clusters→run-pre-market(+HTML)
+python -m cli.main e2e-regression --config config/app.yaml
+```

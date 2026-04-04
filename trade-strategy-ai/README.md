@@ -34,3 +34,56 @@ python -m cli.main persona-init-sample --config config/app.yaml
 ```
 
 文档入口：workspace 根目录 `doc/`。
+
+## 数据库与迁移（Phase 1 基础）
+
+启动本地 PostgreSQL：
+
+```bash
+cd trade-strategy-ai
+docker compose up -d db
+```
+
+准备环境变量（建议复制一份到 `.env`，不要提交密钥）：
+
+```bash
+cp .env.example .env
+```
+
+异步连通性校验：
+
+```bash
+python -m cli.main db-check
+```
+
+执行 Alembic 迁移：
+
+```bash
+python -m cli.main db-migrate
+```
+
+## 数据 Pipeline（一键链路）
+
+从真实站点抓取 → 清洗 → 校验 → 入库：
+
+```bash
+python -m cli.main pipeline-run --config config/app.yaml
+```
+
+LLM 抽取 v0（未配置 LLM 时会 fallback 并记录 raw_llm_output）：
+
+```bash
+python -m cli.main extract-articles --config config/app.yaml --limit 10
+```
+
+从真实抽取数据生成 StyleClusters：
+
+```bash
+python -m cli.main clusters-build --config config/app.yaml
+```
+
+端到端回归（crawl→store→extract→clusters→run-pre-market+HTML）：
+
+```bash
+python -m cli.main e2e-regression --config config/app.yaml
+```

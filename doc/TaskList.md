@@ -65,7 +65,7 @@
 ## Phase 1：数据层（2-3 周）
 
 ### Data Architecture (数据架构)
-- [x] P0-001 设计 PostgreSQL Schema：blog_articles, trade_logs, market_data, article_metadata（已在 `src/models/` 定义；但尚未落地 Alembic migration）
+- [x] P0-001 设计 PostgreSQL Schema：blog_articles, trade_logs, market_data, article_metadata（已在 `src/models/` 定义，并已落地 Alembic migration）
 - [x] P0-002 设计数据库索引策略（时间序列、股票代码、关键字段）（已在模型 Index/UniqueConstraint 中体现；需通过 migration 验证可用）
 - [x] P0-003 制定数据验证规则和异常检测策略（已实现 `src/pipeline/validation.py`）
 - [ ] P0-004 选型并配置 DuckDB / Parquet 存储方案
@@ -80,7 +80,7 @@
 
 补充（面向增量更新的必须项）：
 - [x] P1-006A 建立“按交易员来源配置”的增量抓取机制（支持同站点多作者，last_seen + content_hash/URL 去重）
-- [ ] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（可异步）
+- [x] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（先落盘为待办，后续再异步化）
 - [x] P1-006C 为淘股吧实现手工 Cookie 认证抓取（配置形态：`crawl.auth.tgb.cn.cookie`）
 - [x] P1-006C1 将抓取配置拆分为 `crawl.auth`（站点认证）与 `crawl.sources`（作者来源）
 - [x] P1-006D 为淘股吧实现评论抓取与清洗：去表情、标记无效评论、区分作者/读者
@@ -109,9 +109,9 @@
 ### Database & Storage (数据库与存储)
 - [x] P1-016 配置 PostgreSQL 连接池（SQLAlchemy）（已在 `config/database.py` + `src/db/session.py`）
 - [x] P1-017 实现 ORM 模型（已在 `src/models/`；Repository/DAO 层可后续补齐）
-- [ ] P1-017A 建立 Alembic versions 与首个 migration（把现有 ORM 模型落地到 DB，可一键 migrate）
+- [x] P1-017A 建立 Alembic versions 与首个 migration（把现有 ORM 模型落地到 DB，可一键 migrate）
 - [ ] P1-018 建立数据导入脚本和初始化流程
-- [ ] P1-018A 抓取 JSONL 入库（articles.jsonl → BlogArticle/ArticleMetadata，含 source_url/content_hash 幂等去重/upsert）
+- [x] P1-018A 抓取 JSONL 入库（articles.jsonl → BlogArticle/ArticleMetadata，含 source_url/content_hash 幂等去重/upsert）
 - [ ] P1-019 配置数据备份和恢复机制
 - [ ] P1-020 优化数据库查询性能（Query Plan）
 - [ ] P1-021 建立数据版本控制和审计日志
@@ -124,7 +124,7 @@
 - [ ] P1-026 建立数据监控 Dashboard（数据新鲜度、完整性）
 
 补充（落地为可跑的一键链路，优先级高）：
-- [ ] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store/export），并提供可重复运行的一键入口
+- [x] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store），并提供可重复运行的一键入口
 
 ### API Layer (API 接口层)
 - [ ] P1-027 设计数据查询 API（FastAPI）

@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime
+import os
 from pathlib import Path
 
 import typer
+from alembic import command
+from alembic.config import Config
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from cli.crawl import run_crawl_command
 from src.agents.manager_agent.agent import ManagerAgent
+from config.settings import get_settings
 from src.common.config import load_app_config
 from src.common.logger import configure_logging
 from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
+from src.common.utils import ensure_dir
+from src.pipeline.dag import run_pipeline
+from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
+from src.persona.cluster_builder import build_clusters_from_db
 from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.sample import build_sample_clusters_file
 from src.persona.storage import write_persona_clusters_file
@@ -70,6 +80,15 @@ crawl:
     backoff_seconds: [5, 15, 30]
 	# 抓取来源列表（支持同站点多作者增量抓取）
 	sources: []
+	# 示例（建议把 trader_id 绑定到 traders[].trader_id，便于后续聚类/路由）：
+	# sources:
+	#   - source: tgb
+	#     site: tgb.cn
+	#     trader_id: trader_a
+	#     author_id: "10461311"
+	#     author_name: "某交易员"
+	#     list_url: "https://www.tgb.cn/xxxxx"
+	#     enabled: true
 
 storage:
 	# 输出目录（日报、persona_route 等产物默认写到这里）
@@ -133,6 +152,13 @@ def _project_base_dir(config_path: Path) -> Path:
 	return config_path.parent
 
 
+def _alembic_config(project_root: Path) -> Config:
+	ini_path = project_root / "src" / "db" / "migrations" / "alembic.ini"
+	if not ini_path.exists():
+		raise FileNotFoundError(f"alembic.ini not found: {ini_path}")
+	return Config(str(ini_path))
+
+
 @app.command("crawl")
 def crawl(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
@@ -142,6 +168,152 @@ def crawl(
 	configure_logging(log_level)
 	for line in run_crawl_command(config_path=config, max_articles=max_articles):
 		typer.echo(line)
+
+
+@app.command("db-check")
+def db_check(
+	database_url: str | None = typer.Option(None, help="覆盖 DATABASE_URL（默认读取环境变量/Settings）"),
+) -> None:
+	"""Async SQLAlchemy 连接可用性验证。"""
+	url = database_url or os.getenv("DATABASE_URL") or get_settings().database_url
+
+	async def _run() -> None:
+		engine = create_async_engine(url, echo=False)
+		try:
+			async with engine.connect() as conn:
+				res = await conn.execute(text("SELECT 1"))
+				typer.echo(f"DB OK: {res.scalar_one()}")
+		finally:
+			await engine.dispose()
+
+	asyncio.run(_run())
+
+
+@app.command("db-migrate")
+def db_migrate(
+	project_root: Path = typer.Option(Path("."), help="trade-strategy-ai 项目根目录"),
+	revision: str = typer.Option("head", help="目标版本（默认 head）"),
+) -> None:
+	"""执行 Alembic 迁移（upgrade）。"""
+	cfg = _alembic_config(project_root.resolve())
+	command.upgrade(cfg, revision)
+	typer.echo(f"Migrated to: {revision}")
+
+
+@app.command("pipeline-run")
+def pipeline_run(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	max_articles: int | None = typer.Option(None, help="每个作者最多抓取文章数"),
+	force: bool = typer.Option(False, help="强制重跑 clean/validate 产物"),
+	skip_crawl: bool = typer.Option(False, help="跳过 crawl（直接用已有 articles.jsonl）"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""一键跑通 crawl → clean → validate → store。"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	result = asyncio.run(
+		run_pipeline(
+			config=loaded.config,
+			base_dir=base_dir,
+			max_articles=max_articles,
+			force=force,
+			skip_crawl=skip_crawl,
+		)
+	)
+
+	typer.echo("Pipeline done")
+	typer.echo(f"crawl={result.crawl.outputs}")
+	typer.echo(
+		f"store inserted={result.store.inserted_articles} updated={result.store.updated_articles} dup_skipped={result.store.skipped_duplicates}"
+	)
+
+
+@app.command("extract-articles")
+def extract_articles(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	limit: int = typer.Option(20, help="最多抽取多少篇（processed_at 为空的）"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""LLM 抽取 v0：articles → ArticleMetadata.strategy_rules/preconditions。"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	stats = asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, limit=limit))
+	typer.echo(
+		f"Extract done scanned={stats.scanned} extracted={stats.extracted} skipped={stats.skipped} failed={stats.failed}"
+	)
+
+
+@app.command("clusters-build")
+def clusters_build(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	dest: Path = typer.Option(Path("data/processed/persona/clusters.real.json"), help="输出 clusters 文件"),
+	max_articles: int | None = typer.Option(None, help="最多使用多少篇已抽取文章"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""从真实抽取数据（DB）生成 StyleClusters。"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	full_dest = dest if dest.is_absolute() else (base_dir / dest)
+	full_dest.parent.mkdir(parents=True, exist_ok=True)
+	written, stats = asyncio.run(
+		build_clusters_from_db(config=loaded.config, dest=full_dest, max_articles=max_articles)
+	)
+	typer.echo(f"Wrote clusters: {written}")
+	typer.echo(f"scanned={stats.scanned_articles} used={stats.used_articles} clusters={stats.clusters_built}")
+
+
+@app.command("e2e-regression")
+def e2e_regression(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	max_articles: int | None = typer.Option(10, help="每个作者最多抓取文章数"),
+	extract_limit: int = typer.Option(10, help="抽取篇数上限"),
+	clusters_dest: Path = typer.Option(Path("data/processed/persona/clusters.real.json"), help="clusters 输出路径"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""端到端回归：crawl → store_db → extract → build_clusters → run-pre-market(+HTML)。"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	# 1) migrate
+	cfg = _alembic_config(base_dir)
+	command.upgrade(cfg, "head")
+
+	# 2) pipeline
+	asyncio.run(
+		run_pipeline(
+			config=loaded.config,
+			base_dir=base_dir,
+			max_articles=max_articles,
+			force=True,
+			skip_crawl=False,
+		)
+	)
+
+	# 3) extract
+	asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, limit=extract_limit))
+
+	# 4) build clusters
+	full_clusters = clusters_dest if clusters_dest.is_absolute() else (base_dir / clusters_dest)
+	ensure_dir(full_clusters.parent)
+	asyncio.run(build_clusters_from_db(config=loaded.config, dest=full_clusters))
+
+	# 5) run pre-market with persona enabled
+	cfg2 = loaded.config.model_copy(deep=True)
+	cfg2.persona.enable = True
+	cfg2.persona.clusters_path = str(full_clusters.relative_to(base_dir))
+
+	mgr = ManagerAgent(config=cfg2, base_dir=base_dir)
+	report = asyncio.run(mgr.run_pre_market(as_of_date=date.today(), force=True))
+	html_path = mgr.export_daily_report_html(report=report)
+	typer.echo(f"E2E OK. DailyReport ideas={len(report.ideas)}")
+	typer.echo(f"HTML: {html_path}")
 
 
 @app.command("init-config")

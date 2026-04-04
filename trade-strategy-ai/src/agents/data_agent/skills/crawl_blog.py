@@ -172,6 +172,7 @@ def crawl_source(
             {
                 "source": source_cfg.source,
                 "site": source_cfg.site,
+                "trader_id": source_cfg.trader_id,
                 "author_id": source_cfg.author_id,
                 "author_name": source_cfg.author_name,
                 "source_url": item["source_url"],

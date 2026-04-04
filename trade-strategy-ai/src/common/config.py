@@ -64,6 +64,7 @@ class CrawlThrottleConfig(BaseModel):
 class CrawlSourceConfig(BaseModel):
     source: str
     site: str
+    trader_id: str | None = None
     author_id: str
     author_name: str
     list_url: str

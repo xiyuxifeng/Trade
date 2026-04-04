@@ -2,6 +2,17 @@
 ## - 配置加载支持环境变量展开：例如 "${TGB_COOKIE}"（见 src/common/config.py:_expand_env_vars）
 ## - 建议不要把 Cookie/API Key 明文写入仓库，优先用环境变量注入
 
+# 数据库（推荐：本机安装 PostgreSQL；Docker 仅作为可选方案）
+database:
+  # SQLAlchemy Async URL（示例：postgresql+asyncpg://user:pass@localhost:5432/trade_strategy_ai）
+  # 若不填写（null），则使用 .env / 环境变量中的 DATABASE_URL（或 Settings 默认值）。
+  url: null
+  echo: false
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 1800
+
 # 时区（影响“盘前/盘后”调度的本地时间解析）
 timezone: Asia/Shanghai
 

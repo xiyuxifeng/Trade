@@ -253,7 +253,8 @@ ManagerAgent：
 - backtesting.py / VectorBT（回测框架）
 
 ### 部署 & 运维
-- Docker / Docker Compose
+- 本地直跑（Python venv + 本机 PostgreSQL）
+- Docker / Docker Compose（可选）
 - FastAPI（Web 服务）
 - Prometheus + Grafana（监控）
 

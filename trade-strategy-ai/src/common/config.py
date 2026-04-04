@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -81,6 +82,22 @@ class StorageConfig(BaseModel):
     output_dir: str = "data/processed/phase0"
 
 
+class DatabaseConfig(BaseModel):
+    """Database runtime config.
+
+    This config is primarily used to provide a single source of truth for
+    local (non-Docker) runs. CLI will sync these fields into environment
+    variables (DATABASE_URL, etc.) before first DB access.
+    """
+
+    url: str | None = None
+    echo: bool = False
+    pool_size: int = 10
+    max_overflow: int = 20
+    pool_timeout: int = 30
+    pool_recycle: int = 1800
+
+
 class LLMConfig(BaseModel):
     provider: str | None = None  # openai/anthropic
     model: str | None = None
@@ -110,6 +127,7 @@ class AppConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
     run_mode: str = "interactive"  # interactive/service
 
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     data: DataConfig = Field(default_factory=DataConfig)
@@ -145,6 +163,32 @@ def load_app_config(path: str | Path) -> LoadedConfig:
         raise ConfigError(f"Invalid config schema: {exc}") from exc
 
     return LoadedConfig(config=cfg, config_path=config_path)
+
+
+def apply_database_config_to_env(config: AppConfig) -> None:
+    """Apply `config.database` to environment variables if not already set.
+
+    This keeps DB connection configuration in YAML while still being compatible
+    with SQLAlchemy/Alembic that primarily read `DATABASE_URL`.
+    """
+
+    db = getattr(config, "database", None)
+    if db is None:
+        return
+
+    if isinstance(db.url, str) and db.url.strip():
+        url = db.url.strip()
+        # If env expansion didn't resolve placeholders like "${DATABASE_URL}",
+        # don't set an invalid literal into the environment.
+        if not re.search(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", url):
+            os.environ.setdefault("DATABASE_URL", url)
+
+    # Optional: map pooling knobs for Settings (if used)
+    os.environ.setdefault("DATABASE_ECHO", str(bool(db.echo)).lower())
+    os.environ.setdefault("DATABASE_POOL_SIZE", str(int(db.pool_size)))
+    os.environ.setdefault("DATABASE_MAX_OVERFLOW", str(int(db.max_overflow)))
+    os.environ.setdefault("DATABASE_POOL_TIMEOUT", str(int(db.pool_timeout)))
+    os.environ.setdefault("DATABASE_POOL_RECYCLE", str(int(db.pool_recycle)))
 
 
 def _expand_env_vars(value: Any) -> Any:

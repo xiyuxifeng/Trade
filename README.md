@@ -1,81 +1,21 @@
-# Trade（多交易员 Agent 交易系统）
 
-本 workspace 包含一个面向“多交易员文章 + 交易记录”的多 Agent 交易研究与复盘系统。核心目标是先跑通日常闭环：
 
-- 每个交易员对应一个独立 `TraderAgent`
-- `DataAgent` 通过可插拔 skills 提供数据能力（接口可持续增加）
-- `ManagerAgent` 负责盘前/盘后编排、汇总日报、盘后考核与复盘反馈写回
-- 盘前/盘后时间、收益阈值等关键参数全部通过 config 配置
+# Trade
 
-当前阶段不做自动下单，优先交付“建议/报告/复盘闭环”；在无 GPU 前提下使用第三方大语言模型 API（OpenAI/Anthropic 等）增强画像与总结。
+本项目是一个面向“多交易员文章 + 交易记录”的多 Agent 交易研究与复盘系统。
 
-## 目录
+## 项目目标
 
-- `doc/`：需求、计划、任务清单（以此为准）
-- `trade-strategy-ai/`：主要代码仓（FastAPI/CLI/agents/models）
+1. 支持多交易员独立分析与复盘
+2. 多智能体协作，实现自动化数据处理、策略分析与报告生成
+3. 强化盘前/盘后总结、考核与反馈闭环
+4. 兼容第三方大模型 API，提升智能分析能力
 
-## 文档入口
+---
 
-- `doc/需求.md`
-- `doc/Plan.md`
-- `doc/Project.md`
-- `doc/TaskList.md`
+## 使用方法
+👉 [使用说明.md](doc/使用说明.md)
 
-## Phase 0 快速开始（闭环 MVP）
+## 当前状态
 
-前置：需要 Python 3.11+（该仓库与代码语法要求）。
-
-1）进入项目并生成配置：
-
-```bash
-cd trade-strategy-ai
-python -m cli.main init-config
-```
-
-2）编辑配置（核心键）：
-
-- `schedule.pre_market_time`
-- `schedule.after_close_time`
-- `evaluation.min_expected_return`
-- `traders[].watchlist`
-- `data.mock_prices`（Phase 0 使用 mock price 让闭环可跑）
-
-可选（Phase 0.5：Persona Router MVP）：
-
-```bash
-python -m cli.main persona-init-sample --config config/app.yaml
-```
-
-然后把 `persona.enable` 改为 `true`（并确认 `persona.clusters_path` 指向生成的 clusters 文件）。
-
-3）手动跑盘前与盘后：
-
-```bash
-python -m cli.main run-pre-market --config config/app.yaml
-python -m cli.main run-after-close --config config/app.yaml
-```
-
-输出默认落在 `trade-strategy-ai/data/processed/phase0/`（由 `storage.output_dir` 配置）。
-
-## Phase 1 快速开始（数据链路：抓取→入库→抽取→聚类→回归）
-
-更详细说明见：
-- [doc/使用说明.md](doc/使用说明.md)
-- [trade-strategy-ai/README.md](trade-strategy-ai/README.md)
-
-最小步骤（本地 PostgreSQL + 迁移 + 一键回归）：
-
-```bash
-cd trade-strategy-ai
-docker compose up -d db
-cp .env.example .env
-
-# 可选：激活虚拟环境
-source ../.venv/bin/activate
-
-python -m cli.main db-check
-python -m cli.main db-migrate
-
-# 端到端回归：crawl→store→extract→clusters→run-pre-market(+HTML)
-python -m cli.main e2e-regression --config config/app.yaml
-```
+开发中，欢迎关注进展！

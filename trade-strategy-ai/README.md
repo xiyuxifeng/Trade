@@ -11,6 +11,21 @@ trade-strategy-ai 是一个面向“多交易员文章 + 交易记录”的多 A
 3. 强化盘前/盘后总结、考核与反馈闭环。
 4. 兼容第三方大模型 API，提升智能分析能力。
 
+## 本地安装（无 Docker）
+
+前置：Python 3.11+。
+
+推荐在 workspace 根目录创建统一虚拟环境：
+
+```bash
+cd ..
+python -m venv .venv
+source .venv/bin/activate
+
+cd trade-strategy-ai
+pip install -e ".[dev]"
+```
+
 ## 配置键（节选）
 
 - `schedule.enable`
@@ -37,12 +52,12 @@ python -m cli.main persona-init-sample --config config/app.yaml
 
 ## 数据库与迁移（Phase 1 基础）
 
-启动本地 PostgreSQL：
+准备本地 PostgreSQL（推荐本机安装；Docker 仅作为可选方案）：
 
-```bash
-cd trade-strategy-ai
-docker compose up -d db
-```
+- macOS（Homebrew）示例：`brew install postgresql@15 && brew services start postgresql@15`
+- 创建数据库与用户（示例：trade/trade）：
+	- `psql postgres -c "CREATE ROLE trade WITH LOGIN PASSWORD 'trade';"`
+	- `createdb -O trade trade_strategy_ai`
 
 准备环境变量（建议复制一份到 `.env`，不要提交密钥）：
 
@@ -53,13 +68,13 @@ cp .env.example .env
 异步连通性校验：
 
 ```bash
-python -m cli.main db-check
+python -m cli.main db-check --config config/app.yaml
 ```
 
 执行 Alembic 迁移：
 
 ```bash
-python -m cli.main db-migrate
+python -m cli.main db-migrate --config config/app.yaml
 ```
 
 ## 数据 Pipeline（一键链路）

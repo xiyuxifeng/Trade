@@ -15,8 +15,8 @@ trade-strategy-ai/
 ├── README.md                          # 项目说明
 ├── pyproject.toml                     # Python 项目配置（依赖、构建）
 ├── Makefile                           # 常用命令快捷方式
-├── docker-compose.yml                 # 本地开发环境编排
-├── Dockerfile                         # 生产镜像构建
+├── docker-compose.yml                 # （可选）本地基础设施编排（PostgreSQL/Redis）
+├── Dockerfile                         # （可选）容器镜像构建
 ├── .env.example                       # 环境变量模板
 ├── .gitignore
 │
@@ -595,7 +595,7 @@ crawl_task → clean_task → validate_task → feature_task → export_task
 | **任务调度** | Airflow / 自研 DAG | 数据管道 |
 | **CLI** | Typer | 命令行工具 |
 | **测试** | pytest + pytest-asyncio | 自动化测试 |
-| **容器** | Docker + Docker Compose | 本地开发/部署 |
+| **容器** | Docker + Docker Compose（可选） | 可选的本地/部署形态 |
 | **编排** | Kubernetes | 生产部署 |
 | **监控** | Prometheus + Grafana | 系统监控 |
 | **日志** | structlog | 结构化日志 |
@@ -657,29 +657,26 @@ dev = [
 ]
 ```
 
-### 6.2 Docker Compose 服务
+### 6.2（可选）Docker Compose 服务
 
 ```yaml
 services:
-  api:           # FastAPI 服务         → :8000
-  postgres:      # PostgreSQL 数据库    → :5432
-  redis:         # Redis 缓存           → :6379
-  worker:        # 后台 Agent Worker
-  prometheus:    # 监控                  → :9090
-  grafana:       # 仪表盘               → :3000
+  db:            # PostgreSQL 数据库    → :5432
+  redis:         # Redis 缓存（可选）   → :6379
 ```
 
 ### 6.3 环境变量
 
 ```bash
 # .env.example
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/trade_ai
+DATABASE_URL=postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
 REDIS_URL=redis://localhost:6379/0
-OPENAI_API_KEY=sk-xxx
-ANTHROPIC_API_KEY=sk-ant-xxx
 LOG_LEVEL=INFO
-CRAWL_PROXY=http://proxy:port
-MARKET_DATA_TOKEN=xxx
+# TGB_COOKIE=xxx
+# LLM_PROVIDER=openai|anthropic|openai_compatible
+# LLM_MODEL=gpt-4.1-mini
+# LLM_URL=https://api.openai.com/v1
+# LLM_API_KEY=xxx
 ```
 
 ---
@@ -714,15 +711,25 @@ git clone <repo-url> && cd trade-strategy-ai
 # 2. 安装依赖
 pip install -e ".[dev]"
 
-# 3. 启动基础设施
-docker compose up -d postgres redis
+# 3. 准备本地 PostgreSQL（推荐本机安装；Docker 仅作为可选方案）
+# macOS 示例：
+#   brew install postgresql@15
+#   brew services start postgresql@15
+# 创建数据库与用户（示例：trade/trade）：
+#   psql postgres -c "CREATE ROLE trade WITH LOGIN PASSWORD 'trade';"
+#   createdb -O trade trade_strategy_ai
 
-# 4. 初始化数据库
-python scripts/init_db.py
+# 4. 配置数据库连接
+cp .env.example .env
+# 在 .env 中设置 DATABASE_URL，例如：
+#   DATABASE_URL=postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
 
-# 5. 运行 API
+# 5. 初始化/迁移数据库
+python -m cli.main db-migrate --config config/app.yaml
+
+# 6. 运行 API
 uvicorn api.main:app --reload
 
-# 6. 运行测试
+# 7. 运行测试
 pytest tests/ -v --cov=src
 ```

@@ -22,7 +22,20 @@ class AuthProvider:
         return headers
 
     def is_authenticated(self, text: str) -> bool:
-        return "登录" not in text and "验证码" not in text
+        # Real login/verification pages have a login form or redirect to login URL
+        # Simple keyword check is too broad since normal comments may contain these words
+        has_login_form = (
+            'name="password"' in text
+            or 'name="username"' in text
+            or 'id="password"' in text
+            or 'id="username"' in text
+        )
+        if has_login_form:
+            return False
+        # Also check for login redirect patterns
+        if 'window.location.href' in text and '/login' in text:
+            return False
+        return True
 
 
 class SiteCrawler(Protocol):

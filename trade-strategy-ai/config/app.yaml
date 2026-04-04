@@ -1,10 +1,19 @@
+## trade-strategy-ai 配置文件（YAML）
+## - 配置加载支持环境变量展开：例如 "${TGB_COOKIE}"（见 src/common/config.py:_expand_env_vars）
+## - 建议不要把 Cookie/API Key 明文写入仓库，优先用环境变量注入
+
+# 时区（影响“盘前/盘后”调度的本地时间解析）
 timezone: Asia/Shanghai
+
+# 运行模式：interactive（手动/本地验证） / service（长期运行服务，后续可扩展）
 run_mode: interactive
 
 schedule:
+  # 是否启用定时调度（Phase 0 默认 false，仅手动跑）
   enable: false
-  # 盘前/盘后时间需通过 config 配置，未配置时不自动定时
+  # 盘前时间（HH:MM，按 timezone 解释）
   pre_market_time: "08:30"
+  # 盘后时间（HH:MM，按 timezone 解释）
   after_close_time: "15:30"
 
 evaluation:
@@ -14,6 +23,7 @@ evaluation:
   loss_trigger: true
 
 data:
+  # 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
   providers: ["mock"]
   # mock_prices 用于演示闭环，后续可接入 akshare/tushare 等
   mock_prices:
@@ -21,15 +31,23 @@ data:
     510300.SH: 3.5
 
 crawl:
+  # 站点认证信息（按域名/站点名分组）
   auth:
     tgb.cn:
+      # 认证模式：目前首版为 cookie；后续可扩展 playwright_login 等
       mode: cookie
-      cookie: "Hm_lvt_cc6a63a887a7d811c92b7cc41c441837=; tfstk=g0PnKHa5wctj2aOBKacCppWGU7BOOXGS2ud-2bnPQco69BhLz4-uqcFKeXRpZYmabDELpzEGZlq4p3FuPQ0zzu_I2w6TRyGSaiIADsUQR9uU-YstaazZw4xUeRrgRyGW59lKkuaBrHSgoDlz4foZl2cyT2rr7dosP4-EzB7g7ciwY4lr815ZJ2vrabrz7N0Sb0lrLuzNS4iZ4Ugw7DEzA5SyZwVYi0-T12Dn0yoaJyFZ-nn48cAyaD0nKA4EjQRz_RQl-sncshoTzrwrI7fetbaTnu2z0GpKY-2z9vGWbim7sPPErRsHpAVQkkGUTGKnZPzbNYV5m6c8tPPK5uY2pPkzBWMb9GRng-aK98rVXpnUn8PKdbth4ZJw3s76NV78sL9SLVgiDT8WzYgskSPVSNv4hvus8sQGSLTKLVgiDNbM3FDE52oO.; _c_WBKFRo=D0FHzWjzzNvn6s1EjhiTzR0A3lnPOYU1mzkyvYCe; 893eedf422617c96_gdp_sequence_ids=%7B%22globalKey%22%3A58%2C%22PAGE%22%3A44%2C%22VISIT%22%3A7%2C%22CUSTOM%22%3A9%7D; acw_tc=7929ee2c17752850675892034efb1fd34017e844177e385001d9bf18e23fe0; JSESSIONID=ZWQ3NzUwNWQtYTY1Yy00YzI1LWJlYzMtM2I1YWNhNzA0ZTUw; gdp_user_id=gioenc-17e10g24%2C874e%2C5a8c%2C8679%2C6763901cag61; tgbuser=10344278; tgbpwd=1a4692d9fd8bc44fb111c27b9e4d348924bb35ed4612669e4ce7e3104cb74787ru2wg96dgsm64th; loginStatus=account; 893eedf422617c96_gdp_gio_id=gioenc-01255369; 893eedf422617c96_gdp_session_id=3331c452-7561-48ac-8139-ae5b21ec2036; 893eedf422617c96_gdp_cs1=gioenc-01255369; creatorStatus10344278=true; showStatus10344278=true; 893eedf422617c96_gdp_sequence_ids=%7B%22globalKey%22%3A539%2C%22PAGE%22%3A284%2C%22VISIT%22%3A34%2C%22CUSTOM%22%3A223%7D; 893eedf422617c96_gdp_session_id_3331c452-7561-48ac-8139-ae5b21ec2036=true"
+      # 淘股吧 Cookie（建议通过环境变量注入）
+      cookie: "${TGB_COOKIE}"
+
+  # 抓取来源列表（支持同站点多作者增量抓取）
   sources:
     - source: tgb
       site: tgb.cn
+      # 作者 ID（站点内唯一标识）
       author_id: "10461311"
+      # 作者展示名（用于标记“作者/读者”评论身份）
       author_name: "javxsp"
+      # 列表页 URL（用于遍历文章；首版按列表从新到旧增量扫描）
       list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
     # - source: tgb
     #   site: tgb.cn
@@ -37,15 +55,20 @@ crawl:
     #   author_name: "javxsp"
     #   list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
   throttling:
+    # 每次请求之间的随机间隔区间（秒）
     min_interval_seconds: 1.0
     max_interval_seconds: 2.0
+    # 触发 403/429/非登录态等失败时的退避序列（秒），按序重试
     backoff_seconds: [5, 15, 30]
 
 storage:
+  # 输出目录（Phase 0/0.5 日报、persona_route 等产物默认写到这里）
   output_dir: data/processed/phase0
 
 llm:
+  # 大模型提供商（预留）：openai/anthropic/...
   provider: null
+  # 模型名（例如 gpt-4.1 / claude-3-... 等；取决于 provider）
   model: null
   # 第三方大模型 API Base URL（可选）。例如 OpenAI 兼容接口可配置为 https://api.openai.com/v1
   url: null
@@ -53,24 +76,36 @@ llm:
   api_key: null
 
 persona:
+  # 是否启用 Persona Router（启用后会给 TradeIdea 标注 style_cluster，并输出 persona_route JSON）
   enable: true
+  # 路由目标：return_max（收益最大化）；后续可扩展 risk_min
   objective: "return_max"
+  # clusters 文件路径（样例文件可用 cli persona-init-sample 生成；后续可替换为真实抽取聚类产物）
   clusters_path: data/processed/persona/clusters.sample.json
+  # 输出 Top-K（当前默认 2：Top-1 + Top-2 备选）
   top_k: 2
+  # 可选：直接指定 MarketState JSON（不指定时可从 benchmark CSV 构建）
   market_state_path: null
+  # 基准指数/ETF：用于从日线推断 MarketState（regime/vol）
   market_state_benchmark_symbol: "510300.SH"
+  # 基准日线 CSV（列：date,close...）；为空时可用 cli market-state-build --from-akshare 拉取
   market_state_benchmark_csv: null
 
 traders:
   - trader_id: trader_a
+    # 展示名（用于报告展示）
     display_name: Trader A
     article_sources:
+      # 文章来源（预留）：目前抓取主入口在 crawl.sources（按作者配置）；这里用于后续“交易员画像/增量刷新”映射
       urls: []
       rss: []
       site_type: null
       crawl_frequency_minutes: null
     trade_log_sources:
+      # 交易记录来源（预留）：后续支持 CSV/Excel/PDF 等导入
       csv_paths: []
+    # 关注列表（盘前建议的标的集合）
     watchlist: ["000001.SZ", "510300.SH"]
+    # 默认止盈/止损（当 TraderAgent 未给出时使用）
     default_target_pct: 0.05
     default_stop_pct: 0.03

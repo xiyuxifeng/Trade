@@ -21,52 +21,89 @@ from src.persona.storage import write_persona_clusters_file
 app = typer.Typer(add_completion=False)
 
 
-_DEFAULT_CONFIG_YAML = """timezone: Asia/Shanghai
+_DEFAULT_CONFIG_YAML = """## trade-strategy-ai 配置文件（YAML）
+## - 配置加载支持环境变量展开：例如 \"${TGB_COOKIE}\"
+## - 建议不要把 Cookie/API Key 明文写入仓库，优先用环境变量注入
+
+# 时区（影响调度时间解析）
+timezone: Asia/Shanghai
+
+# 运行模式：interactive（手动/本地验证） / service（长期运行服务，后续可扩展）
 run_mode: interactive
 
 schedule:
+	# 是否启用定时调度（Phase 0 默认 false，仅手动跑）
   enable: false
+	# 盘前时间（HH:MM，按 timezone 解释）
   pre_market_time: "08:30"
+	# 盘后时间（HH:MM，按 timezone 解释）
   after_close_time: "15:30"
 
 evaluation:
+	# 收益率不达标阈值（如 0.01 表示 1%）
   min_expected_return: 0.0
+	# 是否“亏损即触发复盘”
   loss_trigger: true
 
 data:
+	# 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
   providers: ["mock"]
+	# mock_prices 用于演示闭环，后续可接入真实行情
   mock_prices:
     000001.SZ: 10.0
     510300.SH: 3.5
 
 crawl:
-  auth: {}
+	# 站点认证信息（按域名/站点名分组）
+	auth: {}
+	# 示例（淘股吧，建议通过环境变量注入 Cookie）：
+	# auth:
+	#   tgb.cn:
+	#     mode: cookie
+	#     cookie: "${TGB_COOKIE}"
+
   throttling:
+		# 每次请求之间的随机间隔区间（秒）
     min_interval_seconds: 1.0
     max_interval_seconds: 2.0
+		# 失败时退避序列（秒），按序重试
     backoff_seconds: [5, 15, 30]
-  sources: []
+	# 抓取来源列表（支持同站点多作者增量抓取）
+	sources: []
 
 storage:
+	# 输出目录（日报、persona_route 等产物默认写到这里）
   output_dir: data/processed/phase0
 
 llm:
+	# 大模型提供商（预留）：openai/anthropic/...
   provider: null
+	# 模型名（随 provider 而定）
   model: null
+	# 第三方大模型 API Base URL（可选）
   url: null
+	# 大模型 API Key（建议通过环境变量注入）
   api_key: null
 
 persona:
+	# 是否启用 Persona Router
 	enable: false
+	# 路由目标：return_max（收益最大化）；后续可扩展 risk_min
 	objective: "return_max"
+	# clusters 文件路径（可用 persona-init-sample 生成样例）
 	clusters_path: data/processed/persona/clusters.sample.json
+	# 输出 Top-K（默认 2：Top-1 + Top-2 备选）
 	top_k: 2
+	# 可选：直接指定 MarketState JSON
 	market_state_path: null
+	# 基准指数/ETF：用于从日线推断 MarketState（regime/vol）
 	market_state_benchmark_symbol: "510300.SH"
+	# 基准日线 CSV；为空时可用 market-state-build --from-akshare 拉取
 	market_state_benchmark_csv: null
 
 traders:
   - trader_id: trader_a
+		# 展示名（用于报告展示）
     display_name: Trader A
     article_sources:
       urls: []
@@ -75,7 +112,9 @@ traders:
       crawl_frequency_minutes: null
     trade_log_sources:
       csv_paths: []
+		# 关注列表
     watchlist: ["000001.SZ", "510300.SH"]
+		# 默认止盈/止损
     default_target_pct: 0.05
     default_stop_pct: 0.03
 """

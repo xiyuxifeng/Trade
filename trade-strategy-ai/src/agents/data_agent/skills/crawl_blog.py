@@ -100,9 +100,14 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
             raise ValueError(f"Unsupported source: {source_cfg.source}")
 
         auth = config.crawl.auth.get(source_cfg.site)
+        throttle = config.crawl.throttling
         crawler = TgbCrawler(
             auth_provider=AuthProvider(site=source_cfg.site, cookie=auth.cookie if auth else None),
             list_url=source_cfg.list_url,
+            min_interval=throttle.min_interval_seconds,
+            max_interval=throttle.max_interval_seconds,
+            backoff_seconds=tuple(throttle.backoff_seconds),
+            max_retries=len(throttle.backoff_seconds),
         )
         count = crawl_source(
             source_cfg=source_cfg,

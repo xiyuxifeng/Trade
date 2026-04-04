@@ -2,10 +2,11 @@
 
 ## 1. 目标
 
-为淘股吧作者 `javxsp` 建立第一版真实可用的数据抓取链路，满足以下目标：
+为淘股吧及后续站点建立第一版真实可用的数据抓取链路，当前以淘股吧作者 `javxsp` 作为首个真实样本，满足以下目标：
 
 - 支持登录后访问的文章列表、文章正文、评论抓取
-- 支持按作者进行增量抓取
+- 支持同站点多作者增量抓取
+- 配置结构兼容未来多站点扩展
 - 支持 `source_url` + `content_hash` 双层去重
 - 支持评论清洗、作者/读者分类
 - 第一版使用手工提供的 Cookie
@@ -18,7 +19,7 @@
 ### 2.1 第一版交付
 
 - 淘股吧单站点抓取器
-- 单作者配置化抓取
+- 同站点多作者配置化抓取
 - 配置化 Cookie 认证
 - 低频反爬策略
 - 增量抓取状态持久化
@@ -32,7 +33,6 @@
 - Cookie 自动续期
 - 代理池
 - 高并发抓取
-- 多站点统一适配层的完整抽象
 - 楼中楼评论恢复为树结构展示
 
 ## 3. 核心设计决策
@@ -47,11 +47,11 @@
 - 把复杂度集中在“增量、去重、清洗、结构化”
 - 避免在第一版就被自动登录和浏览器控制拖慢
 
-后续预留 `AuthProvider` 和动态抓取回退接口，未来可接 `Playwright`。
+后续预留 `AuthProvider`、`SiteCrawler` 和动态抓取回退接口，未来可接 `Playwright` 与更多站点。
 
 ### 3.2 认证方式
 
-认证配置按域名管理，形态类似：
+认证配置按域名管理，抓取源按作者列表配置，形态类似：
 
 ```yaml
 crawl:
@@ -59,6 +59,12 @@ crawl:
     tgb.cn:
       mode: cookie
       cookie: "${TGB_COOKIE}"
+  sources:
+    - source: tgb
+      site: tgb.cn
+      author_id: "10461311"
+      author_name: "javxsp"
+      list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
 ```
 
 第一版支持两种来源：
@@ -66,9 +72,24 @@ crawl:
 - 直接写入配置文件
 - 通过环境变量注入
 
-代码只依赖认证提供者接口，不把 Cookie 硬编码在抓取逻辑中。
+代码只依赖认证提供者接口，不把 Cookie 硬编码在抓取逻辑中。抓取主流程按 `sources[]` 遍历，从而天然支持同站点多作者。
 
-### 3.3 增量策略
+### 3.3 多作者与多站点边界
+
+第一版实现目标是：
+
+- 支持同站点多作者
+- 为未来多站点保留统一站点适配器接口
+
+建议边界：
+
+- `crawl_blog.py` 负责统一编排
+- `SiteCrawler` 负责站点级列表页、详情页、评论页解析
+- `AuthProvider` 负责认证头与登录态判断
+
+未来新增站点时，只新增对应 `SiteCrawler` 实现和站点配置，不修改抓取主流程。
+
+### 3.4 增量策略
 
 列表页按从新到旧抓取，遇到已见文章时尽快停止。
 
@@ -86,7 +107,7 @@ crawl:
 - `last_success_article_count`
 - `failure_stats`
 
-### 3.4 评论处理策略
+### 3.5 评论处理策略
 
 第一版将评论对外视图拍平成普通列表，但保留可恢复楼层结构的字段。
 
@@ -108,7 +129,7 @@ crawl:
 
 这样后续需要恢复“楼中楼 / 回复某人”的关系时，可以直接基于现有字段重建。
 
-### 3.5 评论清洗策略
+### 3.6 评论清洗策略
 
 第一版采用“标记过滤，不直接删除”的策略。
 
@@ -138,8 +159,8 @@ crawl:
 ### 5.1 落盘路径
 
 ```text
-trade-strategy-ai/data/processed/crawl/tgb/javxsp/articles.jsonl
-trade-strategy-ai/data/processed/crawl/tgb/javxsp/state.json
+trade-strategy-ai/data/processed/crawl/{source}/{author_id}/articles.jsonl
+trade-strategy-ai/data/processed/crawl/{source}/{author_id}/state.json
 ```
 
 ### 5.2 `articles.jsonl` 记录字段
@@ -172,8 +193,13 @@ trade-strategy-ai/data/processed/crawl/tgb/javxsp/state.json
 
 - `trade-strategy-ai/src/agents/data_agent/skills/crawl_blog.py`
   - 抓取主入口
-  - 列表页/详情页/评论页调度
+  - 多作者遍历
+  - 站点抓取器调度
   - 增量与去重编排
+
+- `trade-strategy-ai/src/agents/data_agent/sites/`
+  - 站点适配器目录
+  - 首版提供 `tgb.py`
 
 - `trade-strategy-ai/src/agents/data_agent/skills/crawl_dynamic.py`
   - 后续预留 Playwright 自动登录或动态抓取回退
@@ -197,6 +223,10 @@ trade-strategy-ai/data/processed/crawl/tgb/javxsp/state.json
 - `AuthProvider.get_session_headers()`
 - `AuthProvider.is_authenticated(response)`
 - `AuthProvider.refresh_auth()`
+- `SiteCrawler.fetch_article_list()`
+- `SiteCrawler.fetch_article_detail()`
+- `SiteCrawler.fetch_comments()`
+- `SiteCrawler.normalize_article()`
 
 第一版仅实现 Cookie 认证版本。
 
@@ -210,6 +240,8 @@ trade-strategy-ai/data/processed/crawl/tgb/javxsp/state.json
 - 评论作者身份识别
 - 评论结构字段保留
 - 配置读取与 Cookie 注入
+- 同站点多作者遍历
+- 站点适配器选择
 
 真实联网抓取不纳入单元测试，网络行为通过夹具样本和解析测试覆盖。
 
@@ -228,3 +260,4 @@ trade-strategy-ai/data/processed/crawl/tgb/javxsp/state.json
 4. 实现淘股吧列表页/详情页/评论页解析
 5. 增加 CLI 入口
 6. 用真实作者 `javxsp` 做一次手工验证
+7. 用同站点第二个作者配置做一次非联网配置级验证

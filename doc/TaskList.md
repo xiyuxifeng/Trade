@@ -71,22 +71,24 @@
 - [ ] P0-004 选型并配置 DuckDB / Parquet 存储方案
 
 ### Blog Crawler (博客爬虫)
-- [ ] P1-001 分析目标博客网站结构和动态加载机制
-- [ ] P1-002 开发静态 HTML 爬虫模块（BeautifulSoup）
+- [x] P1-001 分析目标博客网站结构和动态加载机制
+- [x] P1-002 开发静态 HTML 爬虫模块（BeautifulSoup）
 - [ ] P1-003 开发动态页面爬虫模块（Playwright）
 - [ ] P1-004 实现博客内容提取器（标题、正文、发布时间、标签）
 - [ ] P1-005 集成 Nginx + Proxy 池实现反爬虫防护
 - [ ] P1-006 建立爬虫错误重试和日志机制
 
 补充（面向增量更新的必须项）：
-- [ ] P1-006A 建立“按交易员来源配置”的增量抓取机制（last_seen + content_hash/URL 去重）
+- [x] P1-006A 建立“按交易员来源配置”的增量抓取机制（支持同站点多作者，last_seen + content_hash/URL 去重）
 - [ ] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（可异步）
-- [ ] P1-006C 为淘股吧实现手工 Cookie 认证抓取（配置形态：`crawl.auth.tgb.cn.cookie`）
-- [ ] P1-006D 为淘股吧实现评论抓取与清洗：去表情、标记无效评论、区分作者/读者
+- [x] P1-006C 为淘股吧实现手工 Cookie 认证抓取（配置形态：`crawl.auth.tgb.cn.cookie`）
+- [x] P1-006C1 将抓取配置拆分为 `crawl.auth`（站点认证）与 `crawl.sources`（作者来源）
+- [x] P1-006D 为淘股吧实现评论抓取与清洗：去表情、标记无效评论、区分作者/读者
 - [ ] P1-006E 为淘股吧实现楼中楼评论拍平存储，同时保留 `parent_comment_id/root_comment_id/reply_to_user`
 - [ ] P1-006F 增加首版轻量反爬策略：限频、随机抖动、最大页数/文章数/评论页数、403/429 退避
-- [ ] P1-006G 自动登录预留：定义认证接口，后续支持 Playwright 登录与 Cookie 自动续期
-- [ ] P1-006H 抓取命令增加 Cookie 配置使用说明，并记录到项目文档
+- [x] P1-006G 自动登录预留：定义认证接口，后续支持 Playwright 登录与 Cookie 自动续期
+- [x] P1-006H 抓取命令增加 Cookie 配置使用说明，并记录到项目文档
+- [x] P1-006I 抽象站点抓取器接口，首版实现 `TgbCrawler`，兼容未来多站点扩展
 
 ### Trade Log Parser (交易记录解析)
 - [ ] P1-007 定义交易记录 Schema（时间、标的、方向、价格、仓位）

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,32 @@ class DataConfig(BaseModel):
     mock_prices: dict[str, float] = Field(default_factory=dict)
 
 
+class CrawlAuthConfig(BaseModel):
+    mode: str = "cookie"
+    cookie: str | None = None
+
+
+class CrawlThrottleConfig(BaseModel):
+    min_interval_seconds: float = 1.0
+    max_interval_seconds: float = 2.0
+    backoff_seconds: list[int] = Field(default_factory=lambda: [5, 15, 30])
+
+
+class CrawlSourceConfig(BaseModel):
+    source: str
+    site: str
+    author_id: str
+    author_name: str
+    list_url: str
+    enabled: bool = True
+
+
+class CrawlConfig(BaseModel):
+    auth: dict[str, CrawlAuthConfig] = Field(default_factory=dict)
+    throttling: CrawlThrottleConfig = Field(default_factory=CrawlThrottleConfig)
+    sources: list[CrawlSourceConfig] = Field(default_factory=list)
+
+
 class StorageConfig(BaseModel):
     output_dir: str = "data/processed/phase0"
 
@@ -85,6 +112,7 @@ class AppConfig(BaseModel):
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     data: DataConfig = Field(default_factory=DataConfig)
+    crawl: CrawlConfig = Field(default_factory=CrawlConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
@@ -111,8 +139,18 @@ def load_app_config(path: str | Path) -> LoadedConfig:
         raise ConfigError(f"Failed to load config: {config_path}: {exc}") from exc
 
     try:
-        cfg = AppConfig.model_validate(raw)
+        cfg = AppConfig.model_validate(_expand_env_vars(raw))
     except Exception as exc:  # noqa: BLE001
         raise ConfigError(f"Invalid config schema: {exc}") from exc
 
     return LoadedConfig(config=cfg, config_path=config_path)
+
+
+def _expand_env_vars(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env_vars(item) for item in value]
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    return value

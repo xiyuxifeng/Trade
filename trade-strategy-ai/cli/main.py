@@ -8,13 +8,14 @@ import typer
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from cli.crawl import run_crawl_command
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import load_app_config
 from src.common.logger import configure_logging
+from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
+from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.sample import build_sample_clusters_file
 from src.persona.storage import write_persona_clusters_file
-from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
-from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 
 
 app = typer.Typer(add_completion=False)
@@ -37,6 +38,14 @@ data:
   mock_prices:
     000001.SZ: 10.0
     510300.SH: 3.5
+
+crawl:
+  auth: {}
+  throttling:
+    min_interval_seconds: 1.0
+    max_interval_seconds: 2.0
+    backoff_seconds: [5, 15, 30]
+  sources: []
 
 storage:
   output_dir: data/processed/phase0
@@ -83,6 +92,17 @@ def _project_base_dir(config_path: Path) -> Path:
 	if config_path.parent.name == "config":
 		return config_path.parent.parent
 	return config_path.parent
+
+
+@app.command("crawl")
+def crawl(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	max_articles: int | None = typer.Option(None, help="每个作者最多抓取文章数"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	configure_logging(log_level)
+	for line in run_crawl_command(config_path=config, max_articles=max_articles):
+		typer.echo(line)
 
 
 @app.command("init-config")

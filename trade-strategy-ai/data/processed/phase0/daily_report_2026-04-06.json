@@ -1,0 +1,58 @@
+{
+  "report_id": "0e0e79a7-fb0a-4a77-9d72-19340208f5a9",
+  "as_of_date": "2026-04-06",
+  "generated_at": "2026-04-05 16:09:11.627046",
+  "ideas": [
+    {
+      "idea_id": "8019bf38-ca12-4dcc-964f-da36b50d4c31",
+      "trader_id": "trader_a",
+      "as_of_date": "2026-04-06",
+      "symbol": "000001.SZ",
+      "side": "buy",
+      "entry": {
+        "type": "limit",
+        "price": 10.0,
+        "condition": null
+      },
+      "target_price": 10.5,
+      "stop_loss_price": 9.7,
+      "position_size": null,
+      "time_horizon": null,
+      "rationale": "Phase0: rule-based idea from watchlist + mock price",
+      "invalidation": "Price data unavailable or market regime changes",
+      "confidence": 0.3,
+      "style_cluster_id": null,
+      "style_cluster_label": null,
+      "style_score": null,
+      "style_reasons": []
+    },
+    {
+      "idea_id": "da4f4e07-3f4b-49c9-8ad8-4b8aca590ee6",
+      "trader_id": "trader_a",
+      "as_of_date": "2026-04-06",
+      "symbol": "510300.SH",
+      "side": "buy",
+      "entry": {
+        "type": "limit",
+        "price": 3.5,
+        "condition": null
+      },
+      "target_price": 3.675,
+      "stop_loss_price": 3.395,
+      "position_size": null,
+      "time_horizon": null,
+      "rationale": "Phase0: rule-based idea from watchlist + mock price",
+      "invalidation": "Price data unavailable or market regime changes",
+      "confidence": 0.3,
+      "style_cluster_id": null,
+      "style_cluster_label": null,
+      "style_score": null,
+      "style_reasons": []
+    }
+  ],
+  "highlights": [
+    "Generated 2 trade ideas",
+    "Persona router enabled: decisions=0 clusters=/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/persona/clusters.real.json"
+  ],
+  "risks": []
+}

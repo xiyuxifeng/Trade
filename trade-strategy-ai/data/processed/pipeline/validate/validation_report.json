@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "input_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/clean/10461311.articles.cleaned.jsonl",
+      "output_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/validate/10461311.articles.cleaned.validated.jsonl",
+      "records": 1,
+      "extractable": 1,
+      "issues": [
+        {
+          "source_url": "https://www.tgb.cn/a/2qxp6lHUymO",
+          "title": "教你看懂市场内力与外力的本质",
+          "issues": [
+            {
+              "code": "article.comments.count_mismatch",
+              "severity": "warning",
+              "message": "Comment count does not match the number of captured comments.",
+              "field_name": "comment_count",
+              "context": {
+                "payload_count": 46
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "records": 1,
+    "extractable": 1,
+    "errors": 0,
+    "warnings": 1
+  }
+}

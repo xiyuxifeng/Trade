@@ -291,6 +291,43 @@ def clusters_build(
 	typer.echo(f"scanned={stats.scanned_articles} used={stats.used_articles} clusters={stats.clusters_built}")
 
 
+async def _e2e_regression_async(
+	config: Path,
+	max_articles: int | None,
+	extract_limit: int,
+	clusters_dest: Path,
+	base_dir: Path,
+	loaded_cfg,
+) -> None:
+	# 2) pipeline
+	await run_pipeline(
+		config=loaded_cfg.config,
+		base_dir=base_dir,
+		max_articles=max_articles,
+		force=True,
+		skip_crawl=False,
+	)
+
+	# 3) extract
+	await extract_and_store_metadata(config=loaded_cfg.config, base_dir=base_dir, limit=extract_limit)
+
+	# 4) build clusters
+	full_clusters = clusters_dest if clusters_dest.is_absolute() else (base_dir / clusters_dest)
+	ensure_dir(full_clusters.parent)
+	await build_clusters_from_db(config=loaded_cfg.config, dest=full_clusters)
+
+	# 5) run pre-market with persona enabled
+	cfg2 = loaded_cfg.config.model_copy(deep=True)
+	cfg2.persona.enable = True
+	cfg2.persona.clusters_path = str(full_clusters.relative_to(base_dir))
+
+	mgr = ManagerAgent(config=cfg2, base_dir=base_dir)
+	report = await mgr.run_pre_market(as_of_date=date.today(), force=True)
+	html_path = mgr.export_daily_report_html(report=report)
+	typer.echo(f"E2E OK. DailyReport ideas={len(report.ideas)}")
+	typer.echo(f"HTML: {html_path}")
+
+
 @app.command("e2e-regression")
 def e2e_regression(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
@@ -309,35 +346,15 @@ def e2e_regression(
 	cfg = _alembic_config(base_dir)
 	command.upgrade(cfg, "head")
 
-	# 2) pipeline
-	asyncio.run(
-		run_pipeline(
-			config=loaded.config,
-			base_dir=base_dir,
-			max_articles=max_articles,
-			force=True,
-			skip_crawl=False,
-		)
-	)
-
-	# 3) extract
-	asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, limit=extract_limit))
-
-	# 4) build clusters
-	full_clusters = clusters_dest if clusters_dest.is_absolute() else (base_dir / clusters_dest)
-	ensure_dir(full_clusters.parent)
-	asyncio.run(build_clusters_from_db(config=loaded.config, dest=full_clusters))
-
-	# 5) run pre-market with persona enabled
-	cfg2 = loaded.config.model_copy(deep=True)
-	cfg2.persona.enable = True
-	cfg2.persona.clusters_path = str(full_clusters.relative_to(base_dir))
-
-	mgr = ManagerAgent(config=cfg2, base_dir=base_dir)
-	report = asyncio.run(mgr.run_pre_market(as_of_date=date.today(), force=True))
-	html_path = mgr.export_daily_report_html(report=report)
-	typer.echo(f"E2E OK. DailyReport ideas={len(report.ideas)}")
-	typer.echo(f"HTML: {html_path}")
+	# 2-5) run all async steps in a single event loop
+	asyncio.run(_e2e_regression_async(
+		config=config,
+		max_articles=max_articles,
+		extract_limit=extract_limit,
+		clusters_dest=clusters_dest,
+		base_dir=base_dir,
+		loaded_cfg=loaded,
+	))
 
 
 @app.command("init-config")

@@ -48,7 +48,7 @@ crawl:
       # 认证模式：目前首版为 cookie；后续可扩展 playwright_login 等
       mode: cookie
       # 淘股吧 Cookie（建议通过环境变量注入）
-      cookie: "${TGB_COOKIE}"
+      cookie: "Hm_lvt_cc6a63a887a7d811c92b7cc41c441837=; tfstk=g0PnKHa5wctj2aOBKacCppWGU7BOOXGS2ud-2bnPQco69BhLz4-uqcFKeXRpZYmabDELpzEGZlq4p3FuPQ0zzu_I2w6TRyGSaiIADsUQR9uU-YstaazZw4xUeRrgRyGW59lKkuaBrHSgoDlz4foZl2cyT2rr7dosP4-EzB7g7ciwY4lr815ZJ2vrabrz7N0Sb0lrLuzNS4iZ4Ugw7DEzA5SyZwVYi0-T12Dn0yoaJyFZ-nn48cAyaD0nKA4EjQRz_RQl-sncshoTzrwrI7fetbaTnu2z0GpKY-2z9vGWbim7sPPErRsHpAVQkkGUTGKnZPzbNYV5m6c8tPPK5uY2pPkzBWMb9GRng-aK98rVXpnUn8PKdbth4ZJw3s76NV78sL9SLVgiDT8WzYgskSPVSNv4hvus8sQGSLTKLVgiDNbM3FDE52oO.; _c_WBKFRo=D0FHzWjzzNvn6s1EjhiTzR0A3lnPOYU1mzkyvYCe; 893eedf422617c96_gdp_sequence_ids=%7B%22globalKey%22%3A58%2C%22PAGE%22%3A44%2C%22VISIT%22%3A7%2C%22CUSTOM%22%3A9%7D; gdp_user_id=gioenc-17e10g24%2C874e%2C5a8c%2C8679%2C6763901cag61; tgbuser=10344278; tgbpwd=1a4692d9fd8bc44fb111c27b9e4d348924bb35ed4612669e4ce7e3104cb74787ru2wg96dgsm64th; 893eedf422617c96_gdp_gio_id=gioenc-01255369; 893eedf422617c96_gdp_cs1=gioenc-01255369; creatorStatus10344278=true; acw_tc=7929ee2c17753886211971915efb12cb732516334cf035e52f523d879ebad1; JSESSIONID=YWI1NzJjZGUtYTUxYy00NmM5LWEyOWUtNzIyM2MzZGMxMThh; 893eedf422617c96_gdp_session_id=e1ede185-bcfd-4124-a2c6-5dc54a65633c; wsStatus=true; showStatus10344278=true; 893eedf422617c96_gdp_sequence_ids=%7B%22globalKey%22%3A583%2C%22PAGE%22%3A307%2C%22VISIT%22%3A36%2C%22CUSTOM%22%3A242%7D; 893eedf422617c96_gdp_session_id_e1ede185-bcfd-4124-a2c6-5dc54a65633c=true"
 
   # 抓取来源列表（支持同站点多作者增量抓取）
   sources:
@@ -78,12 +78,12 @@ storage:
 
 llm:
   # 大模型提供商（预留）：openai/anthropic/...
-  provider: null
+  provider: "qwen"
   # 模型名（例如 gpt-4.1 / claude-3-... 等；取决于 provider）
-  model: null
+  model: "qwen-plus"
   # 第三方大模型 API Base URL（可选）。例如 OpenAI 兼容接口可配置为 https://api.openai.com/v1
-  url: null
-  # 大模型 API Key（建议通过环境变量注入；此处仅占位）
+  url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  # 大模型 API Key（建议通过环境变量 DASHSCOPE_API_KEY 注入；此处仅占位）
   api_key: null
 
 persona:

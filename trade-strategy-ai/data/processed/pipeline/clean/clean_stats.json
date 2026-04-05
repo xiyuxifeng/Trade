@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "input_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/crawl/tgb/10461311/articles.jsonl",
+      "output_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/clean/10461311.articles.cleaned.jsonl",
+      "records": 1,
+      "comments_total": 49,
+      "comments_kept": 46,
+      "comments_filtered": 3
+    }
+  ]
+}

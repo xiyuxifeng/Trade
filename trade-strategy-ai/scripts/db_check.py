@@ -4,7 +4,7 @@ import asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/trade_strategy_ai")
+DB_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai")
 
 async def check() -> None:
     engine = create_async_engine(DB_URL, echo=False)

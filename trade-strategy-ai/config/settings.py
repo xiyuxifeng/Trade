@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/trade_strategy_ai"
+        default="postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai"
     )
     database_echo: bool = False
     database_pool_size: int = 10

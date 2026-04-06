@@ -305,6 +305,9 @@ async def run_process_tasks(
 
     # Save updated failed tasks
     _save_failed_with_metadata(f_path, alive_failed)
+    # Save dead tasks discovered during processing
+    if dead_failed:
+        _save_failed_with_metadata(d_path, dead_failed)
     _save_tasks(p_path, [])
 
     stats.duration_ms = int((time.monotonic() - start) * 1000)

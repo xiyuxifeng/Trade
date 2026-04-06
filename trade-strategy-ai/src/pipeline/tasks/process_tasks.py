@@ -239,12 +239,14 @@ async def run_process_tasks(
     config: AppConfig,
     pending_path: Path | None = None,
     failed_path: Path | None = None,
+    dead_path: Path | None = None,
 ) -> ProcessTasksStats:
     start = time.monotonic()
     stats = ProcessTasksStats()
 
     p_path = pending_path or PENDING_PATH
     f_path = failed_path or FAILED_PATH
+    d_path = dead_path or DEAD_TASKS_PATH
 
     all_tasks = _load_tasks(p_path)
     if not all_tasks:
@@ -254,8 +256,21 @@ async def run_process_tasks(
     unique_tasks = _dedup_by_article_id(all_tasks)
     stats.skipped_dedup = len(all_tasks) - len(unique_tasks)
 
-    failed_tasks = _load_tasks(f_path)
-    failed_ids = {t.get("task_id") for t in failed_tasks}
+    # Load failed tasks with metadata
+    failed_tasks = _load_failed_with_metadata(f_path)
+
+    # TTL cleanup: separate alive from dead
+    alive_failed, dead_failed = _cleanup_failed_tasks(failed_tasks)
+    stats.dead = len(dead_failed)
+
+    # Save cleaned failed tasks
+    _save_failed_with_metadata(f_path, alive_failed)
+
+    # Append dead tasks to dead_tasks file
+    if dead_failed:
+        _save_failed_with_metadata(d_path, dead_failed)
+
+    failed_ids = {t.get("task_id") for t in alive_failed}
 
     handlers = _create_handlers(config)
 
@@ -268,12 +283,28 @@ async def run_process_tasks(
         if success:
             if not skipped:
                 stats.processed += 1
-            # skipped=True means already-processed metadata (not a dedup skip)
         else:
             stats.failed += 1
-            failed_tasks.append(task)
+            # Update retry metadata for this task
+            matching = [t for t in alive_failed if t.get("task_id") == task_id]
+            if matching:
+                existing = matching[0]
+                existing["retry_count"] = existing.get("retry_count", 0) + 1
+                if existing["retry_count"] >= MAX_RETRY_COUNT:
+                    # Move to dead
+                    dead_failed.append(existing)
+                    alive_failed.remove(existing)
+                    stats.dead += 1
+                # else: stays in alive_failed for retry
+            else:
+                # New failure - add with metadata
+                new_failed = dict(task)
+                new_failed["failed_at"] = datetime.now(UTC).isoformat()
+                new_failed["retry_count"] = 1
+                alive_failed.append(new_failed)
 
-    _save_tasks(f_path, failed_tasks)
+    # Save updated failed tasks
+    _save_failed_with_metadata(f_path, alive_failed)
     _save_tasks(p_path, [])
 
     stats.duration_ms = int((time.monotonic() - start) * 1000)

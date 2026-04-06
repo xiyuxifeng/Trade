@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -172,7 +172,7 @@ async def build_clusters_from_db(
         clusters_by_trader[tid] = clusters
 
     file = PersonaClustersFile(
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(UTC),
         clusters_by_trader=clusters_by_trader,
     )
 

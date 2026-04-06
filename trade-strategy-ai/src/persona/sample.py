@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.persona.claim_keys import ClaimKey
 from src.persona.schemas import (
@@ -39,7 +39,7 @@ def build_sample_clusters_file(*, trader_ids: list[str]) -> PersonaClustersFile:
 						action=ActionSpec(type="enter", side="buy", order="limit", price={"var": "close"}),
 						params={"target_pct": 0.06, "stop_pct": 0.03},
 						confidence=0.6,
-						published_at=datetime.utcnow(),
+						published_at=datetime.now(UTC),
 					),
 				],
 				activity_score=0.7,
@@ -60,7 +60,7 @@ def build_sample_clusters_file(*, trader_ids: list[str]) -> PersonaClustersFile:
 						action=ActionSpec(type="enter", side="buy", order="limit", price={"var": "close"}),
 						params={"target_pct": 0.08, "stop_pct": 0.04},
 						confidence=0.55,
-						published_at=datetime.utcnow(),
+						published_at=datetime.now(UTC),
 					),
 				],
 				preconditions=[
@@ -68,7 +68,7 @@ def build_sample_clusters_file(*, trader_ids: list[str]) -> PersonaClustersFile:
 						instrument_focus=InstrumentFocus.cb,
 						condition={"op": "range_or_panic"},
 						confidence=0.5,
-						published_at=datetime.utcnow(),
+						published_at=datetime.now(UTC),
 					)
 				],
 				activity_score=0.6,
@@ -88,7 +88,7 @@ def build_sample_clusters_file(*, trader_ids: list[str]) -> PersonaClustersFile:
 						condition={"op": "event"},
 						action=ActionSpec(type="filter", params={"allow": True}),
 						confidence=0.5,
-						published_at=datetime.utcnow(),
+						published_at=datetime.now(UTC),
 					),
 				],
 				activity_score=0.5,

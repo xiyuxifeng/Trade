@@ -23,6 +23,7 @@ crawl:
   sources:
     - source: tgb
       site: tgb.cn
+      trader_id: trader_a
       author_id: "10461311"
       author_name: "javxsp"
       list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
@@ -33,6 +34,7 @@ crawl:
     loaded = load_app_config(config_path)
 
     assert loaded.config.crawl.auth["tgb.cn"].cookie == "cookie-value"
+    assert loaded.config.crawl.sources[0].trader_id == "trader_a"
     assert loaded.config.crawl.sources[0].author_name == "javxsp"
     assert loaded.config.crawl.throttling.backoff_seconds == [5, 15]
 

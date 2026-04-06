@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -51,7 +51,7 @@ def build_pipeline_scheduler(*, config: AppConfig, base_dir: Path) -> PipelineSc
 	hour, minute = hhmm
 
 	def _job() -> None:
-		logger.info("pipeline job triggered", when=datetime.utcnow().isoformat())
+		logger.info("pipeline job triggered", when=datetime.now(UTC).isoformat())
 		asyncio.run(run_pipeline(config=config, base_dir=base_dir, skip_crawl=False, force=False))
 
 	sched.add_job(_job, CronTrigger(hour=hour, minute=minute), id="pipeline_run", replace_existing=True)

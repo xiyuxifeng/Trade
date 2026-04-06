@@ -1,10 +1,10 @@
 {
-  "report_id": "0e0e79a7-fb0a-4a77-9d72-19340208f5a9",
+  "report_id": "6b5fa9ff-d368-47f9-b21a-fdc068ca26b9",
   "as_of_date": "2026-04-06",
-  "generated_at": "2026-04-05 16:09:11.627046",
+  "generated_at": "2026-04-06 10:11:32.702076",
   "ideas": [
     {
-      "idea_id": "8019bf38-ca12-4dcc-964f-da36b50d4c31",
+      "idea_id": "4601eb38-d57f-4d88-8f7f-868b2be8cf4e",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "000001.SZ",
@@ -21,13 +21,17 @@
       "rationale": "Phase0: rule-based idea from watchlist + mock price",
       "invalidation": "Price data unavailable or market regime changes",
       "confidence": 0.3,
-      "style_cluster_id": null,
-      "style_cluster_label": null,
-      "style_score": null,
-      "style_reasons": []
+      "style_cluster_id": "trader_a:mixed:v0",
+      "style_cluster_label": "Trader A mixed (v0)",
+      "style_score": 0.5125,
+      "style_reasons": [
+        "E=0.50 expected-return proxy",
+        "A=0.60 applicability(regime/vol/liquidity)",
+        "F=0.60 instrument-fit(InstrumentFocus.stock)"
+      ]
     },
     {
-      "idea_id": "da4f4e07-3f4b-49c9-8ad8-4b8aca590ee6",
+      "idea_id": "d57e5054-9f20-4d26-9ef1-55026a9e17ab",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "510300.SH",
@@ -44,15 +48,19 @@
       "rationale": "Phase0: rule-based idea from watchlist + mock price",
       "invalidation": "Price data unavailable or market regime changes",
       "confidence": 0.3,
-      "style_cluster_id": null,
-      "style_cluster_label": null,
-      "style_score": null,
-      "style_reasons": []
+      "style_cluster_id": "trader_a:mixed:v0",
+      "style_cluster_label": "Trader A mixed (v0)",
+      "style_score": 0.5125,
+      "style_reasons": [
+        "E=0.50 expected-return proxy",
+        "A=0.60 applicability(regime/vol/liquidity)",
+        "F=0.60 instrument-fit(InstrumentFocus.etf)"
+      ]
     }
   ],
   "highlights": [
     "Generated 2 trade ideas",
-    "Persona router enabled: decisions=0 clusters=/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/persona/clusters.real.json"
+    "Persona router enabled: decisions=2 clusters=/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/persona/clusters.real.json"
   ],
   "risks": []
 }

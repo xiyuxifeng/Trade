@@ -54,6 +54,7 @@ crawl:
   sources:
     - source: tgb
       site: tgb.cn
+      trader_id: trader_a
       # 作者 ID（站点内唯一标识）
       author_id: "10461311"
       # 作者展示名（用于标记“作者/读者”评论身份）

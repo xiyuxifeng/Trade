@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
 
@@ -150,5 +150,5 @@ class RouterDecision(BaseModel):
 
 class PersonaClustersFile(BaseModel):
 	schema_version: str = "v0"
-	generated_at: datetime = Field(default_factory=datetime.utcnow)
+	generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 	clusters_by_trader: dict[str, list[StyleCluster]] = Field(default_factory=dict)

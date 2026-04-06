@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
@@ -70,7 +70,7 @@ class TradeIdea(BaseModel):
 class DailyReport(BaseModel):
     report_id: UUID = Field(default_factory=uuid4)
     as_of_date: date
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     ideas: list[TradeIdea] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
@@ -98,7 +98,7 @@ class IdeaEvaluation(BaseModel):
 class EvaluationResult(BaseModel):
     result_id: UUID = Field(default_factory=uuid4)
     as_of_date: date
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     evaluations: list[IdeaEvaluation] = Field(default_factory=list)
     summary: list[str] = Field(default_factory=list)
@@ -106,7 +106,7 @@ class EvaluationResult(BaseModel):
 
 class AgentTask(BaseModel):
     task_id: UUID = Field(default_factory=uuid4)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     type: str
     title: str

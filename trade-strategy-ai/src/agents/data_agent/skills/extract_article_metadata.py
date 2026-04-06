@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,13 @@ class ExtractStats:
     skipped: int = 0
     failed: int = 0
     generated_tasks: int = 0
+    llm_calls: int = 0
+    fallback_calls: int = 0
+
+
+_STOCK_CODE_RE = re.compile(r"\b([0-9]{6})\.(SZ|SH|BJ)\b")
+_POSITIVE_WORDS = ("涨", "盈利", "买入", "做多", "突破", "拉升", "看好", "多头")
+_NEGATIVE_WORDS = ("下跌", "亏损", "卖出", "做空", "止损", "看空", "空头")
 
 
 def _read_prompt(path: Path) -> str:
@@ -54,6 +62,55 @@ def _clamp(value: float | None, lo: float, hi: float) -> float | None:
     return max(lo, min(hi, value))
 
 
+def _heuristic_extract(article: BlogArticle) -> dict[str, Any]:
+    """LLM 不可用时，用轻量规则提取最基础的 metadata。"""
+    content = article.content_text or ""
+    raw_payload = article.raw_payload if isinstance(article.raw_payload, dict) else {}
+
+    symbols: list[str] = []
+    for match in _STOCK_CODE_RE.finditer(content):
+        code, exchange = match.group(1), match.group(2)
+        symbol = f"{code}.{exchange}"
+        if symbol not in symbols:
+            symbols.append(symbol)
+        if len(symbols) >= 5:
+            break
+
+    concepts: list[dict[str, str]] = []
+    trader_id = raw_payload.get("trader_id")
+    if isinstance(trader_id, str) and trader_id.strip():
+        concepts.append(
+            {
+                "name": trader_id.strip(),
+                "type": "trader",
+                "evidence": f"来源: {article.author_name or trader_id.strip()}",
+            }
+        )
+    elif article.author_name:
+        concepts.append(
+            {
+                "name": article.author_name,
+                "type": "author",
+                "evidence": "作者标注",
+            }
+        )
+
+    pos_count = sum(content.count(word) for word in _POSITIVE_WORDS)
+    neg_count = sum(content.count(word) for word in _NEGATIVE_WORDS)
+    total = pos_count + neg_count
+    sentiment = (pos_count - neg_count) / total if total else 0.0
+
+    return {
+        "extracted_concepts": concepts,
+        "trading_symbols": symbols,
+        "strategy_rules": [],
+        "preconditions": [],
+        "comment_insights": [],
+        "sentiment_score": sentiment,
+        "confidence_score": 0.1,
+    }
+
+
 def _validate_rules(rules: Any, *, source_url: str | None, published_at: datetime | None) -> list[dict[str, Any]]:
     if not isinstance(rules, list):
         return []
@@ -81,7 +138,7 @@ def _validate_rules(rules: Any, *, source_url: str | None, published_at: datetim
             rule = ArticleStrategyRule.model_validate(enriched)
         except Exception:
             continue
-        out.append(rule.model_dump())
+        out.append(rule.model_dump(mode="json"))
     return out
 
 
@@ -106,7 +163,7 @@ def _validate_preconditions(
             pre = ArticlePrecondition.model_validate(enriched)
         except Exception:
             continue
-        out.append(pre.model_dump())
+        out.append(pre.model_dump(mode="json"))
     return out
 
 
@@ -126,6 +183,18 @@ async def _extract_one(
         rule_p,
         pre_p,
         "最终输出必须合并为一个 JSON 对象，包含字段：extracted_concepts, trading_symbols, strategy_rules, preconditions, comment_insights, sentiment_score, confidence_score。",
+        (
+            "输出格式要求：\n"
+            "{\n"
+            '  "extracted_concepts": [...],   // 0-10 条，太多说明提取不精准\n'
+            '  "trading_symbols": [...],       // 0-5 个，优先提取有把握的\n'
+            '  "strategy_rules": [...],        // 0-5 条，宁缺毋滥\n'
+            '  "preconditions": [...],         // 0-5 条\n'
+            '  "comment_insights": [...],      // 0-3 条，从评论中提炼\n'
+            '  "sentiment_score": float,       // -1.0 ~ 1.0\n'
+            '  "confidence_score": float       // 0.0 ~ 1.0\n'
+            "}"
+        ),
     ])
 
     # 控制输入长度：避免把超长评论一次性塞爆
@@ -186,28 +255,34 @@ async def extract_and_store_metadata(
                 stats.skipped += 1
                 continue
 
+            error_message: str | None = None
+            if not client.is_enabled():
+                raw = _heuristic_extract(article)
+                mode = "fallback_heuristic"
+                stats.fallback_calls += 1
+            else:
+                stats.llm_calls += 1
+                try:
+                    raw = await _extract_one(client=client, prompts_dir=prompts_dir, article=article)
+                    mode = "llm"
+                except LLMError as exc:
+                    raw = _heuristic_extract(article)
+                    mode = "fallback_on_error"
+                    error_message = str(exc)
+                    stats.failed += 1
+                    stats.fallback_calls += 1
+                except Exception as exc:  # noqa: BLE001
+                    stats.failed += 1
+                    meta.raw_llm_output = {"error": str(exc)}
+                    continue
+
             try:
-                raw = await _extract_one(client=client, prompts_dir=prompts_dir, article=article)
-                mode = "llm"
-            except LLMError as exc:
-                raw = {
-                    "extracted_concepts": [],
-                    "trading_symbols": [],
-                    "strategy_rules": [],
-                    "preconditions": [],
-                    "comment_insights": [],
-                    "sentiment_score": None,
-                    "confidence_score": None,
-                    "_fallback": {"error": str(exc)},
-                }
-                mode = "fallback"
+                rules = _validate_rules(raw.get("strategy_rules"), source_url=article.source_url, published_at=article.published_at)
+                preconds = _validate_preconditions(raw.get("preconditions"), source_url=article.source_url, published_at=article.published_at)
             except Exception as exc:  # noqa: BLE001
                 stats.failed += 1
                 meta.raw_llm_output = {"error": str(exc)}
                 continue
-
-            rules = _validate_rules(raw.get("strategy_rules"), source_url=article.source_url, published_at=article.published_at)
-            preconds = _validate_preconditions(raw.get("preconditions"), source_url=article.source_url, published_at=article.published_at)
 
             meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
             meta.trading_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
@@ -217,6 +292,8 @@ async def extract_and_store_metadata(
             meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
             meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
             meta.raw_llm_output = {"mode": mode, "raw": raw}
+            if error_message:
+                meta.raw_llm_output["error"] = error_message
             meta.processed_at = _now_utc()
 
             stats.extracted += 1

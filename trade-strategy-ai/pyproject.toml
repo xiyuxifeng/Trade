@@ -53,7 +53,7 @@ dependencies = [
 packages = ["src", "cli", "api", "config"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/**", "cli/**", "api/**", "config/**", "pyproject.toml", "README.md"]
+include = ["src/**", "cli/**", "api/**", "config/**", "pyproject.toml"]
 
 [project.optional-dependencies]
 dev = [
@@ -71,6 +71,9 @@ line-length = 100
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "smoke: lightweight regression gate for the end-to-end orchestration path",
+]
 
 [tool.mypy]
 python_version = "3.11"

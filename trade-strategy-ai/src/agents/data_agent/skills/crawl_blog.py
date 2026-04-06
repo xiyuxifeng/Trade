@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 import hashlib
 from pathlib import Path
 import re
@@ -179,7 +179,7 @@ def crawl_source(
                 "source_article_id": item.get("source_article_id"),
                 "title": detail.get("title") or item.get("title"),
                 "published_at": item.get("published_at"),
-                "crawled_at": datetime.utcnow().isoformat(),
+                "crawled_at": datetime.now(UTC).isoformat(),
                 "content_text": content_text,
                 "content_html": detail.get("content_html"),
                 "content_hash": content_hash,

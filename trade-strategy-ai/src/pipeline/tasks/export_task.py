@@ -168,11 +168,26 @@ def _serialize_metadata(meta: ArticleMetadata) -> tuple[Any, ...]:
     )
 
 
-def _get_max_article_id(conn: duckdb.DuckDBPyConnection) -> str | None:
-    result = conn.execute("SELECT MAX(id::VARCHAR) FROM articles").fetchone()
+WATERMARK_KEY = "articles_crawled_at"
+
+
+def _get_watermark(conn: duckdb.DuckDBPyConnection) -> datetime | None:
+    """Read the last exported crawled_at watermark from export_state."""
+    result = conn.execute(
+        "SELECT watermark FROM export_state WHERE key = ?",
+        (WATERMARK_KEY,),
+    ).fetchone()
     if result and result[0]:
-        return str(result[0])
+        return datetime.fromisoformat(str(result[0]))
     return None
+
+
+def _set_watermark(conn: duckdb.DuckDBPyConnection, watermark: datetime) -> None:
+    """Update the export watermark in export_state (upsert)."""
+    conn.execute(
+        "INSERT OR REPLACE INTO export_state (key, watermark, updated_at) VALUES (?, ?, ?)",
+        (WATERMARK_KEY, watermark.isoformat(), datetime.now().isoformat()),
+    )
 
 
 async def run_export_task(

@@ -73,7 +73,7 @@
 ### Blog Crawler (博客爬虫)
 - [x] P1-001 分析目标博客网站结构和动态加载机制
 - [x] P1-002 开发静态 HTML 爬虫模块（BeautifulSoup）
-- [ ] P1-003 开发动态页面爬虫模块（Playwright）
+- [x] P1-003 开发动态页面爬虫模块（Playwright）
 - [x] P1-004 实现博客内容提取器（标题、正文、发布时间、标签）
 - [ ] P1-005 集成 Nginx + Proxy 池实现反爬虫防护
 - [x] P1-006 建立爬虫错误重试和日志机制
@@ -91,33 +91,33 @@
 - [x] P1-006I 抽象站点抓取器接口，首版实现 `TgbCrawler`，兼容未来多站点扩展
 
 ### Trade Log Parser (交易记录解析)
-- [ ] P1-007 定义交易记录 Schema（时间、标的、方向、价格、仓位）
-- [ ] P1-008 开发 HTML/Table 交易记录解析器
-- [ ] P1-009 开发 PDF 交易记录解析器
-- [ ] P1-010 实现交易数据验证（重复、冲突、缺失）
-- [ ] P1-011 建立交易数据导入流程（CSV/Excel 支持）
+ - [x] P1-007 定义交易记录 Schema（时间、标的、方向、价格、仓位）
+ - [x] P1-008 开发 HTML/Table 交易记录解析器
+ - [x] P1-009 开发 PDF 交易记录解析器
+ - [x] P1-010 实现交易数据验证（重复、冲突、缺失）
+ - [x] P1-011 建立交易数据导入流程（CSV/Excel 支持）
 
 补充（多交易员绑定）：
-- [ ] P1-011A 增加 trader_id/account_id 绑定策略（导入时能归属到 TraderAgent）
+- [x] P1-011A 增加 trader_id/account_id 绑定策略（导入时能归属到 TraderAgent）
 
 ### Market Data Integration (市场数据接入)
-- [ ] P1-012 集成股票 K线数据源（TuShare / AKShare）
-- [ ] P1-013 实现数据本地缓存和更新策略
-- [ ] P1-014 集成指数和板块数据
-- [ ] P1-015 建立数据质量检查（OHLCV 合理性）
+ - [x] P1-012 集成股票 K线数据源（TuShare / AKShare）
+ - [x] P1-013 实现数据本地缓存和更新策略
+ - [x] P1-014 集成指数和板块数据
+ - [x] P1-015 建立数据质量检查（OHLCV 合理性）
 
 ### Database & Storage (数据库与存储)
 - [x] P1-016 配置 PostgreSQL 连接池（SQLAlchemy）（已在 `config/database.py` + `src/db/session.py`）
 - [x] P1-017 实现 ORM 模型（已在 `src/models/`；Repository/DAO 层可后续补齐）
 - [x] P1-017A 建立 Alembic versions 与首个 migration（把现有 ORM 模型落地到 DB，可一键 migrate）
-- [ ] P1-018 建立数据导入脚本和初始化流程
+- [x] P1-018 建立数据导入脚本和初始化流程
 - [x] P1-018A 抓取 JSONL 入库（articles.jsonl → BlogArticle/ArticleMetadata，含 source_url/content_hash 幂等去重/upsert）
-- [ ] P1-019 配置数据备份和恢复机制
-- [ ] P1-020 优化数据库查询性能（Query Plan）
-- [ ] P1-021 建立数据版本控制和审计日志
+- [x] P1-019 配置数据备份和恢复机制
+- [x] P1-020 优化数据库查询性能（Query Plan）
+- [x] P1-021 建立数据版本控制和审计日志
 
 ### Data Pipeline & Validation (数据管道与验证)
-- [ ] P1-022 设计 Airflow DAG 或 Luigi 数据流程
+- [x] P1-022 设计 Airflow DAG 或 Luigi 数据流程（已按方案 A 落地为轻量 DAG 抽象层）
 - [ ] P1-023 实现数据异常检测（离群值、缺失）
 - [ ] P1-024 实现数据去重和去噪
 - [ ] P1-025 编写数据质量测试（单元测试）

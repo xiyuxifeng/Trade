@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime
 import os
 from pathlib import Path
@@ -22,10 +23,22 @@ from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 from src.common.utils import ensure_dir
 from src.pipeline.dag import run_pipeline
 from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
+from src.agents.data_agent.skills.import_trade_logs import (
+	import_trade_logs_from_csv,
+	import_trade_logs_from_excel,
+	import_trade_logs_from_html,
+	import_trade_logs_from_pdf,
+	store_trade_logs,
+)
 from src.persona.cluster_builder import build_clusters_from_db
 from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.sample import build_sample_clusters_file
 from src.persona.storage import write_persona_clusters_file
+from src.market_data.service import MarketDataCache, MarketDataSyncService
+from src.backup.service import backup_project_state, restore_project_state
+from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
+from scripts.init_db import init_db
+from scripts.seed_data import seed_project_data
 
 
 app = typer.Typer(add_completion=False)
@@ -66,15 +79,17 @@ evaluation:
 	# 是否“亏损即触发复盘”
 	loss_trigger: true
 
-data:
-	# 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
-	providers: ["mock"]
-	# mock_prices 用于演示闭环，后续可接入真实行情
-	mock_prices:
-		000001.SZ: 10.0
-		510300.SH: 3.5
+	data:
+		# 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
+		providers: ["mock"]
+		# mock_prices 用于演示闭环，后续可接入真实行情
+		mock_prices:
+			000001.SZ: 10.0
+			510300.SH: 3.5
+		# market_data_cache_dir 用于存放 AkShare 同步后的标准化日线缓存
+		market_data_cache_dir: data/processed/market_data
 
-crawl:
+	crawl:
 	# 站点认证信息（按域名/站点名分组）
 	auth: {}
 	# 示例（淘股吧，建议通过环境变量注入 Cookie）：
@@ -132,7 +147,7 @@ persona:
 	# 基准日线 CSV；为空时可用 market-state-build --from-akshare 拉取
 	market_state_benchmark_csv: null
 
-traders:
+	traders:
 	- trader_id: trader_a
 		# 展示名（用于报告展示）
 		display_name: Trader A
@@ -180,6 +195,61 @@ def crawl(
 	configure_logging(log_level)
 	for line in run_crawl_command(config_path=config, max_articles=max_articles):
 		typer.echo(line)
+
+
+@app.command("import-trade-logs")
+def import_trade_logs(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	csv_path: Path = typer.Option(..., help="交易记录 CSV/XLSX/HTML/PDF 路径"),
+	source: str = typer.Option("csv_import", help="交易来源标识"),
+	trader_account_map: str | None = typer.Option(None, help="JSON 格式的 trader_id -> account_id 映射"),
+	dry_run: bool = typer.Option(False, help="仅解析和校验，不写入数据库"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+
+	account_map = json.loads(trader_account_map) if trader_account_map else None
+	if account_map is not None and not isinstance(account_map, dict):
+		raise typer.BadParameter("trader_account_map must be a JSON object")
+
+	suffix = csv_path.suffix.lower()
+	if suffix in {".xlsx", ".xlsm", ".xls"}:
+		records, stats = import_trade_logs_from_excel(
+			xlsx_path=csv_path,
+			source=source,
+			trader_account_map=account_map,
+		)
+	elif suffix in {".html", ".htm"}:
+		records, stats = import_trade_logs_from_html(
+			html_path=csv_path,
+			source=source,
+			trader_account_map=account_map,
+		)
+	elif suffix == ".pdf":
+		records, stats = import_trade_logs_from_pdf(
+			pdf_path=csv_path,
+			source=source,
+			trader_account_map=account_map,
+		)
+	else:
+		records, stats = import_trade_logs_from_csv(
+			csv_path=csv_path,
+			source=source,
+			trader_account_map=account_map,
+		)
+	typer.echo(
+		f"Parsed trade logs: rows={stats.rows_seen} imported={len(records)} "
+		f"invalid={stats.invalid} duplicates={stats.duplicates}"
+	)
+
+	for issue in stats.issues:
+		typer.echo(f"{issue.severity.value.upper()}: {issue.code}: {issue.message}")
+
+	if not dry_run:
+		imported = asyncio.run(store_trade_logs(records))
+		typer.echo(f"Stored trade logs: {imported}")
 
 
 @app.command("db-check")
@@ -316,6 +386,16 @@ async def _e2e_regression_async(
 	ensure_dir(full_clusters.parent)
 	await build_clusters_from_db(config=loaded_cfg.config, dest=full_clusters)
 
+	# 4.5) build trader profiles (from metadata + clusters)
+	profiles_file = await build_trader_profiles(
+		config=loaded_cfg.config,
+		base_dir=base_dir,
+		clusters_path=full_clusters,
+		max_articles_per_trader=max(1, int(extract_limit)),
+	)
+	profiles_path = default_profiles_path(base_dir=base_dir, config=loaded_cfg.config)
+	write_trader_profiles_file(path=profiles_path, data=profiles_file)
+
 	# 5) run pre-market with persona enabled
 	cfg2 = loaded_cfg.config.model_copy(deep=True)
 	cfg2.persona.enable = True
@@ -324,8 +404,11 @@ async def _e2e_regression_async(
 	mgr = ManagerAgent(config=cfg2, base_dir=base_dir)
 	report = await mgr.run_pre_market(as_of_date=date.today(), force=True)
 	html_path = mgr.export_daily_report_html(report=report)
-	typer.echo(f"E2E OK. DailyReport ideas={len(report.ideas)}")
+	result = await mgr.run_after_close(as_of_date=date.today(), force=True)
+	eval_html_path = mgr.export_evaluation_html(result=result)
+	typer.echo(f"E2E OK. DailyReport ideas={len(report.ideas)} evaluation={len(result.evaluations)}")
 	typer.echo(f"HTML: {html_path}")
+	typer.echo(f"Evaluation HTML: {eval_html_path}")
 
 
 @app.command("e2e-regression")
@@ -372,6 +455,98 @@ def init_config(
 	dest.parent.mkdir(parents=True, exist_ok=True)
 	dest.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
 	typer.echo(f"Wrote config: {dest}")
+
+
+@app.command("seed-data")
+def seed_data(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""Import crawl JSONL and trade logs into the local database."""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	stats = asyncio.run(seed_project_data(config=loaded.config, base_dir=base_dir))
+	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
+	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
+	typer.echo(f"Article JSONL paths: {len(stats.article_jsonl_paths)}")
+	typer.echo(f"Trade log paths: {len(stats.trade_log_paths)}")
+
+
+@app.command("init-project")
+def init_project(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""Run migrations and seed local data in one step."""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	init_db(project_root=base_dir)
+	stats = asyncio.run(seed_project_data(config=loaded.config, base_dir=base_dir))
+	typer.echo("Project initialization complete")
+	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
+	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
+
+
+@app.command("backup-data")
+def backup_data(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	dest: Path | None = typer.Option(None, help="备份目录；未提供则自动生成"),
+	include_processed: bool = typer.Option(True, help="是否包含 data/processed"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""Back up database tables and processed artifacts into one folder."""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	result = asyncio.run(
+		backup_project_state(
+			base_dir=base_dir,
+			backup_dir=dest,
+			include_processed=include_processed,
+		)
+	)
+	typer.echo(f"Backup written: {result.backup_dir}")
+	typer.echo(f"Tables: {', '.join(result.tables)}")
+	typer.echo(f"Processed copied: {result.processed_copied}")
+
+
+@app.command("restore-data")
+def restore_data(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	source: Path = typer.Option(..., help="备份目录路径"),
+	include_processed: bool = typer.Option(True, help="是否恢复 data/processed"),
+	force: bool = typer.Option(False, help="确认执行破坏性恢复"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""Restore database tables and processed artifacts from one backup folder."""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	result = asyncio.run(
+		restore_project_state(
+			base_dir=base_dir,
+			backup_dir=source,
+			include_processed=include_processed,
+			force=force,
+		)
+	)
+	typer.echo(f"Restore completed from: {result.backup_dir}")
+	typer.echo(f"Tables: {', '.join(result.tables)}")
+	typer.echo(f"Processed restored: {result.processed_restored}")
 
 
 @app.command("run-pre-market")
@@ -508,8 +683,15 @@ def market_state_build(
 			symbol=cfg.persona.market_state_benchmark_symbol,
 		)
 	else:
-		typer.echo("persona.market_state_benchmark_csv is not set; pass --from-akshare or set benchmark_csv")
-		raise typer.Exit(code=2)
+		cache_dir = base_dir / cfg.data.market_data_cache_dir
+		cached_csv = MarketDataCache(cache_dir).path_for_symbol(cfg.persona.market_state_benchmark_symbol)
+		if cached_csv.exists():
+			src = DailySeriesSource(symbol=cfg.persona.market_state_benchmark_symbol, csv_path=cached_csv)
+			df = load_daily_close_series(src)
+			ms = classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=src.symbol)
+		else:
+			typer.echo("persona.market_state_benchmark_csv is not set; pass --from-akshare or sync cache first")
+			raise typer.Exit(code=2)
 
 	assert ms is not None
 
@@ -518,6 +700,86 @@ def market_state_build(
 	full_dest.write_text(ms.model_dump_json(indent=2), encoding="utf-8")
 	typer.echo(f"Wrote MarketState: {full_dest}")
 	typer.echo(f"regime={ms.regime} vol={ms.volatility}")
+
+
+@app.command("market-data-sync")
+def market_data_sync(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	symbol: list[str] = typer.Option([], "--symbol", help="需要同步的标的，可重复传入"),
+	index_symbol: list[str] = typer.Option([], "--index-symbol", help="需要同步的指数，可重复传入"),
+	industry_board: list[str] = typer.Option([], "--industry-board", help="需要同步的行业板块，可重复传入"),
+	concept_board: list[str] = typer.Option([], "--concept-board", help="需要同步的概念板块，可重复传入"),
+	start_date: str | None = typer.Option(None, help="起始日期 YYYY-MM-DD"),
+	end_date: str | None = typer.Option(None, help="结束日期 YYYY-MM-DD"),
+	adjust: str = typer.Option("", help="复权方式（AkShare 参数）"),
+	cache_dir: Path | None = typer.Option(None, help="缓存目录，默认读取 config.data.market_data_cache_dir"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""同步市场数据到本地缓存，并为后续 DataAgent/MarketState 复用。"""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	cfg = loaded.config
+	base_dir = _project_base_dir(loaded.config_path)
+
+	symbols = [item.strip() for item in symbol if item.strip()]
+	if not symbols:
+		if cfg.persona.market_state_benchmark_symbol:
+			symbols = [cfg.persona.market_state_benchmark_symbol]
+		else:
+			symbols = [s for s in cfg.data.mock_prices.keys() if s.strip()]
+	if not symbols:
+		symbols = []
+
+	resolved_cache_dir = cache_dir if cache_dir is not None else Path(cfg.data.market_data_cache_dir)
+	if not resolved_cache_dir.is_absolute():
+		resolved_cache_dir = base_dir / resolved_cache_dir
+
+	service = MarketDataSyncService(cache_dir=resolved_cache_dir)
+
+	results = []
+	if symbols:
+		results.extend(
+			service.sync_symbols(
+				symbols=symbols,
+				start_date=_parse_date(start_date) if start_date else None,
+				end_date=_parse_date(end_date) if end_date else None,
+				adjust=adjust,
+			)
+		)
+	for item in index_symbol:
+		results.append(
+			service.sync_index(
+				item,
+				start_date=_parse_date(start_date) if start_date else None,
+				end_date=_parse_date(end_date) if end_date else None,
+			)
+		)
+	for item in industry_board:
+		results.append(
+			service.sync_industry_board(
+				item,
+				start_date=_parse_date(start_date) if start_date else None,
+				end_date=_parse_date(end_date) if end_date else None,
+			)
+		)
+	for item in concept_board:
+		results.append(
+			service.sync_concept_board(
+				item,
+				start_date=_parse_date(start_date) if start_date else None,
+				end_date=_parse_date(end_date) if end_date else None,
+			)
+		)
+
+	if not results:
+		typer.echo("No symbols provided and no default benchmark or mock_prices configured")
+		raise typer.Exit(code=2)
+
+	for result in results:
+		typer.echo(
+			f"{result.symbol}: rows={result.rows_written} latest_close={result.latest_close} cache={result.cache_path}"
+		)
 
 
 @app.command("scheduler-start")

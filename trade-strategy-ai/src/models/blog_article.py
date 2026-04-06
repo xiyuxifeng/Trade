@@ -20,6 +20,7 @@ class BlogArticle(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_blog_articles_source_published_at", "source", "published_at"),
         Index("ix_blog_articles_author_published_at", "author_id", "published_at"),
+        Index("ix_blog_articles_crawled_at", "crawled_at"),
         Index("ix_blog_articles_content_hash", "content_hash"),
         CheckConstraint("char_length(title) > 0", name="title_not_empty"),
         CheckConstraint("char_length(content_text) > 0", name="content_text_not_empty"),

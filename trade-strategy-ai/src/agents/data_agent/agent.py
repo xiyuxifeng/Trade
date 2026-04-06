@@ -7,6 +7,8 @@ from src.schemas.contracts import DataRequest, DataResponse, DataResponseStatus
 
 
 class DataAgent(BaseAgent):
+	"""Minimal market data provider that serves the trader and manager loops."""
+
 	def __init__(self, *, config: AppConfig) -> None:
 		super().__init__("data")
 		self.config = config
@@ -30,6 +32,7 @@ class DataAgent(BaseAgent):
 			symbols=request.symbols,
 			fields=request.fields,
 			mock_prices=self.config.data.mock_prices,
+			market_data_cache_dir=self.config.data.market_data_cache_dir,
 		)
 
 		return DataResponse(

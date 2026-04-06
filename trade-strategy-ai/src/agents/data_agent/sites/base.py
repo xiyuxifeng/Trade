@@ -6,6 +6,8 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class AuthProvider:
+    """Build request headers and detect login-gated HTML responses."""
+
     site: str
     cookie: str | None
 
@@ -39,6 +41,8 @@ class AuthProvider:
 
 
 class SiteCrawler(Protocol):
+    """Protocol for site-specific crawlers used by the crawl pipeline."""
+
     source: str
 
     def fetch_article_list(self) -> list[dict[str, str]]:

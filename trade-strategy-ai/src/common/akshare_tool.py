@@ -9,97 +9,178 @@ import pandas as pd
 
 
 def _normalize_cn_symbol(symbol: str) -> str:
-	"""Normalize `510300.SH` -> `510300` for AkShare EM endpoints."""
-	return symbol.split(".")[0].strip()
+    """Normalize `510300.SH` -> `510300` for AkShare EM endpoints."""
+    return symbol.split(".")[0].strip()
 
 
 def _to_yyyymmdd(d: date) -> str:
-	return d.strftime("%Y%m%d")
+    return d.strftime("%Y%m%d")
 
 
 def _pick_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
-	for c in candidates:
-		if c in df.columns:
-			return c
-	return None
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
 
 
 @dataclass(frozen=True)
 class AkshareDailyRequest:
-	symbol: str
-	start_date: date | None = None
-	end_date: date | None = None
-	adjust: str = ""  # no adjust by default
+    """Normalized request object for AkShare daily history endpoints."""
+
+    symbol: str
+    start_date: date | None = None
+    end_date: date | None = None
+    adjust: str = ""  # no adjust by default
 
 
 class AkshareMarketDataTool:
-	"""AkShare market data helper.
+    """AkShare market data helper.
 
-	Design goals:
-	- Small, reusable wrapper around AkShare
-	- Normalize output columns to English: date, open, high, low, close, volume
-	- Provide a stable CSV export for downstream steps (MarketState, caching, etc.)
-	"""
+    Design goals:
+    - Small, reusable wrapper around AkShare
+    - Normalize output columns to English: date, open, high, low, close, volume
+    - Provide a stable CSV export for downstream steps (MarketState, caching, etc.)
+    """
 
-	def __init__(self) -> None:
-		try:
-			import akshare as ak  # type: ignore
-		except Exception as exc:  # noqa: BLE001
-			raise RuntimeError(
-				"AkShare is not available. Install dependencies with: pip install -e trade-strategy-ai"
-			) from exc
-		self._ak = ak
+    def __init__(self) -> None:
+        """Import AkShare lazily so the rest of the app can run without it."""
 
-	def fetch_etf_daily_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
-		"""Fetch ETF daily history via Eastmoney endpoint.
+        try:
+            import akshare as ak  # type: ignore
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                "AkShare is not available. Install dependencies with: pip install -e trade-strategy-ai"
+            ) from exc
+        self._ak = ak
 
-		Returns a DataFrame with columns: date, open, high, low, close, volume (volume optional).
-		"""
+    def _normalize_daily_frame(self, *, df: pd.DataFrame, symbol: str, source: str) -> pd.DataFrame:
+        """Normalize heterogeneous AkShare tables into a shared daily schema."""
+        date_col = _pick_col(df, ["日期", "date", "交易日期", "trade_date"]) or "日期"
+        open_col = _pick_col(df, ["开盘", "open"])
+        high_col = _pick_col(df, ["最高", "high"])
+        low_col = _pick_col(df, ["最低", "low"])
+        close_col = _pick_col(df, ["收盘", "close"])
+        vol_col = _pick_col(df, ["成交量", "volume"])
+        turnover_col = _pick_col(df, ["成交额", "turnover", "amount"])
 
-		symbol = _normalize_cn_symbol(req.symbol)
-		kwargs: dict[str, Any] = {
-			"symbol": symbol,
-			"period": "daily",
-			"adjust": req.adjust,
-		}
-		if req.start_date:
-			kwargs["start_date"] = _to_yyyymmdd(req.start_date)
-		if req.end_date:
-			kwargs["end_date"] = _to_yyyymmdd(req.end_date)
+        out = pd.DataFrame()
+        out["date"] = pd.to_datetime(df[date_col]).dt.date
+        out["symbol"] = symbol
+        out["market"] = "CN"
+        out["timeframe"] = "1d"
+        if open_col:
+            out["open"] = pd.to_numeric(df[open_col], errors="coerce")
+        else:
+            out["open"] = pd.to_numeric(df[close_col], errors="coerce")
+        if high_col:
+            out["high"] = pd.to_numeric(df[high_col], errors="coerce")
+        else:
+            out["high"] = pd.to_numeric(df[close_col], errors="coerce")
+        if low_col:
+            out["low"] = pd.to_numeric(df[low_col], errors="coerce")
+        else:
+            out["low"] = pd.to_numeric(df[close_col], errors="coerce")
+        if close_col:
+            out["close"] = pd.to_numeric(df[close_col], errors="coerce")
+        else:
+            raise ValueError("Unable to find close column from AkShare daily data")
+        if vol_col:
+            out["volume"] = pd.to_numeric(df[vol_col], errors="coerce")
+        else:
+            out["volume"] = 0
+        if turnover_col:
+            out["turnover"] = pd.to_numeric(df[turnover_col], errors="coerce")
+        else:
+            out["turnover"] = 0
+        out["source"] = source
+        out.dropna(subset=["date", "close"], inplace=True)
+        out.sort_values("date", inplace=True)
+        return out
 
-		# AkShare API may evolve; keep this isolated.
-		df = self._ak.fund_etf_hist_em(**kwargs)
-		if df is None or df.empty:
-			raise ValueError(f"AkShare returned empty ETF daily data: {req.symbol}")
+    def fetch_etf_daily_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch ETF daily history via Eastmoney endpoint.
 
-		date_col = _pick_col(df, ["日期", "date", "交易日期"]) or "日期"
-		open_col = _pick_col(df, ["开盘", "open"])
-		high_col = _pick_col(df, ["最高", "high"])
-		low_col = _pick_col(df, ["最低", "low"])
-		close_col = _pick_col(df, ["收盘", "close"])
-		vol_col = _pick_col(df, ["成交量", "volume"])
+        Returns a DataFrame with columns: date, open, high, low, close, volume (volume optional).
+        """
 
-		out = pd.DataFrame()
-		out["date"] = pd.to_datetime(df[date_col]).dt.date
-		if open_col:
-			out["open"] = pd.to_numeric(df[open_col], errors="coerce")
-		if high_col:
-			out["high"] = pd.to_numeric(df[high_col], errors="coerce")
-		if low_col:
-			out["low"] = pd.to_numeric(df[low_col], errors="coerce")
-		if close_col:
-			out["close"] = pd.to_numeric(df[close_col], errors="coerce")
-		else:
-			raise ValueError("Unable to find close column from AkShare ETF data")
-		if vol_col:
-			out["volume"] = pd.to_numeric(df[vol_col], errors="coerce")
+        symbol = _normalize_cn_symbol(req.symbol)
+        kwargs: dict[str, Any] = {
+            "symbol": symbol,
+            "period": "daily",
+            "adjust": req.adjust,
+        }
+        if req.start_date:
+            kwargs["start_date"] = _to_yyyymmdd(req.start_date)
+        if req.end_date:
+            kwargs["end_date"] = _to_yyyymmdd(req.end_date)
 
-		out.dropna(subset=["date", "close"], inplace=True)
-		out.sort_values("date", inplace=True)
-		return out
+        # AkShare API may evolve; keep this isolated.
+        df = self._ak.fund_etf_hist_em(**kwargs)
+        if df is None or df.empty:
+            raise ValueError(f"AkShare returned empty ETF daily data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.etf")
 
-	def write_daily_csv(self, *, df: pd.DataFrame, dest_path: str | Path) -> Path:
-		p = Path(dest_path)
-		p.parent.mkdir(parents=True, exist_ok=True)
-		df.to_csv(p, index=False)
-		return p
+    def fetch_stock_daily_a(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch A-share daily history via AkShare."""
+
+        symbol = _normalize_cn_symbol(req.symbol)
+        kwargs: dict[str, Any] = {
+            "symbol": symbol,
+            "period": "daily",
+            "adjust": req.adjust,
+        }
+        if req.start_date:
+            kwargs["start_date"] = _to_yyyymmdd(req.start_date)
+        if req.end_date:
+            kwargs["end_date"] = _to_yyyymmdd(req.end_date)
+
+        df = self._ak.stock_zh_a_hist(**kwargs)
+        if df is None or df.empty:
+            raise ValueError(f"AkShare returned empty stock daily data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.stock")
+
+    def fetch_index_daily_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch mainland index history via AkShare Eastmoney endpoint."""
+
+        kwargs: dict[str, Any] = {
+            "symbol": req.symbol,
+            "start_date": _to_yyyymmdd(req.start_date) if req.start_date else "19900101",
+            "end_date": _to_yyyymmdd(req.end_date) if req.end_date else "20500101",
+        }
+        df = self._ak.stock_zh_index_daily_em(**kwargs)
+        if df is None or df.empty:
+            raise ValueError(f"AkShare returned empty index daily data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.index")
+
+    def fetch_board_industry_hist_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch industry board history via AkShare Eastmoney endpoint."""
+
+        kwargs: dict[str, Any] = {
+            "symbol": req.symbol,
+            "start_date": _to_yyyymmdd(req.start_date) if req.start_date else "19900101",
+            "end_date": _to_yyyymmdd(req.end_date) if req.end_date else "20500101",
+        }
+        df = self._ak.stock_board_industry_hist_em(**kwargs)
+        if df is None or df.empty:
+            raise ValueError(f"AkShare returned empty industry board data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.board.industry")
+
+    def fetch_board_concept_hist_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch concept board history via AkShare Eastmoney endpoint."""
+
+        kwargs: dict[str, Any] = {
+            "symbol": req.symbol,
+            "start_date": _to_yyyymmdd(req.start_date) if req.start_date else "19900101",
+            "end_date": _to_yyyymmdd(req.end_date) if req.end_date else "20500101",
+        }
+        df = self._ak.stock_board_concept_hist_em(**kwargs)
+        if df is None or df.empty:
+            raise ValueError(f"AkShare returned empty concept board data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.board.concept")
+
+    def write_daily_csv(self, *, df: pd.DataFrame, dest_path: str | Path) -> Path:
+        p = Path(dest_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(p, index=False)
+        return p

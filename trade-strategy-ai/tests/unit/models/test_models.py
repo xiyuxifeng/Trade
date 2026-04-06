@@ -1,5 +1,6 @@
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.data_audit_event import DataAuditEvent
 from src.models.market_data import MarketData
 from src.models.trade_log import TradeLog
 
@@ -8,6 +9,7 @@ def test_blog_article_table_metadata() -> None:
     indexes = {index.name for index in BlogArticle.__table__.indexes}
     assert "ix_blog_articles_source_published_at" in indexes
     assert "ix_blog_articles_author_published_at" in indexes
+    assert "ix_blog_articles_crawled_at" in indexes
     assert BlogArticle.__table__.c.source_url.unique is True
 
 
@@ -24,3 +26,9 @@ def test_market_data_unique_constraint_present() -> None:
 
 def test_article_metadata_one_to_one() -> None:
     assert ArticleMetadata.__table__.c.article_id.unique is True
+
+
+def test_data_audit_event_table_metadata() -> None:
+    indexes = {index.name for index in DataAuditEvent.__table__.indexes}
+    assert "ix_data_audit_events_created_at" in indexes
+    assert "ix_data_audit_events_event_type_created_at" in indexes

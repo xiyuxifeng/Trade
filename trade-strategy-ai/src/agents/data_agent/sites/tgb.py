@@ -10,6 +10,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from src.agents.data_agent.sites.base import AuthProvider
+from src.agents.data_agent.skills.crawl_dynamic import render_page_html
 
 
 def _default_backoff(seconds: list[int]) -> Callable[[int], float]:
@@ -23,6 +24,8 @@ def _default_backoff(seconds: list[int]) -> Callable[[int], float]:
 
 @dataclass
 class TgbCrawler:
+    """Minimal TouGouBa crawler with optional JS rendering support."""
+
     auth_provider: AuthProvider
     list_url: str
     source: str = "tgb"
@@ -30,12 +33,18 @@ class TgbCrawler:
     max_interval: float = 2.0
     backoff_seconds: tuple[int, ...] = (5, 15, 30)
     max_retries: int = 3
+    render_js: bool = False
+    render_timeout_ms: int = 30000
 
     def _throttle(self) -> None:
+        """Sleep briefly between requests to reduce burst pressure."""
+
         delay = random.uniform(self.min_interval, self.max_interval)
         time.sleep(delay)
 
     def _get_text(self, url: str) -> str:
+        """Fetch a page, optionally rendering JS first when configured."""
+
         headers = self.auth_provider.get_session_headers()
         headers.update({
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -44,6 +53,20 @@ class TgbCrawler:
             "Pragma": "no-cache",
             "Upgrade-Insecure-Requests": "1",
         })
+
+        if self.render_js:
+            try:
+                html = render_page_html(
+                    url,
+                    headers=headers,
+                    wait_until="networkidle",
+                    timeout_ms=self.render_timeout_ms,
+                )
+                if html.strip():
+                    return html
+            except Exception:
+                # Fall back to the plain HTTP path if Playwright rendering fails.
+                pass
 
         with httpx.Client(headers=headers, timeout=20.0, follow_redirects=True) as client:
             last_exc: Exception | None = None
@@ -77,6 +100,8 @@ class TgbCrawler:
             raise last_exc or RuntimeError(f"Failed to fetch {url} after {self.max_retries} attempts")
 
     def fetch_article_list(self) -> list[dict[str, str]]:
+        """Collect article list pages until pagination stops producing new items."""
+
         articles: list[dict[str, str]] = []
         seen_urls: set[str] = set()
         page = 1
@@ -103,11 +128,15 @@ class TgbCrawler:
         return articles
 
     def fetch_article_detail(self, article_url: str) -> dict[str, str]:
+        """Fetch one article detail page and normalize it."""
+
         self._throttle()
         html = self._get_text(article_url)
         return self.parse_article_detail(html, article_url)
 
     def fetch_comments(self, article_url: str) -> list[dict[str, str]]:
+        """Fetch all comment pages for one article."""
+
         all_comments: list[dict[str, str]] = []
         seen_ids: set[str] = set()
         page = 1

@@ -49,6 +49,7 @@ class TraderConfig(BaseModel):
 class DataConfig(BaseModel):
     providers: list[str] = Field(default_factory=lambda: ["mock"])  # Phase 0 default
     mock_prices: dict[str, float] = Field(default_factory=dict)
+    market_data_cache_dir: str = "data/processed/market_data"
 
 
 class CrawlAuthConfig(BaseModel):
@@ -70,6 +71,7 @@ class CrawlSourceConfig(BaseModel):
     author_name: str
     list_url: str
     enabled: bool = True
+    render_js: bool = False
 
 
 class CrawlConfig(BaseModel):

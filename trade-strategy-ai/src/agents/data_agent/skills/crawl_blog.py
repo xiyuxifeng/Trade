@@ -17,6 +17,8 @@ LOW_VALUE_COMMENTS = {"谢谢", "感谢", "打卡", "点赞", "666"}
 
 @dataclass(frozen=True)
 class ExistingArticleIndex:
+    """Incremental crawl state used to stop when old content is reached."""
+
     seen_urls: set[str]
     seen_hashes: set[str]
     last_seen_article_url: str | None
@@ -25,6 +27,8 @@ class ExistingArticleIndex:
 
 @dataclass(frozen=True)
 class ClassifiedComment:
+    """Normalized comment record with filter metadata."""
+
     raw_text: str
     clean_text: str
     is_author: bool
@@ -44,6 +48,8 @@ def classify_comment(
     root_comment_id: str | None,
     reply_to_user: str | None,
 ) -> ClassifiedComment:
+    """Clean and classify a single comment before persistence."""
+
     clean_text = _clean_comment_text(raw_text)
     filter_reasons: list[str] = []
     if clean_text in LOW_VALUE_COMMENTS or len(clean_text) <= 2:
@@ -68,6 +74,8 @@ def should_stop_incremental_scan(
     published_at: datetime | None,
     index: ExistingArticleIndex,
 ) -> bool:
+    """Stop a crawl once we hit a previously seen article or hash."""
+
     if source_url in index.seen_urls:
         return True
     if content_hash and content_hash in index.seen_hashes:
@@ -80,6 +88,8 @@ def should_stop_incremental_scan(
 
 
 def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = None) -> list[str]:
+    """Run the configured crawl sources and append article JSONL outputs."""
+
     results: list[str] = []
     for source_cfg in config.crawl.sources:
         if not source_cfg.enabled:
@@ -108,6 +118,7 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
             max_interval=throttle.max_interval_seconds,
             backoff_seconds=tuple(throttle.backoff_seconds),
             max_retries=len(throttle.backoff_seconds),
+            render_js=source_cfg.render_js,
         )
         count = crawl_source(
             source_cfg=source_cfg,
@@ -130,6 +141,8 @@ def crawl_source(
     state_path: Path,
     max_articles: int | None,
 ) -> int:
+    """Crawl one source and persist its article records."""
+
     written = 0
     seen_urls = set(index.seen_urls)
     seen_hashes = set(index.seen_hashes)

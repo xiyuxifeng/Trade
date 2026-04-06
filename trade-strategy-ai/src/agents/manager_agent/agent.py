@@ -29,265 +29,400 @@ from src.schemas.contracts import (
 	EvaluationResult,
 	IdeaEvaluation,
 )
+from src.trader_profile.schemas import TraderProfile
+from src.trader_profile.service import default_profiles_path, load_trader_profiles_file
+from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
+from src.trader_memory.service import TraderMemoryStore, default_memory_path
+from src.market_data.service import MarketDataCache
 
 
 class ManagerAgent:
-	def __init__(self, *, config: AppConfig, base_dir: Path) -> None:
-		self.config = config
-		self.base_dir = base_dir
-		self.logger = get_logger("agent.manager")
+    """Orchestrates the pre-market, after-close, and profile/memory feedback loop."""
 
-		self.output_dir = ensure_dir(self.base_dir / self.config.storage.output_dir)
-		self.tasks_path = self.output_dir / "agent_tasks.jsonl"
+    def __init__(self, *, config: AppConfig, base_dir: Path) -> None:
+        self.config = config
+        self.base_dir = base_dir
+        self.logger = get_logger("agent.manager")
 
-		self.data_agent = DataAgent(config=config)
+        self.output_dir = ensure_dir(self.base_dir / self.config.storage.output_dir)
+        self.tasks_path = self.output_dir / "agent_tasks.jsonl"
+        self.memory_store = TraderMemoryStore(path=default_memory_path(base_dir=self.base_dir, config=self.config))
+        self.trader_profiles = self._load_trader_profiles()
 
-		self._persona_router: PersonaRouter | None = None
-		if getattr(self.config, "persona", None) is not None and self.config.persona.enable:
-			self._persona_router = PersonaRouter(top_k=max(1, int(self.config.persona.top_k)))
+        self.data_agent = DataAgent(config=config)
 
-	def _resolve_path(self, value: str | None) -> Path | None:
-		if not value:
-			return None
-		p = Path(value)
-		if p.is_absolute():
-			return p
-		return self.base_dir / p
+        self._persona_router: PersonaRouter | None = None
+        if getattr(self.config, "persona", None) is not None and self.config.persona.enable:
+            self._persona_router = PersonaRouter(top_k=max(1, int(self.config.persona.top_k)))
 
-	def _guess_instrument_focus(self, symbol: str) -> InstrumentFocus:
-		# Heuristic for CN market. Keep it conservative.
-		code = symbol.split(".")[0]
-		if code.startswith(("110", "111", "112", "113", "118", "123", "127", "128")):
-			return InstrumentFocus.cb
-		if code.startswith(("51", "58", "56", "15")):
-			return InstrumentFocus.etf
-		return InstrumentFocus.stock
+    def _trader_profiles_path(self) -> Path:
+        return default_profiles_path(base_dir=self.base_dir, config=self.config)
 
-	def _load_market_state(self, *, as_of_date: date) -> MarketState:
-		p = self._resolve_path(getattr(self.config.persona, "market_state_path", None))
-		if p and p.exists():
-			try:
-				return MarketState.model_validate(read_json(p))
-			except Exception:  # noqa: BLE001
-				self.logger.warning("persona.market_state_path invalid, using default", path=str(p))
+    def _load_trader_profiles(self) -> dict[str, TraderProfile]:
+        """Load trader profiles if the profile file already exists."""
 
-		# Phase 0.5: build from benchmark daily CSV (index/ETF)
-		bench_csv = self._resolve_path(getattr(self.config.persona, "market_state_benchmark_csv", None))
-		bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
-		if bench_csv and bench_csv.exists() and bench_symbol:
-			try:
-				src = DailySeriesSource(symbol=bench_symbol, csv_path=bench_csv)
-				df = load_daily_close_series(src)
-				return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
-			except Exception as exc:  # noqa: BLE001
-				self.logger.warning("failed to build MarketState from benchmark CSV", error=str(exc))
-		return MarketState(as_of_date=as_of_date)
+        path = self._trader_profiles_path()
+        if not path.exists():
+            return {}
+        try:
+            return load_trader_profiles_file(path).profiles_by_trader
+        except Exception:  # noqa: BLE001
+            self.logger.warning("failed to load trader profiles", path=str(path))
+            return {}
 
-	def _templates_dir(self) -> Path:
-		# Keep template lookup relative to project root for both CLI and service runs.
-		return self.base_dir / "src" / "reporting" / "templates"
+    def _resolve_path(self, value: str | None) -> Path | None:
+        if not value:
+            return None
+        p = Path(value)
+        if p.is_absolute():
+            return p
+        return self.base_dir / p
 
-	def _daily_report_path(self, as_of_date: date) -> Path:
-		return self.output_dir / f"daily_report_{as_of_date.isoformat()}.json"
+    def _guess_instrument_focus(self, symbol: str) -> InstrumentFocus:
+        # Heuristic for CN market. Keep it conservative.
+        code = symbol.split(".")[0]
+        if code.startswith(("110", "111", "112", "113", "118", "123", "127", "128")):
+            return InstrumentFocus.cb
+        if code.startswith(("51", "58", "56", "15")):
+            return InstrumentFocus.etf
+        return InstrumentFocus.stock
 
-	def _daily_report_html_path(self, as_of_date: date) -> Path:
-		return self.output_dir / f"daily_report_{as_of_date.isoformat()}.html"
+    def _load_market_state(self, *, as_of_date: date) -> MarketState:
+        """Resolve MarketState from file, benchmark CSV, or cached market data."""
 
-	def _evaluation_path(self, as_of_date: date) -> Path:
-		return self.output_dir / f"evaluation_{as_of_date.isoformat()}.json"
+        p = self._resolve_path(getattr(self.config.persona, "market_state_path", None))
+        if p and p.exists():
+            try:
+                return MarketState.model_validate(read_json(p))
+            except Exception:  # noqa: BLE001
+                self.logger.warning("persona.market_state_path invalid, using default", path=str(p))
 
-	def _evaluation_html_path(self, as_of_date: date) -> Path:
-		return self.output_dir / f"evaluation_{as_of_date.isoformat()}.html"
+        # Phase 0.5: build from benchmark daily CSV (index/ETF)
+        bench_csv = self._resolve_path(getattr(self.config.persona, "market_state_benchmark_csv", None))
+        bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
+        if bench_csv and bench_csv.exists() and bench_symbol:
+            try:
+                src = DailySeriesSource(symbol=bench_symbol, csv_path=bench_csv)
+                df = load_daily_close_series(src)
+                return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("failed to build MarketState from benchmark CSV", error=str(exc))
+        cache_dir = self._resolve_path(getattr(self.config.data, "market_data_cache_dir", None))
+        if cache_dir and bench_symbol:
+            cache = MarketDataCache(cache_dir)
+            cached_csv = cache.path_for_symbol(bench_symbol)
+            if cached_csv.exists():
+                try:
+                    src = DailySeriesSource(symbol=bench_symbol, csv_path=cached_csv)
+                    df = load_daily_close_series(src)
+                    return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.warning("failed to build MarketState from market data cache", error=str(exc))
+        return MarketState(as_of_date=as_of_date)
 
-	def export_daily_report_html(self, *, report: DailyReport) -> Path:
-		path = self._daily_report_html_path(report.as_of_date)
-		write_daily_report_html(
-			report=report,
-			templates_dir=self._templates_dir(),
-			dest_path=path,
-		)
-		return path
+    def _templates_dir(self) -> Path:
+        # Keep template lookup relative to project root for both CLI and service runs.
+        return self.base_dir / "src" / "reporting" / "templates"
 
-	def export_evaluation_html(self, *, result: EvaluationResult) -> Path:
-		path = self._evaluation_html_path(result.as_of_date)
-		write_evaluation_html(
-			result=result,
-			templates_dir=self._templates_dir(),
-			dest_path=path,
-		)
-		return path
+    def _daily_report_path(self, as_of_date: date) -> Path:
+        return self.output_dir / f"daily_report_{as_of_date.isoformat()}.json"
 
-	def _append_task(self, task: AgentTask) -> None:
-		append_jsonl(self.tasks_path, task.model_dump())
+    def _daily_report_html_path(self, as_of_date: date) -> Path:
+        return self.output_dir / f"daily_report_{as_of_date.isoformat()}.html"
 
-	async def run_pre_market(self, *, as_of_date: date, force: bool = False) -> DailyReport:
-		report_path = self._daily_report_path(as_of_date)
-		if report_path.exists() and not force:
-			payload = read_json(report_path)
-			return DailyReport.model_validate(payload)
+    def _evaluation_path(self, as_of_date: date) -> Path:
+        return self.output_dir / f"evaluation_{as_of_date.isoformat()}.json"
 
-		ideas = []
-		for trader_cfg in self.config.traders:
-			trader = TraderAgent(trader=trader_cfg)
-			trader_ideas = await trader.generate_trade_ideas(
-				as_of_date=as_of_date,
-				data_agent=self.data_agent,
-			)
-			ideas.extend(trader_ideas)
+    def _evaluation_html_path(self, as_of_date: date) -> Path:
+        return self.output_dir / f"evaluation_{as_of_date.isoformat()}.html"
 
-			# generate tasks for missing price data in watchlist
-			missing_symbols = [s for s in trader_cfg.watchlist if s not in self.config.data.mock_prices]
-			for s in missing_symbols:
-				self._append_task(
-					AgentTask(
-						type="data_missing",
-						title=f"Missing mock price for {s}",
-						trader_id=trader_cfg.trader_id,
-						details={"symbol": s, "field": "last_price"},
-					)
-				)
+    def export_daily_report_html(self, *, report: DailyReport) -> Path:
+        path = self._daily_report_html_path(report.as_of_date)
+        write_daily_report_html(
+            report=report,
+            templates_dir=self._templates_dir(),
+            dest_path=path,
+        )
+        return path
 
-		report = DailyReport(
-			as_of_date=as_of_date,
-			ideas=ideas,
-			highlights=[f"Generated {len(ideas)} trade ideas"],
-		)
+    def export_evaluation_html(self, *, result: EvaluationResult) -> Path:
+        path = self._evaluation_html_path(result.as_of_date)
+        write_evaluation_html(
+            result=result,
+            templates_dir=self._templates_dir(),
+            dest_path=path,
+        )
+        return path
 
-		# Optional: persona style routing (Phase 1 MVP)
-		if self._persona_router and self.config.persona.clusters_path:
-			clusters_path = self._resolve_path(self.config.persona.clusters_path)
-			if clusters_path and clusters_path.exists():
-				clusters_file = load_persona_clusters_file(clusters_path)
-				market_state = self._load_market_state(as_of_date=as_of_date)
-				decisions = []
-				for idea in ideas:
-					clusters = clusters_file.clusters_by_trader.get(idea.trader_id, [])
-					if not clusters:
-						continue
-					decision = self._persona_router.route_symbol(
-						trader_id=idea.trader_id,
-						symbol=idea.symbol,
-						as_of_date=as_of_date,
-						instrument_focus=self._guess_instrument_focus(idea.symbol),
-						market_state=market_state,
-						clusters=clusters,
-					)
-					idea.style_cluster_id = decision.selected_cluster_id
-					idea.style_cluster_label = decision.selected_cluster_label
-					idea.style_score = decision.score
-					idea.style_reasons = list(decision.explanation.reasons or [])
-					decisions.append(decision.model_dump())
+    def _append_task(self, task: AgentTask) -> None:
+        append_jsonl(self.tasks_path, task.model_dump())
 
-				route_path = self.output_dir / f"persona_route_{as_of_date.isoformat()}.json"
-				write_json(
-					route_path,
-					{
-						"as_of_date": as_of_date.isoformat(),
-						"clusters_path": str(clusters_path),
-						"decisions": decisions,
-					},
-				)
-				report.highlights.append(
-					f"Persona router enabled: decisions={len(decisions)} clusters={clusters_path}"
-				)
-			else:
-				report.risks.append("persona.enable=true but clusters_path missing or not found")
-		write_json(report_path, report.model_dump())
-		return report
+    def _append_review_memory(
+        self,
+        *,
+        as_of_date: date,
+        idea: "TradeIdea",
+        entry_price: float,
+        current_price: float,
+        return_pct: float,
+        threshold: float,
+        review_reason: str,
+    ) -> None:
+        """Write a short review note back into trader memory."""
 
-	async def run_after_close(self, *, as_of_date: date, force: bool = False) -> EvaluationResult:
-		evaluation_path = self._evaluation_path(as_of_date)
-		if evaluation_path.exists() and not force:
-			payload = read_json(evaluation_path)
-			return EvaluationResult.model_validate(payload)
+        self.memory_store.append(
+            TraderMemoryItem(
+                trader_id=idea.trader_id,
+                memory_type=TraderMemoryType.review_note,
+                as_of_date=as_of_date,
+                symbol=idea.symbol,
+                title=f"{idea.symbol} review note",
+                content=(
+                    f"reason={review_reason}; entry={entry_price:.4f}; current={current_price:.4f}; "
+                    f"return_pct={return_pct:.6f}; threshold={threshold:.6f}"
+                ),
+                source="manager.run_after_close",
+                source_ref=str(idea.idea_id),
+                tags=["review", "evaluation"],
+                importance=0.75,
+            )
+        )
 
-		report_path = self._daily_report_path(as_of_date)
-		if not report_path.exists():
-			raise FileNotFoundError(
-				f"Daily report not found for {as_of_date}. Run pre-market first: {report_path}"
-			)
+    def _build_review_task(
+        self,
+        *,
+        idea: "TradeIdea",
+        as_of_date: date,
+        entry_price: float,
+        current_price: float,
+        return_pct: float,
+        threshold: float,
+    ) -> AgentTask:
+        """Convert an underperforming idea into a structured review task."""
 
-		daily_report = DailyReport.model_validate(read_json(report_path))
+        review_reason = "loss" if return_pct < 0 else "below_expected_return"
+        return AgentTask(
+            type="trader_review",
+            title=f"Trader review required: {idea.symbol}",
+            trader_id=idea.trader_id,
+            idea_id=idea.idea_id,
+            details={
+                "review_type": "trader_review",
+                "reason": review_reason,
+                "symbol": idea.symbol,
+                "as_of_date": as_of_date.isoformat(),
+                "entry_price": round(entry_price, 6),
+                "current_price": round(current_price, 6),
+                "return_pct": round(return_pct, 6),
+                "threshold": round(threshold, 6),
+                "source_idea_id": str(idea.idea_id),
+                "next_action": "write_back_review_note",
+            },
+        )
 
-		symbols = sorted({i.symbol for i in daily_report.ideas})
-		req = DataRequest(trader_id="manager", symbols=symbols, fields=["last_price"])
-		resp = await self.data_agent.handle(req)
+    async def run_pre_market(self, *, as_of_date: date, force: bool = False) -> DailyReport:
+        """Collect ideas and persist the daily pre-market report."""
 
-		last_prices: dict[str, float] = {}
-		if resp.status == DataResponseStatus.ok:
-			last_prices = resp.payload.get("last_price", {})
-		elif resp.status == DataResponseStatus.capability_missing:
-			self._append_task(
-				AgentTask(
-					type="capability_missing",
-					title="DataAgent capability missing for evaluation",
-					details={"missing": resp.missing_capabilities},
-				)
-			)
+        report_path = self._daily_report_path(as_of_date)
+        if report_path.exists() and not force:
+            payload = read_json(report_path)
+            return DailyReport.model_validate(payload)
 
-		evaluations: list[IdeaEvaluation] = []
+        ideas = []
+        for trader_cfg in self.config.traders:
+            trader = TraderAgent(
+                trader=trader_cfg,
+                memory_store=self.memory_store,
+                trader_profile=self.trader_profiles.get(trader_cfg.trader_id),
+            )
+            trader_ideas = await trader.generate_trade_ideas(
+                as_of_date=as_of_date,
+                data_agent=self.data_agent,
+            )
+            ideas.extend(trader_ideas)
 
-		for idea in daily_report.ideas:
-			entry_price = idea.entry.price
-			current_price = last_prices.get(idea.symbol)
+            # generate tasks for missing price data in watchlist
+            missing_symbols = [s for s in trader_cfg.watchlist if s not in self.config.data.mock_prices]
+            for s in missing_symbols:
+                self._append_task(
+                    AgentTask(
+                        type="data_missing",
+                        title=f"Missing mock price for {s}",
+                        trader_id=trader_cfg.trader_id,
+                        details={"symbol": s, "field": "last_price"},
+                    )
+                )
 
-			if entry_price is None or current_price is None:
-				evaluations.append(
-					IdeaEvaluation(
-						idea_id=idea.idea_id,
-						symbol=idea.symbol,
-						entry_price=entry_price,
-						current_price=current_price,
-						status="not_evaluated",
-						notes=["Missing entry price or current price"],
-					)
-				)
-				if current_price is None:
-					self._append_task(
-						AgentTask(
-							type="data_missing",
-							title=f"Missing price for evaluation: {idea.symbol}",
-							trader_id=idea.trader_id,
-							idea_id=idea.idea_id,
-							details={"symbol": idea.symbol, "field": "last_price"},
-						)
-					)
-				continue
+        report = DailyReport(
+            as_of_date=as_of_date,
+            ideas=ideas,
+            highlights=[f"Generated {len(ideas)} trade ideas"],
+        )
 
-			return_pct = (float(current_price) - float(entry_price)) / float(entry_price)
-			evaluations.append(
-				IdeaEvaluation(
-					idea_id=idea.idea_id,
-					symbol=idea.symbol,
-					entry_price=float(entry_price),
-					current_price=float(current_price),
-					return_pct=round(return_pct, 6),
-					status="ok",
-				)
-			)
+        # Optional: persona style routing (Phase 1 MVP)
+        if self._persona_router and self.config.persona.clusters_path:
+            clusters_path = self._resolve_path(self.config.persona.clusters_path)
+            if clusters_path and clusters_path.exists():
+                clusters_file = load_persona_clusters_file(clusters_path)
+                market_state = self._load_market_state(as_of_date=as_of_date)
+                decisions = []
+                for idea in ideas:
+                    clusters = clusters_file.clusters_by_trader.get(idea.trader_id, [])
+                    if not clusters:
+                        continue
+                    decision = self._persona_router.route_symbol(
+                        trader_id=idea.trader_id,
+                        symbol=idea.symbol,
+                        as_of_date=as_of_date,
+                        instrument_focus=self._guess_instrument_focus(idea.symbol),
+                        market_state=market_state,
+                        clusters=clusters,
+                    )
+                    idea.style_cluster_id = decision.selected_cluster_id
+                    idea.style_cluster_label = decision.selected_cluster_label
+                    idea.style_score = decision.score
+                    idea.style_reasons = list(decision.explanation.reasons or [])
+                    decisions.append(decision.model_dump())
 
-			# trigger review tasks
-			min_ret = float(self.config.evaluation.min_expected_return)
-			if (self.config.evaluation.loss_trigger and return_pct < 0) or (return_pct < min_ret):
-				self._append_task(
-					AgentTask(
-						type="trader_review",
-						title=f"Trader review required: {idea.symbol}",
-						trader_id=idea.trader_id,
-						idea_id=idea.idea_id,
-						details={
-							"symbol": idea.symbol,
-							"return_pct": round(return_pct, 6),
-							"min_expected_return": min_ret,
-						},
-					)
-				)
+                route_path = self.output_dir / f"persona_route_{as_of_date.isoformat()}.json"
+                write_json(
+                    route_path,
+                    {
+                        "as_of_date": as_of_date.isoformat(),
+                        "clusters_path": str(clusters_path),
+                        "decisions": decisions,
+                    },
+                )
+                report.highlights.append(
+                    f"Persona router enabled: decisions={len(decisions)} clusters={clusters_path}"
+                )
+            else:
+                report.risks.append("persona.enable=true but clusters_path missing or not found")
+        write_json(report_path, report.model_dump())
+        return report
 
-		summary = [
-			f"Evaluated {len(evaluations)} ideas",
-			f"Output dir: {self.output_dir}",
-		]
+    async def run_after_close(self, *, as_of_date: date, force: bool = False) -> EvaluationResult:
+        """Evaluate ideas against the latest price context and emit tasks."""
 
-		result = EvaluationResult(as_of_date=as_of_date, evaluations=evaluations, summary=summary)
-		write_json(evaluation_path, result.model_dump())
-		return result
+        evaluation_path = self._evaluation_path(as_of_date)
+        if evaluation_path.exists() and not force:
+            payload = read_json(evaluation_path)
+            return EvaluationResult.model_validate(payload)
+
+        report_path = self._daily_report_path(as_of_date)
+        if not report_path.exists():
+            raise FileNotFoundError(
+                f"Daily report not found for {as_of_date}. Run pre-market first: {report_path}"
+            )
+
+        daily_report = DailyReport.model_validate(read_json(report_path))
+
+        symbols = sorted({i.symbol for i in daily_report.ideas})
+        req = DataRequest(trader_id="manager", symbols=symbols, fields=["last_price"])
+        resp = await self.data_agent.handle(req)
+
+        last_prices: dict[str, float] = {}
+        if resp.status == DataResponseStatus.ok:
+            last_prices = resp.payload.get("last_price", {})
+        elif resp.status == DataResponseStatus.capability_missing:
+            self._append_task(
+                AgentTask(
+                    type="capability_missing",
+                    title="DataAgent capability missing for evaluation",
+                    details={"missing": resp.missing_capabilities},
+                )
+            )
+
+        evaluations: list[IdeaEvaluation] = []
+
+        for idea in daily_report.ideas:
+            entry_price = idea.entry.price
+            current_price = last_prices.get(idea.symbol)
+
+            if entry_price is None or current_price is None:
+                evaluations.append(
+                    IdeaEvaluation(
+                        idea_id=idea.idea_id,
+                        symbol=idea.symbol,
+                        entry_price=entry_price,
+                        current_price=current_price,
+                        status="not_evaluated",
+                        notes=["Missing entry price or current price"],
+                    )
+                )
+                if current_price is None:
+                    self._append_task(
+                        AgentTask(
+                            type="data_missing",
+                            title=f"Missing price for evaluation: {idea.symbol}",
+                            trader_id=idea.trader_id,
+                            idea_id=idea.idea_id,
+                            details={"symbol": idea.symbol, "field": "last_price"},
+                        )
+                    )
+                continue
+
+            return_pct = (float(current_price) - float(entry_price)) / float(entry_price)
+            evaluations.append(
+                IdeaEvaluation(
+                    idea_id=idea.idea_id,
+                    symbol=idea.symbol,
+                    entry_price=float(entry_price),
+                    current_price=float(current_price),
+                    return_pct=round(return_pct, 6),
+                    status="ok",
+                )
+            )
+
+            # trigger review tasks
+            min_ret = float(self.config.evaluation.min_expected_return)
+            memory_type = (
+                TraderMemoryType.success_case
+                if return_pct >= min_ret and return_pct >= 0
+                else TraderMemoryType.failure_case
+            )
+            self.memory_store.append(
+                TraderMemoryItem(
+                    trader_id=idea.trader_id,
+                    memory_type=memory_type,
+                    as_of_date=as_of_date,
+                    symbol=idea.symbol,
+                    title=f"{idea.symbol} {memory_type.value.replace('_', ' ')}",
+                    content=(
+                        f"entry={float(entry_price):.4f}, current={float(current_price):.4f}, "
+                        f"return_pct={round(return_pct, 6):.6f}, threshold={min_ret:.6f}"
+                    ),
+                    source="manager.run_after_close",
+                    source_ref=str(idea.idea_id),
+                    tags=["evaluation", memory_type.value],
+                    importance=0.8 if memory_type == TraderMemoryType.success_case else 0.9,
+                )
+            )
+            if (self.config.evaluation.loss_trigger and return_pct < 0) or (return_pct < min_ret):
+                review_task = self._build_review_task(
+                    idea=idea,
+                    as_of_date=as_of_date,
+                    entry_price=float(entry_price),
+                    current_price=float(current_price),
+                    return_pct=return_pct,
+                    threshold=min_ret,
+                )
+                self._append_task(review_task)
+                self._append_review_memory(
+                    as_of_date=as_of_date,
+                    idea=idea,
+                    entry_price=float(entry_price),
+                    current_price=float(current_price),
+                    return_pct=return_pct,
+                    threshold=min_ret,
+                    review_reason=review_task.details["reason"],
+                )
+
+        summary = [
+            f"Evaluated {len(evaluations)} ideas",
+            f"Output dir: {self.output_dir}",
+        ]
+
+        result = EvaluationResult(as_of_date=as_of_date, evaluations=evaluations, summary=summary)
+        write_json(evaluation_path, result.model_dump())
+        return result

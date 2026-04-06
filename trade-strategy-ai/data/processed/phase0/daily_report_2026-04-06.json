@@ -1,10 +1,10 @@
 {
-  "report_id": "cad42bd2-5c9b-4a1f-a362-3d99aeb500cf",
+  "report_id": "889a43a2-2a83-4011-adbb-7b676f1d2a6d",
   "as_of_date": "2026-04-06",
-  "generated_at": "2026-04-06 11:51:47.250798+00:00",
+  "generated_at": "2026-04-06 13:51:34.475599+00:00",
   "ideas": [
     {
-      "idea_id": "f8c425dc-776a-441a-92a6-fe7e47bfa8ef",
+      "idea_id": "30cbafb2-0439-42bd-8d4c-e6d269d10187",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "000001.SZ",
@@ -18,9 +18,9 @@
       "stop_loss_price": 9.7,
       "position_size": null,
       "time_horizon": null,
-      "rationale": "Phase0: rule-based idea from watchlist + mock price",
+      "rationale": "Phase0: rule-based idea from watchlist + mock price | profile: tags: 主升浪, 亏损死循环, 回本执念; clusters: trader_a:mixed:v0; memory mix: success_case=2 | memory summary: symbol: 000001.SZ success case; recent: 510300.SH success case, 000001.SZ success case",
       "invalidation": "Price data unavailable or market regime changes",
-      "confidence": 0.3,
+      "confidence": 0.48,
       "style_cluster_id": "trader_a:mixed:v0",
       "style_cluster_label": "Trader A mixed (v0)",
       "style_score": 0.5125,
@@ -31,7 +31,7 @@
       ]
     },
     {
-      "idea_id": "81037880-c223-4e8b-96e2-cc65bec312d9",
+      "idea_id": "f1379132-eff7-4313-820a-a953a4f20fde",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "510300.SH",
@@ -45,9 +45,9 @@
       "stop_loss_price": 3.395,
       "position_size": null,
       "time_horizon": null,
-      "rationale": "Phase0: rule-based idea from watchlist + mock price",
+      "rationale": "Phase0: rule-based idea from watchlist + mock price | profile: tags: 主升浪, 亏损死循环, 回本执念; clusters: trader_a:mixed:v0; memory mix: success_case=2 | memory summary: symbol: 510300.SH success case; recent: 510300.SH success case, 000001.SZ success case",
       "invalidation": "Price data unavailable or market regime changes",
-      "confidence": 0.3,
+      "confidence": 0.48,
       "style_cluster_id": "trader_a:mixed:v0",
       "style_cluster_label": "Trader A mixed (v0)",
       "style_score": 0.5125,

@@ -10,6 +10,7 @@ import pytest
 from cli.main import _e2e_regression_async, e2e_regression
 from src.common.config import AppConfig, LoadedConfig, PersonaConfig, StorageConfig
 from src.schemas.contracts import DailyReport
+from src.trader_profile.schemas import TraderProfilesFile
 
 
 pytestmark = pytest.mark.smoke
@@ -86,16 +87,22 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
     run_pipeline_mock = AsyncMock(return_value=None)
     extract_mock = AsyncMock(return_value=SimpleNamespace(scanned=1, extracted=1, skipped=0, failed=0))
     build_clusters_mock = AsyncMock(return_value=(1, SimpleNamespace(scanned_articles=1, used_articles=1, clusters_built=1)))
+    build_profiles_mock = AsyncMock(return_value=TraderProfilesFile())
+    write_profiles_mock = MagicMock(return_value=base_dir / "data/processed/phase0/trader_profiles.json")
 
     manager = MagicMock()
     manager.run_pre_market = AsyncMock(return_value=_make_daily_report(date.today()))
+    manager.run_after_close = AsyncMock(return_value=SimpleNamespace(evaluations=[SimpleNamespace(status="ok")]))
     manager.export_daily_report_html.return_value = base_dir / "data/processed/phase0/daily_report.html"
+    manager.export_evaluation_html.return_value = base_dir / "data/processed/phase0/evaluation.html"
     manager_cls = MagicMock(return_value=manager)
 
     with (
         patch("cli.main.run_pipeline", run_pipeline_mock),
         patch("cli.main.extract_and_store_metadata", extract_mock),
         patch("cli.main.build_clusters_from_db", build_clusters_mock),
+        patch("cli.main.build_trader_profiles", build_profiles_mock),
+        patch("cli.main.write_trader_profiles_file", write_profiles_mock),
         patch("cli.main.ManagerAgent", manager_cls),
     ):
         await _e2e_regression_async(
@@ -119,6 +126,8 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
 
     full_clusters = base_dir / clusters_dest
     build_clusters_mock.assert_awaited_once_with(config=loaded.config, dest=full_clusters)
+    build_profiles_mock.assert_awaited_once()
+    write_profiles_mock.assert_called_once()
     manager_cls.assert_called_once()
     manager_kwargs = manager_cls.call_args.kwargs
     assert manager_kwargs["config"].persona.enable is True
@@ -130,3 +139,8 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
     assert pre_market_kwargs["as_of_date"] == date.today()
     assert pre_market_kwargs["force"] is True
     manager.export_daily_report_html.assert_called_once()
+    manager.run_after_close.assert_awaited_once()
+    after_close_kwargs = manager.run_after_close.call_args.kwargs
+    assert after_close_kwargs["as_of_date"] == date.today()
+    assert after_close_kwargs["force"] is True
+    manager.export_evaluation_html.assert_called_once()

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 from src.models.base import Base  # noqa: E402
-from src.models import blog_article, article_metadata, market_data, trade_log  # noqa: F401
+from src.models import article_metadata, blog_article, data_audit_event, market_data, trade_log  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

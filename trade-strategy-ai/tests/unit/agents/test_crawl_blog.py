@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from src.agents.data_agent.skills.crawl_blog import (
-    ExistingArticleIndex,
-    classify_comment,
-    should_stop_incremental_scan,
-)
+from src.agents.data_agent.skills.crawl_blog import ExistingArticleIndex, classify_comment, should_stop_incremental_scan
 from src.agents.data_agent.sites.base import AuthProvider
 from src.agents.data_agent.sites.tgb import TgbCrawler
 
@@ -189,3 +185,30 @@ def test_tgb_crawler_parses_comments_from_text_blocks() -> None:
     assert comments[1]["author_name"] == "Makaz"
     assert comments[2]["author_name"] == "javxsp"
     assert comments[2]["raw_text"] == "[微笑][微笑][鲜花][鲜花]"
+
+
+def test_tgb_crawler_uses_rendered_html_when_render_js_enabled(monkeypatch) -> None:
+    crawler = TgbCrawler(
+        auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
+        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        render_js=True,
+    )
+    rendered_html = """
+    <html>
+      <body>
+        <h1>动态页面标题</h1>
+        <div class="p_wenz"><p>动态渲染后的正文内容。</p></div>
+      </body>
+    </html>
+    """
+
+    monkeypatch.setattr(
+        "src.agents.data_agent.sites.tgb.render_page_html",
+        lambda *args, **kwargs: rendered_html,
+    )
+    monkeypatch.setattr(crawler, "_throttle", lambda: None)
+
+    detail = crawler.fetch_article_detail("https://www.tgb.cn/a/2qxp6lHUymO")
+
+    assert detail["title"] == "动态页面标题"
+    assert "动态渲染后的正文内容" in detail["content_text"]

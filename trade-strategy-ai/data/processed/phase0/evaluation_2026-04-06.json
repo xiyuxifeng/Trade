@@ -1,0 +1,29 @@
+{
+  "result_id": "21d40985-b624-4ddf-9a95-a1ee95bb5b42",
+  "as_of_date": "2026-04-06",
+  "generated_at": "2026-04-06 13:51:34.480440+00:00",
+  "evaluations": [
+    {
+      "idea_id": "30cbafb2-0439-42bd-8d4c-e6d269d10187",
+      "symbol": "000001.SZ",
+      "entry_price": 10.0,
+      "current_price": 10.0,
+      "return_pct": 0.0,
+      "status": "ok",
+      "notes": []
+    },
+    {
+      "idea_id": "f1379132-eff7-4313-820a-a953a4f20fde",
+      "symbol": "510300.SH",
+      "entry_price": 3.5,
+      "current_price": 3.5,
+      "return_pct": 0.0,
+      "status": "ok",
+      "notes": []
+    }
+  ],
+  "summary": [
+    "Evaluated 2 ideas",
+    "Output dir: /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/phase0"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "v1",
+  "updated_at": "2026-04-06T13:51:34.471076Z",
+  "profiles_by_trader": {
+    "trader_a": {
+      "trader_id": "trader_a",
+      "updated_at": "2026-04-06T13:51:34.470251Z",
+      "top_symbols": [],
+      "style_cluster_ids": [
+        "trader_a:mixed:v0"
+      ],
+      "concept_tags": [
+        "主升浪",
+        "亏损死循环",
+        "回本执念",
+        "市场水温",
+        "情绪化交易",
+        "梭哈",
+        "沉没成本谬误",
+        "管不住手",
+        "退潮期",
+        "顺势而为"
+      ],
+      "evidence": {
+        "articles_scanned": 1,
+        "symbols_mentioned": 0,
+        "clusters": 1
+      }
+    }
+  }
+}

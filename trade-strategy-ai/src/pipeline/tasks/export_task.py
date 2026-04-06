@@ -106,6 +106,18 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
     )
 
 
+def _ensure_export_state_table(conn: duckdb.DuckDBPyConnection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS export_state (
+            key VARCHAR PRIMARY KEY,
+            watermark TIMESTAMP,
+            updated_at TIMESTAMP
+        )
+        """
+    )
+
+
 def _serialize_value(v: Any) -> Any:
     if v is None:
         return None

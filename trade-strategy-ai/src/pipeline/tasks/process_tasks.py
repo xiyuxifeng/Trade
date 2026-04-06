@@ -92,7 +92,7 @@ async def _should_skip_metadata_extracted(details: dict[str, Any]) -> bool:
 MAX_RETRIES = 3
 
 
-async def _process_one(task: dict[str, Any]) -> tuple[bool, bool]:
+async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -> tuple[bool, bool]:
     """Process a single task with retry.
 
     Returns: (success, skipped)
@@ -104,7 +104,7 @@ async def _process_one(task: dict[str, Any]) -> tuple[bool, bool]:
         if await _should_skip_metadata_extracted(details):
             return True, True
 
-    handler = TASK_HANDLERS.get(task_type)
+    handler = handlers.get(task_type)
     if handler is None:
         return True, False  # unknown type, skip silently
 
@@ -181,12 +181,14 @@ async def run_process_tasks(
     failed_tasks = _load_tasks(f_path)
     failed_ids = {t.get("task_id") for t in failed_tasks}
 
+    handlers = _create_handlers(config)
+
     for task in unique_tasks:
         task_id = task.get("task_id")
         if task_id in failed_ids:
             continue
 
-        success, skipped = await _process_one(task)
+        success, skipped = await _process_one(task, handlers)
         if success:
             if not skipped:
                 stats.processed += 1

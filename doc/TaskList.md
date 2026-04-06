@@ -135,7 +135,7 @@
 - [ ] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
 - [ ] P1-026D run_process_tasks 改为显式 config 参数注入（非 global 模式）
 - [ ] P1-026E failed_tasks.jsonl 增加自动重试机制或定期清理策略
-- [ ] P1-026H 修复 export_task 增量水位：UUID4 不可排序 → 改为 created_at/crawled_at watermark 或独立导出状态表
+- [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
 
 ### API Layer (API 接口层)
 - [ ] P1-027 设计数据查询 API（FastAPI）
@@ -152,6 +152,9 @@
 - [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）
 - [ ] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
 - [ ] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
+- [ ] P1-037 蒸馏归纳文章分类：技术策略，复盘操作，无效文章
+- [ ] P1-038 文章内的图片处理 ？
+- [ ] P1-039 提炼操作策略
 
 ### Phase 1 Verification (验收检查)
 - [ ] P1-V01 单元测试覆盖率 >80%

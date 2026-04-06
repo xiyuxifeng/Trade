@@ -153,10 +153,10 @@ async def run_process_tasks(
             continue
 
         success, skipped = await _process_one(task)
-        if success and skipped:
-            stats.skipped_dedup += 1
-        elif success:
-            stats.processed += 1
+        if success:
+            if not skipped:
+                stats.processed += 1
+            # skipped=True means already-processed metadata (not a dedup skip)
         else:
             stats.failed += 1
             failed_tasks.append(task)

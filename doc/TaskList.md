@@ -68,7 +68,7 @@
 - [x] P0-001 设计 PostgreSQL Schema：blog_articles, trade_logs, market_data, article_metadata（已在 `src/models/` 定义，并已落地 Alembic migration）
 - [x] P0-002 设计数据库索引策略（时间序列、股票代码、关键字段）（已在模型 Index/UniqueConstraint 中体现；需通过 migration 验证可用）
 - [x] P0-003 制定数据验证规则和异常检测策略（已实现 `src/pipeline/validation.py`）
-- [ ] P0-004 选型并配置 DuckDB / Parquet 存储方案
+- [x] P0-004 选型并配置 DuckDB / Parquet 存储方案
 
 ### Blog Crawler (博客爬虫)
 - [x] P1-001 分析目标博客网站结构和动态加载机制
@@ -125,6 +125,12 @@
 
 补充（落地为可跑的一键链路，优先级高）：
 - [x] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store），并提供可重复运行的一键入口
+
+补充（Pipeline 技术债务，跟进中）：
+- [ ] P1-026B DuckDB JSON 字段改为原生 JSON 类型（TEXT → JSON，应用层免 parse）
+- [ ] P1-026C export_task 支持 PostgreSQL 数据源（生产部署确认）
+- [ ] P1-026D run_process_tasks 改为显式 config 参数注入（非 global 模式）
+- [ ] P1-026E failed_tasks.jsonl 增加自动重试机制或定期清理策略
 
 ### API Layer (API 接口层)
 - [ ] P1-027 设计数据查询 API（FastAPI）

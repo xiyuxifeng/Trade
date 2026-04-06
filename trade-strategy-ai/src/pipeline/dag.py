@@ -55,7 +55,7 @@ async def run_pipeline(
 	clean_result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force)
 	validate_result = run_validate_task(base_dir=base_dir, input_paths=clean_result.cleaned_paths, force=force)
 	store_stats = await store_articles_jsonl_to_db(base_dir=base_dir, jsonl_paths=validate_result.validated_paths)
-	process_stats = await run_process_tasks()
+	process_stats = await run_process_tasks(config=config)
 	export_result = await run_export_task()
 
 	return PipelineRunResult(

@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Awaitable
 
+from src.common.config import AppConfig
 from src.schemas.contracts import AgentTask
 
 
@@ -127,9 +128,12 @@ FAILED_PATH = Path("data/processed/pipeline/failed_tasks.jsonl")
 
 async def run_process_tasks(
     *,
+    config: AppConfig,
     pending_path: Path | None = None,
     failed_path: Path | None = None,
 ) -> ProcessTasksStats:
+    global _config
+    _config = config
     start = time.monotonic()
     stats = ProcessTasksStats()
 
@@ -168,12 +172,20 @@ async def run_process_tasks(
     return stats
 
 
+_config: AppConfig | None = None
+
+
+def _get_config() -> AppConfig:
+    if _config is None:
+        raise RuntimeError("run_process_tasks must be called with config parameter")
+    return _config
+
+
 async def _handle_article_ingested(details: dict[str, Any]) -> None:
     """Handler for article_ingested: trigger metadata extraction."""
     from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
-    from src.common.config import get_app_config
 
-    config = get_app_config()
+    config = _get_config()
 
     await extract_and_store_metadata(
         config=config,
@@ -185,9 +197,8 @@ async def _handle_article_ingested(details: dict[str, Any]) -> None:
 async def _handle_article_metadata_extracted(details: dict[str, Any]) -> None:
     """Handler for article_metadata_extracted: trigger clusters rebuild."""
     from src.persona.cluster_builder import build_clusters_from_db
-    from src.common.config import get_app_config
 
-    config = get_app_config()
+    config = _get_config()
     dest = Path("data/processed/persona/clusters.real.json")
 
     await build_clusters_from_db(

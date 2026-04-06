@@ -131,8 +131,8 @@
 - [x] P1-026G pipeline 增加 DuckDB 导出（export_task）：导出 articles + metadata（幂等写入）
 
 补充（Pipeline 技术债务，跟进中）：
-- [ ] P1-026B DuckDB JSON 字段读写约定与查询示例补齐（确认写入/读回类型，补充 json_extract 用法）
-- [ ] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
+- [x] P1-026B DuckDB JSON 字段读写约定与查询示例补齐（确认写入/读回类型，补充 json_extract 用法）
+- [x] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
 - [x] P1-026D run_process_tasks 改为显式 config 参数注入（闭包捕获，消除 global）
 - [x] P1-026E failed_tasks.jsonl 增加自动重试机制（3次上限）+ TTL 清理（7天）+ dead_tasks.jsonl
 - [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
@@ -219,6 +219,18 @@
 - [ ] P2-V03 特征计算速度 <50ms/笔
 - [ ] P2-V04 样本数据通过 domain expert 评审
 - [ ] P2-V05 模块文档完成度 100%
+
+### LLM 抽取质量提升（v1 第 1 轮）
+- [ ] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证
+- [ ] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率
+- [ ] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）
+- [ ] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计
+
+### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
+- [ ] **TODO** P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计
+- [ ] **TODO** P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类
+- [ ] **TODO** P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl`
+- [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
 
 ---
 

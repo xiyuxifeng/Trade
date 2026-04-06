@@ -10,6 +10,7 @@ from src.pipeline.tasks.clean_task import CleanResult, run_clean_task
 from src.pipeline.tasks.crawl_task import CrawlResult, run_crawl_task
 from src.pipeline.tasks.export_task import ExportResult, run_export_task
 from src.pipeline.tasks.validate_task import ValidateResult, run_validate_task
+from src.pipeline.tasks.process_tasks import ProcessTasksStats, run_process_tasks
 
 
 @dataclass(slots=True)
@@ -19,6 +20,7 @@ class PipelineRunResult:
 	validate: ValidateResult
 	store: StoreStats
 	export: ExportResult
+	process: ProcessTasksStats
 
 
 def discover_crawl_jsonl_paths(*, base_dir: Path, config: AppConfig) -> list[Path]:
@@ -53,6 +55,7 @@ async def run_pipeline(
 	clean_result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force)
 	validate_result = run_validate_task(base_dir=base_dir, input_paths=clean_result.cleaned_paths, force=force)
 	store_stats = await store_articles_jsonl_to_db(base_dir=base_dir, jsonl_paths=validate_result.validated_paths)
+	process_stats = await run_process_tasks()
 	export_result = await run_export_task()
 
 	return PipelineRunResult(
@@ -61,4 +64,5 @@ async def run_pipeline(
 		validate=validate_result,
 		store=store_stats,
 		export=export_result,
+		process=process_stats,
 	)

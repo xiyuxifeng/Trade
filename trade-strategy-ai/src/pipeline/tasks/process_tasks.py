@@ -126,6 +126,36 @@ PENDING_PATH = Path("data/processed/pipeline/pending_tasks.jsonl")
 FAILED_PATH = Path("data/processed/pipeline/failed_tasks.jsonl")
 
 
+def _create_handlers(config: AppConfig) -> dict[str, TaskHandler]:
+    """Create handler closures that explicitly capture config.
+
+    Each handler is a local async function that closes over the config
+    passed in, eliminating the need for module-level global state.
+    """
+
+    async def handle_article_ingested(details: dict[str, Any]) -> None:
+        from src.agents.data_agent.skills.extract_article_metadata import (
+            extract_and_store_metadata,
+        )
+
+        await extract_and_store_metadata(
+            config=config,
+            base_dir=Path("."),
+            limit=20,
+        )
+
+    async def handle_article_metadata_extracted(details: dict[str, Any]) -> None:
+        from src.persona.cluster_builder import build_clusters_from_db
+
+        dest = Path("data/processed/persona/clusters.real.json")
+        await build_clusters_from_db(config=config, dest=dest)
+
+    return {
+        "article_ingested": handle_article_ingested,
+        "article_metadata_extracted": handle_article_metadata_extracted,
+    }
+
+
 async def run_process_tasks(
     *,
     config: AppConfig,

@@ -162,8 +162,6 @@ async def run_process_tasks(
     pending_path: Path | None = None,
     failed_path: Path | None = None,
 ) -> ProcessTasksStats:
-    global _config
-    _config = config
     start = time.monotonic()
     stats = ProcessTasksStats()
 

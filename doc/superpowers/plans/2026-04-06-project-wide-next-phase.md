@@ -2,184 +2,157 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把当前已打通的 `crawl -> store -> extract -> clusters -> pre-market -> report` 闭环固化成稳定回归门禁，并继续推进剩余 Phase 1 / Phase 2 主线功能；LLM 抽取 V2 优化延后到整个项目完成后再做。
+**Goal:** 按“运行闭环主线 -> 数据输入主线 -> 服务化主线”的顺序，推进下一阶段 8 项核心功能，把当前 `crawl -> store -> extract -> clusters -> pre-market -> evaluation` 的最小闭环升级为可持续演进的 Trader 画像、记忆、建议、复盘系统。
 
-**Architecture:** 以 `e2e-regression` 作为第一优先级 smoke gate，确保数据绑定、抽取、聚类、路由和报告产物都能稳定生成。随后按“数据接入 -> 认知建模 -> 报告/接口”三条线推进，保持每个阶段都能独立运行、独立验证，避免再出现只能手工跑通但无法回归的状态。
+**Architecture:** 先在现有 `ManagerAgent + TraderAgent + persona/metadata/pipeline` 基础上补齐 `TraderProfile`、`TraderMemory`、复盘任务与写回链路，让系统先拥有真实的“建议生成 + 盘后反馈 + 自反馈”能力。随后只补支撑闭环所必需的数据输入能力（交易记录、市场数据、动态抓取），最后再通过 FastAPI / host 薄壳把已稳定的能力对外暴露，避免过早把未成熟逻辑服务化。
 
 **Tech Stack:** Python 3.11+, pytest/pytest-asyncio, SQLAlchemy async, PostgreSQL, DuckDB, Typer CLI, Pydantic, Jinja2 HTML reports
 
 ---
 
-## 文件变更概览
+## Priorities
 
-| 文件 | 变更类型 | 说明 |
-|------|----------|------|
-| `trade-strategy-ai/tests/e2e/test_full_flow.py` | Create/Modify | 固化 `e2e-regression` 产物检查与核心路径 smoke test |
-| `trade-strategy-ai/tests/unit/common/test_config.py` | Modify | 锁定 `crawl.sources.trader_id` 绑定，防止 clusters 路由回退为空 |
-| `trade-strategy-ai/config/app.yaml` | Modify | 当前项目配置默认绑定 `crawl.sources.trader_id` |
-| `trade-strategy-ai/cli/main.py` | Modify | 保持 `init-config` 模板与主配置一致 |
-| `trade-strategy-ai/src/persona/cluster_builder.py` | Modify | 继续强化 trader 绑定与聚类可解释性 |
-| `trade-strategy-ai/src/agents/manager_agent/agent.py` | Modify | 继续强化日报/考核/路由产物的稳定性 |
-| `trade-strategy-ai/src/pipeline/tasks/*` | Modify | 继续补齐 pipeline 的失败回归与输入一致性 |
+1. 运行闭环主线：Trader 画像、记忆、建议生成、盘后复盘写回
+2. 数据输入主线：动态抓取、交易记录解析、市场数据接入
+3. 服务化主线：查询 API、触发接口、host 薄壳
 
 ---
 
-## Task 1: 把全链路回归固定成可重复的 smoke gate
+## Next 8 Tasks
+
+### Task 1: 建立 TraderProfile 最小画像层
+
+**目标：** 把现有 `article_metadata`、`clusters.real.json`、`crawl.sources.trader_id` 绑定结果，沉淀为可持续读取的 trader 画像，而不是每次运行时临时拼接。
 
 **Files:**
-- Create: `trade-strategy-ai/tests/e2e/test_full_flow.py`
-- Modify: `trade-strategy-ai/cli/main.py`
-- Modify: `trade-strategy-ai/tests/unit/common/test_config.py`
+- Create: `trade-strategy-ai/src/trader_profile/service.py`
+- Create: `trade-strategy-ai/src/trader_profile/schemas.py`
+- Modify: `trade-strategy-ai/src/persona/cluster_builder.py`
+- Modify: `trade-strategy-ai/src/agents/data_agent/skills/extract_article_metadata.py`
+- Test: `trade-strategy-ai/tests/unit/trader_profile/test_service.py`
 
-- [ ] **Step 1: 写全链路 smoke test**
+- [ ] 定义 `TraderProfile` 字段：风格标签、题材偏好、常见标的、纪律偏好、证据来源、更新时间。
+- [ ] 实现从 `article_metadata + cluster` 生成轻量画像的聚合服务。
+- [ ] 为画像聚合增加单元测试，覆盖空数据、单 trader、多 trader 三种场景。
+- [ ] 验证画像文件或表结构能够被 `TraderAgent` 直接读取。
 
-让测试直接验证官方回归链路的关键产物，而不是只断言某个单点函数。
+### Task 2: 建立 TraderMemory 最小记忆层
 
-```python
-def test_e2e_regression_produces_report_and_persona_route():
-    ...
-    assert report_path.exists()
-    assert route_path.exists()
-    assert daily_report["ideas"]
-    assert len(route["decisions"]) > 0
-```
-
-- [ ] **Step 2: 运行失败测试并确认能抓到真实问题**
-
-Run: `pytest tests/e2e/test_full_flow.py -q`
-Expected: 先失败，原因应来自缺少 smoke test 断言或产物不完整，而不是语法错误。
-
-- [ ] **Step 3: 固化 CLI 入口的一致性**
-
-确保 `e2e-regression`、`run-pre-market`、`clusters-build` 的默认路径与 `config/app.yaml`、`init-config` 模板保持一致，避免“命令能跑但模板生成出来的配置跑不通”。
-
-- [ ] **Step 4: 重新运行 smoke test**
-
-Run: `pytest tests/e2e/test_full_flow.py -q`
-Expected: 通过，并能在测试输出里看到 `DailyReport` 与 persona 产物被生成。
-
-- [ ] **Step 5: 运行官方回归命令**
-
-Run: `../.venv/bin/python -m cli.main e2e-regression --max-articles 1 --extract-limit 1`
-Expected: `E2E OK. DailyReport ideas=...`，且 `persona_route` 里 `decisions > 0`。
-
----
-
-## Task 2: 完成 Phase 1 剩余数据输入主线
+**目标：** 先落地“成功案例 / 失败案例 / 复盘结论”三类记忆，解决当前系统没有历史反馈可复用的问题。
 
 **Files:**
-- Modify: `trade-strategy-ai/src/agents/data_agent/sites/tgb.py`
-- Modify: `trade-strategy-ai/src/agents/data_agent/skills/crawl_blog.py`
-- Modify: `trade-strategy-ai/src/pipeline/tasks/crawl_task.py`
-- Modify: `trade-strategy-ai/src/pipeline/tasks/validate_task.py`
-- Test: `trade-strategy-ai/tests/unit/agents/test_crawl_blog.py`
+- Create: `trade-strategy-ai/src/trader_memory/service.py`
+- Create: `trade-strategy-ai/src/trader_memory/schemas.py`
+- Modify: `trade-strategy-ai/src/agents/manager_agent/agent.py`
+- Test: `trade-strategy-ai/tests/unit/trader_memory/test_service.py`
 
-- [ ] **Step 1: 给动态页面抓取补回归测试**
+- [ ] 定义 `TraderMemoryItem` 与索引键（`trader_id + memory_type + as_of_date`）。
+- [ ] 实现 append / list_recent / search_by_symbol 的最小接口。
+- [ ] 约束 JSONL 或数据库存储格式，先选一种最小可用方案，不同时维护两套。
+- [ ] 为记忆写入与读取补单元测试。
 
-聚焦 Playwright 入口和动态页 fallback，先锁住“能抓到内容”而不是扩展站点能力。
+### Task 3: 重构 TraderAgent 建议生成逻辑
 
-```python
-def test_dynamic_crawler_falls_back_when_static_html_is_missing():
-    ...
-```
-
-- [ ] **Step 2: 运行 crawler 单测并修补**
-
-Run: `pytest tests/unit/agents/test_crawl_blog.py -q`
-Expected: crawler 的静态 / 动态分支都能覆盖到，不依赖线上站点才能验证核心行为。
-
-- [ ] **Step 3: 补交易记录解析入口**
-
-把交易记录的 HTML / PDF / CSV 导入边界先钉住，避免 Phase 2 画像阶段数据源继续悬空。
-
-- [ ] **Step 4: 验证 pipeline 输入输出一致性**
-
-Run: `pytest tests/unit/pipeline -q`
-Expected: crawl -> clean -> validate -> store 的 JSONL 输出格式保持一致。
-
----
-
-## Task 3: 完成 Phase 1 的存储、接口和运维缺口
-
-**Files:**
-- Modify: `trade-strategy-ai/src/pipeline/tasks/export_task.py`
-- Modify: `trade-strategy-ai/src/db/migrations/*`
-- Modify: `trade-strategy-ai/src/host/handler.py`
-- Modify: `trade-strategy-ai/cli/main.py`
-- Test: `trade-strategy-ai/tests/unit/pipeline/test_export_task.py`
-- Test: `trade-strategy-ai/tests/integration/test_api.py`
-
-- [ ] **Step 1: 把导出、备份、恢复和审计的边界固定下来**
-
-优先补数据层可靠性，避免后续画像和策略层不断被底层数据问题打断。
-
-- [ ] **Step 2: 给薄壳 API / host command 补回归**
-
-确保 `/host/command`、`run_pre_market`、`run_after_close` 这些入口在未来仍然只是薄壳，不引入第二套逻辑。
-
-- [ ] **Step 3: 运行存储与接口测试**
-
-Run: `pytest tests/unit/pipeline/test_export_task.py tests/integration/test_api.py -q`
-Expected: 导出、查询和 host 入口都通过，不再依赖手工 CLI。
-
----
-
-## Task 4: 推进 Phase 2 核心认知建模
+**目标：** 把当前基于 watchlist 和固定比例的建议生成，升级为“画像 + 记忆 + 市场数据”的结构化建议生成。
 
 **Files:**
 - Modify: `trade-strategy-ai/src/agents/trader_agent/agent.py`
-- Modify: `trade-strategy-ai/src/agents/manager_agent/agent.py`
-- Modify: `trade-strategy-ai/src/persona/cluster_builder.py`
-- Modify: `trade-strategy-ai/src/persona/router.py`
-- Test: `trade-strategy-ai/tests/unit/persona/test_router.py`
+- Modify: `trade-strategy-ai/src/schemas/contracts.py`
+- Test: `trade-strategy-ai/tests/unit/agents/test_trader_agent.py`
 
-- [ ] **Step 1: 完成 Trader 画像与记忆存储的最小闭环**
+- [ ] 给 `TraderAgent` 注入 `TraderProfile` 和 `TraderMemory` 读取能力。
+- [ ] 让建议理由引用画像与历史记忆证据，而不是只拼默认文案。
+- [ ] 保持当前 `TradeIdea` 契约兼容，不提前扩大字段面。
+- [ ] 补齐 trader agent 单测，覆盖有画像/无画像、有记忆/无记忆两类退化路径。
 
-先把文章/交易记录映射到 trader，再让画像能持续积累，而不是一次性脚本式生成。
+### Task 4: 强化 ManagerAgent 的盘前汇总与冲突处理
 
-- [ ] **Step 2: 让 ManagerAgent 的日报 / 考核 / 复盘形成稳定链路**
-
-确保 `run_pre_market`、`run_after_close` 和 HTML 报告能在连续多天回放时稳定工作。
-
-- [ ] **Step 3: 为 persona route / clusters 增加更可解释的产物**
-
-保持当前可回放 JSON 结构不变，只提升输出的稳定性和可解释性，不提前做 V2 的质量优化。
-
-- [ ] **Step 4: 运行 persona / manager 相关测试**
-
-Run: `pytest tests/unit/persona/test_router.py tests/integration/test_agent_coordination.py -q`
-Expected: 路由和编排逻辑继续保持可回归。
-
----
-
-## Task 5: 全项目收口策略
+**目标：** 避免多个 Trader 建议简单拼接，补齐盘前去重、冲突提示和统一风险摘要。
 
 **Files:**
-- Modify: `doc/TaskList.md`
-- Modify: `daily-report/2026-04-06.md`
-- Modify: `daily-sessions/2026-04-06.md`
+- Modify: `trade-strategy-ai/src/agents/manager_agent/agent.py`
+- Modify: `trade-strategy-ai/src/reporting/html_reports.py`
+- Test: `trade-strategy-ai/tests/unit/agents/test_manager_agent.py`
 
-- [ ] **Step 1: 更新 TaskList 的优先级顺序**
+- [ ] 定义同 symbol 多建议的冲突合并规则。
+- [ ] 在 `DailyReport` 里增加冲突说明和风险摘要来源。
+- [ ] 保持 HTML 报告渲染兼容已有产物。
+- [ ] 为 pre-market 汇总新增回归测试。
 
-把当前最关键的工作顺序调整为：
-1. smoke gate / 回归门禁
-2. Phase 1 剩余数据输入与接口
-3. Phase 2 核心画像与日报
-4. `P2-LLM` 的 V2 优化延后
+### Task 5: 扩展盘后考核为复盘任务生成
 
-- [ ] **Step 2: 更新日报里的下一步计划**
+**目标：** 当前 `run_after_close()` 已能做收益评估，但还没有真正把“不达标/亏损”转成可消费复盘任务。
 
-把今日结果、已修复问题和下一步路线写清楚，避免后续会话再次从“抽取质量优化”切回。
+**Files:**
+- Modify: `trade-strategy-ai/src/agents/manager_agent/agent.py`
+- Modify: `trade-strategy-ai/src/schemas/contracts.py`
+- Test: `trade-strategy-ai/tests/unit/agents/test_manager_agent.py`
 
-- [ ] **Step 3: 保持 V2 延后**
+- [ ] 把低收益/亏损评估结果写成标准复盘任务对象。
+- [ ] 明确触发阈值与复盘原因字段，避免后续写回时丢上下文。
+- [ ] 保持 `EvaluationResult` 对已有 HTML 输出兼容。
+- [ ] 补齐盘后复盘任务生成测试。
 
-`P2-LLM-001/002/003/004` 继续保留在项目完成后的优化阶段，不在下一阶段抢占主线资源。
+### Task 6: 实现复盘任务消费与记忆写回
+
+**目标：** 把复盘任务真正消费掉并写回 `TraderMemory`，形成闭环。
+
+**Files:**
+- Create: `trade-strategy-ai/src/review_tasks/service.py`
+- Modify: `trade-strategy-ai/src/pipeline/tasks/process_tasks.py`
+- Modify: `trade-strategy-ai/src/trader_memory/service.py`
+- Test: `trade-strategy-ai/tests/unit/pipeline/test_process_tasks.py`
+
+- [ ] 为复盘任务定义处理入口，与现有 `pending_tasks` 机制对齐。
+- [ ] 处理成功后把复盘结论写回 `TraderMemory`。
+- [ ] 失败时沿用现有 failed/dead task 机制，不单开第二套重试系统。
+- [ ] 补齐 process task 回归测试。
+
+### Task 7: 补齐支撑闭环的最小数据输入能力
+
+**目标：** 不追求一口气做完所有数据层，而是优先补齐支撑画像/复盘的输入缺口。
+
+**Files:**
+- Modify: `trade-strategy-ai/src/agents/data_agent/skills/crawl_dynamic.py`
+- Create: `trade-strategy-ai/src/agents/data_agent/skills/import_trade_logs.py`
+- Modify: `trade-strategy-ai/src/agents/data_agent/skills/fetch_market.py`
+- Modify: `trade-strategy-ai/src/pipeline/dag.py`
+- Test: `trade-strategy-ai/tests/unit/agents/test_crawl_blog.py`
+- Test: `trade-strategy-ai/tests/unit/agents/test_data_agent.py`
+
+- [ ] 实现 Playwright 动态抓取最小入口，只覆盖当前目标站点必需场景。
+- [ ] 增加交易记录 CSV/HTML 导入入口，先支持最小字段集。
+- [ ] 把市场数据接入扩展到能支撑盘后考核与画像统计。
+- [ ] 为新增数据输入能力补回归测试。
+
+### Task 8: 服务化暴露稳定能力
+
+**目标：** 在闭环与数据输入稳定后，再提供查询与触发接口，避免过早服务化。
+
+**Files:**
+- Create: `trade-strategy-ai/api/main.py`
+- Create: `trade-strategy-ai/api/routers/report.py`
+- Create: `trade-strategy-ai/api/routers/run.py`
+- Modify: `trade-strategy-ai/src/host/handler.py`
+- Test: `trade-strategy-ai/tests/integration/test_api.py`
+
+- [ ] 提供最小查询接口：日报、考核报告、persona route。
+- [ ] 提供最小触发接口：`run_pre_market`、`run_after_close`。
+- [ ] 保持 host handler 与 API 共用同一套核心调用，不复制业务逻辑。
+- [ ] 补齐 API 集成测试。
 
 ---
+
+## Verification
+
+- `make smoke`
+- `pytest -q`
+- `python -m cli.main e2e-regression --config config/app.yaml --max-articles 1 --extract-limit 1`
+- 画像、记忆、复盘三个新增模块都至少有对应单测
 
 ## Phase Gate
 
-- `Task 1` 完成后，才允许把 `e2e-regression` 当作稳定 smoke gate。
-- `Task 2` 和 `Task 3` 完成后，Phase 1 才能视为“工程上可继续扩展”。
-- `Task 4` 完成后，才进入 Phase 2 的正式画像/记忆/复盘主线。
-- `V2` 抽取优化继续后置，等整个项目主线稳定后再启。
+- Task 1-3 完成后，系统才具备最小“画像驱动建议”能力。
+- Task 4-6 完成后，系统才具备真正的“盘后复盘写回”闭环。
+- Task 7 完成后，画像与复盘所依赖的数据输入主线才算基本可用。
+- Task 8 最后执行，避免把未成熟逻辑提前服务化。

@@ -221,10 +221,10 @@
 - [ ] P2-V05 模块文档完成度 100%
 
 ### LLM 抽取质量提升（v1 第 1 轮）
-- [ ] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证
-- [ ] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率
-- [ ] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）
-- [ ] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计
+- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证
+- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率
+- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）
+- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计
 
 ### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
 - [ ] **TODO** P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计
@@ -406,7 +406,8 @@
 
 ## 🚨 高优先级任务（需要首先着手）
 
-- [ ] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
+- 口径：范围任务（如 P0-001 ~ P0-004）只有在范围内全部子任务完成时才勾选为 [x]。
+- [x] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
 - [ ] **P1-001 ~ P1-006**: 爬虫开发（建议 Week 1.0-1.5）
 - [ ] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）
 - [ ] **P3-001 ~ P3-004**: 对齐分析框架设计（建议 Week 2.0）

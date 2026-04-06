@@ -1,10 +1,10 @@
 {
-  "report_id": "6b5fa9ff-d368-47f9-b21a-fdc068ca26b9",
+  "report_id": "cad42bd2-5c9b-4a1f-a362-3d99aeb500cf",
   "as_of_date": "2026-04-06",
-  "generated_at": "2026-04-06 10:11:32.702076",
+  "generated_at": "2026-04-06 11:51:47.250798+00:00",
   "ideas": [
     {
-      "idea_id": "4601eb38-d57f-4d88-8f7f-868b2be8cf4e",
+      "idea_id": "f8c425dc-776a-441a-92a6-fe7e47bfa8ef",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "000001.SZ",
@@ -31,7 +31,7 @@
       ]
     },
     {
-      "idea_id": "d57e5054-9f20-4d26-9ef1-55026a9e17ab",
+      "idea_id": "81037880-c223-4e8b-96e2-cc65bec312d9",
       "trader_id": "trader_a",
       "as_of_date": "2026-04-06",
       "symbol": "510300.SH",

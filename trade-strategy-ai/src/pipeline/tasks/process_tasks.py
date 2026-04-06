@@ -16,6 +16,7 @@ class ProcessTasksStats:
     skipped_dedup: int = 0
     retried: int = 0
     failed: int = 0
+    dead: int = 0
     duration_ms: int = 0
 
 
@@ -87,6 +88,10 @@ async def _should_skip_metadata_extracted(details: dict[str, Any]) -> bool:
 
 
 MAX_RETRIES = 3
+MAX_RETRY_COUNT = 3   # 超过此值移入 dead_tasks
+FAILED_TTL_DAYS = 7   # 超过此天数的失败记录清理
+
+DEAD_TASKS_PATH = Path("data/processed/pipeline/dead_tasks.jsonl")
 
 
 async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -> tuple[bool, bool]:

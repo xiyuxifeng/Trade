@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,8 @@ class ExportStats:
     new_metadata: int = 0
     skipped: int = 0
     duration_ms: int = 0
+    watermark_before: datetime | None = None
+    watermark_after: datetime | None = None
 
 
 @dataclass

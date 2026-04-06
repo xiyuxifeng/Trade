@@ -126,11 +126,16 @@
 补充（落地为可跑的一键链路，优先级高）：
 - [x] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store），并提供可重复运行的一键入口
 
+补充（Phase 1.1/1.2 已落地，pipeline 继续完善）：
+- [x] P1-026F pipeline 增加 pending_tasks 消费（process_tasks）：按 article_id 去重、固定重试、failed 持久化
+- [x] P1-026G pipeline 增加 DuckDB 导出（export_task）：导出 articles + metadata（幂等写入）
+
 补充（Pipeline 技术债务，跟进中）：
-- [ ] P1-026B DuckDB JSON 字段改为原生 JSON 类型（TEXT → JSON，应用层免 parse）
-- [ ] P1-026C export_task 支持 PostgreSQL 数据源（生产部署确认）
+- [ ] P1-026B DuckDB JSON 字段读写约定与查询示例补齐（确认写入/读回类型，补充 json_extract 用法）
+- [ ] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
 - [ ] P1-026D run_process_tasks 改为显式 config 参数注入（非 global 模式）
 - [ ] P1-026E failed_tasks.jsonl 增加自动重试机制或定期清理策略
+- [ ] P1-026H 修复 export_task 增量水位：UUID4 不可排序 → 改为 created_at/crawled_at watermark 或独立导出状态表
 
 ### API Layer (API 接口层)
 - [ ] P1-027 设计数据查询 API（FastAPI）

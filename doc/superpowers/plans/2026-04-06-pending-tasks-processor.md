@@ -1,5 +1,12 @@
 # Pending Tasks Processor Implementation Plan
 
+**Status**：✅ 已实现并集成到 pipeline（`store → process → export`）
+
+**Implemented**：
+- `trade-strategy-ai/src/pipeline/tasks/process_tasks.py`
+- `trade-strategy-ai/src/pipeline/dag.py`
+- `trade-strategy-ai/src/pipeline/tasks/__init__.py`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现 pending_tasks 处理器：读取 `pending_tasks.jsonl`，按 task type 分发到对应处理器，支持 article_id 去重和固定次数重试。

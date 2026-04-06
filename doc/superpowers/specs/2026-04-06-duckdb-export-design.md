@@ -58,8 +58,8 @@
 1. 连接源 DB（SQLite 或 PostgreSQL）
 2. 连接/创建 DuckDB（如不存在则新建）
 3. 确保 `articles` + `metadata` 表存在（如不存在则 CREATE TABLE）
-4. 查询源 DB 中所有 article.id 与 DuckDB articles 表中 max(id) 比较
-5. 只查询 `id > max_id` 的新增/更新记录（JOIN blog_articles + article_metadata）
+4. 当前实现以 DuckDB 中 `articles.id` 的 max 值作为水位
+5. 只查询 `id > max_id` 的新增记录（JOIN blog_articles + article_metadata）
 6. 写入 DuckDB（`INSERT OR REPLACE` 或 `DELETE + INSERT`）
 7. 返回统计：新增条数、更新条数、耗时
 
@@ -72,6 +72,11 @@ crawl → clean → validate → store(SQLite/PG) → **export(DuckDB)**
 ```
 
 `PipelineRunResult` 新增 `export: ExportStats` 字段。
+
+## 风险与后续
+
+- 当前源表 `blog_articles.id` 为 `uuid4()`（随机、不可排序），因此 `id > max_id` 不能作为可靠的增量水位
+- 后续应改为时间戳 watermark（`created_at` / `crawled_at` / `updated_at`）并持久化导出状态（DuckDB `export_state` 表或 pipeline state 文件）
 
 ## 实现文件
 - `src/pipeline/tasks/export_task.py` — 核心导出逻辑

@@ -5,58 +5,75 @@
 
 ---
 
-## T1: DuckDB JSON 字段存储为 TEXT，应用层需 parse
+## T1: DuckDB JSON 字段存储/读写一致性
 
 **严重程度**：低（可工作）
-**影响范围**：`export_task` 导出到 DuckDB 的所有 JSON 字段（`extracted_concepts`, `trading_symbols`, `strategy_rules`, `preconditions`, `comment_insights`, `raw_llm_output`）
+**影响范围**：`export_task` 导出到 DuckDB 的所有 JSON 字段（`tags`, `comments_payload`, `raw_payload`, `extracted_concepts`, `trading_symbols`, `strategy_rules`, `preconditions`, `comment_insights`, `raw_llm_output`）
 
 **现状**：
-- DuckDB 原生支持 JSON 类型，但当前 export_task 将 JSON 字段直接存储为 TEXT
-- 查询时需要 `json_extract(col, '$.key')` 或 `json(col)` 手动解析
+- DuckDB 表结构已使用 JSON 类型列；导出时对 Python dict/list 进行 `json.dumps()` 后写入
+- 这在 DuckDB 中通常可用，但读取侧（Python/duckdb 客户端）可能仍以字符串形式返回，需要确认下游消费方式
 
 **后续处理**：
-- 在 `export_task.py` 中将 TEXT 列改为 DuckDB JSON 类型
-- 验证查询语句兼容性和性能差异
-- 涉及文件：`src/pipeline/tasks/export_task.py`
+- 明确约定：DuckDB JSON 列写入/读取的类型（字符串 JSON vs 结构化 JSON）
+- 为下游 OLAP/导出查询补充示例查询（`json_extract`/`->` 等）
+- 涉及文件：`src/pipeline/tasks/export_task.py`（如需调整 serialize/读回）
 
-**相关任务**：P1-026B（待追加到 TaskList）
+**相关任务**：P1-026B
 
 ---
 
-## T2: export_task 当前从 SQLite 读取（本地调试），生产需确认 PostgreSQL 连接
+## T2: export_task 数据源与环境一致性（生产部署确认）
 
 **严重程度**：中（影响生产部署）
-**影响范围**：`export_task` 数据源切换
+**影响范围**：`export_task` 运行时连接的源数据库（SQLite vs PostgreSQL）
 
 **现状**：
-- `export_task.py` 目前硬编码读取 `data/trade_strategy_ai.db`（SQLite）
-- 尚未验证 PostgreSQL 连接和增量查询逻辑
+- `export_task.py` 通过 `session_scope()` 从“当前应用配置的数据库”读取（不应硬编码数据源）
+- 但仍需在目标部署形态下验证：`DATABASE_URL` 生效、连接权限、以及导出查询的性能/一致性
 
 **后续处理**：
-- 确认 PostgreSQL 连接字符串（`DATABASE_URL`）
-- 实现 `get_source_db_engine()` 函数，根据配置选择 SQLite 或 PostgreSQL
-- 增量查询逻辑：`id > max_id` 在 PostgreSQL 下验证
-- 涉及文件：`src/pipeline/tasks/export_task.py`
+- 明确“export 运行环境”的规范（本地/容器/服务）以及 `DATABASE_URL` 的配置位置
+- 在 PostgreSQL 下跑一次全量/增量导出回归（包含空增量、少量增量、以及 schema 兼容性）
+- 涉及文件：`src/pipeline/tasks/export_task.py`、部署文档（如有）
 
-**相关任务**：P1-026C（待追加到 TaskList）
+**相关任务**：P1-026C
 
 ---
 
-## T3: run_process_tasks config 传入方式使用 global 模式，非最佳实践但可工作
+## T3: process_tasks 的 config 注入仍使用模块级 global（可工作但不利测试/并发）
 
 **严重程度**：低（技术债务）
 **影响范围**：`src/pipeline/tasks/process_tasks.py`
 
 **现状**：
-- `run_process_tasks()` 内部调用 `get_app_config()` 获取全局配置
-- 未通过参数显式注入 config，测试时需要 mock 或环境变量
+- `run_process_tasks(config=...)` 已改为显式参数传入
+- 但内部仍将 config 写入模块级 `_config`，供 handler 通过 `_get_config()` 读取（global 模式）
 
 **后续处理**：
-- 重构为 `run_process_tasks(config: AppConfig, ...)` 参数传入模式
-- 保持向后兼容：默认 `config=None` 时使用 `get_app_config()`
-- 涉及文件：`src/pipeline/tasks/process_tasks.py`, `src/pipeline/dag.py`
+ - 将 handler 签名扩展为 `handler(details, *, config)` 或注册时用闭包绑定 config
+ - 避免模块级可变全局，便于单测与未来并发 worker
+ - 涉及文件：`src/pipeline/tasks/process_tasks.py`, `src/pipeline/dag.py`
 
-**相关任务**：P1-026D（待追加到 TaskList）
+**相关任务**：P1-026D
+
+---
+
+## T5: export_task 的“增量水位”基于 UUID4，不可靠
+
+**严重程度**：中（可能导致漏导出/重复导出）
+**影响范围**：`src/pipeline/tasks/export_task.py` 的增量导出逻辑
+
+**现状**：
+- `blog_articles.id` 使用 `uuid4()` 生成（随机、不可排序）
+- 当前“增量导出”用 `id > max_id` 作为过滤条件在语义上不成立（max UUID 不代表最新写入）
+
+**后续处理（推荐）**：
+- 改为基于时间戳水位：`created_at` / `crawled_at` / `updated_at`（需明确哪一个代表“新增/更新”）
+- 将 watermark 持久化：写入 DuckDB 内的 `export_state` 表，或写入 `data/processed/pipeline/` 下的 state 文件
+- 全量导出仍保留 `force_full`
+
+**相关任务**：P1-026H
 
 ---
 
@@ -88,7 +105,8 @@
 
 | 任务 ID | 描述 | 优先级 | 所属阶段 |
 |---------|------|--------|----------|
-| P1-026B | DuckDB JSON 字段改为原生 JSON 类型 | P2 | Phase 1 |
-| P1-026C | export_task 支持 PostgreSQL 数据源 | P1 | Phase 1 |
+| P1-026B | DuckDB JSON 字段读写约定与查询示例补齐 | P2 | Phase 1 |
+| P1-026C | export_task 在 PostgreSQL 环境回归验证（DATABASE_URL/性能/一致性） | P1 | Phase 1 |
 | P1-026D | run_process_tasks 改为显式 config 参数注入 | P3 | Phase 1 |
 | P1-026E | failed_tasks.jsonl 增加自动重试或定期清理机制 | P2 | Phase 1 |
+| P1-026H | 修复 export_task 增量水位（UUID4 → 时间戳 watermark/状态表） | P0 | Phase 1 |

@@ -86,7 +86,7 @@ def _cleanup_failed_tasks(
     """
     from datetime import timedelta
 
-    now = datetime.now(TZ)
+    now = datetime.now(UTC)
     ttl_cutoff = now - timedelta(days=FAILED_TTL_DAYS)
 
     alive: list[dict[str, Any]] = []

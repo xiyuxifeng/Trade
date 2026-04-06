@@ -91,7 +91,7 @@ class TestRunExportTask:
     ) -> MagicMock:
         """Create a mock BlogArticle object."""
         article = MagicMock(spec=BlogArticle)
-        article.id = uuid4() if article_id is None else uuid4()
+        article.id = uuid4() if article_id is None else article_id
         article.source = source
         article.source_article_id = "test_article_id"
         article.source_url = "https://example.com/article"
@@ -113,7 +113,7 @@ class TestRunExportTask:
         article.content_hash = "abc123def456"
         return article
 
-    def _create_mock_metadata(self, article_id: uuid4) -> MagicMock:
+    def _create_mock_metadata(self, article_id: uuid.UUID) -> MagicMock:
         """Create a mock ArticleMetadata object."""
         meta = MagicMock(spec=ArticleMetadata)
         meta.id = uuid4()

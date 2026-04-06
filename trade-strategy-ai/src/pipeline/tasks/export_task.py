@@ -235,6 +235,7 @@ async def run_export_task(
             all_rows = rows.all()
 
             if not all_rows:
+                stats.watermark_after = watermark
                 stats.duration_ms = int((time.monotonic() - start) * 1000)
                 return ExportResult(stats=stats, duckdb_path=dest)
 
@@ -252,6 +253,10 @@ async def run_export_task(
             max_crawled_at: datetime | None = None
 
             for article, meta in all_rows:
+                # Track max crawled_at for ALL articles (including skipped) to advance watermark
+                if max_crawled_at is None or article.crawled_at > max_crawled_at:
+                    max_crawled_at = article.crawled_at
+
                 article_id_str = str(article.id)
 
                 if article_id_str in existing_ids:
@@ -264,9 +269,6 @@ async def run_export_task(
                 if meta is not None:
                     conn.execute(metadata_sql, _serialize_metadata(meta))
                     stats.new_metadata += 1
-
-                if max_crawled_at is None or article.crawled_at > max_crawled_at:
-                    max_crawled_at = article.crawled_at
 
         # Update watermark after successful export
         if max_crawled_at is not None:

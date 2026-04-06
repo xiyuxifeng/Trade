@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone as TZ, UTC
 from pathlib import Path
 from typing import Any, Callable, Awaitable
 
@@ -39,6 +40,30 @@ def _load_tasks(path: Path) -> list[dict[str, Any]]:
             if not line:
                 continue
             tasks.append(json.loads(line))
+    return tasks
+
+
+def _load_failed_with_metadata(path: Path) -> list[dict[str, Any]]:
+    """Load failed tasks with retry metadata.
+
+    Returns list of dicts with 'failed_at' (ISO8601) and 'retry_count' (int) fields.
+    Backward compatible: tasks without these fields get default values.
+    """
+    if not path.exists():
+        return []
+    tasks = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            task = json.loads(line)
+            # Backward compat: add defaults for old-format entries
+            if "failed_at" not in task:
+                task["failed_at"] = datetime.now(UTC).isoformat()
+            if "retry_count" not in task:
+                task["retry_count"] = 0
+            tasks.append(task)
     return tasks
 
 

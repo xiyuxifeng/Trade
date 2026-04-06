@@ -197,8 +197,8 @@ async def run_export_task(
 ) -> ExportResult:
     """Export articles + metadata from source DB to DuckDB.
 
-    Incremental by default: only exports articles with id > max(articles.id) in DuckDB.
-    Use force_full=True to re-export everything.
+    Incremental by default: exports articles with crawled_at > last_watermark.
+    Use force_full=True to re-export everything (watermark reset).
     """
     import time
 
@@ -208,26 +208,28 @@ async def run_export_task(
 
     with _duckdb_conn(dest) as conn:
         _ensure_tables(conn)
+        _ensure_export_state_table(conn)
 
         if force_full:
-            max_id: str | None = None
+            watermark: datetime | None = None
         else:
-            max_id = _get_max_article_id(conn)
+            watermark = _get_watermark(conn)
+
+        stats.watermark_before = watermark
 
         async with session_scope() as session:
-            if max_id is None:
+            if watermark is None:
                 stmt = (
                     select(BlogArticle, ArticleMetadata)
                     .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-                    .order_by(BlogArticle.id)
+                    .order_by(BlogArticle.crawled_at)
                 )
             else:
-                max_uuid = uuid.UUID(max_id)
                 stmt = (
                     select(BlogArticle, ArticleMetadata)
                     .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-                    .where(BlogArticle.id > max_uuid)
-                    .order_by(BlogArticle.id)
+                    .where(BlogArticle.crawled_at > watermark)
+                    .order_by(BlogArticle.crawled_at)
                 )
 
             rows = await session.execute(stmt)
@@ -238,17 +240,17 @@ async def run_export_task(
                 return ExportResult(stats=stats, duckdb_path=dest)
 
             # Collect existing article_ids in DuckDB for dedup
-            existing_ids: set[str] = set()
-            if max_id is None:
-                existing_ids = set(
-                    str(r[0]) for r in conn.execute("SELECT id::VARCHAR FROM articles").fetchall()
-                )
+            existing_ids: set[str] = set(
+                str(r[0]) for r in conn.execute("SELECT id::VARCHAR FROM articles").fetchall()
+            )
 
             article_placeholders = ", ".join(["?"] * len(ARTICLES_COLUMNS))
             article_sql = f"INSERT OR REPLACE INTO articles ({', '.join(ARTICLES_COLUMNS)}) VALUES ({article_placeholders})"
 
             metadata_placeholders = ", ".join(["?"] * len(METADATA_COLUMNS))
             metadata_sql = f"INSERT OR REPLACE INTO metadata ({', '.join(METADATA_COLUMNS)}) VALUES ({metadata_placeholders})"
+
+            max_crawled_at: datetime | None = None
 
             for article, meta in all_rows:
                 article_id_str = str(article.id)
@@ -263,6 +265,14 @@ async def run_export_task(
                 if meta is not None:
                     conn.execute(metadata_sql, _serialize_metadata(meta))
                     stats.new_metadata += 1
+
+                if max_crawled_at is None or article.crawled_at > max_crawled_at:
+                    max_crawled_at = article.crawled_at
+
+        # Update watermark after successful export
+        if max_crawled_at is not None:
+            _set_watermark(conn, max_crawled_at)
+            stats.watermark_after = max_crawled_at
 
     stats.duration_ms = int((time.monotonic() - start) * 1000)
     return ExportResult(stats=stats, duckdb_path=dest)

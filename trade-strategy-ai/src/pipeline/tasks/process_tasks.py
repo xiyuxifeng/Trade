@@ -75,6 +75,49 @@ def _save_failed_with_metadata(path: Path, tasks: list[dict[str, Any]]) -> None:
             f.write(json.dumps(task, ensure_ascii=False) + "\n")
 
 
+def _cleanup_failed_tasks(
+    tasks: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate alive tasks from dead tasks based on retry count and TTL.
+
+    Returns: (alive_tasks, dead_tasks)
+    - alive: retry_count < MAX_RETRY_COUNT AND failed_at within FAILED_TTL_DAYS
+    - dead: retry_count >= MAX_RETRY_COUNT OR failed_at > FAILED_TTL_DAYS ago
+    """
+    from datetime import timedelta
+
+    now = datetime.now(TZ)
+    ttl_cutoff = now - timedelta(days=FAILED_TTL_DAYS)
+
+    alive: list[dict[str, Any]] = []
+    dead: list[dict[str, Any]] = []
+
+    for task in tasks:
+        retry_count = task.get("retry_count", 0)
+        failed_at_str = task.get("failed_at")
+        if failed_at_str:
+            try:
+                failed_at = datetime.fromisoformat(failed_at_str.replace("Z", "+00:00"))
+                # Handle naive datetime
+                if failed_at.tzinfo is None:
+                    failed_at = failed_at.replace(tzinfo=TZ)
+            except (ValueError, TypeError):
+                failed_at = now
+        else:
+            failed_at = now
+
+        is_dead = (
+            retry_count >= MAX_RETRY_COUNT
+            or failed_at < ttl_cutoff
+        )
+        if is_dead:
+            dead.append(task)
+        else:
+            alive.append(task)
+
+    return alive, dead
+
+
 def _save_tasks(path: Path, tasks: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:

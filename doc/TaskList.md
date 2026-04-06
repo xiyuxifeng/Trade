@@ -133,7 +133,7 @@
 补充（Pipeline 技术债务，跟进中）：
 - [ ] P1-026B DuckDB JSON 字段读写约定与查询示例补齐（确认写入/读回类型，补充 json_extract 用法）
 - [ ] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
-- [ ] P1-026D run_process_tasks 改为显式 config 参数注入（非 global 模式）
+- [x] P1-026D run_process_tasks 改为显式 config 参数注入（闭包捕获，消除 global）
 - [ ] P1-026E failed_tasks.jsonl 增加自动重试机制或定期清理策略
 - [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
 

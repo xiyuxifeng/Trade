@@ -397,6 +397,16 @@ class AlertManager:
                     message=f"{entity_name}: 数据超过 {entity_stats.freshness_hours:.1f} 小时未更新",
                 ))
 
+        # === 原有异常率告警 ===
+        total_records = stats.articles.total + stats.trades.total + stats.market_data.total
+        if total_records > 0 and quality.total_issues > 0:
+            anomaly_rate = (quality.total_issues / total_records) * 100
+            if anomaly_rate > self.anomaly_rate_threshold:
+                alerts.append(AlertEvent(
+                    level="critical",
+                    message=f"异常率 {anomaly_rate:.1f}% 超过阈值 {self.anomaly_rate_threshold}%",
+                ))
+
         # === 异常趋势告警（新增）===
         if quality_trend and len(quality_trend.issue_counts) >= 2:
             if quality_trend.issue_counts[-1] > quality_trend.issue_counts[0] * 1.5:

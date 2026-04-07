@@ -218,6 +218,18 @@ def test_article_duplicate_by_url():
     assert len(url_issues) == 1
 
 
+def test_article_duplicate_hash_and_url_same_article():
+    """When both hash and url are duplicates for the same article, only hash issue is reported."""
+    validator = DataValidator()
+    articles = [
+        BlogArticle(title="A", content_text="content1", source_url="http://same.com", content_hash="abc123"),
+        BlogArticle(title="A", content_text="content1", source_url="http://same.com", content_hash="abc123"),
+    ]
+    issues = validator.detect_article_duplicates(articles)
+    assert len(issues) == 1
+    assert issues[0].code == "article.duplicate.hash"
+
+
 def test_market_duplicate_by_key():
     validator = DataValidator()
     records = [

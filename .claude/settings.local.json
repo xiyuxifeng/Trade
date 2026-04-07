@@ -14,7 +14,12 @@
       "Bash(timeout 3 uvicorn src.api.main:app --port 8765)",
       "Bash(python:*)",
       "Bash(git commit:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(grep -rh \"field:\" trade-strategy-ai/data/patterns/canonical/*.yaml)",
+      "Bash(grep -rh \"field:\" data/patterns/canonical/*.yaml)",
+      "Bash(grep -rh \"op:\" data/patterns/canonical/*.yaml)",
+      "Bash(python3:*)",
+      "Bash(brew services:*)"
     ]
   }
 }

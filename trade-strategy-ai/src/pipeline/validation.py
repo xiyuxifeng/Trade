@@ -373,6 +373,7 @@ class DataValidator:
 
         for article in articles:
             h = getattr(article, "content_hash", None)
+            h_duplicate = False
             if h and h in seen_hash:
                 issues.append(
                     ValidationIssue(
@@ -382,8 +383,13 @@ class DataValidator:
                         context={"hash": h, "source_url": article.source_url},
                     )
                 )
+                h_duplicate = True
             elif h:
                 seen_hash.add(h)
+
+            # Skip url check if hash already flagged as duplicate (same article)
+            if h_duplicate:
+                continue
 
             u = getattr(article, "source_url", None)
             if u and u in seen_url:

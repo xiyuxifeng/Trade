@@ -27,7 +27,7 @@ async def build_report(settings: AppConfig) -> DashboardReport:
     anomaly_threshold = dashboard_cfg.get("anomaly_rate_threshold", 5.0)
     max_details = dashboard_cfg.get("max_anomaly_details", 20)
 
-    async with async_session_factory() as session:
+    async with async_session_factory()() as session:
         service = DashboardService(
             session=session,
             report_dir=report_dir,

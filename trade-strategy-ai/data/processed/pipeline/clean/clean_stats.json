@@ -6,7 +6,9 @@
       "records": 2,
       "comments_total": 60,
       "comments_kept": 57,
-      "comments_filtered": 3
+      "comments_filtered": 3,
+      "duplicates_removed": 0
     }
-  ]
+  ],
+  "remove_duplicates": false
 }

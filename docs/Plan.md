@@ -77,7 +77,7 @@ ManagerAgent：
 - persona.enable=true 时，盘前日报可看到风格簇列；输出 persona_route_YYYY-MM-DD.json
 - Top-1/Top-2 选择有可解释理由，便于后续人工调参
 
-相关规格：doc/PersonaRouterSpec.md
+相关规格：docs/PersonaRouterSpec.md
 
 ---
 

@@ -48,7 +48,7 @@ Phase 0.5（Persona Router MVP，可选）：
 python -m cli.main persona-init-sample --config config/app.yaml
 ```
 
-文档入口：workspace 根目录 `doc/`。
+文档入口：workspace 根目录 `docs/`。
 
 ## 数据库与迁移（Phase 1 基础）
 

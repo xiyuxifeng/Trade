@@ -27,7 +27,7 @@ trade-strategy-ai/
 │   ├── redis.py                       # Redis 缓存配置
 │   └── logging.py                     # 日志配置
 │
-├── doc/                               # 项目文档（需求/计划/任务）
+├── docs/                               # 项目文档（需求/计划/任务）
 │   ├── 需求.md
 │   ├── Plan.md
 │   ├── Project.md

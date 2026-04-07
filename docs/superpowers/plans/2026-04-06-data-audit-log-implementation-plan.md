@@ -197,7 +197,7 @@ Expected: all pass
 - [ ] **Step 5: Commit**
 
 ```bash
-git add trade-strategy-ai/tests/e2e/test_full_flow.py doc/TaskList.md daily-sessions/2026-04-06.md daily-report/2026-04-06.md
+git add trade-strategy-ai/tests/e2e/test_full_flow.py docs/TaskList.md daily-sessions/2026-04-06.md daily-report/2026-04-06.md
 git commit -m "chore: finalize data audit logging"
 ```
 

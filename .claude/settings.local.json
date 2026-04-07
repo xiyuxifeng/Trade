@@ -9,7 +9,10 @@
       "Bash(ls *.toml)",
       "Bash(python -m pytest tests/unit/pipeline/test_dashboard.py -v)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(python -c \"from src.api.main import app; print\\('FastAPI app imported successfully'\\)\")",
+      "Bash(timeout 3 uvicorn src.api.main:app --port 8765)",
+      "Bash(python:*)"
     ]
   }
 }

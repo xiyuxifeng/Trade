@@ -121,7 +121,7 @@
 - [x] P1-023 实现数据异常检测（离群值、缺失）
 - [x] P1-024 实现数据去重和去噪
 - [x] P1-025 编写数据质量测试（单元测试）
-- [ ] P1-026 建立数据监控 Dashboard（数据新鲜度、完整性）
+- [x] P1-026 建立数据监控 Dashboard（数据新鲜度、完整性）
 
 补充（落地为可跑的一键链路，优先级高）：
 - [x] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store），并提供可重复运行的一键入口
@@ -137,11 +137,15 @@
 - [x] P1-026E failed_tasks.jsonl 增加自动重试机制（3次上限）+ TTL 清理（7天）+ dead_tasks.jsonl
 - [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
 
+补充（去重能力，待后续完善）：
+- [ ] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
+- [ ] P1-026J dedup_task 重构/扩展：当前为死代码（pipeline 无交易数据输入），待确认数据入口后接入或移除
+
 ### API Layer (API 接口层)
-- [ ] P1-027 设计数据查询 API（FastAPI）
-- [ ] P1-028 实现博客数据查询接口
-- [ ] P1-029 实现交易数据查询接口
-- [ ] P1-030 实现市场数据查询接口
+- [x] P1-027 设计数据查询 API（FastAPI）
+- [x] P1-028 实现博客数据查询接口
+- [x] P1-029 实现交易数据查询接口
+- [x] P1-030 实现市场数据查询接口
 - [ ] P1-031 实现数据导出接口（CSV/JSON/Parquet）
 
 补充（运行闭环接口）：

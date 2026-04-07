@@ -64,4 +64,38 @@ class DSLValidator:
                 ))
 
     def normalize_condition(self, expr: ConditionExpr) -> ConditionExpr:
-        ...
+        from src.persona.dsl import TRUE, FALSE
+
+        # 1. 递归标准化子节点
+        if expr.op in ("and", "or"):
+            normalized_args = [self.normalize_condition(child) for child in (expr.args or [])]
+            expr = expr.model_copy(update={"args": normalized_args})
+
+            # 2. 简化规则
+            if expr.op == "and":
+                # 去除 TRUE
+                args = [a for a in expr.args if a.op != "true"]
+                if len(args) == 0:
+                    return TRUE
+                if len(args) == 1:
+                    return args[0]
+                return expr.model_copy(update={"args": args})
+
+            if expr.op == "or":
+                # 去除 FALSE
+                args = [a for a in expr.args if a.op != "false"]
+                if len(args) == 0:
+                    return FALSE
+                if len(args) == 1:
+                    return args[0]
+                return expr.model_copy(update={"args": args})
+
+        elif expr.op == "not":
+            normalized_child = self.normalize_condition(expr.args[0])
+            expr = expr.model_copy(update={"args": [normalized_child]})
+
+            # NOT(NOT(x)) → x
+            if normalized_child.op == "not":
+                return normalized_child.args[0]
+
+        return expr

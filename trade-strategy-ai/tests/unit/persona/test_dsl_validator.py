@@ -48,3 +48,52 @@ class TestValidateCondition:
         expr = AND(CMP("a", "eq", 1), ConditionExpr(op="foobar"))
         issues = v.validate_condition(expr)
         assert any(i.code == "dsl.syntax.invalid_op" for i in issues)
+
+
+class TestNormalizeCondition:
+    def test_normalize_and_true(self):
+        v = DSLValidator()
+        expr = AND(TRUE, CMP("x", "eq", 1))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+        assert norm.field == "x"
+
+    def test_normalize_and_multiple(self):
+        v = DSLValidator()
+        expr = AND(TRUE, CMP("a", "eq", 1), CMP("b", "eq", 2))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "and"
+        assert len(norm.args) == 2
+
+    def test_normalize_or_false(self):
+        v = DSLValidator()
+        expr = OR(FALSE, CMP("x", "eq", 1))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+        assert norm.field == "x"
+
+    def test_normalize_not_not(self):
+        v = DSLValidator()
+        expr = NOT(NOT(CMP("x", "eq", 1)))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+        assert norm.field == "x"
+
+    def test_normalize_single_child_and(self):
+        v = DSLValidator()
+        expr = AND(CMP("x", "eq", 1))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+
+    def test_normalize_single_child_or(self):
+        v = DSLValidator()
+        expr = OR(CMP("x", "eq", 1))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+
+    def test_normalize_nested(self):
+        v = DSLValidator()
+        expr = AND(TRUE, OR(FALSE, CMP("x", "eq", 1)))
+        norm = v.normalize_condition(expr)
+        assert norm.op == "cmp"
+        assert norm.field == "x"

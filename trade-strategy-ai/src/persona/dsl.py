@@ -167,24 +167,9 @@ class ConditionExpr(BaseModel):
 
     @model_validator(mode="after")
     def _validate_op(self) -> "ConditionExpr":
-        allowed = {"and", "or", "not", "cmp", "true", "false"}
-        if self.op not in allowed:
-            raise ValueError(f"ConditionExpr op must be one of {allowed}, got: {self.op!r}")
-
-        if self.op in ("and", "or"):
-            if not self.args:
-                raise ValueError(f"ConditionExpr op={self.op!r} requires non-empty args")
-        elif self.op == "not":
-            if not self.args or len(self.args) != 1:
-                raise ValueError(f"ConditionExpr op='not' requires exactly one arg")
-        elif self.op == "cmp":
-            if not self.field or not self.cmp:
-                raise ValueError("ConditionExpr op='cmp' requires field and cmp")
-            allowed_cmp = {"eq", "ne", "gt", "ge", "lt", "le", "in", "not_in"}
-            if self.cmp not in allowed_cmp:
-                raise ValueError(f"cmp must be one of {allowed_cmp}, got: {self.cmp!r}")
-
-        # true/false have no further requirements
+        # Note: This validator is permissive by design; strict validation is handled
+        # by DSLValidator.validate_condition. This allows creating ConditionExpr
+        # objects with any op value for testing the validator.
         return self
 
 

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from src.persona.dsl import AND, CMP, FALSE, NOT, OR, TRUE, ConditionExpr
+from src.persona.dsl import AND, CMP, FALSE, NOT, OR, TRUE, ConditionExpr, ActionSpec
 from src.persona.dsl_validator import DSLValidator
+from src.persona.schemas import ArticleStrategyRule, ArticlePrecondition, InstrumentFocus
+from src.persona.claim_keys import ClaimKey
 
 
 class TestValidateCondition:
@@ -97,3 +99,64 @@ class TestNormalizeCondition:
         norm = v.normalize_condition(expr)
         assert norm.op == "cmp"
         assert norm.field == "x"
+
+
+class TestValidateRule:
+    def test_validate_rule_valid(self):
+        v = DSLValidator()
+        rule = ArticleStrategyRule(
+            claim_key=ClaimKey.entry_trigger,
+            rule_type="entry",
+            instrument_focus=InstrumentFocus.stock,
+            condition={"op": "cmp", "field": "regime", "cmp": "eq", "value": "bullish"},
+            action={"type": "enter"},
+            params={},
+            confidence=0.8,
+        )
+        issues = v.validate_rule(rule)
+        assert issues == []
+
+    def test_validate_rule_invalid_condition(self):
+        v = DSLValidator()
+        rule = ArticleStrategyRule(
+            claim_key=ClaimKey.entry_trigger,
+            rule_type="entry",
+            instrument_focus=InstrumentFocus.stock,
+            condition={"op": "foobar"},
+            action={"type": "enter"},
+            params={},
+            confidence=0.8,
+        )
+        issues = v.validate_rule(rule)
+        assert any(i.code == "dsl.syntax.invalid_op" for i in issues)
+
+    def test_validate_rules_multiple(self):
+        v = DSLValidator()
+        rules = [
+            ArticleStrategyRule(
+                claim_key=ClaimKey.entry_trigger,
+                rule_type="entry",
+                instrument_focus=InstrumentFocus.stock,
+                condition={"op": "cmp", "field": "regime", "cmp": "eq", "value": "bullish"},
+                action={"type": "enter"},
+                params={},
+                confidence=0.8,
+            ),
+            ArticleStrategyRule(
+                claim_key=ClaimKey.exit_take_profit,
+                rule_type="exit",
+                instrument_focus=InstrumentFocus.stock,
+                condition={"op": "foobar"},
+                action={"type": "exit"},
+                params={},
+                confidence=0.8,
+            ),
+        ]
+        issues = v.validate_rules(rules, source="test")
+        assert len(issues) == 1
+        assert issues[0].code == "dsl.syntax.invalid_op"
+
+    def test_validate_rules_empty(self):
+        v = DSLValidator()
+        issues = v.validate_rules([], source="test")
+        assert issues == []

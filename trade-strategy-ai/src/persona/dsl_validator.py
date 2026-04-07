@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from src.pipeline.validation import ValidationIssue, ValidationSeverity
 from src.persona.dsl import ConditionExpr
+from src.persona.schemas import ArticleStrategyRule, ArticlePrecondition
 
 
 class DSLValidator:
@@ -99,3 +100,29 @@ class DSLValidator:
                 return normalized_child.args[0]
 
         return expr
+
+    def validate_rule(
+        self,
+        rule: ArticleStrategyRule | ArticlePrecondition,
+    ) -> list[ValidationIssue]:
+        """验证 ArticleStrategyRule / ArticlePrecondition。"""
+        issues: list[ValidationIssue] = []
+        condition = rule.condition
+        if isinstance(condition, dict):
+            condition = ConditionExpr.model_validate(condition)
+        issues.extend(self.validate_condition(condition))
+        return issues
+
+    def validate_rules(
+        self,
+        rules: list[ArticleStrategyRule],
+        source: str = "unknown",
+    ) -> list[ValidationIssue]:
+        """批量验证，返回所有问题。"""
+        all_issues: list[ValidationIssue] = []
+        for rule in rules:
+            rule_issues = self.validate_rule(rule)
+            for issue in rule_issues:
+                issue.context = {**issue.context, "rule_id": getattr(rule, "claim_key", None), "source": source}
+            all_issues.extend(rule_issues)
+        return all_issues

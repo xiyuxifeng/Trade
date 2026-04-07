@@ -8,12 +8,33 @@ from src.persona.schemas import ArticleStrategyRule, ArticlePrecondition
 
 
 class DSLValidator:
+    """DSL 语法校验器。
+
+    负责校验 ConditionExpr 的语法合法性，以及标准化表达式（去冗余）。
+
+    错误代码：
+      - dsl.syntax.invalid_op: op 不合法
+      - dsl.syntax.missing_args: and/or 缺少 args
+      - dsl.syntax.invalid_not_args: not 参数数量非1
+      - dsl.syntax.missing_field: cmp 缺少 field
+      - dsl.syntax.invalid_cmp: cmp 操作符不合法
+    """
+
     def validate_condition(self, expr: ConditionExpr) -> list[ValidationIssue]:
+        """校验 ConditionExpr 语法合法性（递归）。
+
+        Args:
+            expr: 要校验的条件表达式
+
+        Returns:
+            ValidationIssue 列表，无错误时返回空列表
+        """
         issues: list[ValidationIssue] = []
         self._validate_expr(expr, issues)
         return issues
 
     def _validate_expr(self, expr: ConditionExpr, issues: list[ValidationIssue]) -> None:
+        """递归校验 ConditionExpr 语法。"""
         op = expr.op
         allowed_ops = {"and", "or", "not", "cmp", "true", "false"}
 
@@ -65,6 +86,20 @@ class DSLValidator:
                 ))
 
     def normalize_condition(self, expr: ConditionExpr) -> ConditionExpr:
+        """标准化 ConditionExpr（递归）。
+
+        简化规则：
+          - AND(TRUE, x) → x
+          - OR(FALSE, x) → x
+          - NOT(NOT(x)) → x
+          - AND(x) / OR(x) 单子节点 → x
+
+        Args:
+            expr: 要标准化的条件表达式
+
+        Returns:
+            标准化后的 ConditionExpr
+        """
         from src.persona.dsl import TRUE, FALSE
 
         # 1. 递归标准化子节点

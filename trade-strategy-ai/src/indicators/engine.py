@@ -162,11 +162,11 @@ def bollinger(
 
     middle = sma(closes, window)
     std = np.nanstd(closes[-window:], ddof=0)
-    last_idx = len(closes) - 1
-    middle_val = middle[last_idx]
+    # sma returns len(closes) - window + 1 elements; use [-1] for the last valid value
+    middle_val = float(middle[-1]) if len(middle) > 0 and not np.isnan(middle[-1]) else np.nan
 
     return BollingerResult(
-        upper=middle_val + num_std * std,
+        upper=float(middle_val + num_std * std),
         middle=middle_val,
         lower=middle_val - num_std * std,
     )
@@ -237,11 +237,12 @@ def stochastic(
             k_vals[i] = 100.0 * (closes[i] - window_low) / (window_high - window_low)
 
     # %D = SMA of %K
-    d_vals = sma(k_vals[k_window - 1 :], d_window)
+    k_vals_valid = k_vals[k_window - 1 :]  # 长度 len(closes) - k_window + 1
+    d_vals = sma(k_vals_valid, d_window)  # 长度 len(closes) - k_window - d_window + 2
 
     last_idx = len(closes) - 1
     k_val = k_vals[last_idx]
-    d_idx = last_idx - k_window + 1
-    d_val = d_vals[d_idx] if d_idx >= 0 else np.nan
+    # d_val 取 %D 序列的最后一个有效值
+    d_val = float(d_vals[-1]) if len(d_vals) > 0 and not np.isnan(d_vals[-1]) else np.nan
 
-    return StochasticResult(k=float(k_val), d=float(d_val))
+    return StochasticResult(k=float(k_val), d=d_val)

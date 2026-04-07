@@ -10,16 +10,14 @@ from src.indicators.engine import (
     sma,
     stochastic,
 )
+from src.indicators.pattern_features import PatternFeatureEngine, PatternFeatures
 
 __all__ = [
-    "sma",
-    "ema",
-    "macd",
-    "MACDResult",
-    "rsi",
-    "bollinger",
-    "BollingerResult",
-    "atr",
-    "stochastic",
-    "StochasticResult",
+    # engine
+    "sma", "ema", "macd", "MACDResult",
+    "rsi", "bollinger", "BollingerResult",
+    "atr", "stochastic", "StochasticResult",
+    # pattern_features
+    "PatternFeatureEngine",
+    "PatternFeatures",
 ]

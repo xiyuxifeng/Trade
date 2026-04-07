@@ -31,7 +31,25 @@ class TraderMemoryItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     importance: float = 0.5
 
+    # P2-103: Soft delete support
+    archived: bool = False
+    archived_at: datetime | None = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class TraderMemoryFilter(BaseModel):
+    """Filter criteria for querying trader memories."""
+
+    trader_id: str
+    memory_types: list[TraderMemoryType] | None = None
+    symbol: str | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    keyword: str | None = None  # 搜索 title + content
+    include_archived: bool = False
+    limit: int = 50
+    offset: int = 0
 
 
 class TraderMemorySummary(BaseModel):
@@ -41,6 +59,7 @@ class TraderMemorySummary(BaseModel):
     symbol: str | None = None
     total_items: int = 0
     total_symbol_items: int = 0
+    archived_items: int = 0
     by_type: dict[str, int] = Field(default_factory=dict)
     recent_titles: list[str] = Field(default_factory=list)
     symbol_titles: list[str] = Field(default_factory=list)

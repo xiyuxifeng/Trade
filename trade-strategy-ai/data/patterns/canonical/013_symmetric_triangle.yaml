@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 013_symmetric_triangle
+name_zh: 对称三角形
+name_en: Symmetric Triangle
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: trendline_upper
+  op: falling
+  description_zh: 上轨下降（高点逐步降低）
+- field: trendline_lower
+  op: rising
+  description_zh: 下轨上升（低点逐步抬高）
+- field: breakout
+  op: any
+  description_zh: 向上或向下突破收敛区间
+entry_signal: 突破收敛区间入场
+stop_loss: 三角形内低点下方3%
+take_profit: 三角形高度等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 7
+confidence: 0.75
+description_zh: 经典技术分析形态：对称三角形（Symmetric Triangle）

@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 041_three_black_crows
+name_zh: 三乌鸦
+name_en: Three Black Crows
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: candle1
+  op: bearish
+  description_zh: 第一根为中到大阴线
+- field: candle2
+  op: bearish
+  description_zh: 第二根为阴线，开盘在前一根实体中下部
+- field: candle3
+  op: bearish
+  description_zh: 第三根为阴线，收盘价接近最低
+- field: sequence
+  op: lower_close
+  description_zh: 三根阴线依次降低，收盘价连续创新低
+entry_signal: 三乌鸦形态完成后入场做空
+stop_loss: 第三根阴线高点上方2%
+take_profit: 前低或三乌鸦等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：三乌鸦（Three Black Crows）

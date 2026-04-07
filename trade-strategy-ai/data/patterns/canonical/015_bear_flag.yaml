@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 015_bear_flag
+name_zh: 熊市旗形
+name_en: Bear Flag
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: pole
+  op: steep_down
+  description_zh: 急跌后旗形整理（近垂直下跌）
+- field: flag_channel
+  op: up_sloping
+  description_zh: 旗形通道向上倾斜（小幅反弹）
+- field: volume
+  op: decreasing
+  description_zh: 旗形期间量能萎缩
+entry_signal: 跌破旗形下轨入场
+stop_loss: 旗形上轨上方2%
+take_profit: 旗杆高度等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 9
+confidence: 0.65
+description_zh: 经典技术分析形态：熊市旗形（Bear Flag）

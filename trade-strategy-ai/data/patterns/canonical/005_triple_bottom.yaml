@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 005_triple_bottom
+name_zh: 三重底
+name_en: Triple Bottom
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: triple_bottom
+  description_zh: 三个相近低点，水平支撑
+- field: neckline
+  op: breakout_up
+  description_zh: 突破颈线（中间两高点的水平）
+- field: volume
+  op: increasing
+  description_zh: 第三次探底后上涨需放量
+entry_signal: 突破颈线入场
+stop_loss: 三底支撑下方3%
+take_profit: 颈线等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 7
+confidence: 0.73
+description_zh: 经典技术分析形态：三重底（Triple Bottom）

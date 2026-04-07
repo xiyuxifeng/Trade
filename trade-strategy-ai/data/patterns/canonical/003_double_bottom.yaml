@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 003_double_bottom
+name_zh: 双底
+name_en: Double Bottom
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: double_bottom
+  description_zh: 两个相近低点，中间有一个顶部
+- field: neckline
+  op: breakout_up
+  description_zh: 突破中间顶部（颈线）
+- field: volume
+  op: confirm
+  description_zh: 二次探底缩量，突破时放量
+entry_signal: 突破颈线入场
+stop_loss: 两底连线下方3%
+take_profit: 颈线起算等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.69
+description_zh: 经典技术分析形态：双底（Double Bottom）

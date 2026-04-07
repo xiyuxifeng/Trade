@@ -1,0 +1,30 @@
+schema_version: v1
+pattern_id: 031_hammer
+name_zh: 锤子线
+name_en: Hammer
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: body
+  op: small
+  description_zh: 实体较小（上下影线是实体的2倍以上）
+- field: lower_shadow
+  op: gt_pct
+  value: 60
+  description_zh: 下影线长度超过整日的60%
+- field: upper_shadow
+  op: lt_pct
+  value: 10
+  description_zh: 上影线很短
+- field: volume
+  op: confirm
+  description_zh: 锤子日放量
+entry_signal: 锤子线次日开盘价高于实体中点买入
+stop_loss: 锤子低点下方2%
+take_profit: 颈线等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：锤子线（Hammer）

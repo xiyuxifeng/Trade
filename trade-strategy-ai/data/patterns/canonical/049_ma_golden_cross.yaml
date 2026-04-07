@@ -1,0 +1,26 @@
+schema_version: v1
+pattern_id: 049_ma_golden_cross
+name_zh: 均线金叉
+name_en: MA Golden Cross
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: ma50
+  op: cross_above
+  value: ma200
+  description_zh: 50日均线上穿200日均线（金叉）
+- field: volume
+  op: confirm
+  description_zh: 金叉当日放量确认
+- field: trend
+  op: up
+  description_zh: 金叉前为上涨趋势
+entry_signal: 均线金叉确认后入场买入
+stop_loss: 金叉点或均线支撑位
+take_profit: 前高或目标位
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：均线金叉（MA Golden Cross）

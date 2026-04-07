@@ -1,0 +1,26 @@
+schema_version: v1
+pattern_id: 009_cup_and_handle
+name_zh: 杯柄形
+name_en: Cup and Handle
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: cup_handle
+  description_zh: 碗形整理后回调（柄部）再上涨
+- field: handle_depth
+  op: lt_pct
+  value: 12
+  description_zh: 柄部回调不超过杯深的12%
+- field: breakout
+  op: up
+  description_zh: 突破杯沿高点
+entry_signal: 突破杯沿入场
+stop_loss: 柄部低点下方3%
+take_profit: 杯深等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 3
+confidence: 0.67
+description_zh: 经典技术分析形态：杯柄形（Cup and Handle）

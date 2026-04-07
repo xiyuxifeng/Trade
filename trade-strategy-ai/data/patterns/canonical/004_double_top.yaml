@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 004_double_top
+name_zh: 双顶
+name_en: Double Top
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: double_top
+  description_zh: 两个相近高点，中间有一个底部
+- field: neckline
+  op: breakout_down
+  description_zh: 跌破中间底部（颈线）
+- field: volume
+  op: confirm
+  description_zh: 二次冲顶缩量，下跌时放量
+entry_signal: 跌破颈线入场
+stop_loss: 两顶连线上方3%
+take_profit: 颈线起算等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 6
+confidence: 0.71
+description_zh: 经典技术分析形态：双顶（Double Top）

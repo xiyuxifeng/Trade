@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 019_rectangle_bear
+name_zh: 熊市矩形
+name_en: Bear Rectangle
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: channel
+  op: horizontal
+  description_zh: 价格在水平通道内震荡
+- field: resistance
+  op: horizontal
+  description_zh: 多次测试同一阻力位
+- field: breakout
+  op: down
+  description_zh: 向下突破通道下轨
+entry_signal: 跌破下轨入场
+stop_loss: 上轨阻力上方3%
+take_profit: 矩形高度等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.73
+description_zh: 经典技术分析形态：熊市矩形（Bear Rectangle）

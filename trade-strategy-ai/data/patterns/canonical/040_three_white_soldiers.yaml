@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 040_three_white_soldiers
+name_zh: 三白兵
+name_en: Three White Soldiers
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: candle1
+  op: bullish
+  description_zh: 第一根为中到大阳线
+- field: candle2
+  op: bullish
+  description_zh: 第二根为阳线，开盘在前一根实体中上部
+- field: candle3
+  op: bullish
+  description_zh: 第三根为阳线，收盘价接近最高
+- field: sequence
+  op: higher_close
+  description_zh: 三根阳线依次升高，收盘价连续创新高
+entry_signal: 三白兵形态完成后入场
+stop_loss: 第三根阳线低点下方2%
+take_profit: 前高或三白兵等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：三白兵（Three White Soldiers）

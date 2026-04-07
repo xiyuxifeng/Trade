@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 002_head_and_shoulders_top
+name_zh: 头肩顶
+name_en: Head and Shoulders Top
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: head_shoulder_top
+  description_zh: 左肩 < 头部 > 右肩，顶部形态
+- field: neckline
+  op: breakout_down
+  description_zh: 跌破颈线
+- field: volume
+  op: confirm
+  description_zh: 右肩下跌时放量
+entry_signal: 跌破颈线入场
+stop_loss: 头部高点上方2%
+take_profit: 颈线等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 4
+confidence: 0.67
+description_zh: 经典技术分析形态：头肩顶（Head and Shoulders Top）

@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 008_rounding_bottom
+name_zh: 圆弧底
+name_en: Rounding Bottom
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: rounding
+  description_zh: 价格呈圆弧形缓慢下跌再加速上涨
+- field: volume
+  op: u_shape
+  description_zh: 底部缩量，上涨时放量
+- field: breakout
+  op: up
+  description_zh: 弧形右侧突破
+entry_signal: 弧形右侧突破入场
+stop_loss: 弧底支撑下方3%
+take_profit: 弧顶起算等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 10
+confidence: 0.65
+description_zh: 经典技术分析形态：圆弧底（Rounding Bottom）

@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 037_doji
+name_zh: 十字星
+name_en: Doji
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: body
+  op: doji
+  description_zh: 开盘价与收盘价几乎相等
+- field: shadow
+  op: both_long
+  description_zh: 上下影线较长
+- field: volume
+  op: confirm
+  description_zh: 十字星日量能放大
+entry_signal: 十字星后跟随确认信号入场
+stop_loss: 十字星极点
+take_profit: 十字星对侧极点
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：十字星（Doji）

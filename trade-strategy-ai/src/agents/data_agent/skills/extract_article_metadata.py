@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -19,6 +20,25 @@ from src.persona.schemas import ArticlePrecondition, ArticleStrategyRule
 from src.schemas.contracts import AgentTask
 
 
+class ExtractErrorType(StrEnum):
+    """LLM 抽取错误分类"""
+    NETWORK = "network"      # 网络请求失败
+    JSON_PARSE = "json_parse"  # JSON 解析失败
+    SCHEMA_VALIDATION = "schema_validation"  # Schema 校验失败（输出不合规）
+    QUALITY = "quality"    # 输出质量不达标（空结果、置信度低）
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractErrorRecord:
+    """错误记录"""
+    article_id: str
+    source_url: str | None
+    error_type: str
+    error_message: str
+    raw_output: dict[str, Any] | None
+    timestamp: str
+
+
 @dataclass(slots=True)
 class ExtractStats:
     scanned: int = 0
@@ -28,11 +48,22 @@ class ExtractStats:
     generated_tasks: int = 0
     llm_calls: int = 0
     fallback_calls: int = 0
+    # P2-LLM-001: 合规率统计
+    schema_valid_rules: int = 0
+    schema_invalid_rules: int = 0
+    schema_valid_preconds: int = 0
+    schema_invalid_preconds: int = 0
+    # P2-LLM-002: 错误分类统计
+    errors_by_type: dict[str, int] = None
+
+    def __post_init__(self):
+        if self.errors_by_type is None:
+            object.__setattr__(self, 'errors_by_type', {t.value: 0 for t in ExtractErrorType})
 
 
 _STOCK_CODE_RE = re.compile(r"\b([0-9]{6})\.(SZ|SH|BJ)\b")
-_POSITIVE_WORDS = ("涨", "盈利", "买入", "做多", "突破", "拉升", "看好", "多头")
-_NEGATIVE_WORDS = ("下跌", "亏损", "卖出", "做空", "止损", "看空", "空头")
+_POSITIVE_WORDS = ("涨", "盈利", "买入", "做多", "突破", "拉升", "看好", "多头", "关注", "试错", "扫板", "打板")
+_NEGATIVE_WORDS = ("下跌", "亏损", "卖出", "做空", "止损", "看空", "空头", "观望", "谨慎", "风险", "取关", "止盈", "板砸", "割肉")
 
 
 def _read_prompt(path: Path) -> str:
@@ -45,6 +76,31 @@ def _now_utc() -> datetime:
 
 def default_pending_tasks_path(*, base_dir: Path) -> Path:
     return base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
+
+
+def default_error_log_path(*, base_dir: Path) -> Path:
+    return base_dir / "data" / "processed" / "llm_extraction_errors.jsonl"
+
+
+def _record_error(
+    *,
+    article_id: str,
+    source_url: str | None,
+    error_type: ExtractErrorType,
+    error_message: str,
+    raw_output: dict[str, Any] | None,
+    error_log_path: Path,
+) -> None:
+    """Write an error record to the JSONL error log."""
+    record = ExtractErrorRecord(
+        article_id=article_id,
+        source_url=source_url,
+        error_type=error_type.value,
+        error_message=error_message,
+        raw_output=raw_output,
+        timestamp=_now_utc().isoformat(),
+    )
+    append_jsonl(error_log_path, asdict(record))
 
 
 def _safe_float(value: Any) -> float | None:
@@ -238,6 +294,8 @@ async def extract_and_store_metadata(
     stats = ExtractStats()
     pending_path = pending_tasks_path or default_pending_tasks_path(base_dir=base_dir)
     ensure_dir(pending_path.parent)
+    error_log_path = default_error_log_path(base_dir=base_dir)
+    ensure_dir(error_log_path.parent)
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -271,17 +329,57 @@ async def extract_and_store_metadata(
                     error_message = str(exc)
                     stats.failed += 1
                     stats.fallback_calls += 1
+                    stats.errors_by_type[ExtractErrorType.NETWORK.value] += 1
+                    _record_error(
+                        article_id=str(article.id),
+                        source_url=article.source_url,
+                        error_type=ExtractErrorType.NETWORK,
+                        error_message=error_message,
+                        raw_output=None,
+                        error_log_path=error_log_path,
+                    )
                 except Exception as exc:  # noqa: BLE001
                     stats.failed += 1
-                    meta.raw_llm_output = {"error": str(exc)}
+                    error_msg = str(exc)
+                    stats.errors_by_type[ExtractErrorType.QUALITY.value] += 1
+                    meta.raw_llm_output = {"error": error_msg}
+                    _record_error(
+                        article_id=str(article.id),
+                        source_url=article.source_url,
+                        error_type=ExtractErrorType.QUALITY,
+                        error_message=error_msg,
+                        raw_output=None,
+                        error_log_path=error_log_path,
+                    )
                     continue
 
             try:
-                rules = _validate_rules(raw.get("strategy_rules"), source_url=article.source_url, published_at=article.published_at)
-                preconds = _validate_preconditions(raw.get("preconditions"), source_url=article.source_url, published_at=article.published_at)
+                raw_rules = raw.get("strategy_rules")
+                raw_preconds = raw.get("preconditions")
+                raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
+                raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
+
+                rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
+                preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
+
+                # P2-LLM-001: 统计 schema 合规率
+                stats.schema_valid_rules += len(rules)
+                stats.schema_invalid_rules += raw_rules_count - len(rules)
+                stats.schema_valid_preconds += len(preconds)
+                stats.schema_invalid_preconds += raw_preconds_count - len(preconds)
             except Exception as exc:  # noqa: BLE001
                 stats.failed += 1
-                meta.raw_llm_output = {"error": str(exc)}
+                error_msg = str(exc)
+                stats.errors_by_type[ExtractErrorType.SCHEMA_VALIDATION.value] += 1
+                meta.raw_llm_output = {"error": error_msg}
+                _record_error(
+                    article_id=str(article.id),
+                    source_url=article.source_url,
+                    error_type=ExtractErrorType.SCHEMA_VALIDATION,
+                    error_message=error_msg,
+                    raw_output=raw if isinstance(raw, dict) else None,
+                    error_log_path=error_log_path,
+                )
                 continue
 
             meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []

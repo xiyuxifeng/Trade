@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 033_engulfing_bullish
+name_zh: 看涨吞没
+name_en: Bullish Engulfing
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: prev_candle
+  op: bearish
+  description_zh: 前一根K线为阴线
+- field: curr_candle
+  op: bullish
+  description_zh: 当前K线为阳线且实体包裹前一根
+- field: body
+  op: engulf
+  description_zh: 当前实体完全吞没前一根实体
+- field: volume
+  op: confirm
+  description_zh: 吞没日放量
+entry_signal: 吞没形态形成后次日入场
+stop_loss: 吞没低点下方2%
+take_profit: 前高或颈线
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：看涨吞没（Bullish Engulfing）

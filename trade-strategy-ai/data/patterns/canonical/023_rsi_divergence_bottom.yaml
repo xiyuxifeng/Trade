@@ -1,0 +1,26 @@
+schema_version: v1
+pattern_id: 023_rsi_divergence_bottom
+name_zh: RSI 底背离
+name_en: RSI Bottom Divergence
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price
+  op: lower_low
+  description_zh: 价格创阶段新低
+- field: rsi
+  op: higher_low
+  description_zh: RSI 未创新低（背离）
+- field: rsi
+  op: cross_above
+  value: 30
+  description_zh: RSI 升破 30 或更低值
+entry_signal: RSI 背离确认后入场
+stop_loss: 价格前低下方1%
+take_profit: 前高或 RSI 阻力
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 9
+confidence: 0.67
+description_zh: 经典技术分析形态：RSI 底背离（RSI Bottom Divergence）

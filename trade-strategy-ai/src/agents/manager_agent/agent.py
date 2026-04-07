@@ -29,6 +29,12 @@ from src.schemas.contracts import (
 	EvaluationResult,
 	IdeaEvaluation,
 )
+from src.schemas.review_task import (
+	ReviewEvaluationSnapshot,
+	ReviewTaskDetails,
+	ReviewTriggerReason,
+	ReviewWritebackStatus,
+)
 from src.trader_profile.schemas import TraderProfile
 from src.trader_profile.service import default_profiles_path, load_trader_profiles_file
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
@@ -166,27 +172,30 @@ class ManagerAgent:
         current_price: float,
         return_pct: float,
         threshold: float,
-        review_reason: str,
-    ) -> None:
-        """Write a short review note back into trader memory."""
+        trigger_reason: ReviewTriggerReason,
+    ) -> TraderMemoryItem:
+        """Write a short review note back into trader memory.
 
-        self.memory_store.append(
-            TraderMemoryItem(
-                trader_id=idea.trader_id,
-                memory_type=TraderMemoryType.review_note,
-                as_of_date=as_of_date,
-                symbol=idea.symbol,
-                title=f"{idea.symbol} review note",
-                content=(
-                    f"reason={review_reason}; entry={entry_price:.4f}; current={current_price:.4f}; "
-                    f"return_pct={return_pct:.6f}; threshold={threshold:.6f}"
-                ),
-                source="manager.run_after_close",
-                source_ref=str(idea.idea_id),
-                tags=["review", "evaluation"],
-                importance=0.75,
-            )
+        Returns the created memory item so callers can record the memory_id
+        in the review task details (P2-109A close-loop tracking).
+        """
+        memory = TraderMemoryItem(
+            trader_id=idea.trader_id,
+            memory_type=TraderMemoryType.review_note,
+            as_of_date=as_of_date,
+            symbol=idea.symbol,
+            title=f"{idea.symbol} {trigger_reason.value} review note",
+            content=(
+                f"reason={trigger_reason.value}; entry={entry_price:.4f}; current={current_price:.4f}; "
+                f"return_pct={return_pct:.6f}; threshold={threshold:.6f}"
+            ),
+            source="manager.run_after_close",
+            source_ref=str(idea.idea_id),
+            tags=["review", "evaluation"],
+            importance=0.75,
         )
+        self.memory_store.append(memory)
+        return memory
 
     def _build_review_task(
         self,
@@ -198,26 +207,36 @@ class ManagerAgent:
         return_pct: float,
         threshold: float,
     ) -> AgentTask:
-        """Convert an underperforming idea into a structured review task."""
+        """Convert an underperforming idea into a structured review task.
 
-        review_reason = "loss" if return_pct < 0 else "below_expected_return"
+        P2-109A 闭环: EvaluationResult → ReviewTask created → Trader writes back review note
+        """
+        trigger_reason = ReviewTriggerReason.loss if return_pct < 0 else ReviewTriggerReason.below_expected
+
+        review_details = ReviewTaskDetails(
+            review_type="trader_review",
+            trigger_reason=trigger_reason,
+            source_idea_id=idea.idea_id,
+            symbol=idea.symbol,
+            trader_id=idea.trader_id,
+            evaluation_snapshot=ReviewEvaluationSnapshot(
+                idea_id=idea.idea_id,
+                symbol=idea.symbol,
+                entry_price=round(entry_price, 6),
+                current_price=round(current_price, 6),
+                return_pct=round(return_pct, 6),
+                threshold=round(threshold, 6),
+                as_of_date=as_of_date,
+            ),
+            writeback_status=ReviewWritebackStatus.pending,
+        )
+
         return AgentTask(
             type="trader_review",
             title=f"Trader review required: {idea.symbol}",
             trader_id=idea.trader_id,
             idea_id=idea.idea_id,
-            details={
-                "review_type": "trader_review",
-                "reason": review_reason,
-                "symbol": idea.symbol,
-                "as_of_date": as_of_date.isoformat(),
-                "entry_price": round(entry_price, 6),
-                "current_price": round(current_price, 6),
-                "return_pct": round(return_pct, 6),
-                "threshold": round(threshold, 6),
-                "source_idea_id": str(idea.idea_id),
-                "next_action": "write_back_review_note",
-            },
+            details=review_details.model_dump(),
         )
 
     async def run_pre_market(self, *, as_of_date: date, force: bool = False) -> DailyReport:
@@ -408,15 +427,20 @@ class ManagerAgent:
                     threshold=min_ret,
                 )
                 self._append_task(review_task)
-                self._append_review_memory(
+                # P2-109A: track memory_id in review task for closed-loop traceability
+                trigger_reason = ReviewTriggerReason(review_task.details["trigger_reason"])
+                memory = self._append_review_memory(
                     as_of_date=as_of_date,
                     idea=idea,
                     entry_price=float(entry_price),
                     current_price=float(current_price),
                     return_pct=return_pct,
                     threshold=min_ret,
-                    review_reason=review_task.details["reason"],
+                    trigger_reason=trigger_reason,
                 )
+                # Update writeback status (in memory store, not in the already-queued task)
+                review_task.details["writeback_status"] = ReviewWritebackStatus.written.value
+                review_task.details["memory_id"] = str(memory.memory_id)
 
         summary = [
             f"Evaluated {len(evaluations)} ideas",

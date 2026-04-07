@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 027_volume_test
+name_zh: 量能测试
+name_en: Volume Test
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: volume
+  op: dry_up
+  description_zh: 前高/低量能充沛后缩量回测
+- field: price
+  op: test_level
+  description_zh: 价格回撤至前支撑/阻力位
+- field: volume
+  op: confirm
+  description_zh: 回测时量能萎缩，再次放量确认
+entry_signal: 缩量回测确认后入场
+stop_loss: 回测低点/高点
+take_profit: 突破确认点
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.75
+description_zh: 经典技术分析形态：量能测试（Volume Test）

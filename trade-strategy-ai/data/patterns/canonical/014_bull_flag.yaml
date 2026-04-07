@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 014_bull_flag
+name_zh: 牛市旗形
+name_en: Bull Flag
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: pole
+  op: steep_up
+  description_zh: 急涨后旗形整理（近垂直上涨）
+- field: flag_channel
+  op: down_sloping
+  description_zh: 旗形通道向下倾斜（小幅回调）
+- field: volume
+  op: decreasing
+  description_zh: 旗形期间量能萎缩
+entry_signal: 突破旗形上轨入场
+stop_loss: 旗形下轨下方2%
+take_profit: 旗杆高度等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 8
+confidence: 0.77
+description_zh: 经典技术分析形态：牛市旗形（Bull Flag）

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import os
 from pathlib import Path
 import re
@@ -32,11 +33,20 @@ class TraderSourceConfig(BaseModel):
 
 class TradeLogSourceConfig(BaseModel):
     csv_paths: list[str] = Field(default_factory=list)
+    account_ids: list[str] = Field(default_factory=list)  # 绑定到该交易员的账户列表
+
+
+class TraderStylePreference(str, Enum):
+    """Trader style preference."""
+    CONSERVATIVE = "conservative"
+    MODERATE = "moderate"
+    AGGRESSIVE = "aggressive"
 
 
 class TraderConfig(BaseModel):
     trader_id: str
     display_name: str
+    enabled: bool = True
 
     article_sources: TraderSourceConfig = Field(default_factory=TraderSourceConfig)
     trade_log_sources: TradeLogSourceConfig = Field(default_factory=TradeLogSourceConfig)
@@ -44,6 +54,10 @@ class TraderConfig(BaseModel):
     watchlist: list[str] = Field(default_factory=list)
     default_target_pct: float = 0.05
     default_stop_pct: float = 0.03
+
+    # P2-101: Trader 画像配置
+    style_preference: TraderStylePreference = TraderStylePreference.MODERATE
+    memory_path: str | None = None  # 可选自定义 memory JSONL 路径，默认使用 storage.output_dir/trader_memory.jsonl
 
 
 class DataConfig(BaseModel):

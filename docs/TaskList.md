@@ -138,7 +138,7 @@
 - [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
 
 补充（去重能力，待后续完善）：
-- [ ] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
+- [x] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
 - [ ] P1-026J dedup_task 重构/扩展：当前为死代码（pipeline 无交易数据输入），待确认数据入口后接入或移除
 
 ### API Layer (API 接口层)
@@ -150,12 +150,12 @@
 
 补充（运行闭环接口）：
 - [x] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
-- [ ] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告
+- [x] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告
 
 补充（宿主薄壳接口，规划）：
 - [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）
-- [ ] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
-- [ ] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
+- [x] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
+- [x] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
 - [ ] P1-037 蒸馏归纳文章分类：技术策略，复盘操作，无效文章
 - [ ] P1-038 文章内的图片处理 ？
 - [ ] P1-039 提炼操作策略
@@ -174,9 +174,9 @@
 > 更新：Phase 2 优先服务于 TraderAgent 画像与建议生成；原 Knowledge/Behavior 任务仍保留，但可以分批落地。
 
 ### TraderAgent（交易员画像与建议生成，新增核心）
-- [ ] P2-101 定义 traders 配置结构（trader_id、display_name、article_sources、trade_log_sources）
+- [x] P2-101 定义 traders 配置结构（trader_id、display_name、article_sources、trade_log_sources）
 - [ ] P2-102 实现 Trader 画像（文章 + 交易记录 → 风格/纪律/偏好标签）
-- [ ] P2-103 实现 Trader 记忆存储结构（成功/失败案例、复盘结论，可检索）
+- [x] P2-103 实现 Trader 记忆存储结构（成功/失败案例、复盘结论，可检索）
 - [ ] P2-104 实现盘前 TradeIdea 生成（结构化输出 + 校验）
 - [ ] P2-105 实现复盘任务处理：接收 EvaluationRequest，输出复盘结论并写回记忆
 
@@ -193,28 +193,28 @@
 - [ ] P2-109 阈值触发复盘：evaluation.* 配置化
 
 补充（对应当前风险：闭环主链路缺画像/记忆写回）：
-- [ ] P2-109A 明确盘后复盘写回的最小闭环：评估结果 → 复盘任务 → TraderMemory 写回
+- [x] P2-109A 明确盘后复盘写回的最小闭环：评估结果 → 复盘任务 → TraderMemory 写回
 - [ ] P2-109B 验证盘前/盘后链路都能消费最新画像与记忆，而不是只读取静态配置或默认模板
-- [ ] P2-109C 为复盘任务定义最小字段集（触发原因、建议来源、评估快照、写回结果）
+- [x] P2-109C 为复盘任务定义最小字段集（触发原因、建议来源、评估快照、写回结果）
 - [ ] P2-109D 为复盘写回增加回归测试，确保成功/失败两种路径都可追踪
 
 ### Knowledge Agent - 文章理解 (NLP & 策略提取)
 - [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
-- [ ] P2-002 创建策略概念库（主动性、被动性、量态）
+- [x] P2-002 创建策略概念库（主动性、被动性、量态）
 - [ ] P2-003 开发概念抽取模块（LLM + Prompt）
 - [ ] P2-004 开发买卖规则抽取模块（条件、动作、参数）
 - [ ] P2-005 开发市场前置条件抽取（大盘、板块、风格、流动性）
-- [ ] P2-006 实现 DSL 生成器（规则 → 可执行代码）
+- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）
 - [ ] P2-007 建立策略 DSL 验证和标准化流程
 
 ### Behavior Agent - 行为分析 (特征工程)
-- [ ] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
+- [x] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
 - [ ] P2-009 开发行为标签化模块（规则 or ML）
 - [ ] P2-010 计算交易特征集（收益率、夏普比、最大回撤、胜率、期望值）
 - [ ] P2-011 实现特征归一化和标准化
 - [ ] P2-012 开发行为聚类模块（K-means/DBSCAN）
-- [ ] P2-013 建立常见交易模式库（头肩顶、双顶、复合形态）
-- [ ] P2-014 实现模式匹配和识别
+- [x] P2-013 建立交易模式库（ArticlePattern 主来源 + CanonicalPattern 辅来源 + ValidatedPattern 验证后入库）
+- [x] P2-014 实现模式匹配和识别
 
 ### Feature Extraction & Preprocessing (特征工程)
 - [ ] P2-015 编写特征计算脚本（Pandas/Polars）
@@ -243,9 +243,9 @@
 - [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计
 
 ### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
-- [ ] **TODO** P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计
-- [ ] **TODO** P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类
-- [ ] **TODO** P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl`
+- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计
+- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类
+- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl`
 - [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
 
 ---
@@ -425,7 +425,7 @@
 - 口径：范围任务（如 P0-001 ~ P0-004）只有在范围内全部子任务完成时才勾选为 [x]。
 - [x] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
 - [ ] **P1-001 ~ P1-006**: 爬虫开发（建议 Week 1.0-1.5）
-- [ ] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）
+- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）
 - [ ] **P3-001 ~ P3-004**: 对齐分析框架设计（建议 Week 2.0）
 
 ---

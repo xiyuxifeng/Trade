@@ -1,0 +1,26 @@
+schema_version: v1
+pattern_id: 047_cci_divergence_bottom
+name_zh: CCI 底背离
+name_en: CCI Bottom Divergence
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price
+  op: lower_low
+  description_zh: 价格创阶段新低
+- field: cci
+  op: higher_low
+  description_zh: CCI未跟随创新低（底背离）
+- field: cci
+  op: cross_above
+  value: -100
+  description_zh: CCI升回-100以上
+entry_signal: CCI底背离确认后买入
+stop_loss: 价格前低下方2%
+take_profit: CCI阻力位或前高
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：CCI 底背离（CCI Bottom Divergence）

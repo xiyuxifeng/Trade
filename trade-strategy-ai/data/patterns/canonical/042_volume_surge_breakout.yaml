@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 042_volume_surge_breakout
+name_zh: 放量突破
+name_en: Volume Surge Breakout
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: volume
+  op: spike_3x
+  description_zh: 成交量超过20日均量的3倍
+- field: price
+  op: breakout
+  description_zh: 价格突破关键阻力/支撑位
+- field: price_range
+  op: narrow
+  description_zh: 突破前价格波动收窄（蓄势）
+entry_signal: 放量突破后入场
+stop_loss: 突破前盘整区间低点
+take_profit: 突破高度的1-2倍
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：放量突破（Volume Surge Breakout）

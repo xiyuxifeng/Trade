@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 025_macd_divergence_bottom
+name_zh: MACD 底背离
+name_en: MACD Bottom Divergence
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price
+  op: lower_low
+  description_zh: 价格创阶段新低
+- field: macd_histogram
+  op: higher_low
+  description_zh: MACD 柱未创新低（背离）
+- field: macd
+  op: cross_up
+  description_zh: MACD 线金叉
+entry_signal: MACD 背离确认后入场
+stop_loss: 价格前低下方2%
+take_profit: 前高或 MACD 阻力
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 3
+confidence: 0.71
+description_zh: 经典技术分析形态：MACD 底背离（MACD Bottom Divergence）

@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 044_stoch_overSold
+name_zh: 随机指标超卖
+name_en: Stochastic OverSold
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: stoch_k
+  op: lt
+  value: 20
+  description_zh: K值低于20（超卖区）
+- field: stoch_k
+  op: cross_above
+  value: 20
+  description_zh: K值从下往上穿越20
+- field: stoch_k
+  op: cross_above
+  value: stoch_d
+  description_zh: K值金叉D值
+entry_signal: K值超卖金叉确认买入
+stop_loss: 20以下低点
+take_profit: 80或前高
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：随机指标超卖（Stochastic OverSold）

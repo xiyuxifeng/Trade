@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 039_gravestone
+name_zh: 墓碑十字
+name_en: Gravestone Doji
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: body
+  op: doji
+  description_zh: 开盘价与收盘价几乎相等
+- field: lower_shadow
+  op: tiny
+  description_zh: 下影线极短或无
+- field: upper_shadow
+  op: long
+  description_zh: 上影线很长（约占日内波幅60%+）
+- field: volume
+  op: confirm
+  description_zh: 墓碑日量能放大
+entry_signal: 墓碑十字后放量下跌确认做空
+stop_loss: 墓碑高点上方2%
+take_profit: 前低
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：墓碑十字（Gravestone Doji）

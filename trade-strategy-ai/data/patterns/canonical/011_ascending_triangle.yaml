@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 011_ascending_triangle
+name_zh: 上升三角形
+name_en: Ascending Triangle
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: resistance
+  op: horizontal
+  description_zh: 上轨水平（高点相近）
+- field: support
+  op: rising
+  description_zh: 下轨逐步上移（低点抬高）
+- field: breakout
+  op: up
+  description_zh: 向上突破水平阻力
+entry_signal: 突破上轨入场
+stop_loss: 下轨下方3%
+take_profit: 三角形高度等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.71
+description_zh: 经典技术分析形态：上升三角形（Ascending Triangle）

@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 028_gap_up_breakaway
+name_zh: 向上突破缺口
+name_en: Breakaway Gap Up
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: gap
+  op: up
+  description_zh: 跳空高开，突破盘整区间
+- field: gap_fill
+  op: none
+  description_zh: 缺口短期不被回补
+- field: volume
+  op: confirm
+  description_zh: 缺口当日/次日放量
+entry_signal: 缺口上方入场
+stop_loss: 缺口下沿下方2%
+take_profit: 缺口高度的 1-3 倍
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 6
+confidence: 0.77
+description_zh: 经典技术分析形态：向上突破缺口（Breakaway Gap Up）

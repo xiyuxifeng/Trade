@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 006_triple_top
+name_zh: 三重顶
+name_en: Triple Top
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: price_shape
+  op: triple_top
+  description_zh: 三个相近高点，水平阻力
+- field: neckline
+  op: breakout_down
+  description_zh: 跌破颈线（中间两低点的水平）
+- field: volume
+  op: increasing
+  description_zh: 第三次冲顶后下跌需放量
+entry_signal: 跌破颈线入场
+stop_loss: 三顶阻力上方3%
+take_profit: 颈线等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 8
+confidence: 0.75
+description_zh: 经典技术分析形态：三重顶（Triple Top）

@@ -1,0 +1,28 @@
+schema_version: v1
+pattern_id: 035_morning_star
+name_zh: 早晨之星
+name_en: Morning Star
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: first_candle
+  op: bearish_long
+  description_zh: 第一根为大阴线
+- field: second_candle
+  op: small_body
+  description_zh: 第二根为星线（实体小）
+- field: third_candle
+  op: bullish_long
+  description_zh: 第三根为大阳线，收复第一根大部分失地
+- field: gap
+  op: between
+  description_zh: 星线与第一/第三根之间有跳空
+entry_signal: 第三根阳线确认后买入
+stop_loss: 星线低点下方2%
+take_profit: 第一根阴线开盘价附近
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：早晨之星（Morning Star）

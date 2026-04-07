@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 030_island_reversal_top
+name_zh: 岛形顶
+name_en: Island Reversal Top
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: gap_up
+  op: first
+  description_zh: 先出现向上跳空缺口
+- field: price_action
+  op: gap_down
+  description_zh: 之后出现向下跳空缺口
+- field: gap_range
+  op: isolated
+  description_zh: 两缺口之间价格孤立
+entry_signal: 向下缺口后入场做空
+stop_loss: 向上缺口上沿
+take_profit: 向下缺口下沿等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 8
+confidence: 0.67
+description_zh: 经典技术分析形态：岛形顶（Island Reversal Top）

@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 012_descending_triangle
+name_zh: 下降三角形
+name_en: Descending Triangle
+pattern_type: continuation
+timeframe: daily
+conditions:
+- field: support
+  op: horizontal
+  description_zh: 下轨水平（低点相近）
+- field: resistance
+  op: falling
+  description_zh: 上轨逐步下移（高点降低）
+- field: breakout
+  op: down
+  description_zh: 向下突破水平支撑
+entry_signal: 跌破下轨入场
+stop_loss: 上轨上方3%
+take_profit: 三角形高度等幅目标
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 6
+confidence: 0.73
+description_zh: 经典技术分析形态：下降三角形（Descending Triangle）

@@ -1,0 +1,30 @@
+schema_version: v1
+pattern_id: 032_inverted_hammer
+name_zh: 倒锤子线
+name_en: Inverted Hammer
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: body
+  op: small
+  description_zh: 实体较小
+- field: upper_shadow
+  op: gt_pct
+  value: 60
+  description_zh: 上影线长度超过整日的60%
+- field: lower_shadow
+  op: lt_pct
+  value: 10
+  description_zh: 下影线很短
+- field: volume
+  op: confirm
+  description_zh: 倒锤子日放量
+entry_signal: 倒锤子线次日确认入场
+stop_loss: 倒锤子高点上方2%
+take_profit: 颈线等幅
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：倒锤子线（Inverted Hammer）

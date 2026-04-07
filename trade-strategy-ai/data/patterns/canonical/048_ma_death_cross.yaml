@@ -1,0 +1,26 @@
+schema_version: v1
+pattern_id: 048_ma_death_cross
+name_zh: 均线死叉
+name_en: MA Death Cross
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: ma50
+  op: cross_below
+  value: ma200
+  description_zh: 50日均线下穿200日均线（死叉）
+- field: volume
+  op: confirm
+  description_zh: 死叉当日放量确认
+- field: trend
+  op: down
+  description_zh: 死叉前为下跌趋势
+entry_signal: 均线死叉确认后入场做空
+stop_loss: 死叉点或均线反压位
+take_profit: 前低或目标位
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：均线死叉（MA Death Cross）

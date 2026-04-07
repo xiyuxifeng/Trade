@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 026_volume_climax
+name_zh: 成交量高潮
+name_en: Volume Climax
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: volume
+  op: spike
+  description_zh: 成交量异常放大（超过均量 3 倍以上）
+- field: price_range
+  op: wide
+  description_zh: 当日波幅明显放大
+- field: price
+  op: reversal_next
+  description_zh: 次日价格出现反向走势
+entry_signal: 成交量高潮后反向入场
+stop_loss: 高潮当日极点
+take_profit: 反向第一目标：波幅50%
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 4
+confidence: 0.73
+description_zh: 经典技术分析形态：成交量高潮（Volume Climax）

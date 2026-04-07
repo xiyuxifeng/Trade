@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, Uuid, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -22,6 +22,7 @@ class TradeLog(TimestampMixin, Base):
         Index("ix_trade_logs_symbol_executed_at", "symbol", "executed_at"),
         Index("ix_trade_logs_account_executed_at", "account_id", "executed_at"),
         Index("ix_trade_logs_article_executed_at", "article_id", "executed_at"),
+        UniqueConstraint("account_id", "symbol", "executed_at", "quantity", "price", name="uq_trade_logs_composite_key"),
         CheckConstraint("quantity > 0", name="quantity_positive"),
         CheckConstraint("price > 0", name="price_positive"),
         CheckConstraint("amount >= 0", name="amount_non_negative"),

@@ -1,0 +1,25 @@
+schema_version: v1
+pattern_id: 043_volume_drying_up
+name_zh: 地量见底
+name_en: Volume Drying Up
+pattern_type: reversal
+timeframe: daily
+conditions:
+- field: volume
+  op: drying_up
+  description_zh: 成交量萎缩至20日均量的30%以下
+- field: price
+  op: consolidation
+  description_zh: 价格在支撑位附近横盘
+- field: volume
+  op: confirm
+  description_zh: 缩量后放量阳线确认
+entry_signal: 地量后放量阳线确认买入
+stop_loss: 横盘支撑下方3%
+take_profit: 前高或盘整区间高度
+source: canonical
+book_title: Technical Analysis of Stock Trends
+author: Edwards & Magee
+page_ref: Chapter 5
+confidence: 0.68
+description_zh: 经典技术分析形态：地量见底（Volume Drying Up）

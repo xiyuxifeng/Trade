@@ -105,11 +105,12 @@
     ## 产物
     ```
 
-- 去重原则：
+- session和report的去重原则：
   - 如果一条信息会影响“下一次接手怎么继续做”，放 `daily-sessions`
   - 如果一条信息会影响“项目阶段总结、长期留档、对外汇报”，放 `daily-report`
   - 同一事实只保留一份主记录，另一份只保留摘要引用或结论，不要全文重复
   - 如果不确定归属，优先放到 `daily-sessions`，再在 `daily-report` 中写结论摘要
+
 
 - `docs/superpowers/plans`:
   - 记录superpowers的plan

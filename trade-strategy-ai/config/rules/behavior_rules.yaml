@@ -1,0 +1,59 @@
+# 行为分类规则配置
+# 规则按顺序评估，匹配第一个即返回
+
+schema_version: "v1"
+
+rules:
+  # 追涨类
+  - label: chase_rally
+    description: 追涨（突破后追入）
+    conditions:
+      - field: price_vs_ma
+        op: gt
+        value: 1.02  # 价格 > MA20 * 1.02
+      - field: volume_ratio
+        op: gt
+        value: 1.5   # 成交量放大
+    signals: ["price_breakout", "high_volume"]
+
+  # 抄底类
+  - label: bottom_fish
+    description: 抄底（均值回归左侧）
+    conditions:
+      - field: price_vs_ma
+        op: lt
+        value: 0.98  # 价格 < MA20 * 0.98
+      - field: distance_from_high
+        op: gt
+        value: 0.1   # 距离高点 >10%
+    signals: ["oversold", "support_level"]
+
+  # 趋势跟踪
+  - label: trend_follow
+    description: 趋势跟踪
+    conditions:
+      - field: ma_slope
+        op: gt
+        value: 0.0   # MA 向上
+      - field: price_vs_ma
+        op: gt
+        value: 1.0
+    signals: ["trend_up", "above_ma"]
+
+  # 止损
+  - label: stop_loss_cut
+    description: 止损
+    conditions:
+      - field: pnl_pct
+        op: lt
+        value: -0.05  # 亏损 >5%
+    signals: ["stop_loss"]
+
+  # 止盈
+  - label: profit_taking
+    description: 止盈
+    conditions:
+      - field: pnl_pct
+        op: gt
+        value: 0.10  # 盈利 >10%
+    signals: ["profit_target"]

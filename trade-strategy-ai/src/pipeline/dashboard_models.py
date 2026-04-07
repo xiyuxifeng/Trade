@@ -42,6 +42,9 @@ class DashboardReport:
     """完整的 Dashboard 报告"""
     stats: DashboardStats = field(default_factory=DashboardStats)
     quality: QualityMetrics = field(default_factory=QualityMetrics)
+    quality_trend: "QualityTrend | None" = None
+    source_freshness: list["DataSourceFreshness"] | None = None
+    trader_stats: list["TraderStats"] | None = None
     alerts: list[str] = field(default_factory=list)
     generated_at: datetime | None = None
 

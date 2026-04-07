@@ -74,6 +74,186 @@ class StatsCollector:
         )
 
 
+class DataSourceFreshnessChecker:
+    """检查各数据源新鲜度。"""
+
+    def __init__(self, session: AsyncSession, freshness_threshold_hours: float = 24.0):
+        self.session = session
+        self.threshold = freshness_threshold_hours
+
+    async def check_all(self) -> list["DataSourceFreshness"]:
+        """返回所有数据源的新鲜度。"""
+        from .dashboard_models import DataSourceFreshness
+
+        results: list[DataSourceFreshness] = []
+
+        # 检查 BlogArticle 按 source
+        article_sources = await self._get_sources(BlogArticle, "crawled_at")
+        for source, last_updated in article_sources:
+            freshness = self._calc_freshness(last_updated)
+            results.append(DataSourceFreshness(
+                source=source,
+                entity_type="article",
+                last_updated=last_updated,
+                freshness_hours=freshness,
+                is_stale=freshness > self.threshold if freshness is not None else False,
+            ))
+
+        # 检查 MarketData 按 source
+        market_sources = await self._get_sources(MarketData, "traded_at")
+        for source, last_updated in market_sources:
+            freshness = self._calc_freshness(last_updated)
+            results.append(DataSourceFreshness(
+                source=source,
+                entity_type="market",
+                last_updated=last_updated,
+                freshness_hours=freshness,
+                is_stale=freshness > self.threshold if freshness is not None else False,
+            ))
+
+        return results
+
+    async def _get_sources(self, model, time_col: str):
+        """获取某模型按 source 分组的最新时间。"""
+        from sqlalchemy import func, select
+
+        time_column = getattr(model, time_col)
+        query = (
+            select(model.source, func.max(time_column))
+            .group_by(model.source)
+        )
+        result = await self.session.execute(query)
+        return result.all()
+
+    def _calc_freshness(self, last_updated: datetime | None) -> float | None:
+        """计算新鲜度（小时）。"""
+        if last_updated is None:
+            return None
+        return (datetime.now(UTC) - last_updated).total_seconds() / 3600
+
+
+class TradeStatsCollector:
+    """从 TradeLog 收集交易员级别统计。"""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def collect_all(self) -> list["TraderStats"]:
+        """返回所有交易员的统计。"""
+        from .dashboard_models import TraderStats
+
+        today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 按 account_id 分组统计
+        query = (
+            select(
+                TradeLog.account_id,
+                func.count(TradeLog.id).label("total_trades"),
+                func.count(TradeLog.id).filter(TradeLog.executed_at >= today_start).label("trades_today"),
+            )
+            .group_by(TradeLog.account_id)
+        )
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        trader_stats: list[TraderStats] = []
+        for row in rows:
+            trader_id = row.account_id
+            total_trades = row.total_trades
+            trades_today = row.trades_today or 0
+
+            # 获取标的多样性
+            unique_symbols = await self._get_unique_symbols(trader_id)
+
+            # 获取买卖比例
+            buy_ratio = await self._get_buy_ratio(trader_id)
+
+            # 计算 HHI
+            hhi = await self._calculate_hhi(trader_id)
+
+            # 生成告警
+            alerts = self._generate_alerts(trader_id, buy_ratio, unique_symbols, trades_today)
+
+            trader_stats.append(TraderStats(
+                trader_id=trader_id,
+                total_trades=total_trades,
+                trades_today=trades_today,
+                unique_symbols=unique_symbols,
+                hhi=hhi,
+                buy_ratio=buy_ratio,
+                avg_holding_minutes=None,  # 暂不支持（需关联入场/出场）
+                pnl_positive_ratio=None,  # 暂不支持（需关联持仓和盈亏）
+                alerts=alerts,
+            ))
+
+        return trader_stats
+
+    async def _get_unique_symbols(self, trader_id: str) -> int:
+        """获取该交易员的唯一标的数。"""
+        query = (
+            select(func.count(func.distinct(TradeLog.symbol)))
+            .where(TradeLog.account_id == trader_id)
+        )
+        result = await self.session.execute(query)
+        return result.scalar() or 0
+
+    async def _get_buy_ratio(self, trader_id: str) -> float:
+        """获取该交易员的买入比例。"""
+        total_query = (
+            select(func.count(TradeLog.id))
+            .where(TradeLog.account_id == trader_id)
+        )
+        total_result = await self.session.execute(total_query)
+        total = total_result.scalar() or 0
+
+        if total == 0:
+            return 0.0
+
+        buy_query = (
+            select(func.count(TradeLog.id))
+            .where(TradeLog.account_id == trader_id, TradeLog.side == "buy")
+        )
+        buy_result = await self.session.execute(buy_query)
+        buys = buy_result.scalar() or 0
+
+        return buys / total
+
+    async def _calculate_hhi(self, trader_id: str) -> float:
+        """计算 HHI（Herfindahl 集中度指数）。"""
+        # 获取各标的的交易次数
+        query = (
+            select(TradeLog.symbol, func.count(TradeLog.id).label("count"))
+            .where(TradeLog.account_id == trader_id)
+            .group_by(TradeLog.symbol)
+        )
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        total = sum(row.count for row in rows)
+        if total == 0:
+            return 0.0
+
+        hhi = sum((row.count / total) ** 2 for row in rows)
+        return hhi
+
+    def _generate_alerts(self, trader_id: str, buy_ratio: float, unique_symbols: int, trades_today: int) -> list[str]:
+        """生成交易员级别告警。"""
+        alerts = []
+
+        if buy_ratio > 0.8:
+            alerts.append(f"买入比例偏高({buy_ratio:.0%})，注意风格漂移")
+        elif buy_ratio < 0.2:
+            alerts.append(f"卖出比例偏高({buy_ratio:.0%})，注意风格漂移")
+
+        if unique_symbols == 1 and trades_today >= 3:
+            alerts.append(f"仅交易1只标的({trades_today}笔)，集中度过高")
+
+        if trades_today == 0:
+            alerts.append("今日无交易")
+
+        return alerts
+
+
 class QualityAnalyzer:
     """从 JSONL 报告分析数据质量"""
 
@@ -195,34 +375,53 @@ class AlertManager:
         self.freshness_threshold_hours = freshness_threshold_hours
         self.anomaly_rate_threshold = anomaly_rate_threshold
 
-    def check(self, stats: DashboardStats, quality: QualityMetrics) -> list[AlertEvent]:
+    def check(
+        self,
+        stats: DashboardStats,
+        quality: QualityMetrics,
+        quality_trend: "QualityTrend | None" = None,
+        source_freshness: list["DataSourceFreshness"] | None = None,
+        trader_stats: list["TraderStats"] | None = None,
+    ) -> list[AlertEvent]:
         alerts: list[AlertEvent] = []
 
-        # 检查新鲜度
+        # === 原有新鲜度告警（保持不变）===
         for entity_name, entity_stats in [
             ("articles", stats.articles),
             ("trades", stats.trades),
             ("market_data", stats.market_data),
         ]:
             if entity_stats.freshness_hours is not None and entity_stats.freshness_hours > self.freshness_threshold_hours:
-                alerts.append(
-                    AlertEvent(
-                        level="warning",
-                        message=f"{entity_name}: 数据超过 {entity_stats.freshness_hours:.1f} 小时未更新",
-                    )
-                )
+                alerts.append(AlertEvent(
+                    level="warning",
+                    message=f"{entity_name}: 数据超过 {entity_stats.freshness_hours:.1f} 小时未更新",
+                ))
 
-        # 检查异常率
-        total_records = stats.articles.total + stats.trades.total + stats.market_data.total
-        if total_records > 0 and quality.total_issues > 0:
-            anomaly_rate = (quality.total_issues / total_records) * 100
-            if anomaly_rate > self.anomaly_rate_threshold:
-                alerts.append(
-                    AlertEvent(
-                        level="critical",
-                        message=f"异常率 {anomaly_rate:.1f}% 超过阈值 {self.anomaly_rate_threshold}%",
-                    )
-                )
+        # === 异常趋势告警（新增）===
+        if quality_trend and len(quality_trend.issue_counts) >= 2:
+            if quality_trend.issue_counts[-1] > quality_trend.issue_counts[0] * 1.5:
+                alerts.append(AlertEvent(
+                    level="warning",
+                    message=f"异常率呈上升趋势：{quality_trend.issue_counts[0]} → {quality_trend.issue_counts[-1]}",
+                ))
+
+        # === 数据源新鲜度告警（新增）===
+        if source_freshness:
+            for src in source_freshness:
+                if src.is_stale:
+                    alerts.append(AlertEvent(
+                        level="warning",
+                        message=f"数据源 {src.source}({src.entity_type}) 超过 {self.freshness_threshold_hours:.0f}h 未更新",
+                    ))
+
+        # === 交易员级别告警（新增）===
+        if trader_stats:
+            for trader in trader_stats:
+                for alert_msg in trader.alerts:
+                    alerts.append(AlertEvent(
+                        level="info",
+                        message=f"交易员 {trader.trader_id}: {alert_msg}",
+                    ))
 
         return alerts
 
@@ -241,18 +440,31 @@ class DashboardService:
         self.stats_collector = StatsCollector(session)
         self.quality_analyzer = QualityAnalyzer(report_dir, max_anomaly_details)
         self.alert_manager = AlertManager(freshness_threshold_hours, anomaly_rate_threshold)
+        self.quality_trend_analyzer = QualityTrendAnalyzer(report_dir)
+        self.source_freshness_checker = DataSourceFreshnessChecker(session, freshness_threshold_hours)
+        self.trade_stats_collector = TradeStatsCollector(session)
 
     async def build_report(self) -> DashboardReport:
         stats = await self.stats_collector.collect()
         quality = self.quality_analyzer.analyze()
-        alerts = self.alert_manager.check(stats, quality)
+        quality_trend = self.quality_trend_analyzer.analyze_trend()
+        source_freshness = await self.source_freshness_checker.check_all()
+        trader_stats = await self.trade_stats_collector.collect_all()
+        alerts = self.alert_manager.check(
+            stats, quality,
+            quality_trend=quality_trend,
+            source_freshness=source_freshness,
+            trader_stats=trader_stats,
+        )
 
-        # 将 AlertEvent 转换为字符串格式
         alert_messages = [f"[{alert.level.upper()}] {alert.message}" for alert in alerts]
 
         return DashboardReport(
             stats=stats,
             quality=quality,
+            quality_trend=quality_trend,
+            source_freshness=source_freshness,
+            trader_stats=trader_stats,
             alerts=alert_messages,
             generated_at=datetime.now(UTC),
         )

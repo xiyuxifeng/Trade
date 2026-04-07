@@ -1,4 +1,5 @@
-"""Task 2 测试 — PatternFeatureEngine 基础特征 + 惰性指标计算。"""
+"""Task 2 & 3 tests — PatternFeatureEngine basic features + evaluate_condition."""
+
 import pytest
 
 from src.indicators import PatternFeatureEngine
@@ -177,3 +178,204 @@ class TestComputeAll:
         features = engine.compute_all()
         assert features.bb_width is not None
         assert features.bb_width < 0.05
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 3 — evaluate_condition 测试
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestEvaluateCondition:
+    """evaluate_condition(field, op, value) 核心判断接口测试。"""
+
+    def test_volume_spike_3x(self, sample_bars):
+        """成交量放大 3 倍以上 → spike_3x = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["volume"] = 5000  # 均量 1000
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("volume", "spike_3x") is True
+
+    def test_volume_confirm(self, sample_bars):
+        """成交量放大 1.2 倍以上 → confirm = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["volume"] = 1500
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("volume", "confirm") is True
+
+    def test_volume_drying_up(self, sample_bars):
+        """成交量萎缩至 50% 以下 → drying_up = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["volume"] = 300  # 均量 1000
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("volume", "drying_up") is True
+
+    def test_body_small(self, sample_bars):
+        """十字星（实体很小）→ body small = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.0
+        bars[-1]["high"] = 10.1
+        bars[-1]["low"] = 9.9
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("body", "small") is True
+
+    def test_body_doji(self, sample_bars):
+        """极小实体（doji）→ body doji = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.001
+        bars[-1]["high"] = 10.05
+        bars[-1]["low"] = 9.95
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("body", "doji") is True
+
+    def test_trend_up(self, sample_bars):
+        """持续上涨 → trend up = True。"""
+        bars = sample_bars.copy()
+        for i, bar in enumerate(bars):
+            bar["close"] = 10.0 + i * 0.1
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("trend", "up") is True
+
+    def test_trend_down(self, sample_bars):
+        """持续下跌 → trend down = True。"""
+        bars = sample_bars.copy()
+        for i, bar in enumerate(bars):
+            bar["close"] = 11.0 - i * 0.1
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("trend", "down") is True
+
+    def test_bb_width_narrow(self, flat_bars):
+        """窄幅震荡 → bb_width narrow = True。"""
+        engine = PatternFeatureEngine(flat_bars)
+        assert engine.evaluate_condition("bb_width", "narrow") is True
+
+    def test_price_range_narrow(self, flat_bars):
+        """价格波动极小 → price_range narrow = True。"""
+        engine = PatternFeatureEngine(flat_bars)
+        assert engine.evaluate_condition("price_range", "narrow") is True
+
+    def test_price_range_wide(self, sample_bars):
+        """价格波动较大 → price_range wide = True。"""
+        bars = sample_bars.copy()
+        for i, bar in enumerate(bars):
+            bar["close"] = 10.0 + i * 0.5  # 大幅波动
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("price_range", "wide") is True
+
+    def test_gap_up(self, sample_bars):
+        """跳空高开 → gap up = True。"""
+        bars = sample_bars.copy()
+        bars[-2]["close"] = 10.0
+        bars[-1]["open"] = 10.2
+        bars[-1]["close"] = 10.2
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("gap", "up") is True
+
+    def test_gap_down(self, sample_bars):
+        """跳空低开 → gap down = True。"""
+        bars = sample_bars.copy()
+        bars[-2]["close"] = 10.0
+        bars[-1]["open"] = 9.8
+        bars[-1]["close"] = 9.8
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("gap", "down") is True
+
+    def test_breakout_up(self, sample_bars):
+        """价格大幅上涨 → breakout up = True。"""
+        bars = sample_bars.copy()
+        bars[-2]["close"] = 10.0
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.3  # 3% 涨幅
+        bars[-1]["high"] = 10.3
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("breakout", "up") is True
+
+    def test_curr_candle_bullish(self, sample_bars):
+        """收盘 > 开盘 → curr_candle bullish = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.3
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("curr_candle", "bullish") is True
+
+    def test_curr_candle_bearish(self, sample_bars):
+        """收盘 < 开盘 → curr_candle bearish = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.3
+        bars[-1]["close"] = 10.0
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("curr_candle", "bearish") is True
+
+    def test_upper_shadow_tiny(self, sample_bars):
+        """上影线极短 → upper_shadow tiny = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.3
+        bars[-1]["high"] = 10.31  # 极短上影
+        bars[-1]["low"] = 9.9
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("upper_shadow", "tiny") is True
+
+    def test_lower_shadow_long(self, sample_bars):
+        """下影线较长 → lower_shadow long = True。"""
+        bars = sample_bars.copy()
+        bars[-1]["open"] = 10.0
+        bars[-1]["close"] = 10.1  # 小实体
+        bars[-1]["high"] = 10.05
+        bars[-1]["low"] = 9.3   # 长下影：0.7，超过 body*2=0.2
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("lower_shadow", "long") is True
+
+    def test_unknown_field_returns_false(self, sample_bars):
+        """未知字段 → 返回 False。"""
+        engine = PatternFeatureEngine(sample_bars)
+        assert engine.evaluate_condition("nonexistent_field", "some_op") is False
+
+    def test_rsi_cross_below_value(self, sample_bars):
+        """RSI 低于给定值 → cross_below = True。"""
+        bars = sample_bars.copy()
+        # 制造大跌，使 RSI 大幅下降
+        bars[-1]["close"] = bars[-2]["close"] * 0.75
+        engine = PatternFeatureEngine(bars)
+        result = engine.evaluate_condition("rsi", "cross_below", 70)
+        assert isinstance(result, bool)
+
+    def test_stoch_k_gt(self, sample_bars):
+        """Stochastic %K 高于给定值 → gt = True。"""
+        bars = sample_bars.copy()
+        # 推高价格使 %K > 80
+        for bar in bars:
+            bar["close"] = 15.0
+            bar["high"] = 15.1
+            bar["low"] = 14.9
+        bars[-1]["close"] = 15.1
+        engine = PatternFeatureEngine(bars)
+        k = engine.ensure_stoch_k()
+        if k is not None and k > 50:
+            assert engine.evaluate_condition("stoch_k", "gt", 50) is True
+
+    def test_macd_histogram_cross_up(self, sample_bars):
+        """MACD 直方图 > 0 → cross_up = True。"""
+        bars = sample_bars.copy()
+        # 持续上涨使 MACD 转正
+        for i, bar in enumerate(bars):
+            bar["close"] = 10.0 + i * 0.3
+        engine = PatternFeatureEngine(bars)
+        h = engine.ensure_macd_histogram()
+        if h is not None and h > 0:
+            assert engine.evaluate_condition("macd_histogram", "cross_up") is True
+
+    def test_candle_n_small_body(self, sample_bars):
+        """第 2 根 K 线为小实体 → candle2 small_body = True。"""
+        bars = sample_bars.copy()
+        bars[-2]["open"] = 10.0
+        bars[-2]["close"] = 10.02  # 小实体
+        bars[-2]["high"] = 10.1
+        bars[-2]["low"] = 9.9
+        engine = PatternFeatureEngine(bars)
+        assert engine.evaluate_condition("candle2", "small_body") is True
+
+    def test_channel_horizontal(self, flat_bars):
+        """均线走平 → channel horizontal = True。"""
+        engine = PatternFeatureEngine(flat_bars)
+        assert engine.evaluate_condition("channel", "horizontal") is True

@@ -41,6 +41,33 @@ data:
     000001.SZ: 10.0
     510300.SH: 3.5
 
+# 数据质量配置
+data_quality:
+  trade:
+    # 交易费率阈值：超过此比例视为高费率（默认 1%）
+    fee_high_threshold: 0.01
+  anomaly:
+    # IQR 离群检测倍数
+    iqr_multiplier: 1.5
+    # 成交量 spike 阈值（已有）
+    volume_spike_multiplier: 5.0
+
+# 数据监控 Dashboard
+dashboard:
+  alerts:
+    # 是否启用告警
+    enabled: true
+    # 数据新鲜度阈值（小时），超过则告警
+    freshness_threshold_hours: 24
+    # 异常率阈值（%），超过则告警
+    anomaly_rate_threshold: 5.0
+  # HTML 输出目录
+  html_output_dir: data/processed/dashboard
+  # 最大显示异常详情数
+  max_anomaly_details: 20
+  # 告警输出模式：cli / html / both
+  alert_mode: both
+
 crawl:
   # 站点认证信息（按域名/站点名分组）
   auth:

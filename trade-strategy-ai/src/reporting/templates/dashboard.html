@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>数据监控 Dashboard {{generated_at}}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            margin: 24px;
+            color: #111;
+        }
+        h1 { margin: 0 0 8px 0; }
+        .meta { color: #555; margin: 0 0 16px 0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; }
+        th { color: #333; font-weight: 600; }
+        .alert-warning { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin: 4px 0; }
+        .alert-critical { background: #fee2e2; border: 1px solid #ef4444; border-radius: 6px; padding: 8px 12px; margin: 4px 0; }
+        .severity-error { color: #ef4444; font-weight: 600; }
+        .severity-warning { color: #f59e0b; font-weight: 600; }
+        .severity-info { color: #3b82f6; }
+        .freshness-ok { color: #22c55e; }
+        .freshness-warn { color: #f59e0b; }
+        .freshness-error { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>数据监控 Dashboard</h1>
+    <p class="meta">生成时间: {{ generated_at }}</p>
+
+    {% if report.alerts %}
+    <div class="grid">
+        <div class="card">
+            <h2>告警</h2>
+            {% for alert in report.alerts %}
+                {% if 'CRITICAL' in alert %}
+                <div class="alert-critical">⚠ {{ alert }}</div>
+                {% else %}
+                <div class="alert-warning">⚠ {{ alert }}</div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid">
+        <div class="card">
+            <h2>数据统计</h2>
+            <table>
+                <thead>
+                    <tr><th>数据类型</th><th>总数</th><th>今日新增</th><th>最后入库</th><th>新鲜度</th></tr>
+                </thead>
+                <tbody>
+                    {% for name, stats in [('articles', report.stats.articles), ('trades', report.stats.trades), ('market_data', report.stats.market_data)] %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ stats.total }}</td>
+                        <td>{{ stats.today_new }}</td>
+                        <td>{{ stats.last_crawled_at.strftime('%Y-%m-%d %H:%M') if stats.last_crawled_at else 'N/A' }}</td>
+                        <td>
+                            {% if stats.freshness_hours is not none %}
+                                {% if stats.freshness_hours < 12 %}
+                                    <span class="freshness-ok">{{ "%.1f"|format(stats.freshness_hours) }}h</span>
+                                {% elif stats.freshness_hours < 24 %}
+                                    <span class="freshness-warn">{{ "%.1f"|format(stats.freshness_hours) }}h</span>
+                                {% else %}
+                                    <span class="freshness-error">{{ "%.1f"|format(stats.freshness_hours) }}h</span>
+                                {% endif %}
+                            {% else %}N/A{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>数据质量</h2>
+            <table>
+                <tr><td>总问题数</td><td><strong>{{ report.quality.total_issues }}</strong></td></tr>
+                <tr><td class="severity-error">Error</td><td>{{ report.quality.by_severity.get('error', 0) }}</td></tr>
+                <tr><td class="severity-warning">Warning</td><td>{{ report.quality.by_severity.get('warning', 0) }}</td></tr>
+                <tr><td class="severity-info">Info</td><td>{{ report.quality.by_severity.get('info', 0) }}</td></tr>
+                <tr><td>文章重复</td><td>{{ report.quality.article_dup_count }}</td></tr>
+                <tr><td>文章字段缺失</td><td>{{ report.quality.article_missing_count }}</td></tr>
+                <tr><td>市场数据缺失</td><td>{{ report.quality.market_missing_count }}</td></tr>
+                <tr><td>交易记录缺失</td><td>{{ report.quality.trade_missing_count }}</td></tr>
+            </table>
+        </div>
+    </div>
+
+    {% if report.quality.anomaly_details %}
+    <div class="card" style="margin-top: 16px;">
+        <h2>异常详情 (前 {{ report.quality.anomaly_details|length }} 条)</h2>
+        <table>
+            <thead>
+                <tr><th>Severity</th><th>Code</th><th>Message</th><th>Field</th></tr>
+            </thead>
+            <tbody>
+                {% for detail in report.quality.anomaly_details %}
+                <tr>
+                    <td>
+                        {% if detail.severity == 'error' %}<span class="severity-error">{{ detail.severity }}</span>
+                        {% elif detail.severity == 'warning' %}<span class="severity-warning">{{ detail.severity }}</span>
+                        {% else %}<span class="severity-info">{{ detail.severity }}</span>{% endif %}
+                    </td>
+                    <td><code>{{ detail.code }}</code></td>
+                    <td>{{ detail.message }}</td>
+                    <td>{{ detail.field_name or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</body>
+</html>

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.blog_article import BlogArticle
 from src.models.market_data import MarketData
 from src.models.trade_log import TradeLog
-from .dashboard_models import DashboardReport, DashboardStats, EntityStats, QualityMetrics
+from .dashboard_models import DashboardReport, DashboardStats, EntityStats, QualityMetrics, QualityTrend
 
 
 @dataclass
@@ -126,6 +126,61 @@ class QualityAnalyzer:
             trade_missing_count=trade_missing,
             anomaly_details=issues[: self.max_details],
             generated_at=datetime.now(UTC),
+        )
+
+
+class QualityTrendAnalyzer:
+    """从历史 anomaly 报告分析质量趋势。"""
+
+    def __init__(self, report_dir: Path, days: int = 7):
+        self.report_dir = report_dir
+        self.days = days
+
+    def analyze_trend(self) -> "QualityTrend":
+        """返回最近 N 天的质量趋势。"""
+        report_files = sorted(self.report_dir.glob("anomaly_report_*.jsonl"))
+
+        # 无报告文件时返回空趋势
+        if not report_files:
+            return QualityTrend(
+                days=[],
+                issue_counts=[],
+                anomaly_rates=[],
+                completeness_rates=[],
+            )
+
+        today = datetime.now(UTC).date()
+        date_to_issues: dict[str, list[dict]] = {}
+
+        # 初始化最近 N 天
+        days_list = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(self.days - 1, -1, -1)]
+        for d in days_list:
+            date_to_issues[d] = []
+
+        # 解析所有报告文件，按日期分组
+        for report_file in report_files:
+            date_str = report_file.stem.split("_")[-1]  # anomaly_report_YYYY-MM-DD
+            if date_str not in date_to_issues:
+                continue
+            with report_file.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        issue = json.loads(line)
+                        date_to_issues[date_str].append(issue)
+                    except json.JSONDecodeError:
+                        continue
+
+        issue_counts = [len(date_to_issues[d]) for d in days_list]
+        anomaly_rates = []  # 暂不支持（需知道每日总记录数）
+
+        return QualityTrend(
+            days=days_list,
+            issue_counts=issue_counts,
+            anomaly_rates=anomaly_rates,
+            completeness_rates=[],  # 暂不支持
         )
 
 

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest tests/unit/pipeline/test_quality.py::test_price_outliers_detected -v)",
+      "Bash(python -m pytest tests/unit/pipeline/test_quality.py::test_price_outliers_detected -v)",
+      "Bash(python3 -m pytest tests/unit/pipeline/test_quality.py::test_price_outliers_detected -v)",
+      "Bash(uv run:*)",
+      "Bash(make --version)",
+      "Bash(ls *.toml)",
+      "Bash(python -m pytest tests/unit/pipeline/test_dashboard.py -v)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
+    ]
+  }
+}

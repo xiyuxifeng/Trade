@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -177,9 +178,25 @@ class DataValidator:
 
     def detect_trade_duplicates(self, trades: Sequence[TradeLog]) -> list[ValidationIssue]:
         seen_keys: set[tuple[str, str, datetime, Decimal, Decimal]] = set()
+        seen_external_ids: set[str] = set()
         issues: list[ValidationIssue] = []
 
         for trade in trades:
+            # Check external_id duplicate first
+            ext_id = getattr(trade, "external_id", None) or ""
+            if ext_id and ext_id in seen_external_ids:
+                issues.append(
+                    ValidationIssue(
+                        code="trade.duplicate.external_id",
+                        severity=ValidationSeverity.ERROR,
+                        message="Duplicate trade detected by external_id.",
+                        context={"external_id": ext_id, "symbol": trade.symbol},
+                    )
+                )
+            elif ext_id:
+                seen_external_ids.add(ext_id)
+
+            # Check composite key duplicate
             key = (
                 trade.account_id,
                 trade.symbol,
@@ -223,4 +240,228 @@ class DataValidator:
                     )
                 )
 
+        return issues
+
+    def detect_price_outliers(
+        self, records: Sequence[MarketData], iqr_multiplier: float = 1.5
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        by_symbol: dict[str, list[MarketData]] = {}
+        for r in records:
+            by_symbol.setdefault(r.symbol, []).append(r)
+
+        try:
+            import numpy as np
+        except ImportError:
+            return issues
+
+        for symbol, symbol_records in by_symbol.items():
+            closes = [float(r.close) for r in symbol_records]
+            if len(closes) < 3:
+                continue
+            q1 = float(np.percentile(closes, 25))
+            q3 = float(np.percentile(closes, 75))
+            iqr = q3 - q1
+            lower = q3 - iqr_multiplier * iqr
+            upper = q1 + iqr_multiplier * iqr
+
+            for r in symbol_records:
+                c = float(r.close)
+                if c < lower or c > upper:
+                    issues.append(
+                        ValidationIssue(
+                            code="market.price.outlier",
+                            severity=ValidationSeverity.WARNING,
+                            message=f"Close price {c} is outside IQR bounds [{lower:.4f}, {upper:.4f}].",
+                            field_name="close",
+                            context={
+                                "symbol": symbol,
+                                "close": str(r.close),
+                                "iqr_lower": str(lower),
+                                "iqr_upper": str(upper),
+                            },
+                        )
+                    )
+        return issues
+
+    def detect_missing_fields(
+        self, records: Sequence[BlogArticle | TradeLog | MarketData]
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+
+        for record in records:
+            if isinstance(record, BlogArticle):
+                for field in ("title", "content_text", "source_url"):
+                    val = getattr(record, field, None)
+                    if val is None or (isinstance(val, str) and not val.strip()):
+                        issues.append(
+                            ValidationIssue(
+                                code="article.field.missing",
+                                severity=ValidationSeverity.ERROR,
+                                message=f"Required field '{field}' is missing or empty.",
+                                field_name=field,
+                                context={"field": field, "article_id": getattr(record, "id", None)},
+                            )
+                        )
+
+            elif isinstance(record, TradeLog):
+                for field in ("symbol", "executed_at", "quantity", "price", "side"):
+                    val = getattr(record, field, None)
+                    if val is None or (isinstance(val, str) and not val.strip()):
+                        issues.append(
+                            ValidationIssue(
+                                code="trade.field.missing",
+                                severity=ValidationSeverity.ERROR,
+                                message=f"Required field '{field}' is missing or empty.",
+                                field_name=field,
+                                context={"field": field, "trade_id": getattr(record, "id", None)},
+                            )
+                        )
+
+            elif isinstance(record, MarketData):
+                for field in ("symbol", "traded_at", "open", "high", "low", "close", "volume"):
+                    val = getattr(record, field, None)
+                    if val is None or (isinstance(val, (int, float, Decimal)) and val == 0):
+                        issues.append(
+                            ValidationIssue(
+                                code="market.field.missing",
+                                severity=ValidationSeverity.ERROR,
+                                message=f"Required field '{field}' is missing or zero.",
+                                field_name=field,
+                                context={"field": field, "market_id": getattr(record, "id", None)},
+                            )
+                        )
+
+        return issues
+
+    def detect_sequence_gaps(
+        self, records: Sequence[MarketData], expected_interval_minutes: int = 1440
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        by_symbol: dict[str, list[MarketData]] = {}
+        for r in records:
+            by_symbol.setdefault(r.symbol, []).append(r)
+
+        for symbol, symbol_records in by_symbol.items():
+            sorted_records = sorted(symbol_records, key=lambda r: r.traded_at)
+            for i in range(len(sorted_records) - 1):
+                curr = sorted_records[i]
+                next_r = sorted_records[i + 1]
+                gap = next_r.traded_at - curr.traded_at
+                expected = timedelta(minutes=expected_interval_minutes)
+                if gap > expected * 1.5:
+                    issues.append(
+                        ValidationIssue(
+                            code="market.series.gap",
+                            severity=ValidationSeverity.WARNING,
+                            message=f"Gap of {gap.days} days detected between {curr.traded_at.date()} and {next_r.traded_at.date()}.",
+                            field_name="traded_at",
+                            context={
+                                "symbol": symbol,
+                                "before": str(curr.traded_at),
+                                "after": str(next_r.traded_at),
+                                "gap_days": gap.days,
+                            },
+                        )
+                    )
+        return issues
+
+    def detect_article_duplicates(self, articles: Sequence[BlogArticle]) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        seen_hash: set[str] = set()
+        seen_url: set[str] = set()
+
+        for article in articles:
+            h = getattr(article, "content_hash", None)
+            if h and h in seen_hash:
+                issues.append(
+                    ValidationIssue(
+                        code="article.duplicate.hash",
+                        severity=ValidationSeverity.ERROR,
+                        message="Duplicate article detected by content_hash.",
+                        context={"hash": h, "source_url": article.source_url},
+                    )
+                )
+            elif h:
+                seen_hash.add(h)
+
+            u = getattr(article, "source_url", None)
+            if u and u in seen_url:
+                issues.append(
+                    ValidationIssue(
+                        code="article.duplicate.url",
+                        severity=ValidationSeverity.WARNING,
+                        message="Duplicate article detected by source_url.",
+                        context={"source_url": u},
+                    )
+                )
+            elif u:
+                seen_url.add(u)
+
+        return issues
+
+    def detect_market_duplicates(self, records: Sequence[MarketData]) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        seen_keys: set[tuple[str, str, str, datetime]] = set()
+
+        for record in records:
+            key = (record.symbol, record.market, record.timeframe, record.traded_at)
+            if key in seen_keys:
+                issues.append(
+                    ValidationIssue(
+                        code="market.duplicate.key",
+                        severity=ValidationSeverity.ERROR,
+                        message="Duplicate market data record detected.",
+                        context={"symbol": record.symbol, "traded_at": str(record.traded_at)},
+                    )
+                )
+            else:
+                seen_keys.add(key)
+        return issues
+
+    ADVERTISEMENT_PATTERNS: list[re.Pattern[str]] = [
+        re.compile(r"Buy now!", re.IGNORECASE),
+        re.compile(r"Click here", re.IGNORECASE),
+        re.compile(r"\d{3}[-.]?\d{3}[-.]?\d{4}"),  # phone numbers
+        re.compile(r"http[s]?://[^\s]+", re.IGNORECASE),  # URLs in content
+    ]
+
+    def detect_semantic_noise(self, articles: Sequence[BlogArticle]) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        for article in articles:
+            content = getattr(article, "content_text", "") or ""
+            matched: list[str] = []
+            for pattern in self.ADVERTISEMENT_PATTERNS:
+                if pattern.search(content):
+                    matched.append(pattern.pattern)
+            if len(matched) >= 2:
+                issues.append(
+                    ValidationIssue(
+                        code="article.noise.semantic",
+                        severity=ValidationSeverity.WARNING,
+                        message="Article content matches multiple advertisement/semantic noise patterns.",
+                        context={"patterns": matched, "article_id": getattr(article, "id", None)},
+                    )
+                )
+        return issues
+
+    def detect_trade_high_fee(
+        self, trades: Sequence[TradeLog], threshold: Decimal = Decimal("0.01")
+    ) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        for trade in trades:
+            amount = Decimal(trade.amount)
+            if amount <= 0:
+                continue
+            fee_ratio = Decimal(trade.fee) / amount
+            if fee_ratio > threshold:
+                issues.append(
+                    ValidationIssue(
+                        code="trade.fee.high",
+                        severity=ValidationSeverity.WARNING,
+                        message=f"Trade fee ratio {fee_ratio:.4%} exceeds threshold {threshold:.2%}.",
+                        field_name="fee",
+                        context={"fee": str(trade.fee), "amount": str(amount), "ratio": str(fee_ratio), "threshold": str(threshold)},
+                    )
+                )
         return issues

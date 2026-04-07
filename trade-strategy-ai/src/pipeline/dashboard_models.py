@@ -44,3 +44,36 @@ class DashboardReport:
     quality: QualityMetrics = field(default_factory=QualityMetrics)
     alerts: list[str] = field(default_factory=list)
     generated_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class QualityTrend:
+    """数据质量趋势（过去 N 天）。"""
+    days: list[str]  # 日期列表 "YYYY-MM-DD"
+    issue_counts: list[int]  # 每日问题数
+    anomaly_rates: list[float]  # 每日异常率（%）
+    completeness_rates: list[float]  # 每日完整性（%）
+
+
+@dataclass(slots=True)
+class DataSourceFreshness:
+    """各数据源的新鲜度。"""
+    source: str
+    entity_type: str  # article / trade / market
+    last_updated: datetime | None
+    freshness_hours: float | None
+    is_stale: bool  # 是否超过阈值
+
+
+@dataclass(slots=True)
+class TraderStats:
+    """交易员级别统计。"""
+    trader_id: str
+    total_trades: int
+    trades_today: int
+    unique_symbols: int  # 标的多样性
+    hhi: float  # Herfindahl 集中度指数（0=完全分散，1=完全集中）
+    buy_ratio: float  # 买入比例 0.0~1.0
+    avg_holding_minutes: float | None
+    pnl_positive_ratio: float | None  # 盈利交易占比
+    alerts: list[str]  # 该交易员的告警

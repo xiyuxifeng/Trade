@@ -7,19 +7,19 @@ from pathlib import Path
 import click
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
-from src.common.config import Settings
-from src.db.session import async_session_factory
+from src.common.config import AppConfig, load_app_config
+from src.db.session import get_session_factory as async_session_factory
 from src.pipeline.dashboard_models import DashboardReport
 from src.pipeline.dashboard_service import DashboardService
 from src.pipeline.dashboard_renderers import CLIRenderer, HTMLRenderer
 
 
-def load_config():
-    settings = Settings()
-    return settings
+def load_config() -> AppConfig:
+    loaded = load_app_config("config/app.yaml")
+    return loaded.config
 
 
-async def build_report(settings: Settings) -> DashboardReport:
+async def build_report(settings: AppConfig) -> DashboardReport:
     report_dir = Path("data/processed/pipeline/anomaly")
     dashboard_cfg = getattr(settings, "dashboard", None) or {}
 

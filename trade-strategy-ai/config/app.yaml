@@ -148,3 +148,12 @@ traders:
     # 默认止盈/止损（当 TraderAgent 未给出时使用）
     default_target_pct: 0.05
     default_stop_pct: 0.03
+
+# API 服务配置
+api:
+  host: "0.0.0.0"
+  port: 8000
+  auth:
+    enabled: true
+    api_keys:
+      - "internal-key-001"

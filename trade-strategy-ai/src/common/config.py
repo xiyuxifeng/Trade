@@ -100,6 +100,17 @@ class DatabaseConfig(BaseModel):
     pool_recycle: int = 1800
 
 
+class ApiAuthConfig(BaseModel):
+    enabled: bool = False
+    api_keys: list[str] = Field(default_factory=list)
+
+
+class ApiConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = 8000
+    auth: ApiAuthConfig = Field(default_factory=ApiAuthConfig)
+
+
 class LLMConfig(BaseModel):
     provider: str | None = None  # openai/anthropic
     model: str | None = None
@@ -137,6 +148,7 @@ class AppConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
 
     traders: list[TraderConfig] = Field(default_factory=list)
 

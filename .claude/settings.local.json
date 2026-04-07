@@ -12,7 +12,9 @@
       "Bash(git commit -m ':*)",
       "Bash(python -c \"from src.api.main import app; print\\('FastAPI app imported successfully'\\)\")",
       "Bash(timeout 3 uvicorn src.api.main:app --port 8765)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git commit:*)",
+      "Bash(git:*)"
     ]
   }
 }

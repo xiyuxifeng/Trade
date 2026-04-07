@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from io import BytesIO
 from typing import Any
 
+import pandas as pd
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,6 +80,32 @@ async def list_trades(
         }
 
 
+def _trades_query_filters(query, count_query, symbol, account_id, side, start_date, end_date, min_amount, max_amount):
+    """Apply filters to trades query."""
+    if symbol:
+        query = query.where(TradeLog.symbol == symbol)
+        count_query = count_query.where(TradeLog.symbol == symbol)
+    if account_id:
+        query = query.where(TradeLog.account_id == account_id)
+        count_query = count_query.where(TradeLog.account_id == account_id)
+    if side:
+        query = query.where(TradeLog.side == side)
+        count_query = count_query.where(TradeLog.side == side)
+    if start_date:
+        query = query.where(TradeLog.executed_at >= start_date)
+        count_query = count_query.where(TradeLog.executed_at >= start_date)
+    if end_date:
+        query = query.where(TradeLog.executed_at <= end_date)
+        count_query = count_query.where(TradeLog.executed_at <= end_date)
+    if min_amount is not None:
+        query = query.where(TradeLog.amount >= min_amount)
+        count_query = count_query.where(TradeLog.amount >= min_amount)
+    if max_amount is not None:
+        query = query.where(TradeLog.amount <= max_amount)
+        count_query = count_query.where(TradeLog.amount <= max_amount)
+    return query, count_query
+
+
 @router.get("/export")
 async def export_trades(
     format: str = Query(default="csv", pattern="^(csv|json|parquet)$"),
@@ -85,7 +114,42 @@ async def export_trades(
     side: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
     _: str = Depends(verify_api_key),
 ):
     """Export trades to CSV/JSON/Parquet."""
-    return {"message": f"Export to {format} not yet implemented"}
+    async with async_session_factory() as session:
+        query = select(TradeLog)
+        count_query = select(func.count(TradeLog.id))
+        query, count_query = _trades_query_filters(
+            query, count_query, symbol, account_id, side, start_date, end_date, min_amount, max_amount
+        )
+        query = query.order_by(TradeLog.executed_at.desc())
+
+        result = await session.execute(query)
+        trades = result.scalars().all()
+
+        items = [TradeResponse.model_validate(t).model_dump(mode="json") for t in trades]
+
+        df = pd.DataFrame(items)
+
+        buffer = BytesIO()
+        filename = f"trades_export.{format}"
+
+        if format == "csv":
+            df.to_csv(buffer, index=False)
+            media_type = "text/csv"
+        elif format == "json":
+            df.to_json(buffer, orient="records", force_ascii=False, indent=2)
+            media_type = "application/json"
+        else:  # parquet
+            df.to_parquet(buffer, index=False)
+            media_type = "application/octet-stream"
+
+        buffer.seek(0)
+        return StreamingResponse(
+            buffer,
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )

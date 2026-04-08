@@ -9,6 +9,7 @@ from typing import Any
 
 from src.pipeline.graph import PipelineGraphRegistry, PipelineGraphSpec
 from src.pipeline.health import PipelineHealthSnapshot, PipelineNodeResult
+from src.health.pipeline_checker import record_pipeline_snapshot
 
 
 PipelineHandler = Callable[[dict[str, Any]], Any]
@@ -151,4 +152,6 @@ class PipelineRunner:
             result_by_name[node_name] = result
             snapshot.add_result(result)
 
-        return snapshot.finalize()
+        snapshot_finalized = snapshot.finalize()
+        record_pipeline_snapshot(snapshot_finalized)
+        return snapshot_finalized

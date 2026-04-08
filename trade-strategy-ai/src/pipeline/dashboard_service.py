@@ -12,14 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.blog_article import BlogArticle
 from src.models.market_data import MarketData
 from src.models.trade_log import TradeLog
+from src.alerting.models import AlertLevel, AlertRule
+from src.alerting.manager import AlertManager as AlertingManager
 from .dashboard_models import DashboardReport, DashboardStats, EntityStats, QualityMetrics, QualityTrend
-
-
-@dataclass
-class AlertEvent:
-    """告警事件"""
-    level: str  # info / warning / critical
-    message: str
 
 
 class StatsCollector:
@@ -364,76 +359,68 @@ class QualityTrendAnalyzer:
         )
 
 
-class AlertManager:
-    """告警判断逻辑"""
+def _calc_anomaly_rate(stats: "DashboardStats", quality: "QualityMetrics") -> float:
+    """计算异常率。"""
+    total = stats.articles.total + stats.trades.total + stats.market_data.total
+    if total <= 0:
+        return 0.0
+    return (quality.total_issues / total) * 100
 
-    def __init__(
-        self,
-        freshness_threshold_hours: float = 24.0,
-        anomaly_rate_threshold: float = 5.0,
-    ):
-        self.freshness_threshold_hours = freshness_threshold_hours
-        self.anomaly_rate_threshold = anomaly_rate_threshold
 
-    def check(
-        self,
-        stats: DashboardStats,
-        quality: QualityMetrics,
-        quality_trend: "QualityTrend | None" = None,
-        source_freshness: list["DataSourceFreshness"] | None = None,
-        trader_stats: list["TraderStats"] | None = None,
-    ) -> list[AlertEvent]:
-        alerts: list[AlertEvent] = []
-
-        # === 原有新鲜度告警（保持不变）===
-        for entity_name, entity_stats in [
-            ("articles", stats.articles),
-            ("trades", stats.trades),
-            ("market_data", stats.market_data),
-        ]:
-            if entity_stats.freshness_hours is not None and entity_stats.freshness_hours > self.freshness_threshold_hours:
-                alerts.append(AlertEvent(
-                    level="warning",
-                    message=f"{entity_name}: 数据超过 {entity_stats.freshness_hours:.1f} 小时未更新",
-                ))
-
-        # === 原有异常率告警 ===
-        total_records = stats.articles.total + stats.trades.total + stats.market_data.total
-        if total_records > 0 and quality.total_issues > 0:
-            anomaly_rate = (quality.total_issues / total_records) * 100
-            if anomaly_rate > self.anomaly_rate_threshold:
-                alerts.append(AlertEvent(
-                    level="critical",
-                    message=f"异常率 {anomaly_rate:.1f}% 超过阈值 {self.anomaly_rate_threshold}%",
-                ))
-
-        # === 异常趋势告警（新增）===
-        if quality_trend and len(quality_trend.issue_counts) >= 2:
-            if quality_trend.issue_counts[-1] > quality_trend.issue_counts[0] * 1.5:
-                alerts.append(AlertEvent(
-                    level="warning",
-                    message=f"异常率呈上升趋势：{quality_trend.issue_counts[0]} → {quality_trend.issue_counts[-1]}",
-                ))
-
-        # === 数据源新鲜度告警（新增）===
-        if source_freshness:
-            for src in source_freshness:
-                if src.is_stale:
-                    alerts.append(AlertEvent(
-                        level="warning",
-                        message=f"数据源 {src.source}({src.entity_type}) 超过 {self.freshness_threshold_hours:.0f}h 未更新",
-                    ))
-
-        # === 交易员级别告警（新增）===
-        if trader_stats:
-            for trader in trader_stats:
-                for alert_msg in trader.alerts:
-                    alerts.append(AlertEvent(
-                        level="info",
-                        message=f"交易员 {trader.trader_id}: {alert_msg}",
-                    ))
-
-        return alerts
+def _build_dashboard_rules(
+    freshness_threshold_hours: float,
+    anomaly_rate_threshold: float,
+) -> list[AlertRule]:
+    """根据配置参数构建 Dashboard 专用告警规则。"""
+    return [
+        AlertRule(
+            name="articles_data_stale",
+            condition=lambda stats, _, threshold=freshness_threshold_hours: (
+                stats.articles.freshness_hours is not None
+                and stats.articles.freshness_hours > threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="文章数据过期",
+            message_template=f"文章数据超过 {freshness_threshold_hours:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="trades_data_stale",
+            condition=lambda stats, _, threshold=freshness_threshold_hours: (
+                stats.trades.freshness_hours is not None
+                and stats.trades.freshness_hours > threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="交易数据过期",
+            message_template=f"交易数据超过 {freshness_threshold_hours:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="market_data_stale",
+            condition=lambda stats, _, threshold=freshness_threshold_hours: (
+                stats.market_data.freshness_hours is not None
+                and stats.market_data.freshness_hours > threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="市场数据过期",
+            message_template=f"市场数据超过 {freshness_threshold_hours:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="high_anomaly_rate",
+            condition=lambda stats, quality, threshold=anomaly_rate_threshold: (
+                _calc_anomaly_rate(stats, quality) > threshold
+            ),
+            level=AlertLevel.CRITICAL,
+            title="数据异常率过高",
+            message_template=f"数据异常率 {{anomaly_rate:.1f}}% 超过阈值 {anomaly_rate_threshold}%",
+            cooldown_seconds=1800,
+            tags=["dashboard", "quality"],
+        ),
+    ]
 
 
 class DashboardService:
@@ -449,7 +436,8 @@ class DashboardService:
     ):
         self.stats_collector = StatsCollector(session)
         self.quality_analyzer = QualityAnalyzer(report_dir, max_anomaly_details)
-        self.alert_manager = AlertManager(freshness_threshold_hours, anomaly_rate_threshold)
+        rules = _build_dashboard_rules(freshness_threshold_hours, anomaly_rate_threshold)
+        self.alert_manager = AlertingManager(rules=rules, notifiers=[])
         self.quality_trend_analyzer = QualityTrendAnalyzer(report_dir)
         self.source_freshness_checker = DataSourceFreshnessChecker(session, freshness_threshold_hours)
         self.trade_stats_collector = TradeStatsCollector(session)
@@ -460,14 +448,7 @@ class DashboardService:
         quality_trend = self.quality_trend_analyzer.analyze_trend()
         source_freshness = await self.source_freshness_checker.check_all()
         trader_stats = await self.trade_stats_collector.collect_all()
-        alerts = self.alert_manager.check(
-            stats, quality,
-            quality_trend=quality_trend,
-            source_freshness=source_freshness,
-            trader_stats=trader_stats,
-        )
-
-        alert_messages = [f"[{alert.level.upper()}] {alert.message}" for alert in alerts]
+        events = await self.alert_manager.evaluate(stats, quality)
 
         return DashboardReport(
             stats=stats,
@@ -475,6 +456,6 @@ class DashboardService:
             quality_trend=quality_trend,
             source_freshness=source_freshness,
             trader_stats=trader_stats,
-            alerts=alert_messages,
+            alerts=events,
             generated_at=datetime.now(UTC),
         )

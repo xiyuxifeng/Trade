@@ -17,7 +17,7 @@
 - [x] P0-106 实现轻量 scheduler（建议 APScheduler）：按 schedule.* 定时触发 Manager
 - [x] P0-107 实现 DataAgent 最小能力（例如：行情 OHLCV + 常用指标）；缺能力返回 capability_missing
 - [x] P0-108 实现 1 个 TraderAgent 样本：请求数据 -> 输出结构化 TradeIdea -> 上报 Manager
-- [x] P0-109 实现 Task 机制：capability_missing 自动生成 agent_tasks 待办
+- [x] P0-109 实现 Task 机制：capability_missing 自动生成 agent_tasks **待办**
 
 
 ### Reporting（报告最小闭环）
@@ -80,7 +80,7 @@
 
 补充（面向增量更新的必须项）：
 - [x] P1-006A 建立“按交易员来源配置”的增量抓取机制（支持同站点多作者，last_seen + content_hash/URL 去重）
-- [x] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（先落盘为待办，后续再异步化）
+- [x] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（**先落盘为待办，后续再异步化**）
 - [x] P1-006C 为淘股吧实现手工 Cookie 认证抓取（配置形态：`crawl.auth.tgb.cn.cookie`）
 - [x] P1-006C1 将抓取配置拆分为 `crawl.auth`（站点认证）与 `crawl.sources`（作者来源）
 - [x] P1-006D 为淘股吧实现评论抓取与清洗：去表情、标记无效评论、区分作者/读者
@@ -139,7 +139,7 @@
 
 补充（去重能力，待后续完善）：
 - [x] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
-- [ ] P1-026J dedup_task 重构/扩展：当前为死代码（pipeline 无交易数据输入），待确认数据入口后接入或移除
+- [ ] P1-026J dedup_task 重构/扩展：**当前为死代码（pipeline 无交易数据输入），待确认数据入口后接入或移除**
 
 ### API Layer (API 接口层)
 - [x] P1-027 设计数据查询 API（FastAPI）
@@ -200,12 +200,12 @@
 
 ### Knowledge Agent - 文章理解 (NLP & 策略提取)
 - [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
-- [x] P2-002 创建策略概念库（主动性、被动性、量态）— 待用真实LLM抽取结果验证概念标签覆盖度
+- [x] P2-002 创建策略概念库（主动性、被动性、量态）— **待用真实LLM抽取结果验证概念标签覆盖度**
 - [ ] P2-003 开发概念抽取模块（LLM + Prompt）
 - [ ] P2-004 开发买卖规则抽取模块（条件、动作、参数）
 - [ ] P2-005 开发市场前置条件抽取（大盘、板块、风格、流动性）
-- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）— 待用真实抽取规则验证生成效果
-- [x] P2-007 建立策略 DSL 验证和标准化流程 — 待用真实抽取数据验证流程
+- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）— **待用真实抽取规则验证生成效果**
+- [x] P2-007 建立策略 DSL 验证和标准化流程 — **待用真实抽取数据验证流程**
 
 ### Behavior Agent - 行为分析 (特征工程)
 - [x] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
@@ -237,15 +237,15 @@
 - [ ] P2-V05 模块文档完成度 100%
 
 ### LLM 抽取质量提升（v1 第 1 轮）
-- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — 待用真实LLM API验证
-- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — 待用真实LLM调用验证填充率
-- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— 逻辑完成，待真实场景验证
-- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — 待LLM可用后验证统计准确性
+- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — **待用真实LLM API验证**
+- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — **待用真实LLM调用验证填充率**
+- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— **逻辑完成，待真实场景验证**
+- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — **待LLM可用后验证统计准确性**
 
 ### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
-- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — 待用真实抽取数据验证
-- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — 待真实错误场景验证分类准确性
-- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — 待LLM调用后验证日志记录
+- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — **待用真实抽取数据验证**
+- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — **待真实错误场景验证分类准确性**
+- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — **待LLM调用后验证日志记录**
 - [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
 
 ---
@@ -425,7 +425,7 @@
 - 口径：范围任务（如 P0-001 ~ P0-004）只有在范围内全部子任务完成时才勾选为 [x]。
 - [x] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
 - [ ] **P1-001 ~ P1-006**: 爬虫开发（建议 Week 1.0-1.5）
-- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）— DSL框架完成，待用真实LLM数据验证
+- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）— **DSL框架完成，待用真实LLM数据验证**
 - [ ] **P3-001 ~ P3-004**: 对齐分析框架设计（建议 Week 2.0）
 
 ---

@@ -21,7 +21,9 @@
       "Bash(python3:*)",
       "Bash(brew services:*)",
       "Bash(xxd)",
-      "Bash(mv /tmp/test_lark_parser_clean.py /Users/wanghui/Documents/Claude/trade-strategy-ai/tests/unit/persona/test_lark_parser.py)"
+      "Bash(mv /tmp/test_lark_parser_clean.py /Users/wanghui/Documents/Claude/trade-strategy-ai/tests/unit/persona/test_lark_parser.py)",
+      "Bash(ls -la /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/persona/*.py)",
+      "Bash(ls:*)"
     ]
   }
 }

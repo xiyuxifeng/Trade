@@ -36,7 +36,8 @@ def test_quality_trend_analyzer_parses_jsonl(tmp_path):
     trend = analyzer.analyze_trend()
 
     assert len(trend.issue_counts) > 0
-    assert trend.issue_counts[-1] == 2
+    # index 5 对应 2026-04-07（测试创建的报告日期）
+    assert trend.issue_counts[5] == 2
 
 
 def test_source_freshness_model():

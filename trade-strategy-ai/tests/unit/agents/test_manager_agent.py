@@ -107,9 +107,8 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
     assert len(review_tasks) == 1
     details = review_tasks[0]["details"]
     assert details["review_type"] == "trader_review"
-    assert details["reason"] == "loss"
-    assert details["next_action"] == "write_back_review_note"
-    assert details["threshold"] == 0.0
+    assert details["trigger_reason"] == "loss"
+    assert details["evaluation_snapshot"]["threshold"] == 0.0
 
     memory_path = default_memory_path(base_dir=tmp_path, config=config)
     store = TraderMemoryStore(path=memory_path)

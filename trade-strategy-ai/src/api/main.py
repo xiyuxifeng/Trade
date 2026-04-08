@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from src.api.dependencies import verify_api_key
 from src.api.routes import articles_router, trades_router, market_router, reports_router
+from src.health.routes import health_router
 
 app = FastAPI(
     title="Trade Strategy AI API",
@@ -31,6 +32,7 @@ app.include_router(articles_router)
 app.include_router(trades_router)
 app.include_router(market_router)
 app.include_router(reports_router)
+app.include_router(health_router)
 
 
 @app.get("/health")

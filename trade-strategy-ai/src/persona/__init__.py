@@ -13,6 +13,55 @@ from .schemas import (
 from .router import PersonaRouter
 from .market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from .storage import load_persona_clusters_file, write_persona_clusters_file
+from .param_store import ParameterStore, ParameterDef, ParameterSnapshot, get_param_store
+from .param_types import ParamType, ValidationResult, ValidationError
+from .dsl_executor import (
+	DSLExecutor,
+	ExecutionHooks,
+	ExecutionSummary,
+	RuleEvent,
+	RuleRegistry,
+	RuleState,
+	create_executor,
+)
+from .grid_search import (
+	GridSearcher,
+	GridSearchResult,
+	SearchResult,
+	grid_search,
+	GridSearchError,
+)
+from .bayesian_search import (
+	BayesianSearcher,
+	BayesianSearchResult,
+	bayesian_search,
+	BayesianSearchError,
+)
+from .param_analysis import (
+	OptimizationComparator,
+	SensitivityAnalyzer,
+	WalkForwardAnalyzer,
+	AnalysisReportGenerator,
+	ComparisonResult,
+	SensitivityResult,
+	WalkForwardResult,
+	compare_optimizers,
+	analyze_sensitivity,
+)
+from .overfit_risk import (
+	OverfitRiskEvaluator,
+	OverfitRiskReportGenerator,
+	OverfitRiskResult,
+	WindowAnalysis,
+	evaluate_overfit_risk,
+	generate_overfit_risk_report,
+)
+from .param_stability import (
+	ParamStabilityAnalyzer,
+	ParamDistribution,
+	StabilityAnalysis,
+	analyze_param_stability,
+)
 
 __all__ = [
 	"ClaimKey",
@@ -32,4 +81,46 @@ __all__ = [
 	"classify_market_state",
 	"load_persona_clusters_file",
 	"write_persona_clusters_file",
+	"ParameterStore",
+	"ParameterDef",
+	"ParameterSnapshot",
+	"get_param_store",
+	"ParamType",
+	"ValidationResult",
+	"ValidationError",
+	"DSLExecutor",
+	"ExecutionHooks",
+	"ExecutionSummary",
+	"RuleEvent",
+	"RuleRegistry",
+	"RuleState",
+	"create_executor",
+	"GridSearcher",
+	"GridSearchResult",
+	"SearchResult",
+	"grid_search",
+	"GridSearchError",
+	"BayesianSearcher",
+	"BayesianSearchResult",
+	"bayesian_search",
+	"BayesianSearchError",
+	"OptimizationComparator",
+	"SensitivityAnalyzer",
+	"WalkForwardAnalyzer",
+	"AnalysisReportGenerator",
+	"ComparisonResult",
+	"SensitivityResult",
+	"WalkForwardResult",
+	"compare_optimizers",
+	"analyze_sensitivity",
+	"OverfitRiskEvaluator",
+	"OverfitRiskReportGenerator",
+	"OverfitRiskResult",
+	"WindowAnalysis",
+	"evaluate_overfit_risk",
+	"generate_overfit_risk_report",
+	"ParamStabilityAnalyzer",
+	"ParamDistribution",
+	"StabilityAnalysis",
+	"analyze_param_stability",
 ]

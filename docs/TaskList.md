@@ -336,15 +336,15 @@
 ### DSL Parser & Execution (DSL 解析和执行)
 - [ ] P4-013 选型 DSL 框架（ANTLR / Lark）
 - [ ] P4-014 设计 DSL 语法规则
-- [ ] P4-015 实现 DSL Parser
-- [ ] P4-016 实现 DSL Compiler（→ Python/Java）
-- [ ] P4-017 实现 DSL 执行引擎
+- [x] P4-015 实现 DSL Parser
+- [x] P4-016 实现 DSL Compiler（→ Python/Java）
+- [x] P4-017 实现 DSL 执行引擎
 
 ### Parameter Management (参数管理)
-- [ ] P4-018 设计参数存储结构
-- [ ] P4-019 实现参数版本控制
-- [ ] P4-020 实现参数动态更新机制
-- [ ] P4-021 实现参数约束验证
+- [x] P4-018 设计参数存储结构
+- [x] P4-019 实现参数版本控制
+- [x] P4-020 实现参数动态更新机制
+- [x] P4-021 实现参数约束验证
 
 ### Strategy Agent Integration (Agent 集成)
 - [ ] P4-022 集成 Strategy Agent 主控逻辑
@@ -379,21 +379,21 @@
 - [ ] P5-007 实现回测结果的持久化存储
 
 ### Parameter Optimization (参数优化)
-- [ ] P5-008 实现网格搜索优化器
-- [ ] P5-009 实现贝叶斯优化器（可选）
-- [ ] P5-010 实现参数扫描和对比
-- [ ] P5-011 实现过度拟合风险评估（Walk Forward）
-- [ ] P5-012 实现参数稳定性分析
+- [x] P5-008 实现网格搜索优化器
+- [x] P5-009 实现贝叶斯优化器（可选）
+- [x] P5-010 实现参数扫描和对比
+- [x] P5-011 实现过度拟合风险评估（Walk Forward）
+- [x] P5-012 实现参数稳定性分析
 
 ### Multi-Agent Coordination (多 Agent 协调)
-- [ ] P5-013 设计任务调度器（DAG 执行）
+- [x] P5-013 设计任务调度器（DAG 执行）
 - [ ] P5-014 实现消息队列框架（可选：Kafka/RabbitMQ）
 - [ ] P5-015 实现 Agent 间的通信接口
 - [ ] P5-016 实现错误重试和容错机制
 
 ### Monitoring & Logging (监控与日志)
-- [ ] P5-017 实现集中式日志系统
-- [ ] P5-018 配置 Prometheus + Grafana 监控
+- [x] P5-017 实现集中式日志系统
+- [x] P5-018 配置 Prometheus + Grafana 监控
 - [ ] P5-019 实现关键指标告警
 - [ ] P5-020 实现系统健康检查
 

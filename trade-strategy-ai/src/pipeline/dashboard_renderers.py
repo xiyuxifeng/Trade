@@ -66,19 +66,24 @@ class CLIRenderer:
         self.console.print(table)
 
     def _render_alerts(self, report: DashboardReport) -> None:
+        from src.alerting.models import AlertLevel
+
         if not report.alerts:
             self.console.print("[green]✓ 无告警[/green]")
             return
 
         for alert in report.alerts:
-            # alert 格式为 "[LEVEL] message"
-            if "[CRITICAL]" in alert:
+            # alert 现在是 AlertEvent 对象
+            if alert.level == AlertLevel.CRITICAL:
                 color = "red"
-            elif "[WARNING]" in alert:
+                prefix = "[CRITICAL]"
+            elif alert.level == AlertLevel.WARNING:
                 color = "yellow"
+                prefix = "[WARNING]"
             else:
                 color = "blue"
-            self.console.print(f"[{color}]{alert}[/{color}]")
+                prefix = "[INFO]"
+            self.console.print(f"[{color}]{prefix} {alert.message}[/{color}]")
 
 
 class HTMLRenderer:

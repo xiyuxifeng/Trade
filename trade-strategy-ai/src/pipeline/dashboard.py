@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 from src.common.config import AppConfig, load_app_config
 from src.db.session import get_session_factory as async_session_factory
+from src.alerting.models import AlertLevel
 from src.pipeline.dashboard_models import DashboardReport
 from src.pipeline.dashboard_service import DashboardService
 from src.pipeline.dashboard_renderers import CLIRenderer, HTMLRenderer
@@ -61,7 +62,7 @@ def main(mode: str, output: Path | None, config: Path | None):
         click.echo(f"HTML 报告已生成: {result_path}")
 
     # 如果有关键告警，返回非零退出码
-    critical_alerts = [a for a in report.alerts if "[CRITICAL]" in a]
+    critical_alerts = [e for e in report.alerts if e.level == AlertLevel.CRITICAL]
     if critical_alerts:
         sys.exit(1)
 

@@ -36,10 +36,10 @@
         <div class="card">
             <h2>告警</h2>
             {% for alert in report.alerts %}
-                {% if 'CRITICAL' in alert %}
-                <div class="alert-critical">⚠ {{ alert }}</div>
+                {% if alert.level.value == 'critical' %}
+                <div class="alert-critical">⚠ {{ alert.message }}</div>
                 {% else %}
-                <div class="alert-warning">⚠ {{ alert }}</div>
+                <div class="alert-warning">⚠ {{ alert.message }}</div>
                 {% endif %}
             {% endfor %}
         </div>

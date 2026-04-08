@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from src.alerting.models import AlertEvent
+
 
 @dataclass(slots=True)
 class EntityStats:
@@ -45,7 +47,7 @@ class DashboardReport:
     quality_trend: "QualityTrend | None" = None
     source_freshness: list["DataSourceFreshness"] | None = None
     trader_stats: list["TraderStats"] | None = None
-    alerts: list[str] = field(default_factory=list)
+    alerts: list[AlertEvent] = field(default_factory=list)
     generated_at: datetime | None = None
 
 

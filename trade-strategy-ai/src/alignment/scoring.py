@@ -1,15 +1,16 @@
 """
-对齐评分算法 — P3-001, P3-002, P3-004。
+对齐评分算法 — P3-001, P3-002, P3-004, P3-017。
 
 核心算法：
   - P3-001: rule_match_score() — 规则匹配评分
   - P3-002: behavior_fit_score() — 行为适配度评分
   - P3-004: confidence_scoring() — 综合可信度评分
+  - P3-017: detailed_confidence_scoring() — 多维度综合评分
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -364,8 +365,56 @@ def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# P3-004: 综合可信度评分算法
+# P3-017: 多维度综合评分（增强版）
 # ---------------------------------------------------------------------------
+
+# 默认评分维度及权重
+DEFAULT_SCORING_WEIGHTS = {
+    "rule_match": 0.30,       # 规则匹配度权重
+    "rule_accuracy": 0.15,     # 规则准确度权重
+    "behavior_fit": 0.25,      # 行为适配度权重
+    "conflict_penalty": 0.20,  # 冲突扣分权重
+    "coverage": 0.10,          # 覆盖率权重
+}
+
+# 评分等级阈值
+SCORE_GRADES = [
+    (0.9, "A+", "优秀"),
+    (0.8, "A", "良好"),
+    (0.7, "B+", "较好"),
+    (0.6, "B", "一般"),
+    (0.5, "C", "较差"),
+    (0.0, "D", "不合格"),
+]
+
+
+@dataclass
+class ScoringDimension:
+    """评分维度。"""
+    name: str
+    score: float
+    weight: float
+    description: str = ""
+
+
+@dataclass
+class DetailedConfidenceScore:
+    """详细综合可信度评分（P3-017）。"""
+    trader_id: str
+    # 综合评分（0-1）
+    overall_score: float = 0.0
+    # 评分等级
+    grade: str = "D"
+    grade_label: str = "不合格"
+    # 各维度详情
+    dimensions: list[ScoringDimension] = field(default_factory=list)
+    # 详细评分明细
+    score_breakdown: dict[str, float] = field(default_factory=dict)
+    # 综合评分组成
+    component_scores: dict[str, float] = field(default_factory=dict)
+    # 权重配置
+    weights_used: dict[str, float] = field(default_factory=dict)
+
 
 def confidence_scoring(
     rule_match_scores: list[RuleMatchScore],
@@ -435,3 +484,182 @@ def confidence_scoring(
             "overall_score": overall_score,
         },
     )
+
+
+def detailed_confidence_scoring(
+    trader_id: str,
+    rule_match_scores: list[RuleMatchScore] | None = None,
+    rule_accuracy_scores: dict[str, float] | None = None,
+    behavior_fit: BehaviorFitScore | None = None,
+    coverage_score: float | None = None,
+    conflict_penalty: float = 0.0,
+    weights: dict[str, float] | None = None,
+    **kwargs,
+) -> DetailedConfidenceScore:
+    """计算详细多维度综合可信度评分（P3-017）。
+
+    支持多维度评分：
+      - rule_match: 规则匹配度
+      - rule_accuracy: 规则准确度
+      - behavior_fit: 行为适配度
+      - coverage: 覆盖率
+      - conflict_penalty: 冲突扣分
+
+    Args:
+        trader_id: 交易员 ID
+        rule_match_scores: 规则匹配评分列表
+        rule_accuracy_scores: 规则准确度字典（rule_id -> accuracy）
+        behavior_fit: 行为适配度评分
+        coverage_score: 覆盖率（可选，0-1）
+        conflict_penalty: 冲突扣分（0-1）
+        weights: 各维度权重配置
+
+    Returns:
+        DetailedConfidenceScore
+    """
+    if weights is None:
+        weights = DEFAULT_SCORING_WEIGHTS.copy()
+
+    # 验证权重总和
+    weight_sum = sum(weights.values())
+    if abs(weight_sum - 1.0) > 0.01:
+        # 归一化权重
+        weights = {k: v / weight_sum for k, v in weights.items()}
+
+    dimensions: list[ScoringDimension] = []
+    component_scores: dict[str, float] = {}
+
+    # 1. 规则匹配度
+    rule_match_val = 0.0
+    if rule_match_scores:
+        total_rate = sum(s.match_rate for s in rule_match_scores)
+        rule_match_val = total_rate / len(rule_match_scores)
+    component_scores["rule_match"] = rule_match_val
+    dimensions.append(ScoringDimension(
+        name="rule_match",
+        score=rule_match_val,
+        weight=weights.get("rule_match", 0.3),
+        description="规则匹配度：规则与实际交易的匹配比例",
+    ))
+
+    # 2. 规则准确度
+    rule_accuracy_val = 0.0
+    if rule_accuracy_scores:
+        accuracies = list(rule_accuracy_scores.values())
+        rule_accuracy_val = sum(accuracies) / len(accuracies) if accuracies else 0.0
+    component_scores["rule_accuracy"] = rule_accuracy_val
+    dimensions.append(ScoringDimension(
+        name="rule_accuracy",
+        score=rule_accuracy_val,
+        weight=weights.get("rule_accuracy", 0.15),
+        description="规则准确度：规则预测与实际交易的一致性",
+    ))
+
+    # 3. 行为适配度
+    behavior_fit_val = behavior_fit.fit_score if behavior_fit else 0.5
+    component_scores["behavior_fit"] = behavior_fit_val
+    dimensions.append(ScoringDimension(
+        name="behavior_fit",
+        score=behavior_fit_val,
+        weight=weights.get("behavior_fit", 0.25),
+        description="行为适配度：实际行为与声称策略的匹配程度",
+    ))
+
+    # 4. 覆盖率
+    coverage_val = coverage_score if coverage_score is not None else 0.5
+    component_scores["coverage"] = coverage_val
+    dimensions.append(ScoringDimension(
+        name="coverage",
+        score=coverage_val,
+        weight=weights.get("coverage", 0.1),
+        description="覆盖率：被规则覆盖的交易比例",
+    ))
+
+    # 5. 冲突扣分（转换为正向分数）
+    conflict_score_val = max(0.0, 1.0 - conflict_penalty)
+    component_scores["conflict_penalty"] = conflict_penalty
+    component_scores["conflict_score"] = conflict_score_val
+    dimensions.append(ScoringDimension(
+        name="conflict_penalty",
+        score=conflict_score_val,
+        weight=weights.get("conflict_penalty", 0.2),
+        description="冲突得分：基于冲突检测结果的扣分调整",
+    ))
+
+    # 6. 计算加权综合分数
+    overall_score = 0.0
+    for dim in dimensions:
+        overall_score += dim.score * dim.weight
+
+    # 限制到 [0, 1]
+    overall_score = max(0.0, min(1.0, overall_score))
+
+    # 7. 确定评分等级
+    grade, grade_label = _get_score_grade(overall_score)
+
+    return DetailedConfidenceScore(
+        trader_id=trader_id,
+        overall_score=overall_score,
+        grade=grade,
+        grade_label=grade_label,
+        dimensions=dimensions,
+        score_breakdown={
+            dim.name: dim.score for dim in dimensions
+        },
+        component_scores=component_scores,
+        weights_used=weights.copy(),
+    )
+
+
+def _get_score_grade(score: float) -> tuple[str, str]:
+    """根据分数获取评分等级。
+
+    Args:
+        score: 综合评分（0-1）
+
+    Returns:
+        (等级, 等级标签) 元组
+    """
+    for threshold, grade, label in SCORE_GRADES:
+        if score >= threshold:
+            return grade, label
+    return "D", "不合格"
+
+
+def validate_weights(weights: dict[str, float]) -> bool:
+    """验证权重配置是否有效。
+
+    Args:
+        weights: 权重配置
+
+    Returns:
+        是否有效
+    """
+    if not weights:
+        return False
+
+    # 检查权重总和
+    weight_sum = sum(weights.values())
+    if abs(weight_sum - 1.0) > 0.01:
+        return False
+
+    # 检查权重是否为正
+    if any(v < 0 for v in weights.values()):
+        return False
+
+    return True
+
+
+def normalize_weights(weights: dict[str, float]) -> dict[str, float]:
+    """归一化权重配置。
+
+    Args:
+        weights: 原始权重配置
+
+    Returns:
+        归一化后的权重配置
+    """
+    weight_sum = sum(weights.values())
+    if weight_sum == 0:
+        return weights
+    return {k: v / weight_sum for k, v in weights.items()}

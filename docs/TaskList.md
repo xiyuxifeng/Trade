@@ -200,12 +200,12 @@
 
 ### Knowledge Agent - 文章理解 (NLP & 策略提取)
 - [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
-- [x] P2-002 创建策略概念库（主动性、被动性、量态）
+- [x] P2-002 创建策略概念库（主动性、被动性、量态）— 待用真实LLM抽取结果验证概念标签覆盖度
 - [ ] P2-003 开发概念抽取模块（LLM + Prompt）
 - [ ] P2-004 开发买卖规则抽取模块（条件、动作、参数）
 - [ ] P2-005 开发市场前置条件抽取（大盘、板块、风格、流动性）
-- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）
-- [x] P2-007 建立策略 DSL 验证和标准化流程
+- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）— 待用真实抽取规则验证生成效果
+- [x] P2-007 建立策略 DSL 验证和标准化流程 — 待用真实抽取数据验证流程
 
 ### Behavior Agent - 行为分析 (特征工程)
 - [x] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
@@ -237,15 +237,15 @@
 - [ ] P2-V05 模块文档完成度 100%
 
 ### LLM 抽取质量提升（v1 第 1 轮）
-- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证
-- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率
-- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）
-- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计
+- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — 待用真实LLM API验证
+- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — 待用真实LLM调用验证填充率
+- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— 逻辑完成，待真实场景验证
+- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — 待LLM可用后验证统计准确性
 
 ### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
-- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计
-- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类
-- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl`
+- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — 待用真实抽取数据验证
+- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — 待真实错误场景验证分类准确性
+- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — 待LLM调用后验证日志记录
 - [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
 
 ---
@@ -282,23 +282,23 @@
 - [x] P3-012 计算胜率、期望值等统计量的匹配度
 
 ### Conflict Detection (冲突检测)
-- [ ] P3-013 识别时序冲突（规则要求 vs 实际时间顺序）
-- [ ] P3-014 识别参数冲突（参数设置不一致）
-- [ ] P3-015 识别逻辑冲突（相互矛盾的规则）
-- [ ] P3-016 分类冲突严重程度（Critical / Major / Minor）
+- [x] P3-013 识别时序冲突（规则要求 vs 实际时间顺序）
+- [x] P3-014 识别参数冲突（参数设置不一致）
+- [x] P3-015 识别逻辑冲突（相互矛盾的规则）
+- [x] P3-016 分类冲突严重程度（Critical / Major / Minor）
 
 ### Confidence Scoring & Reporting (可信度评分)
-- [ ] P3-017 实现多维度综合评分（加权组合）
-- [ ] P3-018 生成对齐报告（文本格式）
-- [ ] P3-019 生成可视化报告（图表）
-- [ ] P3-020 生成冲突清单和优化建议
-- [ ] P3-021 实现评分结果缓存和版本管理
+- [x] P3-017 实现多维度综合评分（加权组合）
+- [x] P3-018 生成对齐报告（文本格式）
+- [x] P3-019 生成可视化报告（图表）
+- [x] P3-020 生成冲突清单和优化建议
+- [x] P3-021 实现评分结果缓存和版本管理
 
 ### Alignment Agent 集成 (Agent 模块)
-- [ ] P3-022 实现 Alignment Agent 主控逻辑
-- [ ] P3-023 集成 Rule Matching / Behavior Fit / Conflict Detection
-- [ ] P3-024 实现评分输出的持久化存储
-- [ ] P3-025 实现增量对齐（新数据来时增量计算）
+- [x] P3-022 实现 Alignment Agent 主控逻辑
+- [x] P3-023 集成 Rule Matching / Behavior Fit / Conflict Detection
+- [x] P3-024 实现评分输出的持久化存储
+- [x] P3-025 实现增量对齐（新数据来时增量计算）
 
 ### Validation & Verification (验证)
 - [ ] P3-026 与 domain expert 对齐评分结果对标（相关性 >0.7）
@@ -425,7 +425,7 @@
 - 口径：范围任务（如 P0-001 ~ P0-004）只有在范围内全部子任务完成时才勾选为 [x]。
 - [x] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
 - [ ] **P1-001 ~ P1-006**: 爬虫开发（建议 Week 1.0-1.5）
-- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）
+- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）— DSL框架完成，待用真实LLM数据验证
 - [ ] **P3-001 ~ P3-004**: 对齐分析框架设计（建议 Week 2.0）
 
 ---

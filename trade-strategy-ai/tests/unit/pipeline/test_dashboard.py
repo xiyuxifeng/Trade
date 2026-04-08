@@ -7,7 +7,9 @@ from datetime import datetime, timedelta, UTC
 import pytest
 
 from src.pipeline.dashboard_models import DashboardStats, EntityStats, QualityMetrics, DashboardReport
-from src.pipeline.dashboard_service import AlertManager, QualityAnalyzer
+from src.pipeline.dashboard_service import QualityAnalyzer
+from src.alerting.models import AlertLevel, AlertRule
+from src.alerting.manager import AlertManager as AlertingManager
 
 
 # =============================================================================
@@ -64,11 +66,73 @@ def test_dashboard_report_defaults():
 
 
 # =============================================================================
-# AlertManager tests
+# AlertingManager tests
 # =============================================================================
 
 
-def test_no_alert_when_fresh():
+def _make_rules(freshness_threshold: float = 24.0, anomaly_threshold: float = 5.0) -> list[AlertRule]:
+    """构建与 DashboardService 相同的告警规则。"""
+    return [
+        AlertRule(
+            name="articles_data_stale",
+            condition=lambda stats, _: (
+                stats.articles.freshness_hours is not None
+                and stats.articles.freshness_hours > freshness_threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="文章数据过期",
+            message_template=f"文章数据超过 {freshness_threshold:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="trades_data_stale",
+            condition=lambda stats, _: (
+                stats.trades.freshness_hours is not None
+                and stats.trades.freshness_hours > freshness_threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="交易数据过期",
+            message_template=f"交易数据超过 {freshness_threshold:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="market_data_stale",
+            condition=lambda stats, _: (
+                stats.market_data.freshness_hours is not None
+                and stats.market_data.freshness_hours > freshness_threshold
+            ),
+            level=AlertLevel.WARNING,
+            title="市场数据过期",
+            message_template=f"市场数据超过 {freshness_threshold:.1f} 小时未更新",
+            cooldown_seconds=3600,
+            tags=["dashboard", "freshness"],
+        ),
+        AlertRule(
+            name="high_anomaly_rate",
+            condition=lambda stats, quality: (
+                _calc_anomaly_rate(stats, quality) > anomaly_threshold
+            ),
+            level=AlertLevel.CRITICAL,
+            title="数据异常率过高",
+            message_template=f"数据异常率 {{anomaly_rate:.1f}}% 超过阈值 {anomaly_threshold}%",
+            cooldown_seconds=1800,
+            tags=["dashboard", "quality"],
+        ),
+    ]
+
+
+def _calc_anomaly_rate(stats: DashboardStats, quality: QualityMetrics) -> float:
+    """计算异常率。"""
+    total = stats.articles.total + stats.trades.total + stats.market_data.total
+    if total <= 0:
+        return 0.0
+    return (quality.total_issues / total) * 100
+
+
+@pytest.mark.asyncio
+async def test_no_alert_when_fresh():
     """数据新鲜时无告警"""
     stats = DashboardStats(
         articles=EntityStats(freshness_hours=2.0),
@@ -76,12 +140,13 @@ def test_no_alert_when_fresh():
         market_data=EntityStats(freshness_hours=3.0),
     )
     quality = QualityMetrics(total_issues=0)
-    am = AlertManager(freshness_threshold_hours=24.0, anomaly_rate_threshold=5.0)
-    alerts = am.check(stats, quality)
+    am = AlertingManager(rules=_make_rules(24.0, 5.0), notifiers=[])
+    alerts = await am.evaluate(stats, quality)
     assert len(alerts) == 0
 
 
-def test_alert_when_stale():
+@pytest.mark.asyncio
+async def test_alert_when_stale():
     """数据过期时触发告警"""
     stats = DashboardStats(
         articles=EntityStats(freshness_hours=30.0),
@@ -89,14 +154,15 @@ def test_alert_when_stale():
         market_data=EntityStats(freshness_hours=1.0),
     )
     quality = QualityMetrics(total_issues=0)
-    am = AlertManager(freshness_threshold_hours=24.0, anomaly_rate_threshold=5.0)
-    alerts = am.check(stats, quality)
+    am = AlertingManager(rules=_make_rules(24.0, 5.0), notifiers=[])
+    alerts = await am.evaluate(stats, quality)
     assert len(alerts) == 1
-    assert "articles" in alerts[0].message
-    assert alerts[0].level == "warning"
+    assert "文章" in alerts[0].message
+    assert alerts[0].level == AlertLevel.WARNING
 
 
-def test_critical_alert_when_anomaly_rate_high():
+@pytest.mark.asyncio
+async def test_critical_alert_when_anomaly_rate_high():
     """异常率超阈值时触发 critical 告警"""
     stats = DashboardStats(
         articles=EntityStats(total=100),
@@ -104,14 +170,15 @@ def test_critical_alert_when_anomaly_rate_high():
         market_data=EntityStats(total=0),
     )
     quality = QualityMetrics(total_issues=10)  # 10% 异常率
-    am = AlertManager(freshness_threshold_hours=24.0, anomaly_rate_threshold=5.0)
-    alerts = am.check(stats, quality)
+    am = AlertingManager(rules=_make_rules(24.0, 5.0), notifiers=[])
+    alerts = await am.evaluate(stats, quality)
     assert len(alerts) == 1
-    assert alerts[0].level == "critical"
+    assert alerts[0].level == AlertLevel.CRITICAL
     assert "异常率" in alerts[0].message
 
 
-def test_no_alert_when_no_issues():
+@pytest.mark.asyncio
+async def test_no_alert_when_no_issues():
     """无异常时即使异常率计算也不告警"""
     stats = DashboardStats(
         articles=EntityStats(total=100),
@@ -119,8 +186,8 @@ def test_no_alert_when_no_issues():
         market_data=EntityStats(total=0),
     )
     quality = QualityMetrics(total_issues=0)
-    am = AlertManager(freshness_threshold_hours=24.0, anomaly_rate_threshold=5.0)
-    alerts = am.check(stats, quality)
+    am = AlertingManager(rules=_make_rules(24.0, 5.0), notifiers=[])
+    alerts = await am.evaluate(stats, quality)
     assert len(alerts) == 0
 
 

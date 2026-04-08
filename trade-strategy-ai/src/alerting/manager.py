@@ -187,7 +187,7 @@ class AlertManager:
             "sell_ratio": 100 - buy_ratio if buy_ratio is not None else 0,
             "dup_count": quality.article_dup_count,
             "trades_total": stats.trades.total,
-            "unique_symbols": stats.trades.unique_symbols,
+            "unique_symbols": getattr(stats.trades, "unique_symbols", 0),
         }
 
     def _calc_buy_ratio(self, stats: "DashboardStats") -> float | None:
@@ -195,7 +195,8 @@ class AlertManager:
         total = stats.trades.total
         if total <= 0:
             return None
-        buys = stats.trades.by_type.get("buy", 0)
+        by_type = getattr(stats.trades, "by_type", {})
+        buys = by_type.get("buy", 0) if isinstance(by_type, dict) else 0
         return (buys / total) * 100 if buys else None
 
     def get_statistics(self) -> dict[str, Any]:

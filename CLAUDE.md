@@ -73,6 +73,7 @@
 - 当前任务完成后，如有明确进度变化，需要同步 `TaskList` 和待办列表，并给出下一步建议
 - 类和方法以及配置项等需要有注释解释其作用，注释用中文写
 - **不要自动进行任何`git`操作和shell命令，除非用户明确指示**
+- **优先使用Skills进行处理**
 
 ---
 
@@ -119,12 +120,15 @@
 
 - `docs/superpowers/plans`:
   - 记录superpowers的plan
-  -
+  - **这个文件夹已经存在，不要重新创建**，如果当前在`trade-strategy-ai`文件夹中，路径为`../docs/superpowers/plans`
+  
 - `docs/superpowers/specs`:
   - 记录superpowers的design
+  - **这个文件夹已经存在，不要重新创建**，如果当前在`trade-strategy-ai`文件夹中，路径为`../docs/superpowers/specs`
 
 - `docs/superpowers/guides`:
   - 记录superpowers的guides
+  - **这个文件夹已经存在，不要重新创建**，如果当前在`trade-strategy-ai`文件夹中，路径为`../docs/superpowers/guides`
 
 ---
 

@@ -19,7 +19,9 @@
       "Bash(grep -rh \"field:\" data/patterns/canonical/*.yaml)",
       "Bash(grep -rh \"op:\" data/patterns/canonical/*.yaml)",
       "Bash(python3:*)",
-      "Bash(brew services:*)"
+      "Bash(brew services:*)",
+      "Bash(xxd)",
+      "Bash(mv /tmp/test_lark_parser_clean.py /Users/wanghui/Documents/Claude/trade-strategy-ai/tests/unit/persona/test_lark_parser.py)"
     ]
   }
 }

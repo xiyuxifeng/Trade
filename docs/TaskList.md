@@ -387,14 +387,14 @@
 
 ### Multi-Agent Coordination (多 Agent 协调)
 - [x] P5-013 设计任务调度器（DAG 执行）
-- [ ] P5-014 实现消息队列框架（可选：Kafka/RabbitMQ）
-- [ ] P5-015 实现 Agent 间的通信接口
-- [ ] P5-016 实现错误重试和容错机制
+- [x] P5-014 实现消息队列框架（可选：Kafka/RabbitMQ）
+- [x] P5-015 实现 Agent 间的通信接口
+- [x] P5-016 实现错误重试和容错机制
 
 ### Monitoring & Logging (监控与日志)
 - [x] P5-017 实现集中式日志系统
 - [x] P5-018 配置 Prometheus + Grafana 监控
-- [ ] P5-019 实现关键指标告警
+- [x] P5-019 实现关键指标告警
 - [ ] P5-020 实现系统健康检查
 
 ### Integration & Testing (集成与测试)

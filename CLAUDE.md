@@ -67,7 +67,7 @@
 
 1. 主动询问用户是否需要进行如下保存操作：
   - 是否更新停止数据库连接
-  - 是否清理 `config` 中配置的 cookie 和密钥信息
+  - 是否清理 `config` 中配置的 `cookie` 和密钥信息
   - 是否将当前上下文更新到 `daily-sessions`
   - 是否将本次结果更新到 `daily-report`
   - 是否更新TaskList中完成进度

@@ -38,3 +38,22 @@ simulated_account:
   enabled: true
   initial_capital: 100_000.0
   persist_to_db: true
+
+# P4-009 单股集中度
+concentration:
+  max_single_position_pct: 0.20   # 单股最大占总净值 20%
+  max_single_position_amount: 50_000.0  # 单股最大金额限制
+
+# P4-010 行业敞口
+industry:
+  max_industry_pct: 0.30       # 申万二级行业最大占比 30%
+  max_sector_pct: 0.40        # 申万一级行业最大占比 40%
+  cache_ttl_hours: 24          # 行业数据缓存时间
+
+# P4-011 组合风险
+portfolio:
+  var_confidence: 0.95          # VaR 置信度 95%
+  var_window: 20                # VaR 计算窗口
+  max_var_pct: 0.10             # 最大 VaR 占比 10%
+  max_volatility: 0.30           # 最大波动率 30%
+  max_leverage: 1.0             # 最大杠杆率 100%

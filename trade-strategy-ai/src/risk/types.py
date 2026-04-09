@@ -106,3 +106,106 @@ class TakeProfitConfig:
     trailing_pct: float = 0.05
     # 时间止盈
     target_hold_days: int = 5
+
+
+# ===== P4-009 单股集中度 =====
+
+@dataclass
+class ConcentrationCheck:
+    """单股集中度检查结果"""
+    symbol: str
+    market_value: float
+    net_value: float
+    concentration_pct: float  # 占净值比例
+    passed: bool
+    limit: float  # 阈值
+    trigger_condition: str  # 触发条件描述
+
+
+@dataclass
+class ConcentrationConfig:
+    """集中度配置"""
+    max_single_position_pct: float = 0.20
+    max_single_position_amount: float = 50_000.0
+
+
+# ===== P4-010 行业敞口 =====
+
+@dataclass
+class IndustryExposure:
+    """行业敞口"""
+    industry_code: str    # 申万行业代码
+    industry_name: str    # 申万行业名称
+    market_value: float   # 该行业持仓市值
+    exposure_pct: float   # 占净值比例
+    positions: list[str]  # 该行业包含的股票
+
+
+@dataclass
+class IndustryExposureCheck:
+    """行业敞口检查结果"""
+    sector_code: str
+    sector_name: str
+    exposure_pct: float
+    passed: bool
+    limit: float
+
+
+@dataclass
+class IndustryExposureResult:
+    """行业敞口检查汇总"""
+    total_exposure: float  # 已用敞口
+    checks: list[IndustryExposureCheck]
+    industry_map: dict[str, tuple[str, str]]  # symbol -> (一级代码, 一级名称)
+
+
+@dataclass
+class IndustryExposureConfig:
+    """行业敞口配置"""
+    max_industry_pct: float = 0.30       # 申万二级行业最大占比
+    max_sector_pct: float = 0.40         # 申万一级行业最大占比
+    cache_ttl_hours: int = 24             # 行业数据缓存时间
+
+
+# ===== P4-011 组合风险 =====
+
+class RiskLevel(StrEnum):
+    """风险等级"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class PortfolioRiskMetrics:
+    """组合风险指标"""
+    var: float                           # Value at Risk（金额）
+    var_pct: float                      # VaR 占净值比例
+    volatility: float                   # 组合波动率
+    leverage: float                     # 杠杆率 = 总敞口 / 净值
+    net_value: float                    # 账户净值
+    total_exposure: float               # 总敞口
+    positions_count: int                # 持仓数量
+    risk_level: RiskLevel              # 风险等级
+
+
+@dataclass
+class PortfolioRiskAssessment:
+    """组合风险评估结果"""
+    metrics: PortfolioRiskMetrics
+    var_limit: float                   # VaR 限制
+    volatility_limit: float             # 波动率限制
+    leverage_limit: float               # 杠杆率限制
+    passed: bool                        # 是否通过所有检查
+    violations: list[str]               # 违规项列表
+
+
+@dataclass
+class PortfolioRiskConfig:
+    """组合风险配置"""
+    var_confidence: float = 0.95          # VaR 置信度 95%
+    var_window: int = 20                   # VaR 计算窗口
+    max_var_pct: float = 0.10             # 最大 VaR 占比
+    max_volatility: float = 0.30          # 最大波动率 30%
+    max_leverage: float = 1.0             # 最大杠杆率 100%

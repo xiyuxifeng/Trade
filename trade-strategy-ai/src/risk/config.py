@@ -13,6 +13,9 @@ from src.risk.types import (
     StopLossMode,
     TakeProfitMode,
     ScalingLevel,
+    ConcentrationConfig,
+    IndustryExposureConfig,
+    PortfolioRiskConfig,
 )
 
 
@@ -62,6 +65,10 @@ class RiskConfig(BaseModel):
     stop_loss: StopLossConfigModel = StopLossConfigModel()
     take_profit: TakeProfitConfigModel = TakeProfitConfigModel()
     simulated_account: SimulatedAccountConfig = SimulatedAccountConfig()
+    # P4-009~P4-012 新增
+    concentration: ConcentrationConfig = ConcentrationConfig()
+    industry: IndustryExposureConfig = IndustryExposureConfig()
+    portfolio: PortfolioRiskConfig = PortfolioRiskConfig()
 
 
 @lru_cache

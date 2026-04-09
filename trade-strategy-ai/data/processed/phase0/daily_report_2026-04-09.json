@@ -1,0 +1,66 @@
+{
+  "report_id": "ade951cb-a620-4aa1-b755-9ab7b97994cf",
+  "as_of_date": "2026-04-09",
+  "generated_at": "2026-04-09 13:10:57.220669+00:00",
+  "ideas": [
+    {
+      "idea_id": "f1e50308-f6b9-4e1f-bd92-38a0fe895f2e",
+      "trader_id": "trader_a",
+      "as_of_date": "2026-04-09",
+      "symbol": "000001.SZ",
+      "side": "buy",
+      "entry": {
+        "type": "limit",
+        "price": 10.0,
+        "condition": null
+      },
+      "target_price": 10.5,
+      "stop_loss_price": 9.7,
+      "position_size": null,
+      "time_horizon": null,
+      "rationale": "Phase0: rule-based idea from watchlist + mock price | profile: tags: 主升浪, 亏损死循环, 回本执念; clusters: trader_a:mixed:v0; memory mix: success_case=6 | memory summary: symbol: 000001.SZ success case, 000001.SZ success case; recent: 510300.SH success case, 000001.SZ success case",
+      "invalidation": "Price data unavailable or market regime changes",
+      "confidence": 0.48,
+      "style_cluster_id": "trader_a:stock_event",
+      "style_cluster_label": "A股 事件驱动",
+      "style_score": 0.495,
+      "style_reasons": [
+        "E=0.30 expected-return proxy",
+        "A=0.50 applicability(regime/vol/liquidity)",
+        "F=1.00 instrument-fit(InstrumentFocus.stock)"
+      ]
+    },
+    {
+      "idea_id": "9ffb9c63-ab56-4a64-8ed0-b01cc298c1a7",
+      "trader_id": "trader_a",
+      "as_of_date": "2026-04-09",
+      "symbol": "510300.SH",
+      "side": "buy",
+      "entry": {
+        "type": "limit",
+        "price": 3.5,
+        "condition": null
+      },
+      "target_price": 3.675,
+      "stop_loss_price": 3.395,
+      "position_size": null,
+      "time_horizon": null,
+      "rationale": "Phase0: rule-based idea from watchlist + mock price | profile: tags: 主升浪, 亏损死循环, 回本执念; clusters: trader_a:mixed:v0; memory mix: success_case=6 | memory summary: symbol: 510300.SH success case, 510300.SH success case; recent: 510300.SH success case, 000001.SZ success case",
+      "invalidation": "Price data unavailable or market regime changes",
+      "confidence": 0.48,
+      "style_cluster_id": "trader_a:etf_trend",
+      "style_cluster_label": "ETF 趋势突破",
+      "style_score": 0.565,
+      "style_reasons": [
+        "E=0.40 expected-return proxy",
+        "A=0.50 applicability(regime/vol/liquidity)",
+        "F=1.00 instrument-fit(InstrumentFocus.etf)"
+      ]
+    }
+  ],
+  "highlights": [
+    "Generated 2 trade ideas",
+    "Persona router enabled: decisions=2 clusters=/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/persona/clusters.sample.json"
+  ],
+  "risks": []
+}

@@ -65,7 +65,7 @@ async def trigger_pre_market(
     _: str = Depends(verify_api_key),
 ):
     """Trigger pre-market analysis."""
-    from src.host.handler import handle_command
+    from src.host.handler import handle_command_async
 
     command = {
         "type": "run_pre_market",
@@ -74,7 +74,7 @@ async def trigger_pre_market(
         "force": request.force,
         "args": request.args,
     }
-    result = handle_command(command)
+    result = await handle_command_async(command)
     return result
 
 
@@ -84,7 +84,7 @@ async def trigger_after_close(
     _: str = Depends(verify_api_key),
 ):
     """Trigger after-close evaluation."""
-    from src.host.handler import handle_command
+    from src.host.handler import handle_command_async
 
     command = {
         "type": "run_after_close",
@@ -93,7 +93,7 @@ async def trigger_after_close(
         "force": request.force,
         "args": request.args,
     }
-    result = handle_command(command)
+    result = await handle_command_async(command)
     return result
 
 
@@ -116,7 +116,7 @@ async def host_command(
     Accepts a JSON command and delegates to the internal handler.
     Supported types: run_pre_market, run_after_close, persona_init_sample
     """
-    from src.host.handler import handle_command
+    from src.host.handler import handle_command_async
 
     command = {
         "type": request.type,
@@ -125,5 +125,5 @@ async def host_command(
         "force": request.force,
         "args": request.args,
     }
-    result = handle_command(command)
+    result = await handle_command_async(command)
     return result

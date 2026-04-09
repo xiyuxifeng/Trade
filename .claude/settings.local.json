@@ -34,7 +34,21 @@
       "Bash(pytest tests/unit/risk/test_stop_loss.py -v)",
       "Bash(pytest tests/unit/risk/test_take_profit.py -v)",
       "Bash(pytest tests/integration/strategy_risk_integration_test.py -v)",
-      "Bash(pytest tests/unit/strategy/ tests/unit/risk/ tests/integration/strategy_risk_integration_test.py -v --tb=short)"
+      "Bash(pytest tests/unit/strategy/ tests/unit/risk/ tests/integration/strategy_risk_integration_test.py -v --tb=short)",
+      "Bash(curl:*)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(pkill -f \"uvicorn.run\\(app\")",
+      "Bash(pytest tests/unit/models/test_signal.py -v)",
+      "Bash(pytest tests/unit/models/test_models.py -v)",
+      "Bash(pytest tests/unit/agents/strategy_agent/test_compute_features.py -v)",
+      "Bash(pytest tests/unit/agents/strategy_agent/test_agent.py -v)",
+      "Bash(pytest tests/unit/agents/risk_agent/test_stop_loss.py -v)",
+      "Bash(pytest tests/unit/agents/risk_agent/test_position_sizing.py -v)",
+      "Bash(pytest tests/unit/test_audit.py -v)",
+      "Bash(pytest tests/unit/agents/ tests/unit/strategy/ tests/unit/risk/ -v --tb=short)",
+      "Bash(pytest tests/unit/agents/ tests/unit/strategy/ tests/unit/risk/ tests/integration/ -v --tb=short)",
+      "Bash(sed -i '' 's/from datetime import date, datetime$/from datetime import date, datetime, timezone/' tests/integration/test_agent_integration.py tests/unit/agents/test_manager_agent.py)",
+      "Bash(sed -i '' 's/from datetime import datetime$/from datetime import datetime, timezone/' tests/unit/agents/risk_agent/test_agent.py tests/unit/agents/risk_agent/test_position_sizing.py)"
     ]
   }
 }

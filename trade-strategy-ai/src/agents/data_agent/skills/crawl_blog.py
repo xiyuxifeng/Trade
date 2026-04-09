@@ -12,7 +12,7 @@ from src.common.config import AppConfig, CrawlSourceConfig
 from src.common.utils import append_jsonl, ensure_dir, read_json, write_json
 
 
-LOW_VALUE_COMMENTS = {"谢谢", "感谢", "打卡", "点赞", "666"}
+LOW_VALUE_COMMENTS = {"谢谢", "感谢", "打卡", "点赞", "666", "先赞后看"}
 
 
 @dataclass(frozen=True)

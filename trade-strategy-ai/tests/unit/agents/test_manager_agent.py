@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -201,7 +201,7 @@ async def test_evaluate_signal_success(tmp_path: Path) -> None:
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={}
     )):
         # Mock RiskAgent
@@ -210,7 +210,7 @@ async def test_evaluate_signal_success(tmp_path: Path) -> None:
             symbol="000001",
             side=SignalSide.BUY,
             confidence=0.75,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             triggered_rules=[],
             synthesis_mode=SynthesisMode.PRIORITY,
             entry_price=None,

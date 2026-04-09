@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from src.agents.risk_agent.skills.position_sizing import calculate_position_size
 from src.strategy.types import PositionSizeType
 from src.risk.types import AccountSnapshot
@@ -8,7 +8,7 @@ from src.risk.types import AccountSnapshot
 async def test_calculate_position_size_success():
     account = AccountSnapshot(
         account_id="test",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         net_value=100000.0,
         cash=50000.0,
         total_position_value=50000.0,

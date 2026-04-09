@@ -1,7 +1,7 @@
 """审计日志"""
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def log_agent_call(
         error: 错误信息（如有）
     """
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "agent": agent,
         "action": action,
         "input": _sanitize(input_data),

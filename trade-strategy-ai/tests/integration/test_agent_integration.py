@@ -1,6 +1,6 @@
 """Agent 集成测试"""
 import pytest
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
@@ -78,7 +78,7 @@ async def test_full_pipeline_success(mock_setup):
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={},
     )
 
@@ -88,7 +88,7 @@ async def test_full_pipeline_success(mock_setup):
         symbol="000001",
         side=SignalSide.BUY,
         confidence=0.75,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         triggered_rules=["rule1"],
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=PriceSpec(type="limit", value=10.0),
@@ -145,7 +145,7 @@ async def test_risk_agent_rejection(mock_setup):
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={},
     )
 
@@ -155,7 +155,7 @@ async def test_risk_agent_rejection(mock_setup):
         symbol="000001",
         side=SignalSide.HOLD,  # 拒绝后变为 HOLD
         confidence=0.0,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         triggered_rules=["rule1"],
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,

@@ -8,7 +8,7 @@ Phase 0 responsibilities:
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from src.agents.data_agent.agent import DataAgent
@@ -436,7 +436,7 @@ class ManagerAgent:
         from src.risk.types import AccountSnapshot
         account = AccountSnapshot(
             account_id="default",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             net_value=100000.0,
             cash=50000.0,
             total_position_value=50000.0,
@@ -460,7 +460,7 @@ class ManagerAgent:
                 features_snapshot={},
                 market_state=market_data,
                 rules_snapshot=[],
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
             self.signal_versioning.record(signal=final_signal, context=context)
 

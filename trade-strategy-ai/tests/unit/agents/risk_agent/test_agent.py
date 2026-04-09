@@ -3,7 +3,7 @@ from unittest.mock import patch
 from src.agents.risk_agent.agent import RiskAgent
 from src.strategy.types import RawSignal, SignalSide, SynthesisMode, PositionSize, PositionSizeType
 from src.risk.types import AccountSnapshot, StopLossLevel, StopLossMode
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @pytest.fixture
@@ -23,13 +23,13 @@ async def test_check_pass(risk_agent):
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={}
     )
 
     account = AccountSnapshot(
         account_id="test",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         net_value=100000.0,
         cash=50000.0,
         total_position_value=50000.0,
@@ -68,13 +68,13 @@ async def test_check_reject_on_drawdown_failure(risk_agent):
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={}
     )
 
     account = AccountSnapshot(
         account_id="test",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         net_value=100000.0,
         cash=50000.0,
         total_position_value=50000.0,
@@ -106,13 +106,13 @@ async def test_check_exception_handling(risk_agent):
         synthesis_mode=SynthesisMode.PRIORITY,
         entry_price=None,
         position_size=None,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={}
     )
 
     account = AccountSnapshot(
         account_id="test",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         net_value=100000.0,
         cash=50000.0,
         total_position_value=50000.0,

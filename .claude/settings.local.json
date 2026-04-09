@@ -23,7 +23,18 @@
       "Bash(xxd)",
       "Bash(mv /tmp/test_lark_parser_clean.py /Users/wanghui/Documents/Claude/trade-strategy-ai/tests/unit/persona/test_lark_parser.py)",
       "Bash(ls -la /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/persona/*.py)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(pytest tests/unit/strategy/test_feature_engine.py -v)",
+      "Bash(pytest tests/unit/strategy/test_rule_evaluator.py -v)",
+      "Bash(pytest tests/unit/strategy/test_signal_synthesizer.py -v)",
+      "Bash(pytest tests/unit/strategy/test_signal_version.py -v)",
+      "Bash(pytest tests/unit/risk/test_position_manager.py -v)",
+      "Bash(pytest tests/unit/risk/test_position_manager.py -v --import-mode=importlib)",
+      "Bash(pytest tests/unit/risk/test_stop_loss.py -v)",
+      "Bash(pytest tests/unit/risk/test_take_profit.py -v)",
+      "Bash(pytest tests/integration/strategy_risk_integration_test.py -v)",
+      "Bash(pytest tests/unit/strategy/ tests/unit/risk/ tests/integration/strategy_risk_integration_test.py -v --tb=short)"
     ]
   }
 }

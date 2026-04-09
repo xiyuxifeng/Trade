@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
-import json
+from datetime import date, datetime
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
+import json
 
 import pytest
 
@@ -11,7 +13,7 @@ from src.common.config import AppConfig, DataConfig, StorageConfig, TraderConfig
 from src.schemas.contracts import DailyReport, TradeEntry, TradeIdea
 from src.trader_memory.schemas import TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
-from src.strategy.types import SignalSide
+from src.strategy.types import SignalSide, SynthesisMode, RawSignal, Signal
 
 
 def _make_config() -> AppConfig:
@@ -175,3 +177,48 @@ async def test_list_signals_filters_by_symbol(tmp_path: Path) -> None:
     # 过滤 600000.SH
     versions_sh = manager.signal_versioning.list_versions(symbol="600000.SH", limit=100)
     assert all(v.signal.symbol == "600000.SH" for v in versions_sh)
+
+
+@pytest.mark.asyncio
+async def test_evaluate_signal_success(tmp_path: Path) -> None:
+    """P4-024: 验证 evaluate_signal 成功调用 StrategyAgent 和 RiskAgent"""
+    config = _make_config()
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+
+    trade_idea = MagicMock()
+    trade_idea.symbol = "000001"
+    trade_idea.idea_id = uuid4()
+
+    market_data = {"last_price": 10.0, "volume": 1000000}
+
+    # Mock StrategyAgent
+    with patch.object(manager.strategy_agent, 'generate_raw_signal', return_value=RawSignal(
+        signal_id="test",
+        symbol="000001",
+        side=SignalSide.BUY,
+        confidence=0.75,
+        triggered_rules=[],
+        synthesis_mode=SynthesisMode.PRIORITY,
+        entry_price=None,
+        position_size=None,
+        timestamp=datetime.utcnow(),
+        metadata={}
+    )):
+        # Mock RiskAgent
+        with patch.object(manager.risk_agent, 'check', return_value=Signal(
+            signal_id="test",
+            symbol="000001",
+            side=SignalSide.BUY,
+            confidence=0.75,
+            timestamp=datetime.utcnow(),
+            triggered_rules=[],
+            synthesis_mode=SynthesisMode.PRIORITY,
+            entry_price=None,
+            position_size=None,
+            stop_loss=None,
+            take_profit=None,
+            metadata={}
+        )):
+            result = await manager.evaluate_signal(trade_idea, market_data)
+            assert result is not None
+            assert result.side == SignalSide.BUY

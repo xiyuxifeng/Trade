@@ -8,7 +8,7 @@ Phase 0 responsibilities:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from src.agents.data_agent.agent import DataAgent
@@ -40,6 +40,16 @@ from src.trader_profile.service import default_profiles_path, load_trader_profil
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 from src.market_data.service import MarketDataCache
+from src.strategy.signal_version import SignalVersioning
+from src.strategy.types import (
+    PriceSpec,
+    PositionSize,
+    PositionSizeType,
+    Signal,
+    SignalContext,
+    SignalSide,
+    SynthesisMode,
+)
 
 
 class ManagerAgent:
@@ -56,6 +66,11 @@ class ManagerAgent:
         self.trader_profiles = self._load_trader_profiles()
 
         self.data_agent = DataAgent(config=config)
+
+        # 信号版本控制 - 记录所有生成的交易想法
+        self.signal_versioning = SignalVersioning(
+            storage_path=self.output_dir / "signals"
+        )
 
         self._persona_router: PersonaRouter | None = None
         if getattr(self.config, "persona", None) is not None and self.config.persona.enable:
@@ -239,6 +254,60 @@ class ManagerAgent:
             details=review_details.model_dump(),
         )
 
+    def _record_ideas_as_signals(self, ideas: list["TradeIdea"], as_of_date: date) -> None:
+        """将交易想法记录为信号版本，用于持久化存储和回放。
+
+        P4-025: 信号输出持久化存储
+        """
+        for idea in ideas:
+            # 构建信号 ID：idea_{idea_id}
+            signal_id = f"idea_{idea.idea_id}"
+
+            # 将 TradeIdea 映射为 Signal
+            signal = Signal(
+                signal_id=signal_id,
+                symbol=idea.symbol,
+                side=SignalSide.HOLD,  # TradeIdea 不区分买卖方向，统一为 HOLD
+                confidence=idea.confidence or 0.0,
+                timestamp=datetime.combine(as_of_date, datetime.min.time()),
+                triggered_rules=[idea.trader_id],  # 交易员 ID 作为触发规则标记
+                synthesis_mode=SynthesisMode.PRIORITY,
+                entry_price=PriceSpec(
+                    type=idea.entry.type if idea.entry else "limit",
+                    value=float(idea.entry.price) if idea.entry and idea.entry.price else 0.0,
+                ) if idea.entry else None,
+                position_size=None,
+                stop_loss=None,
+                take_profit=None,
+                version="v1",
+                metadata={
+                    "idea_id": str(idea.idea_id),
+                    "trader_id": idea.trader_id,
+                    "target_price": idea.target_price,
+                    "stop_loss_price": idea.stop_loss_price,
+                    "rationale": idea.rationale,
+                    "invalidation": idea.invalidation,
+                    "style_cluster_id": idea.style_cluster_id,
+                    "style_cluster_label": idea.style_cluster_label,
+                    "style_score": idea.style_score,
+                    "style_reasons": idea.style_reasons or [],
+                    "as_of_date": as_of_date.isoformat(),
+                },
+            )
+
+            # 构建上下文
+            context = SignalContext(
+                features_snapshot={},
+                market_state={},
+                rules_snapshot=[],
+                timestamp=datetime.combine(as_of_date, datetime.min.time()),
+            )
+
+            # 记录信号版本
+            self.signal_versioning.record(signal=signal, context=context)
+
+        self.logger.info(f"Recorded {len(ideas)} ideas as signal versions")
+
     async def run_pre_market(self, *, as_of_date: date, force: bool = False) -> DailyReport:
         """Collect ideas and persist the daily pre-market report."""
 
@@ -317,6 +386,10 @@ class ManagerAgent:
                 )
             else:
                 report.risks.append("persona.enable=true but clusters_path missing or not found")
+
+        # P4-025: 记录信号版本到持久化存储
+        self._record_ideas_as_signals(ideas=ideas, as_of_date=as_of_date)
+
         write_json(report_path, report.model_dump())
         return report
 

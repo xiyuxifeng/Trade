@@ -1,0 +1,21 @@
+{
+  "signal": {
+    "signal_id": "get-074",
+    "symbol": "TEST",
+    "side": "BUY",
+    "confidence": 0.8,
+    "timestamp": "2026-04-09T17:28:30.046352",
+    "triggered_rules": [],
+    "synthesis_mode": null,
+    "entry_price": null,
+    "position_size": null,
+    "version": "v1",
+    "metadata": {}
+  },
+  "context": {
+    "features_snapshot": {},
+    "market_state": {},
+    "rules_snapshot": [],
+    "timestamp": "2026-04-09T17:28:30.046358"
+  }
+}

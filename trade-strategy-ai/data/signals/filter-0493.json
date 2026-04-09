@@ -1,0 +1,21 @@
+{
+  "signal": {
+    "signal_id": "filter-0493",
+    "symbol": "SYM3",
+    "side": "SELL",
+    "confidence": 0.9299999999999999,
+    "timestamp": "2026-04-09T17:28:30.246362",
+    "triggered_rules": [],
+    "synthesis_mode": null,
+    "entry_price": null,
+    "position_size": null,
+    "version": "v1",
+    "metadata": {}
+  },
+  "context": {
+    "features_snapshot": {},
+    "market_state": {},
+    "rules_snapshot": [],
+    "timestamp": "2026-04-09T17:28:30.246367"
+  }
+}

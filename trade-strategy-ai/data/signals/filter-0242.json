@@ -1,0 +1,21 @@
+{
+  "signal": {
+    "signal_id": "filter-0242",
+    "symbol": "SYM2",
+    "side": "BUY",
+    "confidence": 0.9199999999999999,
+    "timestamp": "2026-04-09T17:28:30.159264",
+    "triggered_rules": [],
+    "synthesis_mode": null,
+    "entry_price": null,
+    "position_size": null,
+    "version": "v1",
+    "metadata": {}
+  },
+  "context": {
+    "features_snapshot": {},
+    "market_state": {},
+    "rules_snapshot": [],
+    "timestamp": "2026-04-09T17:28:30.159270"
+  }
+}

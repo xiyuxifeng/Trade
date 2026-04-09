@@ -595,6 +595,50 @@ def run_after_close(
 	typer.echo(f"Output dir: {mgr.output_dir}")
 
 
+@app.command("list-signals")
+def list_signals(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	symbol: str | None = typer.Option(None, help="按标的代码过滤"),
+	since: str | None = typer.Option(None, help="过滤起始日期 YYYY-MM-DD"),
+	limit: int = typer.Option(100, help="返回数量限制"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""列出已存储的信号版本（P4-025）。
+
+	用于查询盘前生成的交易信号及其上下文。
+	"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	mgr = ManagerAgent(config=loaded.config, base_dir=base_dir)
+
+	# 解析日期
+	since_date = None
+	if since:
+		from datetime import datetime as dt
+
+		since_date = dt.fromisoformat(since).date()
+
+	versions = mgr.signal_versioning.list_versions(
+		symbol=symbol,
+		since=since_date,
+		limit=limit,
+	)
+
+	if not versions:
+		typer.echo("No signals found.")
+		return
+
+	typer.echo(f"Found {len(versions)} signal(s):")
+	for v in versions:
+		s = v.signal
+		typer.echo(
+			f"  {s.signal_id} | {s.symbol} | side={s.side.value} | "
+			f"confidence={s.confidence:.2f} | {s.metadata.get('trader_id', 'N/A')}"
+		)
+
+
 @app.command("persona-init-sample")
 def persona_init_sample(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),

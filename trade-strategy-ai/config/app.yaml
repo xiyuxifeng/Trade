@@ -75,7 +75,7 @@ crawl:
       # 认证模式：目前首版为 cookie；后续可扩展 playwright_login 等
       mode: cookie
       # 淘股吧 Cookie（建议通过环境变量注入）
-      cookie: "${TGB_COOKIE}"  # 已清除
+      cookie: null  # 已清除
 
   # 抓取来源列表（支持同站点多作者增量抓取）
   sources:
@@ -87,7 +87,7 @@ crawl:
       # 作者展示名（用于标记“作者/读者”评论身份）
       author_name: "javxsp"
       # 列表页 URL（用于遍历文章；首版按列表从新到旧增量扫描）
-      list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
+      list_url: "https://www.tgb.cn/user/blog/moreTopic?pageNum=2&pageNo=1&sortFlag=T&userID=10461311"
     # - source: tgb
     #   site: tgb.cn
     #   author_id: "10461311"
@@ -96,7 +96,7 @@ crawl:
   throttling:
     # 每次请求之间的随机间隔区间（秒）
     min_interval_seconds: 1.0
-    max_interval_seconds: 2.0
+    max_interval_seconds: 5.0
     # 触发 403/429/非登录态等失败时的退避序列（秒），按序重试
     backoff_seconds: [5, 15, 30]
 

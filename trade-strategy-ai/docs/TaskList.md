@@ -353,8 +353,8 @@
 - [ ] P4-025 实现信号输出的持久化存储
 
 ### Testing & Validation (测试验证)
-- [ ] P4-026 编写 Strategy Agent 单元测试
-- [ ] P4-027 编写 Risk Agent 单元测试
+- [x] P4-026 编写 Strategy Agent 单元测试
+- [x] P4-027 编写 Risk Agent 单元测试
 - [ ] P4-028 压力测试（高频信号输入）
 - [ ] P4-029 手工验证信号生成的合理性
 

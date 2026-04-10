@@ -48,7 +48,8 @@
       "Bash(pytest tests/unit/agents/ tests/unit/strategy/ tests/unit/risk/ -v --tb=short)",
       "Bash(pytest tests/unit/agents/ tests/unit/strategy/ tests/unit/risk/ tests/integration/ -v --tb=short)",
       "Bash(sed -i '' 's/from datetime import date, datetime$/from datetime import date, datetime, timezone/' tests/integration/test_agent_integration.py tests/unit/agents/test_manager_agent.py)",
-      "Bash(sed -i '' 's/from datetime import datetime$/from datetime import datetime, timezone/' tests/unit/agents/risk_agent/test_agent.py tests/unit/agents/risk_agent/test_position_sizing.py)"
+      "Bash(sed -i '' 's/from datetime import datetime$/from datetime import datetime, timezone/' tests/unit/agents/risk_agent/test_agent.py tests/unit/agents/risk_agent/test_position_sizing.py)",
+      "Bash(psql:*)"
     ]
   }
 }

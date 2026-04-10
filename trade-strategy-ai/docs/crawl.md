@@ -364,3 +364,32 @@ python -m cli.main pipeline-run --config config/app.yaml
 ```
 
 **之后每天或定期重复第 4 步即可**，系统会自动增量爬取新文章并存入数据库。
+
+
+## 不抓取直接入库
+
+  最简单的方法：删缓存，让 pipeline 重新处理
+  ```
+  # 删掉 clean 和 validate 的缓存输出
+  rm data/processed/pipeline/clean/10461311.articles.cleaned.jsonl
+  rm data/processed/pipeline/validate/10461311.articles.cleaned.validated.jsonl
+
+  # 重置 crawl 增量状态（这样 pipeline-run 会从头处理）
+  rm data/processed/crawl/tgb/10461311/state.json
+
+  # 跑 pipeline，用 --skip-crawl 跳过爬虫，直接用现有的 102 条数据
+  python -m cli.main pipeline-run --config config/app.yaml --skip-crawl --force
+
+  这样：
+  articles.jsonl (102条)
+    ↓ [clean, --force 重新处理]
+  cleaned.jsonl (102条)
+    ↓ [validate, --force 重新处理]
+  validated.jsonl (102条)
+    ↓ [store]
+    → 写入数据库 102 条
+
+  如果你连都不想删
+
+  直接跑 Python 手动触发 store（绕过 clean/validate 缓存问题）：
+  ```

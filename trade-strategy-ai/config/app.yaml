@@ -83,16 +83,16 @@ crawl:
       site: tgb.cn
       trader_id: javxsp
       # 作者 ID（站点内唯一标识）
-      author_id: “10461311”
+      author_id: "10461311"
       # 作者展示名（用于标记”作者/读者”评论身份）
-      author_name: “javxsp”
+      author_name: javxsp
       # 列表页 URL（用于遍历文章；分页参数 ?pageNo=N&sortFlag=T&userID=xxx 由代码拼接）
-      list_url: “https://www.tgb.cn/user/blog/moreTopic”
+      list_url: https://www.tgb.cn/user/blog/moreTopic
     # - source: tgb
     #   site: tgb.cn
-    #   author_id: "10461311"
-    #   author_name: "javxsp"
-    #   list_url: "https://www.tgb.cn/user/blog/moreTopic?userID=10461311"
+    #   author_id: 10461311
+    #   author_name: javxsp
+    #   list_url: https://www.tgb.cn/user/blog/moreTopic?userID=10461311
   throttling:
     # 每次请求之间的随机间隔区间（秒）
     min_interval_seconds: 1.0

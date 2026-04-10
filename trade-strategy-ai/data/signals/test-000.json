@@ -4,7 +4,7 @@
     "symbol": "TEST",
     "side": "BUY",
     "confidence": 0.8,
-    "timestamp": "2026-04-09T17:28:29.169275",
+    "timestamp": "2026-04-09T23:44:52.448312",
     "triggered_rules": [],
     "synthesis_mode": null,
     "entry_price": null,
@@ -16,6 +16,6 @@
     "features_snapshot": {},
     "market_state": {},
     "rules_snapshot": [],
-    "timestamp": "2026-04-09T17:28:29.169280"
+    "timestamp": "2026-04-09T23:44:52.448321"
   }
 }

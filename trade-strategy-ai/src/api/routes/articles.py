@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from io import BytesIO
+
+from sqlalchemy import or_
 from typing import Any
 
 import pandas as pd
@@ -12,10 +14,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import verify_api_key
 from src.api.schemas import ArticleResponse
+from src.common.config import load_app_config
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
 
 router = APIRouter(prefix="/articles", tags=["articles"])
+
+
+def _build_trader_id_condition(trader_id: str | None, config: Any):
+    """Build SQLAlchemy filter condition for trader_id.
+
+    Logic:
+    - If trader_id is None, return None (no filter)
+    - First try raw_payload['trader_id'] match
+    - Then fall back to author_id mapping via crawl.sources config
+    """
+    if not trader_id:
+        return None
+
+    # 安全获取 sources 列表
+    sources = getattr(getattr(config, 'crawl', None), 'sources', None) or []
+
+    # Build trader_id → author_ids mapping from crawl sources
+    author_ids = [
+        src.author_id
+        for src in sources
+        if getattr(src, 'author_id', None) and getattr(src, 'trader_id', None) == trader_id
+    ]
+
+    if author_ids:
+        return or_(
+            BlogArticle.raw_payload["trader_id"].astext == trader_id,
+            BlogArticle.author_id.in_(author_ids),
+        )
+    return BlogArticle.raw_payload["trader_id"].astext == trader_id
 
 
 @router.get("", response_model=dict[str, Any])
@@ -35,6 +67,14 @@ async def list_articles(
     async with async_session_factory() as session:
         query = select(BlogArticle)
         count_query = select(func.count(BlogArticle.id))
+
+        # Apply trader_id filter
+        if trader_id:
+            cfg = load_app_config("config/app.yaml").config
+            condition = _build_trader_id_condition(trader_id, cfg)
+            if condition is not None:
+                query = query.where(condition)
+                count_query = count_query.where(condition)
 
         if author_id:
             query = query.where(BlogArticle.author_id == author_id)
@@ -96,12 +136,22 @@ async def export_articles(
     source: str | None = None,
     published_after: datetime | None = None,
     published_before: datetime | None = None,
+    trader_id: str | None = None,
     _: str = Depends(verify_api_key),
 ):
     """Export articles to CSV/JSON/Parquet."""
     async with async_session_factory() as session:
         query = select(BlogArticle)
         count_query = select(func.count(BlogArticle.id))
+
+        # Apply trader_id filter
+        if trader_id:
+            cfg = load_app_config("config/app.yaml").config
+            condition = _build_trader_id_condition(trader_id, cfg)
+            if condition is not None:
+                query = query.where(condition)
+                count_query = count_query.where(condition)
+
         query, count_query = _articles_query_filters(query, count_query, author_id, source, published_after, published_before)
         query = query.order_by(BlogArticle.published_at.desc())
 

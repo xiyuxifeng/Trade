@@ -8,11 +8,13 @@ Phase 0 responsibilities:
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from src.agents.data_agent.agent import DataAgent
 from src.agents.trader_agent.agent import TraderAgent
+from src.agents.strategy_agent.agent import StrategyAgent
+from src.agents.risk_agent.agent import RiskAgent
 from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.utils import append_jsonl, ensure_dir, read_json, write_json
@@ -66,6 +68,8 @@ class ManagerAgent:
         self.trader_profiles = self._load_trader_profiles()
 
         self.data_agent = DataAgent(config=config)
+        self.strategy_agent = StrategyAgent()
+        self.risk_agent = RiskAgent()
 
         # 信号版本控制 - 记录所有生成的交易想法
         self.signal_versioning = SignalVersioning(
@@ -221,12 +225,14 @@ class ManagerAgent:
         current_price: float,
         return_pct: float,
         threshold: float,
+        memory_id: str | None = None,
     ) -> AgentTask:
         """Convert an underperforming idea into a structured review task.
 
         P2-109A 闭环: EvaluationResult → ReviewTask created → Trader writes back review note
         """
         trigger_reason = ReviewTriggerReason.loss if return_pct < 0 else ReviewTriggerReason.below_expected
+        writeback_status = ReviewWritebackStatus.written if memory_id else ReviewWritebackStatus.pending
 
         review_details = ReviewTaskDetails(
             review_type="trader_review",
@@ -243,7 +249,8 @@ class ManagerAgent:
                 threshold=round(threshold, 6),
                 as_of_date=as_of_date,
             ),
-            writeback_status=ReviewWritebackStatus.pending,
+            writeback_status=writeback_status,
+            memory_id=memory_id,
         )
 
         return AgentTask(
@@ -329,6 +336,13 @@ class ManagerAgent:
             )
             ideas.extend(trader_ideas)
 
+            # P4-024: 评估每个想法
+            evaluated_signals = []
+            for idea in trader_ideas:
+                signal = await self.evaluate_signal(idea, {})
+                if signal:
+                    evaluated_signals.append(signal)
+
             # generate tasks for missing price data in watchlist
             missing_symbols = [s for s in trader_cfg.watchlist if s not in self.config.data.mock_prices]
             for s in missing_symbols:
@@ -392,6 +406,65 @@ class ManagerAgent:
 
         write_json(report_path, report.model_dump())
         return report
+
+    async def evaluate_signal(
+        self,
+        trade_idea: "TradeIdea",
+        market_data: dict[str, Any]
+    ) -> Signal | None:
+        """
+        评估交易想法：StrategyAgent 合成 + RiskAgent 风控
+
+        Args:
+            trade_idea: 交易想法
+            market_data: 市场数据
+
+        Returns:
+            最终 Signal 或 None（拒绝）
+        """
+        # 1. StrategyAgent 生成 RawSignal
+        raw_signal = await self.strategy_agent.generate_raw_signal(
+            symbol=trade_idea.symbol,
+            trade_idea=trade_idea,
+            market_data=market_data,
+            features={},  # 可预计算
+            rules=[],      # 可从配置获取
+            synthesis_mode=SynthesisMode.PRIORITY
+        )
+
+        # 2. 获取 AccountSnapshot（模拟）
+        from src.risk.types import AccountSnapshot
+        account = AccountSnapshot(
+            account_id="default",
+            timestamp=datetime.now(timezone.utc),
+            net_value=100000.0,
+            cash=50000.0,
+            total_position_value=50000.0,
+            positions=[],
+            daily_pnl=0.0,
+            total_pnl=0.0
+        )
+
+        # 3. RiskAgent 风控检查
+        final_signal = await self.risk_agent.check(
+            raw_signal=raw_signal,
+            account=account,
+            market_data=market_data,
+            risk_config=self.config.evaluation or {}
+        )
+
+        # 4. 存储
+        if not final_signal.side == SignalSide.HOLD and final_signal.side != "HOLD":
+            # 记录到 SignalVersioning
+            context = SignalContext(
+                features_snapshot={},
+                market_state=market_data,
+                rules_snapshot=[],
+                timestamp=datetime.now(timezone.utc)
+            )
+            self.signal_versioning.record(signal=final_signal, context=context)
+
+        return final_signal
 
     async def run_after_close(self, *, as_of_date: date, force: bool = False) -> EvaluationResult:
         """Evaluate ideas against the latest price context and emit tasks."""
@@ -491,17 +564,10 @@ class ManagerAgent:
                 )
             )
             if (self.config.evaluation.loss_trigger and return_pct < 0) or (return_pct < min_ret):
-                review_task = self._build_review_task(
-                    idea=idea,
-                    as_of_date=as_of_date,
-                    entry_price=float(entry_price),
-                    current_price=float(current_price),
-                    return_pct=return_pct,
-                    threshold=min_ret,
-                )
-                self._append_task(review_task)
-                # P2-109A: track memory_id in review task for closed-loop traceability
-                trigger_reason = ReviewTriggerReason(review_task.details["trigger_reason"])
+                # 1. 先计算 trigger_reason（供后续使用）
+                trigger_reason = ReviewTriggerReason.loss if return_pct < 0 else ReviewTriggerReason.below_expected
+
+                # 2. 创建 memory，获取 memory_id
                 memory = self._append_review_memory(
                     as_of_date=as_of_date,
                     idea=idea,
@@ -511,9 +577,21 @@ class ManagerAgent:
                     threshold=min_ret,
                     trigger_reason=trigger_reason,
                 )
-                # Update writeback status (in memory store, not in the already-queued task)
-                review_task.details["writeback_status"] = ReviewWritebackStatus.written.value
-                review_task.details["memory_id"] = str(memory.memory_id)
+                memory_id = str(memory.memory_id)
+
+                # 3. 构建任务（带 memory_id，此时 writeback_status=written）
+                review_task = self._build_review_task(
+                    idea=idea,
+                    as_of_date=as_of_date,
+                    entry_price=float(entry_price),
+                    current_price=float(current_price),
+                    return_pct=return_pct,
+                    threshold=min_ret,
+                    memory_id=memory_id,
+                )
+
+                # 4. 落盘（此时 task 已包含完整信息）
+                self._append_task(review_task)
 
         summary = [
             f"Evaluated {len(evaluations)} ideas",

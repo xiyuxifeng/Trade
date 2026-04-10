@@ -139,7 +139,7 @@
 
 补充（去重能力，待后续完善）：
 - [x] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
-- [x] P1-026J dedup_task 重构/扩展：**pipeline 无交易数据输入，待确认数据入口后接入或移除**
+- [ ] P1-026J dedup_task 重构/扩展：**pipeline 无交易数据输入，待确认数据入口后接入或移除**
 
 ### API Layer (API 接口层)
 - [x] P1-027 设计数据查询 API（FastAPI）
@@ -149,12 +149,12 @@
 - [x] P1-031 实现数据导出接口（CSV/JSON/Parquet）
 
 补充（运行闭环接口）：
-- [x] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
-- [x] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告
+- [ ] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
+- [ ] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告接口
 
 补充（宿主薄壳接口，规划）：
 - [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）
-- [x] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
+- [ ] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler
 - [x] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
 - [ ] P1-037 蒸馏归纳文章分类：技术策略，复盘操作，无效文章
 - [ ] P1-038 文章内的图片处理 ？
@@ -193,19 +193,19 @@
 - [ ] P2-109 阈值触发复盘：evaluation.* 配置化
 
 补充（对应当前风险：闭环主链路缺画像/记忆写回）：
-- [x] P2-109A 明确盘后复盘写回的最小闭环：评估结果 → 复盘任务 → TraderMemory 写回
+- [ ] P2-109A 明确盘后复盘写回的最小闭环：评估结果 → 复盘任务 → TraderMemory 写回 **部分完成**
 - [ ] P2-109B 验证盘前/盘后链路都能消费最新画像与记忆，而不是只读取静态配置或默认模板
 - [x] P2-109C 为复盘任务定义最小字段集（触发原因、建议来源、评估快照、写回结果）
 - [ ] P2-109D 为复盘写回增加回归测试，确保成功/失败两种路径都可追踪
 
 ### Knowledge Agent - 文章理解 (NLP & 策略提取)
 - [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
-- [x] P2-002 创建策略概念库（主动性、被动性、量态）— **待用真实LLM抽取结果验证概念标签覆盖度**
+- [ ] P2-002 创建策略概念库（主动性、被动性、量态）— **待用真实LLM抽取结果验证概念标签覆盖度**
 - [ ] P2-003 开发概念抽取模块（LLM + Prompt）
 - [ ] P2-004 开发买卖规则抽取模块（条件、动作、参数）
 - [ ] P2-005 开发市场前置条件抽取（大盘、板块、风格、流动性）
-- [x] P2-006 实现 DSL 生成器（规则 → 可执行代码）— **待用真实抽取规则验证生成效果**
-- [x] P2-007 建立策略 DSL 验证和标准化流程 — **待用真实抽取数据验证流程**
+- [ ] P2-006 实现 DSL 生成器（规则 → 可执行代码）— **待用真实抽取规则验证生成效果**
+- [ ] P2-007 建立策略 DSL 验证和标准化流程 — **待用真实抽取数据验证流程**
 
 ### Behavior Agent - 行为分析 (特征工程)
 - [x] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
@@ -237,15 +237,15 @@
 - [ ] P2-V05 模块文档完成度 100%
 
 ### LLM 抽取质量提升（v1 第 1 轮）
-- [x] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — **待用真实LLM API验证**
-- [x] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — **待用真实LLM调用验证填充率**
-- [x] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— **逻辑完成，待真实场景验证**
-- [x] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — **待LLM可用后验证统计准确性**
+- [ ] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — **待用真实LLM API验证**
+- [ ] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — **待用真实LLM调用验证填充率**
+- [ ] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— **逻辑完成，待真实场景验证**
+- [ ] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — **待LLM可用后验证统计准确性**
 
 ### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
-- [x] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — **待用真实抽取数据验证**
-- [x] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — **待真实错误场景验证分类准确性**
-- [x] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — **待LLM调用后验证日志记录**
+- [ ] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — **待用真实抽取数据验证**
+- [ ] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — **待真实错误场景验证分类准确性**
+- [ ] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — **待LLM调用后验证日志记录**
 - [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
 
 ---
@@ -347,9 +347,9 @@
 - [x] P4-021 实现参数约束验证
 
 ### Strategy Agent Integration (Agent 集成)
-- [ ] P4-022 集成 Strategy Agent 主控逻辑
-- [ ] P4-023 集成 Risk Agent 主控逻辑
-- [ ] P4-024 实现两个 Agent 的通信接口
+- [x] P4-022 集成 Strategy Agent 主控逻辑
+- [x] P4-023 集成 Risk Agent 主控逻辑
+- [x] P4-024 实现两个 Agent 的通信接口
 - [x] P4-025 实现信号输出的持久化存储
 
 ### Testing & Validation (测试验证)

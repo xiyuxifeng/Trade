@@ -27,7 +27,8 @@ class TgbCrawler:
     """Minimal TouGouBa crawler with optional JS rendering support."""
 
     auth_provider: AuthProvider
-    list_url: str
+    list_url: str  # 列表页 base URL，不含分页参数
+    author_id: str  # 作者 ID，用于拼接分页 URL
     source: str = "tgb"
     min_interval: float = 1.0
     max_interval: float = 2.0
@@ -105,10 +106,11 @@ class TgbCrawler:
         articles: list[dict[str, str]] = []
         seen_urls: set[str] = set()
         page = 1
-        max_pages = 10  # safety limit
+        max_pages = 500  # safety limit
         while page <= max_pages:
             self._throttle()
-            url = f"{self.list_url}&page={page}" if "?" in self.list_url else f"{self.list_url}?page={page}"
+            # 拼接最终 URL: {list_url}?pageNo={page}&sortFlag=T&userID={author_id}
+            url = f"{self.list_url}?pageNo={page}&sortFlag=T&userID={self.author_id}"
             html = self._get_text(url)
             page_articles = self.parse_article_list(html)
             if not page_articles:
@@ -122,7 +124,7 @@ class TgbCrawler:
                     articles.append(article)
                     seen_urls.add(article["source_url"])
             # Stop if page returned fewer than a full page (likely last page)
-            if len(page_articles) < 100:
+            if len(page_articles) < 20:
                 break
             page += 1
         return articles

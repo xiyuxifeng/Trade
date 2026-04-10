@@ -43,7 +43,8 @@ def test_should_stop_incremental_scan_when_url_already_seen() -> None:
 def test_tgb_crawler_parses_article_detail_and_comments() -> None:
     crawler = TgbCrawler(
         auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
-        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        list_url="https://www.tgb.cn/user/blog/moreTopic",
+        author_id="10461311",
     )
     html = """
     <html>
@@ -82,7 +83,8 @@ def test_tgb_crawler_parses_article_detail_and_comments() -> None:
 def test_tgb_crawler_parses_article_list_with_relative_a_links() -> None:
     crawler = TgbCrawler(
         auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
-        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        list_url="https://www.tgb.cn/user/blog/moreTopic",
+        author_id="10461311",
     )
     html = """
     <html>
@@ -107,7 +109,8 @@ def test_tgb_crawler_parses_article_list_with_relative_a_links() -> None:
 def test_tgb_crawler_parses_comments_from_comment_data_blocks() -> None:
     crawler = TgbCrawler(
         auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
-        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        list_url="https://www.tgb.cn/user/blog/moreTopic",
+        author_id="10461311",
     )
     html = """
     <html>
@@ -155,7 +158,8 @@ def test_tgb_crawler_parses_comments_from_comment_data_blocks() -> None:
 def test_tgb_crawler_parses_comments_from_text_blocks() -> None:
     crawler = TgbCrawler(
         auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
-        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        list_url="https://www.tgb.cn/user/blog/moreTopic",
+        author_id="10461311",
     )
     html = """
     <html>
@@ -190,7 +194,8 @@ def test_tgb_crawler_parses_comments_from_text_blocks() -> None:
 def test_tgb_crawler_uses_rendered_html_when_render_js_enabled(monkeypatch) -> None:
     crawler = TgbCrawler(
         auth_provider=AuthProvider(site="tgb.cn", cookie="cookie-value"),
-        list_url="https://www.tgb.cn/user/blog/moreTopic?userID=10461311",
+        list_url="https://www.tgb.cn/user/blog/moreTopic",
+        author_id="10461311",
         render_js=True,
     )
     rendered_html = """

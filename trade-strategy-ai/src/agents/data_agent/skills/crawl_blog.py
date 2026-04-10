@@ -114,6 +114,7 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
         crawler = TgbCrawler(
             auth_provider=AuthProvider(site=source_cfg.site, cookie=auth.cookie if auth else None),
             list_url=source_cfg.list_url,
+            author_id=source_cfg.author_id,
             min_interval=throttle.min_interval_seconds,
             max_interval=throttle.max_interval_seconds,
             backoff_seconds=tuple(throttle.backoff_seconds),

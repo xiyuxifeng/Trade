@@ -1,1 +1,8 @@
 .worktrees/
+
+# Processed data - pipeline outputs, caches, runtime state
+data/processed/
+!data/processed/.gitkeep
+
+# Environment
+.env

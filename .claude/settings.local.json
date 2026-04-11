@@ -58,7 +58,8 @@
       "Bash(find /Users/wanghui/Documents/Claude/trade-strategy-ai -name \"*.pyc\" -delete)",
       "Bash(coverage report:*)",
       "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
-      "Bash(find . -name \"*.pyc\" -delete)"
+      "Bash(find . -name \"*.pyc\" -delete)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep \"revision = \" {}')"
     ]
   }
 }

@@ -19,12 +19,10 @@ from api.routers import run, reports
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
-    # 启动时设置配置路径
     config_path = Path("config/app.yaml")
     if config_path.exists():
         run.set_config_path(config_path)
     yield
-    # 关闭时清理资源（如有）
 
 
 app = FastAPI(
@@ -35,9 +33,11 @@ app = FastAPI(
 )
 
 # CORS 中间件
+# 注意：allow_credentials=True 时不能使用 allow_origins=["*"]
+# 生产环境应配置具体的域名列表
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

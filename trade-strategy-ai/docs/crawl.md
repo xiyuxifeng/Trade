@@ -142,23 +142,34 @@ python -m cli.main crawl --config config/app.yaml --max-articles 10
 
 每次爬取后在以下位置保存状态：
 
+**文件模式**：
 ```
 data/processed/crawl/tgb/10461311/state.json
+```
+
+**数据库模式**：
+```
+crawl_state 表
 ```
 
 保存内容：
 - `seen_urls`: 已见过的文章 URL 集合
 - `seen_hashes`: 已见过文章内容的 SHA256 哈希集合
-- `last_seen_article_url`: 最后一次看到的文章 URL
+- `last_seen_article_url`: 最后一次抓取的文章 URL（用于记录位置，不用于停止逻辑）
 - `last_seen_published_at`: 最后一篇文章的发布时间
 
-### 停止条件（代码位置：`src/agents/data_agent/skills/crawl_blog.py:70-87`）
+### 增量逻辑
 
-函数 `should_stop_incremental_scan()` 的判断逻辑：
+遍历文章列表时：
 
-1. 遇到 URL 已经在 `seen_urls` 中的文章 → **停止**
-2. 遇到 content_hash 已经在 `seen_hashes` 中的文章 → **停止**
-3. 文章发布时间 <= 上次最后看到的时间 → **停止**
+1. 检查 URL 是否在 `seen_urls` 中
+2. 如果在 `seen_urls` 中 → **跳过**，继续处理下一个
+3. 如果不在 `seen_urls` 中 → **抓取详情**，并加入 `seen_urls`
+4. 直到列表遍历完毕
+
+说明：
+- 不依赖 `last_seen_article_url` 作为停止条件
+- 适用于列表顺序为旧→新或新→旧的任意情况
 
 ---
 
@@ -367,6 +378,10 @@ python -m cli.main db-migrate --config config/app.yaml
 
 # 4) 一键爬取 + 入库（增量，可重复运行）
 python -m cli.main pipeline-run --config config/app.yaml
+
+# 5) 迁移crawl-state
+python -m cli.main migrate-crawl-state --config config/app.yaml
+
 ```
 
 **之后每天或定期重复第 4 步即可**，系统会自动增量爬取新文章并存入数据库。
@@ -482,3 +497,79 @@ python -m cli.main pipeline-run --use-db --from-step clean
 - 数据库写入会增加约 5-10% 的爬取时间
 - 需要确保 PostgreSQL 数据库可用
 - `raw_articles` 表中的 `is_processed=False` 记录表示未被 clean 流程处理
+
+---
+
+## 备份与恢复
+
+支持跨设备的完整数据迁移，包括数据库和增量状态。
+
+### 备份
+
+```bash
+# 备份到自动生成的目录（data/backups/YYYYMMDD-HHMMSS/）
+python -m cli.main backup-data --config config/app.yaml
+
+# 备份到指定目录
+python -m cli.main backup-data --config config/app.yaml --dest ./my-backup
+
+# 仅备份数据库，不包含 processed 目录
+python -m cli.main backup-data --config config/app.yaml --no-include-processed
+```
+
+### 恢复
+
+```bash
+# 从备份恢复（会覆盖现有数据，需要确认）
+python -m cli.main restore-data --config config/app.yaml --source ./my-backup --force
+```
+
+### 备份内容
+
+| 内容 | 说明 |
+|------|------|
+| 数据库表 | `blog_articles`, `crawl_state`, `raw_articles`, `trade_logs` 等所有表 |
+| processed 目录 | `data/processed/` 下的所有数据（包括 crawl 状态、报告等） |
+
+### 跨设备迁移步骤
+
+1. **设备 A - 备份数据**
+   ```bash
+   python -m cli.main backup-data --config config/app.yaml --dest ./trade-backup
+   ```
+
+2. **将备份目录拷贝到设备 B**
+   ```bash
+   scp -r ./trade-backup user@device-b:/path/to/trade-strategy-ai/
+   ```
+
+3. **设备 B - 恢复数据**
+   ```bash
+   python -m cli.main restore-data --config config/app.yaml --source ./trade-backup --force
+   ```
+
+4. **验证恢复**
+   ```bash
+   # 检查 crawl_state 表
+   python -c "
+   from src.db.session import session_scope
+   from src.models.crawl_state import CrawlState
+   from sqlalchemy import select
+   import asyncio
+   async def check():
+       async with session_scope() as session:
+           result = await session.execute(select(CrawlState))
+           for row in result.scalars():
+               print(f'source={row.source} author={row.author_id} seen_urls={len(row.seen_urls or [])}')
+   asyncio.run(check())
+   "
+   ```
+
+### 注意事项
+
+- 恢复操作会**覆盖**现有数据，请确保已备份重要数据
+- 备份目录包含完整的数据库快照，可以直接用于完整恢复
+- 建议在恢复后重新运行迁移以确保数据库结构最新
+  ```bash
+  python -m cli.main db-migrate --config config/app.yaml
+  ```

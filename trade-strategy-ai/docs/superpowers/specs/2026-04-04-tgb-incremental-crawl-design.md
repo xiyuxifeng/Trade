@@ -91,21 +91,26 @@ crawl:
 
 ### 3.4 增量策略
 
-列表页按从新到旧抓取，遇到已见文章时尽快停止。
+遍历整个文章列表，对每个 URL 进行增量判断：
 
-增量判断优先级：
+增量判断逻辑（按优先级）：
 
-1. `source_url` 已存在
-2. `content_hash` 已存在
-3. `published_at` 早于最近一次已确认的新文章边界
+1. `source_url` 已在 `seen_urls` 中 → **跳过**，继续处理下一个
+2. `source_url` 不在 `seen_urls` 中 → **抓取详情**，并加入 `seen_urls`
+3. 列表遍历完毕 → 增量抓取完成
+
+说明：
+- 不依赖 `last_seen_article_url` 作为停止条件
+- 只要 URL 未被抓取过，就继续处理
+- 适用于列表顺序为旧→新或新→旧的任意情况
 
 同时记录抓取状态到 `state.json`，包括：
 
-- `last_seen_article_url`
-- `last_seen_published_at`
-- `last_success_crawled_at`
-- `last_success_article_count`
-- `failure_stats`
+- `seen_urls`：所有已抓取的文章 URL 集合
+- `seen_hashes`：所有已抓取文章的 content_hash 集合
+- `last_seen_article_url`：最后抓取的 URL（用于记录位置，不用于停止逻辑）
+- `last_seen_published_at`：最后抓取文章的发布时间
+- `last_success_article_count`：本次成功抓取的文章数量
 
 ### 3.5 评论处理策略
 

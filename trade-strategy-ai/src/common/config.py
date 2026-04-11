@@ -123,6 +123,8 @@ class ApiConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     auth: ApiAuthConfig = Field(default_factory=ApiAuthConfig)
+    # 运行超时（秒），0 表示不限制
+    timeout_seconds: float = 0
 
 
 class LLMConfig(BaseModel):

@@ -897,6 +897,89 @@ def scheduler_start(
 	scheduler.start()
 
 
+@app.command("migrate-crawl-state")
+def migrate_crawl_state(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+):
+	"""将 state.json 中的增量抓取状态迁移到 crawl_state 表。
+
+	从 data/processed/crawl/{source}/{author_id}/state.json 读取状态，
+	写入数据库的 crawl_state 表。
+	"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	from datetime import datetime
+	from src.db.session import session_scope
+	from src.models.crawl_state import CrawlState
+	from src.common.utils import read_json
+	from sqlalchemy import select
+
+	migrated = 0
+	skipped = 0
+
+	for source_cfg in loaded.config.crawl.sources:
+		if not source_cfg.enabled:
+			continue
+
+		state_dir = base_dir / "data" / "processed" / "crawl" / source_cfg.source / source_cfg.author_id
+		state_path = state_dir / "state.json"
+
+		if not state_path.exists():
+			typer.echo(f"跳过 {source_cfg.source}/{source_cfg.author_id}: state.json 不存在")
+			skipped += 1
+			continue
+
+		state_data = read_json(state_path)
+		seen_urls = state_data.get("seen_urls", [])
+		seen_hashes = state_data.get("seen_hashes", [])
+		last_url = state_data.get("last_seen_article_url")
+		last_published = state_data.get("last_seen_published_at")
+
+		import asyncio
+		async def _upsert():
+			nonlocal migrated
+			async with session_scope() as session:
+				result = await session.execute(
+					select(CrawlState).where(
+						CrawlState.source == source_cfg.source,
+						CrawlState.author_id == source_cfg.author_id
+					)
+				)
+				existing = result.scalar_one_or_none()
+
+				if existing is None:
+					state = CrawlState(
+						source=source_cfg.source,
+						author_id=source_cfg.author_id,
+						seen_urls=seen_urls,
+						seen_hashes=seen_hashes,
+						last_seen_article_url=last_url,
+						last_seen_published_at=datetime.fromisoformat(last_published) if last_published else None,
+						last_success_article_count=state_data.get("last_success_article_count", 0),
+					)
+					session.add(state)
+				else:
+					# 如果数据库中已有数据且更完整，保留数据库版本
+					if len(existing.seen_urls or []) >= len(seen_urls):
+						typer.echo(f"保留数据库状态 {source_cfg.source}/{source_cfg.author_id}: DB有{len(existing.seen_urls)}条 >= JSON有{len(seen_urls)}条")
+						return
+					existing.seen_urls = seen_urls
+					existing.seen_hashes = seen_hashes
+					existing.last_seen_article_url = last_url
+					existing.last_seen_published_at = datetime.fromisoformat(last_published) if last_published else None
+					existing.last_success_article_count = state_data.get("last_success_article_count", 0)
+
+				typer.echo(f"迁移 {source_cfg.source}/{source_cfg.author_id}: {len(seen_urls)} URLs, {len(seen_hashes)} hashes")
+				migrated += 1
+
+		asyncio.run(_upsert())
+
+	typer.echo(f"迁移完成: {migrated} 个源已迁移, {skipped} 个跳过")
+
+
 def main() -> None:
 	app()
 

@@ -104,7 +104,17 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
     """
     if use_db:
         import asyncio
-        return asyncio.run(run_crawl_to_db(config, max_articles=max_articles))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # 没有运行中的事件循环，可以安全使用 asyncio.run()
+            return asyncio.run(run_crawl_to_db(config, max_articles=max_articles))
+        else:
+            # 已在事件循环中，创建新任务
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, run_crawl_to_db(config, max_articles=max_articles))
+                return future.result()
 
     results: list[str] = []
     for source_cfg in config.crawl.sources:
@@ -167,22 +177,14 @@ def crawl_source(
     latest_published_at = index.last_seen_published_at
 
     for item in crawler.fetch_article_list():
+        # 跳过已处理过的 URL
+        if item["source_url"] in seen_urls:
+            continue
+
+        # 继续抓取详情
         detail = crawler.fetch_article_detail(item["source_url"])
         content_text = detail.get("content_text", "")
         content_hash = compute_content_hash(content_text) if content_text else None
-        should_stop = should_stop_incremental_scan(
-            source_url=item["source_url"],
-            content_hash=content_hash,
-            published_at=None,
-            index=ExistingArticleIndex(
-                seen_urls=seen_urls,
-                seen_hashes=seen_hashes,
-                last_seen_article_url=latest_url,
-                last_seen_published_at=latest_published_at,
-            ),
-        )
-        if should_stop:
-            break
 
         comments = [
             asdict(
@@ -222,10 +224,9 @@ def crawl_source(
         seen_urls.add(item["source_url"])
         if content_hash:
             seen_hashes.add(content_hash)
-        if latest_url is None:
-            latest_url = item["source_url"]
-        if latest_published_at is None:
-            latest_published_at = item.get("published_at")
+        # 每次都更新为最新的 URL 和时间（用于断点续爬）
+        latest_url = item["source_url"]
+        latest_published_at = item.get("published_at")
         if max_articles is not None and written >= max_articles:
             break
 
@@ -399,23 +400,14 @@ async def crawl_source_to_db(
 
     async with session_scope() as session:
         for item in crawler.fetch_article_list():
+            # 跳过已处理过的 URL
+            if item["source_url"] in seen_urls:
+                continue
+
+            # 继续抓取详情
             detail = crawler.fetch_article_detail(item["source_url"])
             content_text = detail.get("content_text", "")
             content_hash = compute_content_hash(content_text) if content_text else None
-
-            should_stop = should_stop_incremental_scan(
-                source_url=item["source_url"],
-                content_hash=content_hash,
-                published_at=None,
-                index=ExistingArticleIndex(
-                    seen_urls=seen_urls,
-                    seen_hashes=seen_hashes,
-                    last_seen_article_url=latest_url,
-                    last_seen_published_at=latest_published_at,
-                ),
-            )
-            if should_stop:
-                break
 
             comments = [
                 asdict(
@@ -455,10 +447,9 @@ async def crawl_source_to_db(
             seen_urls.add(item["source_url"])
             if content_hash:
                 seen_hashes.add(content_hash)
-            if latest_url is None:
-                latest_url = item["source_url"]
-            if latest_published_at is None:
-                latest_published_at = item.get("published_at")
+            # 每次都更新为最新的 URL 和时间（用于断点续爬）
+            latest_url = item["source_url"]
+            latest_published_at = item.get("published_at")
             if max_articles is not None and written >= max_articles:
                 break
 

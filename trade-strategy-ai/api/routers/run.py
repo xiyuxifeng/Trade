@@ -5,6 +5,8 @@ P1-032: 实现手动触发接口 /run/pre_market、/run/after_close
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from datetime import date
 from pathlib import Path
 
@@ -19,18 +21,18 @@ router = APIRouter(prefix="/run", tags=["run"])
 
 
 # ============================================================================
-# 依赖项：加载配置和初始化 ManagerAgent
+# 线程安全的 ManagerAgent 单例
 # ============================================================================
 
 _config_path: Path | None = None
 _manager_agent: ManagerAgent | None = None
+_manager_lock = threading.Lock()
 
 
 def get_config_path() -> Path:
     """获取配置文件路径。"""
     global _config_path
     if _config_path is None:
-        # 默认路径，可在应用启动时通过 set_config_path 设置
         _config_path = Path("config/app.yaml")
     return _config_path
 
@@ -50,14 +52,24 @@ def get_base_dir() -> Path:
 
 
 def get_manager_agent() -> ManagerAgent:
-    """获取或创建 ManagerAgent 实例。"""
+    """获取或创建 ManagerAgent 实例（线程安全）。"""
     global _manager_agent
     if _manager_agent is None:
-        config_path = get_config_path()
-        base_dir = get_base_dir()
-        loaded = load_app_config(config_path)
-        _manager_agent = ManagerAgent(config=loaded.config, base_dir=base_dir)
+        with _manager_lock:
+            # 双重检查锁定
+            if _manager_agent is None:
+                config_path = get_config_path()
+                base_dir = get_base_dir()
+                loaded = load_app_config(config_path)
+                _manager_agent = ManagerAgent(config=loaded.config, base_dir=base_dir)
     return _manager_agent
+
+
+def get_timeout_seconds() -> float:
+    """获取运行超时配置。"""
+    config_path = get_config_path()
+    loaded = load_app_config(config_path)
+    return loaded.config.api.timeout_seconds
 
 
 # ============================================================================
@@ -98,13 +110,6 @@ class RunAfterCloseResponse(BaseModel):
     result: EvaluationResult | None = Field(default=None, description="完整考核数据")
 
 
-class ErrorResponse(BaseModel):
-    """错误响应。"""
-    status: str = "error"
-    error: str
-    detail: str | None = None
-
-
 # ============================================================================
 # API 端点
 # ============================================================================
@@ -116,6 +121,7 @@ class ErrorResponse(BaseModel):
         200: {"description": "盘前日报生成成功"},
         400: {"description": "请求参数错误"},
         404: {"description": "配置文件未找到"},
+        408: {"description": "请求超时"},
         500: {"description": "服务器内部错误"},
     },
 )
@@ -132,21 +138,18 @@ async def run_pre_market(
         request = RunPreMarketRequest()
 
     as_of_date = request.as_of_date or date.today()
+    timeout = get_timeout_seconds()
 
     try:
-        report = await mgr.run_pre_market(as_of_date=as_of_date, force=request.force)
-
-        html_path = None
-        if request.export_html:
-            html_path = str(mgr.export_daily_report_html(report=report))
-
-        return RunPreMarketResponse(
-            status="success",
-            as_of_date=as_of_date,
-            ideas_count=len(report.ideas),
-            output_dir=str(mgr.output_dir),
-            html_path=html_path,
-            report=report,
+        if timeout > 0:
+            async with asyncio.timeout(timeout):
+                report = await mgr.run_pre_market(as_of_date=as_of_date, force=request.force)
+        else:
+            report = await mgr.run_pre_market(as_of_date=as_of_date, force=request.force)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail=f"盘前日报生成超时（{timeout}秒）",
         )
     except FileNotFoundError as exc:
         raise HTTPException(
@@ -156,8 +159,21 @@ async def run_pre_market(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"盘前日报生成失败: {exc}",
+            detail="盘前日报生成失败",
         )
+
+    html_path = None
+    if request.export_html:
+        html_path = str(mgr.export_daily_report_html(report=report))
+
+    return RunPreMarketResponse(
+        status="success",
+        as_of_date=as_of_date,
+        ideas_count=len(report.ideas),
+        output_dir=str(mgr.output_dir),
+        html_path=html_path,
+        report=report,
+    )
 
 
 @router.post(
@@ -167,6 +183,7 @@ async def run_pre_market(
         200: {"description": "盘后考核生成成功"},
         400: {"description": "请求参数错误"},
         404: {"description": "配置文件未找到或缺少盘前日报"},
+        408: {"description": "请求超时"},
         500: {"description": "服务器内部错误"},
     },
 )
@@ -183,21 +200,18 @@ async def run_after_close(
         request = RunAfterCloseRequest()
 
     as_of_date = request.as_of_date or date.today()
+    timeout = get_timeout_seconds()
 
     try:
-        result = await mgr.run_after_close(as_of_date=as_of_date, force=request.force)
-
-        html_path = None
-        if request.export_html:
-            html_path = str(mgr.export_evaluation_html(result=result))
-
-        return RunAfterCloseResponse(
-            status="success",
-            as_of_date=as_of_date,
-            evaluations_count=len(result.evaluations),
-            output_dir=str(mgr.output_dir),
-            html_path=html_path,
-            result=result,
+        if timeout > 0:
+            async with asyncio.timeout(timeout):
+                result = await mgr.run_after_close(as_of_date=as_of_date, force=request.force)
+        else:
+            result = await mgr.run_after_close(as_of_date=as_of_date, force=request.force)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail=f"盘后考核生成超时（{timeout}秒）",
         )
     except FileNotFoundError as exc:
         raise HTTPException(
@@ -207,8 +221,21 @@ async def run_after_close(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"盘后考核生成失败: {exc}",
+            detail="盘后考核生成失败",
         )
+
+    html_path = None
+    if request.export_html:
+        html_path = str(mgr.export_evaluation_html(result=result))
+
+    return RunAfterCloseResponse(
+        status="success",
+        as_of_date=as_of_date,
+        evaluations_count=len(result.evaluations),
+        output_dir=str(mgr.output_dir),
+        html_path=html_path,
+        result=result,
+    )
 
 
 @router.get("/health")

@@ -16,7 +16,7 @@ from sqlalchemy.sql.schema import Table
 from src.audit.service import AuditService
 from config.database import get_engine
 from src.common.utils import ensure_dir, read_json, write_json
-from src.models import ArticleMetadata, BlogArticle, MarketData, TradeLog  # noqa: F401
+from src.models import ArticleMetadata, BlogArticle, CrawlState, MarketData, RawArticle, Signal, TradeLog  # noqa: F401
 from src.models.base import Base
 
 

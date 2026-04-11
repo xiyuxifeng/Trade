@@ -26,8 +26,11 @@ def test_quality_trend_analyzer_no_reports(tmp_path):
 
 def test_quality_trend_analyzer_parses_jsonl(tmp_path):
     """能正确解析 JSONL 格式的问题报告。"""
-    # 创建测试报告
-    report_file = tmp_path / "anomaly_report_2026-04-07.jsonl"
+    from datetime import date
+
+    # 创建测试报告，使用今天日期确保能被 analyzer 识别
+    today_str = date.today().strftime("%Y-%m-%d")
+    report_file = tmp_path / f"anomaly_report_{today_str}.jsonl"
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(json.dumps({"code": "test", "severity": "error"}) + "\n")
         f.write(json.dumps({"code": "test2", "severity": "warning"}) + "\n")
@@ -36,8 +39,9 @@ def test_quality_trend_analyzer_parses_jsonl(tmp_path):
     trend = analyzer.analyze_trend()
 
     assert len(trend.issue_counts) > 0
-    # index 5 对应 2026-04-07（测试创建的报告日期）
-    assert trend.issue_counts[5] == 2
+    # 找到今天的索引
+    today_index = trend.days.index(today_str)
+    assert trend.issue_counts[today_index] == 2
 
 
 def test_source_freshness_model():

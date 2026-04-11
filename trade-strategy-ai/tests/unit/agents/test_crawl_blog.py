@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from src.agents.data_agent.skills.crawl_blog import ExistingArticleIndex, classify_comment, should_stop_incremental_scan
+from datetime import datetime, UTC
+
+from src.agents.data_agent.skills.crawl_blog import (
+    ExistingArticleIndex,
+    ClassifiedComment,
+    classify_comment,
+    should_stop_incremental_scan,
+    compute_content_hash,
+    LOW_VALUE_COMMENTS,
+)
 from src.agents.data_agent.sites.base import AuthProvider
 from src.agents.data_agent.sites.tgb import TgbCrawler
 
@@ -21,6 +30,33 @@ def test_classify_comment_marks_author_and_filters_low_value_text() -> None:
     assert "low_value" in comment.filter_reasons
 
 
+def test_classify_comment_normal_comment() -> None:
+    """普通评论不被过滤。"""
+    comment = classify_comment(
+        raw_text="这篇文章分析得很有道理",
+        comment_author="reader",
+        article_author="author",
+        parent_comment_id=None,
+        root_comment_id=None,
+        reply_to_user=None,
+    )
+    assert comment.is_filtered is False
+    assert comment.filter_reasons == []
+
+
+def test_classify_comment_short_text_filtered() -> None:
+    """太短的评论被过滤。"""
+    comment = classify_comment(
+        raw_text="好",
+        comment_author="reader",
+        article_author="author",
+        parent_comment_id=None,
+        root_comment_id=None,
+        reply_to_user=None,
+    )
+    assert comment.is_filtered is True
+
+
 def test_should_stop_incremental_scan_when_url_already_seen() -> None:
     index = ExistingArticleIndex(
         seen_urls={"https://www.tgb.cn/a/2qxp6lHUymO"},
@@ -38,6 +74,81 @@ def test_should_stop_incremental_scan_when_url_already_seen() -> None:
         )
         is True
     )
+
+
+def test_should_stop_incremental_scan_no_match() -> None:
+    """未匹配的 URL 继续。"""
+    index = ExistingArticleIndex(
+        seen_urls={"https://www.tgb.cn/a/old"},
+        seen_hashes=set(),
+        last_seen_article_url=None,
+        last_seen_published_at=None,
+    )
+    result = should_stop_incremental_scan(
+        source_url="https://www.tgb.cn/a/new",
+        content_hash="new_hash",
+        published_at=None,
+        index=index,
+    )
+    assert result is False
+
+
+def test_should_stop_incremental_scan_by_hash() -> None:
+    """已见过的 hash 停止。"""
+    index = ExistingArticleIndex(
+        seen_urls=set(),
+        seen_hashes={"abc123"},
+        last_seen_article_url=None,
+        last_seen_published_at=None,
+    )
+    result = should_stop_incremental_scan(
+        source_url="https://www.tgb.cn/a/new",
+        content_hash="abc123",
+        published_at=None,
+        index=index,
+    )
+    assert result is True
+
+
+def test_should_stop_incremental_scan_by_published_at() -> None:
+    """发布时间早于最后时间停止。"""
+    index = ExistingArticleIndex(
+        seen_urls=set(),
+        seen_hashes=set(),
+        last_seen_article_url=None,
+        last_seen_published_at="2026-04-11T10:00:00",
+    )
+    result = should_stop_incremental_scan(
+        source_url="https://www.tgb.cn/a/new",
+        content_hash=None,
+        published_at=datetime.fromisoformat("2026-04-10T10:00:00"),
+        index=index,
+    )
+    assert result is True
+
+
+def test_compute_content_hash() -> None:
+    """compute_content_hash 正确计算哈希。"""
+    h1 = compute_content_hash("test content")
+    h2 = compute_content_hash("test content")
+    assert h1 == h2
+    assert len(h1) == 64  # SHA256 hex length
+
+
+def test_compute_content_hash_different() -> None:
+    """不同内容产生不同哈希。"""
+    h1 = compute_content_hash("content1")
+    h2 = compute_content_hash("content2")
+    assert h1 != h2
+
+
+def test_low_value_comments_set() -> None:
+    """LOW_VALUE_COMMENTS 包含常见低价值评论。"""
+    assert "谢谢" in LOW_VALUE_COMMENTS
+    assert "感谢" in LOW_VALUE_COMMENTS
+    assert "打卡" in LOW_VALUE_COMMENTS
+    assert "点赞" in LOW_VALUE_COMMENTS
+    assert "666" in LOW_VALUE_COMMENTS
 
 
 def test_tgb_crawler_parses_article_detail_and_comments() -> None:

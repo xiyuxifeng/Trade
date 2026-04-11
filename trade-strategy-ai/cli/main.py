@@ -296,9 +296,22 @@ def pipeline_run(
 	max_articles: int | None = typer.Option(None, help="每个作者最多抓取文章数"),
 	force: bool = typer.Option(False, help="强制重跑 clean/validate 产物"),
 	skip_crawl: bool = typer.Option(False, help="跳过 crawl（直接用已有 articles.jsonl）"),
+	from_step: str | None = typer.Option(None, help="从指定步骤开始执行（crawl/clean/validate/store/process/export）"),
+	use_db: bool = typer.Option(False, help="Crawl 阶段直接写入数据库（raw_articles 表），替代 articles.jsonl 文件"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:
-	"""一键跑通 crawl → clean → validate → store。"""
+	"""一键跑通 crawl → clean → validate → store。
+
+	使用 --from-step 可以从指定步骤开始，跳过前面的步骤。例如：
+
+	- --from-step clean：从 clean 开始，跳过 crawl
+	- --from-step validate：从 validate 开始，跳过 crawl 和 clean
+	- --from-step store：从 store 开始，跳过 crawl/clean/validate
+
+	使用 --use-db 可以让 Crawl 阶段直接写入数据库：
+	- 替代 articles.jsonl 文件存储
+	- 增量抓取状态存储在 crawl_state 表
+	"""
 	configure_logging(log_level)
 	loaded = load_app_config(config)
 	apply_database_config_to_env(loaded.config)
@@ -311,6 +324,8 @@ def pipeline_run(
 			max_articles=max_articles,
 			force=force,
 			skip_crawl=skip_crawl,
+			from_step=from_step,
+			use_db=use_db,
 		)
 	)
 

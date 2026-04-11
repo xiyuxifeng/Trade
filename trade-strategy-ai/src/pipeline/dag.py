@@ -13,7 +13,7 @@ from src.pipeline.health import PipelineHealthSnapshot
 from src.pipeline.runner import PipelineRunner
 from src.pipeline.tasks.clean_task import CleanResult, run_clean_task
 from src.pipeline.tasks.crawl_task import CrawlResult, run_crawl_task
-from src.pipeline.tasks.export_task import ExportResult, run_export_task
+from src.pipeline.tasks.export_task import ExportResult, ExportStats, run_export_task, DUCKDB_PATH
 from src.pipeline.tasks.validate_task import ValidateResult, run_validate_task
 from src.pipeline.tasks.process_tasks import ProcessTasksStats, run_process_tasks
 
@@ -60,30 +60,71 @@ def _build_data_pipeline_handlers(
 	force: bool,
 	skip_crawl: bool,
 	audit: AuditService,
+	from_step: str | None = None,
+	use_db: bool = False,
 ) -> dict[str, Any]:
-	"""Create node handlers for the built-in data pipeline graph."""
+	"""Create node handlers for the built-in data pipeline graph.
+
+	Args:
+		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, process, export
+		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
+	"""
+	# 步骤优先级
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "process", "export"]
+
+	def _should_skip(step_name: str) -> bool:
+		"""判断是否应该跳过某个步骤。"""
+		if from_step is None:
+			return False
+		if from_step not in STEP_ORDER:
+			raise ValueError(f"Invalid from_step: {from_step}. Must be one of {STEP_ORDER}")
+		from_index = STEP_ORDER.index(from_step)
+		current_index = STEP_ORDER.index(step_name)
+		return current_index < from_index
 
 	def _crawl(context: dict[str, Any]) -> CrawlResult:
-		if skip_crawl:
+		if skip_crawl or _should_skip("crawl"):
 			result = CrawlResult(outputs=[])
 		else:
-			result = run_crawl_task(config=config, base_dir=base_dir, max_articles=max_articles)
+			result = run_crawl_task(config=config, base_dir=base_dir, max_articles=max_articles, use_db=use_db)
 		context["crawl_result"] = result
 		return result
 
 	def _clean(context: dict[str, Any]) -> CleanResult:
+		if _should_skip("clean"):
+			# 跳过 clean 时，需要伪造一个 CleanResult 以便后续步骤可以继续
+			cleaned_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
+			# 将 .articles.jsonl 路径转换为 .articles.cleaned.jsonl 路径
+			from src.common.utils import ensure_dir
+			out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
+			cleaned = []
+			for p in cleaned_paths:
+				cleaned_path = out_dir / (p.parent.name + ".articles.cleaned.jsonl")
+				if cleaned_path.exists():
+					cleaned.append(cleaned_path)
+			context["clean_result"] = CleanResult(cleaned_paths=cleaned, stats_path=out_dir / "clean_stats.json")
+			return context["clean_result"]
 		crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
 		result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force)
 		context["clean_result"] = result
 		return result
 
 	def _validate(context: dict[str, Any]) -> ValidateResult:
+		if _should_skip("validate"):
+			clean_result = context.get("clean_result")
+			if clean_result:
+				context["validate_result"] = ValidateResult(validated_paths=clean_result.cleaned_paths, stats_path=clean_result.stats_path.parent / "validation_report.json")
+				return context["validate_result"]
+			raise ValueError("Cannot skip validate: clean_result not available")
 		clean_result = context["clean_result"]
 		result = run_validate_task(base_dir=base_dir, input_paths=clean_result.cleaned_paths, force=force)
 		context["validate_result"] = result
 		return result
 
 	async def _store(context: dict[str, Any]) -> StoreStats:
+		if _should_skip("store"):
+			context["store_stats"] = StoreStats()
+			return context["store_stats"]
 		validate_result = context["validate_result"]
 		result = await store_articles_jsonl_to_db(base_dir=base_dir, jsonl_paths=validate_result.validated_paths)
 		context["store_stats"] = result
@@ -99,11 +140,17 @@ def _build_data_pipeline_handlers(
 		return result
 
 	async def _process(context: dict[str, Any]) -> ProcessTasksStats:
+		if _should_skip("process"):
+			context["process_stats"] = ProcessTasksStats()
+			return context["process_stats"]
 		result = await run_process_tasks(config=config)
 		context["process_stats"] = result
 		return result
 
 	async def _export(context: dict[str, Any]) -> ExportResult:
+		if _should_skip("export"):
+			context["export_result"] = ExportResult(stats=ExportStats(), duckdb_path=DUCKDB_PATH)
+			return context["export_result"]
 		result = await run_export_task()
 		context["export_result"] = result
 		return result
@@ -125,8 +172,15 @@ async def _run_data_pipeline_graph(
 	max_articles: int | None = None,
 	force: bool = False,
 	skip_crawl: bool = False,
+	from_step: str | None = None,
+	use_db: bool = False,
 ) -> tuple[PipelineHealthSnapshot, dict[str, Any]]:
-	"""Run the built-in data pipeline graph and return the snapshot plus context."""
+	"""Run the built-in data pipeline graph and return the snapshot plus context.
+
+	Args:
+		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, process, export
+		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
+	"""
 
 	default_pipeline_state_dir(base_dir=base_dir)
 	audit = AuditService()
@@ -136,6 +190,8 @@ async def _run_data_pipeline_graph(
 		"max_articles": max_articles,
 		"force": force,
 		"skip_crawl": skip_crawl,
+		"from_step": from_step,
+		"use_db": use_db,
 		"audit_service": audit,
 	}
 	registry = PipelineGraphRegistry.default()
@@ -147,6 +203,8 @@ async def _run_data_pipeline_graph(
 			force=force,
 			skip_crawl=skip_crawl,
 			audit=audit,
+			from_step=from_step,
+			use_db=use_db,
 		),
 		registry=registry,
 	)
@@ -162,6 +220,8 @@ async def run_pipeline(
 	max_articles: int | None = None,
 	force: bool = False,
 	skip_crawl: bool = False,
+	from_step: str | None = None,
+	use_db: bool = False,
 ) -> PipelineRunResult:
 	_, context = await _run_data_pipeline_graph(
 		config=config,
@@ -169,6 +229,8 @@ async def run_pipeline(
 		max_articles=max_articles,
 		force=force,
 		skip_crawl=skip_crawl,
+		from_step=from_step,
+		use_db=use_db,
 	)
 	if context["health_snapshot"].failed_nodes:
 		raise RuntimeError("; ".join(context["health_snapshot"].error_summaries) or "pipeline graph failed")
@@ -196,6 +258,8 @@ async def run_pipeline_via_registry(
 	max_articles: int | None = None,
 	force: bool = False,
 	skip_crawl: bool = False,
+	from_step: str | None = None,
+	use_db: bool = False,
 ) -> PipelineHealthSnapshot:
 	"""Run the built-in data pipeline graph and return its health snapshot."""
 
@@ -205,5 +269,7 @@ async def run_pipeline_via_registry(
 		max_articles=max_articles,
 		force=force,
 		skip_crawl=skip_crawl,
+		from_step=from_step,
+		use_db=use_db,
 	)
 	return snapshot

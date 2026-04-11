@@ -49,7 +49,16 @@
       "Bash(pytest tests/unit/agents/ tests/unit/strategy/ tests/unit/risk/ tests/integration/ -v --tb=short)",
       "Bash(sed -i '' 's/from datetime import date, datetime$/from datetime import date, datetime, timezone/' tests/integration/test_agent_integration.py tests/unit/agents/test_manager_agent.py)",
       "Bash(sed -i '' 's/from datetime import datetime$/from datetime import datetime, timezone/' tests/unit/agents/risk_agent/test_agent.py tests/unit/agents/risk_agent/test_position_sizing.py)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(find /Users/wanghui/Documents/Claude/trade-strategy-ai/data -type f -exec ls -lh {} \\\\;)",
+      "Bash(find /Users/wanghui/Documents/Claude/trade-strategy-ai/data/processed/pipeline -name \"*.jsonl\" -exec ls -lh {} \\\\;)",
+      "Bash(unzip -l /Users/wanghui/Documents/Claude/trade-strategy-ai/data/processed/crawl/tgb/10461311.zip)",
+      "Bash(coverage run:*)",
+      "Bash(find /Users/wanghui/Documents/Claude/trade-strategy-ai -type d -name __pycache__ -exec rm -rf {} +)",
+      "Bash(find /Users/wanghui/Documents/Claude/trade-strategy-ai -name \"*.pyc\" -delete)",
+      "Bash(coverage report:*)",
+      "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
+      "Bash(find . -name \"*.pyc\" -delete)"
     ]
   }
 }

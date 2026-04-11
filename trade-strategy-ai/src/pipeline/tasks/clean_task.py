@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
+
 from src.common.utils import ensure_dir, write_json
+from src.db.session import session_scope
 from src.models.blog_article import BlogArticle
+from src.models.raw_article import RawArticle
 from src.pipeline.validation import DataValidator
 
 
@@ -168,3 +173,119 @@ def run_clean_task(
 	stats_path = out_dir / "clean_stats.json"
 	write_json(stats_path, stats)
 	return CleanResult(cleaned_paths=cleaned_paths, stats_path=stats_path)
+
+
+# ============ 数据库存储支持 ============
+
+
+async def _clean_raw_articles_from_db(
+	*, output_path: Path, source: str | None = None, author_id: str | None = None, remove_duplicates: bool = False
+) -> dict[str, Any]:
+	"""从数据库读取 raw_articles，清洗后写入 JSONL 文件。"""
+	total = 0
+	total_comments = 0
+	kept_comments = 0
+	filtered_comments = 0
+	duplicates_removed = 0
+
+	if output_path.exists():
+		output_path.unlink()
+
+	async with session_scope() as session:
+		stmt = select(RawArticle).where(RawArticle.is_processed == False)  # noqa: E712
+		if source:
+			stmt = stmt.where(RawArticle.source == source)
+		if author_id:
+			stmt = stmt.where(RawArticle.author_id == author_id)
+
+		result = await session.execute(stmt)
+		records = result.scalars().all()
+
+	# 构建去重集合
+	seen_hash: set[str] = set()
+	seen_url: set[str] = set()
+	unique_records: list[dict[str, Any]] = []
+
+	for r in records:
+		total += 1
+		rec = r.to_clean_payload()
+		h = rec.get("content_hash")
+		u = rec.get("source_url")
+		is_dup = False
+		if remove_duplicates:
+			if h and h in seen_hash:
+				is_dup = True
+			if u and u in seen_url:
+				is_dup = True
+		if is_dup:
+			duplicates_removed += 1
+		else:
+			if h:
+				seen_hash.add(h)
+			if u:
+				seen_url.add(u)
+			unique_records.append(rec)
+
+	# Process each record
+	for rec in unique_records:
+		comments = rec.get("comments") or rec.get("comments_payload") or []
+		if not isinstance(comments, list):
+			comments = []
+
+		total_comments += len(comments)
+		kept = [c for c in comments if not bool(c.get("is_filtered"))]
+		kept_comments += len(kept)
+		filtered_comments += max(0, len(comments) - len(kept))
+
+		cleaned = {
+			**rec,
+			"comments_payload": kept,
+			"comments_filtered_count": max(0, len(comments) - len(kept)),
+			"comments_total_count": len(comments),
+		}
+		# 兼容下游：统一字段名
+		cleaned.pop("comments", None)
+		_append_jsonl(output_path, cleaned)
+
+	return {
+		"input_source": "raw_articles_db",
+		"output_path": str(output_path),
+		"records": total,
+		"comments_total": total_comments,
+		"comments_kept": kept_comments,
+		"comments_filtered": filtered_comments,
+		"duplicates_removed": duplicates_removed,
+	}
+
+
+async def run_clean_from_db_task(
+	*, base_dir: Path, source: str | None = None, author_id: str | None = None, force: bool = False, remove_duplicates: bool = False
+) -> CleanResult:
+	"""从数据库 raw_articles 读取并清洗，输出到 JSONL 文件。"""
+	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
+
+	# 根据 source/author_id 生成输出文件名
+	if author_id:
+		filename = f"{author_id}.articles.cleaned.jsonl"
+	elif source:
+		filename = f"{source}.articles.cleaned.jsonl"
+	else:
+		filename = "all.articles.cleaned.jsonl"
+
+	out_path = out_dir / filename
+	stats: dict[str, Any] = {"files": [], "source": source, "author_id": author_id, "remove_duplicates": remove_duplicates}
+
+	if out_path.exists() and not force:
+		return CleanResult(cleaned_paths=[out_path], stats_path=out_dir / "clean_stats.json")
+
+	file_stats = await _clean_raw_articles_from_db(
+		output_path=out_path,
+		source=source,
+		author_id=author_id,
+		remove_duplicates=remove_duplicates,
+	)
+	stats["files"].append(file_stats)
+
+	stats_path = out_dir / "clean_stats.json"
+	write_json(stats_path, stats)
+	return CleanResult(cleaned_paths=[out_path], stats_path=stats_path)

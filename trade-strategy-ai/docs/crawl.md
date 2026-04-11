@@ -16,7 +16,11 @@
  (原始爬取)      (清洗后)            (校验+富化)        (最终入库)
 ```
 
-**核心原则：先写文件，再写入数据库。** 整个 Pipeline 是「文件驱动、逐步精炼」的流水线设计，每步产物都是独立 JSONL 文件，最后才由 Store 统一入库。优势：中间产物可复用、可断点续跑、方便调试回放。
+**核心原则：原始数据可选择文件或数据库存储，逐步精炼。** Pipeline 支持两种模式：
+- **文件模式（默认）**：Crawl → articles.jsonl → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
+- **数据库模式**：Crawl → raw_articles 表 → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
+
+优势：中间产物可复用、可断点续跑、方便调试回放。
 
 ---
 
@@ -111,6 +115,8 @@ python -m cli.main pipeline-run --config config/app.yaml
 | `--max-articles N` | 限制每个作者最多抓取 N 篇文章（首次全量爬取可不加） |
 | `--skip-crawl` | 跳过爬取，仅对已有 JSONL 执行后续 pipeline |
 | `--force` | 强制重新处理 |
+| `--from-step STEP` | 从指定步骤开始执行，可选值：crawl, clean, validate, store, process, export |
+| `--use-db` | Crawl 阶段直接写入数据库（raw_articles 表），替代 articles.jsonl 文件 |
 
 ### 第 4 步：（可选）单独爬取命令
 
@@ -393,3 +399,86 @@ python -m cli.main pipeline-run --config config/app.yaml
 
   直接跑 Python 手动触发 store（绕过 clean/validate 缓存问题）：
   ```
+
+## --from-step 参数详解
+
+`--from-step` 参数允许从指定步骤开始执行 pipeline，跳过前面的步骤。
+
+### 步骤顺序
+
+```
+crawl → clean → validate → store → process → export
+```
+
+### 使用示例
+
+| 命令 | 说明 |
+|------|------|
+| `pipeline-run` | 从头开始跑完整流程 |
+| `pipeline-run --from-step clean` | 跳过 crawl，从 clean 开始 |
+| `pipeline-run --from-step validate` | 跳过 crawl 和 clean，从 validate 开始 |
+| `pipeline-run --from-step store` | 跳过前三个步骤，只跑 store/process/export |
+| `pipeline-run --from-step export` | 只导出数据到 DuckDB |
+
+### 与 --force 配合使用
+
+`--from-step` 通常与 `--force` 配合使用，以确保跳过的步骤使用最新的数据：
+
+```bash
+# 从 validate 开始，强制重跑 validate 及后续步骤
+python -m cli.main pipeline-run --from-step validate --force
+
+# 从 store 开始，只更新数据库
+python -m cli.main pipeline-run --from-step store
+```
+
+### 注意事项
+
+- `--from-step` 依赖已存在的中间产物文件（如 `.cleaned.jsonl`、`.validated.jsonl`）
+- 如果跳过的步骤所需的输入文件不存在，会导致后续步骤失败
+- `--skip-crawl` 和 `--from-step` 可以同时使用
+
+## --use-db 参数详解
+
+`--use-db` 参数让 Crawl 阶段直接将数据写入 PostgreSQL 数据库，而不是生成 `articles.jsonl` 文件。
+
+### 架构对比
+
+**默认模式（文件）**：
+```
+Crawl → articles.jsonl → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
+```
+
+**数据库模式（--use-db）**：
+```
+Crawl → raw_articles 表 → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
+```
+
+### 使用示例
+
+```bash
+# 使用数据库模式爬取
+python -m cli.main pipeline-run --use-db
+
+# 使用数据库模式 + 从 clean 开始
+python -m cli.main pipeline-run --use-db --from-step clean
+```
+
+### 数据库表说明
+
+使用 `--use-db` 时会涉及以下两张新表：
+
+| 表名 | 说明 |
+|------|------|
+| `raw_articles` | 原始爬取数据，保留 `is_processed` 标志 |
+| `crawl_state` | 增量抓取状态，替代 `state.json` |
+
+### 迁移现有数据
+
+现有数据不受影响。如果需要将现有的 `articles.jsonl` 数据迁移到 `raw_articles` 表，需要编写迁移脚本。
+
+### 注意事项
+
+- 数据库写入会增加约 5-10% 的爬取时间
+- 需要确保 PostgreSQL 数据库可用
+- `raw_articles` 表中的 `is_processed=False` 记录表示未被 clean 流程处理

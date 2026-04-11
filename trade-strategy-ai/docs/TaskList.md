@@ -137,6 +137,12 @@
 - [x] P1-026E failed_tasks.jsonl 增加自动重试机制（3次上限）+ TTL 清理（7天）+ dead_tasks.jsonl
 - [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
 
+补充（Pipeline 增量控制与数据库存储改进）：
+- [x] P1-026K 新增 --from-step 参数支持：可从指定步骤开始执行 pipeline（crawl/clean/validate/store/process/export）
+- [x] P1-026L 新增 raw_articles 表：原始爬取数据直接写入数据库，替代 articles.jsonl
+- [x] P1-026M 新增 crawl_state 表：增量抓取状态统一存储到数据库，替代 state.json
+- [x] P1-026N 新增 --use-db CLI 参数：可通过命令行控制是否使用数据库模式存储原始数据
+
 补充（去重能力，待后续完善）：
 - [x] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
 - [ ] P1-026J dedup_task 重构/扩展：**pipeline 无交易数据输入，待确认数据入口后接入或移除**
@@ -149,8 +155,8 @@
 - [x] P1-031 实现数据导出接口（CSV/JSON/Parquet）
 
 补充（运行闭环接口）：
-- [ ] P1-032 实现手动触发接口（可选）：/run/pre_market、/run/after_close
-- [ ] P1-033 实现报告查询接口（可选）：日报/考核报告/复盘报告接口
+- [x] P1-032 实现手动触发接口：/run/pre_market、/run/after_close
+- [x] P1-033 实现报告查询接口：日报/考核报告查询与 HTML 下载
 
 补充（宿主薄壳接口，规划）：
 - [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）

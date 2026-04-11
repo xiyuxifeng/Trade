@@ -261,3 +261,7 @@ trade-strategy-ai/data/processed/crawl/{source}/{author_id}/state.json
 5. 增加 CLI 入口
 6. 用真实作者 `javxsp` 做一次手工验证
 7. 用同站点第二个作者配置做一次非联网配置级验证
+
+## 11. 更新记录
+
+- **2026-04-11**：新增原始数据数据库存储设计（`2026-04-11-raw-articles-db-design.md`），支持将 `articles.jsonl` 替换为 `raw_articles` 表，`state.json` 替换为 `crawl_state` 表

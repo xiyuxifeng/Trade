@@ -57,6 +57,20 @@ def test_classify_comment_short_text_filtered() -> None:
     assert comment.is_filtered is True
 
 
+def test_classify_comment_image_only_filtered() -> None:
+    """只有图片无文字的评论被过滤。"""
+    comment = classify_comment(
+        raw_text="",
+        comment_author="reader",
+        article_author="author",
+        parent_comment_id=None,
+        root_comment_id=None,
+        reply_to_user=None,
+    )
+    assert comment.is_filtered is True
+    assert "image_only" in comment.filter_reasons
+
+
 def test_should_stop_incremental_scan_when_url_already_seen() -> None:
     index = ExistingArticleIndex(
         seen_urls={"https://www.tgb.cn/a/2qxp6lHUymO"},

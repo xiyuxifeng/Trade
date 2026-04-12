@@ -59,7 +59,16 @@
       "Bash(coverage report:*)",
       "Bash(find . -type d -name __pycache__ -exec rm -rf {} +)",
       "Bash(find . -name \"*.pyc\" -delete)",
-      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep \"revision = \" {}')"
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\" && grep \"revision = \" {}')",
+      "Bash(dropdb trade_strategy_ai)",
+      "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/crawl/tgb/10461311)",
+      "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/clean)",
+      "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/validate)",
+      "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/pending_tasks.jsonl)",
+      "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/failed_tasks.jsonl)",
+      "WebFetch(domain:www.tgb.cn)",
+      "Bash(pip3 install:*)",
+      "Bash(playwright install:*)"
     ]
   }
 }

@@ -77,7 +77,7 @@ class CleanResult:
 
 
 def clean_articles_jsonl(
-	*, input_path: Path, output_path: Path, remove_duplicates: bool = False
+	*, input_path: Path, output_path: Path, remove_duplicates: bool = False, max_articles: int | None = None
 ) -> dict[str, Any]:
 	total = 0
 	total_comments = 0
@@ -119,6 +119,10 @@ def clean_articles_jsonl(
 				unique_records.append(r)
 		records = unique_records
 
+	# Apply max_articles limit
+	if max_articles is not None:
+		records = records[:max_articles]
+
 	# Process each record
 	for rec in records:
 		total += 1
@@ -153,10 +157,10 @@ def clean_articles_jsonl(
 
 
 def run_clean_task(
-	*, base_dir: Path, input_paths: list[Path], force: bool = False, remove_duplicates: bool = False
+	*, base_dir: Path, input_paths: list[Path], force: bool = False, remove_duplicates: bool = False, max_articles: int | None = None
 ) -> CleanResult:
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
-	stats: dict[str, Any] = {"files": [], "remove_duplicates": remove_duplicates}
+	stats: dict[str, Any] = {"files": [], "remove_duplicates": remove_duplicates, "max_articles": max_articles}
 	cleaned_paths: list[Path] = []
 
 	for p in input_paths:
@@ -166,7 +170,7 @@ def run_clean_task(
 		if out_path.exists() and not force:
 			cleaned_paths.append(out_path)
 			continue
-		file_stats = clean_articles_jsonl(input_path=p, output_path=out_path, remove_duplicates=remove_duplicates)
+		file_stats = clean_articles_jsonl(input_path=p, output_path=out_path, remove_duplicates=remove_duplicates, max_articles=max_articles)
 		stats["files"].append(file_stats)
 		cleaned_paths.append(out_path)
 

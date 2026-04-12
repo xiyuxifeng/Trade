@@ -36,6 +36,7 @@ class TgbCrawler:
     max_retries: int = 3
     render_js: bool = False
     render_timeout_ms: int = 30000
+    max_comment_pages: int | None = None  # None 表示不限制，抓取全部
 
     def _throttle(self) -> None:
         """Sleep briefly between requests to reduce burst pressure."""
@@ -136,22 +137,44 @@ class TgbCrawler:
         html = self._get_text(article_url)
         return self.parse_article_detail(html, article_url)
 
-    def fetch_comments(self, article_url: str) -> list[dict[str, str]]:
-        """Fetch all comment pages for one article."""
+    def fetch_comments(
+        self,
+        article_url: str,
+        topic_id: str | None = None,
+        author_id: str | None = None,
+        *,
+        article_html: str | None = None,
+    ) -> list[dict[str, str]]:
+        """从文章详情页 HTML 解析作者评论，支持多页翻页。
+
+        Args:
+            article_url: 文章 URL，用于构造分页 URL
+            topic_id: 未使用，保留接口兼容
+            author_id: 作者 ID，用于过滤只显示该作者的评论
+            article_html: 第一页文章详情页 HTML
+        """
+        if not article_html:
+            return []
 
         all_comments: list[dict[str, str]] = []
         seen_ids: set[str] = set()
         page = 1
-        max_pages = 20  # safety limit
-        base_slug = article_url.rstrip("/").rsplit("/", 1)[-1]
+        max_pages = 500
 
         while page <= max_pages:
-            self._throttle()
-            page_url = f"{article_url.rstrip('/')}-{page}" if page > 1 else article_url
-            html = self._get_text(page_url)
-            page_comments = self.parse_comments(html)
-            if not page_comments:
+            if self.max_comment_pages is not None and page > self.max_comment_pages:
                 break
+
+            # 从当前页 HTML 解析总页数（第一页才解析）
+            total_pages: int | None = None
+            if page == 1:
+                total_pages = self._detect_article_total_pages(article_html)
+                # 如果没有分页信息，说明只有一页
+                if total_pages is None:
+                    total_pages = 1
+
+            # 解析当前页的作者评论
+            page_comments = self.parse_author_comments_from_article_html(article_html, author_id)
             new_count = 0
             for comment in page_comments:
                 cid = comment.get("comment_id") or comment.get("raw_text", "")[:50]
@@ -159,24 +182,91 @@ class TgbCrawler:
                     all_comments.append(comment)
                     seen_ids.add(cid)
                     new_count += 1
-            # Stop if no new comments on this page (reached end)
-            if new_count == 0:
+
+            # 如果当前页没有新评论，停止
+            if new_count == 0 and page > 1:
                 break
-            # Stop if fewer comments than a typical page (likely last page)
-            if len(page_comments) < 20:
+
+            # 翻页判断
+            if page == 1 and total_pages == 1:
+                # 只有一页，不用翻页
                 break
-            # Detect total pages from pagination info
-            total_pages = self._detect_comment_total_pages(html)
             if total_pages and page >= total_pages:
                 break
+
+            # 构造下一页 URL
             page += 1
+            self._throttle()
+            page_url = f"{article_url.rstrip('/')}-{page}"
+            article_html = self._get_text(page_url)
+            if not article_html.strip():
+                break
+
         return all_comments
+
+    def parse_author_comments_from_article_html(self, html: str, author_id: str | None) -> list[dict[str, str]]:
+        """从文章详情页 HTML 中解析指定作者的评论。
+
+        通过 ustr 属性过滤，并用 gioMsg_R_{id} div 的 id 作为唯一评论ID。
+        """
+        soup = BeautifulSoup(html, "html.parser")
+        comments: list[dict[str, str]] = []
+
+        # 找到所有带 ustr 属性的 comment-data 块，过滤出作者的评论
+        for node in soup.select(f".comment-data[ustr=\"{author_id}\"]"):
+            # 从内层 .comment-data-text 获取唯一评论 ID
+            text_node = node.select_one(".comment-data-text")
+            comment_id = text_node.get("id") if text_node else None
+            if not comment_id:
+                continue
+
+            author_node = node.select_one(".user-name")
+            time_node = node.select_one(".pcyclspan")
+            raw_text = text_node.get_text(" ", strip=True) if text_node else ""
+
+            # 解析引用
+            quote_node = node.select_one(".comment-data-quote")
+            reply_to_user: str | None = None
+            parent_comment_id: str | None = None
+            quote_text: str | None = None
+            if quote_node:
+                quote_author_el = quote_node.select_one(".user-name")
+                reply_to_user = quote_author_el.get_text(" ", strip=True) if quote_author_el else None
+                quote_text_el = quote_node.select_one(".data-quote-text")
+                if quote_text_el:
+                    quote_text = quote_text_el.get_text(" ", strip=True)
+
+            comments.append({
+                "comment_id": comment_id,
+                "author_name": author_node.get_text(" ", strip=True) if author_node else "",
+                "raw_text": raw_text,
+                "published_at": time_node.get_text(" ", strip=True) if time_node else None,
+                "parent_comment_id": parent_comment_id,
+                "root_comment_id": parent_comment_id,
+                "reply_to_user": reply_to_user,
+                "quote_text": quote_text,
+            })
+
+        return comments
 
     def _detect_comment_total_pages(self, html: str) -> int | None:
         m = re.search(r"共\s*(\d+)\s*/\s*(\d+)\s*页", html)
         if m:
             total = int(m.group(2))
             return total if total <= 100 else None  # sanity cap
+        return None
+
+    def _detect_article_total_pages(self, html: str) -> int | None:
+        """从文章分页 HTML 中提取总页数，格式：<span>共<b>X</b>/Y页</span>"""
+        m = re.search(r"共\s*<[^>]*>\s*(\d+)\s*</[^>]*>\s*/\s*(\d+)\s*页", html)
+        if m:
+            total = int(m.group(2))
+            return total if total <= 500 else None  # sanity cap
+        # 备选：简单匹配
+        m2 = re.search(r"共\s*(\d+)\s*/\s*(\d+)\s*页", html)
+        if m2:
+            total = int(m2.group(2))
+            return total if total <= 500 else None
         return None
 
     def parse_article_list(self, html: str) -> list[dict[str, str]]:
@@ -209,15 +299,34 @@ class TgbCrawler:
     def parse_article_detail(self, html: str, article_url: str) -> dict[str, str]:
         soup = BeautifulSoup(html, "html.parser")
         title_node = soup.select_one("h1")
-        content_container = soup.select_one(".p_wenz") or soup.select_one(".p_coten") or soup.body
+        # 优先精确提取正文内容（<!-- 正文内容 --> <div class="article-text p_coten" id="first">）
+        content_container = (
+            soup.select_one(".article-text.p_coten#first")
+            or soup.select_one("#first")
+            or soup.select_one(".p_wenz")
+            or soup.select_one(".p_coten")
+            or soup.body
+        )
         content_text = content_container.get_text("\n", strip=True) if content_container else ""
         content_html = str(content_container) if content_container else ""
+        # 从隐藏表单中提取 topicID，用于构造评论 URL
+        # 方法1: input[name="topicID"]
+        topic_id_input = soup.select_one('input[name="topicID"]')
+        topic_id = topic_id_input.get("value") if topic_id_input else None
+        # 方法2: form[name="lookFrm"] > input[id="looktopicID"]
+        if not topic_id:
+            look_frm = soup.select_one('form[name="lookFrm"]')
+            if look_frm:
+                topic_id_input = look_frm.select_one('input[id="looktopicID"]')
+                topic_id = topic_id_input.get("value") if topic_id_input else None
         return {
             "source_url": article_url,
             "source_article_id": article_url.rstrip("/").split("/")[-1],
             "title": title_node.get_text(" ", strip=True) if title_node else "",
             "content_text": content_text,
             "content_html": content_html,
+            "full_html": html,  # 完整页面 HTML，包含评论
+            "topic_id": topic_id,
         }
 
     def parse_comments(self, html: str) -> list[dict[str, str]]:
@@ -249,9 +358,11 @@ class TgbCrawler:
     def _parse_comments_from_comment_data_blocks(self, soup: BeautifulSoup) -> list[dict[str, str]]:
         raw_nodes: list[tuple[dict[str, str], BeautifulSoup]] = []
         for node in soup.select(".comment-data"):
-            comment_id = node.get("id")
-            author_node = node.select_one(".user-name")
+            # 优先使用内层 .comment-data-text 的 id（真正的唯一评论ID，每页不重复）
+            # 外层 .comment-data 的 id（如 reply_10461311_1）在不同页会重复，导致分页去重失败
             text_node = node.select_one(".comment-data-text")
+            comment_id = text_node.get("id") if text_node else node.get("id")
+            author_node = node.select_one(".user-name")
             time_node = node.select_one(".pcyclspan")
             if author_node is None:
                 continue
@@ -271,6 +382,7 @@ class TgbCrawler:
                         ),
                         "quote_author_name": None,
                         "quote_author_id": None,
+                        "quote_text": None,
                     },
                     node,
                 )
@@ -289,6 +401,7 @@ class TgbCrawler:
             quote_node = node.select_one(".comment-data-quote")
             reply_to_user: str | None = None
             parent_comment_id: str | None = None
+            quote_text: str | None = None
             if quote_node:
                 quote_author_el = quote_node.select_one(".user-name")
                 reply_to_user = quote_author_el.get_text(" ", strip=True) if quote_author_el else None
@@ -296,6 +409,10 @@ class TgbCrawler:
                 quote_author_id = self._extract_author_id_from_href(quote_href)
                 if quote_author_id and quote_author_id in author_to_comment:
                     parent_comment_id = author_to_comment[quote_author_id]
+                # 提取被引用的跟帖内容
+                quote_text_el = quote_node.select_one(".data-quote-text")
+                if quote_text_el:
+                    quote_text = quote_text_el.get_text(" ", strip=True)
             comments.append(
                 {
                     "comment_id": data["comment_id"],
@@ -305,6 +422,7 @@ class TgbCrawler:
                     "parent_comment_id": parent_comment_id,
                     "root_comment_id": parent_comment_id,  # flat; root==parent for direct replies
                     "reply_to_user": reply_to_user,
+                    "quote_text": quote_text,
                 }
             )
         return comments

@@ -58,7 +58,12 @@ def classify_comment(
 
     clean_text = _clean_comment_text(raw_text)
     filter_reasons: list[str] = []
-    if clean_text in LOW_VALUE_COMMENTS or len(clean_text) <= 2:
+
+    # 过滤：空评论（只有图片无文字）
+    if not clean_text or not clean_text.strip():
+        filter_reasons.append("image_only")
+    # 过滤：低价值评论
+    elif clean_text in LOW_VALUE_COMMENTS or len(clean_text) <= 2:
         filter_reasons.append("low_value")
 
     return ClassifiedComment(
@@ -186,18 +191,30 @@ def crawl_source(
         content_text = detail.get("content_text", "")
         content_hash = compute_content_hash(content_text) if content_text else None
 
+        raw_comments = crawler.fetch_comments(
+            article_url=item["source_url"],
+            topic_id=detail.get("topic_id"),
+            author_id=source_cfg.author_id,
+            article_html=detail.get("full_html"),
+        )
         comments = [
-            asdict(
-                classify_comment(
-                    raw_text=comment.get("raw_text", ""),
-                    comment_author=comment.get("author_name", ""),
-                    article_author=source_cfg.author_name,
-                    parent_comment_id=comment.get("parent_comment_id"),
-                    root_comment_id=comment.get("root_comment_id"),
-                    reply_to_user=comment.get("reply_to_user"),
-                )
-            )
-            for comment in crawler.fetch_comments(item["source_url"])
+            {
+                **asdict(
+                    classify_comment(
+                        raw_text=comment.get("raw_text", ""),
+                        comment_author=comment.get("author_name", ""),
+                        article_author=source_cfg.author_name,
+                        parent_comment_id=comment.get("parent_comment_id"),
+                        root_comment_id=comment.get("root_comment_id"),
+                        reply_to_user=comment.get("reply_to_user"),
+                    )
+                ),
+                # 保留原始字段
+                "comment_id": comment.get("comment_id"),
+                "published_at": comment.get("published_at"),
+                "quote_text": comment.get("quote_text"),
+            }
+            for comment in raw_comments
         ]
         append_jsonl(
             articles_path,
@@ -409,18 +426,30 @@ async def crawl_source_to_db(
             content_text = detail.get("content_text", "")
             content_hash = compute_content_hash(content_text) if content_text else None
 
+            raw_comments = crawler.fetch_comments(
+                article_url=item["source_url"],
+                topic_id=detail.get("topic_id"),
+                author_id=source_cfg.author_id,
+                article_html=detail.get("full_html"),
+            )
             comments = [
-                asdict(
-                    classify_comment(
-                        raw_text=comment.get("raw_text", ""),
-                        comment_author=comment.get("author_name", ""),
-                        article_author=source_cfg.author_name,
-                        parent_comment_id=comment.get("parent_comment_id"),
-                        root_comment_id=comment.get("root_comment_id"),
-                        reply_to_user=comment.get("reply_to_user"),
-                    )
-                )
-                for comment in crawler.fetch_comments(item["source_url"])
+                {
+                    **asdict(
+                        classify_comment(
+                            raw_text=comment.get("raw_text", ""),
+                            comment_author=comment.get("author_name", ""),
+                            article_author=source_cfg.author_name,
+                            parent_comment_id=comment.get("parent_comment_id"),
+                            root_comment_id=comment.get("root_comment_id"),
+                            reply_to_user=comment.get("reply_to_user"),
+                        )
+                    ),
+                    # 保留原始字段
+                    "comment_id": comment.get("comment_id"),
+                    "published_at": comment.get("published_at"),
+                    "quote_text": comment.get("quote_text"),
+                }
+                for comment in raw_comments
             ]
 
             await upsert_raw_article(
@@ -442,6 +471,7 @@ async def crawl_source_to_db(
                 comments=comments,
                 raw_payload={"list_item": item, "detail": detail},
             )
+            await session.commit()  # 每篇 article 立即提交，避免中断丢数据
 
             written += 1
             seen_urls.add(item["source_url"])

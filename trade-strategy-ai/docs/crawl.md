@@ -4,29 +4,38 @@
 
 本文档说明如何使用本系统进行淘股吧文章的爬取、清洗、校验和入库全流程。
 
+---
+
 ## 架构总览
 
+### Pipeline 流程图（6 个步骤）
+
 ```
-┌──────────┐    ┌──────────┐    ┌────────────┐    ┌──────────┐
-│  Crawl   │ →  │  Clean   │ →  │  Validate  │ →  │  Store   │
-│ 爬取网络 │    │ 清洗JSONL │    │ 校验JSONL  │    │ 写入DB   │
-└──────────┘    └──────────┘    └────────────┘    └──────────┘
-     ↓               ↓                 ↓                ↓
- articles.jsonl  .cleaned.jsonl     .validated.jsonl   PostgreSQL
- (原始爬取)      (清洗后)            (校验+富化)        (最终入库)
+┌────────┐    ┌───────┐    ┌──────────┐    ┌────────┐    ┌─────────┐    ┌────────┐
+│ Crawl  │ →  │ Clean │ →  │ Validate │ →  │ Store  │ →  │ Process │ →  │ Export │
+└────────┘    └───────┘    └──────────┘    └────────┘    └─────────┘    └────────┘
+     ↓            ↓             ↓              ↓              ↓              ↓
+ articles.   .cleaned.     .validated.    PostgreSQL     pending_      trade_strategy.
+ jsonl       jsonl         jsonl         blog_articles  tasks.jsonl   ai.duckdb
+ (或raw_)                                  + article_md  + clusters
 ```
 
-**核心原则：原始数据可选择文件或数据库存储，逐步精炼。** Pipeline 支持两种模式：
-- **文件模式（默认）**：Crawl → articles.jsonl → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
-- **数据库模式**：Crawl → raw_articles 表 → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
+### 步骤依赖关系
 
-优势：中间产物可复用、可断点续跑、方便调试回放。
+| 步骤 | 输入 | 输出 | 是否涉及 DB |
+|------|------|------|------------|
+| **Crawl** | 无 | `articles.jsonl` 或 `raw_articles` 表 | 文件模式：否 / DB 模式：是 |
+| **Clean** | `articles.jsonl` | `.cleaned.jsonl` | 否 |
+| **Validate** | `.cleaned.jsonl` | `.validated.jsonl` | 否 |
+| **Store** | `.validated.jsonl` | `blog_articles` 表 + `pending_tasks.jsonl` | 是 |
+| **Process** | `pending_tasks.jsonl` | `article_metadata` 表 + `clusters.real.json` | 是 |
+| **Export** | DB 数据 | `trade_strategy_ai.duckdb` | 是 |
 
 ---
 
 ## 前置条件
 
-### 当前配置
+### 1. 配置文件
 
 配置文件: `config/app.yaml` 中已配置的爬取源：
 
@@ -38,9 +47,7 @@
 | 列表页 URL | `https://www.tgb.cn/user/blog/moreTopic?userID=10461311` |
 | Cookie | 通过环境变量 `${TGB_COOKIE}` 注入 |
 
-### PostgreSQL 数据库
-
-确保数据库已启动：
+### 2. PostgreSQL 数据库
 
 ```bash
 # 检查是否运行中
@@ -50,126 +57,229 @@ brew services list | grep postgresql
 brew services start postgresql@15
 ```
 
-### Python 虚拟环境
+### 3. Python 虚拟环境
 
 ```bash
 cd /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai
 source ../.venv/bin/activate
 ```
 
-如果虚拟环境不存在，需先创建（见 `docs/使用说明.md` 第3-16行）。
+如果虚拟环境不存在，需先创建（见 `docs/使用说明.md`）。
 
----
-
-## 操作步骤（按顺序执行）
-
-### 第 1 步：配置淘股吧 Cookie
+### 4. 淘股吧 Cookie
 
 **必须先获取 Cookie**，否则爬取会被拒绝（403/未登录态）。
 
-#### 获取方法
-
+获取方法：
 1. 在浏览器登录 [淘股吧](https://www.tgb.cn)
 2. 打开开发者工具 (F12) → `Network`
 3. 刷新一个页面，选任意请求
 4. 在 `Request Headers` 中复制 `Cookie` 整段内容
 
-#### 注入方式（二选一）
+注入方式（二选一）：
 
 **方式 A - 环境变量（推荐）：**
-
 ```bash
 export TGB_COOKIE='你复制的完整 Cookie 内容'
 ```
 
 **方式 B - 直接写入 `.env` 文件：**
-
-编辑 `.env` 文件，取消 `TGB_COOKIE` 的注释并填入值：
-
 ```env
 TGB_COOKIE=你的cookie内容
 ```
 
-### 第 2 步：验证数据库连接与迁移（可选但建议）
+---
+
+## 快速开始
+
+### 首次运行
 
 ```bash
-# 验证连接
-python -m cli.main db-check --config config/app.yaml
-
-# 首次使用需要创建表结构
+# 1) 数据库迁移（首次）
 python -m cli.main db-migrate --config config/app.yaml
+
+# 2) 一键爬取 + 清洗 + 入库
+python -m cli.main pipeline-run --config config/app.yaml
+
+# 3) 迁移 crawl-state 到数据库（首次）
+python -m cli.main migrate-crawl-state --config config/app.yaml
 ```
 
-### 第 3 步：执行 Pipeline 一键爬取 + 清洗 + 入库
+### 日常运行
 
-这是**核心命令**，按顺序自动完成全部步骤：`crawl → clean → validate → store → process → export`
+```bash
+# 增量爬取（自动跳过已抓取的文章）
+python -m cli.main pipeline-run --config config/app.yaml
+```
+
+---
+
+## 命令参考
+
+### pipeline-run — 一键执行全流程
+
+按顺序自动完成全部步骤：`crawl → clean → validate → store → process → export`
 
 ```bash
 python -m cli.main pipeline-run --config config/app.yaml
 ```
 
-#### 常用参数
+**常用参数：**
 
 | 参数 | 说明 |
 |------|------|
-| `--max-articles N` | 限制每个作者最多抓取 N 篇文章（首次全量爬取可不加） |
+| `--max-articles N` | 限制处理的文章数量（crawl/clean/validate/store 步骤生效） |
 | `--skip-crawl` | 跳过爬取，仅对已有 JSONL 执行后续 pipeline |
-| `--force` | 强制重新处理 |
-| `--from-step STEP` | 从指定步骤开始执行，可选值：crawl, clean, validate, store, process, export |
-| `--use-db` | Crawl 阶段直接写入数据库（raw_articles 表），替代 articles.jsonl 文件 |
+| `--force` | 强制重新处理（覆盖 clean/validate 产物） |
+| `--from-step STEP` | 从指定步骤开始，可选：crawl, clean, validate, store, process, export |
+| `--use-db` | Crawl 阶段直接写入 `raw_articles` 表（替代 `articles.jsonl`） |
 
-### 第 4 步：（可选）单独爬取命令
-
-如果只想爬取、不跑完整 pipeline：
+**使用示例：**
 
 ```bash
-# 单独执行爬取（输出到 articles.jsonl）
-python -m cli.main crawl --config config/app.yaml
+# 从 validate 开始，强制重跑
+python -m cli.main pipeline-run --from-step validate --force
 
-# 限制每个作者最多抓取 10 篇
-python -m cli.main crawl --config config/app.yaml --max-articles 10
+# 跳过爬虫，直接处理已有文件
+python -m cli.main pipeline-run --skip-crawl --force
+
+# 数据库模式 + 从 store 开始
+python -m cli.main pipeline-run --use-db --from-step store
 ```
 
-> 注意：单独 crawl 只会生成 `articles.jsonl` 文件，**不会写入数据库**。要入库还是需要跑 `pipeline-run`。
+---
+
+### pipeline-step — 单独执行某一步骤
+
+单独执行某个步骤，自动查找前置中间文件。如果前置文件不存在，会给出友好提示。
+
+```bash
+python -m cli.main pipeline-step <步骤名> [选项]
+```
+
+**可用步骤：**
+
+| 步骤 | 说明 | 前置文件 |
+|------|------|---------|
+| `crawl` | 从网络爬取 | 无 |
+| `clean` | 清洗 JSONL | `articles.jsonl` |
+| `validate` | 校验并富化 | `.cleaned.jsonl` |
+| `store` | 写入数据库 | `.validated.jsonl` |
+| `process` | LLM 抽取 + 聚类 | `pending_tasks.jsonl` |
+| `export` | 导出到 DuckDB | DB 数据 |
+
+**常用示例：**
+
+```bash
+# 单独执行 clean
+python -m cli.main pipeline-step clean
+
+# 强制重跑 clean（覆盖已有）
+python -m cli.main pipeline-step clean --force
+
+# 单独执行 store
+python -m cli.main pipeline-step store
+
+# 强制重跑 process
+python -m cli.main pipeline-step process --force
+
+# 数据库模式爬取
+python -m cli.main pipeline-step crawl --use-db
+
+# 爬取最多 50 篇文章
+python -m cli.main pipeline-step crawl --max-articles 50
+
+# 清洗最多 100 篇（限制输入文件中的记录数）
+python -m cli.main pipeline-step clean --max-articles 100 --force
+
+# 验证最多 80 篇
+python -m cli.main pipeline-step validate --max-articles 80
+
+# 入库最多 50 篇
+python -m cli.main pipeline-step store --max-articles 50
+```
+
+**通用参数：**
+
+| 参数 | 说明 | 适用步骤 |
+|------|------|---------|
+| `--max-articles N` | 限制处理的文章数量 | `crawl`, `clean`, `validate`, `store` |
+| `--force` | 强制重新执行（覆盖已有产物） | 所有步骤 |
+| `--use-db` | 直接写入数据库（替代文件） | `crawl` |
+| `--config` | 配置文件路径 | 所有步骤 |
+
+**自动查找机制：**
+
+| 当前步骤 | 向前查找的文件 |
+|---------|---------------|
+| `clean` | `data/processed/crawl/{source}/{author_id}/articles.jsonl` |
+| `validate` | `data/processed/pipeline/clean/*.cleaned.jsonl` |
+| `store` | `data/processed/pipeline/validate/*.validated.jsonl` |
+| `process` | `data/processed/pipeline/pending_tasks.jsonl` |
+| `export` | 直接读取数据库，无需文件 |
+
+**缺少前置文件时的报错示例：**
+
+```
+$ python -m cli.main pipeline-step clean
+未找到 articles.jsonl 文件。请先运行 'pipeline-step crawl' 或 'pipeline-run --from-step clean --skip-crawl'
+```
+
+**与 pipeline-run 的区别：**
+
+| 特性 | `pipeline-run` | `pipeline-step` |
+|------|---------------|-----------------|
+| 执行范围 | 连续执行多个步骤 | 单独执行单个步骤 |
+| 用途 | 日常增量运行 | 调试、修复、重跑特定步骤 |
+| `--use-db` | 支持 | 仅 `crawl` 支持 |
+
+---
+
+### 其他命令
+
+```bash
+# 单独爬取（只生成 articles.jsonl，不入库）
+python -m cli.main crawl --config config/app.yaml
+
+# 数据库迁移
+python -m cli.main db-migrate --config config/app.yaml
+
+# 迁移 crawl-state 到数据库
+python -m cli.main migrate-crawl-state --config config/app.yaml
+
+# 备份数据
+python -m cli.main backup-data --config config/app.yaml
+
+# 恢复数据
+python -m cli.main restore-data --config config/app.yaml --source ./my-backup --force
+```
 
 ---
 
 ## 增量爬取机制
 
-增量爬取是**自动实现的**，无需额外参数。**直接重复运行 `pipeline-run` 命令即可实现增量爬取**，程序会自动跳过已有文章，只抓取新发布的文章。
+增量爬取是**自动实现的**，无需额外参数。直接重复运行 `pipeline-run` 命令即可。
 
-### 状态持久化
+### 状态存储
 
-每次爬取后在以下位置保存状态：
+| 模式 | 文件 |
+|------|------|
+| 文件模式 | `data/processed/crawl/tgb/{author_id}/state.json` |
+| 数据库模式 | `crawl_state` 表 |
 
-**文件模式**：
-```
-data/processed/crawl/tgb/10461311/state.json
-```
+### 状态内容
 
-**数据库模式**：
-```
-crawl_state 表
-```
-
-保存内容：
 - `seen_urls`: 已见过的文章 URL 集合
 - `seen_hashes`: 已见过文章内容的 SHA256 哈希集合
-- `last_seen_article_url`: 最后一次抓取的文章 URL（用于记录位置，不用于停止逻辑）
+- `last_seen_article_url`: 最后一次抓取的文章 URL
 - `last_seen_published_at`: 最后一篇文章的发布时间
 
 ### 增量逻辑
 
-遍历文章列表时：
-
 1. 检查 URL 是否在 `seen_urls` 中
-2. 如果在 `seen_urls` 中 → **跳过**，继续处理下一个
-3. 如果不在 `seen_urls` 中 → **抓取详情**，并加入 `seen_urls`
+2. 在 `seen_urls` 中 → **跳过**
+3. 不在 `seen_urls` 中 → **抓取详情**，并加入 `seen_urls`
 4. 直到列表遍历完毕
-
-说明：
-- 不依赖 `last_seen_article_url` 作为停止条件
-- 适用于列表顺序为旧→新或新→旧的任意情况
 
 ---
 
@@ -177,16 +287,7 @@ crawl_state 表
 
 ### 阶段 1: Crawl — 从网络爬取
 
-**代码位置**: `src/agents/data_agent/skills/crawl_blog.py`
-**CLI 入口**: `cli/crawl.py`
-**Pipeline Task**: `src/pipeline/tasks/crawl_task.py`
-
-**功能**:
-- 通过 HTTP 请求从淘股吧获取作者的**文章列表**和每篇的**详情页**
-- 同时抓取每篇文章的**评论列表**
-- 对评论做初步分类过滤（低价值评论如"谢谢""666"等标记为 filtered）
-- 计算 `content_hash`（SHA256）用于去重判断
-- 输出原始 JSONL 到磁盘
+**代码位置**: `src/agents/data_agent/skills/crawl_blog.py` / `src/agents/data_agent/sites/tgb.py`
 
 **输出文件**: `data/processed/crawl/tgb/{author_id}/articles.jsonl`
 
@@ -207,15 +308,51 @@ crawl_state 表
   "content_text": "正文内容...",
   "content_html": "<p>正文HTML...</p>",
   "content_hash": "sha256哈希值",
+  "topic_id": "7833368",
   "comment_count": 15,
   "comments": [...],
   "raw_payload": { "list_item": {...}, "detail": {...} }
 }
 ```
 
-**状态文件**: 同目录下的 `state.json`（记录增量爬取断点）
+#### 正文提取规则
 
-**是否涉及数据库**: **否**，纯文件操作
+优先使用精确的正文标签：
+```python
+soup.select_one(".article-text.p_coten#first")  # 最优先
+    or soup.select_one("#first")
+    or soup.select_one(".p_wenz")
+    or soup.select_one(".p_coten")
+    or soup.body  # 最终回退
+```
+
+#### 评论抓取规则
+
+**URL 格式**：`https://www.tgb.cn/topic/lookUserTopic?topicID={topic_id}&lookUserID={author_id}`
+
+- `topic_id`：从文章 HTML 的隐藏表单 `<input name="topicID" value='...'>` 中提取
+- `lookUserID`：使用配置的 `author_id`
+- **只抓取该作者发布的评论**，不抓取读者评论
+
+**评论页数限制**：
+- `max_comment_pages = None`（默认）：抓取全部评论
+- `max_comment_pages = N`：最多抓取 N 页评论
+
+#### TgbCrawler 配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `auth_provider` | AuthProvider | - | 认证提供者（Cookie） |
+| `list_url` | str | - | 列表页 base URL |
+| `author_id` | str | - | 作者 ID |
+| `source` | str | "tgb" | 来源标识 |
+| `min_interval` | float | 1.0 | 请求最小间隔（秒） |
+| `max_interval` | float | 2.0 | 请求最大间隔（秒） |
+| `backoff_seconds` | tuple | (5, 15, 30) | 退避重试秒数 |
+| `max_retries` | int | 3 | 最大重试次数 |
+| `render_js` | bool | False | 是否启用 JS 渲染 |
+| `render_timeout_ms` | int | 30000 | JS 渲染超时（毫秒） |
+| `max_comment_pages` | int \| None | None | 评论最大页数（None=全部） |
 
 ---
 
@@ -223,58 +360,46 @@ crawl_state 表
 
 **代码位置**: `src/pipeline/tasks/clean_task.py`
 
-**输入**: Crawl 阶段的 `articles.jsonl`
+**输入**: `articles.jsonl`
 **输出**: `data/processed/pipeline/clean/{author_id}.articles.cleaned.jsonl`
 
-**核心逻辑** (`clean_articles_jsonl` 函数):
+| 步骤 | 说明 |
+|------|------|
+| **去重**（可选） | 根据 `content_hash` + `source_url` 去重 |
+| **评论过滤** | 移除低价值评论（"谢谢""666""点赞"等）和纯图片评论 |
+| **字段归一化** | `comments` → `comments_payload`，补充统计字段 |
 
-| 步骤 | 说明 | 代码行 |
-|------|------|--------|
-| **去重**（可选） | 根据 `content_hash` + `source_url` 去重，移除重复文章 | 第 90~115 行 |
-| **评论过滤** | 移除低价值评论（`is_filtered=True` 的，如"谢谢""666""点赞"等） | 第 124~127 行 |
-| **字段归一化** | 将 `comments` 统一为 `comments_payload`，补充统计字段 | 第 129~137 行 |
-
-**低价值评论定义** (`crawl_blog.py:15`):
-```python
-LOW_VALUE_COMMENTS = {"谢谢", "感谢", "打卡", "点赞", "666"}
-# 以及长度 ≤ 2 的评论
-```
+**过滤规则**：
+- `image_only`：纯图片评论（无文字内容）
+- `low_value`：低价值评论（"谢谢""666""点赞"等，或长度 ≤ 2 字符）
 
 **输出字段变化**:
-- `comments` → 重命名为 `comments_payload`（仅保留非过滤评论）
+- `comments` → `comments_payload`（仅保留非过滤评论）
 - 新增 `comments_filtered_count`（被过滤的评论数）
 - 新增 `comments_total_count`（评论总数）
-
-**是否涉及数据库**: **否**，纯文件→文件转换
 
 ---
 
 ### 阶段 3: Validate — 数据校验
 
 **代码位置**: `src/pipeline/tasks/validate_task.py`
-**校验引擎**: `src/pipeline/validation.py`（`DataValidator` 类）
 
-**输入**: Clean 阶段的 `.cleaned.jsonl`
+**输入**: `.cleaned.jsonl`
 **输出**: `data/processed/pipeline/validate/{原文件名}.validated.jsonl`
 
-**核心逻辑** (`run_validate_task` 函数):
-
-| 步骤 | 说明 | 代码行 |
-|------|------|--------|
-| **构建 ORM 对象** | 将 JSONL 记录转为 `BlogArticle` 模型实例（纯内存，不入库） | 第 106 行 |
-| **数据校验** | 调用 `DataValidator.validate_article()` 做字段完整性/格式校验 | 第 107 行 |
-| **严重度分级** | 问题分为 ERROR 和 WARNING 两级 | 第 119~122 行 |
-| **可抽取判断** | 校验通过 且 content_text ≥ 80 字符 → 标记为可抽取 | 第 124 行 |
-| **富化输出** | 追加 `validation` 和 `extractable` 字段 | 第 129~134 行 |
+| 步骤 | 说明 |
+|------|------|
+| **构建 ORM 对象** | 将 JSONL 记录转为 `BlogArticle` 模型实例（纯内存） |
+| **数据校验** | 调用 `DataValidator.validate_article()` 做字段完整性/格式校验 |
+| **可抽取判断** | content_text ≥ 80 字符 → 标记为可抽取 |
+| **富化输出** | 追加 `validation` 和 `extractable` 字段 |
 
 **输出字段变化**:
-- 新增 `validation.is_valid`: 是否通过校验（bool）
-- 新增 `validation.issues`: 校验问题列表（含 code / severity / message / field_name）
-- 新增 `extractable`: 是否满足 LLM 抽取条件（bool）
+- 新增 `validation.is_valid`: 是否通过校验
+- 新增 `validation.issues`: 校验问题列表
+- 新增 `extractable`: 是否满足 LLM 抽取条件
 
 **校验报告**: `data/processed/pipeline/validate/validation_report.json`
-
-**是否涉及数据库**: **否**，纯文件→文件转换（ORM 对象仅用于内存校验）
 
 ---
 
@@ -282,294 +407,113 @@ LOW_VALUE_COMMENTS = {"谢谢", "感谢", "打卡", "点赞", "666"}
 
 **代码位置**: `src/agents/data_agent/skills/store_db.py`
 
-**输入**: Validate 阶段的 `.validated.jsonl`
-**输出**: **PostgreSQL 数据库**（BlogArticle 表 + ArticleMetadata 表）
+**输入**: `.validated.jsonl`
+**输出**: PostgreSQL 数据库
 
-**核心逻辑** (`store_articles_jsonl_to_db` 函数, 第 162~223 行):
-
-逐条读取 validated JSONL，调用 `upsert_article_from_payload()` 执行 **UPSERT** 操作。
-
-#### Upsert 详细流程 (`upsert_article_from_payload`, 第 106~146 行)
+#### Upsert 流程
 
 ```
-                    ┌─────────────────────┐
-                    │ 读取 validated JSONL │
-                    └──────────┬──────────┘
-                               ▼
-                    ┌─────────────────────┐
-                    │ content_hash 冲突？  │──是──→ 不同URL？──是──→ 跳过（重复内容）
-                    └──────────┬──────────┘          否         否
-                               │ 否
-                               ▼
-                    ┌─────────────────────┐
-                    │ source_url 已存在？   │──否──→ INSERT 新文章
-                    └──────────┬──────────┘
-                               │ 是
-                               ▼
-                    ┌─────────────────────┐
-                    │ 字段有变化？          │──是──→ UPDATE 原地更新
-                    └──────────┬──────────┘
-                               │ 否
-                               ▼
-                            跳过（无变化）
+读取 validated JSONL
+        ↓
+content_hash 冲突？ → 不同URL？ → 跳过（重复内容）
+        ↓ 否
+source_url 已存在？ → 否 → INSERT 新文章
+        ↓ 是
+字段有变化？ → 是 → UPDATE
+        ↓ 否
+    跳过（无变化）
 ```
-
-具体规则：
-1. 先查 `content_hash` 是否已存在且对应不同 URL → **跳过**（视为重复内容）
-2. 再查 `source_url` 是否已存在 → 不存在则 **INSERT**
-3. URL 已存在 → 逐字段比较，有变化则 **UPDATE**（原地更新），无变化则跳过
 
 #### 额外操作
 
-- **确保 Metadata**: 每篇文章自动确保 `article_metadata` 记录存在（第 200~201 行）
-- **生成待办任务**: 新插入或更新的文章，自动生成 `AgentTask` 落盘到 `pending_tasks.jsonl`（第 204~222 行），用于后续触发 LLM 抽取/聚类
+- 每篇文章自动确保 `article_metadata` 记录存在
+- 新插入或更新的文章，生成 `AgentTask` 落盘到 `pending_tasks.jsonl`
 
-#### 统计指标 (`StoreStats`)
+#### 统计指标
 
 | 字段 | 说明 |
 |------|------|
-| `read_records` | 读取的总记录数 |
 | `inserted_articles` | 新插入的文章数 |
 | `updated_articles` | 更新的文章数 |
 | `skipped_duplicates` | 因 content_hash 重复跳过的数量 |
-| `ensured_metadata` | 确保的 metadata 记录数 |
 | `generated_tasks` | 生成的待办任务数 |
 
 ---
 
-## 各阶段对比总结
+### 阶段 5: Process — 任务处理
 
-| 阶段 | 代码位置 | 输入来源 | 输出目标 | 是否涉及 DB |
-|------|---------|---------|---------|------------|
-| **Crawl** | `crawl_blog.py` | 网络 HTTP 请求 | `articles.jsonl` 文件 | 否 |
-| **Clean** | `clean_task.py` | `articles.jsonl` | `.cleaned.jsonl` 文件 | 否 |
-| **Validate** | `validate_task.py` | `.cleaned.jsonl` | `.validated.jsonl` 文件 | 否 |
-| **Store** | `store_db.py` | `.validated.jsonl` | **PostgreSQL 数据库** | **是**（UPSERT） |
+**代码位置**: `src/pipeline/tasks/process_tasks.py`
+
+**输入**: `pending_tasks.jsonl`
+**输出**: `article_metadata` 表 + `clusters.real.json`
+
+#### 任务类型
+
+| 任务类型 | 处理器 | 说明 |
+|---------|--------|------|
+| `article_ingested` | `extract_and_store_metadata()` | LLM 抽取文章元数据 |
+| `article_metadata_extracted` | `build_clusters_from_db()` | 重建人物聚类 |
+
+#### 失败任务处理
+
+| 文件 | 说明 |
+|------|------|
+| `failed_tasks.jsonl` | 处理失败但未超过 TTL（可重试） |
+| `dead_tasks.jsonl` | 超过 TTL 或重试次数上限（永久失败） |
 
 ---
 
-## 注意事项 / 风险点
+### 阶段 6: Export — 导出 DuckDB
 
-| 项目 | 说明 |
-|------|------|
-| **Cookie 有效期** | 淘股吧 Cookie 可能过期，过期后会出现 403/429 错误，需重新获取 |
-| **请求频率限制** | 配置了 1~2 秒随机间隔（`throttling.min_interval_seconds` / `max_interval_seconds`），避免被封 |
-| **退避策略** | 出现 403/429 时按 `[5, 15, 30]` 秒序列重试（`throttling.backoff_seconds`） |
-| **数据存储位置** | 原始 JSONL 存在 `data/processed/crawl/tgb/{author_id}/`，数据库为 PostgreSQL |
-| **不要提交敏感信息** | 真实 Cookie / API Key 不要提交到代码仓库 |
+**输出**: `data/processed/duckdb/trade_strategy_ai.duckdb`
+
+用于后续数据分析。
 
 ---
 
-## 推荐的最简操作序列
+## 两种运行模式
 
-```bash
-# 0) 确保 PostgreSQL 运行中
-brew services start postgresql@15
-
-# 1) 激活环境
-cd /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai
-source ../.venv/bin/activate
-
-# 2) 设置 Cookie
-export TGB_COOKIE='你的 cookie'
-
-# 3) 数据库迁移（首次）
-python -m cli.main db-migrate --config config/app.yaml
-
-# 4) 一键爬取 + 入库（增量，可重复运行）
-python -m cli.main pipeline-run --config config/app.yaml
-
-# 5) 迁移crawl-state
-python -m cli.main migrate-crawl-state --config config/app.yaml
-
-```
-
-**之后每天或定期重复第 4 步即可**，系统会自动增量爬取新文章并存入数据库。
-
-
-## 不抓取直接入库
-
-  最简单的方法：删缓存，让 pipeline 重新处理
-  ```
-  # 删掉 clean 和 validate 的缓存输出
-  rm data/processed/pipeline/clean/10461311.articles.cleaned.jsonl
-  rm data/processed/pipeline/validate/10461311.articles.cleaned.validated.jsonl
-
-  # 重置 crawl 增量状态（这样 pipeline-run 会从头处理）
-  rm data/processed/crawl/tgb/10461311/state.json
-
-  # 跑 pipeline，用 --skip-crawl 跳过爬虫，直接用现有的 102 条数据
-  python -m cli.main pipeline-run --config config/app.yaml --skip-crawl --force
-
-  这样：
-  articles.jsonl (102条)
-    ↓ [clean, --force 重新处理]
-  cleaned.jsonl (102条)
-    ↓ [validate, --force 重新处理]
-  validated.jsonl (102条)
-    ↓ [store]
-    → 写入数据库 102 条
-
-  如果你连都不想删
-
-  直接跑 Python 手动触发 store（绕过 clean/validate 缓存问题）：
-  ```
-
-## --from-step 参数详解
-
-`--from-step` 参数允许从指定步骤开始执行 pipeline，跳过前面的步骤。
-
-### 步骤顺序
-
-```
-crawl → clean → validate → store → process → export
-```
-
-### 使用示例
-
-| 命令 | 说明 |
-|------|------|
-| `pipeline-run` | 从头开始跑完整流程 |
-| `pipeline-run --from-step clean` | 跳过 crawl，从 clean 开始 |
-| `pipeline-run --from-step validate` | 跳过 crawl 和 clean，从 validate 开始 |
-| `pipeline-run --from-step store` | 跳过前三个步骤，只跑 store/process/export |
-| `pipeline-run --from-step export` | 只导出数据到 DuckDB |
-
-### 与 --force 配合使用
-
-`--from-step` 通常与 `--force` 配合使用，以确保跳过的步骤使用最新的数据：
-
-```bash
-# 从 validate 开始，强制重跑 validate 及后续步骤
-python -m cli.main pipeline-run --from-step validate --force
-
-# 从 store 开始，只更新数据库
-python -m cli.main pipeline-run --from-step store
-```
-
-### 注意事项
-
-- `--from-step` 依赖已存在的中间产物文件（如 `.cleaned.jsonl`、`.validated.jsonl`）
-- 如果跳过的步骤所需的输入文件不存在，会导致后续步骤失败
-- `--skip-crawl` 和 `--from-step` 可以同时使用
-
-## --use-db 参数详解
-
-`--use-db` 参数让 Crawl 阶段直接将数据写入 PostgreSQL 数据库，而不是生成 `articles.jsonl` 文件。
-
-### 架构对比
-
-**默认模式（文件）**：
-```
-Crawl → articles.jsonl → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
-```
-
-**数据库模式（--use-db）**：
-```
-Crawl → raw_articles 表 → Clean → .cleaned.jsonl → Validate → .validated.jsonl → Store
-```
-
-### 使用示例
-
-```bash
-# 使用数据库模式爬取
-python -m cli.main pipeline-run --use-db
-
-# 使用数据库模式 + 从 clean 开始
-python -m cli.main pipeline-run --use-db --from-step clean
-```
-
-### 数据库表说明
-
-使用 `--use-db` 时会涉及以下两张新表：
-
-| 表名 | 说明 |
-|------|------|
-| `raw_articles` | 原始爬取数据，保留 `is_processed` 标志 |
-| `crawl_state` | 增量抓取状态，替代 `state.json` |
-
-### 迁移现有数据
-
-现有数据不受影响。如果需要将现有的 `articles.jsonl` 数据迁移到 `raw_articles` 表，需要编写迁移脚本。
-
-### 注意事项
-
-- 数据库写入会增加约 5-10% 的爬取时间
-- 需要确保 PostgreSQL 数据库可用
-- `raw_articles` 表中的 `is_processed=False` 记录表示未被 clean 流程处理
+| 模式 | 命令 | Crawl 输出 | 适用场景 |
+|------|------|-----------|---------|
+| **文件模式（默认）** | `pipeline-step crawl` | `articles.jsonl` | 调试、中间产物复用 |
+| **数据库模式** | `pipeline-step crawl --use-db` | `raw_articles` 表 | 生产环境、跨设备迁移 |
 
 ---
 
 ## 备份与恢复
 
-支持跨设备的完整数据迁移，包括数据库和增量状态。
-
 ### 备份
 
 ```bash
-# 备份到自动生成的目录（data/backups/YYYYMMDD-HHMMSS/）
+# 备份到自动生成的目录
 python -m cli.main backup-data --config config/app.yaml
 
 # 备份到指定目录
 python -m cli.main backup-data --config config/app.yaml --dest ./my-backup
 
-# 仅备份数据库，不包含 processed 目录
+# 仅备份数据库
 python -m cli.main backup-data --config config/app.yaml --no-include-processed
 ```
 
 ### 恢复
 
 ```bash
-# 从备份恢复（会覆盖现有数据，需要确认）
 python -m cli.main restore-data --config config/app.yaml --source ./my-backup --force
 ```
 
-### 备份内容
+### 跨设备迁移
 
-| 内容 | 说明 |
+1. **设备 A**：`python -m cli.main backup-data --dest ./trade-backup`
+2. 拷贝到设备 B
+3. **设备 B**：`python -m cli.main restore-data --source ./trade-backup --force`
+
+---
+
+## 注意事项
+
+| 项目 | 说明 |
 |------|------|
-| 数据库表 | `blog_articles`, `crawl_state`, `raw_articles`, `trade_logs` 等所有表 |
-| processed 目录 | `data/processed/` 下的所有数据（包括 crawl 状态、报告等） |
-
-### 跨设备迁移步骤
-
-1. **设备 A - 备份数据**
-   ```bash
-   python -m cli.main backup-data --config config/app.yaml --dest ./trade-backup
-   ```
-
-2. **将备份目录拷贝到设备 B**
-   ```bash
-   scp -r ./trade-backup user@device-b:/path/to/trade-strategy-ai/
-   ```
-
-3. **设备 B - 恢复数据**
-   ```bash
-   python -m cli.main restore-data --config config/app.yaml --source ./trade-backup --force
-   ```
-
-4. **验证恢复**
-   ```bash
-   # 检查 crawl_state 表
-   python -c "
-   from src.db.session import session_scope
-   from src.models.crawl_state import CrawlState
-   from sqlalchemy import select
-   import asyncio
-   async def check():
-       async with session_scope() as session:
-           result = await session.execute(select(CrawlState))
-           for row in result.scalars():
-               print(f'source={row.source} author={row.author_id} seen_urls={len(row.seen_urls or [])}')
-   asyncio.run(check())
-   "
-   ```
-
-### 注意事项
-
-- 恢复操作会**覆盖**现有数据，请确保已备份重要数据
-- 备份目录包含完整的数据库快照，可以直接用于完整恢复
-- 建议在恢复后重新运行迁移以确保数据库结构最新
-  ```bash
-  python -m cli.main db-migrate --config config/app.yaml
-  ```
+| **Cookie 有效期** | 淘股吧 Cookie 可能过期，过期后会出现 403/429 错误，需重新获取 |
+| **请求频率限制** | 配置了 1~2 秒随机间隔，避免被封 |
+| **退避策略** | 出现 403/429 时按 `[5, 15, 30]` 秒序列重试 |
+| **敏感信息** | 真实 Cookie / API Key 不要提交到代码仓库 |

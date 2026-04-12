@@ -22,6 +22,12 @@ from src.common.logger import configure_logging
 from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 from src.common.utils import ensure_dir
 from src.pipeline.dag import run_pipeline
+from src.pipeline.tasks.clean_task import run_clean_task
+from src.pipeline.tasks.validate_task import run_validate_task
+from src.pipeline.tasks.process_tasks import run_process_tasks
+from src.pipeline.tasks.export_task import run_export_task
+from src.pipeline.tasks.crawl_task import run_crawl_task
+from src.agents.data_agent.skills.store_db import store_articles_jsonl_to_db
 from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.data_agent.skills.import_trade_logs import (
 	import_trade_logs_from_csv,
@@ -317,8 +323,8 @@ def pipeline_run(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	result = asyncio.run(
-		run_pipeline(
+	async def _run_and_cleanup():
+		result = await run_pipeline(
 			config=loaded.config,
 			base_dir=base_dir,
 			max_articles=max_articles,
@@ -327,13 +333,144 @@ def pipeline_run(
 			from_step=from_step,
 			use_db=use_db,
 		)
-	)
+		return result
+
+	result = asyncio.run(_run_and_cleanup())
 
 	typer.echo("Pipeline done")
 	typer.echo(f"crawl={result.crawl.outputs}")
 	typer.echo(
 		f"store inserted={result.store.inserted_articles} updated={result.store.updated_articles} dup_skipped={result.store.skipped_duplicates}"
 	)
+
+
+@app.command("pipeline-step")
+def pipeline_step(
+	step: str = typer.Argument(..., help="步骤名称: crawl, clean, validate, store, process, export"),
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	max_articles: int | None = typer.Option(None, help="限制处理的文章数量（crawl/clean/validate/store 步骤生效）"),
+	force: bool = typer.Option(False, help="强制重新执行（覆盖已有产物）"),
+	use_db: bool = typer.Option(False, help="Crawl 阶段直接写入数据库（raw_articles 表）"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""单独执行 Pipeline 中的某个步骤。
+
+	每一步都会自动查找前置步骤产生的中间文件，无需手动指定路径。
+	如果前置文件不存在，会给出友好提示。
+
+	示例：
+	  python -m cli.main pipeline-step clean --force
+	  python -m cli.main pipeline-step store
+	  python -m cli.main pipeline-step process --force
+	  python -m cli.main pipeline-step crawl --use-db
+	  python -m cli.main pipeline-step crawl --max-articles 50
+	"""
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	base_dir = _project_base_dir(loaded.config_path)
+
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "process", "export"]
+
+	if step not in STEP_ORDER:
+		typer.echo(f"无效步骤: {step}")
+		typer.echo(f"可选步骤: {', '.join(STEP_ORDER)}")
+		raise typer.Exit(code=1)
+
+	# 导入 audit service（store 步骤需要）
+	from src.audit.service import AuditService
+
+	def discover_crawl_jsonl_paths_func():
+		"""查找 crawl 产生的 articles.jsonl 文件"""
+		paths = []
+		for src in loaded.config.crawl.sources:
+			if not src.enabled:
+				continue
+			p = base_dir / "data" / "processed" / "crawl" / src.source / src.author_id / "articles.jsonl"
+			paths.append(p)
+		return paths
+
+	def find_cleaned_paths():
+		"""查找 clean 产生的 .cleaned.jsonl 文件"""
+		out_dir = base_dir / "data" / "processed" / "pipeline" / "clean"
+		if not out_dir.exists():
+			return []
+		return list(out_dir.glob("*.cleaned.jsonl"))
+
+	def find_validated_paths():
+		"""查找 validate 产生的 .validated.jsonl 文件"""
+		out_dir = base_dir / "data" / "processed" / "pipeline" / "validate"
+		if not out_dir.exists():
+			return []
+		return list(out_dir.glob("*.validated.jsonl"))
+
+	async def run_step():
+		if step == "crawl":
+			result = run_crawl_task(config=loaded.config, base_dir=base_dir, max_articles=max_articles, use_db=use_db)
+			typer.echo(f"crawl done: {len(result.outputs)} articles (max_articles={max_articles}, use_db={use_db})")
+			return result
+
+		elif step == "clean":
+			crawl_paths = discover_crawl_jsonl_paths_func()
+			if not crawl_paths:
+				raise RuntimeError(
+					"未找到 articles.jsonl 文件。"
+					" 请先运行 'pipeline-step crawl' 或 'pipeline-run --from-step clean --skip-crawl'"
+				)
+			existing = find_cleaned_paths()
+			if existing and not force:
+				typer.echo(f"找到 {len(existing)} 个已清洗文件（跳过处理），使用 --force 强制覆盖")
+			result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force, max_articles=max_articles)
+			typer.echo(f"clean done: {len(result.cleaned_paths)} files (max_articles={max_articles})")
+			return result
+
+		elif step == "validate":
+			cleaned_paths = find_cleaned_paths()
+			if not cleaned_paths:
+				raise RuntimeError(
+					"未找到 .cleaned.jsonl 文件。"
+					" 请先运行 'pipeline-step clean' 或 'pipeline-run --from-step validate'"
+				)
+			result = run_validate_task(base_dir=base_dir, input_paths=cleaned_paths, force=force, max_articles=max_articles)
+			typer.echo(f"validate done: {len(result.validated_paths)} files (max_articles={max_articles})")
+			return result
+
+		elif step == "store":
+			validated_paths = find_validated_paths()
+			if not validated_paths:
+				raise RuntimeError(
+					"未找到 .validated.jsonl 文件。"
+					" 请先运行 'pipeline-step validate' 或 'pipeline-run --from-step store'"
+				)
+			audit = AuditService()
+			result = await store_articles_jsonl_to_db(base_dir=base_dir, jsonl_paths=validated_paths, limit=max_articles)
+			typer.echo(
+				f"store done: inserted={result.inserted_articles} updated={result.updated_articles} "
+				f"dup_skipped={result.skipped_duplicates} tasks_generated={result.generated_tasks} (limit={max_articles})"
+			)
+			return result
+
+		elif step == "process":
+			pending_path = base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
+			if not pending_path.exists():
+				typer.echo(f"未找到 pending_tasks.jsonl（位于 {pending_path}）")
+				typer.echo("可能还没有文章入库，请先运行 'pipeline-step store'")
+				raise typer.Exit(code=1)
+			result = await run_process_tasks(config=loaded.config)
+			typer.echo(
+				f"process done: processed={result.processed} skipped_dedup={result.skipped_dedup} "
+				f"retried={result.retried} failed={result.failed} dead={result.dead}"
+			)
+			return result
+
+		elif step == "export":
+			result = await run_export_task()
+			typer.echo(f"export done: duckdb_path={result.duckdb_path}")
+			return result
+
+	# 执行步骤
+	result = asyncio.run(run_step())
+	typer.echo(f"步骤 {step} 执行完成")
 
 
 @app.command("extract-articles")

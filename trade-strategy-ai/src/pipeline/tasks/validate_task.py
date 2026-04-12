@@ -71,11 +71,11 @@ def _to_blog_article(record: dict[str, Any]) -> BlogArticle:
 	)
 
 
-def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = False) -> ValidateResult:
+def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = False, max_articles: int | None = None) -> ValidateResult:
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "validate")
 	report: dict[str, Any] = {
 		"files": [],
-		"summary": {"records": 0, "extractable": 0, "errors": 0, "warnings": 0},
+		"summary": {"records": 0, "extractable": 0, "errors": 0, "warnings": 0, "max_articles": max_articles},
 	}
 	validated_paths: list[Path] = []
 
@@ -100,6 +100,8 @@ def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = 
 		}
 
 		for rec in _iter_jsonl(p):
+			if max_articles is not None and file_stats["records"] >= max_articles:
+				break
 			file_stats["records"] += 1
 			report["summary"]["records"] += 1
 

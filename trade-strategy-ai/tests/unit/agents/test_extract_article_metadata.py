@@ -176,9 +176,13 @@ async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_p
         def is_enabled(self) -> bool:
             return False
 
+    async def fake_normalize(syms: list[str]) -> list[str]:
+        return syms
+
     monkeypatch.setattr(mod, "session_scope", fake_session_scope)
     monkeypatch.setattr(mod, "LLMClient", DisabledClient)
     monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace())
+    monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize)
 
     config = SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None))
     pending_path = tmp_path / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
@@ -222,10 +226,14 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
     async def fake_extract_one(**_: object) -> dict[str, object]:
         raise LLMError("network timeout")
 
+    async def fake_normalize(syms: list[str]) -> list[str]:
+        return syms
+
     monkeypatch.setattr(mod, "session_scope", fake_session_scope)
     monkeypatch.setattr(mod, "LLMClient", EnabledClient)
     monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace())
     monkeypatch.setattr(mod, "_extract_one", fake_extract_one)
+    monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize)
 
     config = SimpleNamespace(llm=SimpleNamespace(provider="qwen", model="qwen-plus", url="u", api_key="k"))
 

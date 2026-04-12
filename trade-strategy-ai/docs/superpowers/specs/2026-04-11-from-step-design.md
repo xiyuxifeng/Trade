@@ -20,7 +20,7 @@
 Pipeline 的完整步骤顺序：
 
 ```
-crawl → clean → validate → store → process → export
+crawl → clean → validate → store → stock_info_update → process → export
 ```
 
 ## 3. 实现设计
@@ -32,7 +32,7 @@ crawl → clean → validate → store → process → export
 from_step: str | None = None
 ```
 
-可选值：`crawl`, `clean`, `validate`, `store`, `process`, `export`
+可选值：`crawl`, `clean`, `validate`, `store`, `stock_info_update`, `process`, `export`
 
 **--use-db 参数**：
 ```python
@@ -47,7 +47,7 @@ use_db: bool = False  # 是否使用数据库模式存储原始数据
 在 `_build_data_pipeline_handlers` 中，通过 `_should_skip` 函数判断是否跳过：
 
 ```python
-STEP_ORDER = ["crawl", "clean", "validate", "store", "process", "export"]
+STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export"]
 
 def _should_skip(step_name: str) -> bool:
     if from_step is None:
@@ -65,6 +65,7 @@ def _should_skip(step_name: str) -> bool:
 | clean | 使用已存在的 `.cleaned.jsonl` 文件作为输入 |
 | validate | 使用已存在的 `.validated.jsonl` 文件作为输入 |
 | store | 返回空的 `StoreStats()` |
+| stock_info_update | 返回空的 `StockInfoUpdateResult(updated=False)` |
 | process | 返回空的 `ProcessTasksStats()` |
 | export | 使用空的 `ExportResult` |
 

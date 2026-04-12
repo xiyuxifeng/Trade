@@ -14,6 +14,7 @@ from src.pipeline.runner import PipelineRunner
 from src.pipeline.tasks.clean_task import CleanResult, run_clean_task
 from src.pipeline.tasks.crawl_task import CrawlResult, run_crawl_task
 from src.pipeline.tasks.export_task import ExportResult, ExportStats, run_export_task, DUCKDB_PATH
+from src.pipeline.tasks.stock_info_task import StockInfoUpdateResult, run_stock_info_update
 from src.pipeline.tasks.validate_task import ValidateResult, run_validate_task
 from src.pipeline.tasks.process_tasks import ProcessTasksStats, run_process_tasks
 
@@ -24,6 +25,7 @@ class PipelineRunResult:
 	clean: CleanResult
 	validate: ValidateResult
 	store: StoreStats
+	stock_info_update: StockInfoUpdateResult
 	export: ExportResult
 	process: ProcessTasksStats
 
@@ -70,7 +72,7 @@ def _build_data_pipeline_handlers(
 		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
 	"""
 	# 步骤优先级
-	STEP_ORDER = ["crawl", "clean", "validate", "store", "process", "export"]
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export"]
 
 	def _should_skip(step_name: str) -> bool:
 		"""判断是否应该跳过某个步骤。"""
@@ -139,6 +141,15 @@ def _build_data_pipeline_handlers(
 		)
 		return result
 
+	async def _stock_info_update(context: dict[str, Any]) -> StockInfoUpdateResult:
+		if _should_skip("stock_info_update"):
+			# 返回空的 result，后续步骤可继续
+			from src.pipeline.tasks.stock_info_task import StockInfoUpdateResult
+			return StockInfoUpdateResult(updated=False)
+		result = await run_stock_info_update(base_dir=base_dir, force=force)
+		context["stock_info_result"] = result
+		return result
+
 	async def _process(context: dict[str, Any]) -> ProcessTasksStats:
 		if _should_skip("process"):
 			context["process_stats"] = ProcessTasksStats()
@@ -160,6 +171,7 @@ def _build_data_pipeline_handlers(
 		"clean": _clean,
 		"validate": _validate,
 		"store": _store,
+		"stock_info_update": _stock_info_update,
 		"process": _process,
 		"export": _export,
 	}
@@ -238,6 +250,7 @@ async def run_pipeline(
 	clean_result = context["clean_result"]
 	validate_result = context["validate_result"]
 	store_stats = context["store_stats"]
+	stock_info_result = context.get("stock_info_result", StockInfoUpdateResult(updated=False))
 	process_stats = context["process_stats"]
 	export_result = context["export_result"]
 
@@ -246,6 +259,7 @@ async def run_pipeline(
 		clean=clean_result,
 		validate=validate_result,
 		store=store_stats,
+		stock_info_update=stock_info_result,
 		export=export_result,
 		process=process_stats,
 	)

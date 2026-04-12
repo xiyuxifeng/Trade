@@ -14,6 +14,7 @@ from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
 from src.llm.client import LLMClient, LLMError, from_env_and_config
+from src.market_data.stock_info_service import get_stock_name_to_symbol_map
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.persona.schemas import ArticlePrecondition, ArticleStrategyRule
@@ -61,9 +62,125 @@ class ExtractStats:
             object.__setattr__(self, 'errors_by_type', {t.value: 0 for t in ExtractErrorType})
 
 
-_STOCK_CODE_RE = re.compile(r"\b([0-9]{6})\.(SZ|SH|BJ)\b")
+_STOCK_CODE_RE = re.compile(r"\b([0-9]{6})\.(SZ|SH|BJ)\b", re.I)
+_MIXED_CASE_RE = re.compile(r"\b(sz|sh|bj)([0-9]{6})\b", re.I)
+_PLAIN_CODE_RE = re.compile(r"\b([0-9]{6})\b")
 _POSITIVE_WORDS = ("涨", "盈利", "买入", "做多", "突破", "拉升", "看好", "多头", "关注", "试错", "扫板", "打板")
 _NEGATIVE_WORDS = ("下跌", "亏损", "卖出", "做空", "止损", "看空", "空头", "观望", "谨慎", "风险", "取关", "止盈", "板砸", "割肉")
+
+
+def _normalize_symbol(code: str, suffix: str | None = None) -> str:
+    """将各种格式转为标准格式 000000.XX"""
+    code = code.upper()
+    if suffix:
+        suffix = suffix.upper()
+        if suffix in ("SZ", "SH", "BJ"):
+            return f"{code}.{suffix}"
+    # 纯数字，根据前缀推断交易所
+    if code.startswith(("000", "001", "002", "003", "300", "400")):
+        return f"{code}.SZ"
+    elif code.startswith(("600", "601", "603", "605", "688", "900")):
+        return f"{code}.SH"
+    elif code.startswith(("430", "830", "870")):
+        return f"{code}.BJ"
+    return f"{code}.SZ"  # 默认深圳
+
+
+def _extract_symbols_from_content(content: str) -> list[str]:
+    """从内容中提取股票代码，支持多种格式"""
+    symbols: list[str] = []
+    seen: set[str] = set()
+
+    def _add_symbol(sym: str) -> bool:
+        """添加符号，返回是否成功（去重）"""
+        sym_upper = sym.upper()
+        if sym_upper not in seen:
+            seen.add(sym_upper)
+            symbols.append(sym_upper)
+            return True
+        return False
+
+    # 1. 标准格式 000000.XX
+    for match in _STOCK_CODE_RE.finditer(content):
+        _add_symbol(f"{match.group(1)}.{match.group(2).upper()}")
+
+    # 2. 混合格式 sz002547, SZ002547
+    for match in _MIXED_CASE_RE.finditer(content):
+        _add_symbol(_normalize_symbol(match.group(2), match.group(1)))
+
+    # 3. 纯数字 002547, 600519
+    for match in _PLAIN_CODE_RE.finditer(content):
+        code = match.group(1)
+        if code.isdigit() and len(code) == 6:
+            _add_symbol(_normalize_symbol(code))
+
+    return symbols[:10]  # 最多10条
+
+
+async def _normalize_symbols_with_db(symbols: list[str]) -> list[str]:
+    """使用数据库映射将中文股票名称转为标准代码
+
+    1. 先用现有逻辑标准化各种代码格式
+    2. 对可能是中文名称的项，查询数据库进行映射
+
+    Args:
+        symbols: LLM 提取的 trading_symbols，可能包含中文名称或各种代码格式
+
+    Returns:
+        标准化后的代码列表
+    """
+    if not symbols:
+        return []
+
+    # 先对已有符号进行格式标准化
+    normalized: list[str] = []
+    name_candidates: list[str] = []  # 可能是中文名称的
+
+    for sym in symbols:
+        sym = sym.strip()
+        if not sym:
+            continue
+
+        # 已经是标准格式 000000.XX
+        if len(sym) == 10 and "." in sym:
+            normalized.append(sym.upper())
+            continue
+
+        # 小写/混合格 sz002547
+        if sym.lower().startswith(("sz", "sh", "bj")) and len(sym) == 8:
+            normalized.append(_normalize_symbol(sym[2:], sym[:2]))
+            continue
+
+        # 纯6位数字
+        if sym.isdigit() and len(sym) == 6:
+            normalized.append(_normalize_symbol(sym))
+            continue
+
+        # 可能是中文名称
+        name_candidates.append(sym)
+
+    # 如果有中文名称候选，查询数据库进行映射
+    if name_candidates:
+        try:
+            name_to_code = await get_stock_name_to_symbol_map()
+            for name in name_candidates:
+                if name in name_to_code:
+                    normalized.append(name_to_code[name])
+                # else: 无法映射，丢弃（因为 LLM 应该已经尽量填代码了）
+        except Exception:
+            # 数据库查询失败，跳过映射
+            pass
+
+    # 去重并返回
+    seen: set[str] = set()
+    result: list[str] = []
+    for sym in normalized:
+        sym_upper = sym.upper()
+        if sym_upper not in seen:
+            seen.add(sym_upper)
+            result.append(sym_upper)
+
+    return result[:10]
 
 
 def _read_prompt(path: Path) -> str:
@@ -123,14 +240,8 @@ def _heuristic_extract(article: BlogArticle) -> dict[str, Any]:
     content = article.content_text or ""
     raw_payload = article.raw_payload if isinstance(article.raw_payload, dict) else {}
 
-    symbols: list[str] = []
-    for match in _STOCK_CODE_RE.finditer(content):
-        code, exchange = match.group(1), match.group(2)
-        symbol = f"{code}.{exchange}"
-        if symbol not in symbols:
-            symbols.append(symbol)
-        if len(symbols) >= 5:
-            break
+    # 支持多种格式的股票代码提取
+    symbols = _extract_symbols_from_content(content)
 
     concepts: list[dict[str, str]] = []
     trader_id = raw_payload.get("trader_id")
@@ -383,7 +494,8 @@ async def extract_and_store_metadata(
                 continue
 
             meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
-            meta.trading_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
+            raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
+            meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
             meta.strategy_rules = rules
             meta.preconditions = preconds
             meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []

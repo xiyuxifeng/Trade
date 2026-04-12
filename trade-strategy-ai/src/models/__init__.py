@@ -5,6 +5,7 @@ from src.models.data_audit_event import DataAuditEvent
 from src.models.market_data import MarketData
 from src.models.raw_article import RawArticle
 from src.models.signal import Signal
+from src.models.stock_info import StockInfo
 from src.models.trade_log import TradeLog
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "MarketData",
     "RawArticle",
     "Signal",
+    "StockInfo",
     "TradeLog",
 ]

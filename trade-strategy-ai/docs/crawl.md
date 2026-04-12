@@ -8,16 +8,16 @@
 
 ## 架构总览
 
-### Pipeline 流程图（6 个步骤）
+### Pipeline 流程图（7 个步骤）
 
 ```
-┌────────┐    ┌───────┐    ┌──────────┐    ┌────────┐    ┌─────────┐    ┌────────┐
-│ Crawl  │ →  │ Clean │ →  │ Validate │ →  │ Store  │ →  │ Process │ →  │ Export │
-└────────┘    └───────┘    └──────────┘    └────────┘    └─────────┘    └────────┘
-     ↓            ↓             ↓              ↓              ↓              ↓
- articles.   .cleaned.     .validated.    PostgreSQL     pending_      trade_strategy.
- jsonl       jsonl         jsonl         blog_articles  tasks.jsonl   ai.duckdb
- (或raw_)                                  + article_md  + clusters
+┌────────┐    ┌───────┐    ┌──────────┐    ┌────────┐    ┌─────────────────┐    ┌─────────┐    ┌────────┐
+│ Crawl  │ →  │ Clean │ →  │ Validate │ →  │ Store  │ →  │ StockInfoUpdate │ →  │ Process │ →  │ Export │
+└────────┘    └───────┘    └──────────┘    └────────┘    └─────────────────┘    └─────────┘    └────────┘
+     ↓            ↓             ↓              ↓                  ↓                    ↓              ↓
+ articles.   .cleaned.     .validated.    PostgreSQL        stock_info         pending_      trade_strategy.
+ jsonl       jsonl         jsonl         blog_articles      表              tasks.jsonl   ai.duckdb
+ (或raw_)                                  + article_md   + clusters          + metadata
 ```
 
 ### 步骤依赖关系
@@ -28,6 +28,7 @@
 | **Clean** | `articles.jsonl` | `.cleaned.jsonl` | 否 |
 | **Validate** | `.cleaned.jsonl` | `.validated.jsonl` | 否 |
 | **Store** | `.validated.jsonl` | `blog_articles` 表 + `pending_tasks.jsonl` | 是 |
+| **StockInfoUpdate** | 无 | `stock_info` 表 | 是 |
 | **Process** | `pending_tasks.jsonl` | `article_metadata` 表 + `clusters.real.json` | 是 |
 | **Export** | DB 数据 | `trade_strategy_ai.duckdb` | 是 |
 
@@ -118,7 +119,7 @@ python -m cli.main pipeline-run --config config/app.yaml
 
 ### pipeline-run — 一键执行全流程
 
-按顺序自动完成全部步骤：`crawl → clean → validate → store → process → export`
+按顺序自动完成全部步骤：`crawl → clean → validate → store → stock_info_update → process → export`
 
 ```bash
 python -m cli.main pipeline-run --config config/app.yaml
@@ -131,7 +132,7 @@ python -m cli.main pipeline-run --config config/app.yaml
 | `--max-articles N` | 限制处理的文章数量（crawl/clean/validate/store 步骤生效） |
 | `--skip-crawl` | 跳过爬取，仅对已有 JSONL 执行后续 pipeline |
 | `--force` | 强制重新处理（覆盖 clean/validate 产物） |
-| `--from-step STEP` | 从指定步骤开始，可选：crawl, clean, validate, store, process, export |
+| `--from-step STEP` | 从指定步骤开始，可选：crawl, clean, validate, store, stock_info_update, process, export |
 | `--use-db` | Crawl 阶段直接写入 `raw_articles` 表（替代 `articles.jsonl`） |
 
 **使用示例：**
@@ -165,6 +166,7 @@ python -m cli.main pipeline-step <步骤名> [选项]
 | `clean` | 清洗 JSONL | `articles.jsonl` |
 | `validate` | 校验并富化 | `.cleaned.jsonl` |
 | `store` | 写入数据库 | `.validated.jsonl` |
+| `stock_info_update` | 更新股票信息映射表 | 无（独立更新 stock_info 表） |
 | `process` | LLM 抽取 + 聚类 | `pending_tasks.jsonl` |
 | `export` | 导出到 DuckDB | DB 数据 |
 
@@ -197,6 +199,9 @@ python -m cli.main pipeline-step validate --max-articles 80
 
 # 入库最多 50 篇
 python -m cli.main pipeline-step store --max-articles 50
+
+# 强制更新股票信息（即使未过期）
+python -m cli.main pipeline-step stock_info_update --force
 ```
 
 **通用参数：**

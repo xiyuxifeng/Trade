@@ -63,7 +63,7 @@ def classify_comment(
     if not clean_text or not clean_text.strip():
         filter_reasons.append("image_only")
     # 过滤：低价值评论
-    elif clean_text in LOW_VALUE_COMMENTS or len(clean_text) <= 2:
+    elif clean_text in LOW_VALUE_COMMENTS or len(clean_text) < 10:
         filter_reasons.append("low_value")
 
     return ClassifiedComment(

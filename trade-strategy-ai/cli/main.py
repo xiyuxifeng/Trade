@@ -27,6 +27,7 @@ from src.pipeline.tasks.validate_task import run_validate_task
 from src.pipeline.tasks.process_tasks import run_process_tasks
 from src.pipeline.tasks.export_task import run_export_task
 from src.pipeline.tasks.crawl_task import run_crawl_task
+from src.pipeline.tasks.stock_info_task import run_stock_info_update
 from src.agents.data_agent.skills.store_db import store_articles_jsonl_to_db
 from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.data_agent.skills.import_trade_logs import (
@@ -370,7 +371,7 @@ def pipeline_step(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	STEP_ORDER = ["crawl", "clean", "validate", "store", "process", "export"]
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export"]
 
 	if step not in STEP_ORDER:
 		typer.echo(f"无效步骤: {step}")
@@ -447,6 +448,14 @@ def pipeline_step(
 			typer.echo(
 				f"store done: inserted={result.inserted_articles} updated={result.updated_articles} "
 				f"dup_skipped={result.skipped_duplicates} tasks_generated={result.generated_tasks} (limit={max_articles})"
+			)
+			return result
+
+		elif step == "stock_info_update":
+			result = await run_stock_info_update(base_dir=base_dir, force=force)
+			typer.echo(
+				f"stock_info_update done: updated={result.updated} total={result.total} "
+				f"inserted={result.inserted} updated_count={result.updated_count} skipped={result.skipped}"
 			)
 			return result
 

@@ -21,6 +21,7 @@ class ArticleMetadata(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_article_metadata_schema_version", "schema_version"),
         Index("ix_article_metadata_processed_at", "processed_at"),
+        Index("ix_article_metadata_article_version", "article_id", "version"),
         CheckConstraint(
             "sentiment_score >= -1 AND sentiment_score <= 1",
             name="sentiment_score_range",
@@ -36,8 +37,8 @@ class ArticleMetadata(TimestampMixin, Base):
         Uuid,
         ForeignKey("blog_articles.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
     )
+    version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1")
     schema_version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1")
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     extracted_concepts: Mapped[list[dict[str, Any]]] = mapped_column(
@@ -64,5 +65,8 @@ class ArticleMetadata(TimestampMixin, Base):
     raw_llm_output: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
     sentiment_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     confidence_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    # LLM 调用信息
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     article = relationship("BlogArticle", back_populates="metadata_record")

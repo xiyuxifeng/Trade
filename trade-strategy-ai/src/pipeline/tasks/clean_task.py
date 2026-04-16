@@ -183,7 +183,7 @@ def run_clean_task(
 
 
 async def _clean_raw_articles_from_db(
-	*, output_path: Path, source: str | None = None, author_id: str | None = None, remove_duplicates: bool = False
+	*, output_path: Path, source: str | None = None, author_id: str | None = None, remove_duplicates: bool = False, max_articles: int | None = None
 ) -> dict[str, Any]:
 	"""从数据库读取 raw_articles，清洗后写入 JSONL 文件。"""
 	total = 0
@@ -230,6 +230,10 @@ async def _clean_raw_articles_from_db(
 				seen_url.add(u)
 			unique_records.append(rec)
 
+	# 应用 max_articles 限制
+	if max_articles is not None:
+		unique_records = unique_records[:max_articles]
+
 	# Process each record
 	for rec in unique_records:
 		comments = rec.get("comments") or rec.get("comments_payload") or []
@@ -263,7 +267,7 @@ async def _clean_raw_articles_from_db(
 
 
 async def run_clean_from_db_task(
-	*, base_dir: Path, source: str | None = None, author_id: str | None = None, force: bool = False, remove_duplicates: bool = False
+	*, base_dir: Path, source: str | None = None, author_id: str | None = None, force: bool = False, remove_duplicates: bool = False, max_articles: int | None = None
 ) -> CleanResult:
 	"""从数据库 raw_articles 读取并清洗，输出到 JSONL 文件。"""
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
@@ -277,7 +281,7 @@ async def run_clean_from_db_task(
 		filename = "all.articles.cleaned.jsonl"
 
 	out_path = out_dir / filename
-	stats: dict[str, Any] = {"files": [], "source": source, "author_id": author_id, "remove_duplicates": remove_duplicates}
+	stats: dict[str, Any] = {"files": [], "source": source, "author_id": author_id, "remove_duplicates": remove_duplicates, "max_articles": max_articles}
 
 	if out_path.exists() and not force:
 		return CleanResult(cleaned_paths=[out_path], stats_path=out_dir / "clean_stats.json")
@@ -287,6 +291,7 @@ async def run_clean_from_db_task(
 		source=source,
 		author_id=author_id,
 		remove_duplicates=remove_duplicates,
+		max_articles=max_articles,
 	)
 	stats["files"].append(file_stats)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -9,11 +10,14 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+# 并发处理限制：每次同时处理的文章数
+CONCURRENCY_LIMIT = 3
+
 from sqlalchemy import select
 from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
-from src.llm.client import LLMClient, LLMError, from_env_and_config
+from src.llm.client import LLMClient, LLMError, LLMResult, from_env_and_config
 from src.market_data.stock_info_service import get_stock_name_to_symbol_map
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
@@ -195,6 +199,11 @@ def default_pending_tasks_path(*, base_dir: Path) -> Path:
     return base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
 
 
+def default_checkpoint_path(*, base_dir: Path) -> Path:
+    """LLM 调用全部失败后的断点记录文件路径。"""
+    return base_dir / "data" / "processed" / "pipeline" / "llm_checkpoint.jsonl"
+
+
 def default_error_log_path(*, base_dir: Path) -> Path:
     return base_dir / "data" / "processed" / "llm_extraction_errors.jsonl"
 
@@ -218,6 +227,66 @@ def _record_error(
         timestamp=_now_utc().isoformat(),
     )
     append_jsonl(error_log_path, asdict(record))
+
+
+def _load_checkpoint(*, checkpoint_path: Path) -> set[str]:
+    """加载断点集合（已确认所有模型都失败的 article_id）。"""
+    if not checkpoint_path.exists():
+        return set()
+    failed_ids: set[str] = set()
+    with checkpoint_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                if "article_id" in record:
+                    failed_ids.add(record["article_id"])
+            except json.JSONDecodeError:
+                continue
+    return failed_ids
+
+
+def _add_to_checkpoint(*, article_id: str, error: str, checkpoint_path: Path) -> None:
+    """将 article_id 添加到断点文件。"""
+    ensure_dir(checkpoint_path.parent)
+    record = {
+        "article_id": article_id,
+        "error": error,
+        "timestamp": _now_utc().isoformat(),
+    }
+    append_jsonl(checkpoint_path, record)
+
+
+def _remove_from_checkpoint(*, article_id: str, checkpoint_path: Path) -> None:
+    """从断点文件移除 article_id（处理成功后调用）。"""
+    if not checkpoint_path.exists():
+        return
+    # 重新写入，排除该 article_id
+    remaining: list[dict[str, Any]] = []
+    with checkpoint_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                if record.get("article_id") != article_id:
+                    remaining.append(record)
+            except json.JSONDecodeError:
+                continue
+    # 写回
+    with checkpoint_path.open("w", encoding="utf-8") as f:
+        for record in remaining:
+            f.write(json.dumps(record, ensure_ascii=False, default=str))
+            f.write("\n")
+
+
+def _clear_checkpoint(*, checkpoint_path: Path) -> None:
+    """清空断点文件（force 模式时调用）。"""
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
 
 
 def _safe_float(value: Any) -> float | None:
@@ -354,10 +423,10 @@ async def _extract_one(
             "输出格式要求：\n"
             "{\n"
             '  "extracted_concepts": [...],   // 0-10 条，太多说明提取不精准\n'
-            '  "trading_symbols": [...],       // 0-5 个，优先提取有把握的\n'
-            '  "strategy_rules": [...],        // 0-5 条，宁缺毋滥\n'
-            '  "preconditions": [...],         // 0-5 条\n'
-            '  "comment_insights": [...],      // 0-3 条，从评论中提炼\n'
+            '  "trading_symbols": [...],       // 0-8 个，优先提取有把握的\n'
+            '  "strategy_rules": [...],        // 0-8 条，宁缺毋滥\n'
+            '  "preconditions": [...],         // 0-8 条\n'
+            '  "comment_insights": [...],      // 0-5 条，从评论中提炼\n'
             '  "sentiment_score": float,       // -1.0 ~ 1.0\n'
             '  "confidence_score": float       // 0.0 ~ 1.0\n'
             "}"
@@ -366,8 +435,8 @@ async def _extract_one(
 
     # 控制输入长度：避免把超长评论一次性塞爆
     content = article.content_text.strip()
-    if len(content) > 12000:
-        content = content[:12000]
+    if len(content) > 20000:
+        content = content[:20000]
 
     user_prompt = json.dumps(
         {
@@ -383,12 +452,419 @@ async def _extract_one(
     return await client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
+async def _process_one_article(
+    *,
+    session: Any,
+    article: BlogArticle,
+    meta: ArticleMetadata,
+    client: LLMClient,
+    prompts_dir: Path,
+    stats: ExtractStats,
+    pending_path: Path,
+    error_log_path: Path,
+    checkpoint_path: Path,
+    version: str,
+) -> bool:
+    """处理单篇文章的 LLM 抽取和数据库更新。
+
+    Returns: True if processed successfully, False otherwise.
+    """
+    stats.scanned += 1
+
+    if not article.content_text or len(article.content_text.strip()) < 80:
+        stats.skipped += 1
+        return False
+
+    error_message: str | None = None
+    mode = "unknown"
+    raw = None
+
+    if not client.is_enabled():
+        raw = _heuristic_extract(article)
+        mode = "fallback_heuristic"
+        stats.fallback_calls += 1
+    else:
+        stats.llm_calls += 1
+        try:
+            raw = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
+            mode = "llm"
+        except LLMError as exc:
+            error_message = str(exc)
+            stats.failed += 1
+            stats.errors_by_type[ExtractErrorType.NETWORK.value] += 1
+            _record_error(
+                article_id=str(article.id),
+                source_url=article.source_url,
+                error_type=ExtractErrorType.NETWORK,
+                error_message=error_message,
+                raw_output=None,
+                error_log_path=error_log_path,
+            )
+            _add_to_checkpoint(
+                article_id=str(article.id),
+                error=error_message,
+                checkpoint_path=checkpoint_path,
+            )
+            return False
+        except Exception as exc:  # noqa: BLE001
+            error_msg = str(exc)
+            stats.failed += 1
+            stats.errors_by_type[ExtractErrorType.QUALITY.value] += 1
+            meta.raw_llm_output = {"error": error_msg}
+            _record_error(
+                article_id=str(article.id),
+                source_url=article.source_url,
+                error_type=ExtractErrorType.QUALITY,
+                error_message=error_msg,
+                raw_output=None,
+                error_log_path=error_log_path,
+            )
+            return False
+
+    try:
+        raw_rules = raw.get("strategy_rules")
+        raw_preconds = raw.get("preconditions")
+        raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
+        raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
+
+        rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
+        preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
+
+        stats.schema_valid_rules += len(rules)
+        stats.schema_invalid_rules += raw_rules_count - len(rules)
+        stats.schema_valid_preconds += len(preconds)
+        stats.schema_invalid_preconds += raw_preconds_count - len(preconds)
+    except Exception as exc:  # noqa: BLE001
+        stats.failed += 1
+        error_msg = str(exc)
+        stats.errors_by_type[ExtractErrorType.SCHEMA_VALIDATION.value] += 1
+        meta.raw_llm_output = {"error": error_msg}
+        _record_error(
+            article_id=str(article.id),
+            source_url=article.source_url,
+            error_type=ExtractErrorType.SCHEMA_VALIDATION,
+            error_message=error_msg,
+            raw_output=raw if isinstance(raw, dict) else None,
+            error_log_path=error_log_path,
+        )
+        return False
+
+    meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
+    raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
+    meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
+    meta.strategy_rules = rules
+    meta.preconditions = preconds
+    meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
+    meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
+    meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
+    meta.raw_llm_output = {"mode": mode, "raw": raw, "version": version}
+    if error_message:
+        meta.raw_llm_output["error"] = error_message
+    meta.processed_at = _now_utc()
+
+    stats.extracted += 1
+
+    # 每篇文章处理完立即写入数据库
+    await session.commit()
+
+    # 输出抽取结果摘要
+    concepts_count = len(meta.extracted_concepts)
+    symbols_count = len(meta.trading_symbols)
+    rules_count = len(meta.strategy_rules)
+    preconds_count = len(meta.preconditions)
+    print(f"  [extracted] {article.title[:30]}... concepts={concepts_count} symbols={symbols_count} rules={rules_count} preconds={preconds_count}")
+
+    # 触发后续聚类/记忆刷新（先落盘待办）
+    task = AgentTask(
+        type="article_metadata_extracted",
+        title="Article metadata extracted",
+        trader_id=(article.raw_payload.get("trader_id") if isinstance(article.raw_payload, dict) else None),
+        details={
+            "article_id": str(article.id),
+            "source_url": article.source_url,
+            "mode": mode,
+            "version": version,
+            "strategy_rules": len(rules),
+            "preconditions": len(preconds),
+        },
+    )
+    append_jsonl(pending_path, task.model_dump())
+    stats.generated_tasks += 1
+
+    return True
+
+
+async def _process_article_isolated(
+    *,
+    article_id: UUID,
+    version: str,
+    llm_provider: str,
+    client: LLMClient,
+    prompts_dir: Path,
+    pending_path: Path,
+    error_log_path: Path,
+    checkpoint_path: Path,
+) -> dict:
+    """独立的文章处理函数，每个调用使用自己的数据库 session。
+
+    用于并发处理：从 session_scope 内部加载 article 和 meta，
+    完成 LLM 抽取后 commit，调用方不管理 session。
+
+    Returns: dict with 'success' (bool) and stats delta
+    """
+    result = {
+        "success": False,
+        "error": None,
+        "scanned": 0,
+        "skipped": 0,
+        "failed": 0,
+        "extracted": 0,
+        "generated_tasks": 0,
+        "llm_calls": 0,
+        "fallback_calls": 0,
+        "schema_valid_rules": 0,
+        "schema_invalid_rules": 0,
+        "schema_valid_preconds": 0,
+        "schema_invalid_preconds": 0,
+        "error_type": None,
+        "llm_provider": None,
+        "llm_model": None,
+    }
+
+    async with session_scope() as session:
+        article = await session.get(BlogArticle, article_id)
+        if not article:
+            result["error"] = f"Article not found: {article_id}"
+            return result
+
+        # 查找或创建该版本的 ArticleMetadata
+        if version == "v1":
+            meta = await session.scalar(
+                select(ArticleMetadata).where(
+                    ArticleMetadata.article_id == article_id,
+                    ArticleMetadata.processed_at.is_(None),
+                )
+            )
+            if not meta:
+                # 没有未处理的 meta，说明已被其他任务处理，跳过
+                result["scanned"] = 1
+                result["error"] = "No unprocessed metadata found"
+                return result
+        else:
+            # v2+：查找没有该版本元数据的文章
+            existing = await session.scalar(
+                select(ArticleMetadata).where(
+                    ArticleMetadata.article_id == article_id,
+                    ArticleMetadata.version == version,
+                )
+            )
+            if existing:
+                result["error"] = f"Version {version} metadata already exists"
+                return result
+            # 创建新记录
+            meta = ArticleMetadata(article_id=article_id, version=version)
+            session.add(meta)
+            await session.flush()
+
+        result["scanned"] = 1
+
+        if not article.content_text or len(article.content_text.strip()) < 80:
+            result["skipped"] = 1
+            return result
+
+        error_message: str | None = None
+        mode = "unknown"
+        raw = None
+
+        if not client.is_enabled():
+            raw = _heuristic_extract(article)
+            mode = "fallback_heuristic"
+            result["fallback_calls"] = 1
+            result["llm_provider"] = llm_provider
+            result["llm_model"] = None
+        else:
+            result["llm_calls"] = 1
+            try:
+                llm_result = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
+                raw = llm_result.data
+                result["llm_model"] = llm_result.model
+                result["llm_provider"] = llm_provider
+                mode = "llm"
+            except LLMError as exc:
+                error_message = str(exc)
+                result["failed"] = 1
+                result["error_type"] = ExtractErrorType.NETWORK.value
+                result["llm_provider"] = llm_provider
+                _record_error(
+                    article_id=str(article.id),
+                    source_url=article.source_url,
+                    error_type=ExtractErrorType.NETWORK,
+                    error_message=error_message,
+                    raw_output=None,
+                    error_log_path=error_log_path,
+                )
+                _add_to_checkpoint(
+                    article_id=str(article.id),
+                    error=error_message,
+                    checkpoint_path=checkpoint_path,
+                )
+                return result
+            except Exception as exc:  # noqa: BLE001
+                error_msg = str(exc)
+                result["failed"] = 1
+                result["error_type"] = ExtractErrorType.QUALITY.value
+                meta.raw_llm_output = {"error": error_msg}
+                _record_error(
+                    article_id=str(article.id),
+                    source_url=article.source_url,
+                    error_type=ExtractErrorType.QUALITY,
+                    error_message=error_msg,
+                    raw_output=None,
+                    error_log_path=error_log_path,
+                )
+                return result
+
+        try:
+            raw_rules = raw.get("strategy_rules")
+            raw_preconds = raw.get("preconditions")
+            raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
+            raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
+
+            rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
+            preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
+
+            result["schema_valid_rules"] = len(rules)
+            result["schema_invalid_rules"] = raw_rules_count - len(rules)
+            result["schema_valid_preconds"] = len(preconds)
+            result["schema_invalid_preconds"] = raw_preconds_count - len(preconds)
+        except Exception as exc:  # noqa: BLE001
+            result["failed"] = 1
+            error_msg = str(exc)
+            result["error_type"] = ExtractErrorType.SCHEMA_VALIDATION.value
+            meta.raw_llm_output = {"error": error_msg}
+            _record_error(
+                article_id=str(article.id),
+                source_url=article.source_url,
+                error_type=ExtractErrorType.SCHEMA_VALIDATION,
+                error_message=error_msg,
+                raw_output=raw if isinstance(raw, dict) else None,
+                error_log_path=error_log_path,
+            )
+            return result
+
+        meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
+        raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
+        meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
+        meta.strategy_rules = rules
+        meta.preconditions = preconds
+        meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
+        meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
+        meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
+        meta.raw_llm_output = {"mode": mode, "raw": raw, "version": version}
+        if error_message:
+            meta.raw_llm_output["error"] = error_message
+        meta.processed_at = _now_utc()
+        meta.provider = result.get("llm_provider")
+        meta.model = result.get("llm_model")
+
+        result["extracted"] = 1
+        await session.commit()
+
+        # 输出抽取结果摘要
+        concepts_count = len(meta.extracted_concepts)
+        symbols_count = len(meta.trading_symbols)
+        rules_count = len(meta.strategy_rules)
+        preconds_count = len(meta.preconditions)
+        print(f"  [extracted] {article.title[:30]}... concepts={concepts_count} symbols={symbols_count} rules={rules_count} preconds={preconds_count}")
+
+        # 触发后续聚类/记忆刷新（先落盘待办）
+        task = AgentTask(
+            type="article_metadata_extracted",
+            title="Article metadata extracted",
+            trader_id=(article.raw_payload.get("trader_id") if isinstance(article.raw_payload, dict) else None),
+            details={
+                "article_id": str(article.id),
+                "source_url": article.source_url,
+                "mode": mode,
+                "version": version,
+                "strategy_rules": len(rules),
+                "preconditions": len(preconds),
+            },
+        )
+        append_jsonl(pending_path, task.model_dump())
+        result["generated_tasks"] = 1
+
+        result["success"] = True
+        return result
+
+
+async def _extract_one_with_retry(
+    *,
+    client: LLMClient,
+    prompts_dir: Path,
+    article: BlogArticle,
+) -> LLMResult:
+    """带重试和模型降级的 LLM 调用。
+
+    使用 complete_json_with_retry 实现：
+    - 每个模型重试 3 次（指数退避）
+    - 所有模型都失败后抛出异常
+
+    Returns:
+        LLMResult: 包含 data (dict) 和 model (str)
+    """
+    concept_p = _read_prompt(prompts_dir / "concept_extraction.md")
+    rule_p = _read_prompt(prompts_dir / "rule_extraction.md")
+    pre_p = _read_prompt(prompts_dir / "precondition_extraction.md")
+
+    system_prompt = "\n\n".join([
+        "你必须只输出严格 JSON，不要输出 Markdown。",
+        concept_p,
+        rule_p,
+        pre_p,
+        "最终输出必须合并为一个 JSON 对象，包含字段：extracted_concepts, trading_symbols, strategy_rules, preconditions, comment_insights, sentiment_score, confidence_score。",
+        (
+            "输出格式要求：\n"
+            "{\n"
+            '  "extracted_concepts": [...],   // 0-10 条，太多说明提取不精准\n'
+            '  "trading_symbols": [...],       // 0-8 个，优先提取有把握的\n'
+            '  "strategy_rules": [...],        // 0-8 条，宁缺毋滥\n'
+            '  "preconditions": [...],         // 0-8 条\n'
+            '  "comment_insights": [...],      // 0-5 条，从评论中提炼\n'
+            '  "sentiment_score": float,       // -1.0 ~ 1.0\n'
+            '  "confidence_score": float       // 0.0 ~ 1.0\n'
+            "}"
+        ),
+    ])
+
+    # 控制输入长度：避免把超长评论一次性塞爆
+    content = article.content_text.strip()
+    if len(content) > 20000:
+        content = content[:20000]
+
+    user_prompt = json.dumps(
+        {
+            "title": article.title,
+            "source_url": article.source_url,
+            "author_name": article.author_name,
+            "published_at": article.published_at.isoformat() if article.published_at else None,
+            "content_text": content,
+        },
+        ensure_ascii=False,
+    )
+
+    # 使用带重试和模型降级的调用
+    return await client.complete_json_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
+
+
 async def extract_and_store_metadata(
     *,
     config: AppConfig,
     base_dir: Path,
     limit: int = 20,
     pending_tasks_path: Path | None = None,
+    force: bool = False,
+    version: str = "v1",
 ) -> ExtractStats:
     prompts_dir = base_dir / "prompts"
     if not prompts_dir.exists():
@@ -401,6 +877,7 @@ async def extract_and_store_metadata(
         api_key=config.llm.api_key,
     )
     client = LLMClient(llm_cfg)
+    llm_provider = llm_cfg.provider or "unknown"
 
     stats = ExtractStats()
     pending_path = pending_tasks_path or default_pending_tasks_path(base_dir=base_dir)
@@ -408,122 +885,86 @@ async def extract_and_store_metadata(
     error_log_path = default_error_log_path(base_dir=base_dir)
     ensure_dir(error_log_path.parent)
 
+    # 断点文件：仅用于日志追踪，记录所有模型都失败的文章
+    checkpoint_path = default_checkpoint_path(base_dir=base_dir)
+    if force:
+        # force 模式：清空断点记录
+        _clear_checkpoint(checkpoint_path=checkpoint_path)
+
+    # 第一步：收集所有待处理的 article_id（使用独立 session 查询）
+    article_ids: list[UUID] = []
+
     async with session_scope() as session:
-        rows = await session.execute(
-            select(BlogArticle, ArticleMetadata)
-            .join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-            .where(ArticleMetadata.processed_at.is_(None))
-            .order_by(BlogArticle.crawled_at.desc())
-            .limit(limit)
-        )
-
-        for article, meta in rows.all():
-            stats.scanned += 1
-
-            if not article.content_text or len(article.content_text.strip()) < 80:
-                stats.skipped += 1
-                continue
-
-            error_message: str | None = None
-            if not client.is_enabled():
-                raw = _heuristic_extract(article)
-                mode = "fallback_heuristic"
-                stats.fallback_calls += 1
-            else:
-                stats.llm_calls += 1
-                try:
-                    raw = await _extract_one(client=client, prompts_dir=prompts_dir, article=article)
-                    mode = "llm"
-                except LLMError as exc:
-                    raw = _heuristic_extract(article)
-                    mode = "fallback_on_error"
-                    error_message = str(exc)
-                    stats.failed += 1
-                    stats.fallback_calls += 1
-                    stats.errors_by_type[ExtractErrorType.NETWORK.value] += 1
-                    _record_error(
-                        article_id=str(article.id),
-                        source_url=article.source_url,
-                        error_type=ExtractErrorType.NETWORK,
-                        error_message=error_message,
-                        raw_output=None,
-                        error_log_path=error_log_path,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    stats.failed += 1
-                    error_msg = str(exc)
-                    stats.errors_by_type[ExtractErrorType.QUALITY.value] += 1
-                    meta.raw_llm_output = {"error": error_msg}
-                    _record_error(
-                        article_id=str(article.id),
-                        source_url=article.source_url,
-                        error_type=ExtractErrorType.QUALITY,
-                        error_message=error_msg,
-                        raw_output=None,
-                        error_log_path=error_log_path,
-                    )
-                    continue
-
-            try:
-                raw_rules = raw.get("strategy_rules")
-                raw_preconds = raw.get("preconditions")
-                raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
-                raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
-
-                rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
-                preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
-
-                # P2-LLM-001: 统计 schema 合规率
-                stats.schema_valid_rules += len(rules)
-                stats.schema_invalid_rules += raw_rules_count - len(rules)
-                stats.schema_valid_preconds += len(preconds)
-                stats.schema_invalid_preconds += raw_preconds_count - len(preconds)
-            except Exception as exc:  # noqa: BLE001
-                stats.failed += 1
-                error_msg = str(exc)
-                stats.errors_by_type[ExtractErrorType.SCHEMA_VALIDATION.value] += 1
-                meta.raw_llm_output = {"error": error_msg}
-                _record_error(
-                    article_id=str(article.id),
-                    source_url=article.source_url,
-                    error_type=ExtractErrorType.SCHEMA_VALIDATION,
-                    error_message=error_msg,
-                    raw_output=raw if isinstance(raw, dict) else None,
-                    error_log_path=error_log_path,
-                )
-                continue
-
-            meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
-            raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
-            meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
-            meta.strategy_rules = rules
-            meta.preconditions = preconds
-            meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
-            meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
-            meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
-            meta.raw_llm_output = {"mode": mode, "raw": raw}
-            if error_message:
-                meta.raw_llm_output["error"] = error_message
-            meta.processed_at = _now_utc()
-
-            stats.extracted += 1
-
-            # 触发后续聚类/记忆刷新（先落盘待办）
-            task = AgentTask(
-                type="article_metadata_extracted",
-                title="Article metadata extracted",
-                trader_id=(article.raw_payload.get("trader_id") if isinstance(article.raw_payload, dict) else None),
-                details={
-                    "article_id": str(article.id),
-                    "source_url": article.source_url,
-                    "mode": mode,
-                    "strategy_rules": len(rules),
-                    "preconditions": len(preconds),
-                },
+        if version == "v1":
+            # v1 版本：查询未处理的 ArticleMetadata
+            rows = await session.execute(
+                select(BlogArticle.id)
+                .join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+                .where(ArticleMetadata.processed_at.is_(None))
+                .order_by(BlogArticle.crawled_at.desc())
+                .limit(limit)
             )
-            append_jsonl(pending_path, task.model_dump())
-            stats.generated_tasks += 1
+            article_ids = [row[0] for row in rows.all()]
+        else:
+            # v2+ 版本：查找没有该版本元数据的文章
+            subq = (
+                select(ArticleMetadata.article_id)
+                .where(ArticleMetadata.version == version)
+            )
+            rows = await session.execute(
+                select(BlogArticle.id)
+                .where(BlogArticle.id.not_in(subq))
+                .order_by(BlogArticle.crawled_at.desc())
+                .limit(limit)
+            )
+            article_ids = [row[0] for row in rows.all()]
 
-        await session.flush()
+    if not article_ids:
+        return stats
 
+    # 第二步：使用信号量控制并发数，分批处理
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+
+    async def process_one(article_id: UUID) -> dict:
+        async with semaphore:
+            return await _process_article_isolated(
+                article_id=article_id,
+                version=version,
+                llm_provider=llm_provider,
+                client=client,
+                prompts_dir=prompts_dir,
+                pending_path=pending_path,
+                error_log_path=error_log_path,
+                checkpoint_path=checkpoint_path,
+            )
+
+    # 并发执行所有任务
+    results: list[dict] = await asyncio.gather(
+        *[process_one(aid) for aid in article_ids],
+        return_exceptions=True,
+    )
+
+    # 第三步：汇总统计结果
+    errors_by_type = {t.value: 0 for t in ExtractErrorType}
+    for r in results:
+        if isinstance(r, Exception):
+            # asyncio.gather 返回的异常在这里处理
+            stats.failed += 1
+            continue
+        stats.scanned += r.get("scanned", 0)
+        stats.extracted += r.get("extracted", 0)
+        stats.skipped += r.get("skipped", 0)
+        stats.failed += r.get("failed", 0)
+        stats.generated_tasks += r.get("generated_tasks", 0)
+        stats.llm_calls += r.get("llm_calls", 0)
+        stats.fallback_calls += r.get("fallback_calls", 0)
+        stats.schema_valid_rules += r.get("schema_valid_rules", 0)
+        stats.schema_invalid_rules += r.get("schema_invalid_rules", 0)
+        stats.schema_valid_preconds += r.get("schema_valid_preconds", 0)
+        stats.schema_invalid_preconds += r.get("schema_invalid_preconds", 0)
+        err_type = r.get("error_type")
+        if err_type and err_type in errors_by_type:
+            errors_by_type[err_type] += 1
+
+    stats.errors_by_type = errors_by_type
     return stats

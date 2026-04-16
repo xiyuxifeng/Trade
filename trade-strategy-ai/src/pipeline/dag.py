@@ -11,7 +11,7 @@ from src.common.utils import ensure_dir
 from src.pipeline.graph import PipelineGraphRegistry
 from src.pipeline.health import PipelineHealthSnapshot
 from src.pipeline.runner import PipelineRunner
-from src.pipeline.tasks.clean_task import CleanResult, run_clean_task
+from src.pipeline.tasks.clean_task import CleanResult, run_clean_task, run_clean_from_db_task
 from src.pipeline.tasks.crawl_task import CrawlResult, run_crawl_task
 from src.pipeline.tasks.export_task import ExportResult, ExportStats, run_export_task, DUCKDB_PATH
 from src.pipeline.tasks.stock_info_task import StockInfoUpdateResult, run_stock_info_update
@@ -28,6 +28,11 @@ class PipelineRunResult:
 	stock_info_update: StockInfoUpdateResult
 	export: ExportResult
 	process: ProcessTasksStats
+	cleanup_stats: dict[str, Any] = None
+
+	def __post_init__(self):
+		if self.cleanup_stats is None:
+			object.__setattr__(self, 'cleanup_stats', {"cleaned": [], "errors": []})
 
 
 def discover_crawl_jsonl_paths(*, base_dir: Path, config: AppConfig) -> list[Path]:
@@ -64,15 +69,16 @@ def _build_data_pipeline_handlers(
 	audit: AuditService,
 	from_step: str | None = None,
 	use_db: bool = False,
+	process_version: str = "v1",
 ) -> dict[str, Any]:
 	"""Create node handlers for the built-in data pipeline graph.
 
 	Args:
-		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, process, export
+		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, stock_info_update, process, export, cleanup
 		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
 	"""
 	# 步骤优先级
-	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export"]
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export", "cleanup"]
 
 	def _should_skip(step_name: str) -> bool:
 		"""判断是否应该跳过某个步骤。"""
@@ -92,22 +98,38 @@ def _build_data_pipeline_handlers(
 		context["crawl_result"] = result
 		return result
 
-	def _clean(context: dict[str, Any]) -> CleanResult:
+	async def _clean(context: dict[str, Any]) -> CleanResult:
 		if _should_skip("clean"):
 			# 跳过 clean 时，需要伪造一个 CleanResult 以便后续步骤可以继续
-			cleaned_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
-			# 将 .articles.jsonl 路径转换为 .articles.cleaned.jsonl 路径
 			from src.common.utils import ensure_dir
 			out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
 			cleaned = []
-			for p in cleaned_paths:
-				cleaned_path = out_dir / (p.parent.name + ".articles.cleaned.jsonl")
-				if cleaned_path.exists():
-					cleaned.append(cleaned_path)
+			if use_db:
+				# use_db 模式下，clean --use-db 生成的是 all.articles.cleaned.jsonl
+				all_cleaned = out_dir / "all.articles.cleaned.jsonl"
+				if all_cleaned.exists():
+					cleaned.append(all_cleaned)
+			else:
+				# 文件模式：从 articles.jsonl 路径推断 cleaned 文件路径
+				crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
+				for p in crawl_paths:
+					cleaned_path = out_dir / (p.parent.name + ".articles.cleaned.jsonl")
+					if cleaned_path.exists():
+						cleaned.append(cleaned_path)
 			context["clean_result"] = CleanResult(cleaned_paths=cleaned, stats_path=out_dir / "clean_stats.json")
 			return context["clean_result"]
-		crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
-		result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force)
+		if use_db:
+			# 数据库模式：从 raw_articles 表读取并清洗
+			result = await run_clean_from_db_task(
+				base_dir=base_dir,
+				force=force,
+				remove_duplicates=False,
+				max_articles=max_articles,
+			)
+		else:
+			# 文件模式：从 articles.jsonl 读取并清洗
+			crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
+			result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force, max_articles=max_articles)
 		context["clean_result"] = result
 		return result
 
@@ -154,7 +176,7 @@ def _build_data_pipeline_handlers(
 		if _should_skip("process"):
 			context["process_stats"] = ProcessTasksStats()
 			return context["process_stats"]
-		result = await run_process_tasks(config=config)
+		result = await run_process_tasks(config=config, force=force, version=process_version)
 		context["process_stats"] = result
 		return result
 
@@ -166,6 +188,77 @@ def _build_data_pipeline_handlers(
 		context["export_result"] = result
 		return result
 
+	def _cleanup(context: dict[str, Any]) -> dict[str, Any]:
+		"""清理中间文件，释放存储空间。"""
+		if _should_skip("cleanup"):
+			context["cleanup_result"] = {"cleaned": [], "errors": []}
+			return context["cleanup_result"]
+
+		cleaned: list[str] = []
+		errors: list[str] = []
+
+		# 1. 清理 articles.jsonl（crawl 产物）
+		if not use_db:
+			crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
+			for p in crawl_paths:
+				if p.exists():
+					try:
+						p.unlink()
+						cleaned.append(str(p))
+					except OSError as exc:
+						errors.append(f"Failed to delete {p}: {exc}")
+
+		# 2. 清理 .cleaned.jsonl（clean 产物）
+		clean_dir = base_dir / "data" / "processed" / "pipeline" / "clean"
+		if clean_dir.exists():
+			for p in clean_dir.glob("*.articles.cleaned.jsonl"):
+				try:
+					p.unlink()
+					cleaned.append(str(p))
+				except OSError as exc:
+					errors.append(f"Failed to delete {p}: {exc}")
+
+		# 3. 清理 .validated.jsonl（validate 产物）
+		validate_dir = base_dir / "data" / "processed" / "pipeline" / "validate"
+		if validate_dir.exists():
+			for p in validate_dir.glob("*.validated.jsonl"):
+				try:
+					p.unlink()
+					cleaned.append(str(p))
+				except OSError as exc:
+					errors.append(f"Failed to delete {p}: {exc}")
+
+		# 4. 清理 pending_tasks.jsonl（process 消费后残留）
+		pending_path = base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
+		if pending_path.exists():
+			try:
+				pending_path.unlink()
+				cleaned.append(str(pending_path))
+			except OSError as exc:
+				errors.append(f"Failed to delete {pending_path}: {exc}")
+
+		# 5. 清理 failed_tasks.jsonl（如果存在）
+		failed_path = base_dir / "data" / "processed" / "pipeline" / "failed_tasks.jsonl"
+		if failed_path.exists():
+			try:
+				failed_path.unlink()
+				cleaned.append(str(failed_path))
+			except OSError as exc:
+				errors.append(f"Failed to delete {failed_path}: {exc}")
+
+		# 6. 清理 llm_checkpoint.jsonl（如果存在）
+		checkpoint_path = base_dir / "data" / "processed" / "pipeline" / "llm_checkpoint.jsonl"
+		if checkpoint_path.exists():
+			try:
+				checkpoint_path.unlink()
+				cleaned.append(str(checkpoint_path))
+			except OSError as exc:
+				errors.append(f"Failed to delete {checkpoint_path}: {exc}")
+
+		result = {"cleaned": cleaned, "errors": errors}
+		context["cleanup_result"] = result
+		return result
+
 	return {
 		"crawl": _crawl,
 		"clean": _clean,
@@ -174,6 +267,7 @@ def _build_data_pipeline_handlers(
 		"stock_info_update": _stock_info_update,
 		"process": _process,
 		"export": _export,
+		"cleanup": _cleanup,
 	}
 
 
@@ -186,12 +280,14 @@ async def _run_data_pipeline_graph(
 	skip_crawl: bool = False,
 	from_step: str | None = None,
 	use_db: bool = False,
+	process_version: str = "v1",
 ) -> tuple[PipelineHealthSnapshot, dict[str, Any]]:
 	"""Run the built-in data pipeline graph and return the snapshot plus context.
 
 	Args:
-		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, process, export
+		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, stock_info_update, process, export, cleanup
 		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
+		process_version: 抽取版本号，如 "v1", "v2" 等
 	"""
 
 	default_pipeline_state_dir(base_dir=base_dir)
@@ -217,6 +313,7 @@ async def _run_data_pipeline_graph(
 			audit=audit,
 			from_step=from_step,
 			use_db=use_db,
+			process_version=process_version,
 		),
 		registry=registry,
 	)
@@ -234,6 +331,7 @@ async def run_pipeline(
 	skip_crawl: bool = False,
 	from_step: str | None = None,
 	use_db: bool = False,
+	process_version: str = "v1",
 ) -> PipelineRunResult:
 	_, context = await _run_data_pipeline_graph(
 		config=config,
@@ -243,6 +341,7 @@ async def run_pipeline(
 		skip_crawl=skip_crawl,
 		from_step=from_step,
 		use_db=use_db,
+		process_version=process_version,
 	)
 	if context["health_snapshot"].failed_nodes:
 		raise RuntimeError("; ".join(context["health_snapshot"].error_summaries) or "pipeline graph failed")
@@ -262,6 +361,7 @@ async def run_pipeline(
 		stock_info_update=stock_info_result,
 		export=export_result,
 		process=process_stats,
+		cleanup_stats=context.get("cleanup_result", {"cleaned": [], "errors": []}),
 	)
 
 

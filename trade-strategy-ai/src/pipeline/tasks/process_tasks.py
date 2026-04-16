@@ -204,7 +204,7 @@ PENDING_PATH = Path("data/processed/pipeline/pending_tasks.jsonl")
 FAILED_PATH = Path("data/processed/pipeline/failed_tasks.jsonl")
 
 
-def _create_handlers(config: AppConfig) -> dict[str, TaskHandler]:
+def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "v1") -> dict[str, TaskHandler]:
     """Create handler closures that explicitly capture config.
 
     Each handler is a local async function that closes over the config
@@ -220,6 +220,8 @@ def _create_handlers(config: AppConfig) -> dict[str, TaskHandler]:
             config=config,
             base_dir=Path("."),
             limit=20,
+            force=force,
+            version=version,
         )
 
     async def handle_article_metadata_extracted(details: dict[str, Any]) -> None:
@@ -240,6 +242,8 @@ async def run_process_tasks(
     pending_path: Path | None = None,
     failed_path: Path | None = None,
     dead_path: Path | None = None,
+    force: bool = False,
+    version: str = "v1",
 ) -> ProcessTasksStats:
     start = time.monotonic()
     stats = ProcessTasksStats()
@@ -272,7 +276,7 @@ async def run_process_tasks(
 
     failed_ids = {t.get("task_id") for t in alive_failed}
 
-    handlers = _create_handlers(config)
+    handlers = _create_handlers(config, force=force, version=version)
 
     for task in unique_tasks:
         task_id = task.get("task_id")

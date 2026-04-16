@@ -12,7 +12,7 @@ Prompt 测试脚本
 
 示例：
     python test_prompt.py --id 123e4567-e89b-12d3-a456-426614174000
-    python test_prompt.py --id 123e4567-e89b-12d3-a456-426614174000 --prompt concept_extraction
+    python test_prompt.py --id 400ecb1a-851d-480c-82a2-5d077451180a --prompt concept_extraction
     python test_prompt.py --id 123e4567-e89b-12d3-a456-426614174000 --prompt all
     python test_prompt.py --id 123e4567-e89b-12d3-a456-426614174000 --source comments
 """
@@ -32,6 +32,11 @@ from src.db.session import session_scope
 from src.llm.client import LLMClient, from_env_and_config
 from src.models.raw_article import RawArticle
 
+# 400ecb1a-851d-480c-82a2-5d077451180a 龙虎榜
+# 75f1b488-d463-4703-9064-ef27a3c2afe1 一字首开
+
+# 12f873fc-c3bf-44ca-aae8-f26596649b38 周总结贴(8.11-8.15)
+# 988494d3-606d-4a2d-bb5d-2e429b60f259 周总结帖（1.12-1.16）
 
 def load_prompt(prompts_dir: Path, prompt_name: str) -> str:
     """加载 prompt 文件内容"""

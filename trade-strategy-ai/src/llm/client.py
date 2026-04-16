@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -14,9 +15,20 @@ class LLMError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class LLMResult:
+    """LLM 调用结果，包含原始 JSON 输出和实际使用的模型。"""
+    data: dict[str, Any]
+    model: str  # 实际使用的模型名称
+
+
+# LLM API 调用重试次数
+LLM_MAX_RETRIES = 3
+
+
+@dataclass(frozen=True, slots=True)
 class LLMClientConfig:
     provider: str | None
-    model: str | None
+    model: str | list[str] | None  # 支持单模型或多模型数组
     url: str | None
     api_key: str | None
     timeout_seconds: float = 60.0
@@ -27,9 +39,18 @@ def _env_or(value: str | None, env_key: str) -> str | None:
 
 
 def from_env_and_config(*, provider: str | None, model: str | None, url: str | None, api_key: str | None) -> LLMClientConfig:
+    # 处理 model 可能是列表的情况
+    resolved_model: str | list[str] | None = None
+    if isinstance(model, list):
+        resolved_model = model if model else None
+    elif model:
+        resolved_model = _env_or(model, "LLM_MODEL")
+    else:
+        resolved_model = os.getenv("LLM_MODEL")
+
     return LLMClientConfig(
         provider=_env_or(provider, "LLM_PROVIDER"),
-        model=_env_or(model, "LLM_MODEL"),
+        model=resolved_model,
         url=_env_or(url, "LLM_URL"),
         # 优先从 DASHSCOPE_API_KEY 获取（如无则用 config/api_key 字段）
         api_key=_env_or(api_key, "DASHSCOPE_API_KEY"),
@@ -43,11 +64,22 @@ class LLMClient:
     def is_enabled(self) -> bool:
         return bool(self.cfg.provider and self.cfg.model and self.cfg.api_key)
 
+    def _normalize_models(self) -> list[str]:
+        """将 model 配置标准化为模型列表。"""
+        model = self.cfg.model
+        if model is None:
+            return []
+        if isinstance(model, str):
+            return [model]
+        if isinstance(model, list):
+            return [m for m in model if m]
+        return []
+
     def _missing_fields(self) -> list[str]:
         missing: list[str] = []
         if not (self.cfg.provider and str(self.cfg.provider).strip()):
             missing.append("provider")
-        if not (self.cfg.model and str(self.cfg.model).strip()):
+        if not (self.cfg.model):
             missing.append("model")
         if not (self.cfg.url and str(self.cfg.url).strip()):
             missing.append("url")
@@ -56,16 +88,58 @@ class LLMClient:
         return missing
 
     async def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        """单次 LLM 调用，不重试。"""
         missing = self._missing_fields()
         if missing:
             raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})")
 
+        models = self._normalize_models()
+        if not models:
+            raise LLMError("No models configured")
+
+        # 使用第一个模型
+        return await self._call_with_model(models[0], system_prompt, user_prompt)
+
+    async def complete_json_with_retry(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
+        """带重试和模型降级的 LLM 调用。
+
+        策略：
+        1. 按顺序尝试每个模型
+        2. 每个模型最多重试 3 次（指数退避）
+        3. 所有模型都失败后抛出异常
+
+        Returns:
+            LLMResult: 包含实际使用的模型和数据
+        """
+        missing = self._missing_fields()
+        if missing:
+            raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})")
+
+        models = self._normalize_models()
+        if not models:
+            raise LLMError("No models configured")
+
+        last_error: LLMError | None = None
+        for model in models:
+            for attempt in range(LLM_MAX_RETRIES):
+                try:
+                    data = await self._call_with_model(model, system_prompt, user_prompt)
+                    return LLMResult(data=data, model=model)
+                except LLMError as exc:
+                    last_error = exc
+                    if attempt < LLM_MAX_RETRIES - 1:
+                        await asyncio.sleep(2 ** attempt)  # 指数退避: 1, 2, 4 秒
+
+        # 所有模型和重试都失败
+        raise last_error or LLMError("All models failed")
+
+    async def _call_with_model(self, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        """使用指定模型调用 LLM。"""
         provider = (self.cfg.provider or "").lower().strip()
-        # 支持 qwen 走 openai 兼容模式
         if provider in {"openai", "openai_compatible", "qwen", "deepseek"}:
-            return await self._openai_chat_json(system_prompt=system_prompt, user_prompt=user_prompt)
+            return await self._openai_chat_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
-            return await self._anthropic_json(system_prompt=system_prompt, user_prompt=user_prompt)
+            return await self._anthropic_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}")
 
     async def complete_text(self, *, system_prompt: str, user_prompt: str) -> str:
@@ -76,8 +150,12 @@ class LLMClient:
             raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})")
 
         provider = (self.cfg.provider or "").lower().strip()
+        models = self._normalize_models()
+        if not models:
+            raise LLMError("No models configured")
+
         if provider in {"openai", "openai_compatible", "qwen", "deepseek"}:
-            return await self._openai_chat_text(system_prompt=system_prompt, user_prompt=user_prompt)
+            return await self._openai_chat_text(model=models[0], system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
             raise LLMError("complete_text for anthropic is not implemented")
         raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}")
@@ -85,6 +163,7 @@ class LLMClient:
     async def _openai_chat_content(
         self,
         *,
+        model: str,
         system_prompt: str,
         user_prompt: str,
         response_format: dict[str, Any] | None,
@@ -99,7 +178,7 @@ class LLMClient:
         )
 
         request: dict[str, Any] = {
-            "model": str(self.cfg.model),
+            "model": model,
             "temperature": 0.2,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -123,8 +202,9 @@ class LLMClient:
             raise LLMError(f"Empty LLM content: {content!r}")
         return content
 
-    async def _openai_chat_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def _openai_chat_json(self, *, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         content = await self._openai_chat_content(
+            model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             # 尽量要求 JSON 输出；不支持的兼容实现会忽略
@@ -136,14 +216,15 @@ class LLMClient:
         except json.JSONDecodeError as exc:
             raise LLMError(f"LLM output is not valid JSON: {content[:500]}") from exc
 
-    async def _openai_chat_text(self, *, system_prompt: str, user_prompt: str) -> str:
+    async def _openai_chat_text(self, *, model: str, system_prompt: str, user_prompt: str) -> str:
         return await self._openai_chat_content(
+            model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_format=None,
         )
 
-    async def _anthropic_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def _anthropic_json(self, *, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         base_url = (self.cfg.url or "https://api.anthropic.com").rstrip("/")
         url = f"{base_url}/v1/messages"
         headers = {
@@ -152,7 +233,7 @@ class LLMClient:
             "content-type": "application/json",
         }
         payload: dict[str, Any] = {
-            "model": self.cfg.model,
+            "model": model,
             "max_tokens": 2048,
             "system": system_prompt,
             "messages": [{"role": "user", "content": user_prompt}],

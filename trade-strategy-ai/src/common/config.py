@@ -129,7 +129,7 @@ class ApiConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     provider: str | None = None  # openai/anthropic
-    model: str | None = None
+    model: str | list[str] | None = None  # 支持单模型字符串或多模型数组
     url: str | None = None
     api_key: str | None = None
 

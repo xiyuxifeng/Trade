@@ -22,7 +22,7 @@ from src.common.logger import configure_logging
 from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 from src.common.utils import ensure_dir
 from src.pipeline.dag import run_pipeline
-from src.pipeline.tasks.clean_task import run_clean_task
+from src.pipeline.tasks.clean_task import run_clean_task, run_clean_from_db_task
 from src.pipeline.tasks.validate_task import run_validate_task
 from src.pipeline.tasks.process_tasks import run_process_tasks
 from src.pipeline.tasks.export_task import run_export_task
@@ -343,15 +343,23 @@ def pipeline_run(
 	typer.echo(
 		f"store inserted={result.store.inserted_articles} updated={result.store.updated_articles} dup_skipped={result.store.skipped_duplicates}"
 	)
+	cleanup_stats = result.cleanup_stats
+	typer.echo(
+		f"cleanup cleaned={len(cleanup_stats.get('cleaned', []))} errors={len(cleanup_stats.get('errors', []))}"
+	)
+	if cleanup_stats.get("cleaned"):
+		for f in cleanup_stats["cleaned"]:
+			typer.echo(f"  deleted: {f}")
 
 
 @app.command("pipeline-step")
 def pipeline_step(
-	step: str = typer.Argument(..., help="步骤名称: crawl, clean, validate, store, process, export"),
+	step: str = typer.Argument(..., help="步骤名称: crawl, clean, validate, store, stock_info_update, process, export, cleanup"),
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
 	max_articles: int | None = typer.Option(None, help="限制处理的文章数量（crawl/clean/validate/store 步骤生效）"),
 	force: bool = typer.Option(False, help="强制重新执行（覆盖已有产物）"),
-	use_db: bool = typer.Option(False, help="Crawl 阶段直接写入数据库（raw_articles 表）"),
+	use_db: bool = typer.Option(False, help="Crawl/Clean 阶段使用数据库模式（crawl: 写入 raw_articles 表；clean: 从 raw_articles 表读取并清洗）"),
+	new_version: str | None = typer.Option(None, help="使用新版本号重新提取（如 v2, v3），为 process 步骤专用"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:
 	"""单独执行 Pipeline 中的某个步骤。
@@ -364,6 +372,7 @@ def pipeline_step(
 	  python -m cli.main pipeline-step store
 	  python -m cli.main pipeline-step process --force
 	  python -m cli.main pipeline-step crawl --use-db
+	  python -m cli.main pipeline-step clean --use-db
 	  python -m cli.main pipeline-step crawl --max-articles 50
 	"""
 	configure_logging(log_level)
@@ -371,7 +380,7 @@ def pipeline_step(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export"]
+	STEP_ORDER = ["crawl", "clean", "validate", "store", "stock_info_update", "process", "export", "cleanup"]
 
 	if step not in STEP_ORDER:
 		typer.echo(f"无效步骤: {step}")
@@ -412,18 +421,33 @@ def pipeline_step(
 			return result
 
 		elif step == "clean":
-			crawl_paths = discover_crawl_jsonl_paths_func()
-			if not crawl_paths:
-				raise RuntimeError(
-					"未找到 articles.jsonl 文件。"
-					" 请先运行 'pipeline-step crawl' 或 'pipeline-run --from-step clean --skip-crawl'"
+			if use_db:
+				# 数据库模式：从 raw_articles 表读取并清洗
+				existing = find_cleaned_paths()
+				if existing and not force:
+					typer.echo(f"找到 {len(existing)} 个已清洗文件（跳过处理），使用 --force 强制覆盖")
+				result = await run_clean_from_db_task(
+					base_dir=base_dir,
+					force=force,
+					remove_duplicates=False,
+					max_articles=max_articles,
 				)
-			existing = find_cleaned_paths()
-			if existing and not force:
-				typer.echo(f"找到 {len(existing)} 个已清洗文件（跳过处理），使用 --force 强制覆盖")
-			result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force, max_articles=max_articles)
-			typer.echo(f"clean done: {len(result.cleaned_paths)} files (max_articles={max_articles})")
-			return result
+				typer.echo(f"clean done: {len(result.cleaned_paths)} files (max_articles={max_articles})")
+				return result
+			else:
+				# 文件模式：从 articles.jsonl 读取并清洗
+				crawl_paths = discover_crawl_jsonl_paths_func()
+				if not crawl_paths:
+					raise RuntimeError(
+						"未找到 articles.jsonl 文件。"
+						" 请先运行 'pipeline-step crawl' 或 'pipeline-run --from-step clean --skip-crawl'"
+					)
+				existing = find_cleaned_paths()
+				if existing and not force:
+					typer.echo(f"找到 {len(existing)} 个已清洗文件（跳过处理），使用 --force 强制覆盖")
+				result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force, max_articles=max_articles)
+				typer.echo(f"clean done: {len(result.cleaned_paths)} files (max_articles={max_articles})")
+				return result
 
 		elif step == "validate":
 			cleaned_paths = find_cleaned_paths()
@@ -462,10 +486,77 @@ def pipeline_step(
 		elif step == "process":
 			pending_path = base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
 			if not pending_path.exists():
-				typer.echo(f"未找到 pending_tasks.jsonl（位于 {pending_path}）")
-				typer.echo("可能还没有文章入库，请先运行 'pipeline-step store'")
-				raise typer.Exit(code=1)
-			result = await run_process_tasks(config=loaded.config)
+				if force:
+					# force 模式：从数据库重建 pending_tasks.jsonl
+					from src.schemas.contracts import AgentTask
+					from src.common.utils import append_jsonl
+					from src.db.session import session_scope
+					from src.models.blog_article import BlogArticle
+					from src.models.article_metadata import ArticleMetadata
+					from sqlalchemy import select
+
+					version = new_version or "v1"
+					pending_path.parent.mkdir(parents=True, exist_ok=True)
+					typer.echo(f"未找到 pending_tasks.jsonl，force 模式从数据库重建...")
+
+					async def _rebuild_pending_tasks():
+						async with session_scope() as session:
+							# 查询所有文章（或按 version 过滤）
+							if version == "v1":
+								# v1: 找没有 metadata 记录的文章
+								rows = await session.execute(
+									select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
+										   BlogArticle.author_name, BlogArticle.source_url,
+										   BlogArticle.content_hash, BlogArticle.raw_payload)
+									.join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+									.where(ArticleMetadata.processed_at.is_(None))
+								)
+							else:
+								# v2+: 找没有该版本 metadata 记录的文章
+								subq = select(ArticleMetadata.article_id).where(
+									ArticleMetadata.version == version
+								)
+								rows = await session.execute(
+									select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
+										   BlogArticle.author_name, BlogArticle.source_url,
+										   BlogArticle.content_hash, BlogArticle.raw_payload)
+									.where(BlogArticle.id.not_in(subq))
+								)
+
+							count = 0
+							for row in rows.all():
+								article_id, source, author_id, author_name, source_url, content_hash, raw_payload = row
+								trader_id = None
+								if isinstance(raw_payload, dict):
+									trader_id = raw_payload.get("trader_id")
+								task = AgentTask(
+									type="article_ingested",
+									title="New/updated article ingested",
+									trader_id=trader_id if isinstance(trader_id, str) else None,
+									details={
+										"article_id": str(article_id),
+										"source": source,
+										"site": raw_payload.get("site") if isinstance(raw_payload, dict) else None,
+										"author_id": author_id,
+										"author_name": author_name,
+										"source_url": source_url,
+										"content_hash": content_hash,
+										"inserted": False,
+										"updated": False,
+									},
+								)
+								append_jsonl(pending_path, task.model_dump())
+								count += 1
+							return count
+
+					count = asyncio.run(_rebuild_pending_tasks())
+					typer.echo(f"已生成 {count} 条 pending_tasks.jsonl 条目")
+				else:
+					typer.echo(f"未找到 pending_tasks.jsonl（位于 {pending_path}）")
+					typer.echo("可能还没有文章入库，请先运行 'pipeline-step store'，或使用 --force 跳过此检查")
+					raise typer.Exit(code=1)
+			version = new_version or "v1"
+			result = await run_process_tasks(config=loaded.config, force=force, version=version)
 			typer.echo(
 				f"process done: processed={result.processed} skipped_dedup={result.skipped_dedup} "
 				f"retried={result.retried} failed={result.failed} dead={result.dead}"
@@ -476,6 +567,38 @@ def pipeline_step(
 			result = await run_export_task()
 			typer.echo(f"export done: duckdb_path={result.duckdb_path}")
 			return result
+
+		elif step == "cleanup":
+			# cleanup 直接调用 handler，不走 DAG runner（cleanup 不在 data_pipeline 图中）
+			from src.pipeline.dag import _build_data_pipeline_handlers
+			from src.audit.service import AuditService
+
+			audit = AuditService()
+			handlers = _build_data_pipeline_handlers(
+				config=loaded.config,
+				base_dir=base_dir,
+				max_articles=None,
+				force=False,
+				skip_crawl=False,
+				audit=audit,
+				from_step="cleanup",
+				use_db=False,
+			)
+			context: dict[str, Any] = {
+				"config": loaded.config,
+				"base_dir": base_dir,
+				"max_articles": None,
+				"force": False,
+				"skip_crawl": False,
+				"from_step": None,
+				"use_db": False,
+				"audit_service": audit,
+			}
+			cleanup_result = handlers["cleanup"](context)
+			typer.echo(f"cleanup done: cleaned={len(cleanup_result.get('cleaned', []))} errors={len(cleanup_result.get('errors', []))}")
+			if cleanup_result.get('cleaned'):
+				typer.echo(f"  deleted: {', '.join(cleanup_result['cleaned'])}")
+			return cleanup_result
 
 	# 执行步骤
 	result = asyncio.run(run_step())

@@ -8,14 +8,14 @@
 
 ## 架构总览
 
-### Pipeline 流程图（7 个步骤）
+### Pipeline 流程图（8 个步骤）
 
 ```
-┌────────┐    ┌───────┐    ┌──────────┐    ┌────────┐    ┌─────────────────┐    ┌─────────┐    ┌────────┐
-│ Crawl  │ →  │ Clean │ →  │ Validate │ →  │ Store  │ →  │ StockInfoUpdate │ →  │ Process │ →  │ Export │
-└────────┘    └───────┘    └──────────┘    └────────┘    └─────────────────┘    └─────────┘    └────────┘
-     ↓            ↓             ↓              ↓                  ↓                    ↓              ↓
- articles.   .cleaned.     .validated.    PostgreSQL        stock_info         pending_      trade_strategy.
+┌────────┐    ┌───────┐    ┌──────────┐    ┌────────┐    ┌─────────────────┐    ┌─────────┐    ┌────────┐    ┌─────────┐
+│ Crawl  │ →  │ Clean │ →  │ Validate │ →  │ Store  │ →  │ StockInfoUpdate │ →  │ Process │ →  │ Export │ →  │ Cleanup │
+└────────┘    └───────┘    └──────────┘    └────────┘    └─────────────────┘    └─────────┘    └────────┘    └─────────┘
+     ↓            ↓             ↓              ↓                  ↓                    ↓              ↓              ↓
+ articles.   .cleaned.     .validated.    PostgreSQL        stock_info         pending_      trade_strategy.  (清理中间文件)
  jsonl       jsonl         jsonl         blog_articles      表              tasks.jsonl   ai.duckdb
  (或raw_)                                  + article_md   + clusters          + metadata
 ```
@@ -31,6 +31,7 @@
 | **StockInfoUpdate** | 无 | `stock_info` 表 | 是 |
 | **Process** | `pending_tasks.jsonl` | `article_metadata` 表 + `clusters.real.json` | 是 |
 | **Export** | DB 数据 | `trade_strategy_ai.duckdb` | 是 |
+| **Cleanup** | 无 | 删除中间文件 | 否 |
 
 ---
 
@@ -132,20 +133,23 @@ python -m cli.main pipeline-run --config config/app.yaml
 | `--max-articles N` | 限制处理的文章数量（crawl/clean/validate/store 步骤生效） |
 | `--skip-crawl` | 跳过爬取，仅对已有 JSONL 执行后续 pipeline |
 | `--force` | 强制重新处理（覆盖 clean/validate 产物） |
-| `--from-step STEP` | 从指定步骤开始，可选：crawl, clean, validate, store, stock_info_update, process, export |
-| `--use-db` | Crawl 阶段直接写入 `raw_articles` 表（替代 `articles.jsonl`） |
+| `--from-step STEP` | 从指定步骤开始，可选：crawl, clean, validate, store, stock_info_update, process, export, cleanup |
+| `--use-db` | Crawl/Clean 阶段使用数据库模式（crawl 写入 raw_articles 表；clean 从 raw_articles 表读取） |
 
 **使用示例：**
 
 ```bash
-# 从 validate 开始，强制重跑
+# 数据库模式完整流程（推荐用于生产环境）
+python -m cli.main pipeline-run --use-db
+
+# 从 validate 开始（假设 clean 已完成）
 python -m cli.main pipeline-run --from-step validate --force
 
 # 跳过爬虫，直接处理已有文件
 python -m cli.main pipeline-run --skip-crawl --force
 
-# 数据库模式 + 从 store 开始
-python -m cli.main pipeline-run --use-db --from-step store
+# 数据库模式 + 从 store 开始（需要先运行过 clean --use-db）
+python -m cli.main pipeline-run --use-db --from-step store --force
 ```
 
 ---
@@ -167,23 +171,36 @@ python -m cli.main pipeline-step <步骤名> [选项]
 | `validate` | 校验并富化 | `.cleaned.jsonl` |
 | `store` | 写入数据库 | `.validated.jsonl` |
 | `stock_info_update` | 更新股票信息映射表 | 无（独立更新 stock_info 表） |
-| `process` | LLM 抽取 + 聚类 | `pending_tasks.jsonl` |
+| `process` | LLM 抽取 + 聚类 | `pending_tasks.jsonl`（不存在时，`--force` 自动从数据库重建） |
 | `export` | 导出到 DuckDB | DB 数据 |
+| `cleanup` | 清理中间文件 | 无（自动清理已完成的步骤产物） |
 
 **常用示例：**
 
 ```bash
-# 单独执行 clean
+# 单独执行 clean（文件模式）
 python -m cli.main pipeline-step clean
+
+# 数据库模式：从 raw_articles 表清洗
+python -m cli.main pipeline-step clean --use-db
 
 # 强制重跑 clean（覆盖已有）
 python -m cli.main pipeline-step clean --force
 
+# 数据库模式 + 限制数量
+python -m cli.main pipeline-step clean --use-db --max-articles 100
+
 # 单独执行 store
 python -m cli.main pipeline-step store
 
-# 强制重跑 process
+# 重跑 process（跳过已成功的，重试失败的）
+python -m cli.main pipeline-step process
+
+# 强制重跑 process（清空断点记录，重新处理所有文章）
 python -m cli.main pipeline-step process --force
+
+# 使用新版本重新提取（如升级 LLM prompt 后），无需跑 store，直接从数据库重建 pending_tasks.jsonl
+python -m cli.main pipeline-step process --new-version v2 --force
 
 # 数据库模式爬取
 python -m cli.main pipeline-step crawl --use-db
@@ -202,6 +219,9 @@ python -m cli.main pipeline-step store --max-articles 50
 
 # 强制更新股票信息（即使未过期）
 python -m cli.main pipeline-step stock_info_update --force
+
+# 清理中间文件（释放存储空间）
+python -m cli.main pipeline-step cleanup
 ```
 
 **通用参数：**
@@ -209,8 +229,9 @@ python -m cli.main pipeline-step stock_info_update --force
 | 参数 | 说明 | 适用步骤 |
 |------|------|---------|
 | `--max-articles N` | 限制处理的文章数量 | `crawl`, `clean`, `validate`, `store` |
-| `--force` | 强制重新执行（覆盖已有产物） | 所有步骤 |
-| `--use-db` | 直接写入数据库（替代文件） | `crawl` |
+| `--force` | 强制重新执行（覆盖已有产物）；process 步骤还会自动从数据库重建 pending_tasks.jsonl | 所有步骤 |
+| `--use-db` | 直接写入数据库（替代文件） | `crawl`, `clean` |
+| `--new-version` | 使用新版本号重新提取（如 v2, v3） | `process` |
 | `--config` | 配置文件路径 | 所有步骤 |
 
 **自动查找机制：**
@@ -220,15 +241,40 @@ python -m cli.main pipeline-step stock_info_update --force
 | `clean` | `data/processed/crawl/{source}/{author_id}/articles.jsonl` |
 | `validate` | `data/processed/pipeline/clean/*.cleaned.jsonl` |
 | `store` | `data/processed/pipeline/validate/*.validated.jsonl` |
-| `process` | `data/processed/pipeline/pending_tasks.jsonl` |
+| `process` | `data/processed/pipeline/pending_tasks.jsonl`（不存在时，`--force` 自动从数据库重建） |
 | `export` | 直接读取数据库，无需文件 |
+| `cleanup` | 无（自动清理所有中间文件） |
 
 **缺少前置文件时的报错示例：**
 
 ```
 $ python -m cli.main pipeline-step clean
 未找到 articles.jsonl 文件。请先运行 'pipeline-step crawl' 或 'pipeline-run --from-step clean --skip-crawl'
+如果使用的crawl方式是 --use-db, clean 也需要添加 --use-db
 ```
+
+**process 步骤缺少 pending_tasks.jsonl 的特殊处理：**
+
+```
+$ python -m cli.main pipeline-step process --new-version v2
+未找到 pending_tasks.jsonl（位于 data/processed/pipeline/pending_tasks.jsonl）
+可能还没有文章入库，请先运行 'pipeline-step store'，或使用 --force 跳过此检查
+
+$ python -m cli.main pipeline-step process --new-version v2 --force
+未找到 pending_tasks.jsonl，force 模式从数据库重建...
+已生成 120 条 pending_tasks.jsonl 条目
+process done: processed=120 skipped_dedup=0 retried=0 failed=0 dead=0
+```
+
+> 注意：`--force` 时会自动从数据库读取文章信息，按 store 步骤相同的格式重建 `pending_tasks.jsonl`，无需先跑 `store`。
+
+**常见错误排查：**
+
+| 错误场景 | 原因 | 解决方案 |
+|---------|------|---------|
+| `pipeline-step clean` 报 "未找到 articles.jsonl" | 使用了文件模式但 JSONL 不存在 | 先运行 `pipeline-step crawl`，或使用 `pipeline-step clean --use-db` |
+| `pipeline-run --use-db --from-step validate` 执行后 validate 为 0 | `--from-step validate` 会跳过 clean，但 `use_db` 模式下 clean 生成的是 `all.articles.cleaned.jsonl` | 先单独运行 `pipeline-step clean --use-db`，再运行后续步骤 |
+| `pipeline-step clean --use-db` 报 "0 files" | 数据库 `raw_articles` 表中没有未处理的数据 | 先运行 `pipeline-step crawl --use-db` 抓取数据 |
 
 **与 pipeline-run 的区别：**
 
@@ -236,7 +282,8 @@ $ python -m cli.main pipeline-step clean
 |------|---------------|-----------------|
 | 执行范围 | 连续执行多个步骤 | 单独执行单个步骤 |
 | 用途 | 日常增量运行 | 调试、修复、重跑特定步骤 |
-| `--use-db` | 支持 | 仅 `crawl` 支持 |
+| `--use-db` | 支持 `crawl`、`clean`（自动传递） | 支持 `crawl`、`clean` |
+| `--force` | 强制重新执行所有步骤 | 强制重新处理（包括之前失败的文章） |
 
 ---
 
@@ -365,8 +412,11 @@ soup.select_one(".article-text.p_coten#first")  # 最优先
 
 **代码位置**: `src/pipeline/tasks/clean_task.py`
 
-**输入**: `articles.jsonl`
-**输出**: `data/processed/pipeline/clean/{author_id}.articles.cleaned.jsonl`
+**输入**:
+- 文件模式：`articles.jsonl`
+- 数据库模式：`raw_articles` 表
+
+**输出**: `data/processed/pipeline/clean/{author_id,source,all}.articles.cleaned.jsonl`
 
 | 步骤 | 说明 |
 |------|------|
@@ -382,6 +432,36 @@ soup.select_one(".article-text.p_coten#first")  # 最优先
 - `comments` → `comments_payload`（仅保留非过滤评论）
 - 新增 `comments_filtered_count`（被过滤的评论数）
 - 新增 `comments_total_count`（评论总数）
+
+**两种运行模式**：
+
+| 模式 | 命令 | 输入 | 输出文件 |
+|------|------|------|---------|
+| **文件模式（默认）** | `pipeline-step clean` | `articles.jsonl` | `{author_id}.articles.cleaned.jsonl` |
+| **数据库模式** | `pipeline-step clean --use-db` | `raw_articles` 表 | `all.articles.cleaned.jsonl` |
+
+**使用示例**：
+
+```bash
+# 文件模式：从 articles.jsonl 清洗
+python -m cli.main pipeline-step clean
+
+# 数据库模式：从 raw_articles 表清洗
+python -m cli.main pipeline-step clean --use-db
+
+# 限制处理数量
+python -m cli.main pipeline-step clean --use-db --max-articles 100
+
+# 强制覆盖已有文件
+python -m cli.main pipeline-step clean --use-db --force
+```
+
+**常见错误**：
+
+| 错误信息 | 原因 | 解决方案 |
+|---------|------|---------|
+| `未找到 articles.jsonl 文件` | 使用文件模式但 JSONL 文件不存在 | 先运行 `pipeline-step crawl` 或使用 `--use-db` 模式 |
+| `clean done: 0 files` | 使用文件模式但未找到 JSONL 文件，或已存在清洗文件 | 确认 `data/processed/crawl/` 目录下有 `articles.jsonl`，或使用 `--force` 覆盖 |
 
 ---
 
@@ -452,6 +532,26 @@ source_url 已存在？ → 否 → INSERT 新文章
 **输入**: `pending_tasks.jsonl`
 **输出**: `article_metadata` 表 + `clusters.real.json`
 
+#### 版本机制
+
+`article_metadata` 表支持多版本共存，通过 `version` 字段区分：
+
+| 版本 | 说明 |
+|------|------|
+| `v1`（默认） | 查询 `processed_at IS NULL` 的记录，更新现有记录 |
+| `v2+` | 查询没有该版本元数据的文章，创建新记录 |
+
+#### 自动重建 pending_tasks.jsonl
+
+当 `pending_tasks.jsonl` 不存在时：
+- **不带 `--force`**：报错并退出，提示先跑 `store`
+- **带 `--force`**：自动从数据库读取所有文章，按 `store` 步骤相同的格式生成 `pending_tasks.jsonl`，然后正常执行
+
+这使得生成新版本结果（如 `--new-version v2`）无需先跑 `store`：
+```bash
+python -m cli.main pipeline-step process --new-version v2 --force
+```
+
 #### 任务类型
 
 | 任务类型 | 处理器 | 说明 |
@@ -459,12 +559,51 @@ source_url 已存在？ → 否 → INSERT 新文章
 | `article_ingested` | `extract_and_store_metadata()` | LLM 抽取文章元数据 |
 | `article_metadata_extracted` | `build_clusters_from_db()` | 重建人物聚类 |
 
+#### LLM 调用重试机制
+
+**配置**：`config/app.yaml` 中 `llm.model` 支持数组配置：
+
+```yaml
+llm:
+  provider: "qwen"
+  model: ["qwen-plus-2025-07-14", "qwen-plus-2025-07-28", "qwen-plus-2025-12-01"]
+  url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+```
+
+**重试策略**：
+
+1. **单模型重试**：每个模型最多重试 3 次（指数退避：1, 2, 4 秒）
+2. **模型降级**：当前模型重试全部失败后，自动尝试下一个模型
+3. **全部失败**：所有模型和重试都失败后，记录到断点文件并继续处理下一篇
+
+#### 断点文件
+
+`data/processed/pipeline/llm_checkpoint.jsonl` — 记录所有 LLM 确认失败的 article_id（用于日志追踪）。
+
+**续传逻辑**：
+- v1 版本：只处理 `processed_at IS NULL` 的记录（已成功的自动跳过）
+- v2+ 版本：只处理没有该版本元数据的文章（已有该版本记录的自动跳过）
+- `--force` 会清空断点记录，强制重新处理所有文章
+
 #### 失败任务处理
 
 | 文件 | 说明 |
 |------|------|
 | `failed_tasks.jsonl` | 处理失败但未超过 TTL（可重试） |
 | `dead_tasks.jsonl` | 超过 TTL 或重试次数上限（永久失败） |
+
+**使用示例**：
+
+```bash
+# 正常运行（跳过已成功的，重试失败的和 pending 的）
+python -m cli.main pipeline-step process
+
+# 强制重试所有文章（清空断点记录）
+python -m cli.main pipeline-step process --force
+
+# 使用新版本 LLM 重新提取，无需跑 store，直接从数据库重建任务队列
+python -m cli.main pipeline-step process --new-version v2 --force
+```
 
 ---
 
@@ -476,12 +615,86 @@ source_url 已存在？ → 否 → INSERT 新文章
 
 ---
 
+### 阶段 7: Cleanup — 清理中间文件
+
+**代码位置**: `src/pipeline/dag.py`
+
+**功能**：Pipeline 完整执行后，清理中间文件以释放存储空间。
+
+**清理的文件**：
+
+| 文件 | 说明 | 清理时机 |
+|------|------|---------|
+| `articles.jsonl` | crawl 产物 | 文件模式下清理 |
+| `*.articles.cleaned.jsonl` | clean 产物 | always |
+| `*.validated.jsonl` | validate 产物 | always |
+| `pending_tasks.jsonl` | process 消费后残留 | always |
+| `failed_tasks.jsonl` | 失败任务记录 | always |
+| `llm_checkpoint.jsonl` | LLM 调用断点记录 | always |
+
+**使用方式**：
+
+```bash
+# 单独执行 cleanup
+python -m cli.main pipeline-step cleanup
+
+# pipeline-run 会在最后自动执行 cleanup
+python -m cli.main pipeline-run --use-db
+```
+
+**输出示例**：
+
+```
+cleanup done: cleaned=6 errors=0
+  deleted: data/processed/crawl/tgb/10461311/articles.jsonl
+  deleted: data/processed/pipeline/clean/all.articles.cleaned.jsonl
+  deleted: data/processed/pipeline/validate/all.articles.validated.jsonl
+  deleted: data/processed/pipeline/pending_tasks.jsonl
+  deleted: data/processed/pipeline/failed_tasks.jsonl
+  deleted: data/processed/pipeline/llm_checkpoint.jsonl
+```
+
+---
+
 ## 两种运行模式
 
-| 模式 | 命令 | Crawl 输出 | 适用场景 |
-|------|------|-----------|---------|
+### 数据库模式完整流程
+
+`--use-db` 模式下，数据存储在 `raw_articles` 表，完整流程：
+
+```bash
+# 1. 爬取数据到数据库
+python -m cli.main pipeline-step crawl --use-db
+
+# 2. 从数据库清洗到 JSONL 文件（必须步骤！）
+python -m cli.main pipeline-step clean --use-db
+
+# 3. 继续后续步骤
+python -m cli.main pipeline-step validate
+python -m cli.main pipeline-step store
+```
+
+### Crawl 步骤
+
+| 模式 | 命令 | 输出 | 适用场景 |
+|------|------|------|---------|
 | **文件模式（默认）** | `pipeline-step crawl` | `articles.jsonl` | 调试、中间产物复用 |
 | **数据库模式** | `pipeline-step crawl --use-db` | `raw_articles` 表 | 生产环境、跨设备迁移 |
+
+### Clean 步骤
+
+| 模式 | 命令 | 输入 | 输出文件 |
+|------|------|------|---------|
+| **文件模式（默认）** | `pipeline-step clean` | `articles.jsonl` | `{author_id}.articles.cleaned.jsonl` |
+| **数据库模式** | `pipeline-step clean --use-db` | `raw_articles` 表 | `all.articles.cleaned.jsonl` |
+
+### pipeline-run 的 --use-db 行为
+
+| 命令 | 行为 |
+|------|------|
+| `pipeline-run --use-db` | crawl 使用 DB 模式，clean 自动使用 DB 模式 |
+| `pipeline-run --use-db --from-step validate` | 跳过 crawl 和 clean，从 validate 开始（需确保已运行过 `clean --use-db`） |
+| `pipeline-run --use-db --from-step store` | 跳过 crawl 和 clean，从 store 开始（需确保已运行过 `clean --use-db`） |
 
 ---
 

@@ -305,6 +305,7 @@ def pipeline_run(
 	skip_crawl: bool = typer.Option(False, help="跳过 crawl（直接用已有 articles.jsonl）"),
 	from_step: str | None = typer.Option(None, help="从指定步骤开始执行（crawl/clean/validate/store/process/export）"),
 	use_db: bool = typer.Option(False, help="Crawl 阶段直接写入数据库（raw_articles 表），替代 articles.jsonl 文件"),
+	new_version: str | None = typer.Option(None, help="Process 步骤的版本号（如 v2, v3），与 --from-step process 配合使用"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:
 	"""一键跑通 crawl → clean → validate → store。
@@ -314,6 +315,11 @@ def pipeline_run(
 	- --from-step clean：从 clean 开始，跳过 crawl
 	- --from-step validate：从 validate 开始，跳过 crawl 和 clean
 	- --from-step store：从 store 开始，跳过 crawl/clean/validate
+	- --from-step process：从 process 开始，跳过前面的步骤
+
+	使用 --new-version 指定 process 步骤的版本号（如 v2, v3）：
+	- 需要配合 --from-step process 使用
+	- 例如：pipeline-run --from-step process --use-db --new-version v2 --force
 
 	使用 --use-db 可以让 Crawl 阶段直接写入数据库：
 	- 替代 articles.jsonl 文件存储
@@ -324,6 +330,8 @@ def pipeline_run(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
+	process_version = new_version or "v1"
+
 	async def _run_and_cleanup():
 		result = await run_pipeline(
 			config=loaded.config,
@@ -333,6 +341,7 @@ def pipeline_run(
 			skip_crawl=skip_crawl,
 			from_step=from_step,
 			use_db=use_db,
+			process_version=process_version,
 		)
 		return result
 
@@ -485,78 +494,8 @@ def pipeline_step(
 
 		elif step == "process":
 			pending_path = base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
-			if not pending_path.exists():
-				if force:
-					# force 模式：从数据库重建 pending_tasks.jsonl
-					from src.schemas.contracts import AgentTask
-					from src.common.utils import append_jsonl
-					from src.db.session import session_scope
-					from src.models.blog_article import BlogArticle
-					from src.models.article_metadata import ArticleMetadata
-					from sqlalchemy import select
-
-					version = new_version or "v1"
-					pending_path.parent.mkdir(parents=True, exist_ok=True)
-					typer.echo(f"未找到 pending_tasks.jsonl，force 模式从数据库重建...")
-
-					async def _rebuild_pending_tasks():
-						async with session_scope() as session:
-							# 查询所有文章（或按 version 过滤）
-							if version == "v1":
-								# v1: 找没有 metadata 记录的文章
-								rows = await session.execute(
-									select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
-										   BlogArticle.author_name, BlogArticle.source_url,
-										   BlogArticle.content_hash, BlogArticle.raw_payload)
-									.join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-									.where(ArticleMetadata.processed_at.is_(None))
-								)
-							else:
-								# v2+: 找没有该版本 metadata 记录的文章
-								subq = select(ArticleMetadata.article_id).where(
-									ArticleMetadata.version == version
-								)
-								rows = await session.execute(
-									select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
-										   BlogArticle.author_name, BlogArticle.source_url,
-										   BlogArticle.content_hash, BlogArticle.raw_payload)
-									.where(BlogArticle.id.not_in(subq))
-								)
-
-							count = 0
-							for row in rows.all():
-								article_id, source, author_id, author_name, source_url, content_hash, raw_payload = row
-								trader_id = None
-								if isinstance(raw_payload, dict):
-									trader_id = raw_payload.get("trader_id")
-								task = AgentTask(
-									type="article_ingested",
-									title="New/updated article ingested",
-									trader_id=trader_id if isinstance(trader_id, str) else None,
-									details={
-										"article_id": str(article_id),
-										"source": source,
-										"site": raw_payload.get("site") if isinstance(raw_payload, dict) else None,
-										"author_id": author_id,
-										"author_name": author_name,
-										"source_url": source_url,
-										"content_hash": content_hash,
-										"inserted": False,
-										"updated": False,
-									},
-								)
-								append_jsonl(pending_path, task.model_dump())
-								count += 1
-							return count
-
-					count = asyncio.run(_rebuild_pending_tasks())
-					typer.echo(f"已生成 {count} 条 pending_tasks.jsonl 条目")
-				else:
-					typer.echo(f"未找到 pending_tasks.jsonl（位于 {pending_path}）")
-					typer.echo("可能还没有文章入库，请先运行 'pipeline-step store'，或使用 --force 跳过此检查")
-					raise typer.Exit(code=1)
 			version = new_version or "v1"
-			result = await run_process_tasks(config=loaded.config, force=force, version=version)
+			result = await run_process_tasks(config=loaded.config, force=force, version=version, pending_path=pending_path)
 			typer.echo(
 				f"process done: processed={result.processed} skipped_dedup={result.skipped_dedup} "
 				f"retried={result.retried} failed={result.failed} dead={result.dead}"
@@ -617,7 +556,7 @@ def extract_articles(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	stats = asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, limit=limit))
+	stats = asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, total_limit=limit))
 	typer.echo(
 		f"Extract done scanned={stats.scanned} extracted={stats.extracted} skipped={stats.skipped} failed={stats.failed}"
 	)
@@ -663,7 +602,7 @@ async def _e2e_regression_async(
 	)
 
 	# 3) extract
-	await extract_and_store_metadata(config=loaded_cfg.config, base_dir=base_dir, limit=extract_limit)
+	await extract_and_store_metadata(config=loaded_cfg.config, base_dir=base_dir, total_limit=extract_limit)
 
 	# 4) build clusters
 	full_clusters = clusters_dest if clusters_dest.is_absolute() else (base_dir / clusters_dest)

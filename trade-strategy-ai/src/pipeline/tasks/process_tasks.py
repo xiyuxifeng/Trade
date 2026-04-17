@@ -219,7 +219,6 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
         await extract_and_store_metadata(
             config=config,
             base_dir=Path("."),
-            limit=20,
             force=force,
             version=version,
         )
@@ -234,6 +233,66 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
         "article_ingested": handle_article_ingested,
         "article_metadata_extracted": handle_article_metadata_extracted,
     }
+
+
+async def _rebuild_pending_tasks(pending_path: Path, version: str) -> None:
+    """从数据库重建 pending_tasks.jsonl。"""
+    from src.schemas.contracts import AgentTask
+    from src.common.utils import append_jsonl
+    from src.db.session import session_scope
+    from src.models.blog_article import BlogArticle
+    from src.models.article_metadata import ArticleMetadata
+    from sqlalchemy import select, or_
+
+    pending_path.parent.mkdir(parents=True, exist_ok=True)
+
+    async with session_scope() as session:
+        if version == "v1":
+            # v1: 找没有 metadata 记录的文章
+            rows = await session.execute(
+                select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
+                       BlogArticle.author_name, BlogArticle.source_url,
+                       BlogArticle.content_hash, BlogArticle.raw_payload)
+                .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+                .where(or_(
+                    ArticleMetadata.id.is_(None),
+                    ArticleMetadata.processed_at.is_(None)
+                ))
+            )
+        else:
+            # v2+: 找没有该版本 metadata 记录的文章
+            subq = select(ArticleMetadata.article_id).where(
+                ArticleMetadata.version == version
+            )
+            rows = await session.execute(
+                select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
+                       BlogArticle.author_name, BlogArticle.source_url,
+                       BlogArticle.content_hash, BlogArticle.raw_payload)
+                .where(BlogArticle.id.not_in(subq))
+            )
+
+        for row in rows.all():
+            article_id, source, author_id, author_name, source_url, content_hash, raw_payload = row
+            trader_id = None
+            if isinstance(raw_payload, dict):
+                trader_id = raw_payload.get("trader_id")
+            task = AgentTask(
+                type="article_ingested",
+                title="New/updated article ingested",
+                trader_id=trader_id if isinstance(trader_id, str) else None,
+                details={
+                    "article_id": str(article_id),
+                    "source": source,
+                    "site": raw_payload.get("site") if isinstance(raw_payload, dict) else None,
+                    "author_id": author_id,
+                    "author_name": author_name,
+                    "source_url": source_url,
+                    "content_hash": content_hash,
+                    "inserted": False,
+                    "updated": False,
+                },
+            )
+            append_jsonl(pending_path, task.model_dump())
 
 
 async def run_process_tasks(
@@ -251,6 +310,11 @@ async def run_process_tasks(
     p_path = pending_path or PENDING_PATH
     f_path = failed_path or FAILED_PATH
     d_path = dead_path or DEAD_TASKS_PATH
+
+    # force 模式：pending_tasks.jsonl 不存在时从数据库重建
+    if force and not p_path.exists():
+        await _rebuild_pending_tasks(p_path, version)
+        print(f"[process] force 模式：已从数据库重建 pending_tasks.jsonl（{p_path}）")
 
     all_tasks = _load_tasks(p_path)
     if not all_tasks:

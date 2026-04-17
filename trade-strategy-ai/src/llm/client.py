@@ -136,7 +136,7 @@ class LLMClient:
     async def _call_with_model(self, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """使用指定模型调用 LLM。"""
         provider = (self.cfg.provider or "").lower().strip()
-        if provider in {"openai", "openai_compatible", "qwen", "deepseek"}:
+        if provider in {"openai", "openai_compatible", "qwen", "deepseek", "glm"}:
             return await self._openai_chat_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
             return await self._anthropic_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
@@ -154,7 +154,7 @@ class LLMClient:
         if not models:
             raise LLMError("No models configured")
 
-        if provider in {"openai", "openai_compatible", "qwen", "deepseek"}:
+        if provider in {"openai", "openai_compatible", "qwen", "deepseek", "glm"}:
             return await self._openai_chat_text(model=models[0], system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
             raise LLMError("complete_text for anthropic is not implemented")

@@ -13,7 +13,7 @@ from uuid import UUID
 # 并发处理限制：每次同时处理的文章数
 CONCURRENCY_LIMIT = 3
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
@@ -639,19 +639,24 @@ async def _process_article_isolated(
 
         # 查找或创建该版本的 ArticleMetadata
         if version == "v1":
+            # 先查找该文章是否有任何 metadata 记录
             meta = await session.scalar(
                 select(ArticleMetadata).where(
                     ArticleMetadata.article_id == article_id,
-                    ArticleMetadata.processed_at.is_(None),
                 )
             )
-            if not meta:
-                # 没有未处理的 meta，说明已被其他任务处理，跳过
+            if meta and meta.processed_at is not None:
+                # 已有处理完成的 metadata，跳过
                 result["scanned"] = 1
-                result["error"] = "No unprocessed metadata found"
+                result["error"] = "Already processed"
                 return result
+            if not meta:
+                # 没有记录，创建新记录
+                meta = ArticleMetadata(article_id=article_id, version=version)
+                session.add(meta)
+                await session.flush()
         else:
-            # v2+：查找没有该版本元数据的文章
+            # v2+：查找该版本的元数据记录是否已存在
             existing = await session.scalar(
                 select(ArticleMetadata).where(
                     ArticleMetadata.article_id == article_id,
@@ -659,6 +664,7 @@ async def _process_article_isolated(
                 )
             )
             if existing:
+                result["scanned"] = 1
                 result["error"] = f"Version {version} metadata already exists"
                 return result
             # 创建新记录
@@ -861,11 +867,12 @@ async def extract_and_store_metadata(
     *,
     config: AppConfig,
     base_dir: Path,
-    limit: int = 20,
     pending_tasks_path: Path | None = None,
     force: bool = False,
     version: str = "v1",
+    total_limit: int | None = None,
 ) -> ExtractStats:
+    """流式批次处理：每批加载 CONCURRENCY_LIMIT * 7 = 21 条，并发处理完后再加载下一批，直到没有数据为止。"""
     prompts_dir = base_dir / "prompts"
     if not prompts_dir.exists():
         raise FileNotFoundError(f"prompts dir not found: {prompts_dir}")
@@ -891,38 +898,8 @@ async def extract_and_store_metadata(
         # force 模式：清空断点记录
         _clear_checkpoint(checkpoint_path=checkpoint_path)
 
-    # 第一步：收集所有待处理的 article_id（使用独立 session 查询）
-    article_ids: list[UUID] = []
-
-    async with session_scope() as session:
-        if version == "v1":
-            # v1 版本：查询未处理的 ArticleMetadata
-            rows = await session.execute(
-                select(BlogArticle.id)
-                .join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-                .where(ArticleMetadata.processed_at.is_(None))
-                .order_by(BlogArticle.crawled_at.desc())
-                .limit(limit)
-            )
-            article_ids = [row[0] for row in rows.all()]
-        else:
-            # v2+ 版本：查找没有该版本元数据的文章
-            subq = (
-                select(ArticleMetadata.article_id)
-                .where(ArticleMetadata.version == version)
-            )
-            rows = await session.execute(
-                select(BlogArticle.id)
-                .where(BlogArticle.id.not_in(subq))
-                .order_by(BlogArticle.crawled_at.desc())
-                .limit(limit)
-            )
-            article_ids = [row[0] for row in rows.all()]
-
-    if not article_ids:
-        return stats
-
-    # 第二步：使用信号量控制并发数，分批处理
+    # 每批大小：并发数的 7 倍，确保每批能充分利用并发
+    BATCH_SIZE = CONCURRENCY_LIMIT * 7
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
     async def process_one(article_id: UUID) -> dict:
@@ -938,33 +915,79 @@ async def extract_and_store_metadata(
                 checkpoint_path=checkpoint_path,
             )
 
-    # 并发执行所有任务
-    results: list[dict] = await asyncio.gather(
-        *[process_one(aid) for aid in article_ids],
-        return_exceptions=True,
-    )
+    async def load_batch() -> list[UUID]:
+        """加载一批 article_id，不重复已处理的文章。
 
-    # 第三步：汇总统计结果
-    errors_by_type = {t.value: 0 for t in ExtractErrorType}
-    for r in results:
-        if isinstance(r, Exception):
-            # asyncio.gather 返回的异常在这里处理
-            stats.failed += 1
-            continue
-        stats.scanned += r.get("scanned", 0)
-        stats.extracted += r.get("extracted", 0)
-        stats.skipped += r.get("skipped", 0)
-        stats.failed += r.get("failed", 0)
-        stats.generated_tasks += r.get("generated_tasks", 0)
-        stats.llm_calls += r.get("llm_calls", 0)
-        stats.fallback_calls += r.get("fallback_calls", 0)
-        stats.schema_valid_rules += r.get("schema_valid_rules", 0)
-        stats.schema_invalid_rules += r.get("schema_invalid_rules", 0)
-        stats.schema_valid_preconds += r.get("schema_valid_preconds", 0)
-        stats.schema_invalid_preconds += r.get("schema_invalid_preconds", 0)
-        err_type = r.get("error_type")
-        if err_type and err_type in errors_by_type:
-            errors_by_type[err_type] += 1
+        不使用 offset 分页：因为 WHERE 条件过滤掉已处理文章后，
+        后续查询从 offset=0 开始不会重复拉取已处理的文章。
+        """
+        async with session_scope() as session:
+            if version == "v1":
+                rows = await session.execute(
+                    select(BlogArticle.id)
+                    .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+                    .where(
+                        or_(
+                            ArticleMetadata.id.is_(None),
+                            ArticleMetadata.processed_at.is_(None)
+                        )
+                    )
+                    .order_by(BlogArticle.crawled_at.desc())
+                    .limit(BATCH_SIZE)
+                )
+            else:
+                subq = (
+                    select(ArticleMetadata.article_id)
+                    .where(ArticleMetadata.version == version)
+                )
+                rows = await session.execute(
+                    select(BlogArticle.id)
+                    .where(BlogArticle.id.not_in(subq))
+                    .order_by(BlogArticle.crawled_at.desc())
+                    .limit(BATCH_SIZE)
+                )
+            return [row[0] for row in rows.all()]
 
-    stats.errors_by_type = errors_by_type
-    return stats
+    async def process_batch(article_ids: list[UUID]) -> list[dict]:
+        results = await asyncio.gather(
+            *[process_one(aid) for aid in article_ids],
+            return_exceptions=True,
+        )
+        return list(results)
+
+    async def run() -> ExtractStats:
+        total_processed = 0
+        while True:
+            batch_ids = await load_batch()
+            if not batch_ids:
+                break
+            # 如果设置了 total_limit，检查是否超过
+            if total_limit is not None and total_processed + len(batch_ids) > total_limit:
+                batch_ids = batch_ids[: total_limit - total_processed]
+                if not batch_ids:
+                    break
+            print(f"[extract_and_store_metadata] processing batch of {len(batch_ids)} articles (total_processed={total_processed})")
+            results = await process_batch(batch_ids)
+
+            # 汇总统计结果
+            for r in results:
+                if isinstance(r, Exception):
+                    stats.failed += 1
+                    continue
+                stats.scanned += r.get("scanned", 0)
+                stats.extracted += r.get("extracted", 0)
+                stats.skipped += r.get("skipped", 0)
+                stats.failed += r.get("failed", 0)
+                stats.generated_tasks += r.get("generated_tasks", 0)
+                stats.llm_calls += r.get("llm_calls", 0)
+                stats.fallback_calls += r.get("fallback_calls", 0)
+                stats.schema_valid_rules += r.get("schema_valid_rules", 0)
+                stats.schema_invalid_rules += r.get("schema_invalid_rules", 0)
+                stats.schema_valid_preconds += r.get("schema_valid_preconds", 0)
+                stats.schema_invalid_preconds += r.get("schema_invalid_preconds", 0)
+
+            total_processed += len(batch_ids)
+
+        return stats
+
+    return await run()

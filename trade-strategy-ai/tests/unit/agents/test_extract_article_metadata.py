@@ -190,7 +190,7 @@ async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_p
     stats = await mod.extract_and_store_metadata(
         config=config,
         base_dir=tmp_path,
-        limit=1,
+        total_limit=1,
         pending_tasks_path=pending_path,
     )
 
@@ -237,7 +237,7 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
 
     config = SimpleNamespace(llm=SimpleNamespace(provider="qwen", model="qwen-plus", url="u", api_key="k"))
 
-    stats = await mod.extract_and_store_metadata(config=config, base_dir=tmp_path, limit=1)
+    stats = await mod.extract_and_store_metadata(config=config, base_dir=tmp_path, total_limit=1)
 
     assert stats.extracted == 1
     assert stats.failed == 1

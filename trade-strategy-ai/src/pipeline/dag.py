@@ -137,7 +137,7 @@ def _build_data_pipeline_handlers(
 		if _should_skip("validate"):
 			clean_result = context.get("clean_result")
 			if clean_result:
-				context["validate_result"] = ValidateResult(validated_paths=clean_result.cleaned_paths, stats_path=clean_result.stats_path.parent / "validation_report.json")
+				context["validate_result"] = ValidateResult(validated_paths=clean_result.cleaned_paths, report_path=clean_result.stats_path.parent / "validation_report.json")
 				return context["validate_result"]
 			raise ValueError("Cannot skip validate: clean_result not available")
 		clean_result = context["clean_result"]

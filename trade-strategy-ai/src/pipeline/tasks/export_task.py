@@ -103,6 +103,10 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
         )
         """
     )
+    # 添加唯一约束，保证同一文章的同一版本只有一条记录
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_article_version ON metadata(article_id, schema_version)"
+    )
 
 
 def _ensure_export_state_table(conn: duckdb.DuckDBPyConnection) -> None:

@@ -1,5 +1,9 @@
 # Proposed Plan TaskList
 
+> 历史参考文档。  
+> 唯一主清单已迁移到 `docs/TaskList.md`。  
+> 本文件保留 Proposed-Plan 阶段的任务拆分记录，不再作为执行入口。
+
 ## 说明
 
 本文档基于以下三部分综合整理：

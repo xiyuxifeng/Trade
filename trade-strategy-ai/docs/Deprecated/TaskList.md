@@ -1,0 +1,480 @@
+# 📋 开发任务列表（Task List）
+
+> 历史参考文档。  
+> 唯一主清单已迁移到 `docs/TaskList.md`。  
+> 本文件不再作为当前执行入口，仅保留旧 Phase 演进记录。
+
+## Phase 0：运行闭环 MVP（3-7 天）
+
+> 目标：先跑通“盘前建议 + 盘后考核复盘”的日常闭环（可手动、可配置定时），再逐步完善爬虫与策略反推能力。
+
+
+### Config & Contracts（配置与数据契约）
+- [x] P0-101 定义配置文件规范（建议 YAML）：timezone、schedule.*、evaluation.*、traders[]、llm.*
+- [x] P0-102 实现配置加载与优先级（文件 < 环境变量 < DB覆盖(可选) < 手动触发参数）
+- [x] P0-103 定义并实现 Pydantic 契约：DataRequest/DataResponse、TradeIdea、EvaluationRequest/EvaluationResult、DailyReport
+- [x] P0-104 定义幂等键与重复运行策略（同日重复运行不重复入库）
+
+
+### Orchestration（编排与调度）
+- [x] P0-105 实现 ManagerAgent 最小编排：run_pre_market / run_after_close（先 CLI 手动触发）
+- [x] P0-106 实现轻量 scheduler（建议 APScheduler）：按 schedule.* 定时触发 Manager
+- [x] P0-107 实现 DataAgent 最小能力（例如：行情 OHLCV + 常用指标）；缺能力返回 capability_missing
+- [x] P0-108 实现 1 个 TraderAgent 样本：请求数据 -> 输出结构化 TradeIdea -> 上报 Manager
+- [x] P0-109 实现 Task 机制：capability_missing 自动生成 agent_tasks **待办**
+
+
+### Reporting（报告最小闭环）
+ - [x] P0-110 生成盘前日报（DailyReport）
+ - [x] P0-111 生成盘后考核报告（EvaluationResult 汇总）
+ - [x] P0-112 输出每日分析报告（HTML）：DailyReport / EvaluationResult 渲染为静态 HTML 文件
+ - [x] P0-113 增加日报/考核 HTML 模板：`src/reporting/templates/daily_report.html`、`src/reporting/templates/evaluation.html`
+ - [x] P0-114 CLI 增加报告导出参数（可选）：运行盘前/盘后时同时生成 HTML 版本报告
+ - [x] P0-V01 Phase 0 验收：手动触发可完成“盘前日报 + 盘后考核”，未配置 schedule 不自动跑
+
+---
+
+## Phase 0.5：Persona Router MVP（3-7 天）
+
+> 目标：在不依赖完整爬虫/LLM 抽取/DSL 的情况下，把“多风格 persona + 市场态势路由 + 收益最大化”接入盘前闭环，并输出可解释/可回放的决策。
+
+### Persona Schema（规则契约与字段标准化）
+- [x] P0-115 定义 `strategy_rules/preconditions` JSON schema（字段标准化）
+- [x] P0-116 定义 claim_key 字典（v0）并写入文档
+
+### StyleCluster & Router（多风格与路由）
+- [x] P0-117 定义 StyleCluster/MarketState 数据结构（可回放）
+- [x] P0-118 实现收益最大化路由（Hard Filter + Scoring Router + Top-2 备选）
+- [x] P0-119 CLI 增加 `persona-init-sample`（无爬虫时生成样例 clusters 文件）
+
+### MarketState（指数/ETF 日线 → regime/vol）
+- [x] P0-123 从本地指数/ETF 日线 CSV 生成 MarketState（regime/vol 规则化分类）
+- [x] P0-124 CLI 增加 `market-state-build`（输出 MarketState JSON）
+- [x] P0-125 ManagerAgent 在缺省 market_state_path 时可从 benchmark CSV 自动构建 MarketState
+- [x] P0-126 AkShare 日线拉取工具类（可复用），并支持 `market-state-build --from-akshare`
+
+### Run Loop Integration（闭环接入）
+- [x] P0-120 盘前 TradeIdea 标注风格选择结果（cluster_id/label/score/reasons）
+- [x] P0-121 输出路由决策 JSON（persona_route_YYYY-MM-DD.json）
+- [x] P0-122 日报 HTML 增加“风格簇”列
+
+### Phase 0.5 Verification（验收）
+- [x] P0.5-V01 persona.enable=true 时，盘前日报包含风格簇列且可生成 persona_route 文件
+- [x] P0.5-V02 Top-1/Top-2 选择理由可解释、可人工调参
+
+备注：已在本机完成一次 CLI 端到端运行验证（见 data/processed 输出）。
+
+---
+
+## Phase 1：数据层（2-3 周）
+
+### Data Architecture (数据架构)
+- [x] P0-001 设计 PostgreSQL Schema：blog_articles, trade_logs, market_data, article_metadata（已在 `src/models/` 定义，并已落地 Alembic migration）
+- [x] P0-002 设计数据库索引策略（时间序列、股票代码、关键字段）（已在模型 Index/UniqueConstraint 中体现；需通过 migration 验证可用）
+- [x] P0-003 制定数据验证规则和异常检测策略（已实现 `src/pipeline/validation.py`）
+- [x] P0-004 选型并配置 DuckDB / Parquet 存储方案
+
+### Blog Crawler (博客爬虫)
+- [x] P1-001 分析目标博客网站结构和动态加载机制
+- [x] P1-002 开发静态 HTML 爬虫模块（BeautifulSoup）
+- [x] P1-003 开发动态页面爬虫模块（Playwright）
+- [x] P1-004 实现博客内容提取器（标题、正文、发布时间、标签）
+- [ ] P1-005 集成 Nginx + Proxy 池实现反爬虫防护
+- [x] P1-006 建立爬虫错误重试和日志机制
+
+补充（面向增量更新的必须项）：
+- [x] P1-006A 建立“按交易员来源配置”的增量抓取机制（支持同站点多作者，last_seen + content_hash/URL 去重）
+- [x] P1-006B 建立文章更新触发：新文章入库后触发 Trader 画像/记忆刷新（**先落盘为待办，后续再异步化**）
+- [x] P1-006C 为淘股吧实现手工 Cookie 认证抓取（配置形态：`crawl.auth.tgb.cn.cookie`）
+- [x] P1-006C1 将抓取配置拆分为 `crawl.auth`（站点认证）与 `crawl.sources`（作者来源）
+- [x] P1-006D 为淘股吧实现评论抓取与清洗：去表情、标记无效评论、区分作者/读者
+- [x] P1-006E 为淘股吧实现楼中楼评论拍平存储，同时保留 `parent_comment_id/root_comment_id/reply_to_user`
+- [x] P1-006F 增加首版轻量反爬策略：限频、随机抖动、最大页数/文章数/评论页数、403/429 退避
+- [x] P1-006G 自动登录预留：定义认证接口，后续支持 Playwright 登录与 Cookie 自动续期
+- [x] P1-006H 抓取命令增加 Cookie 配置使用说明，并记录到项目文档
+- [x] P1-006I 抽象站点抓取器接口，首版实现 `TgbCrawler`，兼容未来多站点扩展
+
+### Trade Log Parser (交易记录解析)
+ - [x] P1-007 定义交易记录 Schema（时间、标的、方向、价格、仓位）
+ - [x] P1-008 开发 HTML/Table 交易记录解析器
+ - [x] P1-009 开发 PDF 交易记录解析器
+ - [x] P1-010 实现交易数据验证（重复、冲突、缺失）
+ - [x] P1-011 建立交易数据导入流程（CSV/Excel 支持）
+
+补充（多交易员绑定）：
+- [x] P1-011A 增加 trader_id/account_id 绑定策略（导入时能归属到 TraderAgent）
+
+### Market Data Integration (市场数据接入)
+ - [x] P1-012 集成股票 K线数据源（TuShare / AKShare）
+ - [x] P1-013 实现数据本地缓存和更新策略
+ - [x] P1-014 集成指数和板块数据
+ - [x] P1-015 建立数据质量检查（OHLCV 合理性）
+
+### Database & Storage (数据库与存储)
+- [x] P1-016 配置 PostgreSQL 连接池（SQLAlchemy）（已在 `config/database.py` + `src/db/session.py`）
+- [x] P1-017 实现 ORM 模型（已在 `src/models/`；Repository/DAO 层可后续补齐）
+- [x] P1-017A 建立 Alembic versions 与首个 migration（把现有 ORM 模型落地到 DB，可一键 migrate）
+- [x] P1-018 建立数据导入脚本和初始化流程
+- [x] P1-018A 抓取 JSONL 入库（articles.jsonl → BlogArticle/ArticleMetadata，含 source_url/content_hash 幂等去重/upsert）
+- [x] P1-019 配置数据备份和恢复机制
+- [x] P1-020 优化数据库查询性能（Query Plan）
+- [x] P1-021 建立数据版本控制和审计日志
+
+### Data Pipeline & Validation (数据管道与验证)
+- [x] P1-022 设计 Airflow DAG 或 Luigi 数据流程（已按方案 A 落地为轻量 DAG 抽象层）
+- [x] P1-023 实现数据异常检测（离群值、缺失）
+- [x] P1-024 实现数据去重和去噪
+- [x] P1-025 编写数据质量测试（单元测试）
+- [x] P1-026 建立数据监控 Dashboard（数据新鲜度、完整性）增强
+
+补充（落地为可跑的一键链路，优先级高）：
+- [x] P1-026A 实现最小 pipeline DAG + tasks（crawl/clean/validate/store），并提供可重复运行的一键入口
+
+补充（Phase 1.1/1.2 已落地，pipeline 继续完善）：
+- [x] P1-026F pipeline 增加 pending_tasks 消费（process_tasks）：按 article_id 去重、固定重试、failed 持久化
+- [x] P1-026G pipeline 增加 DuckDB 导出（export_task）：导出 articles + metadata（幂等写入）
+
+补充（Pipeline 技术债务，跟进中）：
+- [x] P1-026B DuckDB JSON 字段读写约定与查询示例补齐（确认写入/读回类型，补充 json_extract 用法）
+- [x] P1-026C export_task 在 PostgreSQL 环境回归验证（确认 DATABASE_URL、生效与性能/一致性）
+- [x] P1-026D run_process_tasks 改为显式 config 参数注入（闭包捕获，消除 global）
+- [x] P1-026E failed_tasks.jsonl 增加自动重试机制（3次上限）+ TTL 清理（7天）+ dead_tasks.jsonl
+- [x] P1-026H 修复 export_task 增量水位：UUID4 → crawled_at watermark + DuckDB export_state 表
+
+补充（Pipeline 增量控制与数据库存储改进）：
+- [x] P1-026K 新增 --from-step 参数支持：可从指定步骤开始执行 pipeline（crawl/clean/validate/store/process/export）
+- [x] P1-026L 新增 raw_articles 表：原始爬取数据直接写入数据库，替代 articles.jsonl
+- [x] P1-026M 新增 crawl_state 表：增量抓取状态统一存储到数据库，替代 state.json
+- [x] P1-026N 新增 --use-db CLI 参数：可通过命令行控制是否使用数据库模式存储原始数据
+
+补充（去重能力，待后续完善）：
+- [x] P1-026I TradeLog 复合业务键唯一约束：`(account_id, symbol, executed_at, quantity, price)` 加 DB UniqueConstraint（方案 A：DB 层幂等）
+- [ ] P1-026J dedup_task 重构/扩展：**pipeline 无交易数据输入，待确认数据入口后接入或移除** ❌（原因：新方案主链路不以 trade dedup task 为核心，且当前仍缺稳定交易数据入口，继续扩展该 task 的收益很低）
+
+### API Layer (API 接口层)
+- [x] P1-027 设计数据查询 API（FastAPI）
+- [x] P1-028 实现博客数据查询接口
+- [x] P1-029 实现交易数据查询接口
+- [x] P1-030 实现市场数据查询接口
+- [x] P1-031 实现数据导出接口（CSV/JSON/Parquet）
+
+补充（运行闭环接口）：
+- [x] P1-032 实现手动触发接口：/run/pre_market、/run/after_close
+- [x] P1-033 实现报告查询接口：日报/考核报告查询与 HTML 下载
+
+补充（宿主薄壳接口，规划）：
+- [x] P1-034 定义宿主 JSON 命令契约（run_pre_market/run_after_close/persona_init_sample）
+- [ ] P1-035 提供薄壳入口（可选）：FastAPI /host/command → 调用内部 handler ❌（原因：新方案优先走 CLI + 现有 `/run/*` 主链路，宿主薄壳接口不是当前实现闭环的必要条件）
+- [x] P1-036 提供结果查询与下载（可选）：报告/路由决策 JSON
+- [ ] P1-037 蒸馏归纳文章分类：技术策略，复盘操作，无效文章 ❌（原因：新方案更关注 per-trader 策略版本聚合与质量门禁，简单文章分类不是首要产出，也不再作为独立主任务推进）
+- [ ] P1-038 文章内的图片处理 ？ ❌（原因：新方案第一阶段以文本规则抽取、策略版本、主动取数和回测为主，图片处理不在当前关键路径上）
+- [ ] P1-039 提炼操作策略
+
+### Phase 1 Verification (验收检查)
+- [ ] P1-V01 单元测试覆盖率 >80%
+- [ ] P1-V02 爬虫成功率 >95%，数据缺失率 <5%
+- [ ] P1-V03 数据库性能测试通过（1000+ QPS）
+- [ ] P1-V04 数据 24h 更新能工作无异常
+- [ ] P1-V05 文档完成度 100%
+
+---
+
+## Phase 2：认知与行为建模（2-3 周）
+
+> 更新：Phase 2 优先服务于 TraderAgent 画像与建议生成；原 Knowledge/Behavior 任务仍保留，但可以分批落地。
+
+### TraderAgent（交易员画像与建议生成，新增核心）
+- [x] P2-101 定义 traders 配置结构（trader_id、display_name、article_sources、trade_log_sources）
+- [ ] P2-102 实现 Trader 画像（文章 + 交易记录 → 风格/纪律/偏好标签）
+- [x] P2-103 实现 Trader 记忆存储结构（成功/失败案例、复盘结论，可检索）
+- [ ] P2-104 实现盘前 TradeIdea 生成（结构化输出 + 校验）
+- [ ] P2-105 实现复盘任务处理：接收 EvaluationRequest，输出复盘结论并写回记忆
+
+补充（对应当前风险：建议能力仍偏模板化）：
+- [ ] P2-104A 将画像信号并入 TradeIdea 理由、置信度和风险字段，避免建议仍主要依赖模板文案
+- [ ] P2-104B 让 TraderAgent 在有画像/无画像时都能明确区分决策来源，确保理由可回放、可解释
+- [ ] P2-104C 为 `reason` 增加画像证据引用格式，明确标出来源片段或聚合结论
+- [ ] P2-104D 为 `confidence` 增加画像/记忆/市场数据三路加权口径，避免仍然只依赖固定权重
+
+### ManagerAgent（日常汇总与编排，新增核心）
+- [ ] P2-106 实现 TradeIdea 收集与去重/冲突处理
+- [ ] P2-107 生成盘前汇总日报（DailyReport）
+- [ ] P2-108 盘后触发评估：拉取最新行情并计算建议收益（含 MFE/MAE 口径定义）
+- [ ] P2-109 阈值触发复盘：evaluation.* 配置化
+
+补充（对应当前风险：闭环主链路缺画像/记忆写回）：
+- [ ] P2-109A 明确盘后复盘写回的最小闭环：评估结果 → 复盘任务 → TraderMemory 写回 **部分完成**
+- [ ] P2-109B 验证盘前/盘后链路都能消费最新画像与记忆，而不是只读取静态配置或默认模板
+- [x] P2-109C 为复盘任务定义最小字段集（触发原因、建议来源、评估快照、写回结果）
+- [ ] P2-109D 为复盘写回增加回归测试，确保成功/失败两种路径都可追踪
+
+### Knowledge Agent - 文章理解 (NLP & 策略提取)
+- [ ] P2-001 定义策略 DSL 格式（YAML/JSON 模式）
+- [ ] P2-002 创建策略概念库（主动性、被动性、量态）— **待用真实LLM抽取结果验证概念标签覆盖度**
+- [ ] P2-003 开发概念抽取模块（LLM + Prompt）
+- [ ] P2-004 开发买卖规则抽取模块（条件、动作、参数）
+- [ ] P2-005 开发市场前置条件抽取（大盘、板块、风格、流动性）
+- [ ] P2-006 实现 DSL 生成器（规则 → 可执行代码）— **待用真实抽取规则验证生成效果**
+- [ ] P2-007 建立策略 DSL 验证和标准化流程 — **待用真实抽取数据验证流程**
+- [ ] P2-008 后续把 strategy_rules/preconditions 转换为可执行 DSL
+
+### Behavior Agent - 行为分析 (特征工程)
+- [x] P2-008 定义交易行为分类体系（追涨、抄底、震荡、趋势）
+- [x] P2-009 开发行为标签化模块（规则 or ML）
+- [x] P2-010 计算交易特征集（收益率、夏普比、最大回撤、胜率、期望值）
+- [x] P2-011 实现特征归一化和标准化
+- [x] P2-012 开发行为聚类模块（K-means/DBSCAN）
+- [x] P2-013 建立交易模式库（ArticlePattern 主来源 + CanonicalPattern 辅来源 + ValidatedPattern 验证后入库）
+- [x] P2-014 实现模式匹配和识别
+
+### Feature Extraction & Preprocessing (特征工程)
+- [x] P2-015 编写特征计算脚本（Pandas/Polars）
+- [x] P2-016 实现技术指标计算库（MA, MACD, RSI, Bollinger）
+- [x] P2-017 实现基本面特征计算（PE, PB, 涨速）
+- [x] P2-018 实现时间序列特征（趋势、波动性、自相关）
+- [x] P2-019 编写缺失值处理和异常检测脚本
+
+### Data Validation for Phase 2 (验证检查)
+- [ ] P2-020 手工验证 Knowledge Agent 输出（>20 个样本）
+- [ ] P2-021 手工验证 Behavior Agent 输出（>20 个样本）
+- [ ] P2-022 特征计算准确性抽样验证
+- [ ] P2-023 行为标签和实际交易一致性检查
+
+### Phase 2 Verification
+- [ ] P2-V01 Knowledge Agent 规则提取准确率 >80%
+- [ ] P2-V02 Behavior Agent 标签准确率 >75%
+- [ ] P2-V03 特征计算速度 <50ms/笔
+- [ ] P2-V04 样本数据通过 domain expert 评审
+- [ ] P2-V05 模块文档完成度 100%
+
+### LLM 抽取质量提升（v1 第 1 轮）
+- [ ] P2-LLM-v1-001 配置 qwen provider（openai_compatible 模式），运行端到端验证 — **待用真实LLM API验证**
+- [ ] P2-LLM-v1-002 补充 system_prompt 输出格式说明，提升字段填充率 — **待用真实LLM调用验证填充率**
+- [ ] P2-LLM-v1-003 实现 `_heuristic_extract` 兜底逻辑（LLM 不可用时）— **逻辑完成，待真实场景验证**
+- [ ] P2-LLM-v1-004 ExtractStats 增加 `llm_calls` / `fallback_calls` 统计 — **待LLM可用后验证统计准确性**
+
+### LLM 抽取质量提升（v2 第 2 轮，v1 完成后执行）
+- [ ] P2-LLM-001 Schema 合规性：不合规条目记录到 error log，合规率统计 — **待用真实抽取数据验证**
+- [ ] P2-LLM-002 错误分类：ExtractErrorType 网络/JSON/Schema/Quality 四类 — **待真实错误场景验证分类准确性**
+- [ ] P2-LLM-003 错误日志持久化：`data/processed/llm_extraction_errors.jsonl` — **待LLM调用后验证日志记录**
+- [ ] **TODO** P2-LLM-004 prompt 迭代优化：根据真实错误样本调整 prompt
+
+---
+
+## Phase 3：策略对齐（⭐ 核心，2 周）
+
+> 更新：Phase 3 分两条线并行：
+> 1）面向日常系统的“建议考核与复盘闭环”
+> 2）面向策略反推的“文章策略 vs 行为”对齐（原计划保留）
+
+### Daily Evaluation（建议考核与复盘闭环，新增核心）
+- [ ] P3-101 定义建议考核指标口径（收益率、触发止损/止盈、最大不利波动等）
+- [ ] P3-102 实现盘后建议评分与汇总报告（EvaluationResult + 总结）
+- [ ] P3-103 实现不达标/亏损的复盘任务生成与追踪
+- [ ] P3-104 将复盘结论写回 Trader 记忆，并在下一次生成中显式引用
+- [ ] P3-V01 验收：连续运行 5-20 天回放数据能稳定产生“日报 + 考核 + 复盘”
+
+### Alignment Analysis Framework (对齐分析框架)
+- [x] P3-001 定义规则匹配评分算法 `rule_match_score()`
+- [x] P3-002 定义行为适配度评分算法 `behavior_fit_score()`
+- [x] P3-003 定义冲突检测算法 `conflict_detection()`
+- [x] P3-004 定义综合可信度评分算法 `confidence_scoring()`
+
+### Rule Matching & Scoring (规则匹配)
+- [x] P3-005 实现规则漏配检测（历史交易未被规则覆盖）
+- [x] P3-006 计算规则覆盖率（% 历史交易被匹配）
+- [x] P3-007 计算规则准确度（规则触发中真实交易 %）
+- [x] P3-008 实现规则冲突检测（互相排斥的规则）
+
+### Behavior Fit Analysis (行为适配度)
+- [x] P3-009 计算特征向量相似度（余弦、欧几里得）
+- [x] P3-010 计算概率分布拟合度（KL 散度、Wasserstein）
+- [x] P3-011 实现时间序列相似度（DTW，点互相关）
+- [x] P3-012 计算胜率、期望值等统计量的匹配度
+
+### Conflict Detection (冲突检测)
+- [x] P3-013 识别时序冲突（规则要求 vs 实际时间顺序）
+- [x] P3-014 识别参数冲突（参数设置不一致）
+- [x] P3-015 识别逻辑冲突（相互矛盾的规则）
+- [x] P3-016 分类冲突严重程度（Critical / Major / Minor）
+
+### Confidence Scoring & Reporting (可信度评分)
+- [x] P3-017 实现多维度综合评分（加权组合）
+- [x] P3-018 生成对齐报告（文本格式）
+- [x] P3-019 生成可视化报告（图表）
+- [x] P3-020 生成冲突清单和优化建议
+- [x] P3-021 实现评分结果缓存和版本管理
+
+### Alignment Agent 集成 (Agent 模块)
+- [x] P3-022 实现 Alignment Agent 主控逻辑
+- [x] P3-023 集成 Rule Matching / Behavior Fit / Conflict Detection
+- [x] P3-024 实现评分输出的持久化存储
+- [x] P3-025 实现增量对齐（新数据来时增量计算）
+
+### Validation & Verification (验证)
+- [ ] P3-026 与 domain expert 对齐评分结果对标（相关性 >0.7） ❌（原因：旧 Phase 3 的“文章策略 vs 行为对齐”不再是当前主线，当前主线改为 trader 赛马、盘后评分与失败归因）
+- [ ] P3-027 编写对齐分析的单元和集成测试 ❌（原因：对应的是旧对齐分析主线的验证工作，已不属于当前优先实现范围）
+- [ ] P3-028 性能测试（>100 笔/秒 对齐评分能力） ❌（原因：对应的是旧对齐评分系统的性能目标，当前新方案优先验证策略版本、候选池快照、回测和赛马链路）
+- [ ] P3-029 生成样本对齐报告取得 stakeholder 确认 ❌（原因：旧对齐分析报告不再是当前交付主目标，当前更需要盘前盘后报告、ranking 和 postmortem 输出）
+
+### Phase 3 Verification
+- [ ] P3-V01 对齐评分与 expert feedback 相关性 >0.7 ❌（原因：旧对齐分析验收指标已不再作为当前版本的核心成功标准）
+- [ ] P3-V02 冲突检测准确率 >85% ❌（原因：旧冲突检测验收指标对应旧主线，当前不再单独推进该方向）
+- [ ] P3-V03 性能达到 100+ 笔/秒 ❌（原因：旧对齐分析性能目标不再是当前关键验收项）
+- [ ] P3-V04 报告清晰易读，被业务方接受 ❌（原因：此处对应旧对齐报告，不是新方案当前需要优先交付的报告类型）
+- [ ] P3-V05 模块文档完成度 100% ❌（原因：对应旧对齐模块的完整交付标准，当前不再单独推进该模块）
+
+---
+
+## Phase 4：策略执行系统（1.5 周）
+
+### Strategy Agent - 决策引擎 (信号生成)
+- [x] P4-001 实现特征计算引擎（实时）
+- [x] P4-002 实现规则评估引擎（快速匹配）
+- [x] P4-003 实现多规则信号合成（加权/投票）
+- [x] P4-004 实现信号输出格式（BUY / SELL / HOLD）
+- [x] P4-005 实现信号版本控制和追踪
+
+### Risk Agent - 风险控制 (风控)
+- [x] P4-006 实现头寸管理模块（动态头寸计算）
+- [x] P4-007 实现止损设置（基于波动率/回撤）
+- [x] P4-008 实现止盈策略
+- [x] P4-009 实现单股集中度检查
+- [x] P4-010 实现行业敞口控制
+- [x] P4-011 实现总体风险敞口评估
+- [x] P4-012 实现风险超限告警
+
+### DSL Parser & Execution (DSL 解析和执行)
+- [ ] P4-013 选型 DSL 框架（ANTLR / Lark） ❌（原因：仓库中已落地 DSL Parser/Compiler/Executor，框架选型阶段任务已经失去继续执行的意义）
+- [ ] P4-014 设计 DSL 语法规则 ❌（原因：DSL 语法已经形成现有实现，后续应做增量演进而不是继续保留独立的前置设计任务）
+- [x] P4-015 实现 DSL Parser
+- [x] P4-016 实现 DSL Compiler（→ Python/Java）
+- [x] P4-017 实现 DSL 执行引擎
+
+### Parameter Management (参数管理)
+- [x] P4-018 设计参数存储结构
+- [x] P4-019 实现参数版本控制
+- [x] P4-020 实现参数动态更新机制
+- [x] P4-021 实现参数约束验证
+
+### Strategy Agent Integration (Agent 集成)
+- [x] P4-022 集成 Strategy Agent 主控逻辑
+- [x] P4-023 集成 Risk Agent 主控逻辑
+- [x] P4-024 实现两个 Agent 的通信接口
+- [x] P4-025 实现信号输出的持久化存储
+
+### Testing & Validation (测试验证)
+- [x] P4-026 编写 Strategy Agent 单元测试
+- [x] P4-027 编写 Risk Agent 单元测试
+- [x] P4-028 压力测试（高频信号输入）
+- [ ] P4-029 手工验证信号生成的合理性
+
+### Phase 4 Verification
+- [x] P4-V01 信号生成延迟 <100ms
+- [ ] P4-V02 风控能阻止 >95% 风险交易
+- [ ] P4-V03 规则覆盖 >90% 历史交易
+- [ ] P4-V04 系统稳定运行 4+ 小时无异常
+- [ ] P4-V05 模块文档完成度 100%
+
+---
+
+## Phase 5：验证与优化（1.5 周）
+
+### Backtest Agent - 回测系统 (验证策略)
+- [ ] P5-001 选型回测框架（backtesting.py / VectorBT）
+- [ ] P5-002 实现历史数据回测逻辑
+- [ ] P5-003 实现交易执行模拟（滑点、手续费、成本）
+- [ ] P5-004 实现绩效指标计算（收益率、夏普比、最大回撤、卡玛比、信息比）
+- [ ] P5-005 实现风险指标计算（波动率、下行波动率、VaR）
+- [ ] P5-006 实现回测报告生成（HTML 可视化）
+- [ ] P5-007 实现回测结果的持久化存储
+
+### Parameter Optimization (参数优化)
+- [x] P5-008 实现网格搜索优化器
+- [x] P5-009 实现贝叶斯优化器（可选）
+- [x] P5-010 实现参数扫描和对比
+- [x] P5-011 实现过度拟合风险评估（Walk Forward）
+- [x] P5-012 实现参数稳定性分析
+
+### Multi-Agent Coordination (多 Agent 协调)
+- [x] P5-013 设计任务调度器（DAG 执行）
+- [x] P5-014 实现消息队列框架（可选：Kafka/RabbitMQ）
+- [x] P5-015 实现 Agent 间的通信接口
+- [x] P5-016 实现错误重试和容错机制
+
+### Monitoring & Logging (监控与日志)
+- [ ] P5-017 实现集中式日志系统（仅有设计文档，无实现代码）
+- [ ] P5-018 配置 Prometheus + Grafana 监控（仅有设计文档，无实际配置）
+- [x] P5-019 实现关键指标告警
+- [x] P5-020 实现系统健康检查
+
+### Integration & Testing (集成与测试)
+- [ ] P5-021 全链路集成测试
+- [ ] P5-022 压力测试（24h 无间断运行）
+- [ ] P5-023 故障恢复测试
+- [ ] P5-024 安全测试（输入验证、权限）
+
+### Documentation & Deployment (文档与部署)
+- [ ] P5-025 编写系统设计文档
+- [ ] P5-026 编写 API 文档
+- [ ] P5-027 编写部署和运维文档
+- [ ] P5-028 编写故障排查指南
+- [ ] P5-029 准备 Docker 镜像
+- [ ] P5-030 准备部署 Kubernetes manifests
+
+### Phase 5 Verification
+- [ ] P5-V01 回测结果与现实数据偏差符合预期
+- [ ] P5-V02 参数优化后策略 Sharpe >1.0
+- [ ] P5-V03 系统 24h 稳定运行无异常
+- [ ] P5-V04 性能达到要求（延迟、吞吐量）
+- [ ] P5-V05 文档完成度 100%，交付物齐全
+
+---
+
+## 🚨 高优先级任务（需要首先着手）
+
+- 口径：范围任务（如 P0-001 ~ P0-004）只有在范围内全部子任务完成时才勾选为 [x]。
+- [x] **P0-001 ~ P0-004**: 数据库架构设计（建议 Week 1.0）
+- [ ] **P1-001 ~ P1-006**: 爬虫开发（建议 Week 1.0-1.5）
+- [x] **P2-001 ~ P2-006**: 策略 DSL 定义（建议 Week 1.5）— **DSL框架完成，待用真实LLM数据验证**
+- [ ] **P3-001 ~ P3-004**: 对齐分析框架设计（建议 Week 2.0） ❌（原因：该高优先级建议对应旧对齐分析主线，已被新方案中的策略版本、市场候选池、回测与赛马主线替代）
+
+---
+
+## 📊 任务优先级与依赖关系
+
+### 优先级说明
+- **P0**: Critical - 阻塞其他任务
+- **P1**: High - Phase 内核心功能
+- **P2**: Medium - Phase 内支持功能
+- **P3**: Low - 优化和增强
+
+### 并行任务
+以下任务可以并行开展（不相互阻塞）：
+- P1-001 ~ P1-006（爬虫）与 P1-007 ~ P1-011（交易解析）
+- P2-001 ~ P2-007（Knowledge Agent）与 P2-008 ~ P2-014（Behavior Agent）
+
+---
+
+## 📅 建议推进时间表
+
+| 周 | Phase | 完成里程碑 |
+|----|-------|----------|
+| 1 | P1 | 数据库 schema + 爬虫基础 |
+| 2-3 | P1 | 爬虫完成 + 数据管道 |
+| 3-4 | P2 | Knowledge Agent + Behavior Agent |
+| 5-6 | P3 | Alignment Agent 完成 |
+| 7-8 | P4 | Strategy & Risk Agent 完成 |
+| 9-10 | P5 | Backtest Agent + Parameter Optimization |
+| 11 | P5+ | 集成、测试、部署 |
+
+---
+
+## 🎯 定义完成标准（DoD - Definition of Done）
+
+每个任务完成时需要满足：
+- [ ] 代码已提交到 Git
+- [ ] 单元测试覆盖率 >80%
+- [ ] 代码 review 已通过
+- [ ] 文档已更新
+- [ ] 集成测试通过

@@ -1,5 +1,8 @@
 # Proposed Plan Project
 
+> 说明：`docs/TaskList.md` 已成为唯一主清单。  
+> 本文件继续保留为目标架构说明文档，重点描述目标系统边界与模块职责。
+
 ## 项目目标
 
 在现有 `trade-strategy-ai` 的盘前/盘后最小闭环基础上，扩展为一个“按 trader 隔离策略、主动取数、可回测、可赛马、可复盘归因”的交易研究与决策系统。
@@ -118,6 +121,7 @@ trade-strategy-ai/
 ### `providers`
 - 抽象数据源能力，隔离 AKShare 与未来第三方接口。
 - 统一热点、主题成分、行情、指标的取数接口。
+- 私有 App 接口（如 `kaipan.md`）也应通过 provider 隔离，先落 raw/normalized/snapshot，再供上层消费。
 
 ### `backtest`
 - 提供开发期离线日线回测能力。

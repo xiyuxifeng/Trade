@@ -123,7 +123,10 @@ class KaipanProvider:
 
     def _fetch_single(self, request: KaipanRequest) -> dict[str, Any]:
         """发起单次 HTTP 请求，返回解析后的 JSON 响应。"""
-        resp = requests.get(request.endpoint, params=request.params, timeout=30)
+        if request.method == "POST":
+            resp = requests.post(request.endpoint, data=request.params, timeout=30)
+        else:
+            resp = requests.get(request.endpoint, params=request.params, timeout=30)
         resp.raise_for_status()
         return resp.json()
 

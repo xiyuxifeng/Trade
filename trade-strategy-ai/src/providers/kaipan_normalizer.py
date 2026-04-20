@@ -31,8 +31,11 @@ class KaipanNormalizer:
     def _get_nested(self, data: Any, path: str) -> Any:
         """根据路径从嵌套结构中获取值。
 
-        支持 "." 分隔键，"[i]" 遍历数组。
-        示例：_get_nested(data, "list.[i].[0]") 遍历 list，取每个元素的 [0]。
+        支持 "." 分隔键和 "[N]" 数组索引（数字）。
+        示例：
+        - "info.[0].[1]" -> data["info"][0][1]
+        - "list.[0].name" -> data["list"][0]["name"]
+        注意：不处理 "[i]" 符号，[i] 的展开由 _transform() 在调用前完成。
         """
         if not path:
             return data
@@ -128,10 +131,15 @@ class KaipanNormalizer:
     def normalize_market_context(self, raw_path: Path, slot: str) -> dict[str, Any]:
         return self.normalize("market_context", raw_path, slot)
 
-    def normalize_date(self, trade_date: str) -> dict[str, dict[str, Any]]:
-        """批量转换某交易日全部时间槽的 snapshots。"""
+    def normalize_date(self, trade_date: str, slots: tuple[str, ...] = ("09-25", "17-30")) -> dict[str, dict[str, Any]]:
+        """批量转换某交易日全部时间槽的 snapshots。
+
+        Args:
+            trade_date: 交易日期，格式 YYYY-MM-DD
+            slots: 时间槽列表，默认为 ("09-25", "17-30")
+        """
         results = {}
-        for slot in ("09-25", "17-30"):
+        for slot in slots:
             results[slot] = {}
             for dataset in ("hot_topics", "topic_constituents", "strong_symbols", "market_context"):
                 raw_file = (
@@ -141,5 +149,10 @@ class KaipanNormalizer:
                     / f"{dataset}.json"
                 )
                 if raw_file.exists():
-                    results[slot][dataset] = self.normalize(dataset, raw_file, slot)
+                    try:
+                        results[slot][dataset] = self.normalize(dataset, raw_file, slot)
+                    except Exception as e:
+                        results[slot][dataset] = {"_error": str(e)}
+                else:
+                    results[slot][dataset] = None  # 明确标记为不存在
         return results

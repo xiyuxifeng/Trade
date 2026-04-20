@@ -13,11 +13,11 @@ mappings:
     fields:
       symbol:         {raw_path: "List.[i].[0]", type: string}
       name:          {raw_path: "List.[i].[1]", type: string}
-      strength_score:{raw_path: "List.[i].[2]", type: number}
+      strength_score: {raw_path: "List.[i].[2]", type: number}
       change_pct:    {raw_path: "List.[i].[4]", type: number}
       turnover:      {raw_path: "List.[i].[5]", type: number}
-      main_force_buy:{raw_path: "List.[i].[8]", type: number}
-      main_force_sell:{raw_path: "List.[i].[9]", type: number}
+      main_force_buy: {raw_path: "List.[i].[8]", type: number}
+      main_force_sell: {raw_path: "List.[i].[9]", type: number}
       topic_tags:    {raw_path: "List.[i].[10]", type: string}
 
   interval_stats_stock:
@@ -34,7 +34,7 @@ mappings:
       name:          {raw_path: "List.[i].[1]", type: string}
       return_pct:    {raw_path: "List.[i].[3]", type: number}
       net_inflow:    {raw_path: "List.[i].[6]", type: number}
-      turnover_ratio:{raw_path: "List.[i].[7]", type: number}
+      turnover_ratio: {raw_path: "List.[i].[7]", type: number}
       topic_tags:    {raw_path: "List.[i].[10]", type: string}
 
   morning_bidding_list:
@@ -49,7 +49,7 @@ mappings:
     fields:
       symbol:        {raw_path: "info.[i].[0]", type: string}
       name:          {raw_path: "info.[i].[1]", type: string}
-      rt_change_pct:{raw_path: "info.[i].[3]", type: number}
+      rt_change_pct: {raw_path: "info.[i].[3]", type: number}
       bid_net:      {raw_path: "info.[i].[6]", type: number}
       bid_turnover: {raw_path: "info.[i].[8]", type: number}
       topic_tags:   {raw_path: "info.[i].[11]", type: string}

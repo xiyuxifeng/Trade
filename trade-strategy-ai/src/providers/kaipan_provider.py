@@ -127,12 +127,19 @@ class KaipanProvider:
         resp.raise_for_status()
         return resp.json()
 
-    def _save_raw(self, raw_path: Path, request: KaipanRequest, response_data: Any) -> None:
-        """将 raw JSON 保存到文件，顶部嵌入 meta 元信息。"""
+    def _save_raw(self, raw_path: Path, request: KaipanRequest, response_data: Any, dataset: str) -> None:
+        """将 raw JSON 保存到文件，顶部嵌入 meta 元信息。
+
+        Args:
+            raw_path: 原始文件存储路径
+            request: 请求对象
+            response_data: 响应数据
+            dataset: 标准 dataset 名称（从设计文档规定，不是方法名）
+        """
         raw_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "meta": {
-                "dataset": raw_path.stem,
+                "dataset": dataset,
                 "trade_date": self._trade_date.isoformat() if self._trade_date else None,
                 "slot": self._slot,
                 "fetched_at": datetime.now().isoformat(),
@@ -148,6 +155,44 @@ class KaipanProvider:
         }
         with open(raw_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def _fetch_and_save(
+        self,
+        *,
+        dataset: str,
+        api_name: str,
+        controller: str,
+        base_url_key: str = "apphis",
+        method: str = "GET",
+        **params: Any,
+    ) -> dict[str, Any]:
+        """通用抓取保存方法。
+
+        统一处理请求构造、HTTP抓取和原始文件存储。
+
+        Args:
+            dataset: 标准 dataset 名称（必须与设计文档一致）
+            api_name: API 接口名
+            controller: 控制器名
+            base_url_key: Base URL key（默认 apphis）
+            method: HTTP 方法（默认 GET）
+            **params: 传递给 build_request 的额外参数
+
+        Returns:
+            API 响应原始数据
+        """
+        request = self.build_request(
+            api_name=api_name,
+            controller=controller,
+            base_url_key=base_url_key,
+            method=method,
+            **params,
+        )
+        # raw_path 使用 dataset 目录结构，而非方法名
+        raw_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{dataset}.json"
+        response = self._fetch_single(request)
+        self._save_raw(raw_path, request, response, dataset)
+        return response
 
     def dataset_raw_path(self, *, trade_date: date, dataset: str, page_key: str | None = None) -> Path:
         """返回原始 JSON 存储路径。"""
@@ -225,7 +270,8 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="hot_topics",
             api_name="RealRankingInfo",
             controller="ZhiShuRanking",
             base_url_key="apphis",
@@ -237,10 +283,6 @@ class KaipanProvider:
             Index=0,
             st=20,
         )
-        raw_path = self.raw_dir / "board_strength" / f"{trade_date.isoformat()}_{slot}" / "board_strength.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_industry_ranking(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """行业排名 - RealRankingInfo (ZSType=4)。
@@ -254,7 +296,8 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="hot_topics",
             api_name="RealRankingInfo",
             controller="ZhiShuRanking",
             base_url_key="apphis",
@@ -266,10 +309,6 @@ class KaipanProvider:
             Index=0,
             st=20,
         )
-        raw_path = self.raw_dir / "industry_ranking" / f"{trade_date.isoformat()}_{slot}" / "industry_ranking.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_concept_fengkou(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """概念风口 - GetFengKYDPlate。
@@ -283,16 +322,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="hot_topics",
             api_name="GetFengKYDPlate",
             controller="StockFengKData",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "concept_fengkou" / f"{trade_date.isoformat()}_{slot}" / "concept_fengkou.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_theme_detail(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """主题详情 - InfoGet。
@@ -306,16 +342,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="topic_constituents",
             api_name="InfoGet",
             controller="Theme",
             base_url_key="applhb",
             method="POST",
         )
-        raw_path = self.raw_dir / "theme_detail" / f"{trade_date.isoformat()}_{slot}" / "theme_detail.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_stock_sector_v2(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """股票板块 v2 - GetFeaturedSection。
@@ -329,16 +362,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="topic_constituents",
             api_name="GetFeaturedSection",
             controller="StockL2Data",
             base_url_key="apphwshhq",
             method="POST",
         )
-        raw_path = self.raw_dir / "stock_sector_v2" / f"{trade_date.isoformat()}_{slot}" / "stock_sector_v2.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_strong_fengkou(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """强势风口 - GetFengKListBest。
@@ -352,16 +382,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="strong_symbols",
             api_name="GetFengKListBest",
             controller="StockFengKData",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "strong_fengkou" / f"{trade_date.isoformat()}_{slot}" / "strong_fengkou.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_interval_stats_stock(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """区间统计股票 - GetInterviewsByDateStock。
@@ -375,7 +402,8 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="strong_symbols",
             api_name="GetInterviewsByDateStock",
             controller="StockLineData",
             base_url_key="apphis",
@@ -383,10 +411,6 @@ class KaipanProvider:
             Type="2",
             FilterBJS="1",
         )
-        raw_path = self.raw_dir / "interval_stats_stock" / f"{trade_date.isoformat()}_{slot}" / "interval_stats_stock.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_morning_bidding_list(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """早盘竞价列表 - MorningBiddingList。
@@ -400,16 +424,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="strong_symbols",
             api_name="MorningBiddingList",
             controller="HisHomeDingPan",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "morning_bidding_list" / f"{trade_date.isoformat()}_{slot}" / "morning_bidding_list.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_limit_up_reason(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """涨停原因 - GetPlateInfo_w38。
@@ -423,16 +444,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="topic_constituents",
             api_name="GetPlateInfo_w38",
             controller="HisLimitResumption",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "limit_up_reason" / f"{trade_date.isoformat()}_{slot}" / "limit_up_reason.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_pre_market_bid(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """盘前竞价 - MorningBidding。
@@ -446,16 +464,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="market_context",
             api_name="MorningBidding",
             controller="HisHomeDingPan",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "pre_market_bid" / f"{trade_date.isoformat()}_{slot}" / "pre_market_bid.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_pre_market_stats(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """盘前统计 - MorningBiddingNum。
@@ -469,16 +484,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="market_context",
             api_name="MorningBiddingNum",
             controller="HisHomeDingPan",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "pre_market_stats" / f"{trade_date.isoformat()}_{slot}" / "pre_market_stats.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_limit_up_info(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """涨停信息 - GetZhangTingTianTi。
@@ -492,16 +504,13 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="topic_constituents",
             api_name="GetZhangTingTianTi",
             controller="FuPanLa",
             base_url_key="apphis",
             method="POST",
         )
-        raw_path = self.raw_dir / "limit_up_info" / f"{trade_date.isoformat()}_{slot}" / "limit_up_info.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 
     def fetch_lhb_list(self, *, trade_date: date, slot: str) -> dict[str, Any]:
         """龙虎榜列表 - GetStockList。
@@ -515,14 +524,11 @@ class KaipanProvider:
         """
         self._trade_date = trade_date
         self._slot = slot
-        request = self.build_request(
+        return self._fetch_and_save(
+            dataset="topic_constituents",
             api_name="GetStockList",
             controller="LongHuBang",
             base_url_key="applhb",
             method="POST",
         )
-        raw_path = self.raw_dir / "lhb_list" / f"{trade_date.isoformat()}_{slot}" / "lhb_list.json"
-        response = self._fetch_single(request)
-        self._save_raw(raw_path, request, response)
-        return response
 

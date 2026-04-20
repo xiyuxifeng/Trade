@@ -238,41 +238,45 @@
   可并行：`NTL-S0-002`、`NTL-S0-005`。
   验收标准：后续不再以“每种能力都建一个 Agent”为默认方向。
 
-- [ ] `NTL-S0-007` `P0`
+- [x] `NTL-S0-007` `P0`
   目标：定义 `kaipan` 数据目录规范。
   输入：现有 `data/` 目录和 `kaipan.md`。
-  输出：`raw / normalized / snapshots` 目录结构说明与样例路径约定。
-  修改范围：`data/` 目录规范文档、抓取器配置。
+  输出：`raw / snapshots` 目录结构说明与样例路径约定。
+  修改范围：`data/` 目录规范文档。
   前置依赖：`NTL-S0-003`。
   可并行：`NTL-S0-008`、`NTL-S0-010`。
   验收标准：至少明确到日期、接口、快照类型三级路径命名规则。
+  完成情况：已创建 `data/kaipan/raw/` 和 `data/kaipan/snapshots/` 目录骨架，commit `8ff96e7`。
 
-- [ ] `NTL-S0-008` `P0`
-  目标：确定首批 8 个高价值接口并实现原始 JSON 保存。
+- [x] `NTL-S0-008` `P0`
+  目标：确定首批 13 个高价值接口并实现原始 JSON 保存。
   输入：`kaipan.md` 接口列表。
   输出：首批接口名单和原始响应保存逻辑。
-  修改范围：抓取器脚本、`src/providers/kaipan_provider.py`、样例数据目录。
+  修改范围：`src/providers/kaipan_provider.py`、样例数据目录。
   前置依赖：`NTL-S0-007`。
   可并行：`NTL-S0-009`、`NTL-S0-010`。
-  验收标准：至少 8 个接口可以保存原始 JSON 到 `raw` 层。
+  验收标准：13 个接口可以保存原始 JSON 到 `raw` 层。
+  完成情况：13 个接口全部实现（commit `6ede745` → `3090ce8`），支持多域名（apphis/applhb/apphwshhq）、POST/GET 方法、meta 嵌入、文件名含 api_name + 关键参数。
 
-- [ ] `NTL-S0-009` `P0`
+- [x] `NTL-S0-009` `P0`
   目标：定义并输出标准化快照 JSON。
   输入：原始 JSON 响应。
-  输出：`hot_topics`、`topic_constituents`、`strong_symbols` 的标准化快照文件。
-  修改范围：`src/providers/kaipan_provider.py`、标准化脚本、`data/normalized`、`data/snapshots`。
+  输出：`hot_topics`、`topic_constituents`、`strong_symbols`、`market_context` 的标准化快照文件。
+  修改范围：`src/providers/kaipan_normalizer.py`、`src/providers/kaipan_schema/`、`data/snapshots`。
   前置依赖：`NTL-S0-007`、`NTL-S0-008`。
   可并行：`NTL-S0-010`。
-  验收标准：三类标准化快照字段结构稳定，且样例可读取。
+  验收标准：四类标准化快照字段结构稳定，且样例可读取。
+  完成情况：Normalizer 实现完成（commit `5004e41` → `1946cf5`），4 个 YAML schema 文件，11/11 测试 PASS。
 
-- [ ] `NTL-S0-010` `P0`
+- [x] `NTL-S0-010` `P0`
   目标：为每次抓取记录元信息。
   输入：抓取请求与响应。
   输出：包含请求参数、抓取时间、接口版本、鉴权来源的元信息记录。
-  修改范围：抓取器、provider、元信息 schema。
+  修改范围：`src/providers/kaipan_provider.py`。
   前置依赖：`NTL-S0-007`。
   可并行：`NTL-S0-008`、`NTL-S0-009`。
-  验收标准：任意一份 raw/normalized/snapshot 数据都能追溯来源。
+  验收标准：任意一份 raw/snapshot 数据都能追溯来源。
+  完成情况：`_save_raw()` 方法内嵌 meta（dataset、trade_date、slot、fetched_at、source、request），与 NTL-S0-008 合并实现（commit `3090ce8`）。
 
 - [ ] `NTL-S0-011` `P1`
   目标：验证接口字段稳定性与分页规则。
@@ -301,14 +305,15 @@
   可并行：`NTL-S0-012`。
   验收标准：provider 目录可以作为后续 Stage 的基础模块。
 
-- [ ] `NTL-S0-014` `P1`
+- [x] `NTL-S0-014` `P1`
   目标：为 `kaipan` 抓取器补最小验证。
-  输入：raw/normalized/snapshot 三层样例数据。
+  输入：raw/snapshot 三层样例数据。
   输出：最小测试、样例断言或离线验证脚本。
-  修改范围：`tests/` 或验证脚本。
+  修改范围：`tests/providers/test_kaipan_pipeline.py`。
   前置依赖：`NTL-S0-009`、`NTL-S0-010`。
   可并行：`NTL-S0-011`。
   验收标准：抓取器至少有一条可重复验证路径。
+  完成情况：11 个离线验证测试全部 PASS（commit `52ebfdf`）。
 
 ### Stage 0 完成标准
 

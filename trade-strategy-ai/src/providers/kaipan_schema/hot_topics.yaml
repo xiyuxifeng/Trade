@@ -1,0 +1,48 @@
+# hot_topics 快照字段映射
+# 来源接口：板块强度、行业涨幅、概念风口
+
+dataset: hot_topics
+
+mappings:
+  concept:
+    source:
+      api: RealRankingInfo
+      controller: ZhiShuRanking
+      params:
+        Type: "1"
+        ZSType: "7"
+        Order: "1"
+        st: "20"
+    fields:
+      topic_id:    {raw_path: "list.[i].[0]", type: string}
+      topic_name:  {raw_path: "list.[i].[1]", type: string}
+      score:       {raw_path: "list.[i].[2]", type: number}
+      increase_pct:{raw_path: "list.[i].[3]", type: number}
+      speed_pct:   {raw_path: "list.[i].[4]", type: number}
+      turnover:    {raw_path: "list.[i].[5]", type: number}
+      net_inflow:  {raw_path: "list.[i].[6]", type: number}
+
+  industry:
+    source:
+      api: RealRankingInfo
+      controller: ZhiShuRanking
+      params:
+        Type: "2"
+        ZSType: "4"
+        Order: "1"
+        st: "20"
+    fields:
+      topic_id:    {raw_path: "list.[i].[0]", type: string}
+      topic_name:  {raw_path: "list.[i].[1]", type: string}
+      increase_pct:{raw_path: "list.[i].[3]", type: number}
+      turnover:    {raw_path: "list.[i].[5]", type: number}
+      net_inflow:  {raw_path: "list.[i].[6]", type: number}
+
+  concept_fengkou:
+    source:
+      api: GetFengKYDPlate
+      controller: StockFengKData
+      params: {}
+    fields:
+      topic_name: {raw_path: "List.[i].[0]", type: string}
+      score:      {raw_path: "List.[i].[1]", type: number}

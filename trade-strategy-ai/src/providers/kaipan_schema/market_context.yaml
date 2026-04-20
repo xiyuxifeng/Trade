@@ -1,0 +1,28 @@
+# market_context 快照字段映射
+# 来源接口：竞价总体信息、竞价数量统计
+
+dataset: market_context
+
+mappings:
+  pre_market_bid:
+    source:
+      api: MorningBidding
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      bid_amount_today: {raw_path: "info.tJJJE", type: string}
+      bid_amount_yest:  {raw_path: "info.lJJJE", type: string}
+      bid_up_count:     {raw_path: "info.tSZ", type: string}
+      bid_down_count:   {raw_path: "info.tXD", type: string}
+
+  pre_market_stats:
+    source:
+      api: MorningBiddingNum
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      limit_buy_count:           {raw_path: "info.[0]", type: number}
+      match_over_2000w_count:   {raw_path: "info.[1]", type: number}
+      hot_count:                {raw_path: "info.[2]", type: number}
+      main_force_positive_count:{raw_path: "info.[3]", type: number}
+      smash_count:              {raw_path: "info.[4]", type: number}

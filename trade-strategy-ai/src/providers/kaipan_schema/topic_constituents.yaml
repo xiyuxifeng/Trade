@@ -1,0 +1,63 @@
+# topic_constituents 快照字段映射
+# 来源接口：股票所属板块 V2、题材详情、涨停原因、涨停信息、龙虎榜列表
+
+dataset: topic_constituents
+
+mappings:
+  stock_sector_v2:
+    source:
+      api: GetFeaturedSection
+      controller: StockL2Data
+      params: {}
+    fields:
+      topic_id:          {raw_path: "info.[i].[0]", type: string}
+      topic_name:        {raw_path: "info.[i].[1]", type: string}
+      topic_change_pct: {raw_path: "info.[i].[2]", type: number}
+      leader_symbol:     {raw_path: "info.[i].[3]", type: string}
+      leader_name:       {raw_path: "info.[i].[4]", type: string}
+      leader_change_pct: {raw_path: "info.[i].[5]", type: number}
+
+  theme_detail:
+    source:
+      api: InfoGet
+      controller: Theme
+      params: {}
+    fields:
+      theme_id:    {raw_path: "ID", type: string}
+      theme_name:  {raw_path: "Name", type: string}
+      brief_intro: {raw_path: "BriefIntro", type: string}
+
+  limit_up_reason:
+    source:
+      api: GetPlateInfo_w38
+      controller: HisLimitResumption
+      params:
+        Index: "0"
+        st: "20"
+    fields:
+      topic_id:   {raw_path: "list.[i].ZSCode", type: string}
+      topic_name: {raw_path: "list.[i].ZSName", type: string}
+
+  limit_up_info:
+    source:
+      api: GetZhangTingTianTi
+      controller: FuPanLa
+      params: {}
+    fields:
+      symbol:    {raw_path: "StockList.[i].[0]", type: string}
+      name:      {raw_path: "StockList.[i].[1]", type: string}
+      board_num: {raw_path: "StockList.[i].[2]", type: number}
+
+  lhb_list:
+    source:
+      api: GetStockList
+      controller: LongHuBang
+      params:
+        Index: "0"
+        st: "300"
+    fields:
+      symbol:    {raw_path: "list.[i].ID", type: string}
+      name:      {raw_path: "list.[i].Name", type: string}
+      net_buy:   {raw_path: "list.[i].BuyIn", type: number}
+      turnover:  {raw_path: "list.[i].Turnover", type: string}
+      amplitude: {raw_path: "list.[i].Amplitude", type: string}

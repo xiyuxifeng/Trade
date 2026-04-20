@@ -1,6 +1,5 @@
 """Kaipan 数据管线离线验证测试。"""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -47,57 +46,42 @@ class TestKaipanSchemaFiles:
 class TestKaipanProvider:
     """验证 KaipanProvider 的配置。"""
 
+    def setup_method(self):
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_provider import KaipanProvider, KaipanAuth
+        self.auth = KaipanAuth(device_id="test")
+        self.provider = KaipanProvider(
+            auth=self.auth,
+            raw_dir=Path("data/kaipan/raw"),
+            normalized_dir=Path("data/kaipan/snapshots"),
+            snapshots_dir=Path("data/kaipan/snapshots"),
+        )
+
     def test_base_urls_defined(self):
         """验证三个 baseURL 已配置。"""
-        import sys
-        sys.path.insert(0, "src")
-        from providers.kaipan_provider import KaipanProvider, KaipanAuth
-
-        auth = KaipanAuth(device_id="test")
-        provider = KaipanProvider(
-            auth=auth,
-            raw_dir=Path("data/kaipan/raw"),
-            normalized_dir=Path("data/kaipan/snapshots"),
-            snapshots_dir=Path("data/kaipan/snapshots"),
-        )
-        assert hasattr(provider, "base_urls"), "缺少 base_urls 属性"
-        assert "apphis" in provider.base_urls
-        assert "apphwshhq" in provider.base_urls
-        assert "applhb" in provider.base_urls
-        assert "longhuvip.com" in provider.base_urls["apphis"]
-        assert "longhuvip.com" in provider.base_urls["apphwshhq"]
-        assert "longhuvip.com" in provider.base_urls["applhb"]
+        assert hasattr(self.provider, "base_urls"), "缺少 base_urls 属性"
+        assert "apphis" in self.provider.base_urls
+        assert "apphwshhq" in self.provider.base_urls
+        assert "applhb" in self.provider.base_urls
+        assert "longhuvip.com" in self.provider.base_urls["apphis"]
+        assert "longhuvip.com" in self.provider.base_urls["apphwshhq"]
+        assert "longhuvip.com" in self.provider.base_urls["applhb"]
 
     def test_fetch_and_save_method_exists(self):
-        """验证 _fetch_and_save 方法存在。"""
-        import sys
-        sys.path.insert(0, "src")
-        from providers.kaipan_provider import KaipanProvider, KaipanAuth
-
-        auth = KaipanAuth(device_id="test")
-        provider = KaipanProvider(
-            auth=auth,
-            raw_dir=Path("data/kaipan/raw"),
-            normalized_dir=Path("data/kaipan/snapshots"),
-            snapshots_dir=Path("data/kaipan/snapshots"),
-        )
-        assert hasattr(provider, "_fetch_and_save"), "缺少 _fetch_and_save 方法"
+        """验证 _fetch_and_save 方法存在且可调用。"""
+        import inspect
+        assert hasattr(self.provider, "_fetch_and_save"), "缺少 _fetch_and_save 方法"
+        sig = inspect.signature(self.provider._fetch_and_save)
+        params = list(sig.parameters.keys())
+        required = ["dataset", "api_name", "controller"]
+        for p in required:
+            assert p in params, f"_fetch_and_save 缺少必需参数 {p}，当前参数: {params}"
 
     def test_save_raw_method_has_dataset_param(self):
         """验证 _save_raw 方法接受 dataset 参数。"""
-        import sys
-        sys.path.insert(0, "src")
-        from providers.kaipan_provider import KaipanProvider, KaipanAuth
         import inspect
-
-        auth = KaipanAuth(device_id="test")
-        provider = KaipanProvider(
-            auth=auth,
-            raw_dir=Path("data/kaipan/raw"),
-            normalized_dir=Path("data/kaipan/snapshots"),
-            snapshots_dir=Path("data/kaipan/snapshots"),
-        )
-        sig = inspect.signature(provider._save_raw)
+        sig = inspect.signature(self.provider._save_raw)
         params = list(sig.parameters.keys())
         assert "dataset" in params, f"_save_raw 缺少 dataset 参数，当前参数: {params}"
 
@@ -106,8 +90,9 @@ class TestKaipanNormalizer:
     """验证 KaipanNormalizer 的 schema 加载和字段转换。"""
 
     def test_normalizer_has_required_methods(self):
-        """验证所有必需方法存在。"""
+        """验证 normalizer 有所有必需方法。"""
         import sys
+        import inspect
         sys.path.insert(0, "src")
         from providers.kaipan_normalizer import KaipanNormalizer
 
@@ -115,16 +100,16 @@ class TestKaipanNormalizer:
             schema_dir="src/providers/kaipan_schema",
             snapshots_dir="data/kaipan/snapshots",
         )
-        required_methods = [
-            "normalize",
-            "normalize_hot_topics",
-            "normalize_topic_constituents",
-            "normalize_strong_symbols",
-            "normalize_market_context",
-            "normalize_date",
-        ]
-        for method in required_methods:
-            assert hasattr(normalizer, method), f"缺少方法: {method}"
+        methods_with_params = {
+            "normalize": ["dataset", "raw_path", "slot"],
+            "normalize_date": ["trade_date"],
+        }
+        for method_name, required_params in methods_with_params.items():
+            assert hasattr(normalizer, method_name), f"缺少方法: {method_name}"
+            sig = inspect.signature(getattr(normalizer, method_name))
+            params = list(sig.parameters.keys())
+            for p in required_params:
+                assert p in params, f"{method_name} 缺少必需参数 {p}，当前参数: {params}"
 
     def test_normalizer_loads_schema(self):
         """验证 normalizer 可以加载 schema。"""

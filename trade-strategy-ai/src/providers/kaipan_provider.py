@@ -188,8 +188,26 @@ class KaipanProvider:
             method=method,
             **params,
         )
-        # raw_path 使用 dataset 目录结构，而非方法名
-        raw_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{dataset}.json"
+        # 根据 api_name 和关键参数区分文件名，避免同 dataset 下数据互相覆盖
+        filename_parts = [dataset, api_name]
+        if api_name == "RealRankingInfo":
+            filename_parts.append(f"ZSType{params.get('ZSType', '')}")
+        elif api_name == "GetInterviewsByDateStock":
+            filename_parts.append(f"Type{params.get('Type', '')}")
+        elif api_name == "MorningBiddingList":
+            filename_parts.append(f"PidType{params.get('PidType', '')}")
+        elif api_name == "GetPlateInfo_w38":
+            filename_parts.append(f"Index{params.get('Index', '')}")
+        elif api_name == "GetZhangTingTianTi":
+            filename_parts.append(f"Index{params.get('Index', '')}")
+        elif api_name == "GetFengKListBest":
+            filename_parts.append(f"Time{params.get('Time', '')}")
+        elif api_name == "GetFengKList":
+            filename_parts.append(f"Time{params.get('Time', '')}")
+        elif api_name == "GetInterviewsByDateZS":
+            filename_parts.append(f"Type{params.get('Type', '')}")
+        raw_filename = "_".join(filter(None, filename_parts))
+        raw_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{raw_filename}.json"
         response = self._fetch_single(request)
         self._save_raw(raw_path, request, response, dataset)
         return response

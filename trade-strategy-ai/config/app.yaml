@@ -158,3 +158,17 @@ api:
     enabled: true
     api_keys:
       []
+
+# Kaipan 开盘啦私有接口配置
+kaipan:
+  # 数据存储根目录
+  data_dir: data/kaipan
+  # Schema 文件目录
+  schema_dir: src/providers/kaipan_schema
+  # 抓取时间表（可配置）
+  fetch_schedule:
+    pre_market: "9:25"    # 盘前
+    post_close: "17:30"  # 盘后
+  # 交易日历来源
+  trading_calendar:
+    source: akshare

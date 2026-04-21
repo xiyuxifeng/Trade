@@ -421,7 +421,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -768,7 +771,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `GET`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -952,7 +958,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1019,7 +1028,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1059,7 +1071,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1149,7 +1164,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1160,6 +1178,8 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | Day | 是 | 日期，格式：`20260416` |
 | Order | 是 | 排序，`1` 降序 |
 | Type | 是 | 类型，`0` |
+| **Token** | 是 | 用户Token |
+| **UserID** | 是 | 用户ID |
 
 **响应字段：**
 
@@ -1208,7 +1228,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1226,6 +1249,8 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | Isst | 是 | 是否过滤ST，`1` |
 | filter | 是 | 过滤条件，`3` |
 | st | 是 | 每页数量，如：`20` |
+| **Token** | 是 | 用户Token |
+| **UserID** | 是 | 用户ID |
 
 **响应字段：**
 
@@ -1269,7 +1294,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `GET`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1819,8 +1847,8 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | Index | 是 | 分页起始索引 |
 | Order | 是 | 排序，`1` 降序 |
 | st | 是 | 每页数量，如：`20` |
-| Token | `036ca9cad6e44ee4a585c22cb2c298ed` | 用户Token |
-| UserID | `3807176` | 用户ID |
+| **Token** | `036ca9cad6e44ee4a585c22cb2c298ed` | 用户Token |
+| **UserID** | `3807176` | 用户ID |
 
 **PidType 类型说明：**
 
@@ -1885,7 +1913,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `GET`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2036,7 +2067,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2116,7 +2150,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2174,7 +2211,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2270,7 +2310,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2280,6 +2323,8 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | c | 是 | `StockFengKData` |
 | Day | 是 | 日期，格式：`20260416` |
 | Time | 是 | 时间，填空字符串取最新 |
+| **Token** | 是 | 用户Token |
+| **UserID** | 是 | 用户ID |
 
 **响应字段：**
 
@@ -2334,7 +2379,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 **请求方式：** `POST`
 
-**请求URL：** `https://apphis.longhuvip.com/w1/api/index.php`
+**请求URL：**
+- 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
+
+- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 

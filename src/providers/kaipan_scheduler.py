@@ -7,7 +7,26 @@ from __future__ import annotations
 
 import argparse
 import sys
+import yaml
 from datetime import date
+from pathlib import Path
+
+
+def load_kaipan_config() -> dict:
+    """从 config/app.yaml 加载 kaipan 配置。"""
+    config_path = Path("trade-strategy-ai/config/app.yaml")
+    with open(config_path, encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    return config.get("kaipan", {})
+
+
+def get_auth() -> dict:
+    """从配置中构造 KaipanAuth 参数字典。"""
+    cfg = load_kaipan_config()
+    auth_cfg = cfg.get("auth", {})
+    return {
+        "device_id": auth_cfg.get("device_id", ""),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:

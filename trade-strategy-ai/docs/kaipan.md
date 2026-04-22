@@ -14,13 +14,21 @@
     - [市场情绪](#市场情绪)
     - [市场量能](#市场量能)
     - [指数数据](#指数数据)
+      - [获取主要指数的历史数据。](#获取主要指数的历史数据)
+      - [获取今日指数数据](#获取今日指数数据)
   - [涨停分析](#涨停分析)
     - [涨跌停数总数](#涨跌停数总数)
     - [涨停板数量统计](#涨停板数量统计)
+      - [获取历史各板位涨停板数量统计。](#获取历史各板位涨停板数量统计)
+      - [获取今日各板位涨停板数量统计。](#获取今日各板位涨停板数量统计)
     - [涨停表现](#涨停表现)
     - [涨停信息](#涨停信息)
     - [涨停板列表](#涨停板列表)
+      - [获取历史涨停板股票列表。](#获取历史涨停板股票列表)
+      - [获取今日涨停板股票列表。](#获取今日涨停板股票列表)
     - [破板个股列表](#破板个股列表)
+      - [获取历史破板股票列表。](#获取历史破板股票列表)
+      - [获取今日破板股票列表。](#获取今日破板股票列表)
     - [涨停原因](#涨停原因)
     - [盘面亮点](#盘面亮点)
     - [大幅回撤](#大幅回撤)
@@ -59,6 +67,8 @@
     - [题材库搜索](#题材库搜索)
   - [直播数据](#直播数据)
     - [大盘直播](#大盘直播)
+      - [获取历史大盘直播内容。](#获取历史大盘直播内容)
+      - [获取今日大盘直播内容。](#获取今日大盘直播内容)
   - [新高趋势](#新高趋势)
   - [节假日](#节假日)
   - [最新消息](#最新消息)
@@ -228,7 +238,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ### 指数数据
 
-获取主要指数的实时数据。
+#### 获取主要指数的历史数据。
 
 **请求方式：** `POST`
 
@@ -241,6 +251,22 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `GetZsReal` |
 | c | 是 | `StockL2History` |
 | Day | 是 | 日期，格式：`2026-04-16` |
+
+
+#### 获取今日指数数据
+
+**请求方式：** `POST`
+
+**请求URL：** `https://apphwhq.longhuvip.com/w1/api/index.php`
+
+**请求参数：**
+
+| 参数名 | 必填 | 说明 |
+|--------|------|------|
+| a | 是 | `RefreshStockList` |
+| c | 是 | `UserSelectStock` |
+| StockIDList | 是 | `SH000001,SZ399001,SZ399006,SH000688`|
+
 
 **响应字段：**
 
@@ -337,7 +363,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ### 涨停板数量统计
 
-获取各板位涨停板数量统计。
+#### 获取历史各板位涨停板数量统计。
 
 **请求方式：** `GET`
 
@@ -350,6 +376,21 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `DailyLimitIndex` |
 | c | 是 | `HisHomeDingPan` |
 | Day | 是 | 日期，格式：`2026-04-16` |
+
+
+#### 获取今日各板位涨停板数量统计。
+
+**请求方式：** `GET`
+
+**请求URL：** `https://apphwhq.longhuvip.com/w1/api/index.php`
+
+**请求参数：**
+
+| 参数名 | 必填 | 说明 |
+|--------|------|------|
+| a | 是 | `DailyLimitIndex` |
+| c | 是 | `HomeDingPan` |
+
 
 **响应字段（info 数组）：**
 
@@ -424,7 +465,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -487,7 +528,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ### 涨停板列表
 
-获取涨停板股票列表。
+#### 获取历史涨停板股票列表。
 
 **请求方式：** `GET`
 
@@ -500,6 +541,24 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `DailyLimitPerformance` |
 | c | 是 | `HisHomeDingPan` |
 | Day | 是 | 日期，格式：`2026-04-16` |
+| PidType | 是 | 板位类型，详见下方说明 |
+| Type | 是 | 类型，`4` |
+| Index | 是 | 分页起始索引 |
+| Order | 是 | 排序，`0` |
+| st | 是 | 每页数量，如：`1000` |
+
+#### 获取今日涨停板股票列表。
+
+**请求方式：** `GET`
+
+**请求URL：** `https://apphwhq.longhuvip.com/w1/api/index.php`
+
+**请求参数：**
+
+| 参数名 | 必填 | 说明 |
+|--------|------|------|
+| a | 是 | `DailyLimitPerformance` |
+| c | 是 | `HomeDingPan` |
 | PidType | 是 | 板位类型，详见下方说明 |
 | Type | 是 | 类型，`4` |
 | Index | 是 | 分页起始索引 |
@@ -587,7 +646,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ### 破板个股列表
 
-获取破板股票列表。
+#### 获取历史破板股票列表。
 
 **请求方式：** `GET`
 
@@ -600,6 +659,24 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `DailyLimitPerformance2` |
 | c | 是 | `HisHomeDingPan` |
 | Day | 是 | 日期，格式：`2026-04-16` |
+| PidType | 是 | 类型，详见下方说明 |
+| Type | 是 | 类型，`5` |
+| Index | 是 | 分页起始索引 |
+| Order | 是 | 排序，`1` |
+| st | 是 | 每页数量，如：`1000` |
+
+#### 获取今日破板股票列表。
+
+**请求方式：** `GET`
+
+**请求URL：** `https://apphwhq.longhuvip.com/w1/api/index.php`
+
+**请求参数：**
+
+| 参数名 | 必填 | 说明 |
+|--------|------|------|
+| a | 是 | `DailyLimitPerformance2` |
+| c | 是 | `HomeDingPan` |
 | PidType | 是 | 类型，详见下方说明 |
 | Type | 是 | 类型，`5` |
 | Index | 是 | 分页起始索引 |
@@ -774,7 +851,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -961,7 +1038,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1031,7 +1108,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1074,7 +1151,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1167,7 +1244,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1231,7 +1308,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1297,7 +1374,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -1916,7 +1993,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2070,7 +2147,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2153,7 +2230,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2214,7 +2291,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2313,7 +2390,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2382,7 +2459,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 **请求URL：**
 - 历史数据：`https://apphis.longhuvip.com/w1/api/index.php`
 
-- **当天数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
+- **今日数据：`https://apphwhq.longhuvip.com/w1/api/index.php`**
 
 **请求参数：**
 
@@ -2682,7 +2759,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ### 大盘直播
 
-获取大盘直播内容。
+#### 获取历史大盘直播内容。
 
 **请求方式：** `POST`
 
@@ -2695,6 +2772,21 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `ZhiBoContent` |
 | c | 是 | `HisConceptionPoint` |
 | Date | 是 | 日期，格式：`2026-04-15` |
+
+
+#### 获取今日大盘直播内容。
+
+**请求方式：** `POST`
+
+**请求URL：** `https://apphwhq.longhuvip.com/w1/api/index.php`
+
+**请求参数：**
+
+| 参数名 | 必填 | 说明 |
+|--------|------|------|
+| a | 是 | `ZhiBoContent` |
+| c | 是 | `ConceptionPoint` |
+
 
 **响应字段：**
 

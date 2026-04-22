@@ -172,3 +172,6 @@ kaipan:
   # 交易日历来源
   trading_calendar:
     source: akshare
+  # 认证配置
+  auth:
+    device_id: "your_device_id"  # 从 kaipan App 获取

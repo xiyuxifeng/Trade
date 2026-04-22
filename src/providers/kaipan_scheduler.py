@@ -8,8 +8,11 @@ from __future__ import annotations
 import argparse
 import sys
 import yaml
+import logging
 from datetime import date
 from pathlib import Path
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # 动态导入：直接从 trade-strategy-ai/src/providers/ 导入子模块（避免 providers 包名冲突）
 import importlib.util
@@ -83,6 +86,79 @@ def build_parser() -> argparse.ArgumentParser:
     # run 命令
     run_parser = sub.add_parser("run", help="启动自动调度（APScheduler）")
     return parser
+
+
+def is_trading_day(trade_date: date) -> bool:
+    """通过 akshare 判断是否为 A 股交易日。"""
+    try:
+        import akshare as ak
+        cal = ak.trade_cal(symbol="A股")
+        trading_days = cal[cal["is_open"] == 1]["cal_date"].tolist()
+        return trade_date.isoformat() in trading_days
+    except Exception:
+        return False  # 网络异常时跳过，不阻塞调度
+
+
+def run_fetch(slot: str):
+    """由 APScheduler 调用的 fetch 包装函数。"""
+    import sys
+    sys.path.insert(0, "src")
+    from providers.kaipan_provider import KaipanProvider, KaipanAuth
+    from providers.kaipan_normalizer import KaipanNormalizer
+    from datetime import date as date_cls
+
+    trade_date = date_cls.today()
+    cfg = load_kaipan_config()
+    auth_cfg = cfg.get("auth", {})
+    auth = KaipanAuth(device_id=auth_cfg.get("device_id", ""))
+    provider = KaipanProvider(
+        auth=auth,
+        raw_dir=cfg.get("data_dir", "data/kaipan/raw"),
+        normalized_dir="data/kaipan/snapshots",
+        snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+    )
+    normalizer = KaipanNormalizer(
+        schema_dir=cfg.get("schema_dir", "src/providers/kaipan_schema"),
+        snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+    )
+
+    if slot == "09-25":
+        datasets = [
+            (provider.fetch_board_strength, {}),
+            (provider.fetch_industry_ranking, {}),
+            (provider.fetch_concept_fengkou, {}),
+            (provider.fetch_theme_detail, {}),
+            (provider.fetch_stock_sector_v2, {}),
+            (provider.fetch_strong_fengkou, {}),
+            (provider.fetch_interval_stats_stock, {}),
+            (provider.fetch_morning_bidding_list, {}),
+            (provider.fetch_limit_up_reason, {}),
+            (provider.fetch_pre_market_bid, {}),
+            (provider.fetch_pre_market_stats, {}),
+            (provider.fetch_limit_up_info, {}),
+        ]
+    else:
+        datasets = [
+            (provider.fetch_board_strength, {}),
+            (provider.fetch_industry_ranking, {}),
+            (provider.fetch_concept_fengkou, {}),
+            (provider.fetch_theme_detail, {}),
+            (provider.fetch_stock_sector_v2, {}),
+            (provider.fetch_strong_fengkou, {}),
+            (provider.fetch_interval_stats_stock, {}),
+            (provider.fetch_limit_up_reason, {}),
+            (provider.fetch_limit_up_info, {}),
+            (provider.fetch_lhb_list, {}),
+        ]
+
+    for fetch_fn, kwargs in datasets:
+        try:
+            fetch_fn(trade_date=trade_date, slot=slot, **kwargs)
+        except Exception as e:
+            logging.warning(f"{fetch_fn.__name__} failed: {e}")
+
+    normalizer.normalize_date(trade_date.isoformat(), slots=(slot,))
+    logging.info(f"scheduled fetch + normalize completed for {trade_date} {slot}")
 
 
 def main():
@@ -204,7 +280,48 @@ def main():
         else:
             print("status: no data yet")
     elif args.command == "run":
-        print("scheduler started")
+        import signal
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+        )
+
+        if not is_trading_day(date.today()):
+            print("today is not a trading day, skipping")
+            return
+
+        scheduler = BackgroundScheduler()
+
+        cfg = load_kaipan_config()
+        pre_market = cfg.get("fetch_schedule", {}).get("pre_market", "9:25")
+        post_close = cfg.get("fetch_schedule", {}).get("post_close", "17:30")
+
+        # 解析时间
+        pre_hour, pre_min = map(int, pre_market.split(":"))
+        post_hour, post_min = map(int, post_close.split(":"))
+
+        scheduler.add_job(
+            run_fetch,
+            CronTrigger(hour=pre_hour, minute=pre_min, second=0),
+            args=["09-25"],
+            id="pre_market",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            run_fetch,
+            CronTrigger(hour=post_hour, minute=post_min, second=0),
+            args=["17-30"],
+            id="post_close",
+            replace_existing=True,
+        )
+
+        scheduler.start()
+        print(f"scheduler started (pre_market {pre_market}, post_close {post_close})")
+
+        signal.signal(signal.SIGINT, lambda *_: scheduler.shutdown())
+        signal.signal(signal.SIGTERM, lambda *_: scheduler.shutdown())
+        scheduler._thread.join()
 
 
 if __name__ == "__main__":

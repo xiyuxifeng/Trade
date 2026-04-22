@@ -164,8 +164,24 @@ def main():
         norm_results = normalizer.normalize_date(trade_date.isoformat(), slots_tuple)
         print(f"[fetch] normalize 完成，结果: {norm_results}")
     elif args.command == "normalize":
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_normalizer import KaipanNormalizer
+
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)
-        print(f"normalize {trade_date} slot={args.slot}")
+        slots = ("09-25", "17-30") if args.slot == "all" else (args.slot,)
+
+        cfg = load_kaipan_config()
+        normalizer = KaipanNormalizer(
+            schema_dir=cfg.get("schema_dir", "src/providers/kaipan_schema"),
+            snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+        )
+
+        results = normalizer.normalize_date(trade_date.isoformat(), slots=slots)
+        for slot, datasets in results.items():
+            ok = sum(1 for v in datasets.values() if v is not None and "_error" not in v)
+            err = sum(1 for v in datasets.values() if v is None or "_error" in v)
+            print(f"normalize {trade_date} {slot}: {ok} ok, {err} failed")
     elif args.command == "status":
         print("status: no data yet")
     elif args.command == "run":

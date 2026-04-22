@@ -14,18 +14,18 @@ from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# 确保 src 目录在 sys.path 中
-_src = Path(__file__).parent.parent / "src"
-if str(_src) not in sys.path:
-    sys.path.insert(0, str(_src))
+# 确保项目根目录在 sys.path 中
+_root = Path(__file__).parent.parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 
-from providers.kaipan_provider import KaipanAuth, KaipanProvider
-from providers.kaipan_normalizer import KaipanNormalizer
+from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
+from src.providers.kaipan_normalizer import KaipanNormalizer
 
 
 def load_kaipan_config() -> dict:
     """从 config/app.yaml 加载 kaipan 配置。"""
-    config_path = Path(__file__).parent.parent.parent / "config" / "app.yaml"
+    config_path = _root / "config" / "app.yaml"
     with open(config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
     return config.get("kaipan", {})
@@ -78,10 +78,6 @@ def is_trading_day(trade_date: date) -> bool:
 
 def run_fetch(slot: str):
     """由 APScheduler 调用的 fetch 包装函数。"""
-    import sys
-    sys.path.insert(0, "src")
-    from providers.kaipan_provider import KaipanProvider, KaipanAuth
-    from providers.kaipan_normalizer import KaipanNormalizer
     from datetime import date as date_cls
 
     trade_date = date_cls.today()
@@ -217,8 +213,6 @@ def main():
         norm_results = normalizer.normalize_date(trade_date.isoformat(), slots_tuple)
         print(f"[fetch] normalize 完成，结果: {norm_results}")
     elif args.command == "normalize":
-        import sys
-        sys.path.insert(0, "src")
         from providers.kaipan_normalizer import KaipanNormalizer
 
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)

@@ -1,0 +1,1413 @@
+{
+  "meta": {
+    "dataset": "topic_constituents",
+    "trade_date": "2026-04-22",
+    "slot": "09-25",
+    "fetched_at": "2026-04-22T23:38:38.055749",
+    "source": "kaipan",
+    "request": {
+      "endpoint": "https://applhb.longhuvip.com/w1/api/index.php",
+      "controller": "Theme",
+      "action": "InfoGet",
+      "params": {
+        "DeviceID": "9b6fe2a5-ad92-4d1c-a8b8-d7c8e4da0f53",
+        "PhoneOSNew": "1",
+        "VerSion": "5.23.0.1",
+        "apiv": "w44",
+        "Token": "036ca9cad6e44ee4a585c22cb2c298ed",
+        "UserID": "3807176",
+        "ID": "261",
+        "a": "InfoGet",
+        "c": "Theme"
+      }
+    }
+  },
+  "data": {
+    "ID": "261",
+    "Name": "华为海思概念",
+    "BriefIntro": "华为海思是一家全球领先的Fabless半导体与器件设计公司，致力于为客户提供智能家庭、智慧城市及智能出行等泛智能终端芯片解决方案。产品覆盖智慧视觉、智慧IoT、智慧媒体、智慧交通及汽车电子、显示、手机终端、数据中心及光收发器等多个领域。",
+    "ClassLayer": "3",
+    "Desc": "",
+    "PlateSwitch": "1",
+    "StkSwitch": "2",
+    "Introduction": "<p>相关题材新闻</p><p><br/></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">2024年8月1日，<span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">华为海思宣布，</span>将于9月9日召开海思全联接大会，届时将发布多款海思芯片，这些芯片将涵盖音视频、鸿蒙、星闪等多种应用场景。</span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">题材相关介绍</span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">一、海思半导体<br/></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">华为海思是华为的全资子公司，专注于半导体和集成电路设计。<span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">前身是华为集成电路设计中心，拥有通信联接、智能终端芯片等多项技术，并与高通、联发科等巨头竞争。海思的产品线非常广泛，包括智慧视觉、智慧IoT、智慧媒体、智慧交通及汽车电子、显示、手机终端、数据中心及光收发器等多个领域。海思的芯片解决方案在安防监控、智能电视、机顶盒、大中小屏智能终端等方面都有应用，并且在移动通信技术方面，海思的巴龙系列芯片支持多种LTE技术，包括Cat.4至Cat.21以及5G技术。</span></span></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">二、发展历程</span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\">华为海思的发展历程可以追溯到1991年，当时华为成立了ASIC设计中心，开始自主研发芯片。2004年，华为正式成立海思半导体有限公司，专注于半导体和集成电路设计。海思在芯片设计领域积累了丰富的经验，开发了多种芯片产品，包括用于智能设备的麒麟系列、数据中心的鲲鹏系列服务CPU、人工智能的Ascend（升腾）系列SoC、连接芯片（基站芯片天罡、终端芯片巴龙）以及其他专用芯片（视频监控、机顶盒芯片、物联网等芯片）。海思的芯片产品在国内外市场都有广泛应用，公司总部位于深圳，并在全球设有多个办事处和研究中心，拥有7000多名员工。海思已经建立了强大的IC设计和验证技术组合，开发了先进的EDA设计平台，并成功开发了200多种拥有自主知识产权的模型，申请了8000多项专利 。</span><span class=\"docQuote___YIW6w\" style=\"color: var(--msh-chat-segment-quoteIcon-color); box-sizing: inherit; margin: 0px 4px; position: relative; top: 3px; cursor: pointer; user-select: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; letter-spacing: 0.25px; white-space: pre-wrap;\"><span role=\"img\" class=\"anticon MuiBox-root css-0\" style=\"box-sizing: inherit; display: inline-flex; color: inherit; line-height: 0; text-align: center; vertical-align: -0.125em; text-rendering: optimizelegibility; -webkit-font-smoothing: antialiased; align-items: center;\"><svg width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\" class=\"\"><use xlink:href=\"#mshd-seg-quote\"></use></svg></span></span><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"></span></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></span></p><p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span></span></p><span style=\"color: rgb(6, 6, 7); font-family: -apple-system, blinkmacsystemfont, &quot;Helvetica Neue&quot;, helvetica, &quot;segoe ui&quot;, arial, roboto, &quot;PingFang SC&quot;, miui, &quot;Hiragino Sans GB&quot;, &quot;Microsoft Yahei&quot;, sans-serif; font-size: 14px; letter-spacing: 0.25px; white-space: pre-wrap; background-color: rgb(255, 255, 255);\"><br/></span>",
+    "CreateTime": "1723785234",
+    "UpdateTime": "0",
+    "Table": [
+      {
+        "Level1": {
+          "ID": "2957",
+          "Name": "经销商代理商",
+          "ZSCode": "0",
+          "FirstShelveTime": "1723777344",
+          "UpdateCacheTime": "0",
+          "IsNew": 0,
+          "Stocks": [
+            {
+              "StockID": "000062",
+              "IsZz": "2",
+              "IsHot": "1",
+              "Reason": "公司是海思芯片全系列产品授权代理商。",
+              "FirstShelveTime": "1723777555",
+              "UpdateCacheTime": "1723777555",
+              "IsNew": 0,
+              "prod_name": "深圳华强",
+              "Hot": 10225
+            },
+            {
+              "StockID": "300184",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "鼎芯无限为公司全资子公司，鼎芯无限官网显示，华为海思为公司元器件分销合作伙伴。",
+              "FirstShelveTime": "1723777595",
+              "UpdateCacheTime": "1723777595",
+              "IsNew": 0,
+              "prod_name": "力源信息",
+              "Hot": 3360
+            },
+            {
+              "StockID": "001287",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司中电港全资子公司深圳市思尼克技术有限公司是华为海思系列全产品线授权分销商之一。",
+              "FirstShelveTime": "1723777555",
+              "UpdateCacheTime": "1723777555",
+              "IsNew": 0,
+              "prod_name": "中电港",
+              "Hot": 2136
+            },
+            {
+              "StockID": "000034",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "根据海思官网显示：神州数码为公司代理商，主要授权产品为智慧媒体，短距物联产品。",
+              "FirstShelveTime": "1724725751",
+              "UpdateCacheTime": "1724725751",
+              "IsNew": 0,
+              "prod_name": "神州数码",
+              "Hot": 1470
+            },
+            {
+              "StockID": "001298",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "根据海思官网信息，公司子公司天午科技为海思代理。",
+              "FirstShelveTime": "1723777687",
+              "UpdateCacheTime": "1723777687",
+              "IsNew": 0,
+              "prod_name": "好上好",
+              "Hot": 1267
+            }
+          ]
+        },
+        "Level2": []
+      },
+      {
+        "Level1": {
+          "ID": "2958",
+          "Name": "合作商",
+          "ZSCode": "0",
+          "FirstShelveTime": "1723777344",
+          "UpdateCacheTime": "0",
+          "IsNew": 0,
+          "Stocks": [
+            {
+              "StockID": "603738",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司石英晶体谐振器细分领域龙头，共有17款产品通过了MTK、华为海思等逾十家国内外知名应用方案商的认证。",
+              "FirstShelveTime": "1723778180",
+              "UpdateCacheTime": "1723778180",
+              "IsNew": 0,
+              "prod_name": "泰晶科技",
+              "Hot": 10845
+            },
+            {
+              "StockID": "002261",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司研发打造基于鸿蒙操作系统及结合海思芯片的创新产品，成功将开源鸿蒙操作系统成功适配到海思M900笔记本",
+              "FirstShelveTime": "1724394280",
+              "UpdateCacheTime": "1724394280",
+              "IsNew": 0,
+              "prod_name": "拓维信息",
+              "Hot": 8609
+            },
+            {
+              "StockID": "301312",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司客户包括海思光电子有限公司",
+              "FirstShelveTime": "1723777704",
+              "UpdateCacheTime": "1723777704",
+              "IsNew": 0,
+              "prod_name": "智立方",
+              "Hot": 2342
+            },
+            {
+              "StockID": "000810",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "华为海思半导体是公司于国内市场众多主芯片上游产业链的战略合作伙伴之一",
+              "FirstShelveTime": "1723960444",
+              "UpdateCacheTime": "1723960444",
+              "IsNew": 0,
+              "prod_name": "创维数字",
+              "Hot": 2293
+            },
+            {
+              "StockID": "600839",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司与华为海思在芯片领域有相关的合作",
+              "FirstShelveTime": "1724149967",
+              "UpdateCacheTime": "1724149967",
+              "IsNew": 0,
+              "prod_name": "四川长虹",
+              "Hot": 1999
+            },
+            {
+              "StockID": "300339",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司与华为建立了长期深度的合作关系，是海思芯片的战略合作伙伴",
+              "FirstShelveTime": "1723778739",
+              "UpdateCacheTime": "1723778739",
+              "IsNew": 0,
+              "prod_name": "润和软件",
+              "Hot": 1733
+            },
+            {
+              "StockID": "300504",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司已成为星闪联盟会员，专注于“海思接入产品芯片方案产品技术研究”",
+              "FirstShelveTime": "1723777669",
+              "UpdateCacheTime": "1723777669",
+              "IsNew": 0,
+              "prod_name": "天邑股份",
+              "Hot": 1198
+            },
+            {
+              "StockID": "300400",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "与海思半导体签订了《海思劲拓合作备忘录》",
+              "FirstShelveTime": "1723960295",
+              "UpdateCacheTime": "1723960295",
+              "IsNew": 0,
+              "prod_name": "劲拓股份",
+              "Hot": 1156
+            },
+            {
+              "StockID": "002881",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "低端产品上，公司与海思在不同产品类型上有战略合作",
+              "FirstShelveTime": "1723777997",
+              "UpdateCacheTime": "1723777997",
+              "IsNew": 0,
+              "prod_name": "美格智能",
+              "Hot": 1072
+            },
+            {
+              "StockID": "300050",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司已取得华为海思芯片ICD授权，并应用到5G网络路测仪表产品业务中。",
+              "FirstShelveTime": "1723777641",
+              "UpdateCacheTime": "1723777641",
+              "IsNew": 0,
+              "prod_name": "世纪鼎利",
+              "Hot": 1035
+            },
+            {
+              "StockID": "688037",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "华为海思是公司的客户",
+              "FirstShelveTime": "1723778691",
+              "UpdateCacheTime": "1723778691",
+              "IsNew": 0,
+              "prod_name": "芯源微  ",
+              "Hot": 946
+            },
+            {
+              "StockID": "300079",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司有基于国产密码的智能终端版权保护技术研究及开发（海思项目）",
+              "FirstShelveTime": "1723777799",
+              "UpdateCacheTime": "1723777799",
+              "IsNew": 0,
+              "prod_name": "数码视讯",
+              "Hot": 907
+            },
+            {
+              "StockID": "300598",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "华为海思是公司的主要客户",
+              "FirstShelveTime": "1723778424",
+              "UpdateCacheTime": "1723778424",
+              "IsNew": 0,
+              "prod_name": "诚迈科技",
+              "Hot": 851
+            },
+            {
+              "StockID": "300531",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司部分项目与海思有特定技术方案的合作",
+              "FirstShelveTime": "1723777739",
+              "UpdateCacheTime": "1723777739",
+              "IsNew": 0,
+              "prod_name": "优博讯",
+              "Hot": 844
+            },
+            {
+              "StockID": "300460",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "获得海思 IC 设计方案平台认证",
+              "FirstShelveTime": "1723777720",
+              "UpdateCacheTime": "1723777720",
+              "IsNew": 0,
+              "prod_name": "ST惠伦",
+              "Hot": 681
+            },
+            {
+              "StockID": "603324",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司为华为武汉研发生产项目-海思光工厂洁净室提供工艺废气治理系统",
+              "FirstShelveTime": "1723777769",
+              "UpdateCacheTime": "1723777769",
+              "IsNew": 0,
+              "prod_name": "盛剑科技",
+              "Hot": 676
+            },
+            {
+              "StockID": "300041",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司目前主要在芯片组装及封测部分进行产品开发和市场拓展；其中芯片封测是以海思合作为契机，尚处于小批量应用阶段",
+              "FirstShelveTime": "1724569516",
+              "UpdateCacheTime": "1724569516",
+              "IsNew": 0,
+              "prod_name": "回天新材",
+              "Hot": 509
+            }
+          ]
+        },
+        "Level2": []
+      },
+      {
+        "Level1": {
+          "ID": "2959",
+          "Name": "供应商服务商",
+          "ZSCode": "0",
+          "FirstShelveTime": "1723778301",
+          "UpdateCacheTime": "0",
+          "IsNew": 0,
+          "Stocks": [
+            {
+              "StockID": "603118",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司国产海思方案 WIFI 产品已成功获取客户项目，运营商直营业务部突破终端公司组网类新订单",
+              "FirstShelveTime": "1723778341",
+              "UpdateCacheTime": "1723778341",
+              "IsNew": 0,
+              "prod_name": "共进股份",
+              "Hot": 4414
+            },
+            {
+              "StockID": "300456",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司为华为（海思）提供硅光子芯片的代工服务，包括工艺开发和晶圆制造。",
+              "FirstShelveTime": "1723778512",
+              "UpdateCacheTime": "1723778512",
+              "IsNew": 0,
+              "prod_name": "赛微电子",
+              "Hot": 3764
+            },
+            {
+              "StockID": "002371",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司主要为集成电路芯片企业提供设备与服务，华为海思是公司的客户",
+              "FirstShelveTime": "1723778798",
+              "UpdateCacheTime": "1723778798",
+              "IsNew": 0,
+              "prod_name": "北方华创",
+              "Hot": 3383
+            },
+            {
+              "StockID": "600584",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司业务覆盖高端用户，包括海思",
+              "FirstShelveTime": "1723778812",
+              "UpdateCacheTime": "1723778812",
+              "IsNew": 0,
+              "prod_name": "长电科技",
+              "Hot": 2947
+            },
+            {
+              "StockID": "002185",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司及相关子公司通过了海思质量管理体系审核",
+              "FirstShelveTime": "1723778882",
+              "UpdateCacheTime": "1723778882",
+              "IsNew": 0,
+              "prod_name": "华天科技",
+              "Hot": 2575
+            },
+            {
+              "StockID": "300496",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "作为华为的专业技术供应商，公司与华为及海思在物联网和智能汽车等多个领域均有合作。",
+              "FirstShelveTime": "1723778489",
+              "UpdateCacheTime": "1723778489",
+              "IsNew": 0,
+              "prod_name": "中科创达",
+              "Hot": 2016
+            },
+            {
+              "StockID": "300726",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "单层陶瓷电容、陶瓷薄膜电路等产品在5G应用的光通信元件，已给海思半导体等客户小批量供货。",
+              "FirstShelveTime": "1723778462",
+              "UpdateCacheTime": "1723778462",
+              "IsNew": 0,
+              "prod_name": "宏达电子",
+              "Hot": 1502
+            },
+            {
+              "StockID": "688258",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司为华为海思提供ARM和X86服务器芯片的BIOS和BMC固件技术服务。",
+              "FirstShelveTime": "1723778267",
+              "UpdateCacheTime": "1723778267",
+              "IsNew": 0,
+              "prod_name": "卓易信息",
+              "Hot": 1314
+            },
+            {
+              "StockID": "002967",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司大客户和重点项目全面拓展，与华为海思合作加深",
+              "FirstShelveTime": "1723778860",
+              "UpdateCacheTime": "1723778860",
+              "IsNew": 0,
+              "prod_name": "广电计量",
+              "Hot": 1091
+            },
+            {
+              "StockID": "300602",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司向华为海思提供导热硅胶、泡棉胶等产品，海思半导体为公司前五名客户",
+              "FirstShelveTime": "1723778362",
+              "UpdateCacheTime": "1723778362",
+              "IsNew": 0,
+              "prod_name": "飞荣达",
+              "Hot": 1064
+            },
+            {
+              "StockID": "002819",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "在测试技术与服务相关业务领域，华为、华为海思也是公司的客户。",
+              "FirstShelveTime": "1723778253",
+              "UpdateCacheTime": "1723778253",
+              "IsNew": 0,
+              "prod_name": "东方中科",
+              "Hot": 911
+            },
+            {
+              "StockID": "301316",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司与华为的合作主要为向华为海思及华为终端提供移动智能终端外场测试服务。",
+              "FirstShelveTime": "1723778232",
+              "UpdateCacheTime": "1723778232",
+              "IsNew": 0,
+              "prod_name": "慧博云通",
+              "Hot": 852
+            },
+            {
+              "StockID": "300531",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司在互动平台表示公司在部分项目与海思有特定技术方案的合作。",
+              "FirstShelveTime": "1724401416",
+              "UpdateCacheTime": "1724401416",
+              "IsNew": 0,
+              "prod_name": "优博讯",
+              "Hot": 844
+            },
+            {
+              "StockID": "300416",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司收购上海宜特后， 海思半导体有限公司的芯片检测需求较大，使得华为试验服务订单持续增加",
+              "FirstShelveTime": "1723778442",
+              "UpdateCacheTime": "1723778442",
+              "IsNew": 0,
+              "prod_name": "苏试试验",
+              "Hot": 832
+            },
+            {
+              "StockID": "301366",
+              "IsZz": "2",
+              "IsHot": "0",
+              "Reason": "公司为飞腾、申威、龙芯、海思等国产芯片公司的研发提供技术服务。",
+              "FirstShelveTime": "1723778209",
+              "UpdateCacheTime": "1723778209",
+              "IsNew": 0,
+              "prod_name": "一博科技",
+              "Hot": 611
+            }
+          ]
+        },
+        "Level2": []
+      },
+      {
+        "Level1": {
+          "ID": "2960",
+          "Name": "昇腾910C",
+          "ZSCode": "0",
+          "FirstShelveTime": "1723781360",
+          "UpdateCacheTime": "0",
+          "IsNew": 0,
+          "Stocks": []
+        },
+        "Level2": [
+          {
+            "ID": "2961",
+            "Name": "整机",
+            "ZSCode": "0",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "002261",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司在多个领域推出基于开源鸿蒙的创新解决方案及软硬一体化设备，并研发打造基于鸿蒙操作系统及结合海思芯片的创新产品",
+                "FirstShelveTime": "1724394183",
+                "UpdateCacheTime": "1724394183",
+                "IsNew": 0,
+                "prod_name": "拓维信息",
+                "Hot": 8609
+              },
+              {
+                "StockID": "600498",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司旗下长江计算作为算力基础设施国家队，与昇腾合作发布了昇腾智造等“智”系列解决方案",
+                "FirstShelveTime": "1723781426",
+                "UpdateCacheTime": "1723781426",
+                "IsNew": 0,
+                "prod_name": "烽火通信",
+                "Hot": 7371
+              },
+              {
+                "StockID": "301236",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司已推出鲲鹏一体机和昇腾一体机产品",
+                "FirstShelveTime": "1723785996",
+                "UpdateCacheTime": "1723785996",
+                "IsNew": 0,
+                "prod_name": "软通动力",
+                "Hot": 2928
+              },
+              {
+                "StockID": "000034",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司的神州鲲泰服务器采用华为鲲鹏和昇腾芯片",
+                "FirstShelveTime": "1723781426",
+                "UpdateCacheTime": "1723781426",
+                "IsNew": 0,
+                "prod_name": "神州数码",
+                "Hot": 1470
+              }
+            ]
+          },
+          {
+            "ID": "2962",
+            "Name": "高速连接器",
+            "ZSCode": "0",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "301517",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司是华为、中兴等大型通讯公司电连接器及互连产品的合格供方",
+                "FirstShelveTime": "1723782136",
+                "UpdateCacheTime": "1723782136",
+                "IsNew": 0,
+                "prod_name": "陕西华达",
+                "Hot": 1705
+              },
+              {
+                "StockID": "688629",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "华为是公司的第一大客户，且华为占公司通讯类业务的比重超 60%，为其提供高速连接器",
+                "FirstShelveTime": "1723781457",
+                "UpdateCacheTime": "1723781457",
+                "IsNew": 0,
+                "prod_name": "华丰科技",
+                "Hot": 1570
+              },
+              {
+                "StockID": "002897",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司已与华为等众多优质客户建立了长期合作关系,内设华为专案工厂主要生产通讯连接器",
+                "FirstShelveTime": "1723781457",
+                "UpdateCacheTime": "1723781457",
+                "IsNew": 0,
+                "prod_name": "意华股份",
+                "Hot": 1375
+              },
+              {
+                "StockID": "002055",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "华为为公司连接器领域客户",
+                "FirstShelveTime": "1723781457",
+                "UpdateCacheTime": "1723781457",
+                "IsNew": 0,
+                "prod_name": "ST得润",
+                "Hot": 727
+              }
+            ]
+          },
+          {
+            "ID": "2963",
+            "Name": "液冷",
+            "ZSCode": "0",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "002837",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "在通信机柜设备温控领域，公司凭赢得华为信赖和稳固的合作关系",
+                "FirstShelveTime": "1723781492",
+                "UpdateCacheTime": "1723781492",
+                "IsNew": 0,
+                "prod_name": "英维克",
+                "Hot": 26578
+              },
+              {
+                "StockID": "002272",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "2024年3月11日微信公众号发布：华夏鲲鹏与川润在华灏鲲鹏西部产业基地隆重举行战略合作签约仪式",
+                "FirstShelveTime": "1723781492",
+                "UpdateCacheTime": "1723781492",
+                "IsNew": 0,
+                "prod_name": "川润股份",
+                "Hot": 2512
+              }
+            ]
+          },
+          {
+            "ID": "2964",
+            "Name": "光模块",
+            "ZSCode": "801206",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "002281",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司400G硅光G现在的客户包括BAT和华为。",
+                "FirstShelveTime": "1723781515",
+                "UpdateCacheTime": "1723781515",
+                "IsNew": 0,
+                "prod_name": "光迅科技",
+                "Hot": 11363
+              },
+              {
+                "StockID": "000988",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司自主研发的106FPDFB/CWDM激光器芯片已量产，是国内唯一进入华为公司全面替代进口10Gbls激光器产品的供应商",
+                "FirstShelveTime": "1723781515",
+                "UpdateCacheTime": "1723781515",
+                "IsNew": 0,
+                "prod_name": "华工科技",
+                "Hot": 9703
+              }
+            ]
+          },
+          {
+            "ID": "2965",
+            "Name": "PCB",
+            "ZSCode": "0",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "600601",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "华为是公司PCB业务的主要客户之一",
+                "FirstShelveTime": "1723781538",
+                "UpdateCacheTime": "1723781538",
+                "IsNew": 0,
+                "prod_name": "方正科技",
+                "Hot": 3896
+              },
+              {
+                "StockID": "002916",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司系华为核心供应商，主要为其提供包括无线通信基站用PCB在内的各类产品。",
+                "FirstShelveTime": "1723781538",
+                "UpdateCacheTime": "1723781538",
+                "IsNew": 0,
+                "prod_name": "深南电路",
+                "Hot": 2538
+              },
+              {
+                "StockID": "688183",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "生益电子是华为PCB的主力供应商之一",
+                "FirstShelveTime": "1723781538",
+                "UpdateCacheTime": "1723781538",
+                "IsNew": 0,
+                "prod_name": "生益电子",
+                "Hot": 2081
+              }
+            ]
+          },
+          {
+            "ID": "2968",
+            "Name": "其他",
+            "ZSCode": "0",
+            "FirstShelveTime": "1723781360",
+            "UpdateCacheTime": "0",
+            "IsNew": 0,
+            "Stocks": [
+              {
+                "StockID": "301070",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "豫资开勒与洛阳昇腾实验室围绕统筹各自算力资源，共同开展算力扩容与运营合作，构建异构化算力互补体系。",
+                "FirstShelveTime": "1723781426",
+                "UpdateCacheTime": "1723781426",
+                "IsNew": 0,
+                "prod_name": "开勒股份",
+                "Hot": 1813
+              },
+              {
+                "StockID": "301182",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "公司已经与华为合作多年，主要供应防水组件类产品",
+                "FirstShelveTime": "1723781597",
+                "UpdateCacheTime": "1723781597",
+                "IsNew": 0,
+                "prod_name": "凯旺科技",
+                "Hot": 1030
+              },
+              {
+                "StockID": "688695",
+                "IsZz": "2",
+                "IsHot": "0",
+                "Reason": "互动易称，中间件是国产基础软硬件生态中的重要一环，公司与包括华为在内的众多基础软硬件厂商保持稳定的合作关系",
+                "FirstShelveTime": "1723781597",
+                "UpdateCacheTime": "1723781597",
+                "IsNew": 0,
+                "prod_name": "中创股份",
+                "Hot": 322
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "Stocks": [],
+    "StockList": [
+      {
+        "StockID": "000062",
+        "Tag": [
+          {
+            "ID": "2957",
+            "Name": "经销商代理商",
+            "Reason": "公司是海思芯片全系列产品授权代理商。"
+          }
+        ],
+        "prod_name": "深圳华强",
+        "HotNum": 10225
+      },
+      {
+        "StockID": "001287",
+        "Tag": [
+          {
+            "ID": "2957",
+            "Name": "经销商代理商",
+            "Reason": "公司中电港全资子公司深圳市思尼克技术有限公司是华为海思系列全产品线授权分销商之一。"
+          }
+        ],
+        "prod_name": "中电港",
+        "HotNum": 2136
+      },
+      {
+        "StockID": "300184",
+        "Tag": [
+          {
+            "ID": "2957",
+            "Name": "经销商代理商",
+            "Reason": "鼎芯无限为公司全资子公司，鼎芯无限官网显示，华为海思为公司元器件分销合作伙伴。"
+          }
+        ],
+        "prod_name": "力源信息",
+        "HotNum": 3360
+      },
+      {
+        "StockID": "300050",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司已取得华为海思芯片ICD授权，并应用到5G网络路测仪表产品业务中。"
+          }
+        ],
+        "prod_name": "世纪鼎利",
+        "HotNum": 1035
+      },
+      {
+        "StockID": "300504",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司已成为星闪联盟会员，专注于“海思接入产品芯片方案产品技术研究”"
+          }
+        ],
+        "prod_name": "天邑股份",
+        "HotNum": 1198
+      },
+      {
+        "StockID": "001298",
+        "Tag": [
+          {
+            "ID": "2957",
+            "Name": "经销商代理商",
+            "Reason": "根据海思官网信息，公司子公司天午科技为海思代理。"
+          }
+        ],
+        "prod_name": "好上好",
+        "HotNum": 1267
+      },
+      {
+        "StockID": "301312",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司客户包括海思光电子有限公司"
+          }
+        ],
+        "prod_name": "智立方",
+        "HotNum": 2342
+      },
+      {
+        "StockID": "300460",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "获得海思 IC 设计方案平台认证"
+          }
+        ],
+        "prod_name": "ST惠伦",
+        "HotNum": 681
+      },
+      {
+        "StockID": "300531",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司部分项目与海思有特定技术方案的合作"
+          },
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司在互动平台表示公司在部分项目与海思有特定技术方案的合作。"
+          }
+        ],
+        "prod_name": "优博讯",
+        "HotNum": 844
+      },
+      {
+        "StockID": "603324",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司为华为武汉研发生产项目-海思光工厂洁净室提供工艺废气治理系统"
+          }
+        ],
+        "prod_name": "盛剑科技",
+        "HotNum": 676
+      },
+      {
+        "StockID": "300079",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司有基于国产密码的智能终端版权保护技术研究及开发（海思项目）"
+          }
+        ],
+        "prod_name": "数码视讯",
+        "HotNum": 907
+      },
+      {
+        "StockID": "002881",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "低端产品上，公司与海思在不同产品类型上有战略合作"
+          }
+        ],
+        "prod_name": "美格智能",
+        "HotNum": 1072
+      },
+      {
+        "StockID": "603738",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司石英晶体谐振器细分领域龙头，共有17款产品通过了MTK、华为海思等逾十家国内外知名应用方案商的认证。"
+          }
+        ],
+        "prod_name": "泰晶科技",
+        "HotNum": 10845
+      },
+      {
+        "StockID": "301366",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司为飞腾、申威、龙芯、海思等国产芯片公司的研发提供技术服务。"
+          }
+        ],
+        "prod_name": "一博科技",
+        "HotNum": 611
+      },
+      {
+        "StockID": "301316",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司与华为的合作主要为向华为海思及华为终端提供移动智能终端外场测试服务。"
+          }
+        ],
+        "prod_name": "慧博云通",
+        "HotNum": 852
+      },
+      {
+        "StockID": "002819",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "在测试技术与服务相关业务领域，华为、华为海思也是公司的客户。"
+          }
+        ],
+        "prod_name": "东方中科",
+        "HotNum": 911
+      },
+      {
+        "StockID": "688258",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司为华为海思提供ARM和X86服务器芯片的BIOS和BMC固件技术服务。"
+          }
+        ],
+        "prod_name": "卓易信息",
+        "HotNum": 1314
+      },
+      {
+        "StockID": "603118",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司国产海思方案 WIFI 产品已成功获取客户项目，运营商直营业务部突破终端公司组网类新订单"
+          }
+        ],
+        "prod_name": "共进股份",
+        "HotNum": 4414
+      },
+      {
+        "StockID": "300602",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司向华为海思提供导热硅胶、泡棉胶等产品，海思半导体为公司前五名客户"
+          }
+        ],
+        "prod_name": "飞荣达",
+        "HotNum": 1064
+      },
+      {
+        "StockID": "300598",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "华为海思是公司的主要客户"
+          }
+        ],
+        "prod_name": "诚迈科技",
+        "HotNum": 851
+      },
+      {
+        "StockID": "300416",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司收购上海宜特后， 海思半导体有限公司的芯片检测需求较大，使得华为试验服务订单持续增加"
+          }
+        ],
+        "prod_name": "苏试试验",
+        "HotNum": 832
+      },
+      {
+        "StockID": "300726",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "单层陶瓷电容、陶瓷薄膜电路等产品在5G应用的光通信元件，已给海思半导体等客户小批量供货。"
+          }
+        ],
+        "prod_name": "宏达电子",
+        "HotNum": 1502
+      },
+      {
+        "StockID": "300496",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "作为华为的专业技术供应商，公司与华为及海思在物联网和智能汽车等多个领域均有合作。"
+          }
+        ],
+        "prod_name": "中科创达",
+        "HotNum": 2016
+      },
+      {
+        "StockID": "300456",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司为华为（海思）提供硅光子芯片的代工服务，包括工艺开发和晶圆制造。"
+          }
+        ],
+        "prod_name": "赛微电子",
+        "HotNum": 3764
+      },
+      {
+        "StockID": "688037",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "华为海思是公司的客户"
+          }
+        ],
+        "prod_name": "芯源微  ",
+        "HotNum": 946
+      },
+      {
+        "StockID": "300339",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司与华为建立了长期深度的合作关系，是海思芯片的战略合作伙伴"
+          }
+        ],
+        "prod_name": "润和软件",
+        "HotNum": 1733
+      },
+      {
+        "StockID": "002371",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司主要为集成电路芯片企业提供设备与服务，华为海思是公司的客户"
+          }
+        ],
+        "prod_name": "北方华创",
+        "HotNum": 3383
+      },
+      {
+        "StockID": "600584",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司业务覆盖高端用户，包括海思"
+          }
+        ],
+        "prod_name": "长电科技",
+        "HotNum": 2947
+      },
+      {
+        "StockID": "002967",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司大客户和重点项目全面拓展，与华为海思合作加深"
+          }
+        ],
+        "prod_name": "广电计量",
+        "HotNum": 1091
+      },
+      {
+        "StockID": "002185",
+        "Tag": [
+          {
+            "ID": "2959",
+            "Name": "供应商服务商",
+            "Reason": "公司及相关子公司通过了海思质量管理体系审核"
+          }
+        ],
+        "prod_name": "华天科技",
+        "HotNum": 2575
+      },
+      {
+        "StockID": "301070",
+        "Tag": [
+          {
+            "ID": "2968",
+            "Name": "其他",
+            "Reason": "豫资开勒与洛阳昇腾实验室围绕统筹各自算力资源，共同开展算力扩容与运营合作，构建异构化算力互补体系。"
+          }
+        ],
+        "prod_name": "开勒股份",
+        "HotNum": 1813
+      },
+      {
+        "StockID": "000034",
+        "Tag": [
+          {
+            "ID": "2961",
+            "Name": "整机",
+            "Reason": "公司的神州鲲泰服务器采用华为鲲鹏和昇腾芯片"
+          },
+          {
+            "ID": "2957",
+            "Name": "经销商代理商",
+            "Reason": "根据海思官网显示：神州数码为公司代理商，主要授权产品为智慧媒体，短距物联产品。"
+          }
+        ],
+        "prod_name": "神州数码",
+        "HotNum": 1470
+      },
+      {
+        "StockID": "600498",
+        "Tag": [
+          {
+            "ID": "2961",
+            "Name": "整机",
+            "Reason": "公司旗下长江计算作为算力基础设施国家队，与昇腾合作发布了昇腾智造等“智”系列解决方案"
+          }
+        ],
+        "prod_name": "烽火通信",
+        "HotNum": 7371
+      },
+      {
+        "StockID": "688629",
+        "Tag": [
+          {
+            "ID": "2962",
+            "Name": "高速连接器",
+            "Reason": "华为是公司的第一大客户，且华为占公司通讯类业务的比重超 60%，为其提供高速连接器"
+          }
+        ],
+        "prod_name": "华丰科技",
+        "HotNum": 1570
+      },
+      {
+        "StockID": "002897",
+        "Tag": [
+          {
+            "ID": "2962",
+            "Name": "高速连接器",
+            "Reason": "公司已与华为等众多优质客户建立了长期合作关系,内设华为专案工厂主要生产通讯连接器"
+          }
+        ],
+        "prod_name": "意华股份",
+        "HotNum": 1375
+      },
+      {
+        "StockID": "002055",
+        "Tag": [
+          {
+            "ID": "2962",
+            "Name": "高速连接器",
+            "Reason": "华为为公司连接器领域客户"
+          }
+        ],
+        "prod_name": "ST得润",
+        "HotNum": 727
+      },
+      {
+        "StockID": "002837",
+        "Tag": [
+          {
+            "ID": "2963",
+            "Name": "液冷",
+            "Reason": "在通信机柜设备温控领域，公司凭赢得华为信赖和稳固的合作关系"
+          }
+        ],
+        "prod_name": "英维克",
+        "HotNum": 26578
+      },
+      {
+        "StockID": "002272",
+        "Tag": [
+          {
+            "ID": "2963",
+            "Name": "液冷",
+            "Reason": "2024年3月11日微信公众号发布：华夏鲲鹏与川润在华灏鲲鹏西部产业基地隆重举行战略合作签约仪式"
+          }
+        ],
+        "prod_name": "川润股份",
+        "HotNum": 2512
+      },
+      {
+        "StockID": "002281",
+        "Tag": [
+          {
+            "ID": "2964",
+            "Name": "光模块",
+            "Reason": "公司400G硅光G现在的客户包括BAT和华为。"
+          }
+        ],
+        "prod_name": "光迅科技",
+        "HotNum": 11363
+      },
+      {
+        "StockID": "000988",
+        "Tag": [
+          {
+            "ID": "2964",
+            "Name": "光模块",
+            "Reason": "公司自主研发的106FPDFB/CWDM激光器芯片已量产，是国内唯一进入华为公司全面替代进口10Gbls激光器产品的供应商"
+          }
+        ],
+        "prod_name": "华工科技",
+        "HotNum": 9703
+      },
+      {
+        "StockID": "002916",
+        "Tag": [
+          {
+            "ID": "2965",
+            "Name": "PCB",
+            "Reason": "公司系华为核心供应商，主要为其提供包括无线通信基站用PCB在内的各类产品。"
+          }
+        ],
+        "prod_name": "深南电路",
+        "HotNum": 2538
+      },
+      {
+        "StockID": "688183",
+        "Tag": [
+          {
+            "ID": "2965",
+            "Name": "PCB",
+            "Reason": "生益电子是华为PCB的主力供应商之一"
+          }
+        ],
+        "prod_name": "生益电子",
+        "HotNum": 2081
+      },
+      {
+        "StockID": "600601",
+        "Tag": [
+          {
+            "ID": "2965",
+            "Name": "PCB",
+            "Reason": "华为是公司PCB业务的主要客户之一"
+          }
+        ],
+        "prod_name": "方正科技",
+        "HotNum": 3896
+      },
+      {
+        "StockID": "688695",
+        "Tag": [
+          {
+            "ID": "2968",
+            "Name": "其他",
+            "Reason": "互动易称，中间件是国产基础软硬件生态中的重要一环，公司与包括华为在内的众多基础软硬件厂商保持稳定的合作关系"
+          }
+        ],
+        "prod_name": "中创股份",
+        "HotNum": 322
+      },
+      {
+        "StockID": "301182",
+        "Tag": [
+          {
+            "ID": "2968",
+            "Name": "其他",
+            "Reason": "公司已经与华为合作多年，主要供应防水组件类产品"
+          }
+        ],
+        "prod_name": "凯旺科技",
+        "HotNum": 1030
+      },
+      {
+        "StockID": "301517",
+        "Tag": [
+          {
+            "ID": "2962",
+            "Name": "高速连接器",
+            "Reason": "公司是华为、中兴等大型通讯公司电连接器及互连产品的合格供方"
+          }
+        ],
+        "prod_name": "陕西华达",
+        "HotNum": 1705
+      },
+      {
+        "StockID": "301236",
+        "Tag": [
+          {
+            "ID": "2961",
+            "Name": "整机",
+            "Reason": "公司已推出鲲鹏一体机和昇腾一体机产品"
+          }
+        ],
+        "prod_name": "软通动力",
+        "HotNum": 2928
+      },
+      {
+        "StockID": "300400",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "与海思半导体签订了《海思劲拓合作备忘录》"
+          }
+        ],
+        "prod_name": "劲拓股份",
+        "HotNum": 1156
+      },
+      {
+        "StockID": "000810",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "华为海思半导体是公司于国内市场众多主芯片上游产业链的战略合作伙伴之一"
+          }
+        ],
+        "prod_name": "创维数字",
+        "HotNum": 2293
+      },
+      {
+        "StockID": "600839",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司与华为海思在芯片领域有相关的合作"
+          }
+        ],
+        "prod_name": "四川长虹",
+        "HotNum": 1999
+      },
+      {
+        "StockID": "002261",
+        "Tag": [
+          {
+            "ID": "2961",
+            "Name": "整机",
+            "Reason": "公司在多个领域推出基于开源鸿蒙的创新解决方案及软硬一体化设备，并研发打造基于鸿蒙操作系统及结合海思芯片的创新产品"
+          },
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司研发打造基于鸿蒙操作系统及结合海思芯片的创新产品，成功将开源鸿蒙操作系统成功适配到海思M900笔记本"
+          }
+        ],
+        "prod_name": "拓维信息",
+        "HotNum": 8609
+      },
+      {
+        "StockID": "300041",
+        "Tag": [
+          {
+            "ID": "2958",
+            "Name": "合作商",
+            "Reason": "公司目前主要在芯片组装及封测部分进行产品开发和市场拓展；其中芯片封测是以海思合作为契机，尚处于小批量应用阶段"
+          }
+        ],
+        "prod_name": "回天新材",
+        "HotNum": 509
+      }
+    ],
+    "IsNew": 0,
+    "ZT": {
+      "000062": [
+        "1",
+        "10.01",
+        "1776841461"
+      ]
+    },
+    "Power": 1,
+    "Subscribe": 0,
+    "IsGood": 0,
+    "ComNum": 1396,
+    "GoodNum": 1257,
+    "errcode": "0",
+    "t": 0.017047999999999952
+  }
+}

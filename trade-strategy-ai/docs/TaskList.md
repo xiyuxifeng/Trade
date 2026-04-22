@@ -278,7 +278,7 @@
   验收标准：任意一份 raw/snapshot 数据都能追溯来源。
   完成情况：`_save_raw()` 方法内嵌 meta（dataset、trade_date、slot、fetched_at、source、request），与 NTL-S0-008 合并实现（commit `3090ce8`）。
 
-- [ ] `NTL-S0-011` `P1`
+- [x] `NTL-S0-011` `P1`
   目标：验证接口字段稳定性与分页规则。
   输入：首批 8 个接口抓取能力。
   输出：最近 20 到 60 个交易日的样本数据和字段稳定性结论。
@@ -286,6 +286,7 @@
   前置依赖：`NTL-S0-008`、`NTL-S0-009`、`NTL-S0-010`。
   可并行：`NTL-S0-014`。
   验收标准：能明确哪些字段稳定、哪些字段存在缺失或分页差异。
+  完成情况：最近 30 个交易日、13 个接口批量抓取验证完成；`RealRankingInfo`、`GetFengKListBest`、`GetInterviewsByDateStock`、`GetZhangTingTianTi` 的历史/今日差异已在 normalizer 里归一化；测试 `22 passed`。
 
 - [x] `NTL-S0-012` `P0`
   目标：建立 `src/providers/kaipan_provider.py` 草案。
@@ -1473,7 +1474,7 @@
 
 ### 18.1 最近必须先做的任务
 
-1. `NTL-S0-007` ~ `NTL-S0-011`
+1. `NTL-S0-007` ~ `NTL-S0-010`
 2. `NTL-S0-014`
 3. `NTL-S1-001` ~ `NTL-S1-013`
 4. `NTL-S15-001` ~ `NTL-S15-010`

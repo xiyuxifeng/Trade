@@ -524,6 +524,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 }
 ```
 
+**返回差异说明：**
+- 历史 URL 与今日 URL 存在 `Date` / `date` 大小写差异。
+- 解析层会同时补齐 `Date` 和 `date`，保留兼容性并统一字段访问方式。
+
 ---
 
 ### 涨停板列表
@@ -1097,6 +1101,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 }
 ```
 
+**返回差异说明：**
+- 历史 URL 与今日 URL 的结构基本一致，但今日返回常见会缺少 `MinDay`。
+- 解析层已统一补齐 `MinDay: null`，下游可以按固定结构读取。
+
 ---
 
 ### 行业涨幅
@@ -1139,6 +1147,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
     "errcode": "0"
 }
 ```
+
+**返回差异说明：**
+- 与“板块强度”一致，今日 URL 可能缺少 `MinDay`。
+- 解析层会自动补齐该字段，避免历史/今日分支处理。
 
 ---
 
@@ -2346,6 +2358,10 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 }
 ```
 
+**返回差异说明：**
+- 历史 URL 可能不返回 `Count`，今日 URL 常见会返回 `Count`。
+- 解析层会在 `Count` 缺失时按 `List` 长度补齐。
+
 ---
 
 ### 复盘榜
@@ -2447,6 +2463,11 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
     "errcode": "0"
 }
 ```
+
+**返回差异说明：**
+- 历史 URL 与今日 URL 的提示字段存在 `Tips` / `Tip` 命名差异。
+- 解析层会同时补齐两个字段，统一按同一结构消费。
+
 
 ---
 

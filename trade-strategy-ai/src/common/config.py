@@ -152,6 +152,34 @@ class PersonaConfig(BaseModel):
     market_state_benchmark_csv: str | None = None
 
 
+class KaipanConfig(BaseModel):
+    """开盘啦私有接口运行配置。"""
+
+    data_dir: str = "data/kaipan"
+    schema_dir: str = "src/providers/kaipan_schema"
+    token: str | None = None
+    user_id: str | int | None = None
+    fetch_schedule: dict[str, str] = Field(
+        default_factory=lambda: {
+            "pre_market": "9:25",
+            "post_close": "17:30",
+        }
+    )
+    trading_calendar: dict[str, str] = Field(default_factory=lambda: {"source": "akshare"})
+    default_headers: dict[str, str] = Field(
+        default_factory=lambda: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)",
+            "Connection": "Keep-Alive",
+            "Accept-Encoding": "gzip",
+        }
+    )
+    min_request_interval_seconds: float = 0.8
+    max_retries: int = 3
+    retry_backoff_seconds: list[float] = Field(default_factory=lambda: [1.0, 2.0, 4.0])
+    retry_status_codes: list[int] = Field(default_factory=lambda: [403, 429, 500, 502, 503, 504])
+
+
 class AppConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
     run_mode: str = "interactive"  # interactive/service
@@ -165,6 +193,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
     api: ApiConfig = Field(default_factory=ApiConfig)
+    kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
 
     traders: list[TraderConfig] = Field(default_factory=list)
 

@@ -11,6 +11,37 @@ import yaml
 from datetime import date
 from pathlib import Path
 
+# 动态导入：直接从 trade-strategy-ai/src/providers/ 导入子模块（避免 providers 包名冲突）
+import importlib.util
+import sys as _sys
+
+_tai_src = Path(__file__).parent.parent.parent / "trade-strategy-ai" / "src"
+if str(_tai_src) not in _sys.path:
+    _sys.path.insert(0, str(_tai_src))
+
+# 动态加载 kaipan_provider（注册到 sys.modules 避免 dataclass 装饰器失败）
+_provider_spec = importlib.util.spec_from_file_location(
+    "providers.kaipan_provider", _tai_src / "providers" / "kaipan_provider.py"
+)
+_provider_module = importlib.util.module_from_spec(_provider_spec)
+_sys.modules["providers.kaipan_provider"] = _provider_module
+_provider_spec.loader.exec_module(_provider_module)  # type: ignore
+KaipanAuth = _provider_module.KaipanAuth
+KaipanProvider = _provider_module.KaipanProvider
+
+# 动态加载 kaipan_normalizer
+_normalizer_spec = importlib.util.spec_from_file_location(
+    "providers.kaipan_normalizer", _tai_src / "providers" / "kaipan_normalizer.py"
+)
+_normalizer_module = importlib.util.module_from_spec(_normalizer_spec)
+_sys.modules["providers.kaipan_normalizer"] = _normalizer_module
+_normalizer_spec.loader.exec_module(_normalizer_module)  # type: ignore
+KaipanNormalizer = _normalizer_module.KaipanNormalizer
+
+del _tai_src, _provider_spec, _provider_module, _normalizer_spec, _normalizer_module, _sys
+from providers.kaipan_provider import KaipanAuth, KaipanProvider
+from providers.kaipan_normalizer import KaipanNormalizer
+
 
 def load_kaipan_config() -> dict:
     """从 config/app.yaml 加载 kaipan 配置。"""
@@ -60,7 +91,78 @@ def main():
 
     if args.command == "fetch":
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)
-        print(f"fetch {trade_date} slot={args.slot}")
+        slot = args.slot
+
+        # 解析时间槽对应的接口集合
+        if slot == "all":
+            slots_to_fetch = ["09-25", "17-30"]
+        else:
+            slots_to_fetch = [slot]
+
+        # 实例化 provider（使用 worktree 路径结构）
+        auth_dict = get_auth()
+        auth = KaipanAuth(device_id=auth_dict.get("device_id", ""))
+        provider = KaipanProvider(
+            auth=auth,
+            raw_dir="trade-strategy-ai/data/kaipan/raw",
+            normalized_dir="trade-strategy-ai/data/kaipan/normalized",
+            snapshots_dir="trade-strategy-ai/data/kaipan/snapshots",
+        )
+
+        # 9:25 有 12 个接口（含竞价数据，无龙虎榜）
+        fetchors_0925 = [
+            provider.fetch_board_strength,
+            provider.fetch_industry_ranking,
+            provider.fetch_concept_fengkou,
+            provider.fetch_theme_detail,
+            provider.fetch_stock_sector_v2,
+            provider.fetch_strong_fengkou,
+            provider.fetch_interval_stats_stock,
+            provider.fetch_morning_bidding_list,
+            provider.fetch_limit_up_reason,
+            provider.fetch_pre_market_bid,
+            provider.fetch_pre_market_stats,
+            provider.fetch_limit_up_info,
+        ]
+        # 17:30 有 10 个接口（含龙虎榜，无竞价数据）
+        fetchors_1730 = [
+            provider.fetch_board_strength,
+            provider.fetch_industry_ranking,
+            provider.fetch_concept_fengkou,
+            provider.fetch_theme_detail,
+            provider.fetch_stock_sector_v2,
+            provider.fetch_strong_fengkou,
+            provider.fetch_interval_stats_stock,
+            provider.fetch_limit_up_reason,
+            provider.fetch_limit_up_info,
+            provider.fetch_lhb_list,
+        ]
+
+        for s in slots_to_fetch:
+            if s == "09-25":
+                fetchors = fetchors_0925
+            elif s == "17-30":
+                fetchors = fetchors_1730
+            else:
+                print(f"[WARN] 未知时间槽 {s}，跳过")
+                continue
+
+            print(f"[fetch] 开始抓取 {trade_date} {s}，共 {len(fetchors)} 个接口")
+            for i, fetcher in enumerate(fetchors, 1):
+                try:
+                    fetcher(trade_date=trade_date, slot=s)
+                    print(f"[fetch] [{i}/{len(fetchors)}] {fetcher.__name__} 成功")
+                except Exception as e:
+                    print(f"[WARN] [{i}/{len(fetchors)}] {fetcher.__name__} 失败: {e}，继续其余接口")
+
+        # 抓取完成后调用 normalize_date 转换
+        normalizer = KaipanNormalizer(
+            schema_dir="trade-strategy-ai/src/providers/kaipan_schema",
+            snapshots_dir="trade-strategy-ai/data/kaipan/snapshots",
+        )
+        slots_tuple = tuple(slots_to_fetch)
+        norm_results = normalizer.normalize_date(trade_date.isoformat(), slots_tuple)
+        print(f"[fetch] normalize 完成，结果: {norm_results}")
     elif args.command == "normalize":
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)
         print(f"normalize {trade_date} slot={args.slot}")

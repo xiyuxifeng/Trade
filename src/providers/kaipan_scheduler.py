@@ -183,7 +183,26 @@ def main():
             err = sum(1 for v in datasets.values() if v is None or "_error" in v)
             print(f"normalize {trade_date} {slot}: {ok} ok, {err} failed")
     elif args.command == "status":
-        print("status: no data yet")
+        from pathlib import Path
+        import json
+
+        cfg = load_kaipan_config()
+        raw_base = Path(cfg.get("data_dir", "data/kaipan/raw"))
+        if not raw_base.exists():
+            print("status: no data yet")
+            return
+
+        # 查找最近一次抓取
+        latest = None
+        for p in sorted(raw_base.rglob("*.json"), reverse=True):
+            if p.parent.name.startswith("20"):
+                latest = p.parent.name
+                break
+
+        if latest:
+            print(f"status: latest slot {latest}")
+        else:
+            print("status: no data yet")
     elif args.command == "run":
         print("scheduler started")
 

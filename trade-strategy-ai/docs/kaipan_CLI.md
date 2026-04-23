@@ -183,7 +183,6 @@ data/kaipan/snapshots/hot_topics/2026-04-22_09-25/hot_topics.json
 
 ## 注意事项
 
-1. **首次使用需填写 `device_id`**：在 `config/app.yaml` 的 `kaipan.auth.device_id` 中填入从 kaipan App 获取的设备 ID
-2. **非交易自动跳过**：`run` 命令在非交易日会自动退出，不会报错
-3. **接口失败不影响其余**：`fetch` 命令中单个接口失败会打印警告，继续执行其余接口
-4. **日志输出**：`run` 命令使用 `logging.basicConfig`，默认输出到 stderr
+1. **非交易自动跳过**：`run` 命令在非交易日会自动退出，不会报错
+2. **接口失败不影响其余**：`fetch` 命令中单个接口失败会打印警告，继续执行其余接口
+3. **日志输出**：`run` 命令使用 `logging.basicConfig`，默认输出到 stderr

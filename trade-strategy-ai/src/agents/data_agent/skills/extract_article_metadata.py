@@ -304,6 +304,51 @@ def _clamp(value: float | None, lo: float, hi: float) -> float | None:
     return max(lo, min(hi, value))
 
 
+def _quality_gate(raw: dict[str, Any]) -> dict[str, Any]:
+    """质量门禁：检查 sentiment_score / confidence_score 是否满足最低要求。
+
+    返回 dict：
+        passed: bool  — 是否通过
+        rejected_fields: list[str]  — 不满足条件的字段名
+        quality_score: float  — 综合质量分（0~1）
+    """
+    rejected: list[str] = []
+    quality_factors: list[float] = []
+
+    # confidence_score 检查：必须 >= 0.3 才能接受
+    conf = _safe_float(raw.get("confidence_score"))
+    if conf is None or conf < 0.3:
+        rejected.append("confidence_score")
+        conf_score = 0.0
+    else:
+        conf_score = conf
+    quality_factors.append(conf_score)
+
+    # sentiment_score 检查：允许 None（纯分析），但如果存在必须合法
+    sent = _safe_float(raw.get("sentiment_score"))
+    if sent is not None and (sent < -1.0 or sent > 1.0):
+        rejected.append("sentiment_score")
+        sent_score = 0.0
+    else:
+        sent_score = (sent + 1.0) / 2.0 if sent is not None else 0.5  # None 时取中性 0.5
+    quality_factors.append(sent_score)
+
+    # strategy_rules 非空且置信度较高 → 额外加分
+    rules = raw.get("strategy_rules")
+    rules_score = 0.0
+    if isinstance(rules, list) and len(rules) > 0 and conf is not None and conf >= 0.5:
+        rules_score = min(len(rules) / 5.0, 1.0)  # 最多 5 条规则满分
+    quality_factors.append(rules_score)
+
+    quality_score = sum(quality_factors) / len(quality_factors) if quality_factors else 0.0
+
+    return {
+        "passed": len(rejected) == 0,
+        "rejected_fields": rejected,
+        "quality_score": quality_score,
+    }
+
+
 def _heuristic_extract(article: BlogArticle) -> dict[str, Any]:
     """LLM 不可用时，用轻量规则提取最基础的 metadata。"""
     content = article.content_text or ""

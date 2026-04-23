@@ -229,9 +229,37 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
         dest = Path("data/processed/persona/clusters.real.json")
         await build_clusters_from_db(config=config, dest=dest)
 
+    # 候选池快照 handlers（NTL-S2-020 ~ NTL-S2-022）
+    from src.pipeline.tasks.snapshot_tasks import (
+        handle_hot_topics_snapshot,
+        handle_topic_constituents_snapshot,
+        handle_strong_symbols_snapshot,
+    )
+
+    async def handle_hot_topics_snapshot_wrapped(details: dict[str, Any]) -> None:
+        await handle_hot_topics_snapshot(details, config=config)
+
+    async def handle_topic_constituents_snapshot_wrapped(details: dict[str, Any]) -> None:
+        await handle_topic_constituents_snapshot(details, config=config)
+
+    async def handle_strong_symbols_snapshot_wrapped(details: dict[str, Any]) -> None:
+        await handle_strong_symbols_snapshot(details, config=config)
+
+    # 策略版本构建 handler（NTL-S3-008）
+    from src.pipeline.tasks.strategy_version_tasks import (
+        handle_build_trader_strategy_version,
+    )
+
+    async def handle_build_trader_strategy_version_wrapped(details: dict[str, Any]) -> None:
+        await handle_build_trader_strategy_version(details, config=config)
+
     return {
         "article_ingested": handle_article_ingested,
         "article_metadata_extracted": handle_article_metadata_extracted,
+        "hot_topics_snapshot": handle_hot_topics_snapshot_wrapped,
+        "topic_constituents_snapshot": handle_topic_constituents_snapshot_wrapped,
+        "strong_symbols_snapshot": handle_strong_symbols_snapshot_wrapped,
+        "build_trader_strategy_version": handle_build_trader_strategy_version_wrapped,
     }
 
 

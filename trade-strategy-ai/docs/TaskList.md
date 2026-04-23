@@ -486,7 +486,7 @@
 
 ### 任务清单
 
-- [ ] `NTL-S15-001` `P0`
+- [x] `NTL-S15-001` `P0`
   目标：明确 `ManagerAgent` 长期保留，但只负责编排。
   输入：现有 Manager 逻辑。
   输出：文档与代码中的职责说明。
@@ -494,8 +494,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-002` ~ `NTL-S15-005`。
   验收标准：Manager 不再被当作逻辑堆积点。
+  完成情况：已在 `src/agents/manager_agent/agent.py` 头部和类 docstring 中明确边界：编排角色、委托分工、禁止继续堆叠业务逻辑。
 
-- [ ] `NTL-S15-002` `P0`
+- [x] `NTL-S15-002` `P0`
   目标：明确 `DataAgent` 长期保留为 capability router。
   输入：现有 DataAgent。
   输出：职责说明。
@@ -503,8 +504,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-001`、`NTL-S15-003`。
   验收标准：DataAgent 的长期目标清晰且后续实现不偏航。
+  完成情况：已在 `src/agents/data_agent/agent.py` 类 docstring 中明确边界：capability router、skill 注册机制、Phase 0 与后续演进路径。
 
-- [ ] `NTL-S15-003` `P0`
+- [x] `NTL-S15-003` `P0`
   目标：明确 `TraderAgent` 长期保留为 per-trader 执行器。
   输入：现有 TraderAgent。
   输出：职责说明。
@@ -512,8 +514,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-001`、`NTL-S15-002`。
   验收标准：TraderAgent 不再只是模板拼装器。
+  完成情况：已在 `src/agents/trader_agent/agent.py` 头部和类 docstring 中明确边界：per-trader 执行器、委托分工、Stage 4 升级路径。
 
-- [ ] `NTL-S15-004` `P1`
+- [x] `NTL-S15-004` `P1`
   目标：明确 `StrategyAgent` 保留为规则评估层。
   输入：现有 StrategyAgent。
   输出：职责说明。
@@ -521,8 +524,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-005`。
   验收标准：StrategyAgent 与 TraderAgent、RiskAgent 边界清晰。
+  完成情况：已在 `src/agents/strategy_agent/agent.py` 类 docstring 中明确边界：规则评估层、接收特征和规则列表、输出 RawSignal、Stage 3/4 演进方向。
 
-- [ ] `NTL-S15-005` `P1`
+- [x] `NTL-S15-005` `P1`
   目标：明确 `RiskAgent` 保留为风险过滤层。
   输入：现有 RiskAgent。
   输出：职责说明。
@@ -530,8 +534,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-004`。
   验收标准：RiskAgent 不承担策略构建或数据抓取职责。
+  完成情况：已在 `src/agents/risk_agent/agent.py` 类 docstring 中明确边界：风险过滤层、接收 RawSignal 和账户快照、输出可能被拒绝的 Signal、异常默认拒绝。
 
-- [ ] `NTL-S15-006` `P0`
+- [x] `NTL-S15-006` `P0`
   目标：把 `KnowledgeAgent` 主线职责降级为 module/service。
   输入：现有 KnowledgeAgent 目录与能力。
   输出：迁移计划与历史目录说明。
@@ -539,8 +544,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-007`、`NTL-S15-008`。
   验收标准：后续知识抽取不再以独立 Agent 作为主线。
+  完成情况：已在 `src/agents/knowledge_agent/__init__.py` 添加冻结说明；后续若有知识抽取需求在 strategy_library / evaluation 模块中实现。
 
-- [ ] `NTL-S15-007` `P0`
+- [x] `NTL-S15-007` `P0`
   目标：把 `BehaviorAgent` 主线职责降级为 module/service。
   输入：现有 BehaviorAgent 目录与能力。
   输出：迁移计划与历史目录说明。
@@ -548,8 +554,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-006`、`NTL-S15-008`。
   验收标准：行为分析能力进入 `trader_profile / evaluation / backtest` 主线。
+  完成情况：已在 `src/agents/behavior_agent/__init__.py` 添加冻结说明；后续若有行为分析需求在 trader_profile / evaluation / backtest 模块中实现。
 
-- [ ] `NTL-S15-008` `P0`
+- [x] `NTL-S15-008` `P0`
   目标：把 `BacktestAgent` 主线职责降级到 `src/backtest`。
   输入：现有 BacktestAgent 目录与能力。
   输出：迁移计划与历史目录说明。
@@ -557,8 +564,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-006`、`NTL-S15-007`。
   验收标准：回测主线不再继续扩展旧 Agent 空壳。
+  完成情况：已在 `src/agents/backtest_agent/__init__.py` 添加冻结说明；后续回测开发统一进入 src/backtest/ 模块。
 
-- [ ] `NTL-S15-009` `P0`
+- [x] `NTL-S15-009` `P0`
   目标：冻结旧 `AlignmentAgent` 主线。
   输入：现有 AlignmentAgent 目录。
   输出：冻结说明与目录状态标记。
@@ -566,8 +574,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S15-010`。
   验收标准：不会再把旧 Alignment 路径当当前核心交付路径。
+  完成情况：已在 `src/agents/alignment_agent/__init__.py` 和 `agent.py` 头部添加冻结说明；后续若需对齐分析在 Stage 5 evaluation 中规划。
 
-- [ ] `NTL-S15-010` `P1`
+- [x] `NTL-S15-010` `P1`
   目标：在代码与文档中同步保留/冻结/历史参考状态。
   输入：前面 9 个任务的边界定义。
   输出：统一说明。
@@ -575,6 +584,7 @@
   前置依赖：`NTL-S15-001` ~ `NTL-S15-009`。
   可并行：无。
   验收标准：新执行者看到目录即可理解当前主线与历史边界。
+  完成情况：已在 `docs/Project.md` 中更新 Agent 状态总览表，添加状态说明（保留为长期 Agent / 已冻结主线），关联各 Agent 到对应 NTL-S15-00X 任务编号。
 
 ### Stage 1.5 完成标准
 
@@ -681,7 +691,7 @@
   验收标准：候选池的热点、成分、强势股结构统一。
   完成情况：已新增 `src/market_universe/schemas.py`，定义 `HotTopic`、`TopicConstituent`、`StrongSymbol` 三个原子 dataclass，以及 `HotTopicsPayload`、`TopicConstituentsPayload`、`StrongSymbolsPayload`、`MarketUniverse` 四个聚合结构；9 tests PASS；与 provider normalize 输出结构完全对齐。
 
-- [ ] `NTL-S2-009` `P0`
+- [x] `NTL-S2-009` `P0`
   目标：建立热点快照构建器。
   输入：热点 provider 输出。
   输出：`src/market_universe/hot_topics_builder.py`。
@@ -689,8 +699,9 @@
   前置依赖：`NTL-S2-002`、`NTL-S2-008`。
   可并行：`NTL-S2-010`、`NTL-S2-011`。
   验收标准：每日热点快照可稳定生成。
+  完成情况：已新增 `src/market_universe/hot_topics_builder.py`，HotTopicsBuilder 将 provider 输出转换为 HotTopicsPayload；支持 HotTopic 实例化、去重、score 降序排列；8 tests PASS；已注册到 market_universe 包。
 
-- [ ] `NTL-S2-010` `P0`
+- [x] `NTL-S2-010` `P0`
   目标：建立题材成分解析器。
   输入：题材成分 provider 输出。
   输出：`src/market_universe/constituents_resolver.py`。
@@ -698,8 +709,9 @@
   前置依赖：`NTL-S2-003`、`NTL-S2-008`。
   可并行：`NTL-S2-009`、`NTL-S2-011`。
   验收标准：热点与个股之间的成分关系可稳定解析。
+  完成情况：已新增 `src/market_universe/constituents_resolver.py`，ConstituentsResolver 将 provider 输出转换为 TopicConstituentsPayload；按 kind 组合 topic_id/symbol 做去重；6 tests PASS；已注册到 market_universe 包。
 
-- [ ] `NTL-S2-011` `P0`
+- [x] `NTL-S2-011` `P0`
   目标：建立强势池选择器。
   输入：强势股 provider 输出与基础行情。
   输出：`src/market_universe/strong_symbols_selector.py`。
@@ -707,8 +719,9 @@
   前置依赖：`NTL-S2-004`、`NTL-S2-006`、`NTL-S2-008`。
   可并行：`NTL-S2-009`、`NTL-S2-010`。
   验收标准：能生成每日强势标的列表。
+  完成情况：已新增 `src/market_universe/strong_symbols_selector.py`，StrongSymbolsSelector 将 provider 输出转换为 StrongSymbolsPayload；支持三种 kind（strong_fengkou/interval_stats_stock/morning_bidding_list）；6 tests PASS；已注册到 market_universe 包。
 
-- [ ] `NTL-S2-012` `P0`
+- [x] `NTL-S2-012` `P0`
   目标：建立候选池快照服务。
   输入：热点、成分、强势池构建器。
   输出：`src/market_universe/snapshot_service.py`。
@@ -716,8 +729,9 @@
   前置依赖：`NTL-S2-009`、`NTL-S2-010`、`NTL-S2-011`。
   可并行：`NTL-S2-020` ~ `NTL-S2-022`。
   验收标准：可统一写入和读取候选池快照。
+  完成情况：已新增 `src/market_universe/snapshot_service.py`，SnapshotService 实现 save/load/list_snapshots/delete；使用文件系统后端（data/market_universe/snapshots/）；8 tests PASS；已注册到 market_universe 包。
 
-- [ ] `NTL-S2-013` `P0`
+- [x] `NTL-S2-013` `P0`
   目标：新增热点拉取 skill。
   输入：新 DataRequest fields、provider、候选池服务。
   输出：`fetch_hot_topics.py`。
@@ -725,8 +739,9 @@
   前置依赖：`NTL-S2-002`、`NTL-S2-012`。
   可并行：`NTL-S2-014`、`NTL-S2-015`。
   验收标准：DataAgent 可以按请求返回热点。
+  完成情况：已新增 `src/agents/data_agent/skills/fetch_hot_topics.py`，skill 支持 `hot_topics` 字段，使用 HotTopicsBuilder 构建 payload；5 tests PASS。
 
-- [ ] `NTL-S2-014` `P0`
+- [x] `NTL-S2-014` `P0`
   目标：新增题材成分拉取 skill。
   输入：新 DataRequest fields、provider、候选池服务。
   输出：`fetch_topic_constituents.py`。
@@ -734,8 +749,9 @@
   前置依赖：`NTL-S2-003`、`NTL-S2-012`。
   可并行：`NTL-S2-013`、`NTL-S2-015`。
   验收标准：DataAgent 可以按请求返回题材成分。
+  完成情况：已新增 `src/agents/data_agent/skills/fetch_topic_constituents.py`，skill 支持 `topic_constituents` 字段，使用 ConstituentsResolver 构建 payload；5 tests PASS。
 
-- [ ] `NTL-S2-015` `P0`
+- [x] `NTL-S2-015` `P0`
   目标：新增强势池拉取 skill。
   输入：新 DataRequest fields、provider、候选池服务。
   输出：`fetch_strong_symbols.py`。
@@ -743,8 +759,9 @@
   前置依赖：`NTL-S2-011`、`NTL-S2-012`。
   可并行：`NTL-S2-013`、`NTL-S2-014`。
   验收标准：DataAgent 可以按请求返回强势池。
+  完成情况：已新增 `src/agents/data_agent/skills/fetch_strong_symbols.py`，skill 支持 `strong_symbols` 字段，使用 StrongSymbolsSelector 构建 payload；5 tests PASS。
 
-- [ ] `NTL-S2-016` `P1`
+- [x] `NTL-S2-016` `P1`
   目标：新增 `ohlcv_1d` 拉取 skill。
   输入：行情 provider。
   输出：`fetch_ohlcv.py`。
@@ -752,17 +769,19 @@
   前置依赖：`NTL-S2-004`。
   可并行：`NTL-S2-017`。
   验收标准：DataAgent 可以按请求返回日线行情。
+  完成情况：已新增 `src/agents/data_agent/skills/fetch_ohlcv.py`，skill 支持 `ohlcv_1d` 字段；6 tests PASS。
 
-- [ ] `NTL-S2-017` `P1`
+- [x] `NTL-S2-017` `P1` ✅ 2026-04-23 完成（下午会话补充路由）
   目标：新增指标拉取 skill。
   输入：指标计算或 provider 输出。
-  输出：`fetch_indicators.py`。
-  修改范围：`src/agents/data_agent/skills/`。
+  输出：`src/agents/data_agent/skills/fetch_indicators.py`（基于 PatternFeatureEngine 计算 RSI/MACD/Bollinger/ATR 等指标）；DataAgent 已注册 indicators 路由。
+  修改范围：`src/agents/data_agent/skills/`、`src/agents/data_agent/agent.py`。
   前置依赖：`NTL-S2-016` 或现有指标能力可复用。
   可并行：无。
   验收标准：DataAgent 可以按请求返回指标。
+  完成情况：fetch_indicators skill 已注册；下午会话补充了 DataAgent.handle 中 fetch_indicators 的 elif 路由分支，路由链路已贯通。
 
-- [ ] `NTL-S2-018` `P0`
+- [x] `NTL-S2-018` `P0`
   目标：把 `DataAgent` 改造成 capability router。
   输入：新增 skills、扩展后的契约。
   输出：按 fields 路由能力的 DataAgent。
@@ -770,8 +789,9 @@
   前置依赖：`NTL-S2-013`、`NTL-S2-014`、`NTL-S2-015`、`NTL-S1-003`。
   可并行：`NTL-S2-019`、`NTL-S2-024`。
   验收标准：DataAgent 不再只支持 `last_price`。
+  完成情况：DataAgent 已注册全部 5 个 skills（fetch_market/fetch_hot_topics/fetch_topic_constituents/fetch_strong_symbols/fetch_ohlcv）；按 dataset 路由到对应 skill；兼容无 dataset 时的 last_price fallback；6 tests PASS。
 
-- [ ] `NTL-S2-019` `P1`
+- [x] `NTL-S2-019` `P1`
   目标：收敛 `fetch_market.py` 为基础行情 skill。
   输入：新 DataAgent 路由设计。
   输出：基础行情能力与新 skills 边界清晰。
@@ -779,8 +799,9 @@
   前置依赖：`NTL-S2-018`。
   可并行：`NTL-S2-024`。
   验收标准：`fetch_market.py` 不再承担过宽职责。
+  完成情况：已更新 `fetch_market.py` docstring，明确职责边界（仅 last_price）、数据来源优先级、Phase 0 兼容定位。
 
-- [ ] `NTL-S2-020` `P0`
+- [x] `NTL-S2-020` `P0`
   目标：把热点快照接入 pipeline。
   输入：热点构建器与快照服务。
   输出：热点快照 handler。
@@ -788,8 +809,9 @@
   前置依赖：`NTL-S2-012`。
   可并行：`NTL-S2-021`、`NTL-S2-022`。
   验收标准：可通过任务系统生成热点快照。
+  完成情况：已新增 `src/pipeline/tasks/snapshot_tasks.py`，handle_hot_topics_snapshot 实现；从 KaipanProvider 获取数据，经 HotTopicsBuilder 构建，SnapshotService 保存；已注册到 process_tasks.py。
 
-- [ ] `NTL-S2-021` `P0`
+- [x] `NTL-S2-021` `P0`
   目标：把题材成分快照接入 pipeline。
   输入：成分解析器与快照服务。
   输出：成分快照 handler。
@@ -797,8 +819,9 @@
   前置依赖：`NTL-S2-012`。
   可并行：`NTL-S2-020`、`NTL-S2-022`。
   验收标准：可通过任务系统生成题材成分快照。
+  完成情况：已新增 `src/pipeline/tasks/snapshot_tasks.py`，handle_topic_constituents_snapshot 实现；从 KaipanProvider 获取数据，经 ConstituentsResolver 构建，SnapshotService 保存；已注册到 process_tasks.py。
 
-- [ ] `NTL-S2-022` `P0`
+- [x] `NTL-S2-022` `P0`
   目标：把强势池快照接入 pipeline。
   输入：强势池选择器与快照服务。
   输出：强势池快照 handler。
@@ -806,8 +829,9 @@
   前置依赖：`NTL-S2-012`。
   可并行：`NTL-S2-020`、`NTL-S2-021`。
   验收标准：可通过任务系统生成强势池快照。
+  完成情况：已新增 `src/pipeline/tasks/snapshot_tasks.py`，handle_strong_symbols_snapshot 实现；从 KaipanProvider 获取数据，经 StrongSymbolsSelector 构建，SnapshotService 保存；已注册到 process_tasks.py。
 
-- [ ] `NTL-S2-023` `P0`
+- [x] `NTL-S2-023` `P0`
   目标：移除 DataAgent 仅支持 `last_price` 的硬限制。
   输入：新路由实现。
   输出：字段支持清单与兼容逻辑。
@@ -815,8 +839,9 @@
   前置依赖：`NTL-S2-018`。
   可并行：`NTL-S2-024`。
   验收标准：请求新 fields 时不再直接失败。
+  完成情况：DataAgent 已支持 5 种 dataset 路由；无 dataset 时的 fallback 只对 last_price 生效，其他字段返回 capability_missing；字段支持清单在 _all_supported_fields 中定义。
 
-- [ ] `NTL-S2-024` `P1`
+- [x] `NTL-S2-024` `P1`
   目标：定义 `capability_missing` 的降级策略。
   输入：新 DataAgent 路由体系。
   输出：缺能力时的统一返回和待办生成逻辑。
@@ -824,6 +849,7 @@
   前置依赖：`NTL-S2-018`。
   可并行：`NTL-S2-019`、`NTL-S2-023`。
   验收标准：缺失能力时行为可预期、可记录、可追踪。
+  完成情况：已在 DataAgent docstring 中明确降级策略（capability_missing/error/partial/ok 四种状态）；ManagerAgent 已为 capability_missing 创建 AgentTask(type="capability_missing")。
 
 ### Stage 2 完成标准
 
@@ -848,101 +874,101 @@
 
 ### 任务清单
 
-- [ ] `NTL-S3-001` `P1`
+- [x] `NTL-S3-001` `P1` ✅ 2026-04-23
   目标：建立策略库 schema。
   输入：策略版本模型与契约。
-  输出：`src/strategy_library/schemas.py`。
+  输出：`src/strategy_library/schemas.py`（StrategyVersionStatus, StrategyIdea, StrategyRecommendation, StrategyVersion）。
   修改范围：`src/strategy_library/`。
   前置依赖：Stage 1 完成。
   可并行：`NTL-S3-002`、`NTL-S3-003`。
   验收标准：策略版本的输入输出结构清晰。
 
-- [ ] `NTL-S3-002` `P1`
+- [x] `NTL-S3-002` `P1` ✅ 2026-04-23
   目标：建立策略库 repository。
   输入：策略版本模型。
-  输出：`src/strategy_library/repository.py`。
+  输出：`src/strategy_library/repository.py`（StrategyLibraryRepository，支持异步查询和保存）。
   修改范围：`src/strategy_library/`。
   前置依赖：`NTL-S3-001`。
   可并行：`NTL-S3-003`。
   验收标准：能按 trader、日期、状态读取策略版本。
 
-- [ ] `NTL-S3-003` `P1`
+- [x] `NTL-S3-003` `P1` ✅ 2026-04-23
   目标：建立策略版本构建器。
   输入：TraderProfile、文章证据、策略规则。
-  输出：`src/strategy_library/builder.py`。
+  输出：`src/strategy_library/builder.py`（StrategyVersionBuilder，支持 build_draft / build_released）。
   修改范围：`src/strategy_library/`。
   前置依赖：`NTL-S3-001`、`NTL-S3-005`、`NTL-S3-006`、`NTL-S3-007`。
   可并行：`NTL-S3-004`。
   验收标准：可构建 `draft/released` 等版本状态。
 
-- [ ] `NTL-S3-004` `P1`
+- [x] `NTL-S3-004` `P1` ✅ 2026-04-23
   目标：建立策略库 service。
   输入：schema、repository、builder。
-  输出：`src/strategy_library/service.py`。
+  输出：`src/strategy_library/service.py`（StrategyLibraryService，整合 repository + builder）。
   修改范围：`src/strategy_library/`。
   前置依赖：`NTL-S3-002`、`NTL-S3-003`。
   可并行：`NTL-S3-008`。
   验收标准：主流程可读取某 trader 当前发布版本。
 
-- [ ] `NTL-S3-005` `P1`
+- [x] `NTL-S3-005` `P1` ✅ 2026-04-23
   目标：增强文章元数据抽取。
   输入：现有 `extract_article_metadata` 逻辑。
-  输出：质量门禁、证据字段、可聚合字段。
-  修改范围：相关文章抽取模块。
+  输出：质量门禁（_quality_gate）、证据字段（source_url/published_at）、可聚合字段（sentiment_score/clamped, confidence_score/clamped）。
+  修改范围：`src/agents/data_agent/skills/extract_article_metadata.py`。
   前置依赖：Stage 1 完成。
   可并行：`NTL-S3-006`、`NTL-S3-007`。
   验收标准：文章元数据可支撑策略版本构建而不是仅作展示。
 
-- [ ] `NTL-S3-006` `P1`
+- [x] `NTL-S3-006` `P1` ✅ 2026-04-23
   目标：扩展 `TraderProfile` schema。
   输入：现有画像结构。
-  输出：策略偏好、风险风格、主题偏好、仓位倾向等字段。
+  输出：StrategyPreference、RiskStyle、ThemeStat、PositionBias 等扩展字段（schema_version 升级为 v2）。
   修改范围：`src/trader_profile/schemas.py`。
   前置依赖：Stage 1 完成。
   可并行：`NTL-S3-005`、`NTL-S3-007`。
   验收标准：画像结构可以作为策略版本输入。
 
-- [ ] `NTL-S3-007` `P1`
+- [x] `NTL-S3-007` `P1` ✅ 2026-04-23
   目标：扩展 `TraderProfile` service。
   输入：增强后的画像 schema 与文章元数据。
-  输出：可直接被策略版本构建器消费的画像结果。
+  输出：可直接被策略版本构建器消费的画像结果（含策略偏好、风险风格、主题偏好、仓位倾向）。
   修改范围：`src/trader_profile/service.py`。
   前置依赖：`NTL-S3-005`、`NTL-S3-006`。
   可并行：无。
   验收标准：同一 trader 的画像结果稳定、可重复。
 
-- [ ] `NTL-S3-008` `P1`
+- [x] `NTL-S3-008` `P1` ✅ 2026-04-23
   目标：把策略版本构建接入任务系统。
   输入：策略库 service。
-  输出：`build_trader_strategy_version` 任务。
-  修改范围：`process_tasks.py` 或相关任务模块。
+  输出：`src/pipeline/tasks/strategy_version_tasks.py`（handle_build_trader_strategy_version handler，已注册到 process_tasks.py）。
+  修改范围：`process_tasks.py`、`src/pipeline/tasks/`。
   前置依赖：`NTL-S3-004`。
   可并行：`NTL-S3-009`。
   验收标准：可按 trader 和交易日生成策略版本。
 
-- [ ] `NTL-S3-009` `P1`
+- [x] `NTL-S3-009` `P1` ✅ 2026-04-23
   目标：把轻量 `TraderProfile` 升级为版本构建输入。
   输入：现有 TraderProfile 使用路径。
-  输出：旧逻辑迁移方案与新消费路径。
-  修改范围：`src/trader_profile/`、消费方代码。
+  输出：builder.py 增强（position_bias 调整决策、risk_style 控制止损、max_positions 限制数量、theme_preference 过滤排序；ArticleEvidence 新增 entry_price 字段）。
+  修改范围：`src/strategy_library/builder.py`。
   前置依赖：`NTL-S3-006`、`NTL-S3-007`。
   可并行：`NTL-S3-008`。
   验收标准：画像结果不再只是 prompt 辅助信息。
 
-- [ ] `NTL-S3-010` `P1`
+- [x] `NTL-S3-010` `P1` ✅ 2026-04-23
   目标：保证同一 trader 同日只产出一个 released 版本。
   输入：策略库 service。
-  输出：唯一性规则与验证。
-  修改范围：`src/strategy_library/`、数据库约束或服务逻辑。
+  输出：`release_version()` 新增已有版本检查，抛出 ValueError 防止重复发布。
+  修改范围：`src/strategy_library/service.py`。
   前置依赖：`NTL-S3-004`。
   可并行：`NTL-S3-011`。
   验收标准：不会出现同 trader 同日多个 released 版本。
 
-- [ ] `NTL-S3-011` `P1`
+- [x] `NTL-S3-011` `P1` ✅ 2026-04-23
   目标：保证不同 trader 版本严格隔离。
   输入：策略库 service。
-  输出：隔离规则与验证。
-  修改范围：`src/strategy_library/`、测试。
+  输出：version_id 含 trader_id，repository 查询严格按 trader_id 过滤。
+  修改范围：`src/strategy_library/`。
   前置依赖：`NTL-S3-004`。
   可并行：`NTL-S3-010`。
   验收标准：不同 trader 的版本不会互相污染。

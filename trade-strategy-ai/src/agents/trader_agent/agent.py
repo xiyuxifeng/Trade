@@ -1,10 +1,23 @@
-"""TraderAgent.
+"""TraderAgent - per-trader 执行器。
 
-Phase 0 uses a deterministic rule-based idea generator:
-- request last_price for watchlist from DataAgent
-- generate TradeIdea with configurable target/stop percentages
+职责边界（NTL-S15-003）：
+- 长期保留为 per-trader 执行器，负责为单个 trader 生成交易想法
+- 不直接抓取数据，委托 DataAgent 获取
+- 不承担策略评估，委托 StrategyAgent/RiskAgent
+- 不管理记忆存储，委托 TraderMemoryStore
 
-Later phases can replace/augment this with LLM + memory.
+Phase 0（当前）：
+- 基于 watchlist + last_price 生成 TradeIdea
+- 使用 target/stop 百分比配置
+
+后续演进（Stage 4）：
+- 输入升级为：策略版本、强势池快照、画像、记忆
+- 不再以 watchlist 为核心输入
+- 同一 trader 同日只产出一个 released 版本
+
+禁止：
+- 在 TraderAgent 中硬编码跨 trader 的编排逻辑
+- 承担 ManagerAgent 的编排职责
 """
 
 from __future__ import annotations
@@ -18,7 +31,14 @@ from src.trader_memory.service import TraderMemoryStore
 
 
 class TraderAgent:
-    """Deterministic idea generator that blends profile, memory, and prices."""
+    """Per-trader 交易想法生成器。
+
+    职责（NTL-S15-003）：
+    - 接收 trader 配置、记忆、画像作为输入
+    - 委托 DataAgent 获取市场数据
+    - 生成 TradeIdea 列表返回给 ManagerAgent
+    - 不做风控、不做评估、不做编排
+    """
 
     def __init__(
         self,

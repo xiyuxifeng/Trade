@@ -1,7 +1,12 @@
 """
-Alignment Agent — P3-022~P3-025。
+Alignment Agent — P3-022~P3-025（已冻结 NTL-S15-009）。
 
-对齐分析 Agent，负责：
+⚠️ 已冻结：不再作为主线交付路径。
+- 对齐分析能力已移至 evaluation / ranking 模块的待实现功能中。
+- 不会再以独立 AlignmentAgent 继续开发。
+- 如需对齐分析能力，应在 Stage 5 evaluation 中规划。
+
+对齐分析 Agent 历史职责：
   - P3-022: 集成 Rule Matching / Behavior Fit / Conflict Detection
   - P3-023: 协调各评分模块执行
   - P3-024: 评分输出的持久化存储

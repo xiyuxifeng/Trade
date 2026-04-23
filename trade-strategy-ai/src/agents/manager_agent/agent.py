@@ -1,9 +1,21 @@
-"""ManagerAgent.
+"""ManagerAgent - 编排层。
 
-Phase 0 responsibilities:
-- pre-market: collect trade ideas and write DailyReport
-- after-close: evaluate ideas using DataAgent last_price and write EvaluationResult
-- create AgentTask records when data is missing or trader review is required
+职责边界（NTL-S15-001）：
+- 长期保留为编排层，负责协调 DataAgent、TraderAgent、StrategyAgent、RiskAgent
+- 不承担具体业务逻辑（数据抓取、策略评估、风控判断）
+- 不直接操作数据库或文件系统（委托给对应 service）
+- 决策流向：编排 -> 委托 -> 汇总，不做深层业务推理
+
+当前 Phase 0 职责：
+- pre-market: 协调 TraderAgent 生成交易想法，输出 DailyReport
+- after-close: 协调 DataAgent 获取最新价，输出 EvaluationResult
+- 信号版本: 委托 SignalVersioning 记录，不自己管理存储格式
+- AgentTask: 仅做记录，不做任务消化
+
+后续演进方向：
+- 接入策略版本库后，ManagerAgent 负责按版本拉取快照、编排生成
+- 接入 Evaluation/Postmortem 后，ManagerAgent 负责协调 ranking 与记忆写回
+- 禁止在 ManagerAgent 中继续堆叠业务判断逻辑，业务逻辑应下沉到对应 module/service
 """
 
 from __future__ import annotations
@@ -55,7 +67,16 @@ from src.strategy.types import (
 
 
 class ManagerAgent:
-    """Orchestrates the pre-market, after-close, and profile/memory feedback loop."""
+    """编排层，协调各子 Agent协作。
+
+    职责（NTL-S15-001）：
+    - 委托 DataAgent 执行数据拉取
+    - 委托 TraderAgent 生成交易想法
+    - 委托 StrategyAgent/RiskAgent 评估信号
+    - 委托 TraderMemoryStore 写记忆
+    - 委托 SignalVersioning 记录信号版本
+    - 仅做流程编排，不承担具体业务判断
+    """
 
     def __init__(self, *, config: AppConfig, base_dir: Path) -> None:
         self.config = config

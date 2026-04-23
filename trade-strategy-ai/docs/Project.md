@@ -137,15 +137,20 @@ class BaseAgent:
 
 | Agent | 目录 | 当前定位 | 状态 |
 |-------|------|------|------|
-| Manager Agent | `manager_agent/` | 主流程编排、盘前输出、盘后评分、复盘触发 | 保留为长期 Agent |
-| Data Agent | `data_agent/` | capability router，统一对外数据契约 | 保留为长期 Agent |
-| Trader Agent | `trader_agent/` | per-trader 决策执行 | 保留为长期 Agent |
-| Strategy Agent | `strategy_agent/` | 规则评估与信号合成 | 保留为长期 Agent |
-| Risk Agent | `risk_agent/` | 风险过滤 | 保留为长期 Agent |
-| Knowledge Agent | `knowledge_agent/` | 文章理解相关历史目录 | 逐步降级为 module/service |
-| Behavior Agent | `behavior_agent/` | 行为分析相关历史目录 | 逐步降级为 module/service |
-| Alignment Agent | `alignment_agent/` | 旧对齐分析主线 | 冻结 |
-| Backtest Agent | `backtest_agent/` | 历史回测 Agent 目录 | 逐步降级到 `src/backtest` |
+| Manager Agent | `manager_agent/` | 主流程编排、盘前输出、盘后评分、复盘触发 | 保留为长期 Agent（NTL-S15-001） |
+| Data Agent | `data_agent/` | capability router，统一对外数据契约 | 保留为长期 Agent（NTL-S15-002） |
+| Trader Agent | `trader_agent/` | per-trader 决策执行 | 保留为长期 Agent（NTL-S15-003） |
+| Strategy Agent | `strategy_agent/` | 规则评估与信号合成 | 保留（边界待定义 NTL-S15-004） |
+| Risk Agent | `risk_agent/` | 风险过滤 | 保留（边界待定义 NTL-S15-005） |
+| Knowledge Agent | `knowledge_agent/` | 文章理解相关历史目录 | 已冻结主线（NTL-S15-006） |
+| Behavior Agent | `behavior_agent/` | 行为分析相关历史目录 | 已冻结主线（NTL-S15-007） |
+| Alignment Agent | `alignment_agent/` | 旧对齐分析主线 | 已冻结（NTL-S15-009） |
+| Backtest Agent | `backtest_agent/` | 历史回测 Agent 目录 | 已冻结主线（NTL-S15-008） |
+
+**Agent 状态说明：**
+- **保留为长期 Agent**：长期保留在 `src/agents/` 中，承担明确职责，不继续堆叠业务逻辑
+- **保留（边界待定义）**：保留但具体边界在对应 NTL-S15-00X 任务中定义
+- **已冻结主线**：不再作为当前核心交付路径；目录保留为历史参考；代码不再主动扩展
 
 ### 3.1.1 当前推荐的主线模块
 

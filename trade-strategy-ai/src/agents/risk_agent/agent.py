@@ -12,7 +12,26 @@ from src.agents.risk_agent.skills import (
 
 
 class RiskAgent(BaseAgent):
-    """风险 Agent - 负责风控检查"""
+    """风险过滤层（NTL-S15-005）。
+
+	职责边界（NTL-S15-005）：
+	- 长期保留为风险过滤层，负责信号的风控检查与调整
+	- 不承担策略构建、数据抓取、头寸分配策略制定等职责
+	- 接收 RawSignal 和账户快照，输出可能被拒绝的最终 Signal
+
+	当前 Phase 0 流程：
+	1. drawdown_control - 回撤控制检查
+	2. stop_loss - 止损计算
+	3. position_sizing - 头寸计算
+
+	后续演进：
+	- 风控规则可配置化，不硬编码在 Agent 内
+	- 异常时默认拒绝信号（HOLD，confidence=0）
+
+	禁止：
+	- 在 RiskAgent 中承担策略构建、数据抓取职责
+	- 越过信号直接下单
+	"""
 
     def __init__(self):
         super().__init__("risk_agent")

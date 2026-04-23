@@ -11,7 +11,29 @@ from src.agents.strategy_agent.skills import (
 
 
 class StrategyAgent(BaseAgent):
-    """策略 Agent - 负责信号合成"""
+    """规则评估与信号合成层（NTL-S15-004）。
+
+	职责边界（NTL-S15-004）：
+	- 长期保留为规则评估层，负责从特征到信号的转换
+	- 不直接抓取市场数据，委托 DataAgent 获取
+	- 不承担风控判断，委托 RiskAgent
+	- 不管理策略版本存储，委托 StrategyVersioning
+	- 接收特征和规则列表，输出 RawSignal
+
+	当前 Phase 0 流程：
+	1. compute_features - 计算特征
+	2. evaluate_rules - 评估规则
+	3. combine_scores - 组合分数
+	4. generate_signal - 生成信号
+
+	后续演进（Stage 3/4）：
+	- 接入策略版本库后，基于版本化规则快照评估
+	- 不再使用静态规则模板
+
+	禁止：
+	- 在 StrategyAgent 中硬编码具体规则
+	- 承担风控、头寸计算、数据获取等职责
+	"""
 
     def __init__(self):
         super().__init__("strategy_agent")

@@ -72,7 +72,8 @@
       "Bash(pytest tests/unit/providers/test_fallback_provider.py::test_fallback_provider_basic_structure -v)",
       "Bash(pytest tests/unit/providers/test_fallback_provider.py -v)",
       "Bash(pytest tests/unit/providers/ -v)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(xargs rm:*)"
     ]
   }
 }

@@ -13,6 +13,7 @@ def test_aggregate_profile_counts_top_symbols() -> None:
             ["000002.SZ", "000001.SZ"],
         ],
         concepts_by_article=[[], [], []],
+        rules_by_article=[],
         clusters_file=None,
     )
 
@@ -35,6 +36,7 @@ def test_aggregate_profile_includes_cluster_ids() -> None:
         trader_id="trader_a",
         symbols_by_article=[["000001.SZ"]],
         concepts_by_article=[[]],
+        rules_by_article=[],
         clusters_file=clusters_file,
     )
 

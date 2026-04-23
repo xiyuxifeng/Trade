@@ -340,7 +340,7 @@
 
 ### 任务清单
 
-- [ ] `NTL-S1-001` `P0`
+- [x] `NTL-S1-001` `P0`
   目标：扩展配置 schema，支持 provider、snapshot、kaipan。
   输入：现有 `src/common/config.py`。
   输出：新增配置字段与默认值。
@@ -348,8 +348,9 @@
   前置依赖：Stage 0 完成。
   可并行：`NTL-S1-002`。
   验收标准：配置层能表达 provider、快照与抓取参数。
+  完成情况：已补充 `KaipanConfig`，并保留 `token/user_id`、fetch schedule、default headers、重试参数等可配置项。
 
-- [ ] `NTL-S1-002` `P0`
+- [x] `NTL-S1-002` `P0`
   目标：更新 CLI 默认 YAML 模板。
   输入：新配置 schema。
   输出：默认 YAML 模板中的新配置段。
@@ -357,8 +358,9 @@
   前置依赖：`NTL-S1-001`。
   可并行：无。
   验收标准：新配置可以通过 CLI 初始化或展示。
+  完成情况：`init-config` 默认模板已加入 `kaipan` 段，并在生成时归一化制表符为可解析 YAML。
 
-- [ ] `NTL-S1-003` `P0`
+- [x] `NTL-S1-003` `P0`
   目标：扩展 `DataRequest/DataResponse` 相关契约。
   输入：现有 `src/schemas/contracts.py`。
   输出：支持 `hot_topics`、`topic_constituents`、`strong_symbols`、`ohlcv_1d`、`indicators`。
@@ -367,7 +369,7 @@
   可并行：`NTL-S1-004`、`NTL-S1-005`。
   验收标准：新字段可被 DataAgent 消费和返回。
 
-- [ ] `NTL-S1-004` `P0`
+- [x] `NTL-S1-004` `P0`
   目标：扩展 `TradeIdea`。
   输入：现有交易建议 schema。
   输出：新增 `strategy_version_id`、`source_topic_ids`、`evidence_refs`、`decision_mode`。
@@ -376,7 +378,7 @@
   可并行：`NTL-S1-003`、`NTL-S1-005`。
   验收标准：盘前建议结构足以支撑追溯。
 
-- [ ] `NTL-S1-005` `P0`
+- [x] `NTL-S1-005` `P0`
   目标：扩展盘后评估契约。
   输入：现有 `EvaluationResult` 与 review task schema。
   输出：Evidence Pack、失败分类、ranking features 相关字段。
@@ -385,7 +387,7 @@
   可并行：`NTL-S1-003`、`NTL-S1-004`。
   验收标准：盘后评估 schema 足以支持后续归因和 ranking。
 
-- [ ] `NTL-S1-006` `P0`
+- [x] `NTL-S1-006` `P0`
   目标：新增 `trader_strategy_version` 模型。
   输入：策略版本设计。
   输出：模型定义。
@@ -394,7 +396,7 @@
   可并行：`NTL-S1-007`、`NTL-S1-008`、`NTL-S1-009`。
   验收标准：模型字段能追溯 trader、版本状态、证据来源。
 
-- [ ] `NTL-S1-007` `P0`
+- [x] `NTL-S1-007` `P0`
   目标：新增 `hot_topics_snapshot` 模型。
   输入：快照 schema 设计。
   输出：模型定义。
@@ -403,7 +405,7 @@
   可并行：`NTL-S1-006`、`NTL-S1-008`、`NTL-S1-009`。
   验收标准：模型能承载每日热点快照。
 
-- [ ] `NTL-S1-008` `P0`
+- [x] `NTL-S1-008` `P0`
   目标：新增 `topic_constituents_snapshot` 模型。
   输入：快照 schema 设计。
   输出：模型定义。
@@ -412,7 +414,7 @@
   可并行：`NTL-S1-006`、`NTL-S1-007`、`NTL-S1-009`。
   验收标准：模型能承载题材成分快照。
 
-- [ ] `NTL-S1-009` `P0`
+- [x] `NTL-S1-009` `P0`
   目标：新增 `strong_symbols_snapshot` 模型。
   输入：快照 schema 设计。
   输出：模型定义。
@@ -421,7 +423,7 @@
   可并行：`NTL-S1-006`、`NTL-S1-007`、`NTL-S1-008`。
   验收标准：模型能承载强势池快照。
 
-- [ ] `NTL-S1-010` `P1`
+- [x] `NTL-S1-010` `P1`
   目标：扩展 `signal` 模型追踪字段。
   输入：现有 `src/models/signal.py`。
   输出：新增 trader、version、topic、evaluation 追踪字段。
@@ -430,7 +432,7 @@
   可并行：`NTL-S1-011`。
   验收标准：signal 能串联盘前与盘后上下文。
 
-- [ ] `NTL-S1-011` `P0`
+- [x] `NTL-S1-011` `P0`
   目标：新增 migration。
   输入：所有新增模型。
   输出：Alembic 迁移文件。
@@ -439,7 +441,7 @@
   可并行：`NTL-S1-013`。
   验收标准：数据库可创建新增表和字段。
 
-- [ ] `NTL-S1-012` `P0`
+- [x] `NTL-S1-012` `P0`
   目标：重构配置代码，避免继续只服务旧最小闭环。
   输入：扩展后的配置 schema。
   输出：配置读取逻辑对新旧链路兼容。
@@ -447,8 +449,9 @@
   前置依赖：`NTL-S1-001`。
   可并行：`NTL-S1-003`、`NTL-S1-004`、`NTL-S1-005`。
   验收标准：现有链路仍可运行，新字段可被正确消费。
+  完成情况：`load_app_config` / `KaipanConfig` / CLI 默认模板 / 现有消费方已对齐，新旧链路可以共存。
 
-- [ ] `NTL-S1-013` `P1`
+- [x] `NTL-S1-013` `P1`
   目标：为新增模型与 migration 补最小测试。
   输入：新增模型与迁移。
   输出：模型测试、迁移测试或最小验证脚本。
@@ -456,12 +459,14 @@
   前置依赖：`NTL-S1-011`。
   可并行：无。
   验收标准：模型与 migration 至少有一条自动化验证路径。
+  完成情况：已补模型注册测试、模型字段测试与 migration 内容测试，覆盖新模型、`signals` 扩列和 `Base.metadata` 注册。
 
 ### Stage 1 完成标准
 
 - 新配置、新契约、新模型和 migration 已落地。
 - 新旧链路可以共存。
 - Stage 2 以后不需要再回头补基础结构。
+ 现已完成。
 
 ---
 
@@ -596,7 +601,7 @@
 
 ### 任务清单
 
-- [ ] `NTL-S2-001` `P0`
+- [x] `NTL-S2-001` `P0`
   目标：新增 provider 抽象基类。
   输入：Stage 1 契约与配置。
   输出：`src/providers/base.py`。
@@ -604,8 +609,9 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S2-002` ~ `NTL-S2-005`。
   验收标准：provider 接口支持统一请求、标准化输出与错误处理。
+  完成情况：已新增 `src/providers/base.py`，提供统一的 `ProviderBase`、`ProviderResult`、`ProviderError` 与 `ProviderStatus`。
 
-- [ ] `NTL-S2-002` `P0`
+- [x] `NTL-S2-002` `P0`
   目标：新增热点 provider。
   输入：provider 基类、快照 schema。
   输出：`src/providers/hot_topics_provider.py`。
@@ -613,8 +619,9 @@
   前置依赖：`NTL-S2-001`。
   可并行：`NTL-S2-003`、`NTL-S2-004`、`NTL-S2-005`。
   验收标准：能输出统一的热点结构。
+  完成情况：已新增 `src/providers/hot_topics_provider.py`，可汇总板块强度、行业排名与概念风口为统一 topics 列表。
 
-- [ ] `NTL-S2-003` `P0`
+- [x] `NTL-S2-003` `P0`
   目标：新增题材成分 provider。
   输入：provider 基类、快照 schema。
   输出：`src/providers/topic_constituents_provider.py`。
@@ -622,8 +629,9 @@
   前置依赖：`NTL-S2-001`。
   可并行：`NTL-S2-002`、`NTL-S2-004`、`NTL-S2-005`。
   验收标准：能输出统一的题材成分结构。
+  完成情况：已新增 `src/providers/topic_constituents_provider.py`，可汇总题材、龙头、涨停原因和龙虎榜相关成分信息。
 
-- [ ] `NTL-S2-004` `P0`
+- [x] `NTL-S2-004` `P0`
   目标：新增基础行情 provider。
   输入：provider 基类、行情 schema。
   输出：`src/providers/market_data_provider.py`。
@@ -631,8 +639,9 @@
   前置依赖：`NTL-S2-001`。
   可并行：`NTL-S2-002`、`NTL-S2-003`、`NTL-S2-005`。
   验收标准：能输出统一的 `ohlcv_1d` 或基础行情结构。
+  完成情况：已新增 `src/providers/market_data_provider.py`，可从 `fetch_ohlcv_1d`、`MarketDataSyncService` 或 cache 读取日线行情，并归一为 `ohlcv_1d` bars 结构。
 
-- [ ] `NTL-S2-005` `P0`
+- [x] `NTL-S2-005` `P0`
   目标：新增 AKShare provider。
   输入：现有 AKShare 能力。
   输出：`src/providers/akshare_provider.py`。
@@ -640,8 +649,9 @@
   前置依赖：`NTL-S2-001`。
   可并行：`NTL-S2-002`、`NTL-S2-003`、`NTL-S2-004`。
   验收标准：AKShare 能以 provider 形式输出标准数据。
+  完成情况：已新增 `src/providers/akshare_provider.py`，可直接输出 `ohlcv_1d` 标准结构，也可作为 `MarketDataProvider` 的 backend 复用。
 
-- [ ] `NTL-S2-006` `P0`
+- [x] `NTL-S2-006` `P0`
   目标：把 `kaipan_provider.py` 从草案推进为可调用实现。
   输入：Stage 0 的数据资产层和 provider 基类。
   输出：可调用的 `kaipan` provider。
@@ -649,8 +659,9 @@
   前置依赖：`NTL-S2-001`、Stage 0 完成。
   可并行：`NTL-S2-007`。
   验收标准：至少能输出热点、成分、强势池三类标准结构。
+  完成情况：已将 `KaipanProvider` 升级为 `ProviderBase`，补齐 `hot_topics`、`topic_constituents`、`strong_symbols` 三类 capability，以及对应的标准化输出与公开 wrapper 方法。
 
-- [ ] `NTL-S2-007` `P1`
+- [x] `NTL-S2-007` `P1`
   目标：新增 fallback provider。
   输入：多个 provider 实现。
   输出：`src/providers/fallback_provider.py`。
@@ -658,8 +669,9 @@
   前置依赖：`NTL-S2-002` ~ `NTL-S2-006`。
   可并行：无。
   验收标准：主链路 provider 异常时可按顺序降级。
+  完成情况：已新增 `src/providers/fallback_provider.py`，FallbackProvider 继承 ProviderBase，维护 `capability -> 有序 provider 列表` 映射；支持三种降级场景（单个成功候选链成功返回、部分成功返回 partial、所有失败返回 partial 与完整错误列表）；17 tests PASS；已注册到 providers 包。
 
-- [ ] `NTL-S2-008` `P0`
+- [x] `NTL-S2-008` `P0`
   目标：建立市场候选池 schema。
   输入：快照定义。
   输出：`src/market_universe/schemas.py`。
@@ -667,6 +679,7 @@
   前置依赖：Stage 1 完成。
   可并行：`NTL-S2-009` ~ `NTL-S2-012`。
   验收标准：候选池的热点、成分、强势股结构统一。
+  完成情况：已新增 `src/market_universe/schemas.py`，定义 `HotTopic`、`TopicConstituent`、`StrongSymbol` 三个原子 dataclass，以及 `HotTopicsPayload`、`TopicConstituentsPayload`、`StrongSymbolsPayload`、`MarketUniverse` 四个聚合结构；9 tests PASS；与 provider normalize 输出结构完全对齐。
 
 - [ ] `NTL-S2-009` `P0`
   目标：建立热点快照构建器。

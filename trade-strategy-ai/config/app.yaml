@@ -181,9 +181,6 @@ kaipan:
   # 交易日历来源
   trading_calendar:
     source: akshare
-  # 认证配置
-  auth:
-    device_id: "your_device_id"  # 从 kaipan App 获取
   # 简单反爬与重试策略
   min_request_interval_seconds: 3.0
   max_retries: 3

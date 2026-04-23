@@ -10,6 +10,7 @@ import re
 import yaml
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 class KaipanNormalizer:
@@ -27,6 +28,49 @@ class KaipanNormalizer:
         schema_path = self.schema_dir / f"{dataset}.yaml"
         with open(schema_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
+
+    def _canonicalize_raw_data(self, raw_data: Any, meta: dict[str, Any]) -> Any:
+        """按请求 URL/action 统一历史/今日响应差异。
+
+        这一步只处理同一接口在历史 URL 与今日 URL 下返回字段不一致的问题，
+        不改变原始业务含义，只补齐别名或缺失字段，便于后续 schema 映射和上层消费。
+        """
+        if not isinstance(raw_data, dict):
+            return raw_data
+
+        normalized = dict(raw_data)
+        request = meta.get("request", {}) if isinstance(meta, dict) else {}
+        endpoint = str(request.get("endpoint", ""))
+        action = str(request.get("action", ""))
+        host = urlparse(endpoint).netloc
+
+        # 今日接口在 apphwhq 域名下会缺少 MinDay，历史接口通常有该字段。
+        if action == "RealRankingInfo" and host == "apphwhq.longhuvip.com" and "MinDay" not in normalized:
+            normalized["MinDay"] = None
+
+        # 历史/今日返回的提示字段存在 Tip/Tips 命名差异。
+        if action == "GetFengKListBest":
+            tip = normalized.get("Tip")
+            tips = normalized.get("Tips")
+            if tips is None and tip is not None:
+                normalized["Tips"] = tip
+            elif tip is None and tips is not None:
+                normalized["Tip"] = tips
+
+        # 历史接口可能不返回 Count，按 List 长度补齐，避免下游分支。
+        if action == "GetInterviewsByDateStock" and normalized.get("Count") is None:
+            list_value = normalized.get("List")
+            if isinstance(list_value, list):
+                normalized["Count"] = len(list_value)
+
+        # 历史/今日返回的日期字段存在 Date/date 大小写差异。
+        if action == "GetZhangTingTianTi":
+            if normalized.get("Date") is None and normalized.get("date") is not None:
+                normalized["Date"] = normalized["date"]
+            if normalized.get("date") is None and normalized.get("Date") is not None:
+                normalized["date"] = normalized["Date"]
+
+        return normalized
 
     def _get_nested(self, data: Any, path: str) -> Any:
         """根据路径从嵌套结构中获取值。
@@ -102,7 +146,7 @@ class KaipanNormalizer:
             raw = json.load(f)
 
         schema = self._load_schema(dataset)
-        raw_data = raw.get("data", {})
+        raw_data = self._canonicalize_raw_data(raw.get("data", {}), raw.get("meta", {}))
         meta = raw.get("meta", {})
 
         snapshot = {"meta": meta}

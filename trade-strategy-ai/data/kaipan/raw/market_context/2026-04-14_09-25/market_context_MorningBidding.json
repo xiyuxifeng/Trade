@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "dataset": "market_context",
+    "trade_date": "2026-04-14",
+    "slot": "09-25",
+    "fetched_at": "2026-04-22T23:33:27.646001",
+    "source": "kaipan",
+    "request": {
+      "endpoint": "https://apphis.longhuvip.com/w1/api/index.php",
+      "controller": "HisHomeDingPan",
+      "action": "MorningBidding",
+      "params": {
+        "DeviceID": "9b6fe2a5-ad92-4d1c-a8b8-d7c8e4da0f53",
+        "PhoneOSNew": "1",
+        "VerSion": "5.23.0.1",
+        "apiv": "w44",
+        "Token": "036ca9cad6e44ee4a585c22cb2c298ed",
+        "UserID": "3807176",
+        "Date": "2026-04-14",
+        "a": "MorningBidding",
+        "c": "HisHomeDingPan"
+      }
+    }
+  },
+  "data": {
+    "info": {
+      "tJJJE": "226.65亿",
+      "lJJJE": "235.87亿",
+      "ycln": "23837亿",
+      "lln": "21504亿",
+      "tSZ": "3515",
+      "tXD": "1505",
+      "lSZ": "2317",
+      "lXD": "2719"
+    },
+    "ttag": 0.008115000000000011,
+    "errcode": "0"
+  }
+}

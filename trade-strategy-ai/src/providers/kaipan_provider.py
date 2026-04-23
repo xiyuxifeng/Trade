@@ -9,19 +9,27 @@
 from __future__ import annotations
 
 import json
+import random
+import time
 import requests
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
+
+try:
+    from common.config import KaipanConfig
+except ImportError:  # pragma: no cover - 兼容不同 PYTHONPATH 启动方式
+    from src.common.config import KaipanConfig
 
 
 @dataclass(frozen=True)
 class KaipanAuth:
     """开盘啦私有接口鉴权参数。"""
 
-    device_id: str
-    phone_os_new: str = "2"
+    device_id: str = field(default_factory=lambda: str(uuid4()))
+    phone_os_new: str = "1"
     version: str = "5.23.0.1"
     apiv: str = "w44"
     token: str | None = None
@@ -74,18 +82,56 @@ class KaipanProvider:
         raw_dir: str | Path,
         normalized_dir: str | Path,
         snapshots_dir: str | Path,
+        kaipan_config: KaipanConfig | dict[str, Any] | None = None,
     ) -> None:
         self.auth = auth
         self.raw_dir = Path(raw_dir)
         self.normalized_dir = Path(normalized_dir)
         self.snapshots_dir = Path(snapshots_dir)
+        self.session = requests.Session()
+        self.kaipan_config = kaipan_config
+        self.default_headers = dict(self._config_value("default_headers", {}))
+        if not self.default_headers:
+            self.default_headers = {
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)",
+                "Connection": "Keep-Alive",
+                "Accept-Encoding": "gzip",
+            }
+        self.session.headers.update(self.default_headers)
         self.base_urls = {
             "apphis": "https://apphis.longhuvip.com/w1/api/index.php",
+            "apphwhq": "https://apphwhq.longhuvip.com/w1/api/index.php",
             "apphwshhq": "https://apphwshhq.longhuvip.com/w1/api/index.php",
             "applhb": "https://applhb.longhuvip.com/w1/api/index.php",
         }
+        self.min_request_interval_seconds = float(self._config_value("min_request_interval_seconds", 0.8))
+        self.max_retries = int(self._config_value("max_retries", 3))
+        self.retry_backoff_seconds = tuple(self._config_value("retry_backoff_seconds", [1.0, 2.0, 4.0]))
+        self.retry_status_codes = set(int(code) for code in self._config_value("retry_status_codes", [403, 429, 500, 502, 503, 504]))
+        self._last_request_at: float | None = None
         self._trade_date: date | None = None
         self._slot: str | None = None
+
+    def _config_value(self, key: str, default: Any) -> Any:
+        """从 kaipan 配置中读取值，兼容 Pydantic 模型和普通字典。"""
+        if self.kaipan_config is None:
+            return default
+        if isinstance(self.kaipan_config, dict):
+            return self.kaipan_config.get(key, default)
+        return getattr(self.kaipan_config, key, default)
+
+    def _resolve_history_or_today_url(self, *, trade_date: date | None = None, use_today_url: bool | None = None) -> str:
+        """按接口文档选择历史或今日数据域名。
+
+        默认根据 `trade_date` 是否等于今天自动判断；`use_today_url`
+        作为显式覆盖开关保留，便于特殊场景手工指定。
+        """
+        if use_today_url is not None:
+            return "apphwhq" if use_today_url else "apphis"
+        if trade_date is not None and trade_date == date.today():
+            return "apphwhq"
+        return "apphis"
 
     def build_common_params(self) -> dict[str, Any]:
         """构造私有接口公共参数。"""
@@ -95,10 +141,12 @@ class KaipanProvider:
             "VerSion": self.auth.version,
             "apiv": self.auth.apiv,
         }
-        if self.auth.token:
-            params["Token"] = self.auth.token
-        if self.auth.user_id:
-            params["UserID"] = self.auth.user_id
+        token = self._config_value("token", self.auth.token)
+        user_id = self._config_value("user_id", self.auth.user_id)
+        if token:
+            params["Token"] = token
+        if user_id:
+            params["UserID"] = str(user_id)
         return params
 
     def build_request(
@@ -113,6 +161,8 @@ class KaipanProvider:
         """生成规范化请求对象。"""
         merged = self.build_common_params()
         merged.update(params)
+        merged["a"] = api_name
+        merged["c"] = controller
         return KaipanRequest(
             endpoint=self.base_urls[base_url_key],
             method=method,
@@ -123,12 +173,47 @@ class KaipanProvider:
 
     def _fetch_single(self, request: KaipanRequest) -> dict[str, Any]:
         """发起单次 HTTP 请求，返回解析后的 JSON 响应。"""
-        if request.method == "POST":
-            resp = requests.post(request.endpoint, data=request.params, timeout=30)
-        else:
-            resp = requests.get(request.endpoint, params=request.params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            self._throttle()
+            try:
+                resp = self.session.request(
+                    method=request.method,
+                    url=request.endpoint,
+                    params=request.params if request.method != "POST" else None,
+                    data=request.params if request.method == "POST" else None,
+                    timeout=30,
+                    headers=self.default_headers,
+                )
+                self._last_request_at = time.monotonic()
+                if resp.status_code in self.retry_status_codes and attempt < self.max_retries:
+                    self._sleep_with_backoff(attempt)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except (requests.RequestException, ValueError) as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    raise
+                self._sleep_with_backoff(attempt)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Kaipan 请求失败，且未返回明确错误")
+
+    def _throttle(self) -> None:
+        """控制请求节奏，避免短时间内连续打爆接口。"""
+        if self._last_request_at is None:
+            return
+        elapsed = time.monotonic() - self._last_request_at
+        remaining = self.min_request_interval_seconds - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    def _sleep_with_backoff(self, attempt: int) -> None:
+        """按固定退避时间重试，附加少量抖动。"""
+        base = self.retry_backoff_seconds[min(attempt, len(self.retry_backoff_seconds) - 1)]
+        jitter = random.uniform(0, 0.3)
+        time.sleep(base + jitter)
 
     def _save_raw(self, raw_path: Path, request: KaipanRequest, response_data: Any, dataset: str) -> None:
         """将 raw JSON 保存到文件，顶部嵌入 meta 元信息。
@@ -167,6 +252,7 @@ class KaipanProvider:
         controller: str,
         base_url_key: str = "apphis",
         method: str = "GET",
+        page_key: str | None = None,
         **params: Any,
     ) -> dict[str, Any]:
         """通用抓取保存方法。
@@ -179,6 +265,7 @@ class KaipanProvider:
             controller: 控制器名
             base_url_key: Base URL key（默认 apphis）
             method: HTTP 方法（默认 GET）
+            page_key: 分页文件名后缀，用于区分页数据
             **params: 传递给 build_request 的额外参数
 
         Returns:
@@ -209,11 +296,42 @@ class KaipanProvider:
             filename_parts.append(f"Time{params.get('Time', '')}")
         elif api_name == "GetInterviewsByDateZS":
             filename_parts.append(f"Type{params.get('Type', '')}")
+        if page_key:
+            filename_parts.append(page_key)
         raw_filename = "_".join(filter(None, filename_parts))
         raw_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{raw_filename}.json"
         response = self._fetch_single(request)
         self._save_raw(raw_path, request, response, dataset)
         return response
+
+    def fetch_custom(
+        self,
+        *,
+        trade_date: date,
+        slot: str,
+        dataset: str,
+        api_name: str,
+        controller: str,
+        base_url_key: str = "apphis",
+        method: str = "GET",
+        page_key: str | None = None,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """通用抓取入口，供脚本或特殊验证任务直接调用。
+
+        适合批量验证、分页回放或临时补抓，不影响现有显式封装方法。
+        """
+        self._trade_date = trade_date
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset=dataset,
+            api_name=api_name,
+            controller=controller,
+            base_url_key=base_url_key,
+            method=method,
+            page_key=page_key,
+            **params,
+        )
 
     def dataset_raw_path(self, *, trade_date: date, dataset: str, page_key: str | None = None) -> Path:
         """返回原始 JSON 存储路径。"""
@@ -279,7 +397,7 @@ class KaipanProvider:
     # 13 个具体接口实现
     # ================================
 
-    def fetch_board_strength(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_board_strength(self, *, trade_date: date, slot: str, use_today_url: bool | None = None) -> dict[str, Any]:
         """板块强度 - RealRankingInfo (ZSType=7)。
 
         Args:
@@ -295,7 +413,7 @@ class KaipanProvider:
             dataset="hot_topics",
             api_name="RealRankingInfo",
             controller="ZhiShuRanking",
-            base_url_key="apphis",
+            base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
             Date=trade_date.strftime("%Y-%m-%d"),
             Type="1",
@@ -305,7 +423,7 @@ class KaipanProvider:
             st=20,
         )
 
-    def fetch_industry_ranking(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_industry_ranking(self, *, trade_date: date, slot: str, use_today_url: bool | None = None) -> dict[str, Any]:
         """行业排名 - RealRankingInfo (ZSType=4)。
 
         Args:
@@ -321,7 +439,7 @@ class KaipanProvider:
             dataset="hot_topics",
             api_name="RealRankingInfo",
             controller="ZhiShuRanking",
-            base_url_key="apphis",
+            base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
             Date=trade_date.strftime("%Y-%m-%d"),
             Type="2",
@@ -349,9 +467,10 @@ class KaipanProvider:
             controller="StockFengKData",
             base_url_key="apphis",
             method="POST",
+            Day=trade_date.strftime("%Y%m%d"),
         )
 
-    def fetch_theme_detail(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_theme_detail(self, *, trade_date: date, slot: str, theme_id: str) -> dict[str, Any]:
         """主题详情 - InfoGet。
 
         Args:
@@ -369,9 +488,10 @@ class KaipanProvider:
             controller="Theme",
             base_url_key="applhb",
             method="POST",
+            ID=theme_id,
         )
 
-    def fetch_stock_sector_v2(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_stock_sector_v2(self, *, trade_date: date, slot: str, stock_id: str) -> dict[str, Any]:
         """股票板块 v2 - GetFeaturedSection。
 
         Args:
@@ -388,10 +508,11 @@ class KaipanProvider:
             api_name="GetFeaturedSection",
             controller="StockL2Data",
             base_url_key="apphwshhq",
-            method="POST",
+            method="GET",
+            StockID=stock_id,
         )
 
-    def fetch_strong_fengkou(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_strong_fengkou(self, *, trade_date: date, slot: str, time: str = "", use_today_url: bool | None = None) -> dict[str, Any]:
         """强势风口 - GetFengKListBest。
 
         Args:
@@ -407,11 +528,21 @@ class KaipanProvider:
             dataset="strong_symbols",
             api_name="GetFengKListBest",
             controller="StockFengKData",
-            base_url_key="apphis",
+            base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
+            Day=trade_date.strftime("%Y%m%d"),
+            Time=time,
         )
 
-    def fetch_interval_stats_stock(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_interval_stats_stock(
+        self,
+        *,
+        trade_date: date,
+        slot: str,
+        start_date: date,
+        end_date: date,
+        use_today_url: bool | None = None,
+    ) -> dict[str, Any]:
         """区间统计股票 - GetInterviewsByDateStock。
 
         Args:
@@ -427,13 +558,28 @@ class KaipanProvider:
             dataset="strong_symbols",
             api_name="GetInterviewsByDateStock",
             controller="StockLineData",
-            base_url_key="apphis",
+            base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
+            DStart=start_date.strftime("%Y-%m-%d"),
+            DEnd=end_date.strftime("%Y-%m-%d"),
             Type="2",
             FilterBJS="1",
+            Order="1",
+            Index=0,
+            st=20,
         )
 
-    def fetch_morning_bidding_list(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_morning_bidding_list(
+        self,
+        *,
+        trade_date: date,
+        slot: str,
+        pid_type: int,
+        data_type: int,
+        index: int = 0,
+        order: int = 1,
+        st: int = 20,
+    ) -> dict[str, Any]:
         """早盘竞价列表 - MorningBiddingList。
 
         Args:
@@ -450,10 +596,16 @@ class KaipanProvider:
             api_name="MorningBiddingList",
             controller="HisHomeDingPan",
             base_url_key="apphis",
-            method="POST",
+            method="GET",
+            Date=trade_date.strftime("%Y-%m-%d"),
+            PidType=pid_type,
+            Type=data_type,
+            Index=index,
+            Order=order,
+            st=st,
         )
 
-    def fetch_limit_up_reason(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_limit_up_reason(self, *, trade_date: date, slot: str, index: int = 0, st: int = 20) -> dict[str, Any]:
         """涨停原因 - GetPlateInfo_w38。
 
         Args:
@@ -471,6 +623,9 @@ class KaipanProvider:
             controller="HisLimitResumption",
             base_url_key="apphis",
             method="POST",
+            Date=trade_date.strftime("%Y-%m-%d"),
+            Index=index,
+            st=st,
         )
 
     def fetch_pre_market_bid(self, *, trade_date: date, slot: str) -> dict[str, Any]:
@@ -490,7 +645,8 @@ class KaipanProvider:
             api_name="MorningBidding",
             controller="HisHomeDingPan",
             base_url_key="apphis",
-            method="POST",
+            method="GET",
+            Date=trade_date.strftime("%Y-%m-%d"),
         )
 
     def fetch_pre_market_stats(self, *, trade_date: date, slot: str) -> dict[str, Any]:
@@ -510,10 +666,11 @@ class KaipanProvider:
             api_name="MorningBiddingNum",
             controller="HisHomeDingPan",
             base_url_key="apphis",
-            method="POST",
+            method="GET",
+            Date=trade_date.strftime("%Y-%m-%d"),
         )
 
-    def fetch_limit_up_info(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_limit_up_info(self, *, trade_date: date, slot: str, index: int = 0, st: int = 20, use_today_url: bool | None = None) -> dict[str, Any]:
         """涨停信息 - GetZhangTingTianTi。
 
         Args:
@@ -529,11 +686,14 @@ class KaipanProvider:
             dataset="topic_constituents",
             api_name="GetZhangTingTianTi",
             controller="FuPanLa",
-            base_url_key="apphis",
+            base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
+            Date=trade_date.strftime("%Y-%m-%d"),
+            Index=index,
+            st=st,
         )
 
-    def fetch_lhb_list(self, *, trade_date: date, slot: str) -> dict[str, Any]:
+    def fetch_lhb_list(self, *, trade_date: date, slot: str, index: int = 0, st: int = 300) -> dict[str, Any]:
         """龙虎榜列表 - GetStockList。
 
         Args:
@@ -551,5 +711,7 @@ class KaipanProvider:
             controller="LongHuBang",
             base_url_key="applhb",
             method="POST",
+            Time=trade_date.strftime("%Y-%m-%d"),
+            Index=index,
+            st=st,
         )
-

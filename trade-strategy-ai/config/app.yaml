@@ -165,6 +165,15 @@ kaipan:
   data_dir: data/kaipan
   # Schema 文件目录
   schema_dir: src/providers/kaipan_schema
+  # 可选鉴权参数（建议通过环境变量注入）
+  token: null
+  user_id: null
+  # 默认请求头，模拟 Android 客户端
+  default_headers:
+    Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+    User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)
+    Connection: Keep-Alive
+    Accept-Encoding: gzip
   # 抓取时间表（可配置）
   fetch_schedule:
     pre_market: "9:25"    # 盘前
@@ -175,3 +184,8 @@ kaipan:
   # 认证配置
   auth:
     device_id: "your_device_id"  # 从 kaipan App 获取
+  # 简单反爬与重试策略
+  min_request_interval_seconds: 3.0
+  max_retries: 3
+  retry_backoff_seconds: [1.0, 2.0, 4.0]
+  retry_status_codes: [403, 429, 500, 502, 503, 504]

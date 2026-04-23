@@ -1,5 +1,6 @@
 """Kaipan 数据管线离线验证测试。"""
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,7 @@ class TestKaipanProvider:
         import sys
         sys.path.insert(0, "src")
         from providers.kaipan_provider import KaipanProvider, KaipanAuth
-        self.auth = KaipanAuth(device_id="test")
+        self.auth = KaipanAuth()
         self.provider = KaipanProvider(
             auth=self.auth,
             raw_dir=Path("data/kaipan/raw"),
@@ -62,11 +63,212 @@ class TestKaipanProvider:
         """验证三个 baseURL 已配置。"""
         assert hasattr(self.provider, "base_urls"), "缺少 base_urls 属性"
         assert "apphis" in self.provider.base_urls
+        assert "apphwhq" in self.provider.base_urls
         assert "apphwshhq" in self.provider.base_urls
         assert "applhb" in self.provider.base_urls
         assert "longhuvip.com" in self.provider.base_urls["apphis"]
+        assert "longhuvip.com" in self.provider.base_urls["apphwhq"]
         assert "longhuvip.com" in self.provider.base_urls["apphwshhq"]
         assert "longhuvip.com" in self.provider.base_urls["applhb"]
+
+    def test_default_headers_defined(self):
+        """验证模拟客户端请求头已配置。"""
+        assert hasattr(self.provider, "default_headers"), "缺少 default_headers"
+        headers = self.provider.default_headers
+        assert headers["Content-Type"] == "application/x-www-form-urlencoded; charset=UTF-8"
+        assert "Dalvik/2.1.0" in headers["User-Agent"]
+        assert headers["Connection"] == "Keep-Alive"
+        assert headers["Accept-Encoding"] == "gzip"
+        for key, value in headers.items():
+            assert self.provider.session.headers.get(key) == value
+
+    def test_provider_uses_kaipan_config_values(self):
+        """验证 provider 可以从 kaipan 配置中读取反爬参数。"""
+        import sys
+        sys.path.insert(0, "src")
+        from common.config import KaipanConfig
+        from providers.kaipan_provider import KaipanProvider, KaipanAuth
+
+        kaipan_config = KaipanConfig(
+            min_request_interval_seconds=1.5,
+            max_retries=5,
+            retry_backoff_seconds=[2.0, 4.0, 8.0],
+            retry_status_codes=[403, 429],
+        )
+        provider = KaipanProvider(
+            auth=KaipanAuth(),
+            raw_dir=Path("data/kaipan/raw"),
+            normalized_dir=Path("data/kaipan/snapshots"),
+            snapshots_dir=Path("data/kaipan/snapshots"),
+            kaipan_config=kaipan_config,
+        )
+
+        assert provider.min_request_interval_seconds == 1.5
+        assert provider.max_retries == 5
+        assert provider.retry_backoff_seconds == (2.0, 4.0, 8.0)
+        assert provider.retry_status_codes == {403, 429}
+
+    def test_provider_uses_kaipan_config_token_and_user_id(self):
+        """验证 provider 优先使用配置中的 Token/UserID。"""
+        import sys
+        sys.path.insert(0, "src")
+        from common.config import KaipanConfig
+        from providers.kaipan_provider import KaipanProvider, KaipanAuth
+
+        provider = KaipanProvider(
+            auth=KaipanAuth(token="auth-token", user_id="auth-user"),
+            raw_dir=Path("data/kaipan/raw"),
+            normalized_dir=Path("data/kaipan/snapshots"),
+            snapshots_dir=Path("data/kaipan/snapshots"),
+            kaipan_config=KaipanConfig(token="config-token", user_id="config-user"),
+        )
+
+        params = provider.build_common_params()
+        assert params["Token"] == "config-token"
+        assert params["UserID"] == "config-user"
+
+    def test_fetch_single_retries_on_retryable_status(self, monkeypatch):
+        """验证遇到可重试状态码时会重试。"""
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, payload):
+                self.status_code = status_code
+                self._payload = payload
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError(f"status={self.status_code}")
+
+            def json(self):
+                return self._payload
+
+        def fake_request(*, method, url, params=None, data=None, timeout=None, headers=None):
+            calls.append(
+                {
+                    "method": method,
+                    "url": url,
+                    "params": params,
+                    "data": data,
+                    "timeout": timeout,
+                    "headers": headers,
+                }
+            )
+            if len(calls) == 1:
+                return FakeResponse(429, {"error": "rate limited"})
+            return FakeResponse(200, {"ok": True})
+
+        monkeypatch.setattr(self.provider.session, "request", fake_request)
+        monkeypatch.setattr(self.provider, "_throttle", lambda: None)
+        monkeypatch.setattr(self.provider, "_sleep_with_backoff", lambda attempt: None)
+        self.provider.max_retries = 2
+
+        request = self.provider.build_request(api_name="MorningBidding", controller="HisHomeDingPan", method="POST")
+        result = self.provider._fetch_single(request)
+
+        assert result == {"ok": True}
+        assert len(calls) == 2
+        assert calls[0]["method"] == "POST"
+        assert calls[0]["data"] == request.params
+        assert calls[0]["params"] is None
+        assert calls[0]["headers"]["User-Agent"].startswith("Dalvik/2.1.0")
+        assert calls[1]["headers"]["Accept-Encoding"] == "gzip"
+
+    def test_auth_defaults_generate_device_id_and_phone_os(self):
+        """验证 KaipanAuth 默认生成 device_id，并将 PhoneOSNew 设为 1。"""
+        from providers.kaipan_provider import KaipanAuth
+
+        auth = KaipanAuth()
+        assert isinstance(auth.device_id, str)
+        assert auth.device_id
+        assert auth.phone_os_new == "1"
+
+    def test_modified_methods_pass_expected_params(self, monkeypatch):
+        """验证按新版文档更新后的接口参数。"""
+        captured = []
+
+        def fake_fetch_and_save(**kwargs):
+            captured.append(kwargs)
+            return {"ok": True}
+
+        monkeypatch.setattr(self.provider, "_fetch_and_save", fake_fetch_and_save)
+        import providers.kaipan_provider as kaipan_module
+
+        class FakeDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 4, 16)
+
+        monkeypatch.setattr(kaipan_module, "date", FakeDate)
+
+        self.provider.fetch_board_strength(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_board_strength(trade_date=date(2026, 4, 15), slot="09-25")
+        self.provider.fetch_stock_sector_v2(trade_date=date(2026, 4, 16), slot="09-25", stock_id="002726")
+        self.provider.fetch_theme_detail(trade_date=date(2026, 4, 16), slot="09-25", theme_id="261")
+
+        assert captured[0]["base_url_key"] == "apphwhq"
+        assert captured[0]["Date"] == "2026-04-16"
+        assert captured[0]["ZSType"] == "7"
+        assert captured[1]["base_url_key"] == "apphis"
+        assert captured[1]["Date"] == "2026-04-15"
+        assert captured[2]["method"] == "GET"
+        assert captured[2]["StockID"] == "002726"
+        assert captured[2]["base_url_key"] == "apphwshhq"
+        assert captured[3]["ID"] == "261"
+        assert captured[3]["base_url_key"] == "applhb"
+
+    def test_all_implemented_methods_use_expected_urls(self, monkeypatch):
+        """验证已实现接口的 URL 选择与文档一致。"""
+        captured = []
+
+        def fake_fetch_and_save(**kwargs):
+            captured.append(kwargs)
+            return {"ok": True}
+
+        monkeypatch.setattr(self.provider, "_fetch_and_save", fake_fetch_and_save)
+        import providers.kaipan_provider as kaipan_module
+
+        class FakeDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 4, 16)
+
+        monkeypatch.setattr(kaipan_module, "date", FakeDate)
+
+        self.provider.fetch_board_strength(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_board_strength(trade_date=date(2026, 4, 15), slot="09-25")
+        self.provider.fetch_industry_ranking(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_concept_fengkou(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_theme_detail(trade_date=date(2026, 4, 16), slot="09-25", theme_id="261")
+        self.provider.fetch_stock_sector_v2(trade_date=date(2026, 4, 16), slot="09-25", stock_id="002726")
+        self.provider.fetch_strong_fengkou(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_interval_stats_stock(
+            trade_date=date(2026, 4, 16),
+            slot="09-25",
+            start_date=date(2026, 4, 8),
+            end_date=date(2026, 4, 16),
+        )
+        self.provider.fetch_morning_bidding_list(trade_date=date(2026, 4, 16), slot="09-25", pid_type=0, data_type=4)
+        self.provider.fetch_limit_up_reason(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_pre_market_bid(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_pre_market_stats(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_limit_up_info(trade_date=date(2026, 4, 16), slot="09-25")
+        self.provider.fetch_lhb_list(trade_date=date(2026, 4, 16), slot="17-30")
+
+        assert captured[0]["base_url_key"] == "apphwhq"
+        assert captured[1]["base_url_key"] == "apphis"
+        assert captured[2]["base_url_key"] == "apphwhq"
+        assert captured[3]["base_url_key"] == "apphis"
+        assert captured[4]["base_url_key"] == "applhb"
+        assert captured[5]["base_url_key"] == "apphwshhq"
+        assert captured[6]["base_url_key"] == "apphwhq"
+        assert captured[7]["base_url_key"] == "apphwhq"
+        assert captured[8]["base_url_key"] == "apphis"
+        assert captured[9]["base_url_key"] == "apphis"
+        assert captured[10]["base_url_key"] == "apphis"
+        assert captured[11]["base_url_key"] == "apphis"
+        assert captured[12]["base_url_key"] == "apphwhq"
+        assert captured[13]["base_url_key"] == "applhb"
 
     def test_fetch_and_save_method_exists(self):
         """验证 _fetch_and_save 方法存在且可调用。"""
@@ -124,6 +326,83 @@ class TestKaipanNormalizer:
         schema = normalizer._load_schema("hot_topics")
         assert schema["dataset"] == "hot_topics"
         assert "mappings" in schema
+
+    def test_canonicalize_real_ranking_adds_minday_for_today_url(self, tmp_path):
+        """验证今日 URL 的 RealRankingInfo 会补齐 MinDay。"""
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_normalizer import KaipanNormalizer
+
+        normalizer = KaipanNormalizer(
+            schema_dir="src/providers/kaipan_schema",
+            snapshots_dir=tmp_path / "snapshots",
+        )
+        raw = {"Count": 1, "list": [[1, 2, 3]]}
+        meta = {"request": {"endpoint": "https://apphwhq.longhuvip.com/w1/api/index.php", "action": "RealRankingInfo"}}
+
+        normalized = normalizer._canonicalize_raw_data(raw, meta)
+
+        assert normalized["MinDay"] is None
+        assert normalized["Count"] == 1
+        assert normalized["list"] == [[1, 2, 3]]
+
+    def test_canonicalize_fengkou_tip_alias(self, tmp_path):
+        """验证 Tip/Tips 别名会被统一补齐。"""
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_normalizer import KaipanNormalizer
+
+        normalizer = KaipanNormalizer(
+            schema_dir="src/providers/kaipan_schema",
+            snapshots_dir=tmp_path / "snapshots",
+        )
+        raw_today = {"List": [["000001", "测试", 1]], "Tip": "today-tip"}
+        raw_history = {"List": [["000001", "测试", 1]], "Tips": "history-tips"}
+        meta = {"request": {"endpoint": "https://apphwhq.longhuvip.com/w1/api/index.php", "action": "GetFengKListBest"}}
+
+        normalized_today = normalizer._canonicalize_raw_data(raw_today, meta)
+        normalized_history = normalizer._canonicalize_raw_data(raw_history, meta)
+
+        assert normalized_today["Tips"] == "today-tip"
+        assert normalized_today["Tip"] == "today-tip"
+        assert normalized_history["Tips"] == "history-tips"
+        assert normalized_history["Tip"] == "history-tips"
+
+    def test_canonicalize_interval_stats_stock_infers_count(self, tmp_path):
+        """验证区间统计接口会在缺失 Count 时按 List 长度补齐。"""
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_normalizer import KaipanNormalizer
+
+        normalizer = KaipanNormalizer(
+            schema_dir="src/providers/kaipan_schema",
+            snapshots_dir=tmp_path / "snapshots",
+        )
+        raw = {"List": [[1], [2], [3]]}
+        meta = {"request": {"endpoint": "https://apphis.longhuvip.com/w1/api/index.php", "action": "GetInterviewsByDateStock"}}
+
+        normalized = normalizer._canonicalize_raw_data(raw, meta)
+
+        assert normalized["Count"] == 3
+        assert normalized["List"] == [[1], [2], [3]]
+
+    def test_canonicalize_limit_up_info_uses_date_alias(self, tmp_path):
+        """验证涨停信息会统一 Date/date 字段。"""
+        import sys
+        sys.path.insert(0, "src")
+        from providers.kaipan_normalizer import KaipanNormalizer
+
+        normalizer = KaipanNormalizer(
+            schema_dir="src/providers/kaipan_schema",
+            snapshots_dir=tmp_path / "snapshots",
+        )
+        raw = {"StockList": [], "date": "2026-04-22"}
+        meta = {"request": {"endpoint": "https://apphwhq.longhuvip.com/w1/api/index.php", "action": "GetZhangTingTianTi"}}
+
+        normalized = normalizer._canonicalize_raw_data(raw, meta)
+
+        assert normalized["Date"] == "2026-04-22"
+        assert normalized["date"] == "2026-04-22"
 
 
 class TestDirectoryStructure:

@@ -68,7 +68,11 @@
       "Bash(rm -rf /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/failed_tasks.jsonl)",
       "WebFetch(domain:www.tgb.cn)",
       "Bash(pip3 install:*)",
-      "Bash(playwright install:*)"
+      "Bash(playwright install:*)",
+      "Bash(pytest tests/unit/providers/test_fallback_provider.py::test_fallback_provider_basic_structure -v)",
+      "Bash(pytest tests/unit/providers/test_fallback_provider.py -v)",
+      "Bash(pytest tests/unit/providers/ -v)",
+      "Bash(pytest:*)"
     ]
   }
 }

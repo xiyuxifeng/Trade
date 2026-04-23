@@ -1,9 +1,20 @@
-"""开盘啦私有接口 Provider 草案。
+"""Kaipan 私有接口 provider。
 
-说明：
-- 当前文件是接口设计草案，不直接接入主链路。
-- 目标是把 App 私有接口与上层 DataAgent / market_universe 隔离。
-- 第一阶段优先支持 raw JSON 抓取、标准化快照输出、字段映射。
+职责：
+- 组装 Kaipan 私有接口请求参数。
+- 保留现有 raw fetch 方法，供调度器和补抓脚本直接复用。
+- 对外提供标准化 capability：
+  - `hot_topics`
+  - `topic_constituents`
+  - `strong_symbols`
+
+扩展方式：
+- 新增能力时，优先增加一个 capability 分支和对应的 normalize 逻辑。
+- 原始抓取方法可以继续保留，用于 CLI、scheduler 和调试场景。
+- 如果后续要扩展到 `market_context` 或 `postmarket_evidence`，沿用“原始抓取 + 标准化输出”的模式即可。
+
+设计文档：
+- 见 `docs/superpowers/specs/2026-04-23-kaipan-provider-design.md`
 """
 
 from __future__ import annotations
@@ -22,6 +33,10 @@ try:
     from common.config import KaipanConfig
 except ImportError:  # pragma: no cover - 兼容不同 PYTHONPATH 启动方式
     from src.common.config import KaipanConfig
+
+import pandas as pd
+
+from src.providers.base import ProviderBase, ProviderError, ProviderStatus
 
 
 @dataclass(frozen=True)
@@ -62,17 +77,11 @@ class KaipanSnapshotMeta:
     source: str = "kaipan"
 
 
-class KaipanProvider:
-    """开盘啦数据提供者草案。
+class KaipanProvider(ProviderBase):
+    """开盘啦数据提供者。
 
-    职责：
-    - 组装私有接口请求参数
-    - 统一保存 raw JSON
-    - 输出标准化热点 / 成分 / 强势池快照
-
-    非职责：
-    - 不直接给 DataAgent 暴露所有私有接口细节
-    - 不在本文件中承担 ranking / backtest / manager 编排逻辑
+    现阶段负责把 Kaipan 私有接口包装成可调用 provider，
+    同时保留原始抓取方法，方便 scheduler 和调试脚本复用。
     """
 
     def __init__(
@@ -83,7 +92,9 @@ class KaipanProvider:
         normalized_dir: str | Path,
         snapshots_dir: str | Path,
         kaipan_config: KaipanConfig | dict[str, Any] | None = None,
+        provider_name: str = "kaipan",
     ) -> None:
+        super().__init__(provider_name=provider_name)
         self.auth = auth
         self.raw_dir = Path(raw_dir)
         self.normalized_dir = Path(normalized_dir)
@@ -112,6 +123,65 @@ class KaipanProvider:
         self._last_request_at: float | None = None
         self._trade_date: date | None = None
         self._slot: str | None = None
+
+    def request(self, *, capability: str, **kwargs: Any) -> dict[str, Any]:
+        """拉取 capability 对应的 raw 数据。"""
+
+        if capability == "hot_topics":
+            return self._request_hot_topics(**kwargs)
+        if capability == "topic_constituents":
+            return self._request_topic_constituents(**kwargs)
+        if capability == "strong_symbols":
+            return self._request_strong_symbols(**kwargs)
+        self.unsupported(capability)
+
+    def normalize(
+        self,
+        *,
+        capability: str,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """把 raw 响应转换为标准 provider payload。"""
+
+        if capability == "hot_topics":
+            return self._normalize_hot_topics(raw=raw, request=request)
+        if capability == "topic_constituents":
+            return self._normalize_topic_constituents(raw=raw, request=request)
+        if capability == "strong_symbols":
+            return self._normalize_strong_symbols(raw=raw, request=request)
+        self.unsupported(capability)
+
+    def fetch_hot_topics(self, *, trade_date: date | str, slot: str = "09-25", **kwargs: Any) -> dict[str, Any]:
+        """获取并返回标准化热点结构。"""
+
+        result = self.run("hot_topics", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch hot_topics")
+        return result.payload
+
+    def fetch_topic_constituents(
+        self,
+        *,
+        trade_date: date | str,
+        slot: str = "17-30",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """获取并返回标准化题材成分结构。"""
+
+        result = self.run("topic_constituents", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch topic_constituents")
+        return result.payload
+
+    def fetch_strong_symbols(self, *, trade_date: date | str, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """获取并返回标准化强势标的结构。"""
+
+        result = self.run("strong_symbols", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch strong_symbols")
+        return result.payload
 
     def _config_value(self, key: str, default: Any) -> Any:
         """从 kaipan 配置中读取值，兼容 Pydantic 模型和普通字典。"""
@@ -347,51 +417,367 @@ class KaipanProvider:
         return self.snapshots_dir / trade_date.isoformat() / f"{dataset}.json"
 
     # -----------------------------
-    # 下列方法是后续推荐实现的接口
+    # capability 级别的请求与归一化逻辑
     # -----------------------------
 
-    def fetch_hot_topics(self, *, trade_date: date, kind: str) -> dict[str, Any]:
-        """获取热点主题。
+    def _coerce_trade_date(self, value: Any) -> date:
+        """把字符串或日期值统一转换为 `date`。"""
 
-        kind:
-        - `concept`
-        - `industry`
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            return date.fromisoformat(value)
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            raise ProviderError("trade_date is required and must be a date or ISO string")
+        return parsed.date()
 
-        预期输出：
-        - `topics`: 标准化主题列表
-        - `evidence`: 原始接口摘要
-        """
-        raise NotImplementedError
+    def _request_hot_topics(self, *, trade_date: Any, slot: str = "09-25", **kwargs: Any) -> dict[str, Any]:
+        """拉取热点主题所需的 raw 数据。"""
 
-    def fetch_topic_constituents(self, *, trade_date: date, topic_ids: list[str], kind: str) -> dict[str, Any]:
-        """获取主题成分股映射。"""
-        raise NotImplementedError
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return {
+            "trade_date": td.isoformat(),
+            "slot": slot,
+            "board_strength": self.fetch_board_strength(trade_date=td, slot=slot, use_today_url=kwargs.get("use_today_url")),
+            "industry": self.fetch_industry_ranking(trade_date=td, slot=slot, use_today_url=kwargs.get("use_today_url")),
+            "concept_fengkou": self.fetch_concept_fengkou(trade_date=td, slot=slot),
+        }
 
-    def fetch_strong_symbols(self, *, trade_date: date, universe: list[str] | None = None) -> dict[str, Any]:
-        """获取强势股候选池。"""
-        raise NotImplementedError
+    def _request_topic_constituents(
+        self,
+        *,
+        trade_date: Any,
+        slot: str = "17-30",
+        stock_id: str | None = None,
+        topic_ids: list[str] | None = None,
+        theme_id: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """拉取题材成分所需的 raw 数据。"""
 
-    def fetch_market_context(self, *, trade_date: date) -> dict[str, Any]:
-        """获取市场状态上下文。
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
 
-        适合聚合：
-        - 市场情绪
-        - 市场量能
-        - 指数数据
-        - 涨跌停数
-        """
-        raise NotImplementedError
+        raw: dict[str, Any] = {
+            "trade_date": td.isoformat(),
+            "slot": slot,
+            "limit_up_reason": self.fetch_limit_up_reason(trade_date=td, slot=slot),
+            "limit_up_info": self.fetch_limit_up_info(trade_date=td, slot=slot),
+            "lhb_list": self.fetch_lhb_list(trade_date=td, slot=slot),
+        }
 
-    def fetch_postmarket_evidence(self, *, trade_date: date, symbols: list[str]) -> dict[str, Any]:
-        """获取盘后解释型证据。
+        if stock_id:
+            raw["stock_sector_v2"] = self.fetch_stock_sector_v2(trade_date=td, slot=slot, stock_id=stock_id)
 
-        适合聚合：
-        - 龙虎榜
-        - 涨停原因
-        - 大盘直播
-        - 最新消息
-        """
-        raise NotImplementedError
+        requested_topic_ids = list(topic_ids or [])
+        if theme_id:
+            requested_topic_ids.append(theme_id)
+        if requested_topic_ids:
+            raw["theme_detail"] = [
+                self.fetch_theme_detail(trade_date=td, slot=slot, theme_id=topic)
+                for topic in requested_topic_ids
+            ]
+        else:
+            raw["theme_detail"] = []
+        return raw
+
+    def _request_strong_symbols(
+        self,
+        *,
+        trade_date: Any,
+        slot: str = "17-30",
+        start_date: Any | None = None,
+        end_date: Any | None = None,
+        universe: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """拉取强势标的所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        sd = self._coerce_trade_date(start_date or td)
+        ed = self._coerce_trade_date(end_date or td)
+
+        raw: dict[str, Any] = {
+            "trade_date": td.isoformat(),
+            "slot": slot,
+            "strong_fengkou": self.fetch_strong_fengkou(trade_date=td, slot=slot, use_today_url=kwargs.get("use_today_url")),
+            "interval_stats_stock": self.fetch_interval_stats_stock(
+                trade_date=td,
+                slot=slot,
+                start_date=sd,
+                end_date=ed,
+                use_today_url=kwargs.get("use_today_url"),
+            ),
+            "universe": universe or [],
+        }
+        if slot == "09-25":
+            raw["morning_bidding_list"] = self.fetch_morning_bidding_list(trade_date=td, slot=slot)
+        else:
+            raw["morning_bidding_list"] = {"info": []}
+        return raw
+
+    def _normalize_hot_topics(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """把热点主题 raw 数据归一为标准 payload。"""
+
+        topics: list[dict[str, Any]] = []
+        topics.extend(self._parse_ranked_topics(raw.get("board_strength", {}), kind="concept"))
+        topics.extend(self._parse_ranked_topics(raw.get("industry", {}), kind="industry"))
+        topics.extend(self._parse_fengkou_topics(raw.get("concept_fengkou", {}), kind="concept_fengkou"))
+        return {
+            "dataset": "hot_topics",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "topics": topics,
+            "sources": ["board_strength", "industry", "concept_fengkou"],
+        }
+
+    def _normalize_topic_constituents(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把题材成分 raw 数据归一为标准 payload。"""
+
+        constituents: list[dict[str, Any]] = []
+        constituents.extend(self._parse_stock_sector_v2(raw.get("stock_sector_v2", {})))
+        theme_detail = raw.get("theme_detail", [])
+        if isinstance(theme_detail, list):
+            for item in theme_detail:
+                constituents.extend(self._parse_theme_detail(item))
+        constituents.extend(self._parse_limit_up_reason(raw.get("limit_up_reason", {})))
+        constituents.extend(self._parse_limit_up_info(raw.get("limit_up_info", {})))
+        constituents.extend(self._parse_lhb_list(raw.get("lhb_list", {})))
+        return {
+            "dataset": "topic_constituents",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "constituents": constituents,
+            "sources": ["stock_sector_v2", "theme_detail", "limit_up_reason", "limit_up_info", "lhb_list"],
+        }
+
+    def _normalize_strong_symbols(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把强势标的 raw 数据归一为标准 payload。"""
+
+        symbols: list[dict[str, Any]] = []
+        symbols.extend(self._parse_strong_fengkou(raw.get("strong_fengkou", {})))
+        symbols.extend(self._parse_interval_stats_stock(raw.get("interval_stats_stock", {})))
+        symbols.extend(self._parse_morning_bidding_list(raw.get("morning_bidding_list", {})))
+        return {
+            "dataset": "strong_symbols",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "symbols": symbols,
+            "sources": ["strong_fengkou", "interval_stats_stock", "morning_bidding_list"],
+        }
+
+    def _parse_ranked_topics(self, raw: dict[str, Any], *, kind: str) -> list[dict[str, Any]]:
+        """解析 RealRankingInfo 的 list 数组。"""
+
+        items = raw.get("list")
+        if not isinstance(items, list):
+            return []
+
+        topics: list[dict[str, Any]] = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            topics.append(
+                {
+                    "kind": kind,
+                    "topic_id": row[0],
+                    "topic_name": row[1],
+                    "score": row[2] if len(row) > 2 else None,
+                    "increase_pct": row[3] if len(row) > 3 else None,
+                    "speed_pct": row[4] if len(row) > 4 else None,
+                    "turnover": row[5] if len(row) > 5 else None,
+                    "net_inflow": row[6] if len(row) > 6 else None,
+                }
+            )
+        return topics
+
+    def _parse_fengkou_topics(self, raw: dict[str, Any], *, kind: str) -> list[dict[str, Any]]:
+        """解析 GetFengKYDPlate 的 List 数组。"""
+
+        items = raw.get("List") or raw.get("list")
+        if not isinstance(items, list):
+            return []
+
+        topics: list[dict[str, Any]] = []
+        for idx, row in enumerate(items):
+            if not isinstance(row, list) or not row:
+                continue
+            topics.append(
+                {
+                    "kind": kind,
+                    "topic_id": f"fengkou_{idx}",
+                    "topic_name": row[0],
+                    "score": row[1] if len(row) > 1 else None,
+                }
+            )
+        return topics
+
+    def _parse_stock_sector_v2(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("info")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            results.append(
+                {
+                    "kind": "stock_sector_v2",
+                    "topic_id": row[0],
+                    "topic_name": row[1],
+                    "topic_change_pct": row[2] if len(row) > 2 else None,
+                    "leader_symbol": row[3] if len(row) > 3 else None,
+                    "leader_name": row[4] if len(row) > 4 else None,
+                    "leader_change_pct": row[5] if len(row) > 5 else None,
+                }
+            )
+        return results
+
+    def _parse_theme_detail(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        if not raw:
+            return []
+        return [
+            {
+                "kind": "theme_detail",
+                "topic_id": raw.get("ID"),
+                "topic_name": raw.get("Name"),
+                "brief_intro": raw.get("BriefIntro"),
+            }
+        ]
+
+    def _parse_limit_up_reason(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("list")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                {
+                    "kind": "limit_up_reason",
+                    "topic_id": row.get("ZSCode"),
+                    "topic_name": row.get("ZSName"),
+                }
+            )
+        return results
+
+    def _parse_limit_up_info(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("StockList")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            results.append(
+                {
+                    "kind": "limit_up_info",
+                    "symbol": row[0],
+                    "name": row[1],
+                    "board_num": row[2] if len(row) > 2 else None,
+                }
+            )
+        return results
+
+    def _parse_lhb_list(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("list")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                {
+                    "kind": "lhb_list",
+                    "symbol": row.get("ID"),
+                    "name": row.get("Name"),
+                    "net_buy": row.get("BuyIn"),
+                }
+            )
+        return results
+
+    def _parse_strong_fengkou(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("List") or raw.get("list")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            results.append(
+                {
+                    "kind": "strong_fengkou",
+                    "symbol": row[0],
+                    "name": row[1],
+                    "strength_score": row[2] if len(row) > 2 else None,
+                    "change_pct": row[4] if len(row) > 4 else None,
+                    "turnover": row[5] if len(row) > 5 else None,
+                    "main_force_buy": row[8] if len(row) > 8 else None,
+                    "main_force_sell": row[9] if len(row) > 9 else None,
+                    "topic_tags": row[10] if len(row) > 10 else None,
+                }
+            )
+        return results
+
+    def _parse_interval_stats_stock(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("List")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            results.append(
+                {
+                    "kind": "interval_stats_stock",
+                    "symbol": row[0],
+                    "name": row[1],
+                    "return_pct": row[3] if len(row) > 3 else None,
+                    "net_inflow": row[6] if len(row) > 6 else None,
+                    "turnover_ratio": row[7] if len(row) > 7 else None,
+                    "topic_tags": row[10] if len(row) > 10 else None,
+                }
+            )
+        return results
+
+    def _parse_morning_bidding_list(self, raw: dict[str, Any]) -> list[dict[str, Any]]:
+        items = raw.get("info")
+        if not isinstance(items, list):
+            return []
+        results = []
+        for row in items:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            results.append(
+                {
+                    "kind": "morning_bidding_list",
+                    "symbol": row[0],
+                    "name": row[1],
+                    "rt_change_pct": row[3] if len(row) > 3 else None,
+                    "bid_net": row[6] if len(row) > 6 else None,
+                    "bid_turnover": row[8] if len(row) > 8 else None,
+                    "topic_tags": row[11] if len(row) > 11 else None,
+                }
+            )
+        return results
 
     # ================================
     # 13 个具体接口实现
@@ -470,7 +856,7 @@ class KaipanProvider:
             Day=trade_date.strftime("%Y%m%d"),
         )
 
-    def fetch_theme_detail(self, *, trade_date: date, slot: str, theme_id: str) -> dict[str, Any]:
+    def fetch_theme_detail(self, *, trade_date: date, slot: str, theme_id: str = "") -> dict[str, Any]:
         """主题详情 - InfoGet。
 
         Args:
@@ -491,7 +877,7 @@ class KaipanProvider:
             ID=theme_id,
         )
 
-    def fetch_stock_sector_v2(self, *, trade_date: date, slot: str, stock_id: str) -> dict[str, Any]:
+    def fetch_stock_sector_v2(self, *, trade_date: date, slot: str, stock_id: str = "") -> dict[str, Any]:
         """股票板块 v2 - GetFeaturedSection。
 
         Args:
@@ -539,8 +925,8 @@ class KaipanProvider:
         *,
         trade_date: date,
         slot: str,
-        start_date: date,
-        end_date: date,
+        start_date: date | None = None,
+        end_date: date | None = None,
         use_today_url: bool | None = None,
     ) -> dict[str, Any]:
         """区间统计股票 - GetInterviewsByDateStock。
@@ -560,8 +946,8 @@ class KaipanProvider:
             controller="StockLineData",
             base_url_key=self._resolve_history_or_today_url(trade_date=trade_date, use_today_url=use_today_url),
             method="POST",
-            DStart=start_date.strftime("%Y-%m-%d"),
-            DEnd=end_date.strftime("%Y-%m-%d"),
+            DStart=(start_date or trade_date).strftime("%Y-%m-%d"),
+            DEnd=(end_date or trade_date).strftime("%Y-%m-%d"),
             Type="2",
             FilterBJS="1",
             Order="1",
@@ -574,8 +960,8 @@ class KaipanProvider:
         *,
         trade_date: date,
         slot: str,
-        pid_type: int,
-        data_type: int,
+        pid_type: int = 0,
+        data_type: int = 4,
         index: int = 0,
         order: int = 1,
         st: int = 20,

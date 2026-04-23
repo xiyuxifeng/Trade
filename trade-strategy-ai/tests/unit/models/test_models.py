@@ -25,7 +25,8 @@ def test_market_data_unique_constraint_present() -> None:
 
 
 def test_article_metadata_one_to_one() -> None:
-    assert ArticleMetadata.__table__.c.article_id.unique is True
+    constraint_names = {constraint.name for constraint in ArticleMetadata.__table__.constraints}
+    assert "uq_article_metadata_article_id_version" in constraint_names
 
 
 def test_data_audit_event_table_metadata() -> None:

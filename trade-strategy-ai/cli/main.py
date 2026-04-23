@@ -86,17 +86,17 @@ evaluation:
 	# 是否“亏损即触发复盘”
 	loss_trigger: true
 
-	data:
-		# 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
-		providers: ["mock"]
-		# mock_prices 用于演示闭环，后续可接入真实行情
-		mock_prices:
-			000001.SZ: 10.0
-			510300.SH: 3.5
-		# market_data_cache_dir 用于存放 AkShare 同步后的标准化日线缓存
-		market_data_cache_dir: data/processed/market_data
+data:
+	# 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
+	providers: ["mock"]
+	# mock_prices 用于演示闭环，后续可接入真实行情
+	mock_prices:
+		000001.SZ: 10.0
+		510300.SH: 3.5
+	# market_data_cache_dir 用于存放 AkShare 同步后的标准化日线缓存
+	market_data_cache_dir: data/processed/market_data
 
-	crawl:
+crawl:
 	# 站点认证信息（按域名/站点名分组）
 	auth: {}
 	# 示例（淘股吧，建议通过环境变量注入 Cookie）：
@@ -154,7 +154,7 @@ persona:
 	# 基准日线 CSV；为空时可用 market-state-build --from-akshare 拉取
 	market_state_benchmark_csv: null
 
-	traders:
+traders:
 	- trader_id: trader_a
 		# 展示名（用于报告展示）
 		display_name: Trader A
@@ -170,6 +170,44 @@ persona:
 		# 默认止盈/止损
 		default_target_pct: 0.05
 		default_stop_pct: 0.03
+
+# API 服务配置
+api:
+	host: "0.0.0.0"
+	port: 8000
+	timeout_seconds: 300  # 5分钟，0 表示不限制
+	auth:
+		enabled: true
+		api_keys:
+			[]
+
+# Kaipan 开盘啦私有接口配置
+kaipan:
+	# 数据存储根目录
+	data_dir: data/kaipan
+	# Schema 文件目录
+	schema_dir: src/providers/kaipan_schema
+	# 可选鉴权参数（建议通过环境变量注入）
+	token: null
+	user_id: null
+	# 默认请求头，模拟 Android 客户端
+	default_headers:
+		Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+		User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)
+		Connection: Keep-Alive
+		Accept-Encoding: gzip
+	# 抓取时间表（可配置）
+	fetch_schedule:
+		pre_market: "9:25"    # 盘前
+		post_close: "17:30"   # 盘后
+	# 交易日历来源
+	trading_calendar:
+		source: akshare
+	# 简单反爬与重试策略
+	min_request_interval_seconds: 3.0
+	max_retries: 3
+	retry_backoff_seconds: [1.0, 2.0, 4.0]
+	retry_status_codes: [403, 429, 500, 502, 503, 504]
 """
 
 
@@ -676,7 +714,8 @@ def init_config(
 		raise typer.Exit(code=1)
 
 	dest.parent.mkdir(parents=True, exist_ok=True)
-	dest.write_text(_DEFAULT_CONFIG_YAML, encoding="utf-8")
+	# 将模板中的制表符归一化为空格，避免生成无效 YAML。
+	dest.write_text(_DEFAULT_CONFIG_YAML.replace("\t", "  "), encoding="utf-8")
 	typer.echo(f"Wrote config: {dest}")
 
 

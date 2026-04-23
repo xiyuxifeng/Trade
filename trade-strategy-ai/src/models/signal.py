@@ -21,6 +21,12 @@ class Signal(Base):
     position_size = Column(JSONB, nullable=True)
     stop_loss = Column(JSONB, nullable=True)
     take_profit = Column(JSONB, nullable=True)
+    trader_id = Column(String(64), nullable=True)
+    strategy_version_id = Column(String(128), nullable=True)
+    source_topic_ids = Column(JSONB, nullable=True)
+    evidence_refs = Column(JSONB, nullable=True)
+    decision_mode = Column(String(32), nullable=True)
+    evaluation_result_id = Column(String(128), nullable=True)
     rejected = Column(Boolean, default=False)
     rejection_reason = Column(Text, nullable=True)
     degraded = Column(Boolean, default=False)
@@ -47,6 +53,12 @@ class Signal(Base):
             "position_size": self.position_size,
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
+            "trader_id": self.trader_id,
+            "strategy_version_id": self.strategy_version_id,
+            "source_topic_ids": self.source_topic_ids,
+            "evidence_refs": self.evidence_refs,
+            "decision_mode": self.decision_mode,
+            "evaluation_result_id": self.evaluation_result_id,
             "rejected": self.rejected,
             "rejection_reason": self.rejection_reason,
             "degraded": self.degraded,

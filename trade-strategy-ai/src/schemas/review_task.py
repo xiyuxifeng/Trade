@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -51,6 +52,11 @@ class ReviewTaskDetails(BaseModel):
     source_idea_id: UUID
     symbol: str
     trader_id: str
+
+    # Stage 1 扩展字段：用于挂接盘后证据、归因和 ranking
+    evidence_refs: list[str] = Field(default_factory=list)
+    failure_category: str | None = None
+    ranking_features: dict[str, Any] = Field(default_factory=dict)
 
     # 评估快照（创建时固化，后续不再修改）
     evaluation_snapshot: ReviewEvaluationSnapshot

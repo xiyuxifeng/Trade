@@ -147,12 +147,14 @@ CLI 从 `config/app.yaml` 的 `kaipan` 配置节读取参数：
 kaipan:
   data_dir: data/kaipan            # 数据存储根目录
   schema_dir: src/providers/kaipan_schema  # YAML schema 目录
-  auth:
-    device_id: "your_device_id"   # 从 kaipan App 获取，必填
+  token: null                      # 可选鉴权参数，建议通过环境变量注入
+  user_id: null                    # 可选鉴权参数，建议通过环境变量注入
   fetch_schedule:
     pre_market: "9:25"             # 盘前抓取时间
     post_close: "17:30"            # 盘后抓取时间
 ```
+
+说明：`device_id` 不再作为配置项暴露，调度器和 provider 会使用代码内默认值生成。
 
 ---
 

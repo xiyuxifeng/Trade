@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
+from cli.main import _DEFAULT_CONFIG_YAML
 from src.common.config import load_app_config
 
 
@@ -91,3 +94,28 @@ kaipan:
     assert kaipan.max_retries == 3
     assert kaipan.retry_backoff_seconds == [1.0, 2.0, 4.0]
     assert kaipan.retry_status_codes == [403, 429, 500, 502, 503, 504]
+
+
+def test_init_config_template_exposes_required_top_level_sections() -> None:
+    template = yaml.safe_load(_DEFAULT_CONFIG_YAML.replace("\t", "  "))
+
+    assert sorted(template.keys()) == [
+        "api",
+        "crawl",
+        "data",
+        "database",
+        "evaluation",
+        "kaipan",
+        "llm",
+        "persona",
+        "run_mode",
+        "schedule",
+        "storage",
+        "timezone",
+        "traders",
+    ]
+    assert sorted(template["data"].keys()) == ["market_data_cache_dir", "mock_prices", "providers"]
+    assert sorted(template["crawl"].keys()) == ["auth", "sources", "throttling"]
+    assert sorted(template["api"].keys()) == ["auth", "host", "port", "timeout_seconds"]
+    assert "token" in template["kaipan"]
+    assert "user_id" in template["kaipan"]

@@ -22,6 +22,10 @@ class DataRequest(BaseModel):
     market: str = "CN"
     timeframe: str | None = None
     date_range: tuple[date | None, date | None] | None = None
+    dataset: str | None = None
+    topic_ids: list[str] = Field(default_factory=list)
+    indicator_names: list[str] = Field(default_factory=list)
+    snapshot_date: date | None = None
     fields: list[str] = Field(default_factory=list)
     constraints: dict[str, Any] = Field(default_factory=dict)
 
@@ -29,6 +33,8 @@ class DataRequest(BaseModel):
 class DataResponse(BaseModel):
     request_id: UUID
     status: DataResponseStatus
+    dataset: str | None = None
+    available_datasets: list[str] = Field(default_factory=list)
     payload: dict[str, Any] = Field(default_factory=dict)
     payload_refs: list[str] = Field(default_factory=list)
     missing_capabilities: list[str] = Field(default_factory=list)
@@ -55,6 +61,12 @@ class TradeIdea(BaseModel):
 
     position_size: float | None = None  # 0-1 fraction
     time_horizon: str | None = None
+
+    # Stage 1 追溯字段：用于连接策略版本、主题证据与决策模式
+    strategy_version_id: str | None = None
+    source_topic_ids: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(default_factory=list)
+    decision_mode: str | None = None
 
     rationale: str | None = None
     invalidation: str | None = None
@@ -101,6 +113,11 @@ class EvaluationResult(BaseModel):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     evaluations: list[IdeaEvaluation] = Field(default_factory=list)
+    # Stage 1 盘后扩展字段：用于证据包、归因和 ranking 入口
+    evidence_pack_refs: list[str] = Field(default_factory=list)
+    failure_categories: list[str] = Field(default_factory=list)
+    ranking_features: dict[str, Any] = Field(default_factory=dict)
+    postmortem_notes: list[str] = Field(default_factory=list)
     summary: list[str] = Field(default_factory=list)
 
 

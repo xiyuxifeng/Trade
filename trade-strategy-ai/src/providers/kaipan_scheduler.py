@@ -31,15 +31,6 @@ def load_kaipan_config() -> dict:
     return config.get("kaipan", {})
 
 
-def get_auth() -> dict:
-    """从配置中构造 KaipanAuth 参数字典。"""
-    cfg = load_kaipan_config()
-    auth_cfg = cfg.get("auth", {})
-    return {
-        "device_id": auth_cfg.get("device_id", ""),
-    }
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.providers.kaipan_scheduler",
@@ -82,17 +73,21 @@ def run_fetch(slot: str):
 
     trade_date = date_cls.today()
     cfg = load_kaipan_config()
-    auth_cfg = cfg.get("auth", {})
-    auth = KaipanAuth(device_id=auth_cfg.get("device_id", ""))
+    data_root = _root / cfg.get("data_dir", "data/kaipan")
+    raw_dir = data_root / "raw"
+    snapshots_dir = data_root / "snapshots"
+    schema_dir = _root / cfg.get("schema_dir", "src/providers/kaipan_schema")
+    auth = KaipanAuth()
     provider = KaipanProvider(
         auth=auth,
-        raw_dir=cfg.get("data_dir", "data/kaipan/raw"),
-        normalized_dir="data/kaipan/snapshots",
-        snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+        raw_dir=raw_dir,
+        normalized_dir=snapshots_dir,
+        snapshots_dir=snapshots_dir,
+        kaipan_config=cfg,
     )
     normalizer = KaipanNormalizer(
-        schema_dir=cfg.get("schema_dir", "src/providers/kaipan_schema"),
-        snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+        schema_dir=schema_dir,
+        snapshots_dir=snapshots_dir,
     )
 
     if slot == "09-25":
@@ -141,6 +136,11 @@ def main():
     if args.command == "fetch":
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)
         slot = args.slot
+        cfg = load_kaipan_config()
+        data_root = _root / cfg.get("data_dir", "data/kaipan")
+        raw_dir = data_root / "raw"
+        snapshots_dir = data_root / "snapshots"
+        schema_dir = _root / cfg.get("schema_dir", "src/providers/kaipan_schema")
 
         # 解析时间槽对应的接口集合
         if slot == "all":
@@ -148,14 +148,14 @@ def main():
         else:
             slots_to_fetch = [slot]
 
-        # 实例化 provider（使用 worktree 路径结构）
-        auth_dict = get_auth()
-        auth = KaipanAuth(device_id=auth_dict.get("device_id", ""))
+        # 实例化 provider（使用工作区根目录路径）
+        auth = KaipanAuth()
         provider = KaipanProvider(
             auth=auth,
-            raw_dir="trade-strategy-ai/data/kaipan/raw",
-            normalized_dir="trade-strategy-ai/data/kaipan/normalized",
-            snapshots_dir="trade-strategy-ai/data/kaipan/snapshots",
+            raw_dir=raw_dir,
+            normalized_dir=snapshots_dir,
+            snapshots_dir=snapshots_dir,
+            kaipan_config=cfg,
         )
 
         # 9:25 有 12 个接口（含竞价数据，无龙虎榜）
@@ -206,22 +206,22 @@ def main():
 
         # 抓取完成后调用 normalize_date 转换
         normalizer = KaipanNormalizer(
-            schema_dir="trade-strategy-ai/src/providers/kaipan_schema",
-            snapshots_dir="trade-strategy-ai/data/kaipan/snapshots",
+            schema_dir=schema_dir,
+            snapshots_dir=snapshots_dir,
         )
         slots_tuple = tuple(slots_to_fetch)
         norm_results = normalizer.normalize_date(trade_date.isoformat(), slots_tuple)
         print(f"[fetch] normalize 完成，结果: {norm_results}")
     elif args.command == "normalize":
-        from providers.kaipan_normalizer import KaipanNormalizer
-
         trade_date = date.today() if args.date is None else date.fromisoformat(args.date)
         slots = ("09-25", "17-30") if args.slot == "all" else (args.slot,)
 
         cfg = load_kaipan_config()
+        data_root = _root / cfg.get("data_dir", "data/kaipan")
+        snapshots_dir = data_root / "snapshots"
         normalizer = KaipanNormalizer(
-            schema_dir=cfg.get("schema_dir", "src/providers/kaipan_schema"),
-            snapshots_dir=cfg.get("data_dir", "data/kaipan/snapshots"),
+            schema_dir=_root / cfg.get("schema_dir", "src/providers/kaipan_schema"),
+            snapshots_dir=snapshots_dir,
         )
 
         results = normalizer.normalize_date(trade_date.isoformat(), slots=slots)
@@ -234,7 +234,7 @@ def main():
         import json
 
         cfg = load_kaipan_config()
-        raw_base = Path(cfg.get("data_dir", "data/kaipan/raw"))
+        raw_base = _root / cfg.get("data_dir", "data/kaipan") / "raw"
         if not raw_base.exists():
             print("status: no data yet")
             return

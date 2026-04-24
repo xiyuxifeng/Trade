@@ -73,7 +73,8 @@
       "Bash(pytest tests/unit/providers/test_fallback_provider.py -v)",
       "Bash(pytest tests/unit/providers/ -v)",
       "Bash(pytest:*)",
-      "Bash(xargs rm:*)"
+      "Bash(xargs rm:*)",
+      "Bash(find . -type d -name \"__pycache__\" -exec rm -rf {} +)"
     ]
   }
 }

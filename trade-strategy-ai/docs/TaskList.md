@@ -1126,14 +1126,15 @@
 
 ### 任务清单
 
-- [ ] `NTL-S5-001` `P1`
+- [x] `NTL-S5-001` `P1`
   目标：建立 Evidence Pack 结构。
   输入：盘前输出、行情快照、信号上下文。
-  输出：`src/evaluation/evidence_pack.py`。
-  修改范围：`src/evaluation/`。
+  输出：`src/evaluation/evidence_pack.py` + `src/models/converters.py` + `src/models/evidence_pack.py`。
+  修改范围：`src/evaluation/` + `src/models/`。
   前置依赖：Stage 4 完成。
   可并行：`NTL-S5-002`、`NTL-S5-003`。
   验收标准：任一建议都能生成证据包。
+  **完成内容**：EvidencePack dataclass（trade_idea / signal_context / market_data / strategy_version_snapshot）+ converters.py 显式转换层 + EvidencePackRecord ORM 模型。
 
 - [ ] `NTL-S5-002` `P1`
   目标：建立失败归因分类。

@@ -10,6 +10,7 @@ import pytest
 
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig, TraderConfig
+from src.market_universe.schemas import MarketUniverse, HotTopicsPayload, HotTopic
 from src.schemas.contracts import DailyReport, TradeEntry, TradeIdea
 from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus
 from src.trader_memory.schemas import TraderMemoryType
@@ -414,3 +415,61 @@ async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> Non
 
     sell_idea = next(i for i in report.ideas if i.symbol == "600001.SH")
     assert sell_idea.side == "sell"
+
+
+@pytest.mark.asyncio
+async def test_market_universe_snapshot_populated_in_signal(tmp_path: Path) -> None:
+    """NTL-S4-TD003: SignalContext.market_universe_snapshot 应被实际填充"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"600000.SH": 10.0}),
+        stage4=Stage4Config(enable=True, market_universe_slot="09-25", allow_phase0_fallback=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=[],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    # 预先保存 market_universe snapshot
+    market_universe = MarketUniverse(
+        trade_date="2026-04-20",
+        slot="09-25",
+        hot_topics=HotTopicsPayload(
+            trade_date="2026-04-20",
+            slot="09-25",
+            topics=[HotTopic(kind="concept", topic_id="AI001", topic_name="人工智能", score=85.0)],
+            sources=["test"],
+        ),
+    )
+    manager.snapshot_service.save(market_universe)
+
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:draft:v1",
+        trader_id="trader_a",
+        strategy_date=day,
+        status=StrategyVersionStatus.draft,
+        recommendations=[
+            StrategyRecommendation(symbol="600000.SH", decision="buy", confidence=0.72),
+        ],
+    )
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
+
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    # 验证信号中 market_universe_snapshot 已填充
+    idea = report.ideas[0]
+    signal_id = f"idea_{idea.idea_id}"
+    stored = manager.signal_versioning.get_version(signal_id)
+    assert stored is not None
+    assert stored.context.market_universe_snapshot is not None
+    assert stored.context.market_universe_snapshot["trade_date"] == "2026-04-20"
+    assert stored.context.market_universe_snapshot["slot"] == "09-25"
+    assert "hot_topics" in stored.context.market_universe_snapshot

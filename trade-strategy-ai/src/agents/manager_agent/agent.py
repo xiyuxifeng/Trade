@@ -20,8 +20,10 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.agents.data_agent.agent import DataAgent
 from src.agents.trader_agent.agent import TraderAgent
@@ -67,6 +69,9 @@ from src.strategy.types import (
     SynthesisMode,
 )
 from src.db.session import session_scope
+
+if TYPE_CHECKING:
+    from src.market_universe.schemas import MarketUniverse
 
 
 class ManagerAgent:
@@ -361,7 +366,12 @@ class ManagerAgent:
             details=review_details.model_dump(),
         )
 
-    def _record_ideas_as_signals(self, ideas: list["TradeIdea"], as_of_date: date) -> None:
+    def _record_ideas_as_signals(
+        self,
+        ideas: list["TradeIdea"],
+        as_of_date: date,
+        market_universe: "MarketUniverse | None" = None,
+    ) -> None:
         """将交易想法记录为信号版本，用于持久化存储和回放。
 
         P4-025: 信号输出持久化存储
@@ -410,13 +420,15 @@ class ManagerAgent:
             )
 
             # 构建上下文（NTL-S4-004: 扩展版本/快照/主题追溯字段）
+            # NTL-S4-TD003: market_universe 已透传到此处，进行序列化
+            universe_dict: dict[str, object] | None = asdict(market_universe) if market_universe else None
             context = SignalContext(
                 features_snapshot={},
                 market_state={},
                 rules_snapshot=[],
                 timestamp=datetime.combine(as_of_date, datetime.min.time()),
                 strategy_version_id=idea.strategy_version_id,
-                market_universe_snapshot=None,  # 已在 run_pre_market 加载但未透传到此处，降级到 None
+                market_universe_snapshot=universe_dict,
                 topic_source_ids=idea.source_topic_ids,
             )
 
@@ -520,7 +532,8 @@ class ManagerAgent:
                 report.risks.append("persona.enable=true but clusters_path missing or not found")
 
         # P4-025: 记录信号版本到持久化存储
-        self._record_ideas_as_signals(ideas=ideas, as_of_date=as_of_date)
+        # NTL-S4-TD003: 透传 market_universe 以便填充 SignalContext.market_universe_snapshot
+        self._record_ideas_as_signals(ideas=ideas, as_of_date=as_of_date, market_universe=market_universe)
 
         write_json(report_path, report.model_dump())
         return report

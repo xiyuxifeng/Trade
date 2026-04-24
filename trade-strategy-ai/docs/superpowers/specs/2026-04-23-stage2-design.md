@@ -112,6 +112,20 @@ class ProviderResult:
 - Schema 与 ORM 完全解耦——dataclass 约束内存结构，不绑定数据库表
 - `MarketUniverse` 是三层 payload 的顶层聚合，供 TraderAgent / StrategyAgent 消费
 
+### Schema ↔ ORM 转换路径（TD-003-b 已明确）
+
+详见 `src/models/converters.py`。转换规则：
+
+| 场景 | 存储方式 |
+|------|----------|
+| 标量字段（str/float/int/UUID） | ORM 列直写 |
+| 复杂嵌套结构（PriceSpec / PositionSize） | JSONB 列 |
+| 列表字段（rules_snapshot, triggered_rules） | JSONB 列 |
+| 完整聚合对象（SignalContext, EvidencePack） | JSONB 列 + ID 引用 |
+
+写入路径：Schema → `converters.py` → ORM 实例 → `session.add()`
+读取路径：ORM 实例 → `converters.py` → Schema dataclass
+
 ### MarketUniverse 聚合结构
 
 ```python

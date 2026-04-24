@@ -22,14 +22,29 @@ class HotTopicsBuilder:
         Args:
             provider_payload: HotTopicsProvider.normalize() 返回的 dict，
                 包含 topics list、trade_date、slot、sources。
+                当 FallbackProvider 返回 partial=True 时，
+                从 partial_payloads 中合并多个 topics 列表。
 
         Returns:
             HotTopicsPayload dataclass 实例。
         """
-        raw_topics = provider_payload.get("topics", [])
-        trade_date = provider_payload.get("trade_date", "")
-        slot = provider_payload.get("slot", "")
-        sources = provider_payload.get("sources", [])
+        # NTL-S4-TD002: 处理 FallbackProvider 返回的 partial 结果
+        if provider_payload.get("partial"):
+            partial_payloads = provider_payload.get("partial_payloads", [])
+            raw_topics = []
+            trade_date = ""
+            slot = ""
+            sources = []
+            for p in partial_payloads:
+                raw_topics.extend(p.get("topics", []))
+                trade_date = trade_date or p.get("trade_date", "")
+                slot = slot or p.get("slot", "")
+                sources.extend(p.get("sources", []))
+        else:
+            raw_topics = provider_payload.get("topics", [])
+            trade_date = provider_payload.get("trade_date", "")
+            slot = provider_payload.get("slot", "")
+            sources = provider_payload.get("sources", [])
 
         # 实例化 HotTopic，去重
         seen: set[tuple[str, str]] = set()

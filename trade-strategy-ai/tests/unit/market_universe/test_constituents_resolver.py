@@ -190,3 +190,45 @@ class TestConstituentsResolver:
 
         # 4个输入，3个去重（limit_up_info/000001 去重保留1个，000002 保留，lhb_list/000001 保留）
         assert len(result.constituents) == 3
+
+    def test_build_merges_partial_payloads(self):
+        """NTL-S4-TD002: FallbackProvider 返回 partial=True 时，合并多个 partial_payloads。"""
+        from src.market_universe.constituents_resolver import ConstituentsResolver
+
+        provider_payload = {
+            "partial": True,
+            "errors": ["provider2 timeout"],
+            "partial_payloads": [
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "constituents": [
+                        {"kind": "stock_sector_v2", "topic_id": "ZS001", "topic_name": "AI"},
+                    ],
+                    "sources": ["kaipan"],
+                },
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "constituents": [
+                        {"kind": "limit_up_info", "symbol": "000001", "name": "股票A", "board_num": 5},
+                        {"kind": "stock_sector_v2", "topic_id": "ZS001", "topic_name": "AI"},  # 重复，去重
+                    ],
+                    "sources": ["akshare"],
+                },
+            ],
+        }
+
+        resolver = ConstituentsResolver()
+        result = resolver.build(provider_payload)
+
+        # 3个输入，1个重复 → 2个
+        assert len(result.constituents) == 2
+        # stock_sector_v2 用 topic_name，limit_up_info 用 name
+        topic_names = {c.topic_name for c in result.constituents}
+        names = {c.name for c in result.constituents}
+        assert "AI" in topic_names
+        assert "股票A" in names
+        # sources 合并
+        assert "kaipan" in result.sources
+        assert "akshare" in result.sources

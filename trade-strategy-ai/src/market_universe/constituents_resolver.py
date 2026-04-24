@@ -21,14 +21,29 @@ class ConstituentsResolver:
         Args:
             provider_payload: TopicConstituentsProvider.normalize() 返回的 dict，
                 包含 constituents list、trade_date、slot、sources。
+                当 FallbackProvider 返回 partial=True 时，
+                从 partial_payloads 中合并多个 constituents 列表。
 
         Returns:
             TopicConstituentsPayload dataclass 实例。
         """
-        raw_constituents = provider_payload.get("constituents", [])
-        trade_date = provider_payload.get("trade_date", "")
-        slot = provider_payload.get("slot", "")
-        sources = provider_payload.get("sources", [])
+        # NTL-S4-TD002: 处理 FallbackProvider 返回的 partial 结果
+        if provider_payload.get("partial"):
+            partial_payloads = provider_payload.get("partial_payloads", [])
+            raw_constituents = []
+            trade_date = ""
+            slot = ""
+            sources = []
+            for p in partial_payloads:
+                raw_constituents.extend(p.get("constituents", []))
+                trade_date = trade_date or p.get("trade_date", "")
+                slot = slot or p.get("slot", "")
+                sources.extend(p.get("sources", []))
+        else:
+            raw_constituents = provider_payload.get("constituents", [])
+            trade_date = provider_payload.get("trade_date", "")
+            slot = provider_payload.get("slot", "")
+            sources = provider_payload.get("sources", [])
 
         # 实例化 TopicConstituent，去重
         seen: set[tuple[str, str | None]] = set()

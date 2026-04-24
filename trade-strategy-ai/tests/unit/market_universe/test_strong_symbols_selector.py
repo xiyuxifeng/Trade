@@ -184,3 +184,43 @@ class TestStrongSymbolsSelector:
 
         # 4个输入，3个去重（strong_fengkou/000001 去重保留1个，000002 保留，interval_stats_stock/000001 保留）
         assert len(result.symbols) == 3
+
+    def test_build_merges_partial_payloads(self):
+        """NTL-S4-TD002: FallbackProvider 返回 partial=True 时，合并多个 partial_payloads。"""
+        from src.market_universe.strong_symbols_selector import StrongSymbolsSelector
+
+        provider_payload = {
+            "partial": True,
+            "errors": ["provider2 connection failed"],
+            "partial_payloads": [
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "symbols": [
+                        {"kind": "strong_fengkou", "symbol": "000001", "name": "股票A", "strength_score": 85.0},
+                    ],
+                    "sources": ["kaipan"],
+                },
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "symbols": [
+                        {"kind": "interval_stats_stock", "symbol": "000002", "name": "股票B", "return_pct": 8.0},
+                        {"kind": "strong_fengkou", "symbol": "000001", "name": "股票A"},  # 重复，应去重
+                    ],
+                    "sources": ["akshare"],
+                },
+            ],
+        }
+
+        selector = StrongSymbolsSelector()
+        result = selector.build(provider_payload)
+
+        # 3个输入，1个重复去重 → 2个
+        assert len(result.symbols) == 2
+        symbols_by_name = {s.name for s in result.symbols}
+        assert "股票A" in symbols_by_name
+        assert "股票B" in symbols_by_name
+        # sources 合并
+        assert "kaipan" in result.sources
+        assert "akshare" in result.sources

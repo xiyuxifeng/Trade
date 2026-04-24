@@ -217,3 +217,43 @@ class TestHotTopicsBuilder:
         # 有 score 的排在前面
         assert result.topics[0].topic_name == "有分"
         assert result.topics[1].topic_name == "无分"
+
+    def test_build_merges_partial_payloads(self):
+        """NTL-S4-TD002: FallbackProvider 返回 partial=True 时，合并多个 partial_payloads。"""
+        from src.market_universe.hot_topics_builder import HotTopicsBuilder
+
+        # FallbackProvider partial 返回格式
+        provider_payload = {
+            "partial": True,
+            "errors": ["provider2 timeout"],
+            "partial_payloads": [
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "topics": [
+                        {"kind": "concept", "topic_id": "BK001", "topic_name": "AI", "score": 85.0},
+                    ],
+                    "sources": ["provider1"],
+                },
+                {
+                    "trade_date": "2026-04-23",
+                    "slot": "17-30",
+                    "topics": [
+                        {"kind": "industry", "topic_id": "HY001", "topic_name": "芯片", "score": 80.0},
+                        {"kind": "concept", "topic_id": "BK002", "topic_name": "新能源", "score": 75.0},
+                    ],
+                    "sources": ["provider2"],
+                },
+            ],
+        }
+
+        builder = HotTopicsBuilder()
+        result = builder.build(provider_payload)
+
+        # 合并后应有 3 个 topics（AI、芯片、新能源）
+        assert len(result.topics) == 3
+        assert result.trade_date == "2026-04-23"
+        assert result.slot == "17-30"
+        # sources 合并
+        assert "provider1" in result.sources
+        assert "provider2" in result.sources

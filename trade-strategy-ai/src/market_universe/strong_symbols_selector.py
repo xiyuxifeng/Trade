@@ -21,14 +21,29 @@ class StrongSymbolsSelector:
         Args:
             provider_payload: KaipanProvider.fetch_strong_symbols() 返回的 dict，
                 包含 symbols list、trade_date、slot、sources。
+                当 FallbackProvider 返回 partial=True 时，
+                从 partial_payloads 中合并多个 symbols 列表。
 
         Returns:
             StrongSymbolsPayload dataclass 实例。
         """
-        raw_symbols = provider_payload.get("symbols", [])
-        trade_date = provider_payload.get("trade_date", "")
-        slot = provider_payload.get("slot", "")
-        sources = provider_payload.get("sources", [])
+        # NTL-S4-TD002: 处理 FallbackProvider 返回的 partial 结果
+        if provider_payload.get("partial"):
+            partial_payloads = provider_payload.get("partial_payloads", [])
+            raw_symbols = []
+            trade_date = ""
+            slot = ""
+            sources = []
+            for p in partial_payloads:
+                raw_symbols.extend(p.get("symbols", []))
+                trade_date = trade_date or p.get("trade_date", "")
+                slot = slot or p.get("slot", "")
+                sources.extend(p.get("sources", []))
+        else:
+            raw_symbols = provider_payload.get("symbols", [])
+            trade_date = provider_payload.get("trade_date", "")
+            slot = provider_payload.get("slot", "")
+            sources = provider_payload.get("sources", [])
 
         # 实例化 StrongSymbol，去重（按 kind + symbol）
         seen: set[tuple[str, str | None]] = set()

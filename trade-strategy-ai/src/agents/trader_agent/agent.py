@@ -227,9 +227,19 @@ class TraderAgent:
             if last_price is None:
                 continue
 
-            entry_price = float(last_price)
-            target = entry_price * (1.0 + float(self.trader.default_target_pct))
-            stop = entry_price * (1.0 - float(self.trader.default_stop_pct))
+            # NTL-S4-TD001: sell 决策时 target/stop 镜像（做空 target 在 entry 下方，stop 在 entry 上方）
+            decision = candidate_map[symbol][0]
+            target_pct = float(self.trader.default_target_pct)
+            stop_pct = float(self.trader.default_stop_pct)
+            if decision == "sell":
+                entry_price = float(last_price)
+                target = entry_price * (1.0 - target_pct)
+                stop = entry_price * (1.0 + stop_pct)
+            else:
+                # buy / hold 均按多头逻辑
+                entry_price = float(last_price)
+                target = entry_price * (1.0 + target_pct)
+                stop = entry_price * (1.0 - stop_pct)
 
             if idea_mode == "strategy":
                 rationale = f"Stage4: strategy-based idea from version {strategy_version.version_id}"
@@ -253,7 +263,7 @@ class TraderAgent:
                 rationale += memory_hint
 
             # === confidence 计算 ===
-            decision, strategy_confidence = candidate_map[symbol]
+            _, strategy_confidence = candidate_map[symbol]
             if idea_mode == "strategy":
                 # Stage 4 路径：优先使用策略版本的 confidence
                 confidence = strategy_confidence

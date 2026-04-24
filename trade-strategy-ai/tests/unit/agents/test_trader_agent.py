@@ -261,3 +261,52 @@ async def test_generate_trade_ideas_phase0_fallback_when_no_strategy_version() -
     assert ideas[0].strategy_version_id is None
     # confidence 走 Phase 0 启发式（0.3）
     assert ideas[0].confidence == 0.3
+
+
+@pytest.mark.asyncio
+async def test_sell_decision_mirrors_target_and_stop() -> None:
+    """NTL-S4-TD001: sell 决策时 target 在 entry 下方，stop 在 entry 上方"""
+    trader = TraderConfig(
+        trader_id="trader_a",
+        display_name="Trader A",
+        watchlist=["600000.SH"],
+        default_target_pct=0.05,   # 5%
+        default_stop_pct=0.03,     # 3%
+    )
+    agent = TraderAgent(trader=trader)
+
+    data_agent = SimpleNamespace(
+        handle=AsyncMock(
+            return_value=DataResponse(
+                request_id="00000000-0000-0000-0000-000000000000",
+                status=DataResponseStatus.ok,
+                payload={"last_price": {"600000.SH": 10.0}},
+            )
+        )
+    )
+
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-24:draft:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 24),
+        status=StrategyVersionStatus.draft,
+        recommendations=[
+            # decision="sell"，entry=10.0
+            # target 应在下方: 10.0 * (1 - 0.05) = 9.5
+            # stop 应在上方:   10.0 * (1 + 0.03) = 10.3
+            StrategyRecommendation(symbol="600000.SH", decision="sell", confidence=0.65),
+        ],
+    )
+
+    ideas = await agent.generate_trade_ideas(
+        as_of_date=date(2026, 4, 24),
+        data_agent=data_agent,
+        strategy_version=strategy_version,
+    )
+
+    assert len(ideas) == 1
+    idea = ideas[0]
+    assert idea.side == "sell"
+    assert idea.entry.price == 10.0
+    assert idea.target_price == 9.5    # 10.0 * (1 - 0.05)
+    assert idea.stop_loss_price == 10.3  # 10.0 * (1 + 0.03)

@@ -9,8 +9,9 @@ import json
 import pytest
 
 from src.agents.manager_agent.agent import ManagerAgent
-from src.common.config import AppConfig, DataConfig, StorageConfig, TraderConfig
+from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig, TraderConfig
 from src.schemas.contracts import DailyReport, TradeEntry, TradeIdea
+from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus
 from src.trader_memory.schemas import TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 from src.strategy.types import SignalSide, SynthesisMode, RawSignal, Signal
@@ -142,7 +143,7 @@ async def test_manager_records_ideas_as_signals(tmp_path: Path) -> None:
     assert stored is not None
     assert stored.signal.signal_id == signal_id
     assert stored.signal.symbol == "000001.SZ"
-    assert stored.signal.side == SignalSide.HOLD
+    assert stored.signal.side == SignalSide.BUY  # NTL-S4-002: side 来自 idea.side（默认 "buy"）
     assert stored.signal.confidence > 0
     assert stored.signal.metadata["trader_id"] == "trader_a"
     assert stored.signal.metadata["target_price"] == 12.6  # 12.0 * 1.05
@@ -222,3 +223,194 @@ async def test_evaluate_signal_success(tmp_path: Path) -> None:
             result = await manager.evaluate_signal(trade_idea, market_data)
             assert result is not None
             assert result.side == SignalSide.BUY
+
+
+# === NTL-S4-011: 盘前链路回归测试 ===
+
+@pytest.mark.asyncio
+async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
+    """NTL-S4-011: Stage 4 路径下，TraderAgent 接收 strategy_version 并派生候选标的"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"600000.SH": 10.0, "600001.SH": 8.0}),
+        stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=["000001.SZ"],  # Phase 0 候选
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    # 构造一个 strategy_version（含 recommendations）
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:draft:v1",
+        trader_id="trader_a",
+        strategy_date=day,
+        status=StrategyVersionStatus.draft,
+        recommendations=[
+            StrategyRecommendation(symbol="600000.SH", decision="buy", confidence=0.72),
+            StrategyRecommendation(symbol="600001.SH", decision="hold", confidence=0.65),
+        ],
+    )
+
+    # Mock StrategyLibraryService.get_current_released_version
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
+
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    # Stage 4 路径：候选来自 strategy_version.recommendations，不是 watchlist
+    symbols = {idea.symbol for idea in report.ideas}
+    assert symbols == {"600000.SH", "600001.SH"}
+    # watchlist 中的 000001.SZ 不在候选中
+    assert "000001.SZ" not in symbols
+
+
+@pytest.mark.asyncio
+async def test_phase0_fallback_when_no_strategy_version(tmp_path: Path) -> None:
+    """NTL-S4-011: Phase 0 降级路径：strategy_version 不可用时使用 watchlist"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"000001.SZ": 12.0}),
+        stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=["000001.SZ"],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    # Mock StrategyLibraryService 抛出异常（模拟 DB 不可用）
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+
+    # 不应抛出异常，降级到 Phase 0
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    # Phase 0 路径：候选来自 watchlist
+    assert len(report.ideas) == 1
+    assert report.ideas[0].symbol == "000001.SZ"
+    assert report.ideas[0].strategy_version_id is None
+
+
+@pytest.mark.asyncio
+async def test_allow_phase0_false_skips_trader(tmp_path: Path) -> None:
+    """NTL-S4-011: allow_phase0_fallback=False 时，strategy_version 不可用则跳过 trader"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"000001.SZ": 12.0}),
+        stage4=Stage4Config(enable=True, allow_phase0_fallback=False),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=["000001.SZ"],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    # Mock StrategyLibraryService 抛出异常
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+
+    # 不应抛出异常，但 trader 被跳过（无 ideas）
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+    assert len(report.ideas) == 0
+
+
+@pytest.mark.asyncio
+async def test_daily_report_includes_strategy_version_ids(tmp_path: Path) -> None:
+    """NTL-S4-011: DailyReport.strategy_version_ids 包含本次使用的策略版本"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"600000.SH": 10.0}),
+        stage4=Stage4Config(enable=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=[],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:released:v2",
+        trader_id="trader_a",
+        strategy_date=day,
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="600000.SH", decision="buy", confidence=0.72),
+        ],
+    )
+
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
+
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    # strategy_version_ids 应包含本次使用的版本 ID
+    assert "trader_a:2026-04-20:released:v2" in report.strategy_version_ids
+
+
+@pytest.mark.asyncio
+async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> None:
+    """NTL-S4-011: StrategyVersion.recommendations 的 decision 正确传递到 TradeIdea.side"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"600000.SH": 10.0, "600001.SH": 9.0}),
+        stage4=Stage4Config(enable=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=[],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 20)
+
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:draft:v1",
+        trader_id="trader_a",
+        strategy_date=day,
+        status=StrategyVersionStatus.draft,
+        recommendations=[
+            StrategyRecommendation(symbol="600000.SH", decision="buy", confidence=0.72),
+            StrategyRecommendation(symbol="600001.SH", decision="sell", confidence=0.55),
+        ],
+    )
+
+    from unittest.mock import AsyncMock
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
+
+    report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    buy_idea = next(i for i in report.ideas if i.symbol == "600000.SH")
+    assert buy_idea.side == "buy"
+
+    sell_idea = next(i for i in report.ideas if i.symbol == "600001.SH")
+    assert sell_idea.side == "sell"

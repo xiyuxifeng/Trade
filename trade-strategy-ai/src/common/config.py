@@ -152,6 +152,17 @@ class PersonaConfig(BaseModel):
     market_state_benchmark_csv: str | None = None
 
 
+class Stage4Config(BaseModel):
+    """Stage 4 盘前主链路配置（NTL-S4-009）。
+
+    控制是否启用新版盘前链路（策略版本 + 候选池快照）。
+    当 enable=False 时，降级到 Phase 0 兼容路径（watchlist + last_price）。
+    """
+
+    enable: bool = True  # 默认启用 Stage 4 路径
+    market_universe_slot: str = "09-25"  # 候选池快照时段
+    allow_phase0_fallback: bool = True  # 允许在策略版本不可用时降级到 Phase 0
+
 class KaipanConfig(BaseModel):
     """开盘啦私有接口运行配置。"""
 
@@ -192,6 +203,7 @@ class AppConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
+    stage4: Stage4Config = Field(default_factory=Stage4Config)
     api: ApiConfig = Field(default_factory=ApiConfig)
     kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
 

@@ -995,7 +995,7 @@
 
 ### 任务清单
 
-- [ ] `NTL-S4-001` `P1`
+- [x] `NTL-S4-001` `P1` ✅ 2026-04-24
   目标：重构 `TraderAgent` 输入。
   输入：策略版本、强势池、画像、记忆。
   输出：可消费新输入的 `TraderAgent`。
@@ -1003,8 +1003,9 @@
   前置依赖：Stage 2、Stage 3 完成。
   可并行：`NTL-S4-003`、`NTL-S4-004`。
   验收标准：TraderAgent 不再以 watchlist 为核心输入。
+  完成情况：新增 strategy_version + market_universe 参数；新增 _candidates_from_strategy/_strong_symbol_hint 方法；Phase 0 降级路径完整保留；5 tests PASS。
 
-- [ ] `NTL-S4-002` `P1`
+- [x] `NTL-S4-002` `P1` ✅ 2026-04-24
   目标：支持 `buy / sell / hold` 三类决策。
   输入：新 TraderAgent。
   输出：完整决策类型。
@@ -1012,8 +1013,9 @@
   前置依赖：`NTL-S4-001`。
   可并行：无。
   验收标准：盘前输出不再只有单一建议路径。
+  完成情况：移除 _candidates_from_strategy 对 sell 的过滤；buy/hold/sell 三类决策全输出；TradeIdea.side 正确传递；测试断言更新（HOLD → BUY）。
 
-- [ ] `NTL-S4-003` `P1`
+- [x] `NTL-S4-003` `P1` ✅ 2026-04-24
   目标：扩展 `StrategyAgent` 支持版本化规则快照。
   输入：策略版本库。
   输出：版本化规则评估逻辑。
@@ -1021,8 +1023,9 @@
   前置依赖：Stage 3 完成。
   可并行：`NTL-S4-001`、`NTL-S4-004`。
   验收标准：StrategyAgent 评估基于策略版本而不是静态模板。
+  完成情况：StrategyVersion 新增 rules_snapshot 字段；generate_raw_signal 新增 strategy_version 参数；规则来源判断逻辑实现；39 tests PASS。
 
-- [ ] `NTL-S4-004` `P1`
+- [x] `NTL-S4-004` `P1` ✅ 2026-04-24
   目标：扩展信号类型上下文。
   输入：现有 `src/strategy/types.py`。
   输出：新增版本、快照、主题来源字段。
@@ -1030,8 +1033,9 @@
   前置依赖：Stage 3 完成。
   可并行：`NTL-S4-001`、`NTL-S4-003`。
   验收标准：信号上下文足以支撑追溯。
+  完成情况：SignalContext 新增 strategy_version_id/market_universe_snapshot/topic_source_ids 字段；Signal 新增 strategy_version_id 字段；8 tests PASS。
 
-- [ ] `NTL-S4-005` `P1`
+- [x] `NTL-S4-005` `P1` ✅ 2026-04-24
   目标：扩展 `signal_version` 持久化完整上下文。
   输入：扩展后的 signal 类型。
   输出：完整 signal 版本持久化能力。
@@ -1039,6 +1043,7 @@
   前置依赖：`NTL-S4-004`。
   可并行：`NTL-S4-006`。
   验收标准：能重放某次盘前建议的完整上下文。
+  完成情况：_signal_to_dict/_dict_to_signal 新增 strategy_version_id；_context_to_dict/_dict_to_context 新增 strategy_version_id/market_universe_snapshot/topic_source_ids；57 tests PASS。
 
 - [ ] `NTL-S4-006` `P1`
   目标：重构 `ManagerAgent` 接入策略版本与候选池快照。
@@ -1048,17 +1053,19 @@
   前置依赖：`NTL-S4-001`、`NTL-S4-003`、Stage 2、Stage 3 完成。
   可并行：`NTL-S4-007`。
   验收标准：Manager 能编排新版盘前链路。
+  完成情况：新增 StrategyLibraryService + SnapshotService 依赖；run_pre_market 重构（market_universe 共享加载、strategy_version per-trader 加载）；_record_ideas_as_signals 更新（side 映射、SignalContext 扩展）；Phase 0 降级完整保留；5 manager tests PASS，合计 57 tests PASS。
 
-- [ ] `NTL-S4-007` `P1`
+- [x] `NTL-S4-007` `P1` ✅ 2026-04-24
   目标：引入定向深挖 DataRequest 规划。
   输入：Manager 编排逻辑。
   输出：按需要发起二次取数的规划逻辑。
-  修改范围：`src/agents/manager_agent/agent.py` 或 service 层。
+  修改范围：`src/agents/manager_agent/agent.py`。
   前置依赖：`NTL-S4-006`。
   可并行：`NTL-S4-008`。
   验收标准：盘前取数不再只是固定模板。
+  完成情况：新增 _plan_data_requests 方法，从 rules_snapshot 条件中提取字段并映射到 dataset；run_pre_market 集成定向深挖逻辑，当 strategy_version 存在且有 rules_snapshot 时自动发起 indicators/ohlcv_1d 等额外取数；57 tests PASS。
 
-- [ ] `NTL-S4-008` `P1`
+- [x] `NTL-S4-008` `P1` ✅ 2026-04-24
   目标：盘前输出增加策略版本和证据追踪字段。
   输入：扩展后的 `TradeIdea`。
   输出：完整结构化输出。
@@ -1066,8 +1073,9 @@
   前置依赖：`NTL-S4-006`、`NTL-S1-004`。
   可并行：无。
   验收标准：盘前建议可直接追溯版本与证据。
+  完成情况：TradeIdea 新增 source_recommendation_idx 字段（来源 recommendation 索引）；DailyReport 新增 strategy_version_ids 字段（报告级版本追溯）；run_pre_market 收集 used_strategy_version_ids 并传入 DailyReport；57 tests PASS。
 
-- [ ] `NTL-S4-009` `P1`
+- [x] `NTL-S4-009` `P1` ✅ 2026-04-24
   目标：下线旧 `watchlist + last_price` 主路径地位。
   输入：新版盘前链路。
   输出：旧路径降级为兼容或 fallback。
@@ -1075,8 +1083,9 @@
   前置依赖：`NTL-S4-006`、`NTL-S4-008`。
   可并行：`NTL-S4-010`。
   验收标准：主路径已经切换到快照 + 版本方案。
+  完成情况：新增 Stage4Config（enable=True, market_universe_slot, allow_phase0_fallback）；run_pre_market 受 stage4.enable 控制，allow_phase0_fallback=False 时跳过 trader 而非降级；57 tests PASS。
 
-- [ ] `NTL-S4-010` `P1`
+- [x] `NTL-S4-010` `P1` ✅ 2026-04-24
   目标：拆分 `ManagerAgent` 中膨胀的编排逻辑。
   输入：现有与新版 Manager 实现。
   输出：service 层或辅助模块。
@@ -1084,8 +1093,9 @@
   前置依赖：`NTL-S4-006`。
   可并行：`NTL-S4-009`。
   验收标准：Manager 只保留编排，不继续承担过多业务逻辑。
+  完成情况：新增 `src/agents/manager_agent/premarket_service.py`（PreMarketService）；将 per-trader 编排逻辑（策略版本加载/定向深挖/信号评估/missing symbols）提取到 `PreMarketService.run_for_trader`；`run_pre_market` 简化为循环调用 service；57 tests PASS。
 
-- [ ] `NTL-S4-011` `P1`
+- [x] `NTL-S4-011` `P1` ✅ 2026-04-24
   目标：补盘前链路回归测试。
   输入：新版盘前主链路。
   输出：回归测试或稳定的集成验证。
@@ -1093,6 +1103,7 @@
   前置依赖：`NTL-S4-008`、`NTL-S4-009`。
   可并行：无。
   验收标准：至少一条完整盘前流程可重复验证。
+  完成情况：新增 5 个回归测试（test_stage4_path_with_strategy_version / test_phase0_fallback_when_no_strategy_version / test_allow_phase0_false_skips_trader / test_daily_report_includes_strategy_version_ids / test_trade_idea_side_reflects_strategy_decision）；覆盖 Stage 4 路径、Phase 0 降级、allow_phase0_fallback=False 跳过逻辑、DailyReport.strategy_version_ids 追溯、TradeIdea.side 决策传递；10/10 manager tests PASS。
 
 ### Stage 4 完成标准
 

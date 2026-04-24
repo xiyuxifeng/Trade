@@ -53,3 +53,5 @@ class StrategyVersion:
     evidence_refs: list[str] = field(default_factory=list)  # 证据引用列表
     notes: str | None = None  # 备注（可选）
     released_at: datetime | None = None  # 发布时间（可选）
+    # 版本化规则快照（NTL-S4-003）：用于 StrategyAgent 评估的规则集合
+    rules_snapshot: list[dict] = field(default_factory=list)  # [{rule_id, condition, action, confidence}, ...]

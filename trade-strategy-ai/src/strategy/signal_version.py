@@ -126,6 +126,7 @@ class SignalVersioning:
                 "value": signal.position_size.value if signal.position_size else None,
             } if signal.position_size else None,
             "version": signal.version,
+            "strategy_version_id": signal.strategy_version_id,  # NTL-S4-004
             "metadata": signal.metadata,
         }
 
@@ -136,6 +137,9 @@ class SignalVersioning:
             "market_state": context.market_state,
             "rules_snapshot": context.rules_snapshot,
             "timestamp": context.timestamp.isoformat() if context.timestamp else None,
+            "strategy_version_id": context.strategy_version_id,  # NTL-S4-004
+            "market_universe_snapshot": context.market_universe_snapshot,  # NTL-S4-004
+            "topic_source_ids": context.topic_source_ids,  # NTL-S4-004
         }
 
     def _dict_to_signal(self, data: dict) -> Signal:
@@ -153,6 +157,7 @@ class SignalVersioning:
             entry_price=PriceSpec(**data["entry_price"]) if data["entry_price"] else None,
             position_size=PositionSize(**data["position_size"]) if data["position_size"] else None,
             version=data.get("version", "v1"),
+            strategy_version_id=data.get("strategy_version_id"),  # NTL-S4-004
             metadata=data.get("metadata", {}),
         )
 
@@ -163,4 +168,7 @@ class SignalVersioning:
             market_state=data["market_state"],
             rules_snapshot=data["rules_snapshot"],
             timestamp=datetime.fromisoformat(data["timestamp"]) if data["timestamp"] else datetime.now(),
+            strategy_version_id=data.get("strategy_version_id"),  # NTL-S4-004
+            market_universe_snapshot=data.get("market_universe_snapshot"),  # NTL-S4-004
+            topic_source_ids=data.get("topic_source_ids", []),  # NTL-S4-004
         )

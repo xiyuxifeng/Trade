@@ -94,16 +94,28 @@ class Signal:
     stop_loss: Any = None  # StopLossLevel from risk module
     take_profit: Any = None  # list[TakeProfitLevel] from risk module
     version: str = "v1"
+    # 策略版本追溯（NTL-S4-004）
+    strategy_version_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class SignalContext:
-    """信号生成上下文（用于版本控制）"""
+    """信号生成上下文（用于版本控制，NTL-S4-004 扩展）。
+
+    扩展字段：
+    - strategy_version_id：生成该信号所使用的策略版本 ID
+    - market_universe_snapshot：市场候选池快照摘要（hot_topics / strong_symbols）
+    - topic_source_ids：该信号关联的主题 ID 列表
+    """
     features_snapshot: dict[str, Any]
     market_state: dict[str, Any]
     rules_snapshot: list[dict[str, Any]]
     timestamp: datetime
+    # 版本化追溯字段（NTL-S4-004）
+    strategy_version_id: str | None = None  # 策略版本 ID
+    market_universe_snapshot: dict[str, Any] | None = None  # 候选池快照摘要
+    topic_source_ids: list[str] = field(default_factory=list)  # 关联的主题 ID 列表
 
 
 @dataclass

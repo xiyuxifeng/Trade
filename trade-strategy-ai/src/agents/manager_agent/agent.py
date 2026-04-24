@@ -54,6 +54,8 @@ from src.trader_profile.service import default_profiles_path, load_trader_profil
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 from src.market_data.service import MarketDataCache
+from src.market_universe.snapshot_service import SnapshotService
+from src.strategy_library.service import StrategyLibraryService
 from src.strategy.signal_version import SignalVersioning
 from src.strategy.types import (
     PriceSpec,
@@ -64,6 +66,7 @@ from src.strategy.types import (
     SignalSide,
     SynthesisMode,
 )
+from src.db.session import session_scope
 
 
 class ManagerAgent:
@@ -91,6 +94,10 @@ class ManagerAgent:
         self.data_agent = DataAgent(config=config)
         self.strategy_agent = StrategyAgent()
         self.risk_agent = RiskAgent()
+
+        # Stage 4 新增 service（NTL-S4-006）
+        self.strategy_library_service = StrategyLibraryService()
+        self.snapshot_service = SnapshotService()
 
         # 信号版本控制 - 记录所有生成的交易想法
         self.signal_versioning = SignalVersioning(
@@ -203,6 +210,78 @@ class ManagerAgent:
     def _append_task(self, task: AgentTask) -> None:
         append_jsonl(self.tasks_path, task.model_dump())
 
+    def _plan_data_requests(
+        self,
+        strategy_version: "StrategyVersion",
+        candidate_symbols: list[str],
+    ) -> dict[str, Any]:
+        """分析 rules_snapshot 中引用的字段，决定需要发起哪些额外 DataRequest。
+
+        NTL-S4-007 定向深挖：
+        - 从 rules_snapshot 的 condition 表达式中提取字段名（如 rsi、macd、volume）
+        - 将字段名映射到 DataRequest 支持的 fields（indicators、ohlcv_1d 等）
+        - 返回需要发起额外取数的 fields 列表
+
+        Args:
+            strategy_version: 策略版本（含 rules_snapshot）
+            candidate_symbols: 候选标的列表
+
+        Returns:
+            dict，key 是 dataset，value 是需要的 fields 列表
+        """
+        from src.strategy_library.schemas import StrategyVersion
+
+        # 规则字段 → dataset 映射
+        FIELD_TO_DATASET: dict[str, str] = {
+            # 技术指标
+            "rsi": "indicators",
+            "macd": "indicators",
+            "bollinger": "indicators",
+            "atr": "indicators",
+            "kdj": "indicators",
+            "cci": "indicators",
+            "obv": "indicators",
+            # 行情数据
+            "close": "ohlcv_1d",
+            "open": "ohlcv_1d",
+            "high": "ohlcv_1d",
+            "low": "ohlcv_1d",
+            "volume": "ohlcv_1d",
+            "turnover": "ohlcv_1d",
+        }
+
+        needed_datasets: dict[str, set[str]] = {}
+
+        for rule in (strategy_version.rules_snapshot or []):
+            condition = rule.get("condition", {})
+            # condition 可能是 dict 或 string
+            if isinstance(condition, dict):
+                # 从 condition dict 中提取字段（简化处理：遍历所有 value）
+                self._extract_fields_from_condition(condition, FIELD_TO_DATASET, needed_datasets)
+            elif isinstance(condition, str):
+                # 从字符串中提取字段名（简化正则匹配）
+                import re
+                for field, dataset in FIELD_TO_DATASET.items():
+                    if field in condition.lower():
+                        needed_datasets.setdefault(dataset, set()).add(field)
+
+        return {dataset: list(fields) for dataset, fields in needed_datasets.items()}
+
+    def _extract_fields_from_condition(
+        self,
+        condition: dict[str, Any],
+        field_map: dict[str, str],
+        result: dict[str, set[str]],
+    ) -> None:
+        """递归从 condition dict 中提取字段名。"""
+        for value in condition.values():
+            if isinstance(value, dict):
+                self._extract_fields_from_condition(value, field_map, result)
+            elif isinstance(value, str):
+                for field, dataset in field_map.items():
+                    if field in value.lower():
+                        result.setdefault(dataset, set()).add(field)
+
     def _append_review_memory(
         self,
         *,
@@ -292,10 +371,14 @@ class ManagerAgent:
             signal_id = f"idea_{idea.idea_id}"
 
             # 将 TradeIdea 映射为 Signal
+            # side 字段：使用 idea.side（buy/hold/sell），映射到 SignalSide 枚举
+            side_map = {"buy": SignalSide.BUY, "sell": SignalSide.SELL, "hold": SignalSide.HOLD}
+            signal_side = side_map.get(str(idea.side).lower(), SignalSide.HOLD)
+
             signal = Signal(
                 signal_id=signal_id,
                 symbol=idea.symbol,
-                side=SignalSide.HOLD,  # TradeIdea 不区分买卖方向，统一为 HOLD
+                side=signal_side,
                 confidence=idea.confidence or 0.0,
                 timestamp=datetime.combine(as_of_date, datetime.min.time()),
                 triggered_rules=[idea.trader_id],  # 交易员 ID 作为触发规则标记
@@ -308,6 +391,7 @@ class ManagerAgent:
                 stop_loss=None,
                 take_profit=None,
                 version="v1",
+                strategy_version_id=idea.strategy_version_id,  # NTL-S4-004: 策略版本追溯
                 metadata={
                     "idea_id": str(idea.idea_id),
                     "trader_id": idea.trader_id,
@@ -320,15 +404,20 @@ class ManagerAgent:
                     "style_score": idea.style_score,
                     "style_reasons": idea.style_reasons or [],
                     "as_of_date": as_of_date.isoformat(),
+                    "source_topic_ids": idea.source_topic_ids,
+                    "evidence_refs": idea.evidence_refs,
                 },
             )
 
-            # 构建上下文
+            # 构建上下文（NTL-S4-004: 扩展版本/快照/主题追溯字段）
             context = SignalContext(
                 features_snapshot={},
                 market_state={},
                 rules_snapshot=[],
                 timestamp=datetime.combine(as_of_date, datetime.min.time()),
+                strategy_version_id=idea.strategy_version_id,
+                market_universe_snapshot=None,  # 已在 run_pre_market 加载但未透传到此处，降级到 None
+                topic_source_ids=idea.source_topic_ids,
             )
 
             # 记录信号版本
@@ -344,42 +433,50 @@ class ManagerAgent:
             payload = read_json(report_path)
             return DailyReport.model_validate(payload)
 
+        # === Stage 4 路径：尝试加载候选池快照（所有 trader 共享同一快照）===
+        # NTL-S4-009: stage4.enable 控制是否使用新版盘前链路
+        market_universe = None
+        if self.config.stage4.enable:
+            try:
+                slot = self.config.stage4.market_universe_slot
+                market_universe = self.snapshot_service.load(as_of_date.isoformat(), slot)
+            except Exception:  # noqa: BLE001
+                self.logger.warning("failed to load market universe snapshot, Stage 4 path disabled")
+
         ideas = []
+        used_strategy_version_ids: list[str] = []  # NTL-S4-008: 追踪本次使用的策略版本
+
+        # === NTL-S4-010: 委托 PreMarketService 处理 per-trader 编排逻辑 ===
+        from src.agents.manager_agent.premarket_service import PreMarketService
+        premarket_svc = PreMarketService(
+            data_agent=self.data_agent,
+            strategy_agent=self.strategy_agent,
+            risk_agent=self.risk_agent,
+            memory_store=self.memory_store,
+            trader_profiles=self.trader_profiles,
+            config=self.config,
+            snapshot_service=self.snapshot_service,
+            strategy_library_service=self.strategy_library_service,
+        )
+
         for trader_cfg in self.config.traders:
-            trader = TraderAgent(
-                trader=trader_cfg,
-                memory_store=self.memory_store,
-                trader_profile=self.trader_profiles.get(trader_cfg.trader_id),
-            )
-            trader_ideas = await trader.generate_trade_ideas(
+            result = await premarket_svc.run_for_trader(
+                trader_cfg=trader_cfg,
+                market_universe=market_universe,
                 as_of_date=as_of_date,
-                data_agent=self.data_agent,
             )
-            ideas.extend(trader_ideas)
-
-            # P4-024: 评估每个想法
-            evaluated_signals = []
-            for idea in trader_ideas:
-                signal = await self.evaluate_signal(idea, {})
-                if signal:
-                    evaluated_signals.append(signal)
-
-            # generate tasks for missing price data in watchlist
-            missing_symbols = [s for s in trader_cfg.watchlist if s not in self.config.data.mock_prices]
-            for s in missing_symbols:
-                self._append_task(
-                    AgentTask(
-                        type="data_missing",
-                        title=f"Missing mock price for {s}",
-                        trader_id=trader_cfg.trader_id,
-                        details={"symbol": s, "field": "last_price"},
-                    )
-                )
+            ideas.extend(result.ideas)
+            if result.strategy_version_id:
+                used_strategy_version_ids.append(result.strategy_version_id)
+            # 记录 missing symbols 任务
+            for task in result.missing_symbol_tasks:
+                self._append_task(task)
 
         report = DailyReport(
             as_of_date=as_of_date,
             ideas=ideas,
             highlights=[f"Generated {len(ideas)} trade ideas"],
+            strategy_version_ids=list(dict.fromkeys(used_strategy_version_ids)),  # NTL-S4-008: 去重后保留顺序
         )
 
         # Optional: persona style routing (Phase 1 MVP)

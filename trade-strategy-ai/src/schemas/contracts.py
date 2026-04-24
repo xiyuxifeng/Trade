@@ -67,6 +67,8 @@ class TradeIdea(BaseModel):
     source_topic_ids: list[str] = Field(default_factory=list)
     evidence_refs: list[str] = Field(default_factory=list)
     decision_mode: str | None = None
+    # NTL-S4-008 新增：来源追踪
+    source_recommendation_idx: int | None = None  # 来源 recommendation 在版本中的索引位置
 
     rationale: str | None = None
     invalidation: str | None = None
@@ -88,7 +90,8 @@ class DailyReport(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
 
-
+    # NTL-S4-008: 盘前报告级策略版本追溯
+    strategy_version_ids: list[str] = Field(default_factory=list)  # 本次生成所用的策略版本 ID 列表
 class EvaluationRequest(BaseModel):
     request_id: UUID = Field(default_factory=uuid4)
     trader_id: str

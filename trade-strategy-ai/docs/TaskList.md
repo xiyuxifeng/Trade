@@ -1218,7 +1218,7 @@
   验收标准：每条盘前建议都能生成对应证据包。
   完成情况：新增 StrategyLibraryRepository.get_by_version_id + StrategyLibraryService.get_version；manager_agent 新增 5 个辅助方法（_generate_evidence_pack / _save_evidence_pack / _load_signal_context / _fetch_full_market_data / _load_strategy_version_snapshot）；run_after_close 中调用 EvidencePack 生成并持久化到 JSON；postmortem_tasks 从 JSON 加载；95 tests PASS。
 
-- [ ] `NTL-S5-010` `P1`
+- [x] `NTL-S5-010` `P1`
   目标：升级盘后评分口径。
   输入：新评估 schema、行情数据。
   输出：支持 `MFE / MAE / 规则命中 / 前置条件违背`。
@@ -1226,6 +1226,7 @@
   前置依赖：`NTL-S5-001`、`NTL-S5-002`、`NTL-S1-005`。
   可并行：`NTL-S5-009`、`NTL-S5-011`。
   验收标准：盘后评估不再只依赖当前价格。
+  完成情况：新增 `metrics_calculator.py`（compute_mfe_mae_return + rules_hit 提取）；`postmortem_service.py` 集成计算并增强归因逻辑（亏损 + rules_hit 非空 → RULE_PRECONDITION_FAILED）；109 tests PASS。
 
 - [ ] `NTL-S5-011` `P1`
   目标：在盘后生成 ranking。
@@ -1501,6 +1502,17 @@
 
 - 已形成“正式版本 + 候选优化版本”的双轨机制。
 - 关键链路可观察、可告警、可查询、可回归。
+
+---
+
+### Stage 8. 实际市场约束
+
+- [ ] 增加实际市场约束
+
+1. 主板（沪市、深市）涨停板定义 普通股票‌：‌±10‌%，科创板股票‌：‌±20%‌，创业板股票‌：‌±20%定义
+2. 一字涨停板无法买入成交， 除非盘中开板，如果买入的话可以按涨停价格计算
+3. 一字跌停板无法卖出成交， 除非盘中开板，如果卖出的话可以按跌停价格计算
+4. 如果以开盘价格买入和卖出 需要按照这个规则计算成交价: A股市场沪深主板、科创板、创业板的限价申报价格不得高于基准价格的 102% 且不得低于 98%，北交所则为 105% 和 95%
 
 ---
 

@@ -309,28 +309,24 @@ class PostmortemService:
         market_data: dict,
         auto_attribution: dict,
     ) -> str:
-        """构造 LLM 归因 Prompt（Option A: 完整上下文）。"""
+        """从 prompts/llm_attribution.md 加载模板并填充变量。"""
         bars = market_data.get("bars", [])
         bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "无市场数据"
 
-        return f"""## 交易想法
-- 标的: {trade_idea.get('symbol', 'N/A')}
-- 方向: {trade_idea.get('side', 'N/A')}
-- 入场价格: {trade_idea.get('entry', {})}
-- 目标价格: {trade_idea.get('target', 'N/A')}
-- 止损价格: {trade_idea.get('stop_loss', 'N/A')}
+        entry = trade_idea.get("entry", {})
+        if isinstance(entry, dict):
+            entry_str = json.dumps(entry, ensure_ascii=False, default=str)
+        else:
+            entry_str = str(entry)
 
-## 市场数据（1d 日线）
-{bars_str}
-
-## 自动归因结果（auto）
-- 原因: {auto_attribution.get('reason', 'N/A')}
-- 置信度: {auto_attribution.get('confidence', 0.0)}
-
-## 任务
-分析上述交易失败的根本原因，给出修正后的归因。如果自动归因准确，确认即可。
-如果自动归因有误，给出修正原因。
-
-请以 JSON 格式返回：
-{{"reason": "归因原因", "corrected_reason": "修正后原因（如有）", "confidence": 0.0-1.0}}
-"""
+        # 加载模板并替换占位符
+        template = _load_prompt("prompts/llm_attribution.md")
+        result = template.replace("{symbol}", str(trade_idea.get("symbol", "N/A")))
+        result = result.replace("{side}", str(trade_idea.get("side", "N/A")))
+        result = result.replace("{entry}", entry_str)
+        result = result.replace("{target}", str(trade_idea.get("target", "N/A")))
+        result = result.replace("{stop_loss}", str(trade_idea.get("stop_loss", "N/A")))
+        result = result.replace("{bars}", bars_str)
+        result = result.replace("{auto_reason}", str(auto_attribution.get("reason", "N/A")))
+        result = result.replace("{auto_confidence}", str(auto_attribution.get("confidence", 0.0)))
+        return result

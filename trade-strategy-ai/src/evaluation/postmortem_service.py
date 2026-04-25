@@ -100,3 +100,27 @@ class PostmortemService:
             root_causes.append("data_quality_issue")
 
         return FailureAttribution(root_causes=root_causes)
+
+    def _apply_validation(
+        self,
+        auto: FailureAttribution,
+        validation: LLMValidationResult,
+    ) -> tuple[FailureAttribution, str, dict[str, object]]:
+        """应用 LLM 校验结果。
+
+        Returns:
+            (final_attribution, source, extra)
+        """
+        extra: dict[str, object] = {}
+
+        if validation.decision == ValidationDecision.CONFIRM:
+            return auto, "llm_confirmed", extra
+
+        elif validation.decision == ValidationDecision.CORRECT:
+            corrected = FailureAttribution(root_causes=validation.corrected_categories)
+            extra["auto_original"] = auto
+            return corrected, "llm_corrected", extra
+
+        else:  # REJECT
+            extra["auto_original"] = auto
+            return FailureAttribution(root_causes=[]), "llm_rejected", extra

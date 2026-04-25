@@ -167,3 +167,53 @@ class TestAutoAttribution:
 
         result = service._auto_attribution(evidence)
         assert result.root_causes == []
+
+
+class TestApplyValidation:
+    """LLM 校验结果应用逻辑测试。"""
+
+    async def test_apply_confirm(self):
+        """confirm 决策保留原始归因，source 为 llm_confirmed。"""
+        from src.evaluation.postmortem_service import PostmortemService, ValidationDecision, LLMValidationResult
+        from src.evaluation.failure_taxonomy import FailureAttribution
+
+        service = PostmortemService()
+        auto = FailureAttribution(root_causes=["entry_timing_poor"])
+        validation = LLMValidationResult(decision=ValidationDecision.CONFIRM, reasoning="正确")
+
+        final, source, extra = service._apply_validation(auto, validation)
+        assert final.root_causes == ["entry_timing_poor"]
+        assert source == "llm_confirmed"
+        assert extra == {}
+
+    async def test_apply_correct(self):
+        """correct 决策使用 LLM 修正结果，保留原始结果到 extra。"""
+        from src.evaluation.postmortem_service import PostmortemService, ValidationDecision, LLMValidationResult
+        from src.evaluation.failure_taxonomy import FailureAttribution
+
+        service = PostmortemService()
+        auto = FailureAttribution(root_causes=["entry_timing_poor"])
+        validation = LLMValidationResult(
+            decision=ValidationDecision.CORRECT,
+            corrected_categories=["exit_timing_poor"],
+            reasoning="应修正为 exit_timing_poor",
+        )
+
+        final, source, extra = service._apply_validation(auto, validation)
+        assert final.root_causes == ["exit_timing_poor"]
+        assert source == "llm_corrected"
+        assert extra["auto_original"].root_causes == ["entry_timing_poor"]
+
+    async def test_apply_reject(self):
+        """reject 决策清空 categories，保留原始结果到 extra。"""
+        from src.evaluation.postmortem_service import PostmortemService, ValidationDecision, LLMValidationResult
+        from src.evaluation.failure_taxonomy import FailureAttribution
+
+        service = PostmortemService()
+        auto = FailureAttribution(root_causes=["entry_timing_poor"])
+        validation = LLMValidationResult(decision=ValidationDecision.REJECT, reasoning="这笔交易是盈利的")
+
+        final, source, extra = service._apply_validation(auto, validation)
+        assert final.root_causes == []
+        assert source == "llm_rejected"
+        assert extra["auto_original"].root_causes == ["entry_timing_poor"]

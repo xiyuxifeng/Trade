@@ -296,3 +296,53 @@ def test_summarize_excludes_archived(tmp_path: Path) -> None:
     summary = store.summarize_context(trader_id="trader_a")
     assert summary.total_items == 2  # archived item excluded
     assert summary.archived_items == 1
+
+
+# ---------------------------------------------------------------------------
+# NTL-S5-005: new memory types in summarize_context
+# ---------------------------------------------------------------------------
+
+def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
+    """验证 summarize_context 正确聚合 postmortem / strategy_adjustment / market_regime_note。"""
+    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
+
+    # 写入各种类型的 memory
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="postmortem entry timing",
+            content="Entry timing poor for SH600519",
+        )
+    )
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.strategy_adjustment,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="adjust entry tolerance",
+            content="Increase entry price tolerance",
+        )
+    )
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.market_regime_note,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="high volatility",
+            content="VIX > 30, reduce position size",
+        )
+    )
+    # 验证 summary 正确聚合
+    summary = store.summarize_context(trader_id="trader_a", symbol="SH600519", limit=5)
+    assert summary.total_items == 3
+    assert len(summary.postmortem_notes) == 1
+    assert "Entry timing poor" in summary.postmortem_notes[0]
+    assert len(summary.strategy_adjustments) == 1
+    assert "Increase entry price tolerance" in summary.strategy_adjustments[0]
+    assert len(summary.market_regime_notes) == 1
+    assert "VIX > 30" in summary.market_regime_notes[0]

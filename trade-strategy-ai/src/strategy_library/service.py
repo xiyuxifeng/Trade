@@ -63,6 +63,24 @@ class StrategyLibraryService:
             return None
         return drafts[0]
 
+    async def get_version(
+        self,
+        session: AsyncSession,
+        version_id: str,
+    ) -> StrategyVersion | None:
+        """按 version_id 读取策略版本。
+
+        用于 EvidencePack 构造时加载 rules_snapshot。
+
+        Args:
+            session: 数据库 session
+            version_id: 版本 ID
+
+        Returns:
+            StrategyVersion 或 None
+        """
+        return await self._repo.get_by_version_id(session=session, version_id=version_id)
+
     async def save_version(self, session: AsyncSession, version: StrategyVersion) -> None:
         """保存或更新策略版本。"""
         await self._repo.save(session=session, version=version)

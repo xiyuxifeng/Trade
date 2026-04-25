@@ -1208,7 +1208,7 @@
   验收标准：盘后复盘可通过任务系统运行。
   完成情况：新增 `src/pipeline/tasks/postmortem_tasks.py`（handle_postmortem_analysis）；run_after_close 末尾为未通过评估的 idea 创建 postmortem_analysis 任务；process_tasks.py 注册 handler；自动归因结果以 TraderMemoryType.postmortem 写回 TraderMemoryStore；4 tests PASS。
 
-- [ ] `NTL-S5-009` `P1`
+- [x] `NTL-S5-009` `P1` ✅ 2026-04-25
   目标：让 Manager 生成 Evidence Pack。
   输入：Evidence Pack 模块和盘前输出上下文。
   输出：盘后流程中生成 Evidence Pack。
@@ -1216,6 +1216,7 @@
   前置依赖：`NTL-S5-001`、`NTL-S4-006`。
   可并行：`NTL-S5-010`、`NTL-S5-011`。
   验收标准：每条盘前建议都能生成对应证据包。
+  完成情况：新增 StrategyLibraryRepository.get_by_version_id + StrategyLibraryService.get_version；manager_agent 新增 5 个辅助方法（_generate_evidence_pack / _save_evidence_pack / _load_signal_context / _fetch_full_market_data / _load_strategy_version_snapshot）；run_after_close 中调用 EvidencePack 生成并持久化到 JSON；postmortem_tasks 从 JSON 加载；95 tests PASS。
 
 - [ ] `NTL-S5-010` `P1`
   目标：升级盘后评分口径。

@@ -770,6 +770,15 @@ class ManagerAgent:
                 )
             )
 
+            # NTL-S5-009: 生成并持久化 EvidencePack
+            evidence_pack = await self._generate_evidence_pack(
+                idea=idea,
+                daily_report=daily_report,
+                last_prices=last_prices,
+                config=self.config,
+            )
+            self._save_evidence_pack(evidence_pack)
+
             # trigger review tasks
             min_ret = float(self.config.evaluation.min_expected_return)
             memory_type = (

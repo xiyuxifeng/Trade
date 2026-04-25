@@ -25,3 +25,24 @@ class FailureRootCause(StrEnum):
     EXTERNAL_EVENT = "external_event"
     SYMBOL_SELECTION_SUBOPTIMAL = "symbol_selection_suboptimal"
     DATA_QUALITY_ISSUE = "data_quality_issue"
+
+
+class FailureStage(StrEnum):
+    """失败发生的交易阶段（可选，最多 1 个）。
+
+    用于标注失败发生在交易的哪个阶段。
+    """
+    ENTRY = "stage:entry"
+    EXIT = "stage:exit"
+    HOLDING = "stage:holding"
+
+
+class FailureRuleType(StrEnum):
+    """涉及的规则类型（可选，最多 1 个）。
+
+    用于标注失败涉及哪类策略规则。
+    """
+    ENTRY = "rule_type:entry"
+    EXIT = "rule_type:exit"
+    FILTER = "rule_type:filter"
+    SIZING = "rule_type:sizing"

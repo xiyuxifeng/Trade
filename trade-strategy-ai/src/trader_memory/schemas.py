@@ -43,6 +43,10 @@ class TraderMemoryItem(BaseModel):
     strategy_version_id: str | None = None
     ranking_entry_id: UUID | None = None
 
+    # 新增：topic 关联（NTL-S5-006）
+    topic_source: str | None = None              # provider 名称，如 "kaipan"
+    raw_topic_ids: dict[str, str] | None = None  # {provider: raw_topic_id}
+
     # 新增：盘后评估数据
     postmortem_data: dict | None = None
     strategy_adjustment_data: dict | None = None
@@ -63,6 +67,10 @@ class TraderMemoryFilter(BaseModel):
     include_archived: bool = False
     limit: int = 50
     offset: int = 0
+
+    # 新增：检索过滤（NTL-S5-006）
+    tags: list[str] | None = None               # 按标签检索（匹配任一 tag 即可）
+    strategy_version_id: str | None = None     # 按策略版本检索
 
 
 class TraderMemorySummary(BaseModel):

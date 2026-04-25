@@ -91,6 +91,38 @@ class TestTraderMemoryItem:
         )
         assert item.market_regime_data["regime_type"] == "volatile"
 
+    def test_trader_memory_item_with_topic_fields(self):
+        """验证 TraderMemoryItem 可创建带 topic_source 和 raw_topic_ids 的记忆."""
+        item = TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            title="postmortem entry timing",
+            content="Entry timing poor for SH600519",
+            topic_source="kaipan",
+            raw_topic_ids={"kaipan": "AI_chip_001", "akshare": "AISemi"},
+            tags=["AI_chip", "半导体"],
+        )
+        assert item.topic_source == "kaipan"
+        assert item.raw_topic_ids == {"kaipan": "AI_chip_001", "akshare": "AISemi"}
+        assert "AI_chip" in item.tags
+
+
+class TestTraderMemoryFilter:
+    """验证 TraderMemoryFilter 新增字段."""
+
+    def test_filter_with_tags_and_version(self):
+        """验证 Filter 支持 tags 和 strategy_version_id."""
+        from src.trader_memory.schemas import TraderMemoryFilter
+
+        f = TraderMemoryFilter(
+            trader_id="trader_a",
+            tags=["AI_chip", "半导体"],
+            strategy_version_id="v_2026_04_25",
+        )
+        assert f.tags == ["AI_chip", "半导体"]
+        assert f.strategy_version_id == "v_2026_04_25"
+
 
 class TestTraderMemorySummary:
     """验证 TraderMemorySummary 扩展字段。"""

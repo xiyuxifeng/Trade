@@ -15,6 +15,13 @@ from src.evaluation.failure_taxonomy import (
     FailureAttribution,
     parse_failure_categories,
 )
+from src.evaluation.postmortem_service import (
+    ValidationDecision,
+    LLMValidationResult,
+    PostmortemResult,
+    PostmortemService,
+    LLMValidator,
+)
 
 __all__ = [
     "EvidencePack",
@@ -23,4 +30,9 @@ __all__ = [
     "FailureRuleType",
     "FailureAttribution",
     "parse_failure_categories",
+    "ValidationDecision",
+    "LLMValidationResult",
+    "PostmortemResult",
+    "PostmortemService",
+    "LLMValidator",
 ]

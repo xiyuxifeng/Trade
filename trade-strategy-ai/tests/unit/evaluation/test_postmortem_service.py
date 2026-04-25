@@ -281,3 +281,21 @@ class TestGenerate:
         result = await service.generate(evidence)
         assert result.attribution_source == "llm_confirmed"
         assert result.failure_attribution.root_causes == []
+
+
+class TestModuleExports:
+    """模块导出测试。"""
+
+    def test_evaluation_exports_postmortem(self):
+        """evaluation 模块正确导出 postmortem_service 的所有公开接口。"""
+        from src.evaluation import (
+            PostmortemResult,
+            PostmortemService,
+            ValidationDecision,
+            LLMValidationResult,
+        )
+        from dataclasses import fields
+        field_names = [f.name for f in fields(PostmortemResult)]
+        assert "idea_id" in field_names
+        assert hasattr(PostmortemService, "generate")
+        assert hasattr(ValidationDecision, "CONFIRM")

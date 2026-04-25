@@ -1188,7 +1188,7 @@
   验收标准：下次盘前能按上下文取回相关记忆。
   完成情况：TraderMemoryItem 新增 topic_source/raw_topic_ids 字段（dict[str, list[str]]）；TraderMemoryFilter 新增 tags/strategy_version_id 字段；_apply_filter 实现 tags 任一命中 + strategy_version_id 精确匹配；新增 topic_mapping Alembic migration；27 tests PASS；NTL-S5-006 前置集成：DailyReport.market_universe_snapshot、source_topic_ids 使用 "topic_name|kind" 编码格式（直接来自 topic_constituents，不依赖 hot_topics 查表）、_build_topic_tags 解析编码生成 canonical tag；5 commits 完成。
 
-- [ ] `NTL-S5-007` `P1`
+- [x] `NTL-S5-007` `P1` ✅ 2026-04-25
   目标：扩展 review task 结构。
   输入：盘后归因需求。
   输出：支持结构化失败归因的 review task。
@@ -1196,8 +1196,9 @@
   前置依赖：`NTL-S1-005`、Stage 4 完成。
   可并行：`NTL-S5-006`。
   验收标准：盘后复盘任务输入结构完整。
+  完成情况：`ReviewTaskDetails.failure_category` 从 `str` 升级为 `FailureAttribution | None`，与 `PostmortemResult.failure_attribution` 类型对齐；测试更新。
 
-- [ ] `NTL-S5-008` `P1`
+- [x] `NTL-S5-008` `P1` ✅ 2026-04-25
   目标：把 postmortem 接入任务系统。
   输入：postmortem service。
   输出：`run_postmortem_analysis` 任务。
@@ -1205,6 +1206,7 @@
   前置依赖：`NTL-S5-003`、`NTL-S5-007`。
   可并行：无。
   验收标准：盘后复盘可通过任务系统运行。
+  完成情况：新增 `src/pipeline/tasks/postmortem_tasks.py`（handle_postmortem_analysis）；run_after_close 末尾为未通过评估的 idea 创建 postmortem_analysis 任务；process_tasks.py 注册 handler；自动归因结果以 TraderMemoryType.postmortem 写回 TraderMemoryStore；4 tests PASS。
 
 - [ ] `NTL-S5-009` `P1`
   目标：让 Manager 生成 Evidence Pack。

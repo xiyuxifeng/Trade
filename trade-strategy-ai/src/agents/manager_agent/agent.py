@@ -294,30 +294,32 @@ class ManagerAgent:
     ) -> tuple[list[str], str | None, dict[str, str] | None]:
         """从 market_universe_snapshot 构建 canonical tags.
 
+        处理 JSON 序列化后的 dict 结构（asdict → json.dumps → json.load 后嵌套 dict）。
+
         Returns:
             tuple of (canonical_tags, topic_source, raw_topic_ids)
         """
         if not idea.source_topic_ids or not market_universe_snapshot:
             return [], None, None
 
-        from src.market_universe.schemas import MarketUniverse
-
-        mu = MarketUniverse(**market_universe_snapshot)
-        if not mu.hot_topics:
+        hot_topics_data = market_universe_snapshot.get("hot_topics")
+        if not hot_topics_data:
             return [], None, None
 
-        hot_topics_map = {ht.topic_id: ht for ht in mu.hot_topics.topics}
+        # hot_topics.topics 是 list of dict（JSON 序列化后）
+        topics_list: list[dict] = hot_topics_data.get("topics", [])
+        hot_topics_map: dict[str, dict] = {t.get("topic_id", ""): t for t in topics_list}
 
         canonical_tags = []
         raw_ids = {}
 
         for tid in idea.source_topic_ids:
             ht = hot_topics_map.get(tid)
-            if ht:
-                canonical_tags.append(f"kaipan:{ht.kind}:{ht.topic_name}")
-                raw_ids["kaipan"] = ht.topic_id
+            if ht and ht.get("topic_name") and ht.get("kind"):
+                canonical_tags.append(f"kaipan:{ht['kind']}:{ht['topic_name']}")
+                raw_ids["kaipan"] = tid
 
-        return canonical_tags, "kaipan", raw_ids or None
+        return canonical_tags, "kaipan" if canonical_tags else None, raw_ids or None
 
     def _append_review_memory(
         self,

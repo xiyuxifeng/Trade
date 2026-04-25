@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.create_index("ix_trader_strategy_versions_trader_status", "trader_strategy_versions", ["trader_id", "status"])
     op.create_index("ix_trader_strategy_versions_strategy_date", "trader_strategy_versions", ["strategy_date"])
     op.create_unique_constraint(
-        "uq_trader_strategy_versions_trader_id_strategy_date_version_name",
+        "uq_tsv_trader_dt_ver",
         "trader_strategy_versions",
         ["trader_id", "strategy_date", "version_name"],
     )

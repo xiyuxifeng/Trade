@@ -46,7 +46,7 @@ def _make_metadata(article: BlogArticle) -> ArticleMetadata:
     return ArticleMetadata(
         id=uuid4(),
         article_id=article.id,
-        schema_version="v1",
+        version="v1",
         processed_at=None,
         extracted_concepts=[],
         trading_symbols=[],
@@ -149,7 +149,7 @@ async def test_extract_one_prompt_includes_structured_limits(tmp_path: Path) -> 
     await mod._extract_one(client=FakeClient(), prompts_dir=prompts_dir, article=article)
 
     assert '"extracted_concepts": [...],   // 0-10 条' in captured["system_prompt"]
-    assert '"comment_insights": [...],      // 0-3 条，从评论中提炼' in captured["system_prompt"]
+    assert '"comment_insights": [...],      // 0-5 条，从评论中提炼' in captured["system_prompt"]
 
 
 @pytest.mark.asyncio
@@ -181,7 +181,7 @@ async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_p
 
     monkeypatch.setattr(mod, "session_scope", fake_session_scope)
     monkeypatch.setattr(mod, "LLMClient", DisabledClient)
-    monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace())
+    monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace(provider=None))
     monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize)
 
     config = SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None))
@@ -231,7 +231,7 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
 
     monkeypatch.setattr(mod, "session_scope", fake_session_scope)
     monkeypatch.setattr(mod, "LLMClient", EnabledClient)
-    monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace())
+    monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace(provider=None))
     monkeypatch.setattr(mod, "_extract_one", fake_extract_one)
     monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize)
 

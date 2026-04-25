@@ -1,0 +1,26 @@
+{
+  "trade_date": "2026-04-20",
+  "slot": "09-25",
+  "fetched_at": null,
+  "metadata": {},
+  "hot_topics": {
+    "trade_date": "2026-04-20",
+    "slot": "09-25",
+    "sources": [
+      "test"
+    ],
+    "fetched_at": null,
+    "topics": [
+      {
+        "kind": "concept",
+        "topic_id": "AI001",
+        "topic_name": "人工智能",
+        "score": 85.0,
+        "increase_pct": null,
+        "speed_pct": null,
+        "turnover": null,
+        "net_inflow": null
+      }
+    ]
+  }
+}

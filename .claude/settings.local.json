@@ -76,7 +76,11 @@
       "Bash(xargs rm:*)",
       "Bash(find . -type d -name \"__pycache__\" -exec rm -rf {} +)",
       "Bash(mv trade-strategy-ai/tests/unit/market_universe/test_schemas.py trade-strategy-ai/tests/unit/market_universe/test_market_universe_schemas.py)",
-      "Bash(mv trade-strategy-ai/tests/unit/strategy_library/test_schemas.py trade-strategy-ai/tests/unit/strategy_library/test_strategy_library_schemas.py)"
+      "Bash(mv trade-strategy-ai/tests/unit/strategy_library/test_schemas.py trade-strategy-ai/tests/unit/strategy_library/test_strategy_library_schemas.py)",
+      "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai -name \"*.py\" -exec grep -l \"topic_mapping\" {} \\\\;)",
+      "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests -name \"__pycache__\" -type d -exec rm -rf {} +)",
+      "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests -name \"*.pyc\" -delete)",
+      "Bash(find:*)"
     ]
   }
 }

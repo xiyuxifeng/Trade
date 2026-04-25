@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.evaluation.failure_taxonomy import FailureAttribution
+
 
 class ReviewTriggerReason(StrEnum):
     """Why a review task was triggered."""
@@ -55,7 +57,7 @@ class ReviewTaskDetails(BaseModel):
 
     # Stage 1 扩展字段：用于挂接盘后证据、归因和 ranking
     evidence_refs: list[str] = Field(default_factory=list)
-    failure_category: str | None = None
+    failure_attribution: FailureAttribution | None = None
     ranking_features: dict[str, Any] = Field(default_factory=dict)
 
     # 评估快照（创建时固化，后续不再修改）

@@ -211,8 +211,16 @@ class PreMarketService:
         strategy_version: StrategyVersion,
         candidate_symbols: list[str],
     ) -> dict[str, list[str]]:
-        """分析 rules_snapshot 中引用的字段，决定需要发起哪些额外 DataRequest。"""
+        """分析 rules_snapshot 中引用的字段，决定需要发起哪些额外 DataRequest。
+
+        NTL-S4-007 定向深挖：
+        - 从 rules_snapshot 的 condition 表达式中提取字段名（如 rsi、macd、volume）
+        - 将字段名映射到 DataRequest 支持的 fields（indicators、ohlcv_1d 等）
+        - 返回需要发起额外取数的 fields 列表
+        """
+        # 规则字段 → dataset 映射
         FIELD_TO_DATASET: dict[str, str] = {
+            # 技术指标
             "rsi": "indicators",
             "macd": "indicators",
             "bollinger": "indicators",
@@ -220,6 +228,7 @@ class PreMarketService:
             "kdj": "indicators",
             "cci": "indicators",
             "obv": "indicators",
+            # 行情数据
             "close": "ohlcv_1d",
             "open": "ohlcv_1d",
             "high": "ohlcv_1d",
@@ -229,19 +238,31 @@ class PreMarketService:
         }
 
         needed_datasets: dict[str, set[str]] = {}
-        import re
 
         for rule in (strategy_version.rules_snapshot or []):
             condition = rule.get("condition", {})
             if isinstance(condition, dict):
-                for value in condition.values():
-                    if isinstance(value, str):
-                        for field, dataset in FIELD_TO_DATASET.items():
-                            if field in value.lower():
-                                needed_datasets.setdefault(dataset, set()).add(field)
+                # 递归从 condition dict 中提取字段
+                self._extract_fields_from_condition(condition, FIELD_TO_DATASET, needed_datasets)
             elif isinstance(condition, str):
+                # 从字符串中提取字段名
                 for field, dataset in FIELD_TO_DATASET.items():
                     if field in condition.lower():
                         needed_datasets.setdefault(dataset, set()).add(field)
 
         return {dataset: list(fields) for dataset, fields in needed_datasets.items()}
+
+    def _extract_fields_from_condition(
+        self,
+        condition: dict[str, Any],
+        field_map: dict[str, str],
+        result: dict[str, set[str]],
+    ) -> None:
+        """递归从 condition dict 中提取字段名。"""
+        for value in condition.values():
+            if isinstance(value, dict):
+                self._extract_fields_from_condition(value, field_map, result)
+            elif isinstance(value, str):
+                for field, dataset in field_map.items():
+                    if field in value.lower():
+                        result.setdefault(dataset, set()).add(field)

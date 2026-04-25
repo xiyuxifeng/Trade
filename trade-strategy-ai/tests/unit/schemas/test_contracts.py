@@ -6,6 +6,7 @@ from uuid import UUID
 from src.schemas.contracts import DataRequest, DataResponse, DataResponseStatus, EvaluationResult
 from src.schemas.contracts import TradeEntry, TradeIdea
 from src.schemas.review_task import ReviewTaskDetails
+from src.evaluation.failure_taxonomy import FailureAttribution
 
 
 def test_data_request_and_response_support_stage1_datasets() -> None:
@@ -76,7 +77,11 @@ def test_evaluation_result_and_review_task_support_stage1_postmortem_fields() ->
             "as_of_date": "2026-04-22",
         },
         evidence_refs=["evidence:1"],
-        failure_category="regime_mismatch",
+        failure_attribution=FailureAttribution(
+            root_causes=["entry_timing_poor"],
+            stage="stage:entry",
+            rule_type="rule_type:entry",
+        ),
         ranking_features={"mfe": 0.12, "mae": -0.03},
     )
 
@@ -84,5 +89,6 @@ def test_evaluation_result_and_review_task_support_stage1_postmortem_fields() ->
     assert evaluation.failure_categories == ["regime_mismatch"]
     assert evaluation.ranking_features["mfe"] == 0.12
     assert review_task.evidence_refs == ["evidence:1"]
-    assert review_task.failure_category == "regime_mismatch"
+    assert review_task.failure_attribution.root_causes == ["entry_timing_poor"]
+    assert review_task.failure_attribution.stage == "stage:entry"
     assert review_task.ranking_features["mae"] == -0.03

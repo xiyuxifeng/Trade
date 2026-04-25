@@ -333,18 +333,10 @@ class RankingService:
     def get_latest_by_version(self, version_id: str) -> list[RankingEntry]:
         """获取指定策略版本的最新 ranking 条目（is_latest=True）。
 
-        Note: 同步版本，直接调用 repo。
+        Note: 同步封装（用于不需要 async 的场景）。
         """
-        # 同步封装（用于不需要 async 的场景）
         import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return asyncio.get_event_loop().run_until_complete(
-            self._repo.get_latest_by_version(version_id)
-        )
+        return asyncio.run(self._repo.get_latest_by_version(version_id))
 
     def get_by_trader(self, trader_id: str, trade_date: str | None = None) -> list[RankingEntry]:
         """获取指定 trader 的 ranking 条目列表。
@@ -352,12 +344,7 @@ class RankingService:
         Note: 同步封装。
         """
         import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return asyncio.get_event_loop().run_until_complete(
+        return asyncio.run(
             self._repo.query_by_date(
                 trade_date or "", trader_id=trader_id, is_latest_only=True
             )

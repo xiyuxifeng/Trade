@@ -5,5 +5,13 @@ from .constituents_resolver import ConstituentsResolver
 from .hot_topics_builder import HotTopicsBuilder
 from .snapshot_service import SnapshotService
 from .strong_symbols_selector import StrongSymbolsSelector
+from .topic_utils import build_topic_tags
 
-__all__ = ["schemas", "HotTopicsBuilder", "ConstituentsResolver", "StrongSymbolsSelector", "SnapshotService"]
+__all__ = [
+    "schemas",
+    "HotTopicsBuilder",
+    "ConstituentsResolver",
+    "StrongSymbolsSelector",
+    "SnapshotService",
+    "build_topic_tags",
+]

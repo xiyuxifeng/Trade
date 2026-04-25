@@ -100,11 +100,11 @@ class TestTraderMemoryItem:
             title="postmortem entry timing",
             content="Entry timing poor for SH600519",
             topic_source="kaipan",
-            raw_topic_ids={"kaipan": "AI_chip_001", "akshare": "AISemi"},
+            raw_topic_ids={"kaipan": ["AI_chip_001"], "akshare": ["AISemi"]},
             tags=["AI_chip", "半导体"],
         )
         assert item.topic_source == "kaipan"
-        assert item.raw_topic_ids == {"kaipan": "AI_chip_001", "akshare": "AISemi"}
+        assert item.raw_topic_ids == {"kaipan": ["AI_chip_001"], "akshare": ["AISemi"]}
         assert "AI_chip" in item.tags
 
 

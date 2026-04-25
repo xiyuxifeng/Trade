@@ -191,6 +191,25 @@ class TraderMemoryStore:
             if item.memory_type == TraderMemoryType.review_note
         ][: max(0, int(limit))]
 
+        # 新增：聚合 new memory types 到 summary
+        postmortem_notes = [
+            item.content
+            for item in active_items
+            if item.memory_type == TraderMemoryType.postmortem
+        ][: max(0, int(limit))]
+
+        strategy_adjustments = [
+            item.content
+            for item in active_items
+            if item.memory_type == TraderMemoryType.strategy_adjustment
+        ][: max(0, int(limit))]
+
+        market_regime_notes = [
+            item.content
+            for item in active_items
+            if item.memory_type == TraderMemoryType.market_regime_note
+        ][: max(0, int(limit))]
+
         return TraderMemorySummary(
             trader_id=trader_id,
             symbol=symbol,
@@ -201,4 +220,7 @@ class TraderMemoryStore:
             recent_titles=recent_titles,
             symbol_titles=symbol_titles,
             review_notes=review_notes,
+            postmortem_notes=postmortem_notes,
+            strategy_adjustments=strategy_adjustments,
+            market_regime_notes=market_regime_notes,
         )

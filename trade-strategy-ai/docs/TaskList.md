@@ -1047,7 +1047,7 @@
   验收标准：能重放某次盘前建议的完整上下文。
   完成情况：_signal_to_dict/_dict_to_signal 新增 strategy_version_id；_context_to_dict/_dict_to_context 新增 strategy_version_id/market_universe_snapshot/topic_source_ids；57 tests PASS。
 
-- [ ] `NTL-S4-006` `P1`
+- [x] `NTL-S4-006` `P1` ✅ 2026-04-25
   目标：重构 `ManagerAgent` 接入策略版本与候选池快照。
   输入：新 DataAgent、策略库、候选池快照。
   输出：升级后的 ManagerAgent。
@@ -1055,7 +1055,7 @@
   前置依赖：`NTL-S4-001`、`NTL-S4-003`、Stage 2、Stage 3 完成。
   可并行：`NTL-S4-007`。
   验收标准：Manager 能编排新版盘前链路。
-  完成情况：新增 StrategyLibraryService + SnapshotService 依赖；run_pre_market 重构（market_universe 共享加载、strategy_version per-trader 加载）；_record_ideas_as_signals 更新（side 映射、SignalContext 扩展）；Phase 0 降级完整保留；5 manager tests PASS，合计 57 tests PASS。
+  完成情况：新增 StrategyLibraryService + SnapshotService 依赖；run_pre_market 重构（market_universe 共享加载、strategy_version per-trader 加载）；_record_ideas_as_signals 更新（side 映射、SignalContext 扩展）；Phase 0 降级完整保留；SignalContext 包含 market_universe_snapshot + topic_source_ids；5 manager tests PASS，合计 57 tests PASS。
 
 - [x] `NTL-S4-007` `P1` ✅ 2026-04-24
   目标：引入定向深挖 DataRequest 规划。

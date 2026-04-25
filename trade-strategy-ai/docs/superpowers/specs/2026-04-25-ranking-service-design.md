@@ -367,3 +367,45 @@ __all__ = [
 - [x] 与 postmortem_service 的数据流清晰
 - [x] 与 NTL-S5-011、NTL-S7-001 的下游关系明确
 - [x] rank 计算时机明确：add_entry 时为 None，generate_ranking 时批量计算
+- [x] 并发安全：唯一约束 + ON CONFLICT DO UPDATE 原子 upsert
+- [x] async 风格统一：所有 service 方法为 async def
+- [x] flat view 分组内排序：先 trader 分组，组内按 composite_score 排序
+
+---
+
+## 8. 已确认设计决策
+
+| 问题 | 决策 |
+|------|------|
+| 问题 1 并发一致性 | A — DB 层唯一约束 + ON CONFLICT DO UPDATE |
+| 问题 2 async 风格 | A — 全 async（RankingService 全部 async def） |
+| 问题 3 flat view 排序 | B — 先按 trader 分组，组内按 composite_score 排序 |
+| 问题 4 add_entry 后立即可用 | 无区别，设计保持现状（rank 在 generate_ranking 时批量计算） |
+| 问题 5 update_entry | 异步（async def） |
+
+---
+
+## 9. 并发安全设计
+
+### 9.1 Upsert 原子性
+
+`add_entry` 的 upsert 使用 `ON CONFLICT DO UPDATE`，确保：
+
+- 并发写入同一 `(trade_date, strategy_version_id, symbol)` 时，只有一条 `is_latest=True`
+- 旧 entry 的 `is_latest` 被原子性地设为 `False`
+- 不需要应用层悲观锁
+
+### 9.2 约束声明（PostgreSQL）
+
+```python
+__table_args__ = (
+    UniqueConstraint(
+        "trade_date", "strategy_version_id", "symbol",
+        name="uq_ranking_entry_latest",
+        where=(Column("is_latest") == True),  # 部分唯一约束，仅对 is_latest=True 的记录生效
+    ),
+    Index("ix_ranking_trader_version", "trader_id", "strategy_version_id"),
+)
+```
+
+部分唯一约束使用 `WHERE is_latest = true` 子句实现，确保同一 `(trade_date, version, symbol)` 只允许同时存在一条 `is_latest=True` 的记录。

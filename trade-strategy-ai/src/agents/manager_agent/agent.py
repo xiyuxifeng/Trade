@@ -287,6 +287,38 @@ class ManagerAgent:
                     if field in value.lower():
                         result.setdefault(dataset, set()).add(field)
 
+    def _build_topic_tags(
+        self,
+        idea: "TradeIdea",
+        market_universe_snapshot: dict[str, Any] | None,
+    ) -> tuple[list[str], str | None, dict[str, str] | None]:
+        """从 market_universe_snapshot 构建 canonical tags.
+
+        Returns:
+            tuple of (canonical_tags, topic_source, raw_topic_ids)
+        """
+        if not idea.source_topic_ids or not market_universe_snapshot:
+            return [], None, None
+
+        from src.market_universe.schemas import MarketUniverse
+
+        mu = MarketUniverse(**market_universe_snapshot)
+        if not mu.hot_topics:
+            return [], None, None
+
+        hot_topics_map = {ht.topic_id: ht for ht in mu.hot_topics.topics}
+
+        canonical_tags = []
+        raw_ids = {}
+
+        for tid in idea.source_topic_ids:
+            ht = hot_topics_map.get(tid)
+            if ht:
+                canonical_tags.append(f"kaipan:{ht.kind}:{ht.topic_name}")
+                raw_ids["kaipan"] = ht.topic_id
+
+        return canonical_tags, "kaipan", raw_ids or None
+
     def _append_review_memory(
         self,
         *,
@@ -297,12 +329,16 @@ class ManagerAgent:
         return_pct: float,
         threshold: float,
         trigger_reason: ReviewTriggerReason,
+        market_universe_snapshot: dict[str, Any] | None = None,
     ) -> TraderMemoryItem:
         """Write a short review note back into trader memory.
 
         Returns the created memory item so callers can record the memory_id
         in the review task details (P2-109A close-loop tracking).
         """
+        canonical_tags, topic_source, raw_topic_ids = self._build_topic_tags(
+            idea, market_universe_snapshot
+        )
         memory = TraderMemoryItem(
             trader_id=idea.trader_id,
             memory_type=TraderMemoryType.review_note,
@@ -315,7 +351,9 @@ class ManagerAgent:
             ),
             source="manager.run_after_close",
             source_ref=str(idea.idea_id),
-            tags=["review", "evaluation"],
+            tags=["review", "evaluation"] + canonical_tags,
+            topic_source=topic_source,
+            raw_topic_ids=raw_topic_ids,
             importance=0.75,
         )
         self.memory_store.append(memory)
@@ -678,6 +716,12 @@ class ManagerAgent:
                 if return_pct >= min_ret and return_pct >= 0
                 else TraderMemoryType.failure_case
             )
+
+            # NTL-S5-006 前置：构建 canonical tags
+            canonical_tags, topic_source, raw_topic_ids = self._build_topic_tags(
+                idea, daily_report.market_universe_snapshot
+            )
+
             self.memory_store.append(
                 TraderMemoryItem(
                     trader_id=idea.trader_id,
@@ -691,7 +735,9 @@ class ManagerAgent:
                     ),
                     source="manager.run_after_close",
                     source_ref=str(idea.idea_id),
-                    tags=["evaluation", memory_type.value],
+                    tags=["evaluation", memory_type.value] + canonical_tags,
+                    topic_source=topic_source,
+                    raw_topic_ids=raw_topic_ids,
                     importance=0.8 if memory_type == TraderMemoryType.success_case else 0.9,
                 )
             )
@@ -708,6 +754,7 @@ class ManagerAgent:
                     return_pct=return_pct,
                     threshold=min_ret,
                     trigger_reason=trigger_reason,
+                    market_universe_snapshot=daily_report.market_universe_snapshot,
                 )
                 memory_id = str(memory.memory_id)
 

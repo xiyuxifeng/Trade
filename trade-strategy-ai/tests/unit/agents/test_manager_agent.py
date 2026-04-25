@@ -57,7 +57,8 @@ async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
     result = await manager.run_after_close(as_of_date=day, force=True)
-    assert result.evaluations[0].status == "ok"
+    # NTL-S5-013: Phase 0 (no bars) now correctly returns "fallback" status
+    assert result.evaluations[0].status == "fallback"
 
     memory_path = default_memory_path(base_dir=tmp_path, config=config)
     store = TraderMemoryStore(path=memory_path)
@@ -105,7 +106,8 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
     result = await manager.run_after_close(as_of_date=day, force=True)
-    assert result.evaluations[0].status == "ok"
+    # NTL-S5-013: Phase 0 (no bars) now correctly returns "fallback" status
+    assert result.evaluations[0].status == "fallback"
 
     tasks = manager.tasks_path.read_text(encoding="utf-8").splitlines()
     review_tasks = [json.loads(line) for line in tasks if json.loads(line)["type"] == "trader_review"]

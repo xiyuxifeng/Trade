@@ -14,6 +14,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.ranking_entry import RankingEntryRecord
@@ -28,9 +29,9 @@ class RankingRepository:
     async def upsert(self, entry) -> RankingEntryRecord:
         """Upsert 一条 ranking entry，保证 is_latest=True 的唯一性。
 
-        实现：
-          1. 先将同一 (trade_date, strategy_version_id, symbol) 的现有 latest 标记为 False
-          2. 插入新 entry（is_latest=True）
+        实现：先 UPDATE 标记旧的为 False，再用新 ID INSERT 新行。
+        注意：由于 unique constraint 在 INSERT 时仍会冲突（constraint 不含 is_latest），
+        所以先 DELETE 旧的，再 INSERT 新行。
 
         Args:
             entry: RankingEntry dataclass
@@ -38,16 +39,15 @@ class RankingRepository:
         Returns:
             新创建的 RankingEntryRecord
         """
-        # 先将同一 (trade_date, strategy_version_id, symbol) 的现有 latest 标记为 False
+        from sqlalchemy import delete
+
+        # 先删除同一 (trade_date, strategy_version_id, symbol) 的现有 entry
         await self.session.execute(
-            update(RankingEntryRecord)
-            .where(
+            delete(RankingEntryRecord).where(
                 RankingEntryRecord.trade_date == entry.trade_date,
                 RankingEntryRecord.strategy_version_id == entry.strategy_version_id,
                 RankingEntryRecord.symbol == entry.symbol,
-                RankingEntryRecord.is_latest == True,
             )
-            .values(is_latest=False)
         )
 
         # 插入新 entry（is_latest=True）
@@ -62,7 +62,7 @@ class RankingRepository:
             mae=entry.mae,
             composite_score=entry.composite_score,
             rank=entry.rank,
-            is_latest=True,  # 强制为 True
+            is_latest=True,
             idea_id=entry.idea_id,
             attribution_source=entry.attribution_source,
             extra=entry.extra,

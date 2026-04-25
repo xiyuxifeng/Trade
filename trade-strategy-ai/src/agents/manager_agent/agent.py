@@ -344,7 +344,6 @@ class ManagerAgent:
             trade_idea=idea,
             signal_context=signal_context,
             market_data=market_data,
-            strategy_version_id=idea.strategy_version_id,
             strategy_version_snapshot=rules_snapshot,
         )
 

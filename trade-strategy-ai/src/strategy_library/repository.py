@@ -55,6 +55,29 @@ class StrategyLibraryRepository:
         orm_objects = result.scalars().all()
         return [self._from_orm_model(obj) for obj in orm_objects]
 
+    async def get_by_version_id(
+        self, session: AsyncSession, version_id: str
+    ) -> StrategyVersion | None:
+        """按 version_id 精确查询策略版本。
+
+        用于 EvidencePack 构造时加载 rules_snapshot。
+
+        Args:
+            session: 数据库 session
+            version_id: 版本 ID（如 "trader_001_2026-04-25_released"）
+
+        Returns:
+            StrategyVersion 或 None（不存在时）
+        """
+        stmt = select(TraderStrategyVersion).where(
+            TraderStrategyVersion.version_name == version_id,
+        )
+        result = await session.execute(stmt)
+        orm_obj = result.scalar_one_or_none()
+        if orm_obj is None:
+            return None
+        return self._from_orm_model(orm_obj)
+
     async def save(self, session: AsyncSession, version: StrategyVersion) -> None:
         """保存或更新策略版本（异步）。"""
         existing = await self._get_existing(session, version)

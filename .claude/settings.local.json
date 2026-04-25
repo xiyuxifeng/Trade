@@ -74,7 +74,9 @@
       "Bash(pytest tests/unit/providers/ -v)",
       "Bash(pytest:*)",
       "Bash(xargs rm:*)",
-      "Bash(find . -type d -name \"__pycache__\" -exec rm -rf {} +)"
+      "Bash(find . -type d -name \"__pycache__\" -exec rm -rf {} +)",
+      "Bash(mv trade-strategy-ai/tests/unit/market_universe/test_schemas.py trade-strategy-ai/tests/unit/market_universe/test_market_universe_schemas.py)",
+      "Bash(mv trade-strategy-ai/tests/unit/strategy_library/test_schemas.py trade-strategy-ai/tests/unit/strategy_library/test_strategy_library_schemas.py)"
     ]
   }
 }

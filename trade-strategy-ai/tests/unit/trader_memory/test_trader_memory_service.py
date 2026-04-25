@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
@@ -449,3 +450,72 @@ def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
     )
     assert len(result) == 1
     assert result[0].symbol == "SH600519"
+
+
+# ---------------------------------------------------------------------------
+# NTL-S5-012: extra field
+# ---------------------------------------------------------------------------
+
+def test_trader_memory_item_has_extra_field():
+    """TraderMemoryItem 应有 extra 字段（NTL-S5-012）。"""
+    item = TraderMemoryItem(
+        trader_id="trader_001",
+        memory_type=TraderMemoryType.failure_case,
+        as_of_date=date(2026, 4, 25),
+        title="test",
+        content="test content",
+    )
+    assert hasattr(item, "extra")
+    assert item.extra == {}
+    item.extra = {"auto_original": {"reason": "test"}}
+    assert item.extra["auto_original"]["reason"] == "test"
+
+
+# ---------------------------------------------------------------------------
+# NTL-S5-012: update() method
+# ---------------------------------------------------------------------------
+
+def test_update_modifies_existing_item(tmp_path):
+    """update() 应原地修改已有条目，不新增。"""
+    store = TraderMemoryStore(path=tmp_path / "memory.jsonl")
+
+    original = TraderMemoryItem(
+        memory_id=uuid4(),
+        trader_id="trader_001",
+        memory_type=TraderMemoryType.failure_case,
+        as_of_date=date(2026, 4, 25),
+        symbol="AAPL",
+        title="原始 failure",
+        content="原始内容",
+    )
+    store.append(original)
+
+    # 更新
+    updated = original.model_copy(deep=True)
+    updated.content = "更新后内容"
+    updated.postmortem_data = {"return_pct": -3.5}
+
+    result = store.update(original.memory_id, updated)
+
+    assert result is True
+
+    # 验证：文件只有一条
+    items = store._load_all()
+    assert len(items) == 1
+    assert items[0].content == "更新后内容"
+    assert items[0].postmortem_data == {"return_pct": -3.5}
+
+
+def test_update_nonexistent_returns_false(tmp_path):
+    """update() 对不存在的 ID 返回 False。"""
+    from uuid import uuid4
+    store = TraderMemoryStore(path=tmp_path / "memory.jsonl")
+    item = TraderMemoryItem(
+        trader_id="trader_001",
+        memory_type=TraderMemoryType.failure_case,
+        as_of_date=date(2026, 4, 25),
+        title="test",
+        content="test",
+    )
+    result = store.update(uuid4(), item)
+    assert result is False

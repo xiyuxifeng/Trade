@@ -52,6 +52,9 @@ class TraderMemoryItem(BaseModel):
     strategy_adjustment_data: dict | None = None
     market_regime_data: dict | None = None
 
+    # 新增：附加数据（NTL-S5-012，用于存储 auto_original 等）
+    extra: dict = Field(default_factory=dict)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

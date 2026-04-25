@@ -133,6 +133,16 @@ class TraderMemoryStore:
                 return True
         return False
 
+    def update(self, memory_id: UUID, updated_item: TraderMemoryItem) -> bool:
+        """更新指定 memory 条目。返回 True if found and updated."""
+        items = self._load_all()
+        for i, item in enumerate(items):
+            if item.memory_id == memory_id:
+                items[i] = updated_item
+                self._save_all(items)
+                return True
+        return False
+
     def hard_delete(self, memory_id: UUID) -> bool:
         """Permanently remove a memory item. Returns True if found and deleted."""
         items = self._load_all()

@@ -489,6 +489,7 @@ class ManagerAgent:
             ideas=ideas,
             highlights=[f"Generated {len(ideas)} trade ideas"],
             strategy_version_ids=list(dict.fromkeys(used_strategy_version_ids)),  # NTL-S4-008: 去重后保留顺序
+            market_universe_snapshot=asdict(market_universe) if market_universe else None,
         )
 
         # Optional: persona style routing (Phase 1 MVP)

@@ -1,3 +1,5 @@
+from src.models.ranking_entry import RankingEntryRecord
+
 from src.models.article_metadata import ArticleMetadata
 from src.models.hot_topics_snapshot import HotTopicsSnapshot
 from src.models.blog_article import BlogArticle
@@ -19,6 +21,7 @@ __all__ = [
     "DataAuditEvent",
     "HotTopicsSnapshot",
     "MarketData",
+    "RankingEntryRecord",
     "RawArticle",
     "Signal",
     "StrongSymbolsSnapshot",

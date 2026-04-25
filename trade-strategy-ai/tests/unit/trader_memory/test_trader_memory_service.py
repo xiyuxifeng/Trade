@@ -346,3 +346,106 @@ def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
     assert "Increase entry price tolerance" in summary.strategy_adjustments[0]
     assert len(summary.market_regime_notes) == 1
     assert "VIX > 30" in summary.market_regime_notes[0]
+
+
+# ---------------------------------------------------------------------------
+# NTL-S5-006: tags and strategy_version_id filter
+# ---------------------------------------------------------------------------
+
+def test_filter_by_tags(tmp_path: Path) -> None:
+    """验证 tags 过滤：匹配任一 tag 即可命中."""
+    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="AI chip postmortem",
+            content="Entry timing poor",
+            tags=["AI_chip", "半导体"],
+        )
+    )
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 24),
+            symbol="SH600519",
+            title="新能源 postmortem",
+            content="Position sizing issue",
+            tags=["新能源车"],
+        )
+    )
+
+    result = store.list_filtered(
+        TraderMemoryFilter(trader_id="trader_a", tags=["AI_chip"])
+    )
+    assert len(result) == 1
+    assert result[0].title == "AI chip postmortem"
+
+
+def test_filter_by_strategy_version(tmp_path: Path) -> None:
+    """验证 strategy_version_id 过滤：精确匹配."""
+    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="v1 postmortem",
+            content="Version 1 analysis",
+            strategy_version_id="v_2026_04_25",
+        )
+    )
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 24),
+            symbol="SH600519",
+            title="v2 postmortem",
+            content="Version 2 analysis",
+            strategy_version_id="v_2026_04_24",
+        )
+    )
+
+    result = store.list_filtered(
+        TraderMemoryFilter(trader_id="trader_a", strategy_version_id="v_2026_04_25")
+    )
+    assert len(result) == 1
+    assert result[0].title == "v1 postmortem"
+
+
+def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
+    """验证 tags + symbol 组合过滤."""
+    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            symbol="SH600519",
+            title="AI chip SH600519",
+            content="Entry timing poor",
+            tags=["AI_chip"],
+        )
+    )
+    store.append(
+        TraderMemoryItem(
+            trader_id="trader_a",
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=date(2026, 4, 25),
+            symbol="000001.SZ",
+            title="AI chip 000001",
+            content="Breakout analysis",
+            tags=["AI_chip"],
+        )
+    )
+
+    result = store.list_filtered(
+        TraderMemoryFilter(trader_id="trader_a", tags=["AI_chip"], symbol="SH600519")
+    )
+    assert len(result) == 1
+    assert result[0].symbol == "SH600519"

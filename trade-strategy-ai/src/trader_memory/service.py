@@ -82,6 +82,20 @@ class TraderMemoryStore:
                 if kw in i.title.lower() or kw in i.content.lower()
             ]
 
+        # NTL-S5-006: tags 过滤（匹配任一 tag 即可）
+        if f.tags:
+            result = [
+                i for i in result
+                if i.tags and any(tag in i.tags for tag in f.tags)
+            ]
+
+        # NTL-S5-006: strategy_version_id 过滤（精确匹配）
+        if f.strategy_version_id:
+            result = [
+                i for i in result
+                if i.strategy_version_id == f.strategy_version_id
+            ]
+
         return result
 
     def list_filtered(self, filter: TraderMemoryFilter) -> list[TraderMemoryItem]:

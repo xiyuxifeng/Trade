@@ -93,3 +93,272 @@ def _sort_key(entry: RankingEntry) -> tuple:
     else:
         odds = max(0.0, (entry.mfe or 0) - (entry.mae or 0))
         return (0, -entry.return_pct, -odds)  # (0, return_pct desc, odds desc)
+
+
+# -------------------------------------------------
+# RankingService（add_entry / generate_ranking / update_entry）
+# -------------------------------------------------
+
+from uuid import uuid4 as _uuid4
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.evaluation.ranking_repository import RankingRepository
+from src.models.ranking_entry import RankingEntryRecord
+
+
+class RankingService:
+    """盘后 ranking service。
+
+    职责：
+      - 接收 postmortem 结果和 evidence pack，生成 ranking 条目并持久化
+      - 支持批量生成 ranking（计算组内 rank）
+      - 支持 postmortem 修正后的同步更新
+      - 提供嵌套视图和扁平视图两种输出格式
+    """
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+        self._repo = RankingRepository(session)
+
+    def _entry_from_postmortem_and_pack(
+        self,
+        postmortem,
+        evidence_pack,
+    ):
+        """从 postmortem 结果和 evidence pack 构建 RankingEntry。
+
+        从 evidence_pack 提取：
+          - trade_date（从 TradeIdea.as_of_date）
+          - trader_id（从 signal_context 或 TradeIdea）
+          - strategy_version_id
+          - symbol（从 TradeIdea）
+
+        从 postmortem 提取：
+          - return_pct / mfe / mae
+          - attribution_source
+        """
+        # 从 evidence_pack 提取基本信息
+        trade_date = evidence_pack.trade_date
+        strategy_version_id = evidence_pack.strategy_version_id or ""
+        symbol = ""
+
+        # 从 trade_idea 提取 symbol
+        if evidence_pack.trade_idea and hasattr(evidence_pack.trade_idea, "symbol"):
+            symbol = evidence_pack.trade_idea.symbol or ""
+
+        # 从 signal_context 提取 trader_id（如果有）
+        trader_id = ""
+        if evidence_pack.signal_context and hasattr(evidence_pack.signal_context, "trader_id"):
+            trader_id = evidence_pack.signal_context.trader_id or ""
+
+        # 如果 signal_context 没有 trader_id，尝试从 trade_idea 提取
+        if not trader_id and evidence_pack.trade_idea and hasattr(evidence_pack.trade_idea, "trader_id"):
+            trader_id = evidence_pack.trade_idea.trader_id or ""
+
+        # 从 postmortem 提取指标
+        return_pct = postmortem.return_pct
+        mfe_val = postmortem.mfe
+        mae_val = postmortem.mae
+
+        composite = _compute_composite(return_pct, mfe_val, mae_val)
+
+        return RankingEntry(
+            entry_id=_uuid4(),
+            trade_date=trade_date,
+            trader_id=trader_id,
+            strategy_version_id=strategy_version_id,
+            symbol=symbol,
+            return_pct=return_pct,
+            mfe=mfe_val,
+            mae=mae_val,
+            composite_score=composite,
+            rank=None,  # add_entry 时不计算 rank
+            is_latest=True,
+            idea_id=postmortem.idea_id,
+            attribution_source=postmortem.attribution_source,
+            extra={},
+        )
+
+    async def add_entry(self, postmortem, evidence_pack) -> RankingEntry:
+        """接收一个 postmortem 结果，生成并持久化一条 ranking 条目。
+
+        rank 字段在 add_entry 时为 None，由 generate_ranking() 批量计算。
+        同一 (trade_date, strategy_version_id, symbol) 已存在时，
+        旧 entry 被标记为 is_latest=False，新 entry 的 is_latest=True。
+
+        Args:
+            postmortem: 盘后复盘结果
+            evidence_pack: 交易证据包
+
+        Returns:
+            新建的 RankingEntry
+        """
+        entry = self._entry_from_postmortem_and_pack(postmortem, evidence_pack)
+        record = await self._repo.upsert(entry)
+        return RankingEntry.from_record(record)
+
+    async def generate_ranking(
+        self,
+        trade_date: str,
+        trader_id: str | None = None,
+        strategy_version_id: str | None = None,
+        view: Literal["nested", "flat"] = "nested",
+    ) -> dict | list:
+        """批量生成并更新指定日期的 ranking（计算 rank）。
+
+        调用时机：当日所有 add_entry 完成后（NTL-S5-011 盘后流程末尾）。
+
+        排序规则：
+          1. return_pct 降序
+          2. return_pct 相同时按 (mfe - mae) 降序
+          3. return_pct 为 None 的排在最后，组内按赔率排序
+
+        Args:
+            trade_date: 交易日期（YYYY-MM-DD）
+            trader_id: 可选，限定 trader
+            strategy_version_id: 可选，限定策略版本
+            view: "nested"（默认，嵌套字典）| "flat"（扁平列表）
+
+        Returns:
+            nested view: {trader_id: {strategy_version_id: [RankingEntry...]}}
+            flat view: [RankingEntry...]（先按 trader 分组，组内按 composite_score 排序）
+        """
+        # 查询所有 latest entry
+        records = await self._repo.query_by_date(
+            trade_date=trade_date,
+            trader_id=trader_id,
+            strategy_version_id=strategy_version_id,
+            is_latest_only=True,
+        )
+
+        entries = [RankingEntry.from_record(r) for r in records]
+
+        # 按 (trader_id, strategy_version_id) 分组
+        groups: dict[str, dict[str, list[RankingEntry]]] = {}
+        for entry in entries:
+            groups.setdefault(entry.trader_id, {})
+            groups[entry.trader_id].setdefault(entry.strategy_version_id, [])
+            groups[entry.trader_id][entry.strategy_version_id].append(entry)
+
+        # 在每个组内排序并计算 rank
+        all_entries_with_rank: list[RankingEntry] = []
+        for trader_id_key, versions in groups.items():
+            for version_id, version_entries in versions.items():
+                # 排序
+                sorted_entries = sorted(version_entries, key=_sort_key)
+                # 计算组内 rank（从 1 开始）
+                ranked_entries = []
+                for rank_idx, e in enumerate(sorted_entries, start=1):
+                    e.rank = rank_idx
+                    ranked_entries.append(e)
+                all_entries_with_rank.extend(ranked_entries)
+
+        # 更新 DB 中的 rank
+        if all_entries_with_rank:
+            entry_ids = [e.entry_id for e in all_entries_with_rank]
+            ranks = [e.rank for e in all_entries_with_rank]
+            await self._repo.update_rank(entry_ids, ranks)
+
+        # 生成视图
+        if view == "flat":
+            # flat view：先按 trader 分组，组内按 composite_score 排序
+            flat_list: list[RankingEntry] = []
+            for t_id in sorted(groups.keys()):
+                trader_entries: list[RankingEntry] = []
+                for v_id in sorted(groups[t_id].keys()):
+                    trader_entries.extend(sorted(
+                        groups[t_id][v_id],
+                        key=lambda e: (-(e.composite_score or 0)),
+                    ))
+                flat_list.extend(trader_entries)
+            return flat_list
+        else:
+            # nested view：{trader_id: {strategy_version_id: [entries...]}}
+            return groups
+
+    async def update_entry(self, entry_id: UUID, postmortem) -> RankingEntry | None:
+        """当 postmortem 被 LLM 修正时，同步更新对应的 ranking 条目。
+
+        实现逻辑：
+          1. 查找 entry_id 对应的 record
+          2. 标记旧 entry.is_latest=False
+          3. 写入新 entry（is_latest=True，rank=None）
+
+        Args:
+            entry_id: 被修正的 entry ID
+            postmortem: 更新后的 postmortem 结果
+
+        Returns:
+            更新后的 RankingEntry，或 None（未找到）
+        """
+        # 查找旧 record
+        stmt = select(RankingEntryRecord).where(RankingEntryRecord.entry_id == entry_id)
+        result = await self.session.execute(stmt)
+        old_record = result.scalar_one_or_none()
+
+        if old_record is None:
+            return None
+
+        # 标记旧 entry 为非最新
+        old_record.is_latest = False
+
+        # 从 postmortem 提取更新的指标
+        return_pct = postmortem.return_pct
+        mfe_val = postmortem.mfe
+        mae_val = postmortem.mae
+
+        # 创建新 entry（基于旧的 key + 更新的指标）
+        new_entry = RankingEntry(
+            entry_id=_uuid4(),
+            trade_date=old_record.trade_date,
+            trader_id=old_record.trader_id,
+            strategy_version_id=old_record.strategy_version_id,
+            symbol=old_record.symbol,
+            return_pct=return_pct,
+            mfe=mfe_val,
+            mae=mae_val,
+            composite_score=_compute_composite(return_pct, mfe_val, mae_val),
+            rank=None,  # 下次 generate_ranking 重新计算
+            is_latest=True,
+            idea_id=postmortem.idea_id,
+            attribution_source=postmortem.attribution_source,
+            extra={"corrected_from": str(entry_id)},
+        )
+
+        new_record = await self._repo.upsert(new_entry)
+        return RankingEntry.from_record(new_record)
+
+    def get_latest_by_version(self, version_id: str) -> list[RankingEntry]:
+        """获取指定策略版本的最新 ranking 条目（is_latest=True）。
+
+        Note: 同步版本，直接调用 repo。
+        """
+        # 同步封装（用于不需要 async 的场景）
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return asyncio.get_event_loop().run_until_complete(
+            self._repo.get_latest_by_version(version_id)
+        )
+
+    def get_by_trader(self, trader_id: str, trade_date: str | None = None) -> list[RankingEntry]:
+        """获取指定 trader 的 ranking 条目列表。
+
+        Note: 同步封装。
+        """
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return asyncio.get_event_loop().run_until_complete(
+            self._repo.query_by_date(
+                trade_date or "", trader_id=trader_id, is_latest_only=True
+            )
+        )

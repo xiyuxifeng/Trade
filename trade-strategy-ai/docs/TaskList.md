@@ -1178,14 +1178,15 @@
   验收标准：记忆结构足以存储盘后结果。
   完成情况：TraderMemoryType 新增 3 种类型（postmortem/strategy_adjustment/market_regime_note）；TraderMemoryItem 新增 idea_id/strategy_version_id/ranking_entry_id/postmortem_data/strategy_adjustment_data/market_regime_data 字段；TraderMemorySummary 新增 postmortem_notes/strategy_adjustments/market_regime_notes 字段；summarize_context 更新支持聚合 new types；22 tests PASS。
 
-- [ ] `NTL-S5-006` `P1`
+- [x] `NTL-S5-006` `P1`
   目标：扩展 `TraderMemory` service 检索能力。
   输入：扩展后的记忆 schema。
   输出：支持按版本、主题、标的检索。
-  修改范围：`src/trader_memory/service.py`。
+  修改范围：`src/trader_memory/schemas.py`、`src/trader_memory/service.py`、`src/db/migrations/`。
   前置依赖：`NTL-S5-005`。
   可并行：`NTL-S5-007`。
   验收标准：下次盘前能按上下文取回相关记忆。
+  完成情况：TraderMemoryItem 新增 topic_source/raw_topic_ids 字段（JSONL schema）；TraderMemoryFilter 新增 tags/strategy_version_id 字段；_apply_filter 实现 tags 任一命中 + strategy_version_id 精确匹配；新增 topic_mapping Alembic migration；27 tests PASS。
 
 - [ ] `NTL-S5-007` `P1`
   目标：扩展 review task 结构。

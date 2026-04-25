@@ -1146,7 +1146,7 @@
   验收标准：失败原因分类结构稳定且可扩展。
   完成情况：新增 `failure_taxonomy.py`（FailureRootCause/FailureStage/FailureRuleType/FailureAttribution/parse_failure_categories）；10 tests PASS；多维度标签体系设计文档已提交。
 
-- [ ] `NTL-S5-003` `P1`
+- [x] `NTL-S5-003` `P1` ✅ 2026-04-25
   目标：建立盘后复盘 service。
   输入：Evidence Pack、失败归因、行情数据。
   输出：`src/evaluation/postmortem_service.py`。
@@ -1154,6 +1154,7 @@
   前置依赖：`NTL-S5-001`、`NTL-S5-002`。
   可并行：`NTL-S5-004`。
   验收标准：能生成结构化 postmortem 结果。
+  完成情况：新增 `postmortem_service.py`（ValidationDecision/LLMValidationResult/PostmortemResult/PostmortemService/LLMValidator protocol）；自动归因 + LLM 校验混合模式；25 tests PASS；设计文档已提交。
 
 - [ ] `NTL-S5-004` `P1`
   目标：建立 ranking service。

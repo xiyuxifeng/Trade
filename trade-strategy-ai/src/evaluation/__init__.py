@@ -22,6 +22,7 @@ from src.evaluation.postmortem_service import (
     PostmortemService,
     LLMValidator,
 )
+from src.evaluation.ranking_service import RankingEntry, RankingService
 
 __all__ = [
     "EvidencePack",
@@ -35,4 +36,6 @@ __all__ = [
     "PostmortemResult",
     "PostmortemService",
     "LLMValidator",
+    "RankingEntry",
+    "RankingService",
 ]

@@ -1,7 +1,7 @@
 # TaskList
 
-> 本文件是 `trade-strategy-ai` 的唯一执行入口。  
-> 目标不是“记录想法”，而是确保任何人在没有历史上下文时，也能继续把项目推进到可交付状态。  
+> 本文件是 `trade-strategy-ai` 的唯一执行入口。
+> 目标不是“记录想法”，而是确保任何人在没有历史上下文时，也能继续把项目推进到可交付状态。
 > 旧 `docs/TaskList.md`、旧 `docs/Proposed-Plan/TaskList.md`、以及其他历史计划文档只保留参考价值，不再作为执行入口。
 
 ---
@@ -57,6 +57,8 @@
 - `前置依赖`：必须先完成的任务。
 - `可并行`：哪些任务可以和它同时做。
 - `验收标准`：做到什么程度才算完成。
+- `完成情况`: 记录完成的内容和结果。
+- `备注`: 可选，其他需要注意的事项和说明。
 
 ### 2.5 执行原则
 
@@ -1156,14 +1158,15 @@
   验收标准：能生成结构化 postmortem 结果。
   完成情况：新增 `postmortem_service.py`（ValidationDecision/LLMValidationResult/PostmortemResult/PostmortemService/LLMValidator protocol）；自动归因 + LLM 校验混合模式；25 tests PASS；设计文档已提交。
 
-- [ ] `NTL-S5-004` `P1`
+- [x] `NTL-S5-004` `P1`
   目标：建立 ranking service。
   输入：盘后评分数据。
-  输出：`src/evaluation/ranking_service.py`。
-  修改范围：`src/evaluation/`。
+  输出：`src/evaluation/ranking_service.py` + `ranking_repository.py` + `RankingEntryRecord` ORM。
+  修改范围：`src/evaluation/` + `src/models/`。
   前置依赖：`NTL-S5-001`、`NTL-S5-002`。
   可并行：`NTL-S5-003`。
   验收标准：能按 trader、策略版本、标的等维度输出 ranking。
+  完成情况：新增 `RankingEntry` dataclass + `RankingService`（add_entry/generate_ranking/update_entry）+ `RankingRepository`（upsert/update_rank/query）+ `RankingEntryRecord` ORM；多级排序（return_pct + 赔率）；nested/flat 双视图输出；is_latest 版本淘汰；41 tests PASS。
 
 - [ ] `NTL-S5-005` `P1`
   目标：扩展 `TraderMemory` schema。

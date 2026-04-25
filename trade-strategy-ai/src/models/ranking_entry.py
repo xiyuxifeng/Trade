@@ -26,13 +26,14 @@ class RankingEntryRecord(TimestampMixin, Base):
     索引设计：
       - trade_date：按日期查询
       - (trader_id, strategy_version_id)：嵌套分组查询
-      - (trade_date, strategy_version_id, symbol) 唯一约束：防止并发重复写入
+      - (trade_date, trader_id, strategy_version_id, symbol) 唯一约束：防止同一交易员重复写入
     """
 
     __tablename__ = "ranking_entries"
     __table_args__ = (
         UniqueConstraint(
             "trade_date",
+            "trader_id",
             "strategy_version_id",
             "symbol",
             name="uq_ranking_entry",

@@ -71,6 +71,8 @@ from src.strategy.types import (
 )
 from src.db.session import session_scope
 from src.evaluation.evidence_pack import EvidencePack
+from src.evaluation.ranking_service import RankingService
+from src.evaluation.metrics_calculator import compute_mfe_mae_return
 
 if TYPE_CHECKING:
     from src.market_universe.schemas import MarketUniverse
@@ -729,6 +731,8 @@ class ManagerAgent:
             )
 
         evaluations: list[IdeaEvaluation] = []
+        # NTL-S5-011: 收集待写入 ranking 的数据
+        pending_rankings: list[tuple[EvidencePack, float, float, float]] = []
 
         for idea in daily_report.ideas:
             entry_price = idea.entry.price
@@ -777,6 +781,16 @@ class ManagerAgent:
                 config=self.config,
             )
             self._save_evidence_pack(evidence_pack)
+
+            # NTL-S5-011: 计算 mfe/mae/return_pct 用于 ranking
+            mfe_val, mae_val, return_pct_for_ranking, _, _ = compute_mfe_mae_return(
+                bars=evidence_pack.market_data.get("bars", []),
+                entry_price=float(entry_price) if entry_price else 0.0,
+                entry_date=str(as_of_date),
+                target_price=evidence_pack.market_data.get("target_price"),
+                stop_loss_price=evidence_pack.market_data.get("stop_loss_price"),
+            )
+            pending_rankings.append((evidence_pack, mfe_val, mae_val, return_pct_for_ranking))
 
             # trigger review tasks
             min_ret = float(self.config.evaluation.min_expected_return)
@@ -855,6 +869,19 @@ class ManagerAgent:
                     },
                 )
                 self._append_task(postmortem_task)
+
+        # NTL-S5-011: 生成盘后 ranking
+        if pending_rankings:
+            async with session_scope() as session:
+                ranking_svc = RankingService(session, output_dir=self.output_dir)
+                for pack, mfe_val, mae_val, return_pct_val in pending_rankings:
+                    await ranking_svc.add_entry_from_metrics(
+                        evidence_pack=pack,
+                        mfe=mfe_val,
+                        mae=mae_val,
+                        return_pct=return_pct_val,
+                    )
+                await ranking_svc.generate_ranking_and_save(trade_date=str(as_of_date))
 
         summary = [
             f"Evaluated {len(evaluations)} ideas",

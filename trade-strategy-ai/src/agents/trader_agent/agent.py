@@ -302,4 +302,14 @@ class TraderAgent:
                 )
             )
 
+            # NTL-S5-006 前置：从 topic_constituents 关联 topic_id
+            if market_universe is not None and market_universe.topic_constituents:
+                topic_ids = [
+                    tc.topic_id
+                    for tc in market_universe.topic_constituents.constituents
+                    if tc.symbol == symbol and tc.topic_id
+                ]
+                if topic_ids:
+                    ideas[-1].source_topic_ids = topic_ids
+
         return ideas

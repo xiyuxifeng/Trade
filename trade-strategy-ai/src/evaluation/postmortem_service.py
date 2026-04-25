@@ -124,3 +124,41 @@ class PostmortemService:
         else:  # REJECT
             extra["auto_original"] = auto
             return FailureAttribution(root_causes=[]), "llm_rejected", extra
+
+    async def generate(
+        self,
+        evidence_pack: EvidencePack,
+    ) -> PostmortemResult:
+        """对单笔交易生成复盘结果。
+
+        Args:
+            evidence_pack: 交易证据包
+
+        Returns:
+            PostmortemResult: 结构化复盘结果
+        """
+        # Step 1: 自动归因
+        auto_attribution = self._auto_attribution(evidence_pack)
+
+        # Step 2: LLM 校验（可选）
+        source = "auto"
+        extra: dict[str, object] = {}
+        final_attribution = auto_attribution
+
+        if self.llm_validator is not None:
+            validation = await self.llm_validator.validate(evidence_pack, auto_attribution)
+            final_attribution, source, extra = self._apply_validation(auto_attribution, validation)
+
+        # Step 3: LLM 笔记生成（当前未实现，占位）
+        notes = None
+        # if self.enable_llm_notes and self.llm_validator is not None:
+        #     notes = await self._generate_notes(evidence_pack, final_attribution)
+
+        return PostmortemResult(
+            idea_id=evidence_pack.idea_id,
+            trade_date=evidence_pack.trade_date,
+            failure_attribution=final_attribution,
+            attribution_source=source,
+            postmortem_notes=notes,
+            extra=extra,
+        )

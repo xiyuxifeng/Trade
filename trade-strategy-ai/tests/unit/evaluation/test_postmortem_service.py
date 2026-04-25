@@ -217,3 +217,67 @@ class TestApplyValidation:
         assert final.root_causes == []
         assert source == "llm_rejected"
         assert extra["auto_original"].root_causes == ["entry_timing_poor"]
+
+
+class TestGenerate:
+    """generate 方法集成测试。"""
+
+    async def test_generate_auto_only(self):
+        """无 LLM validator 时返回纯自动归因结果。"""
+        from uuid import uuid4
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService()
+
+        evidence = EvidencePack(
+            idea_id=uuid4(),
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={},  # 空数据，触发 data_quality_issue
+        )
+
+        result = await service.generate(evidence)
+        assert result.attribution_source == "auto"
+        assert "data_quality_issue" in result.failure_attribution.root_causes
+        assert result.postmortem_notes is None
+
+    async def test_generate_with_validator_confirm(self):
+        """有 LLM validator 且 confirm 时返回 llm_confirmed source。"""
+        from uuid import uuid4
+        from src.evaluation.postmortem_service import PostmortemService, ValidationDecision, LLMValidationResult
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from src.evaluation.failure_taxonomy import FailureAttribution
+        from datetime import date
+
+        class MockValidator:
+            async def validate(self, evidence_pack, auto_attribution):
+                return LLMValidationResult(decision=ValidationDecision.CONFIRM, reasoning="正确")
+
+        service = PostmortemService(llm_validator=MockValidator())
+
+        evidence = EvidencePack(
+            idea_id=uuid4(),
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={"000001": {"close": 10.5}},
+        )
+
+        result = await service.generate(evidence)
+        assert result.attribution_source == "llm_confirmed"
+        assert result.failure_attribution.root_causes == []

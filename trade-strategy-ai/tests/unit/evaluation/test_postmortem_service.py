@@ -119,7 +119,7 @@ class TestAutoAttribution:
     """自动归因逻辑测试。"""
 
     def test_data_quality_issue(self):
-        """market_data 为空应标记 data_quality_issue。"""
+        """market_data 为空应标记 data_quality_issue（NTL-S5-010 新增 bars 检查）。"""
         from src.evaluation.postmortem_service import PostmortemService
         from src.evaluation.evidence_pack import EvidencePack
         from src.schemas.contracts import TradeIdea
@@ -137,14 +137,14 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={},  # 空数据
+            market_data={},  # 空数据，bars 也缺失
         )
 
-        result = service._auto_attribution(evidence)
+        result = service._auto_attribution(evidence, rules_hit=[], return_pct=0.0)
         assert "data_quality_issue" in result.root_causes
 
     def test_no_issue_when_data_present(self):
-        """market_data 非空且 signal_context 为 None 时应返回空归因。"""
+        """market_data 非空（含 bars）且盈利时应返回空归因（NTL-S5-010）。"""
         from src.evaluation.postmortem_service import PostmortemService
         from src.evaluation.evidence_pack import EvidencePack
         from src.schemas.contracts import TradeIdea
@@ -162,11 +162,69 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={"000001": {"close": 10.5}},  # 非空数据
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
+            },  # 含 bars 的有效数据
         )
 
-        result = service._auto_attribution(evidence)
+        result = service._auto_attribution(evidence, rules_hit=[], return_pct=8.0)
         assert result.root_causes == []
+
+    def test_loss_with_rules_hit(self):
+        """亏损 + rules_hit 非空 → RULE_PRECONDITION_FAILED（NTL-S5-010）。"""
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService()
+
+        evidence = EvidencePack(
+            idea_id=None,
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
+            },
+        )
+
+        result = service._auto_attribution(evidence, rules_hit=["r1", "r2"], return_pct=-15.0)
+        assert "rule_precondition_failed" in result.root_causes
+        assert "entry_timing_poor" not in result.root_causes
+
+    def test_loss_without_rules_hit(self):
+        """亏损 + rules_hit 为空 → ENTRY_TIMING_POOR（NTL-S5-010）。"""
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService()
+
+        evidence = EvidencePack(
+            idea_id=None,
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
+            },
+        )
+
+        result = service._auto_attribution(evidence, rules_hit=[], return_pct=-15.0)
+        assert "entry_timing_poor" in result.root_causes
+        assert "rule_precondition_failed" not in result.root_causes
 
 
 class TestApplyValidation:
@@ -275,7 +333,12 @@ class TestGenerate:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={"000001": {"close": 10.5}},
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
+                "entry_price": 10.0,
+                "target_price": 11.0,
+                "stop_loss_price": 9.0,
+            },  # NTL-S5-010: 含 bars 的有效数据
         )
 
         result = await service.generate(evidence)

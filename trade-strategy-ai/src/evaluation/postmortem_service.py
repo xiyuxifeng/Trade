@@ -28,6 +28,7 @@ class LLMValidationResult:
 
 from uuid import UUID
 from src.evaluation.failure_taxonomy import FailureAttribution
+from src.evaluation.metrics_calculator import compute_mfe_mae_return, _extract_rules_hit
 
 
 @dataclass
@@ -85,19 +86,32 @@ class PostmortemService:
         self.llm_validator = llm_validator
         self.enable_llm_notes = enable_llm_notes
 
-    def _auto_attribution(self, evidence_pack: EvidencePack) -> FailureAttribution:
-        """基于 EvidencePack 数据做自动归因。
+    def _auto_attribution(
+        self,
+        evidence_pack: EvidencePack,
+        rules_hit: list[str],
+        return_pct: float,
+    ) -> FailureAttribution:
+        """基于 EvidencePack 数据做自动归因（NTL-S5-010 增强）。
 
-        目前实现：
-        - data_quality_issue：market_data 为空或异常
-
-        完整归因逻辑在 NTL-S5-010 后完善。
+        归因逻辑：
+        - 数据质量：无 market_data 或 bars 为空
+        - 亏损归因（return_pct < 0）：
+            - rules_hit 非空 → RULE_PRECONDITION_FAILED（规则前置条件可能未满足）
+            - rules_hit 为空 → ENTRY_TIMING_POOR（入场时机差，无规则依据）
         """
         root_causes: list[str] = []
 
         # 数据质量问题
-        if not evidence_pack.market_data:
+        if not evidence_pack.market_data or not evidence_pack.market_data.get("bars"):
             root_causes.append("data_quality_issue")
+
+        # 亏损归因
+        if return_pct < 0:
+            if not rules_hit:
+                root_causes.append("entry_timing_poor")
+            else:
+                root_causes.append("rule_precondition_failed")
 
         return FailureAttribution(root_causes=root_causes)
 
@@ -137,10 +151,36 @@ class PostmortemService:
         Returns:
             PostmortemResult: 结构化复盘结果
         """
-        # Step 1: 自动归因
-        auto_attribution = self._auto_attribution(evidence_pack)
+        # Step 1: 计算 MFE / MAE / return_pct（NTL-S5-010）
+        bars: list[dict] = evidence_pack.market_data.get("bars", [])
+        entry_price: float = evidence_pack.market_data.get("entry_price", 0.0)
+        target_price = evidence_pack.market_data.get("target_price")
+        stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
 
-        # Step 2: LLM 校验（可选）
+        mfe, mae, return_pct, exit_triggered, exit_date = compute_mfe_mae_return(
+            bars=bars,
+            entry_price=entry_price,
+            entry_date=evidence_pack.trade_date,
+            target_price=target_price,
+            stop_loss_price=stop_loss_price,
+        )
+
+        # 提取 rules_hit
+        rules_hit: list[str] = []
+        if (
+            evidence_pack.signal_context
+            and evidence_pack.signal_context.rules_snapshot
+        ):
+            rules_hit = _extract_rules_hit(evidence_pack.signal_context.rules_snapshot)
+
+        # Step 2: 自动归因（基于 return_pct 和 rules_hit）
+        auto_attribution = self._auto_attribution(
+            evidence_pack,
+            rules_hit=rules_hit,
+            return_pct=return_pct,
+        )
+
+        # Step 3: LLM 校验（可选）
         source = "auto"
         extra: dict[str, object] = {}
         final_attribution = auto_attribution
@@ -149,10 +189,19 @@ class PostmortemService:
             validation = await self.llm_validator.validate(evidence_pack, auto_attribution)
             final_attribution, source, extra = self._apply_validation(auto_attribution, validation)
 
-        # Step 3: LLM 笔记生成（当前未实现，占位）
+        # Step 4: LLM 笔记生成（当前未实现，占位）
         notes = None
         # if self.enable_llm_notes and self.llm_validator is not None:
         #     notes = await self._generate_notes(evidence_pack, final_attribution)
+
+        # 构建 extra（包含 NTL-S5-010 新增字段）
+        result_extra: dict[str, object] = {
+            **extra,
+            "rules_hit": rules_hit,
+            "exit_triggered": exit_triggered,
+            "exit_date": exit_date,
+            "is_final": exit_triggered is not None,
+        }
 
         return PostmortemResult(
             idea_id=evidence_pack.idea_id,
@@ -160,5 +209,8 @@ class PostmortemService:
             failure_attribution=final_attribution,
             attribution_source=source,
             postmortem_notes=notes,
-            extra=extra,
+            mfe=mfe,
+            mae=mae,
+            return_pct=return_pct,
+            extra=result_extra,
         )

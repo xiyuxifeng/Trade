@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -106,12 +106,18 @@ class EvaluationRequest(BaseModel):
 
 
 class IdeaEvaluation(BaseModel):
+    """单笔交易评估结果。
+
+    .. deprecated::
+        current_price 字段废弃（2026-04-26），语义从"评估时刻快照价"
+        改为"exit_price"（bars 收盘价）。保留以兼容外部消费方。
+    """
     idea_id: UUID
     symbol: str
     entry_price: float | None = None
-    current_price: float | None = None
+    current_price: float | None = None  # deprecated: 语义变为 exit_price
     return_pct: float | None = None
-    status: str = "not_evaluated"  # ok/not_evaluated/error
+    status: Literal["ok", "partial", "fallback", "not_evaluated"] = "not_evaluated"
     notes: list[str] = Field(default_factory=list)
 
 

@@ -81,3 +81,35 @@ class TestPostmortemResult:
         assert result.mae is None
         assert result.return_pct is None
         assert result.extra == {}
+
+
+class TestLLMValidator:
+    """LLMValidator protocol 测试。"""
+
+    def test_service_initialization(self):
+        """PostmortemService 可无参数初始化。"""
+        from src.evaluation.postmortem_service import PostmortemService
+
+        service = PostmortemService()
+        assert service.llm_validator is None
+        assert service.enable_llm_notes is False
+
+    def test_service_with_validator(self):
+        """PostmortemService 可接收 LLMValidator。"""
+        from src.evaluation.postmortem_service import PostmortemService, LLMValidator, ValidationDecision, LLMValidationResult
+        from src.evaluation.failure_taxonomy import FailureAttribution
+        from src.evaluation.evidence_pack import EvidencePack
+        from uuid import uuid4
+
+        # 创建一个简单的 mock validator
+        class MockValidator:
+            async def validate(
+                self,
+                evidence_pack: EvidencePack,
+                auto_attribution: FailureAttribution,
+            ) -> LLMValidationResult:
+                return LLMValidationResult(decision=ValidationDecision.CONFIRM)
+
+        service = PostmortemService(llm_validator=MockValidator(), enable_llm_notes=True)
+        assert service.llm_validator is not None
+        assert service.enable_llm_notes is True

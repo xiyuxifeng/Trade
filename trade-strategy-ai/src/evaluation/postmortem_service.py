@@ -50,3 +50,37 @@ class PostmortemResult:
 
     # 扩展字段
     extra: dict[str, object] = field(default_factory=dict)
+
+
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from src.evaluation.evidence_pack import EvidencePack
+
+
+class LLMValidator(Protocol):
+    """LLM 校验器接口。"""
+    async def validate(
+        self,
+        evidence_pack: EvidencePack,
+        auto_attribution: FailureAttribution,
+    ) -> LLMValidationResult:
+        """校验自动归因结果。"""
+        ...
+
+
+class PostmortemService:
+    """盘后复盘 service。
+
+    Args:
+        llm_validator: LLM 校验器（可选，不提供则只做自动归因）
+        enable_llm_notes: 是否生成 LLM 复盘笔记（需要 llm_validator）
+    """
+
+    def __init__(
+        self,
+        llm_validator: LLMValidator | None = None,
+        enable_llm_notes: bool = False,
+    ):
+        self.llm_validator = llm_validator
+        self.enable_llm_notes = enable_llm_notes

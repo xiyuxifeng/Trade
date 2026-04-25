@@ -292,35 +292,35 @@ class ManagerAgent:
         idea: "TradeIdea",
         market_universe_snapshot: dict[str, Any] | None,
     ) -> tuple[list[str], str | None, dict[str, list[str]] | None]:
-        """从 market_universe_snapshot 构建 canonical tags.
+        """从 market_universe_snapshot 构建 canonical tags。
 
-        处理 JSON 序列化后的 dict 结构（asdict → json.dumps → json.load 后嵌套 dict）。
+        source_topic_ids 编码格式："topic_name|kind"
+        直接解析编码字符串生成 canonical tag，不依赖 hot_topics 查表。
 
         Returns:
             tuple of (canonical_tags, topic_source, raw_topic_ids)
             - canonical_tags: ["kaipan:{kind}:{topic_name}", ...]
             - topic_source: provider 名称，如 "kaipan"（有 tags 时才返回）
-            - raw_topic_ids: {provider: [raw_topic_id, ...]}（保留所有 topic_id）
+            - raw_topic_ids: {provider: [raw_topic_id, ...]}
         """
         if not idea.source_topic_ids or not market_universe_snapshot:
             return [], None, None
 
-        hot_topics_data = market_universe_snapshot.get("hot_topics")
-        if not hot_topics_data:
-            return [], None, None
-
-        # hot_topics.topics 是 list of dict（JSON 序列化后）
-        topics_list: list[dict] = hot_topics_data.get("topics", [])
-        hot_topics_map: dict[str, dict] = {t.get("topic_id", ""): t for t in topics_list}
-
+        # source_topic_ids 格式："topic_name|kind"（编码字符串）
+        # 直接解析生成 canonical tags，不查 hot_topics
         canonical_tags = []
         raw_ids: dict[str, list[str]] = {}
 
-        for tid in idea.source_topic_ids:
-            ht = hot_topics_map.get(tid)
-            if ht and ht.get("topic_name") and ht.get("kind"):
-                canonical_tags.append(f"kaipan:{ht['kind']}:{ht['topic_name']}")
-                raw_ids.setdefault("kaipan", []).append(tid)
+        for encoded in idea.source_topic_ids:
+            if "|" not in encoded:
+                continue
+            parts = encoded.rsplit("|", 1)
+            if len(parts) != 2:
+                continue
+            topic_name, kind = parts
+            if topic_name and kind:
+                canonical_tags.append(f"kaipan:{kind}:{topic_name}")
+                raw_ids.setdefault("kaipan", []).append(encoded)
 
         return canonical_tags, "kaipan" if canonical_tags else None, raw_ids or None
 

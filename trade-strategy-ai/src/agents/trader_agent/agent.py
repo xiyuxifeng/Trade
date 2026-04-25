@@ -302,14 +302,15 @@ class TraderAgent:
                 )
             )
 
-            # NTL-S5-006 前置：从 topic_constituents 关联 topic_id
+            # NTL-S5-006 前置：从 topic_constituents 关联 topic_name 和 kind
+            # 编码格式："topic_name|kind"，用于后续 canonical tag 生成
             if market_universe is not None and market_universe.topic_constituents:
-                topic_ids = [
-                    tc.topic_id
+                topic_entries = [
+                    f"{tc.topic_name}|{tc.kind}"
                     for tc in market_universe.topic_constituents.constituents
-                    if tc.symbol == symbol and tc.topic_id
+                    if tc.symbol == symbol and tc.topic_name and tc.kind
                 ]
-                if topic_ids:
-                    ideas[-1].source_topic_ids = topic_ids
+                if topic_entries:
+                    ideas[-1].source_topic_ids = topic_entries
 
         return ideas

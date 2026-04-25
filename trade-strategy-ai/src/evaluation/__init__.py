@@ -8,5 +8,19 @@
 """
 
 from src.evaluation.evidence_pack import EvidencePack
+from src.evaluation.failure_taxonomy import (
+    FailureRootCause,
+    FailureStage,
+    FailureRuleType,
+    FailureAttribution,
+    parse_failure_categories,
+)
 
-__all__ = ["EvidencePack"]
+__all__ = [
+    "EvidencePack",
+    "FailureRootCause",
+    "FailureStage",
+    "FailureRuleType",
+    "FailureAttribution",
+    "parse_failure_categories",
+]

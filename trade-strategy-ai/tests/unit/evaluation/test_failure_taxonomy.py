@@ -107,3 +107,21 @@ class TestParseFailureCategories:
         assert result.root_causes == ["entry_timing_poor"]
         assert result.stage == "stage:exit"
         assert result.rule_type is None
+
+
+class TestModuleExports:
+    """模块导出测试。"""
+
+    def test_evaluation_exports_failure_taxonomy(self):
+        """evaluation 模块正确导出 failure_taxonomy 的所有公开接口。"""
+        from src.evaluation import (
+            FailureRootCause,
+            FailureStage,
+            FailureRuleType,
+            FailureAttribution,
+            parse_failure_categories,
+        )
+        assert hasattr(FailureRootCause, "ENTRY_TIMING_POOR")
+        assert hasattr(FailureStage, "ENTRY")
+        assert hasattr(FailureRuleType, "ENTRY")
+        assert callable(parse_failure_categories)

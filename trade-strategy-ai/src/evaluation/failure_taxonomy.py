@@ -46,3 +46,31 @@ class FailureRuleType(StrEnum):
     EXIT = "rule_type:exit"
     FILTER = "rule_type:filter"
     SIZING = "rule_type:sizing"
+
+
+@dataclass
+class FailureAttribution:
+    """结构化失败归因。"""
+    root_causes: list[str]
+    stage: str | None = None
+    rule_type: str | None = None
+
+
+def parse_failure_categories(tags: list[str]) -> FailureAttribution:
+    """将标签列表解析为结构化归因对象。
+
+    Args:
+        tags: 标签列表，如 ["entry_timing_poor", "stage:entry", "rule_type:entry"]
+
+    Returns:
+        FailureAttribution: 结构化归因对象
+    """
+    root_causes = [t for t in tags if t in FailureRootCause]
+    stages = [t for t in tags if t in FailureStage]
+    rule_types = [t for t in tags if t in FailureRuleType]
+
+    return FailureAttribution(
+        root_causes=root_causes,
+        stage=stages[0] if stages else None,
+        rule_type=rule_types[0] if rule_types else None,
+    )

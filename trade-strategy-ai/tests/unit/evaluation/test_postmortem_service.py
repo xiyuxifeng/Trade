@@ -1,4 +1,6 @@
 """postmortem_service 测试。"""
+import pytest
+from unittest.mock import AsyncMock
 
 from src.evaluation.postmortem_service import ValidationDecision, LLMValidationResult
 
@@ -362,3 +364,105 @@ class TestModuleExports:
         assert "idea_id" in field_names
         assert hasattr(PostmortemService, "generate")
         assert hasattr(ValidationDecision, "CONFIRM")
+
+
+# ---------------------------------------------------------------------------
+# NTL-S5-012: llm_attribution
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_llm_attribution_llm_disabled_returns_auto():
+    """LLM 未配置时降级为 auto。"""
+    from src.evaluation.postmortem_service import PostmortemService
+
+    service = PostmortemService()
+    result = await service.llm_attribution(
+        trade_idea={"symbol": "AAPL", "side": "buy"},
+        market_data={"bars": []},
+        auto_attribution={"reason": "原始原因", "confidence": 0.5},
+    )
+    assert result["attribution_source"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_llm_attribution_llm_confirmed():
+    """LLM 确认自动归因时返回 llm_confirmed。"""
+    from unittest.mock import AsyncMock
+    from src.evaluation.postmortem_service import PostmortemService
+    from src.llm.client import LLMClient, LLMClientConfig
+
+    cfg = LLMClientConfig(provider="openai", model="gpt-4o", url="https://api.openai.com/v1", api_key="fake")
+    client = LLMClient(cfg)
+    client.complete_json = AsyncMock(return_value={"reason": "原始原因", "confidence": 0.8})
+
+    service = PostmortemService()
+    result = await service.llm_attribution(
+        trade_idea={"symbol": "AAPL", "side": "buy"},
+        market_data={"bars": [{"date": "2026-04-25", "open": 150, "high": 155, "low": 148, "close": 152}]},
+        auto_attribution={"reason": "原始原因", "confidence": 0.5},
+        llm_client=client,
+    )
+    assert result["attribution_source"] == "llm_confirmed"
+    assert result["reason"] == "原始原因"
+
+
+@pytest.mark.asyncio
+async def test_llm_attribution_llm_corrected():
+    """LLM 修正自动归因时返回 llm_corrected。"""
+    from unittest.mock import AsyncMock
+    from src.evaluation.postmortem_service import PostmortemService
+    from src.llm.client import LLMClient, LLMClientConfig
+
+    cfg = LLMClientConfig(provider="openai", model="gpt-4o", url="https://api.openai.com/v1", api_key="fake")
+    client = LLMClient(cfg)
+    client.complete_json = AsyncMock(return_value={"reason": "修正原因", "corrected_reason": "修正原因", "confidence": 0.9})
+
+    service = PostmortemService()
+    result = await service.llm_attribution(
+        trade_idea={"symbol": "AAPL", "side": "buy"},
+        market_data={"bars": [{"date": "2026-04-25", "open": 150, "high": 155, "low": 148, "close": 152}]},
+        auto_attribution={"reason": "原始原因", "confidence": 0.5},
+        llm_client=client,
+    )
+    assert result["attribution_source"] == "llm_corrected"
+    assert result["reason"] == "修正原因"
+    assert result["corrected_reason"] == "修正原因"
+
+
+@pytest.mark.asyncio
+async def test_llm_attribution_llm_rejected():
+    """LLM 调用失败时返回 llm_rejected。"""
+    from unittest.mock import AsyncMock
+    from src.evaluation.postmortem_service import PostmortemService
+    from src.llm.client import LLMClient, LLMClientConfig
+
+    cfg = LLMClientConfig(provider="openai", model="gpt-4o", url="https://api.openai.com/v1", api_key="fake")
+    client = LLMClient(cfg)
+    client.complete_json = AsyncMock(side_effect=Exception("LLM error"))
+
+    service = PostmortemService()
+    result = await service.llm_attribution(
+        trade_idea={"symbol": "AAPL", "side": "buy"},
+        market_data={"bars": []},
+        auto_attribution={"reason": "原始原因", "confidence": 0.5},
+        llm_client=client,
+    )
+    assert result["attribution_source"] == "llm_rejected"
+    assert result["reason"] == "原始原因"
+
+
+def test_build_llm_attribution_prompt():
+    """_build_llm_attribution_prompt 正确构造 Prompt。"""
+    from src.evaluation.postmortem_service import PostmortemService
+
+    service = PostmortemService()
+    prompt = service._build_llm_attribution_prompt(
+        trade_idea={"symbol": "AAPL", "side": "buy", "entry": {"price": 150}, "target": 165, "stop_loss": 140},
+        market_data={"bars": [{"date": "2026-04-25", "open": 150, "close": 145}]},
+        auto_attribution={"reason": "原始原因", "confidence": 0.5},
+    )
+    assert "AAPL" in prompt
+    assert "buy" in prompt
+    assert "原始原因" in prompt
+    assert "交易想法" in prompt
+    assert "市场数据" in prompt

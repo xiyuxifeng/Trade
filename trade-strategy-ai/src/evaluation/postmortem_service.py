@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -214,3 +215,111 @@ class PostmortemService:
             return_pct=return_pct,
             extra=result_extra,
         )
+
+    # -------------------------------------------------------------------------
+    # NTL-S5-012: LLM 归因
+    # -------------------------------------------------------------------------
+
+    async def llm_attribution(
+        self,
+        trade_idea: dict,
+        market_data: dict,
+        auto_attribution: dict,
+        llm_client=None,
+    ) -> dict:
+        """对 failure_case 进行 LLM 归因分析（NTL-S5-012）。
+
+        复用 src/llm/client.py 的 LLMClient。
+
+        Args:
+            trade_idea: 交易想法 dict
+            market_data: 市场数据 dict（包含 bars）
+            auto_attribution: 自动归因结果
+            llm_client: 可选，LLM 客户端（用于测试注入）
+
+        Returns:
+            dict: 包含 attribution_source 和归因详情的 dict
+        """
+        from src.llm.client import LLMClient, LLMClientConfig, from_env_and_config
+
+        if llm_client is None:
+            cfg = from_env_and_config(
+                provider=None, model=None, url=None, api_key=None,
+            )
+            llm_client = LLMClient(cfg)
+
+        if not llm_client.is_enabled():
+            # LLM 未配置，降级为 auto
+            return {
+                "attribution_source": "auto",
+                "reason": auto_attribution.get("reason", ""),
+                "corrected_reason": None,
+                "confidence": 0.0,
+            }
+
+        system_prompt = "你是一个交易归因分析助手。请分析失败交易的根本原因，以 JSON 格式返回分析结果。"
+        user_prompt = self._build_llm_attribution_prompt(trade_idea, market_data, auto_attribution)
+
+        try:
+            response = await llm_client.complete_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+        except Exception:
+            response = None
+
+        # 判断归因结果
+        if response is None:
+            return {
+                "attribution_source": "llm_rejected",
+                "reason": auto_attribution.get("reason", ""),
+                "corrected_reason": None,
+                "confidence": 0.0,
+            }
+
+        corrected_reason = response.get("corrected_reason") or response.get("reason", "")
+        auto_reason = auto_attribution.get("reason", "")
+
+        if corrected_reason == auto_reason:
+            attribution_source = "llm_confirmed"
+        else:
+            attribution_source = "llm_corrected"
+
+        return {
+            "attribution_source": attribution_source,
+            "reason": corrected_reason,
+            "corrected_reason": corrected_reason if corrected_reason != auto_reason else None,
+            "confidence": response.get("confidence", 0.5),
+        }
+
+    def _build_llm_attribution_prompt(
+        self,
+        trade_idea: dict,
+        market_data: dict,
+        auto_attribution: dict,
+    ) -> str:
+        """构造 LLM 归因 Prompt（Option A: 完整上下文）。"""
+        bars = market_data.get("bars", [])
+        bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "无市场数据"
+
+        return f"""## 交易想法
+- 标的: {trade_idea.get('symbol', 'N/A')}
+- 方向: {trade_idea.get('side', 'N/A')}
+- 入场价格: {trade_idea.get('entry', {})}
+- 目标价格: {trade_idea.get('target', 'N/A')}
+- 止损价格: {trade_idea.get('stop_loss', 'N/A')}
+
+## 市场数据（1d 日线）
+{bars_str}
+
+## 自动归因结果（auto）
+- 原因: {auto_attribution.get('reason', 'N/A')}
+- 置信度: {auto_attribution.get('confidence', 0.0)}
+
+## 任务
+分析上述交易失败的根本原因，给出修正后的归因。如果自动归因准确，确认即可。
+如果自动归因有误，给出修正原因。
+
+请以 JSON 格式返回：
+{{"reason": "归因原因", "corrected_reason": "修正后原因（如有）", "confidence": 0.0-1.0}}
+"""

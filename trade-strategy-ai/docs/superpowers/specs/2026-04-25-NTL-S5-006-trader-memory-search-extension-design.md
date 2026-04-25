@@ -37,16 +37,9 @@ CREATE INDEX idx_topic_mapping_canonical ON topic_mapping(canonical_name);
 
 > **说明：** `topic_mapping` 表由 provider 层维护（不在 NTL-S5-006 实现范围内），本任务只负责建表。
 
-### 2.2 `trader_memory` 表新增字段
-
-```sql
-ALTER TABLE trader_memory ADD COLUMN topic_source VARCHAR(50);
-ALTER TABLE trader_memory ADD COLUMN raw_topic_ids JSONB;  -- {provider: raw_topic_id}
-```
-
-> **说明：** `raw_topic_ids` 记录原始 provider → topic_id 映射，供精确回溯使用；`tags` 字段存 canonical name，供跨 provider 检索使用。
-
 ## 3. Schema 扩展
+
+> **注意：** `TraderMemoryItem` 使用 JSONL 存储（不是 PostgreSQL 表），因此 `topic_source` 和 `raw_topic_ids` 作为 Pydantic 字段新增，不涉及数据库迁移。
 
 ### 3.1 `TraderMemoryItem` 新增字段
 
@@ -139,6 +132,6 @@ def _apply_filter(self, items: list[TraderMemoryItem], f: TraderMemoryFilter) ->
 |------|---------|------|
 | `src/trader_memory/schemas.py` | 修改 | 新增 topic_source、raw_topic_ids、tags、strategy_version_id 字段 |
 | `src/trader_memory/service.py` | 修改 | `_apply_filter` 新增过滤逻辑 |
-| `src/db/migrations/` | 新增 | Alembic migration for topic_mapping 表和 trader_memory 新增字段 |
+| `src/db/migrations/versions/2026_04_25_0001_add_topic_mapping_table.py` | 新增 | Alembic migration for topic_mapping 表 |
 | `tests/unit/trader_memory/test_trader_memory_service.py` | 修改 | 新增 filter 测试 |
 | `tests/unit/trader_memory/test_trader_memory_schemas.py` | 修改 | 新增 schema 测试 |

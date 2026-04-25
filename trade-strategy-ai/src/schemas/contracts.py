@@ -92,6 +92,11 @@ class DailyReport(BaseModel):
 
     # NTL-S4-008: 盘前报告级策略版本追溯
     strategy_version_ids: list[str] = Field(default_factory=list)  # 本次生成所用的策略版本 ID 列表
+
+    # 新增：候选池快照（供盘后使用，NTL-S5-006 前置依赖）
+    market_universe_snapshot: dict[str, Any] | None = None
+
+
 class EvaluationRequest(BaseModel):
     request_id: UUID = Field(default_factory=uuid4)
     trader_id: str

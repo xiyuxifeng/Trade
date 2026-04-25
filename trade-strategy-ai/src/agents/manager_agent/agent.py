@@ -87,6 +87,7 @@ class ManagerAgent:
     """
 
     def __init__(self, *, config: AppConfig, base_dir: Path) -> None:
+        """初始化 ManagerAgent，加载配置、profile、创建子 Agent。"""
         self.config = config
         self.base_dir = base_dir
         self.logger = get_logger("agent.manager")
@@ -114,6 +115,7 @@ class ManagerAgent:
             self._persona_router = PersonaRouter(top_k=max(1, int(self.config.persona.top_k)))
 
     def _trader_profiles_path(self) -> Path:
+        """获取 trader profiles 文件路径。"""
         return default_profiles_path(base_dir=self.base_dir, config=self.config)
 
     def _load_trader_profiles(self) -> dict[str, TraderProfile]:
@@ -129,6 +131,7 @@ class ManagerAgent:
             return {}
 
     def _resolve_path(self, value: str | None) -> Path | None:
+        """解析路径：绝对路径直接返回，相对路径相对于 base_dir。"""
         if not value:
             return None
         p = Path(value)
@@ -137,7 +140,7 @@ class ManagerAgent:
         return self.base_dir / p
 
     def _guess_instrument_focus(self, symbol: str) -> InstrumentFocus:
-        # Heuristic for CN market. Keep it conservative.
+        """根据股票代码判断 instrument 类型（保守估算）。"""
         code = symbol.split(".")[0]
         if code.startswith(("110", "111", "112", "113", "118", "123", "127", "128")):
             return InstrumentFocus.cb
@@ -481,7 +484,22 @@ class ManagerAgent:
         self.logger.info(f"Recorded {len(ideas)} ideas as signal versions")
 
     async def run_pre_market(self, *, as_of_date: date, force: bool = False) -> DailyReport:
-        """Collect ideas and persist the daily pre-market report."""
+        """收集交易想法并持久化盘前日报。
+
+        流程：
+        1. 检查是否已有 report（存在且非 force 则直接返回）
+        2. 加载 market_universe 快照（Stage 4 路径）
+        3. 对每个 trader 调用 PreMarketService 生成 ideas
+        4. 保存 DailyReport（包含 market_universe_snapshot）
+        5. 可选：persona style routing
+
+        Args:
+            as_of_date: 交易日期
+            force: 是否强制重新生成（跳过缓存）
+
+        Returns:
+            DailyReport 实例
+        """
 
         report_path = self._daily_report_path(as_of_date)
         if report_path.exists() and not force:
@@ -642,7 +660,24 @@ class ManagerAgent:
         return final_signal
 
     async def run_after_close(self, *, as_of_date: date, force: bool = False) -> EvaluationResult:
-        """Evaluate ideas against the latest price context and emit tasks."""
+        """评估盘前生成的 ideas 并写入 TraderMemory。
+
+        流程：
+        1. 检查是否已有 evaluation（存在且非 force 则直接返回）
+        2. 加载 DailyReport 获取盘前 ideas 和 market_universe_snapshot
+        3. 获取最新价格（通过 DataAgent）
+        4. 对每个 idea 计算 return_pct，判断是否达到 min_expected_return
+        5. 根据 return_pct 创建 success_case/failure_case memory
+        6. 触发 review 条件时创建 review_note memory
+        7. 存储 EvaluationResult
+
+        Args:
+            as_of_date: 交易日期
+            force: 是否强制重新评估（跳过缓存）
+
+        Returns:
+            EvaluationResult 实例
+        """
 
         evaluation_path = self._evaluation_path(as_of_date)
         if evaluation_path.exists() and not force:

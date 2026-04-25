@@ -16,7 +16,7 @@ from src.evaluation.evidence_pack import EvidencePack
 from src.evaluation.postmortem_service import PostmortemService
 from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
-from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
+from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 
 
@@ -125,35 +125,63 @@ async def handle_postmortem_analysis(
     service = PostmortemService()
     result = await service.generate(evidence_pack)
 
-    # 写入 TraderMemory
-    memory = TraderMemoryItem(
-        trader_id=trader_id or trade_idea.trader_id,
-        memory_type=TraderMemoryType.postmortem,
-        as_of_date=trade_idea.as_of_date,
-        symbol=trade_idea.symbol,
-        title=f"Postmortem: {trade_idea.symbol} on {trade_idea.as_of_date}",
-        content=f"attribution={result.failure_attribution.root_causes}, source={result.attribution_source}",
-        source="postmortem_task",
-        source_ref=str(trade_idea.idea_id),
-        tags=["postmortem", trade_idea.trader_id, trade_idea.symbol],
-        topic_source=None,
-        raw_topic_ids={},
-        importance=0.9,
-        postmortem_data={
-            "root_causes": result.failure_attribution.root_causes,
-            "stage": result.failure_attribution.stage,
-            "rule_type": result.failure_attribution.rule_type,
-            "attribution_source": result.attribution_source,
-            "mfe": result.mfe,
-            "mae": result.mae,
-            "return_pct": result.return_pct,
-        },
-    )
+    # 构建 postmortem_data（NTL-S5-012）
+    postmortem_data = {
+        "root_causes": result.failure_attribution.root_causes,
+        "stage": result.failure_attribution.stage,
+        "rule_type": result.failure_attribution.rule_type,
+        "attribution_source": result.attribution_source,
+        "mfe": result.mfe,
+        "mae": result.mae,
+        "return_pct": result.return_pct,
+    }
 
-    # 写入 TraderMemoryStore
+    # NTL-S5-012: 尝试找到对应的 failure_case 并原地更新
     memory_path = default_memory_path(base_dir=Path("."), config=config)
     store = TraderMemoryStore(path=memory_path)
-    store.append(memory)
+
+    # 从 details 提取 auto_attribution（NTL-S5-012 新增）
+    auto_attribution = details.get("auto_attribution") or {}
+
+    f = TraderMemoryFilter(
+        trader_id=trader_id or trade_idea.trader_id,
+        memory_types=[TraderMemoryType.failure_case],
+        symbol=trade_idea.symbol,
+        date_from=trade_idea.as_of_date,
+        date_to=trade_idea.as_of_date,
+        include_archived=False,
+    )
+    failure_cases = store.list_filtered(f)
+
+    if failure_cases:
+        # 原地更新已有的 failure_case 条目（NTL-S5-012）
+        failure_case = failure_cases[0]
+        updated = failure_case.model_copy(deep=True)
+        updated.postmortem_data = postmortem_data
+        updated.extra = failure_case.extra or {}
+        updated.extra["auto_original"] = auto_attribution
+        store.update(failure_case.memory_id, updated)
+        print(f"[postmortem] 已更新 failure_case memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
+    else:
+        # Fallback: append 新条目（兼容边界情况）
+        memory = TraderMemoryItem(
+            trader_id=trader_id or trade_idea.trader_id,
+            memory_type=TraderMemoryType.postmortem,
+            as_of_date=trade_idea.as_of_date,
+            symbol=trade_idea.symbol,
+            title=f"Postmortem: {trade_idea.symbol} on {trade_idea.as_of_date}",
+            content=f"attribution={result.failure_attribution.root_causes}, source={result.attribution_source}",
+            source="postmortem_task",
+            source_ref=str(trade_idea.idea_id),
+            tags=["postmortem", trade_idea.trader_id, trade_idea.symbol],
+            topic_source=None,
+            raw_topic_ids={},
+            importance=0.9,
+            postmortem_data=postmortem_data,
+            extra={"auto_original": auto_attribution},
+        )
+        store.append(memory)
+        print(f"[postmortem] 已写入 memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
 
     print(f"[postmortem] 已写入 memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
 

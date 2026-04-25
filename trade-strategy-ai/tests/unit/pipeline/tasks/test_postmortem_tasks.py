@@ -83,6 +83,8 @@ class TestHandlePostmortemAnalysis:
 
         mock_report = DailyReport(as_of_date=date(2026, 4, 25), ideas=[mock_idea])
         mock_store = MagicMock()
+        # list_filtered 返回空列表 → 走 append 分支（fallback）
+        mock_store.list_filtered.return_value = []
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
@@ -98,3 +100,65 @@ class TestHandlePostmortemAnalysis:
                             # 验证写入的 memory 类型
                             call_args = mock_store.append.call_args[0][0]
                             assert call_args.memory_type.value == "postmortem"
+
+    @pytest.mark.asyncio
+    async def test_updates_existing_failure_case_in_place(self, mock_config, valid_details):
+        """existing failure_case 存在时原地更新，不新增条目（NTL-S5-012）。"""
+        from src.schemas.contracts import DailyReport, TradeIdea, TradeEntry
+        from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
+
+        idea_id = uuid4()
+        valid_details["idea_id"] = str(idea_id)
+        valid_details["auto_attribution"] = {"reason": "original reason", "confidence": 0.5}
+
+        mock_idea = TradeIdea(
+            idea_id=idea_id,
+            trader_id="trader_001",
+            as_of_date=date(2026, 4, 25),
+            symbol="000001",
+            side="buy",
+            entry=TradeEntry(price=10.0),
+            strategy_version_id="v1",
+        )
+
+        mock_report = DailyReport(as_of_date=date(2026, 4, 25), ideas=[mock_idea])
+
+        # 创建已有的 failure_case
+        existing_failure = TraderMemoryItem(
+            memory_id=uuid4(),
+            trader_id="trader_001",
+            memory_type=TraderMemoryType.failure_case,
+            as_of_date=date(2026, 4, 25),
+            symbol="000001",
+            title="原始 failure",
+            content="原始内容",
+        )
+
+        mock_store = MagicMock()
+        # list_filtered 返回已有的 failure_case
+        mock_store.list_filtered.return_value = [existing_failure]
+        # update 方法
+        mock_store.update = MagicMock(return_value=True)
+
+        with TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
+            report_path.touch()
+
+            with patch("src.pipeline.tasks.postmortem_tasks._daily_report_path") as mock_path:
+                mock_path.return_value = report_path
+                with patch("src.pipeline.tasks.postmortem_tasks.read_json", return_value=mock_report.model_dump()):
+                    with patch("src.pipeline.tasks.postmortem_tasks._fetch_last_prices", new_callable=AsyncMock, return_value={"000001": 9.5}):
+                        with patch("src.pipeline.tasks.postmortem_tasks.TraderMemoryStore", return_value=mock_store):
+                            await handle_postmortem_analysis(valid_details, config=mock_config)
+
+                            # 验证 update 被调用（不是 append）
+                            mock_store.update.assert_called_once()
+                            mock_store.append.assert_not_called()
+
+                            # 验证 update 的参数
+                            call_args = mock_store.update.call_args
+                            updated_item = call_args[0][1]  # 第二个参数是 updated_item
+                            assert updated_item.postmortem_data is not None
+                            assert updated_item.postmortem_data["attribution_source"] == "auto"
+                            assert updated_item.extra.get("auto_original") == {"reason": "original reason", "confidence": 0.5}
+

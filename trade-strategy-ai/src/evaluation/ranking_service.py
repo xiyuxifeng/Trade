@@ -199,6 +199,74 @@ class RankingService:
         record = await self._repo.upsert(entry)
         return RankingEntry.from_record(record)
 
+    async def add_entry_from_metrics(
+        self,
+        evidence_pack: "EvidencePack",
+        mfe: float,
+        mae: float,
+        return_pct: float,
+    ) -> RankingEntry:
+        """从 metrics 计算结果生成 ranking 条目（NTL-S5-011）。
+
+        用于 run_after_close 场景：此时没有完整的 PostmortemResult，
+        但 ranking 数据（mfe/mae/return_pct）在 EvidencePack 生成时就能算出来。
+
+        attribution_source 固定为 "auto"，因为 run_after_close
+        没有 LLM validator 参与归因。
+
+        与 add_entry(postmortem, pack) 的区别：
+        - add_entry：需要 PostmortemResult（由 PostmortemService.generate() 产生）
+        - add_entry_from_metrics：直接接收 metrics 结果，不需要 PostmortemService
+
+        Args:
+            evidence_pack: 当前 idea 的 EvidencePack
+            mfe: Maximum Favorable Excursion
+            mae: Maximum Adverse Excursion
+            return_pct: 收益率（%）
+
+        Returns:
+            新建的 RankingEntry
+        """
+        # 从 evidence_pack 提取基本信息
+        trade_date = evidence_pack.trade_date
+        strategy_version_id = evidence_pack.strategy_version_id or ""
+        symbol = ""
+        trader_id = ""
+
+        # 从 trade_idea 提取 symbol 和 trader_id
+        if evidence_pack.trade_idea:
+            if hasattr(evidence_pack.trade_idea, "symbol"):
+                symbol = evidence_pack.trade_idea.symbol or ""
+            if hasattr(evidence_pack.trade_idea, "trader_id"):
+                trader_id = evidence_pack.trade_idea.trader_id or ""
+
+        # 从 signal_context 提取 trader_id（如果 trade_idea 没有）
+        if not trader_id and evidence_pack.signal_context:
+            if hasattr(evidence_pack.signal_context, "trader_id"):
+                trader_id = evidence_pack.signal_context.trader_id or ""
+
+        composite = _compute_composite(return_pct, mfe, mae)
+
+        entry = RankingEntry(
+            entry_id=_uuid4(),
+            trade_date=trade_date,
+            trader_id=trader_id,
+            strategy_version_id=strategy_version_id,
+            symbol=symbol,
+            return_pct=return_pct,
+            mfe=mfe,
+            mae=mae,
+            composite_score=composite,
+            rank=None,  # add_entry 时不计算 rank
+            is_latest=True,
+            idea_id=evidence_pack.idea_id,
+            attribution_source="auto",  # run_after_close 无 LLM
+            extra={},
+        )
+
+        record = await self._repo.upsert(entry)
+        return RankingEntry.from_record(record)
+
     async def generate_ranking(
         self,
         trade_date: str,

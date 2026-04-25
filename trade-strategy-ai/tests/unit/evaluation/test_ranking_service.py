@@ -210,3 +210,55 @@ async def test_add_entry_creates_entry():
     assert result.trader_id == "trader_a"
     assert result.symbol == "SH600519"
     assert result.return_pct == 5.0
+
+
+@pytest.mark.asyncio
+async def test_add_entry_from_metrics_creates_entry():
+    """直接传入 mfe/mae/return_pct，生成 RankingEntry（NTL-S5-011）"""
+    mock_session = AsyncMock()
+    mock_repo = AsyncMock()
+    service = RankingService(mock_session)
+    service._repo = mock_repo
+
+    # Mock evidence_pack
+    mock_pack = MagicMock()
+    mock_pack.trade_date = "2026-04-25"
+    mock_pack.strategy_version_id = "v1"
+    mock_pack.trade_idea = MagicMock()
+    mock_pack.trade_idea.symbol = "AAPL"
+    mock_pack.trade_idea.trader_id = "trader_001"
+    mock_pack.signal_context = None
+
+    # Mock upsert result
+    mock_record = MagicMock()
+    mock_record.entry_id = uuid4()
+    mock_record.trade_date = "2026-04-25"
+    mock_record.trader_id = "trader_001"
+    mock_record.strategy_version_id = "v1"
+    mock_record.symbol = "AAPL"
+    mock_record.return_pct = 3.333
+    mock_record.mfe = 10.0
+    mock_record.mae = 2.0
+    mock_record.composite_score = 11.333
+    mock_record.rank = None
+    mock_record.is_latest = True
+    mock_record.idea_id = None
+    mock_record.attribution_source = "auto"
+    mock_record.extra = {}
+    mock_repo.upsert.return_value = mock_record
+
+    result = await service.add_entry_from_metrics(
+        evidence_pack=mock_pack,
+        mfe=10.0,
+        mae=2.0,
+        return_pct=3.333,
+    )
+
+    assert mock_repo.upsert.called
+    assert result.mfe == 10.0
+    assert result.mae == 2.0
+    assert result.return_pct == pytest.approx(3.333)
+    assert result.trader_id == "trader_001"
+    assert result.symbol == "AAPL"
+    assert result.attribution_source == "auto"  # 固定为 auto
+    assert result.is_latest is True

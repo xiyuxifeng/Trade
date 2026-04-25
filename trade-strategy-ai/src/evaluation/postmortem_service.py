@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 
 class ValidationDecision(StrEnum):
@@ -58,6 +59,16 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from src.evaluation.evidence_pack import EvidencePack
+
+
+def _load_prompt(relative_path: str) -> str:
+    """从 prompts 目录加载 prompt 文件。
+
+    路径相对于项目根目录。
+    """
+    # 项目根目录：src/evaluation/../../ = 项目根
+    root = Path(__file__).parent.parent.parent
+    return (root / relative_path).read_text(encoding="utf-8").strip()
 
 
 class LLMValidator(Protocol):
@@ -257,8 +268,8 @@ class PostmortemService:
                 "confidence": 0.0,
             }
 
-        system_prompt = "你是一个交易归因分析助手。请分析失败交易的根本原因，以 JSON 格式返回分析结果。"
-        user_prompt = self._build_llm_attribution_prompt(trade_idea, market_data, auto_attribution)
+        system_prompt = _load_prompt("prompts/llm_attribution.md")
+        user_prompt = self._build_llm_user_prompt(trade_idea, market_data, auto_attribution)
 
         try:
             response = await llm_client.complete_json(
@@ -292,7 +303,7 @@ class PostmortemService:
             "confidence": response.get("confidence", 0.5),
         }
 
-    def _build_llm_attribution_prompt(
+    def _build_llm_user_prompt(
         self,
         trade_idea: dict,
         market_data: dict,

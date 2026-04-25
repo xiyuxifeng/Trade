@@ -451,12 +451,12 @@ async def test_llm_attribution_llm_rejected():
     assert result["reason"] == "原始原因"
 
 
-def test_build_llm_attribution_prompt():
-    """_build_llm_attribution_prompt 正确构造 Prompt。"""
+def test_build_llm_user_prompt():
+    """_build_llm_user_prompt 正确构造 user prompt。"""
     from src.evaluation.postmortem_service import PostmortemService
 
     service = PostmortemService()
-    prompt = service._build_llm_attribution_prompt(
+    prompt = service._build_llm_user_prompt(
         trade_idea={"symbol": "AAPL", "side": "buy", "entry": {"price": 150}, "target": 165, "stop_loss": 140},
         market_data={"bars": [{"date": "2026-04-25", "open": 150, "close": 145}]},
         auto_attribution={"reason": "原始原因", "confidence": 0.5},

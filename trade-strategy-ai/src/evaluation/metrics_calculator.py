@@ -11,6 +11,16 @@ from __future__ import annotations
 from typing import Any
 
 
+def compute_return_pct(entry_price: float, exit_price: float) -> float:
+    """计算收益率（比例口径，0.01=1%）。
+
+    统一供盘前、盘后、fallback 路径复用，避免不同入口出现口径漂移。
+    """
+    if entry_price <= 0:
+        return 0.0
+    return exit_price / entry_price - 1
+
+
 def _normalize_bar(bar: dict[str, Any]) -> dict[str, float]:
     """统一 bar 数据格式，兼容不同 key 命名（lowercase / uppercase）。"""
     return {
@@ -48,7 +58,7 @@ def compute_mfe_mae_return(
     target_price: float | None = None,
     stop_loss_price: float | None = None,
 ) -> tuple[float, float, float, str | None, str | None]:
-    """计算 MFE / MAE / return_pct。
+    """计算 MFE / MAE / return_pct（比例口径，0.01=1%）。
 
     做多（buy）场景：
     - MFE = max(high_i) - entry_price（持仓期间最大盈利）
@@ -114,7 +124,7 @@ def compute_mfe_mae_return(
         exit_price = close
         exit_date = bar_date
 
-    # 计算收益率
-    return_pct = (exit_price / entry_price - 1) * 100
+    # 计算收益率（比例口径：0.01 = 1%）
+    return_pct = compute_return_pct(entry_price, exit_price)
 
     return (mfe, mae, return_pct, exit_triggered, exit_date)

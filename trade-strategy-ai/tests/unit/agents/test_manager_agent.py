@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 import json
 
@@ -33,6 +34,11 @@ def _make_config() -> AppConfig:
         ],
     )
 
+@asynccontextmanager
+async def _mock_session_scope():
+    """避免单元测试连接真实数据库。"""
+    yield MagicMock()
+
 
 @pytest.mark.asyncio
 async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
@@ -56,9 +62,15 @@ async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
     )
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
-    result = await manager.run_after_close(as_of_date=day, force=True)
+    with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
+        patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
+        patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"):
+        result = await manager.run_after_close(as_of_date=day, force=True)
     # NTL-S5-013: Phase 0 (no bars) now correctly returns "fallback" status
     assert result.evaluations[0].status == "fallback"
+    assert result.evaluations[0].partial_data is False
+    assert result.evaluations[0].fallback_reason == "no_bars_data"
+    assert "reason=no_bars_data" in result.evaluations[0].notes[0]
 
     memory_path = default_memory_path(base_dir=tmp_path, config=config)
     store = TraderMemoryStore(path=memory_path)
@@ -105,7 +117,10 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
     )
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
-    result = await manager.run_after_close(as_of_date=day, force=True)
+    with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
+        patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
+        patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"):
+        result = await manager.run_after_close(as_of_date=day, force=True)
     # NTL-S5-013: Phase 0 (no bars) now correctly returns "fallback" status
     assert result.evaluations[0].status == "fallback"
 
@@ -122,6 +137,109 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
     review_notes = store.list_recent(trader_id="trader_a", limit=10, memory_types=[TraderMemoryType.review_note])
     assert len(review_notes) == 1
     assert review_notes[0].symbol == "000001.SZ"
+
+
+@pytest.mark.asyncio
+async def test_manager_marks_partial_data_when_bars_are_incomplete(tmp_path: Path) -> None:
+    """当只有部分 bars 时，应标记 partial_data 并保留结构化说明。"""
+    config = _make_config()
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 6)
+
+    report = DailyReport(
+        as_of_date=day,
+        ideas=[
+            TradeIdea(
+                trader_id="trader_a",
+                as_of_date=day,
+                symbol="000001.SZ",
+                entry=TradeEntry(type="limit", price=10.0),
+                target_price=10.5,
+                stop_loss_price=9.7,
+            )
+        ],
+        highlights=["seed"],
+    )
+    manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+    partial_pack = None
+    from src.evaluation.evidence_pack import EvidencePack
+
+    partial_pack = EvidencePack(
+        idea_id=report.ideas[0].idea_id,
+        trade_date=str(day),
+        trade_idea=report.ideas[0],
+        signal_context=None,
+        market_data={
+            "bars": [
+                {"date": "2026-04-06", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.1},
+            ],
+            "entry_price": 10.0,
+            "target_price": 10.5,
+            "stop_loss_price": 9.7,
+        },
+    )
+
+    with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
+        patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
+        patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"), \
+        patch.object(manager, "_generate_evidence_pack", new_callable=AsyncMock, return_value=partial_pack):
+        result = await manager.run_after_close(as_of_date=day, force=True)
+
+    evaluation = result.evaluations[0]
+    assert evaluation.status == "partial"
+    assert evaluation.partial_data is True
+    assert evaluation.fallback_reason is None
+    assert "[partial]" in evaluation.notes[0]
+
+
+@pytest.mark.asyncio
+async def test_run_after_close_writes_canonical_topic_tags(tmp_path: Path) -> None:
+    """验证 run_after_close 使用 source_topic_ids 生成 canonical topic tags。"""
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"000001.SZ": 12.0}),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=["000001.SZ"],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 6)
+
+    report = DailyReport(
+        as_of_date=day,
+        ideas=[
+            TradeIdea(
+                trader_id="trader_a",
+                as_of_date=day,
+                symbol="000001.SZ",
+                entry=TradeEntry(type="limit", price=10.0),
+                source_topic_ids=["AI算力|concept"],
+            )
+        ],
+        highlights=["seed"],
+        market_universe_snapshot={"provider": "kaipan"},
+    )
+    manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+    with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
+        patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
+        patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"):
+        await manager.run_after_close(as_of_date=day, force=True)
+
+    memory_path = default_memory_path(base_dir=tmp_path, config=config)
+    store = TraderMemoryStore(path=memory_path)
+    memories = store.list_recent(trader_id="trader_a", limit=10)
+    assert memories
+    assert "kaipan:concept:AI算力" in memories[0].tags
+    assert memories[0].topic_source == "kaipan"
+    assert memories[0].raw_topic_ids == {"kaipan": ["AI算力|concept"]}
 
 
 @pytest.mark.asyncio

@@ -134,6 +134,7 @@ class StrategyLibraryService:
             evidence_refs=draft_version.evidence_refs,
             notes=draft_version.notes,
             released_at=datetime.now(UTC),
+            rules_snapshot=draft_version.rules_snapshot,
         )
         await self._repo.save(session=session, version=released)
         return released

@@ -111,6 +111,10 @@ class IdeaEvaluation(BaseModel):
     .. deprecated::
         current_price 字段废弃（2026-04-26），语义从"评估时刻快照价"
         改为"exit_price"（bars 收盘价）。保留以兼容外部消费方。
+
+    结构化扩展字段：
+    - partial_data：标记是否为部分行情数据
+    - fallback_reason：标记降级/缺失的原因，便于报告和日志消费
     """
     idea_id: UUID
     symbol: str
@@ -118,6 +122,8 @@ class IdeaEvaluation(BaseModel):
     current_price: float | None = None  # deprecated: 语义变为 exit_price
     return_pct: float | None = None
     status: Literal["ok", "partial", "fallback", "not_evaluated"] = "not_evaluated"
+    partial_data: bool = False
+    fallback_reason: str | None = None
     notes: list[str] = Field(default_factory=list)
 
 

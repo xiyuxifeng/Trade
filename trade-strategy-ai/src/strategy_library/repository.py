@@ -114,6 +114,7 @@ class StrategyLibraryRepository:
                     }
                     for rec in version.recommendations
                 ],
+                "rules_snapshot": version.rules_snapshot,
             },
             notes=version.notes,
         )
@@ -144,6 +145,7 @@ class StrategyLibraryRepository:
             evidence_refs=orm_obj.evidence_refs or [],
             notes=orm_obj.notes,
             released_at=orm_obj.released_at,
+            rules_snapshot=orm_obj.strategy_payload.get("rules_snapshot", []),
         )
 
     # ---- 内部辅助方法 ----
@@ -180,5 +182,6 @@ class StrategyLibraryRepository:
                 }
                 for rec in version.recommendations
             ],
+            "rules_snapshot": version.rules_snapshot,
         }
         existing.notes = version.notes

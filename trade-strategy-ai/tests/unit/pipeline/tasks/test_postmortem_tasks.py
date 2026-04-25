@@ -100,6 +100,10 @@ class TestHandlePostmortemAnalysis:
                             # 验证写入的 memory 类型
                             call_args = mock_store.append.call_args[0][0]
                             assert call_args.memory_type.value == "postmortem"
+                            # fallback 现在会把 last_price 映射为 bars，return_pct 不应固定为 0
+                            assert call_args.postmortem_data["return_pct"] == pytest.approx(-0.05)
+                            assert call_args.postmortem_data["postmortem_notes"] is not None
+                            assert "000001" in call_args.postmortem_data["postmortem_notes"]
 
     @pytest.mark.asyncio
     async def test_updates_existing_failure_case_in_place(self, mock_config, valid_details):
@@ -160,5 +164,5 @@ class TestHandlePostmortemAnalysis:
                             updated_item = call_args[0][1]  # 第二个参数是 updated_item
                             assert updated_item.postmortem_data is not None
                             assert updated_item.postmortem_data["attribution_source"] == "auto"
+                            assert updated_item.postmortem_data["postmortem_notes"] is not None
                             assert updated_item.extra.get("auto_original") == {"reason": "original reason", "confidence": 0.5}
-

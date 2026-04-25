@@ -114,6 +114,7 @@ class TestStrategyLibraryService:
             strategy_date=date(2026, 4, 23),
             status=StrategyVersionStatus.draft,
             recommendations=[],
+            rules_snapshot=[{"rule_id": "r1", "condition": "ma5_cross"}],
         )
         repo = StrategyLibraryRepository()
         builder = StrategyVersionBuilder()
@@ -130,4 +131,5 @@ class TestStrategyLibraryService:
                 assert released.status == StrategyVersionStatus.released
                 assert released.released_at is not None
                 assert released.version_id == draft_version.version_id.replace("draft", "released")
+                assert released.rules_snapshot == [{"rule_id": "r1", "condition": "ma5_cross"}]
                 mock_save.assert_called_once()

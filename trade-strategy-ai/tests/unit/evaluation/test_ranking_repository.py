@@ -36,21 +36,25 @@ def make_entry(
 
 @pytest.mark.asyncio
 async def test_upsert_marks_old_latest_false():
-    """验证 upsert 将旧 latest 标记为 False。"""
+    """验证 upsert 删除条件包含 trader_id，避免跨交易员误删。"""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     repo = RankingRepository(mock_session)
     entry = make_entry()
 
     await repo.upsert(entry)
 
-    # 验证 update 被调用（标记旧 entry 为非最新）
+    # 第一次 execute 为 delete 语句
     assert mock_session.execute.called
+    stmt = mock_session.execute.call_args_list[0].args[0]
+    assert "ranking_entries.trader_id" in str(stmt)
 
 
 @pytest.mark.asyncio
 async def test_upsert_adds_new_record():
     """验证 upsert 添加新 record。"""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     repo = RankingRepository(mock_session)
     entry = make_entry()
 

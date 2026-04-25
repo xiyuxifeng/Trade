@@ -63,7 +63,7 @@ async def test_mfe_mae_filled_target_hit():
 
     assert result.mfe == 10.0
     assert result.mae == 1.0
-    assert result.return_pct == pytest.approx(9.0)
+    assert result.return_pct == pytest.approx(0.09)
     assert result.extra.get("exit_triggered") == "target"
     assert result.extra.get("exit_date") == "2026-04-02"
     assert result.extra.get("is_final") is True
@@ -86,7 +86,7 @@ async def test_mfe_mae_filled_stop_loss_hit():
 
     assert result.mfe == 2.0
     assert result.mae == 6.0
-    assert result.return_pct == pytest.approx(-5.0)
+    assert result.return_pct == pytest.approx(-0.05)
     assert result.extra.get("exit_triggered") == "stop_loss"
 
 
@@ -107,7 +107,7 @@ async def test_still_holding_no_exit():
 
     assert result.mfe == 5.0
     assert result.mae == 2.0
-    assert result.return_pct == pytest.approx(4.0)
+    assert result.return_pct == pytest.approx(0.04)
     assert result.extra.get("exit_triggered") is None
     assert result.extra.get("is_final") is False
 

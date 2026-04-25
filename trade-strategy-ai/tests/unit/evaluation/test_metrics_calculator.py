@@ -1,6 +1,7 @@
 """NTL-S5-010 MFE/MAE 计算器单元测试"""
 import pytest
 from src.evaluation.metrics_calculator import (
+    compute_return_pct,
     _normalize_bar,
     _find_bar_index,
     _extract_rules_hit,
@@ -75,7 +76,7 @@ def test_compute_target_hit():
     mfe, mae, return_pct, exit_triggered, exit_date = result
     assert mfe == 10.0      # high=110 - entry=100
     assert mae == 1.0       # entry=100 - low=99
-    assert return_pct == pytest.approx(9.0)  # (109/100-1)*100 = 9%
+    assert return_pct == pytest.approx(0.09)  # (109/100-1) = 9%
     assert exit_triggered == "target"
     assert exit_date == "2026-04-02"
 
@@ -96,7 +97,7 @@ def test_compute_stop_loss_hit():
     mfe, mae, return_pct, exit_triggered, exit_date = result
     assert mfe == 2.0        # high=102 - entry=100
     assert mae == 6.0        # entry=100 - low=94
-    assert return_pct == pytest.approx(-5.0)  # (95/100-1)*100 = -5%
+    assert return_pct == pytest.approx(-0.05)  # (95/100-1) = -5%
     assert exit_triggered == "stop_loss"
     assert exit_date == "2026-04-02"
 
@@ -117,7 +118,7 @@ def test_compute_no_exit_still_holding():
     mfe, mae, return_pct, exit_triggered, exit_date = result
     assert mfe == 5.0        # max(high) - entry = 105 - 100
     assert mae == 2.0        # entry - min(low) = 100 - 98
-    assert return_pct == pytest.approx(4.0)  # (104/100-1)*100 = 4%
+    assert return_pct == pytest.approx(0.04)  # (104/100-1) = 4%
     assert exit_triggered is None
     assert exit_date == "2026-04-02"
 
@@ -137,7 +138,7 @@ def test_compute_entry_date_only():
     mfe, mae, return_pct, exit_triggered, exit_date = result
     assert mfe == 3.0        # high=103 - entry=100
     assert mae == 2.0        # entry=100 - low=98
-    assert return_pct == pytest.approx(2.0)  # (102/100-1)*100 = 2%
+    assert return_pct == pytest.approx(0.02)  # (102/100-1) = 2%
     assert exit_triggered is None
 
 
@@ -174,7 +175,7 @@ def test_compute_entry_date_not_in_bars():
     # 从第一条 bar 开始
     assert mfe == 5.0
     assert mae == 2.0
-    assert return_pct == pytest.approx(4.0)
+    assert return_pct == pytest.approx(0.04)
 
 
 def test_compute_zero_entry_price():
@@ -190,3 +191,10 @@ def test_compute_zero_entry_price():
     assert mfe == 0.0
     assert mae == 0.0
     assert return_pct == pytest.approx(0.0)
+
+
+def test_compute_return_pct_helper():
+    """收益率 helper 统一输出比例口径。"""
+    assert compute_return_pct(100.0, 104.0) == pytest.approx(0.04)
+    assert compute_return_pct(100.0, 95.0) == pytest.approx(-0.05)
+    assert compute_return_pct(0.0, 95.0) == 0.0

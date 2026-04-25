@@ -1,6 +1,6 @@
 """postmortem_service 测试。"""
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from src.evaluation.postmortem_service import ValidationDecision, LLMValidationResult
 
@@ -309,6 +309,77 @@ class TestGenerate:
         assert result.attribution_source == "auto"
         assert "data_quality_issue" in result.failure_attribution.root_causes
         assert result.postmortem_notes is None
+
+    async def test_generate_with_notes_enabled_uses_llm_notes(self):
+        """开启复盘笔记且注入 LLM 客户端时，应返回 LLM 生成摘要。"""
+        from uuid import uuid4
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        mock_client = MagicMock()
+        mock_client.is_enabled.return_value = True
+        mock_client.complete_json_with_retry = AsyncMock(return_value={"notes": "LLM 生成的复盘摘要"})
+
+        service = PostmortemService(enable_llm_notes=True, llm_notes_client=mock_client)
+
+        evidence = EvidencePack(
+            idea_id=uuid4(),
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
+                "entry_price": 10.0,
+                "target_price": 10.5,
+                "stop_loss_price": 9.7,
+            },
+        )
+
+        result = await service.generate(evidence)
+        assert result.postmortem_notes is not None
+        assert result.postmortem_notes == "LLM 生成的复盘摘要"
+        assert result.extra["notes_source"] == "llm"
+        mock_client.complete_json_with_retry.assert_awaited_once()
+
+    async def test_generate_with_notes_enabled_falls_back_without_llm(self):
+        """未注入 LLM 客户端时，应回退到结构化摘要。"""
+        from uuid import uuid4
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService(enable_llm_notes=True)
+
+        evidence = EvidencePack(
+            idea_id=uuid4(),
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={
+                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
+                "entry_price": 10.0,
+                "target_price": 10.5,
+                "stop_loss_price": 9.7,
+            },
+        )
+
+        result = await service.generate(evidence)
+        assert result.postmortem_notes is not None
+        assert "000001" in result.postmortem_notes
+        assert result.extra["notes_source"] == "fallback"
 
     async def test_generate_with_validator_confirm(self):
         """有 LLM validator 且 confirm 时返回 llm_confirmed source。"""

@@ -1228,7 +1228,7 @@
   验收标准：盘后评估不再只依赖当前价格。
   完成情况：新增 `metrics_calculator.py`（compute_mfe_mae_return + rules_hit 提取）；`postmortem_service.py` 集成计算并增强归因逻辑（亏损 + rules_hit 非空 → RULE_PRECONDITION_FAILED）；109 tests PASS。
 
-- [ ] `NTL-S5-011` `P1`
+- [x] `NTL-S5-011` `P1` ✅ 2026-04-25
   目标：在盘后生成 ranking。
   输入：ranking service、盘后评分结果。
   输出：盘后 ranking 结果。
@@ -1236,8 +1236,9 @@
   前置依赖：`NTL-S5-004`、`NTL-S5-010`。
   可并行：`NTL-S5-009`。
   验收标准：可以按 trader、策略版本等输出 ranking。
+  完成情况：handle_postmortem_analysis 中在完成复盘后调用 RankingService.add_entry；ranking_task 在 postmortem_analysis 之后执行；ranking 结果通过 RankingRepository 持久化。
 
-- [ ] `NTL-S5-012` `P1`
+- [x] `NTL-S5-012` `P1` ✅ 2026-04-25
   目标：差评触发 LLM 归因并写回记忆。
   输入：postmortem 结果、记忆 service。
   输出：自动写回差评复盘结论。
@@ -1245,8 +1246,16 @@
   前置依赖：`NTL-S5-003`、`NTL-S5-006`、`NTL-S5-010`。
   可并行：无。
   验收标准：差评案例会形成可复用记忆。
+  完成情况：
+  - TraderMemoryItem 新增 `extra` 字段（存储 auto_original）；TraderMemoryStore 新增 `update()` 方法（load+modify+save 模式）
+  - PostmortemService 新增 `llm_attribution()` 方法：调用 LLMClient.complete_json(*, system_prompt, user_prompt)，支持降级为 auto
+  - prompts/llm_attribution.md：提取 LLM 归因 prompt 模板（标准字段：{symbol}/{side}/{entry}/{target_price}/{stop_loss_price}/{bars}/{auto_reason}/{auto_confidence}，兼容旧占位符 {target}/{stop_loss}）
+  - handle_postmortem_analysis：查找已有的 failure_case 条目，存在则原地更新（update），不存在才 append
+  - run_after_close：从 signal_context 提取 trigger_rules + confidence 作为 auto_attribution 传入 postmortem_task details
+  - 修复 PostgreSQL constraint name 长度超限（68 chars → 19 chars "uq_tsv_trader_dt_ver"）
+  - 105 tests PASS
 
-- [ ] `NTL-S5-013` `P1`
+- [x] `NTL-S5-013` `P1` ✅ 2026-04-26
   目标：替换当前仅基于 `current_price` 的简化评估逻辑。
   输入：新评分与归因逻辑。
   输出：旧盘后简化逻辑降级或退出主路径。
@@ -1254,8 +1263,15 @@
   前置依赖：`NTL-S5-010`。
   可并行：`NTL-S5-014`。
   验收标准：主路径盘后评估已使用新评分口径。
+  完成情况：
+  - IdeaEvaluation.status 扩展为 Literal["ok", "partial", "fallback", "not_evaluated"]
+  - current_price 字段标注废弃（语义变为 exit_price）
+  - run_after_close 评估循环重构：先生成 EvidencePack 获取 bars，再计算 mfe/mae/return_pct
+  - 状态判断：完整 bars → ok；bars < 2 → partial；无 bars + 有 current_price → fallback；无 entry_price → not_evaluated
+  - 143 core module tests PASS，2 pre-existing failures (UniqueViolationError on ranking_entries)
+  - 2026-04-26 复核：补齐 `partial_data` / `fallback_reason` 结构化字段、partial/fallback 日志、`postmortem_notes` 输出与写回。
 
-- [ ] `NTL-S5-014` `P1`
+- [x] `NTL-S5-014` `P1`
   目标：验证记忆写回可被下次消费。
   输入：盘前与盘后记忆写回逻辑。
   输出：验证用例或集成测试。
@@ -1263,11 +1279,14 @@
   前置依赖：`NTL-S5-012`。
   可并行：无。
   验收标准：下一次盘前能读取前一次的 postmortem 结果。
+  完成情况：Memory write → read 完整链路验证通过。`handle_postmortem_analysis` → `summarize_context` → `_memory_hint()` → idea rationale。`by_type["success_case/failure_case"]` 正确影响 confidence。110 tests PASS（manager_agent/evaluation/trader_memory）。asyncpg event loop 警告为测试 infrastructure 问题，不影响逻辑。
 
 ### Stage 5 完成标准
 
 - 盘后不再只是简单收益率汇总。
 - 已具备评分、ranking、归因、记忆写回能力。
+
+**Stage 5 总结文档**：[2026-04-26-Stage5-Summary-Design.md](../superpowers/specs/2026-04-26-Stage5-Summary-Design.md)
 
 ---
 
@@ -1294,6 +1313,7 @@
   前置依赖：Stage 2、Stage 3 完成。
   可并行：`NTL-S6-002`、`NTL-S6-003`。
   验收标准：回测输入输出结构清晰。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 1）
 
 - [ ] `NTL-S6-002` `P1`
   目标：建立回测执行器。
@@ -1303,6 +1323,7 @@
   前置依赖：`NTL-S6-001`。
   可并行：`NTL-S6-003`。
   验收标准：可按策略版本和快照执行回放。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 2）
 
 - [ ] `NTL-S6-003` `P1`
   目标：建立回测评分模块。
@@ -1312,6 +1333,7 @@
   前置依赖：Stage 5 评分设计或兼容口径。
   可并行：`NTL-S6-002`。
   验收标准：回测评分口径与线上一致。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 3）
 
 - [ ] `NTL-S6-004` `P1`
   目标：建立回测引擎。
@@ -1321,6 +1343,7 @@
   前置依赖：`NTL-S6-002`、`NTL-S6-003`。
   可并行：`NTL-S6-005`。
   验收标准：能按 trader / 日期区间完整回测。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 4）
 
 - [ ] `NTL-S6-005` `P1`
   目标：建立回测报告模块。
@@ -1330,6 +1353,7 @@
   前置依赖：`NTL-S6-004`。
   可并行：`NTL-S6-008`。
   验收标准：回测结果有可读报告输出。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 5）
 
 - [ ] `NTL-S6-006` `P1`
   目标：让回测读取快照和策略版本，而不是实时取数。
@@ -1339,6 +1363,7 @@
   前置依赖：`NTL-S6-004`、Stage 2、Stage 3 完成。
   可并行：`NTL-S6-007`。
   验收标准：相同输入可重复回放。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 6）
 
 - [ ] `NTL-S6-007` `P1`
   目标：回测与线上共用 scoring 口径。
@@ -1348,6 +1373,7 @@
   前置依赖：`NTL-S6-003`、Stage 5 完成。
   可并行：`NTL-S6-006`。
   验收标准：同一案例线上线下评分结果差异可解释。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 7）
 
 - [ ] `NTL-S6-008` `P1`
   目标：增加回测 CLI 入口。
@@ -1357,6 +1383,7 @@
   前置依赖：`NTL-S6-004`、`NTL-S6-005`。
   可并行：无。
   验收标准：可直接从命令行运行回测。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 8）
 
 - [ ] `NTL-S6-009` `P1`
   目标：建立 LLM 规则白名单。
@@ -1366,6 +1393,7 @@
   前置依赖：Stage 3 或现有规则抽取能力可用。
   可并行：`NTL-S6-010`。
   验收标准：可区分能直接验真的规则与不能直接验真的规则。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 9）
 
 - [ ] `NTL-S6-010` `P1`
   目标：对高频规则做命中验证。
@@ -1375,6 +1403,7 @@
   前置依赖：`NTL-S6-009`、`NTL-S6-006`。
   可并行：`NTL-S6-011`。
   验收标准：至少一批规则完成命中验证。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 10）
 
 - [ ] `NTL-S6-011` `P1`
   目标：输出规则覆盖率、命中率、后验收益分布。
@@ -1384,6 +1413,7 @@
   前置依赖：`NTL-S6-010`。
   可并行：无。
   验收标准：能据此筛掉明显无效规则。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 11）
 
 - [ ] `NTL-S6-012` `P1`
   目标：停止继续扩展旧 `backtest_agent` 路线。
@@ -1393,6 +1423,7 @@
   前置依赖：`NTL-S6-004`。
   可并行：`NTL-S6-013`。
   验收标准：后续回测开发统一进入 `src/backtest/`。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 12）
 
 - [ ] `NTL-S6-013` `P1`
   目标：验证回测结果可复现。
@@ -1402,6 +1433,7 @@
   前置依赖：`NTL-S6-006`、`NTL-S6-007`。
   可并行：无。
   验收标准：同一输入重复运行结果一致或差异可解释。
+  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 13）
 
 ### Stage 6 完成标准
 

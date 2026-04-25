@@ -45,6 +45,7 @@ class RankingRepository:
         await self.session.execute(
             delete(RankingEntryRecord).where(
                 RankingEntryRecord.trade_date == entry.trade_date,
+                RankingEntryRecord.trader_id == entry.trader_id,
                 RankingEntryRecord.strategy_version_id == entry.strategy_version_id,
                 RankingEntryRecord.symbol == entry.symbol,
             )

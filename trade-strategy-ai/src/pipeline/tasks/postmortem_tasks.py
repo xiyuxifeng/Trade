@@ -18,6 +18,7 @@ from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
+from src.llm.client import LLMClient, from_env_and_config
 
 
 def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
@@ -44,6 +45,36 @@ def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
 def _evidence_pack_path(pack_id: str, config: AppConfig) -> Path:
     """获取 EvidencePack JSON 文件路径。"""
     return Path(".") / config.storage.output_dir / "evidence_packs" / f"{pack_id}.json"
+
+
+def _build_llm_notes_client(config: AppConfig):
+    """根据配置构建 LLM 笔记客户端，配置缺失时返回 None。"""
+    llm_cfg = getattr(config, "llm", None)
+    provider = getattr(llm_cfg, "provider", None)
+    model = getattr(llm_cfg, "model", None)
+    url = getattr(llm_cfg, "url", None)
+    api_key = getattr(llm_cfg, "api_key", None)
+
+    if not (
+        isinstance(provider, str) and provider.strip()
+        and (
+            isinstance(model, str) and model.strip()
+            or isinstance(model, list) and any(isinstance(m, str) and m.strip() for m in model)
+        )
+        and isinstance(url, str) and url.strip()
+        and isinstance(api_key, str) and api_key.strip()
+    ):
+        return None
+
+    llm_client = LLMClient(
+        from_env_and_config(
+            provider=provider,
+            model=model if isinstance(model, (str, list)) else None,
+            url=url,
+            api_key=api_key,
+        )
+    )
+    return llm_client if llm_client.is_enabled() else None
 
 
 async def handle_postmortem_analysis(
@@ -100,29 +131,64 @@ async def handle_postmortem_analysis(
             evidence_pack = EvidencePack.from_dict(pack_data)
         else:
             # fallback：降级到最小实现（保留容错）
+            fallback_price = last_prices.get(symbol or trade_idea.symbol)
+            fallback_bars = []
+            if fallback_price is not None:
+                fallback_bars = [{
+                    "date": str(trade_idea.as_of_date),
+                    "open": fallback_price,
+                    "high": fallback_price,
+                    "low": fallback_price,
+                    "close": fallback_price,
+                }]
             evidence_pack = EvidencePack(
                 idea_id=trade_idea.idea_id,
                 trade_date=str(trade_idea.as_of_date),
                 trade_idea=trade_idea,
                 signal_context=None,
-                market_data={"last_price": last_prices.get(symbol or trade_idea.symbol)},
+                market_data={
+                    "last_price": fallback_price,
+                    "bars": fallback_bars,
+                    "entry_price": float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
+                    "target_price": trade_idea.target_price,
+                    "stop_loss_price": trade_idea.stop_loss_price,
+                },
                 strategy_version_id=trade_idea.strategy_version_id,
                 strategy_version_snapshot=[],
             )
     else:
         # fallback：降级到最小实现
+        fallback_price = last_prices.get(symbol or trade_idea.symbol)
+        fallback_bars = []
+        if fallback_price is not None:
+            fallback_bars = [{
+                "date": str(trade_idea.as_of_date),
+                "open": fallback_price,
+                "high": fallback_price,
+                "low": fallback_price,
+                "close": fallback_price,
+            }]
         evidence_pack = EvidencePack(
             idea_id=trade_idea.idea_id,
             trade_date=str(trade_idea.as_of_date),
             trade_idea=trade_idea,
             signal_context=None,
-            market_data={"last_price": last_prices.get(symbol or trade_idea.symbol)},
+            market_data={
+                "last_price": fallback_price,
+                "bars": fallback_bars,
+                "entry_price": float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
+                "target_price": trade_idea.target_price,
+                "stop_loss_price": trade_idea.stop_loss_price,
+            },
             strategy_version_id=trade_idea.strategy_version_id,
             strategy_version_snapshot=[],
         )
 
     # 执行自动归因
-    service = PostmortemService()
+    service = PostmortemService(
+        enable_llm_notes=True,
+        llm_notes_client=_build_llm_notes_client(config),
+    )
     result = await service.generate(evidence_pack)
 
     # 构建 postmortem_data（NTL-S5-012）
@@ -134,6 +200,7 @@ async def handle_postmortem_analysis(
         "mfe": result.mfe,
         "mae": result.mae,
         "return_pct": result.return_pct,
+        "postmortem_notes": result.postmortem_notes,
     }
 
     # NTL-S5-012: 尝试找到对应的 failure_case 并原地更新
@@ -158,6 +225,10 @@ async def handle_postmortem_analysis(
         failure_case = failure_cases[0]
         updated = failure_case.model_copy(deep=True)
         updated.postmortem_data = postmortem_data
+        updated.content = (
+            f"attribution={result.failure_attribution.root_causes}, "
+            f"source={result.attribution_source}, notes={result.postmortem_notes or 'n/a'}"
+        )
         updated.extra = failure_case.extra or {}
         updated.extra["auto_original"] = auto_attribution
         store.update(failure_case.memory_id, updated)
@@ -170,7 +241,10 @@ async def handle_postmortem_analysis(
             as_of_date=trade_idea.as_of_date,
             symbol=trade_idea.symbol,
             title=f"Postmortem: {trade_idea.symbol} on {trade_idea.as_of_date}",
-            content=f"attribution={result.failure_attribution.root_causes}, source={result.attribution_source}",
+            content=(
+                f"attribution={result.failure_attribution.root_causes}, "
+                f"source={result.attribution_source}, notes={result.postmortem_notes or 'n/a'}"
+            ),
             source="postmortem_task",
             source_ref=str(trade_idea.idea_id),
             tags=["postmortem", trade_idea.trader_id, trade_idea.symbol],

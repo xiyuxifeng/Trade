@@ -17,11 +17,12 @@
 
 | 文件 | 动作 |
 |------|------|
+| `src/trader_memory/schemas.py` | 修改：新增 `extra` 字段 |
 | `src/trader_memory/service.py` | 修改：新增 `update()` 方法 |
 | `src/pipeline/tasks/postmortem_tasks.py` | 修改：`handle_postmortem_analysis` 原地更新 failure_case |
 | `src/evaluation/postmortem_service.py` | 修改：新增 `llm_attribution()` 方法 |
-| `src/agents/manager_agent/agent.py` | 修改：差评时触发 postmortem_task |
-| `tests/unit/trader_memory/test_service.py` | 修改：新增 `update()` 测试 |
+| `src/agents/manager_agent/agent.py` | 修改：差评时传递 `auto_attribution` 到 postmortem_task |
+| `tests/unit/trader_memory/test_trader_memory_service.py` | 修改：新增 `update()` 和 `extra` 测试 |
 | `tests/unit/pipeline/tasks/test_postmortem_tasks.py` | 修改：新增原地更新测试 |
 
 ---
@@ -30,29 +31,65 @@
 
 **Files:**
 - Modify: `src/trader_memory/service.py`
-- Test: `tests/unit/trader_memory/test_service.py`
+- Modify: `src/trader_memory/schemas.py`（新增 `extra: dict` 字段）
+- Test: `tests/unit/trader_memory/test_trader_memory_service.py`
 
-### 1.1 新增 update() 方法
+### 1.1 TraderMemoryItem 新增 extra 字段
 
-- [ ] **Step 1: 写测试**
+- [ ] **Step 1: 添加 extra 字段到 TraderMemoryItem**
+
+在 `src/trader_memory/schemas.py` 的 `TraderMemoryItem` 中添加：
 
 ```python
-# tests/unit/trader_memory/test_service.py 新增
+extra: dict = Field(default_factory=dict)
+```
+
+- [ ] **Step 2: 写测试验证 extra 字段**
+
+```python
+# tests/unit/trader_memory/test_trader_memory_service.py 新增
+
+def test_trader_memory_item_has_extra_field():
+    """TraderMemoryItem 应有 extra 字段（NTL-S5-012）。"""
+    item = TraderMemoryItem(
+        trader_id="trader_001",
+        memory_type=TraderMemoryType.failure_case,
+        as_of_date=date(2026, 4, 25),
+        title="test",
+        content="test content",
+    )
+    assert hasattr(item, "extra")
+    assert item.extra == {}
+    item.extra = {"auto_original": {"reason": "test"}}
+    assert item.extra["auto_original"]["reason"] == "test"
+```
+
+Run: `pytest tests/unit/trader_memory/test_trader_memory_service.py::test_trader_memory_item_has_extra_field -v`
+Expected: FAIL（字段不存在）
+
+- [ ] **Step 3: 实现 extra 字段**
+
+已在上方 Step 1 实现。
+
+Run: `pytest tests/unit/trader_memory/test_trader_memory_service.py::test_trader_memory_item_has_extra_field -v`
+Expected: PASS
+
+### 1.2 新增 update() 方法
+
+- [ ] **Step 4: 写测试**
+
+```python
+# tests/unit/trader_memory/test_trader_memory_service.py 新增
 
 def test_update_modifies_existing_item(tmp_path):
     """update() 应原地修改已有条目，不新增。"""
-    from src.trader_memory.service import TraderMemoryStore
-    from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
-    from datetime import date
-    from uuid import uuid4
-
     store = TraderMemoryStore(path=tmp_path / "memory.jsonl")
 
     original = TraderMemoryItem(
         memory_id=uuid4(),
         trader_id="trader_001",
         memory_type=TraderMemoryType.failure_case,
-        as_of_date=date.fromisoformat("2026-04-25"),
+        as_of_date=date(2026, 4, 25),
         symbol="AAPL",
         title="原始 failure",
         content="原始内容",
@@ -75,14 +112,14 @@ def test_update_modifies_existing_item(tmp_path):
     assert items[0].postmortem_data == {"return_pct": -3.5}
 ```
 
-- [ ] **Step 2: 运行测试验证**
+- [ ] **Step 5: 运行测试验证**
 
-Run: `pytest tests/unit/trader_memory/test_service.py::test_update_modifies_existing_item -v`
+Run: `pytest tests/unit/trader_memory/test_trader_memory_service.py::test_update_modifies_existing_item -v`
 Expected: FAIL（method not defined）
 
-- [ ] **Step 3: 实现 update() 方法**
+- [ ] **Step 6: 实现 update() 方法**
 
-在 `archive()` 方法之后添加：
+在 `src/trader_memory/service.py` 的 `archive()` 方法之后添加：
 
 ```python
 def update(self, memory_id: UUID, updated_item: TraderMemoryItem) -> bool:
@@ -96,16 +133,16 @@ def update(self, memory_id: UUID, updated_item: TraderMemoryItem) -> bool:
     return False
 ```
 
-- [ ] **Step 4: 运行测试验证**
+- [ ] **Step 7: 运行测试验证**
 
-Run: `pytest tests/unit/trader_memory/test_service.py::test_update_modifies_existing_item -v`
+Run: `pytest tests/unit/trader_memory/test_trader_memory_service.py::test_update_modifies_existing_item -v`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 8: 提交**
 
 ```bash
-git add src/trader_memory/service.py tests/unit/trader_memory/test_service.py
-git commit -m "feat(NTL-S5-012): add TraderMemoryStore.update() method"
+git add src/trader_memory/schemas.py src/trader_memory/service.py tests/unit/trader_memory/test_trader_memory_service.py
+git commit -m "feat(NTL-S5-012): add TraderMemoryStore.update() and extra field"
 ```
 
 ---
@@ -148,7 +185,7 @@ Expected: FAIL（method not defined）
 
 - [ ] **Step 3: 实现 llm_attribution()**
 
-在 `PostmortemService` 类中添加：
+在 `PostmortemService` 类中添加。注意：`complete_json(*, system_prompt, user_prompt)` 无 schema 参数，JSON mode 由 provider 内部实现。
 
 ```python
 async def llm_attribution(
@@ -159,7 +196,7 @@ async def llm_attribution(
 ) -> dict:
     """对 failure_case 进行 LLM 归因分析。
 
-    复用 src/llm/client.py 的 LLMClient（Protocol + 实现）。
+    复用 src/llm/client.py 的 LLMClient。
 
     Args:
         trade_idea: 交易想法 dict
@@ -169,20 +206,16 @@ async def llm_attribution(
     Returns:
         dict: 包含 attribution_source 和归因详情的 dict
     """
-    prompt = self._build_llm_attribution_prompt(trade_idea, market_data, auto_attribution)
+    system_prompt = "你是一个交易归因分析助手。请分析失败交易的根本原因，以 JSON 格式返回分析结果。"
+    user_prompt = self._build_llm_attribution_prompt(trade_idea, market_data, auto_attribution)
 
-    response = await self._llm_client.complete_json(
-        prompt=prompt,
-        schema={
-            "type": "object",
-            "properties": {
-                "reason": {"type": "string"},
-                "corrected_reason": {"type": "string"},
-                "confidence": {"type": "number"},
-            },
-            "required": ["reason"],
-        },
-    )
+    try:
+        response = await self._llm_client.complete_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+    except Exception:
+        response = None
 
     # 判断归因结果
     if response is None:
@@ -193,7 +226,7 @@ async def llm_attribution(
             "confidence": 0.0,
         }
 
-    corrected_reason = response.get("corrected_reason") or response.get("reason")
+    corrected_reason = response.get("corrected_reason") or response.get("reason", "")
     auto_reason = auto_attribution.get("reason", "")
 
     if corrected_reason == auto_reason:
@@ -206,7 +239,6 @@ async def llm_attribution(
         "reason": corrected_reason,
         "corrected_reason": corrected_reason if corrected_reason != auto_reason else None,
         "confidence": response.get("confidence", 0.5),
-        "llm_model": self._llm_client.model,
     }
 ```
 
@@ -220,6 +252,7 @@ def _build_llm_attribution_prompt(
     auto_attribution: dict,
 ) -> str:
     """构造 LLM 归因 Prompt（Option A: 完整上下文）。"""
+    import json
     bars = market_data.get("bars", [])
     bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "无市场数据"
 
@@ -227,8 +260,8 @@ def _build_llm_attribution_prompt(
 - 标的: {trade_idea.get('symbol', 'N/A')}
 - 方向: {trade_idea.get('side', 'N/A')}
 - 入场价格: {trade_idea.get('entry', {})}
-- 目标价格: {trade_idea.get('target', 'N/A')}
-- 止损价格: {trade_idea.get('stop_loss', 'N/A')}
+- 目标价格: {trade_idea.get('target_price', trade_idea.get('target', 'N/A'))}
+- 止损价格: {trade_idea.get('stop_loss_price', trade_idea.get('stop_loss', 'N/A'))}
 
 ## 市场数据（1d 日线）
 {bars_str}
@@ -278,7 +311,7 @@ async def test_handle_postmortem_updates_existing_failure_case(tmp_path):
     """handle_postmortem_analysis 应原地更新 failure_case，不新增条目。"""
     from src.pipeline.tasks.postmortem_tasks import handle_postmortem_analysis
     from src.trader_memory.service import TraderMemoryStore
-    from src.trader_memory.schemas import TraderMemoryType, TraderMemoryFilter
+    from src.trader_memory.schemas import TraderMemoryType
     from datetime import date
     from uuid import uuid4
 
@@ -289,36 +322,34 @@ async def test_handle_postmortem_updates_existing_failure_case(tmp_path):
         memory_id=uuid4(),
         trader_id="trader_001",
         memory_type=TraderMemoryType.failure_case,
-        as_of_date=date.fromisoformat("2026-04-25"),
+        as_of_date=date(2026, 4, 25),
         symbol="AAPL",
         title="失败案例",
         content="失败内容",
     )
     store.append(failure_case)
 
-    # 模拟 postmortem 数据
-    postmortem_data = {
-        "return_pct": -3.5,
-        "mfe": 2.1,
-        "mae": 5.8,
-        "attribution_source": "llm_corrected",
+    # 构造 details：包含 auto_attribution（NTL-S5-012 新增字段）
+    details = {
+        "idea_id": str(failure_case.idea_id),
+        "trade_date": "2026-04-25",
+        "trader_id": "trader_001",
+        "symbol": "AAPL",
+        "auto_attribution": {"reason": "原始原因", "confidence": 0.5},
     }
 
-    await handle_postmortem_analysis(
-        trader_id="trader_001",
-        idea_id=failure_case.idea_id,
-        as_of_date=date.fromisoformat("2026-04-25"),
-        symbol="AAPL",
-        postmortem_data=postmortem_data,
-        auto_attribution={"reason": "原始原因"},
-        memory_store=store,
-    )
+    # Mock config
+    mock_config = MagicMock()
+    mock_config.storage.output_dir = str(tmp_path)
+
+    await handle_postmortem_analysis(details, config=mock_config)
 
     # 验证：文件只有一条
     items = store._load_all()
     assert len(items) == 1
-    assert items[0].postmortem_data == postmortem_data
-    assert items[0].extra["auto_original"] == {"reason": "原始原因"}
+    # failure_case 被更新，postmortem_data 存在
+    assert items[0].postmortem_data is not None
+    assert items[0].extra.get("auto_original") == {"reason": "原始原因"}
 ```
 
 - [ ] **Step 2: 运行测试验证**
@@ -328,16 +359,19 @@ Expected: FAIL（逻辑未改）
 
 - [ ] **Step 3: 实现更新逻辑**
 
-在 `handle_postmortem_analysis` 中：
+在 `handle_postmortem_analysis` 函数末尾（`store.append(memory)` 之前），添加查找并更新逻辑。注意 `auto_attribution` 从 `details` 中读取：
 
 ```python
-# 找到对应的 failure_case memory（NTL-S5-012）
+# 从 details 提取 auto_attribution（NTL-S5-012 新增）
+auto_attribution = details.get("auto_attribution") or {}
+
+# 查找对应的 failure_case memory（NTL-S5-012）
 f = TraderMemoryFilter(
     trader_id=trader_id,
     memory_types=[TraderMemoryType.failure_case],
     symbol=symbol,
-    date_from=as_of_date,
-    date_to=as_of_date,
+    date_from=date.fromisoformat(trade_date_str),
+    date_to=date.fromisoformat(trade_date_str),
     include_archived=False,
 )
 failure_cases = memory_store.list_filtered(f)
@@ -346,25 +380,35 @@ if failure_cases:
     # 原地更新同一条目（NTL-S5-012）
     failure_case = failure_cases[0]
     updated = failure_case.model_copy(deep=True)
-    updated.postmortem_data = postmortem_data
+    updated.postmortem_data = {
+        "root_causes": result.failure_attribution.root_causes,
+        "stage": result.failure_attribution.stage,
+        "rule_type": result.failure_attribution.rule_type,
+        "attribution_source": result.attribution_source,
+        "mfe": result.mfe,
+        "mae": result.mae,
+        "return_pct": result.return_pct,
+    }
     updated.extra = failure_case.extra or {}
     updated.extra["auto_original"] = auto_attribution
     memory_store.update(failure_case.memory_id, updated)
 else:
     # Fallback: append 新条目（兼容边界情况）
     memory_item = TraderMemoryItem(
-        trader_id=trader_id,
-        memory_type=TraderMemoryType.failure_case,
-        as_of_date=as_of_date,
-        symbol=symbol,
-        title=f"Failure: {symbol}",
-        content=postmortem_data.get("reason", "交易失败"),
-        idea_id=idea_id,
-        postmortem_data=postmortem_data,
+        trader_id=trader_id or trade_idea.trader_id,
+        memory_type=TraderMemoryType.postmortem,  # 用 postmortem 类型
+        as_of_date=trade_idea.as_of_date,
+        symbol=trade_idea.symbol,
+        title=f"Postmortem: {trade_idea.symbol} on {trade_idea.as_of_date}",
+        content=f"attribution={result.failure_attribution.root_causes}",
+        idea_id=trade_idea.idea_id,
+        postmortem_data={...},
         extra={"auto_original": auto_attribution},
     )
     memory_store.append(memory_item)
 ```
+
+并将 `TraderMemoryFilter` import 添加到文件顶部。
 
 - [ ] **Step 4: 运行测试验证**
 

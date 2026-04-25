@@ -145,7 +145,7 @@ class RankingService:
         """
         # 从 evidence_pack 提取基本信息
         trade_date = evidence_pack.trade_date
-        strategy_version_id = evidence_pack.strategy_version_id or ""
+        strategy_version_id = evidence_pack.strategy_version_id or "__none__"
         symbol = ""
 
         # 从 trade_idea 提取 symbol
@@ -226,14 +226,15 @@ class RankingService:
             evidence_pack: 当前 idea 的 EvidencePack
             mfe: Maximum Favorable Excursion
             mae: Maximum Adverse Excursion
-            return_pct: 收益率（%）
+            return_pct: 收益率（比例口径，0.01=1%）
 
         Returns:
             新建的 RankingEntry
         """
         # 从 evidence_pack 提取基本信息
         trade_date = evidence_pack.trade_date
-        strategy_version_id = evidence_pack.strategy_version_id or ""
+        # NTL-S5-013 fix: 空字符串会导致 unique constraint 冲突，用 __none__ 替代
+        strategy_version_id = evidence_pack.strategy_version_id or "__none__"
         symbol = ""
         trader_id = ""
 

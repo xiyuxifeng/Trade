@@ -61,7 +61,7 @@ class EvidencePack:
 
     # 策略版本追溯
     strategy_version_id: str | None = None
-    strategy_version_snapshot: list[dict] = field(default_factory=dict)  # rules_snapshot
+    strategy_version_snapshot: list[dict] = field(default_factory=list)  # rules_snapshot
 
     # 时间戳
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))

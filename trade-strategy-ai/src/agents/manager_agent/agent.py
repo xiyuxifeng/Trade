@@ -72,7 +72,7 @@ from src.strategy.types import (
 from src.db.session import session_scope
 from src.evaluation.evidence_pack import EvidencePack
 from src.evaluation.ranking_service import RankingService
-from src.evaluation.metrics_calculator import compute_mfe_mae_return
+from src.evaluation.metrics_calculator import compute_mfe_mae_return, compute_return_pct
 
 if TYPE_CHECKING:
     from src.market_universe.schemas import MarketUniverse
@@ -257,16 +257,21 @@ class ManagerAgent:
             return {}
 
         agent = DataAgent(config=config)
-        req = DataRequest(
-            trader_id="manager",
-            symbols=symbols,
-            fields=["ohlcv_1d", "indicators"],
-        )
-        resp = await agent.handle(req)
+        market_data: dict[str, Any] = {}
 
-        if resp.status == DataResponseStatus.ok:
-            return resp.payload
-        return {}
+        # DataAgent 按 dataset 路由，需分别拉取 ohlcv_1d / indicators。
+        for dataset in ("ohlcv_1d", "indicators"):
+            req = DataRequest(
+                trader_id="manager",
+                symbols=symbols,
+                dataset=dataset,
+                fields=[dataset],
+            )
+            resp = await agent.handle(req)
+            if resp.status == DataResponseStatus.ok:
+                market_data.update(resp.payload)
+
+        return market_data
 
     async def _load_strategy_version_snapshot(
         self,
@@ -336,7 +341,14 @@ class ManagerAgent:
 
         # 2. 获取完整行情
         market_data = await self._fetch_full_market_data([idea.symbol], config)
+        ohlcv_1d = market_data.get("ohlcv_1d", {}) or {}
+        bars = ohlcv_1d.get(idea.symbol, [])
+        market_data["bars"] = bars
         market_data["entry_price"] = float(idea.entry.price) if idea.entry and idea.entry.price else None
+        market_data["target_price"] = float(idea.target_price) if idea.target_price is not None else None
+        market_data["stop_loss_price"] = (
+            float(idea.stop_loss_price) if idea.stop_loss_price is not None else None
+        )
         market_data["current_price"] = last_prices.get(idea.symbol)
 
         # 3. 获取策略版本快照
@@ -367,7 +379,7 @@ class ManagerAgent:
         in the review task details (P2-109A close-loop tracking).
         """
         canonical_tags, topic_source, raw_topic_ids = build_topic_tags(
-            idea, market_universe_snapshot
+            idea.source_topic_ids, market_universe_snapshot
         )
         memory = TraderMemoryItem(
             trader_id=idea.trader_id,
@@ -746,6 +758,8 @@ class ManagerAgent:
                         entry_price=None,
                         current_price=current_price,
                         status="not_evaluated",
+                        partial_data=False,
+                        fallback_reason="missing_entry_price",
                         notes=["Missing entry price"],
                     )
                 )
@@ -774,16 +788,35 @@ class ManagerAgent:
                 stop_loss_price=stop_loss_price,
             )
 
-            # 判断数据情况并决定 status
+            # 判断数据情况并决定 status / 结构化扩展字段
+            partial_data = False
+            fallback_reason: str | None = None
             if not bars:
                 # NTL-S5-013: fallback 到 last_prices（旧逻辑保留作为降级路径）
                 if current_price is not None:
-                    return_pct = (float(current_price) - entry_price_val) / entry_price_val
+                    return_pct = compute_return_pct(entry_price_val, float(current_price))
                     eval_status = "fallback"
-                    notes_text = f"[fallback] return_pct={round(return_pct, 6):.6f}, reason=no_bars_data"
+                    fallback_reason = "no_bars_data"
+                    notes_text = (
+                        f"[fallback] bars=0, return_pct={round(return_pct, 6):.6f}, "
+                        f"reason={fallback_reason}, last_price={float(current_price):.4f}"
+                    )
+                    self.logger.warning(
+                        "fallback evaluation without bars for symbol=%s trader_id=%s reason=%s last_price=%s",
+                        idea.symbol,
+                        idea.trader_id,
+                        fallback_reason,
+                        current_price,
+                    )
                 else:
                     eval_status = "not_evaluated"
-                    notes_text = "Missing current price for fallback"
+                    fallback_reason = "missing_last_price"
+                    notes_text = "[not_evaluated] reason=missing_last_price"
+                    self.logger.warning(
+                        "evaluation skipped because both bars and last_price are missing for symbol=%s trader_id=%s",
+                        idea.symbol,
+                        idea.trader_id,
+                    )
                     self._append_task(
                         AgentTask(
                             type="data_missing",
@@ -796,7 +829,19 @@ class ManagerAgent:
             elif len(bars) < 2:
                 # NTL-S5-013: partial data
                 eval_status = "partial"
-                notes_text = f"[partial] mfe={mfe_val:.4f}, mae={mae_val:.4f}, return_pct={round(return_pct, 6):.6f}"
+                partial_data = True
+                notes_text = (
+                    f"[partial] bars={len(bars)}, mfe={mfe_val:.4f}, mae={mae_val:.4f}, "
+                    f"return_pct={round(return_pct, 6):.6f}, insufficient_bars"
+                )
+                self.logger.warning(
+                    "partial evaluation data for symbol=%s trader_id=%s bars=%s entry_date=%s exit_date=%s",
+                    idea.symbol,
+                    idea.trader_id,
+                    len(bars),
+                    as_of_date,
+                    exit_date,
+                )
             else:
                 # NTL-S5-013: 完整数据
                 eval_status = "ok"
@@ -818,6 +863,8 @@ class ManagerAgent:
                     current_price=exit_price,  # deprecated: 语义变为 exit_price
                     return_pct=round(return_pct, 6),
                     status=eval_status,
+                    partial_data=partial_data,
+                    fallback_reason=fallback_reason,
                     notes=[notes_text],
                 )
             )
@@ -835,7 +882,7 @@ class ManagerAgent:
 
             # NTL-S5-006 前置：构建 canonical tags
             canonical_tags, topic_source, raw_topic_ids = build_topic_tags(
-                idea, daily_report.market_universe_snapshot
+                idea.source_topic_ids, daily_report.market_universe_snapshot
             )
 
             self.memory_store.append(

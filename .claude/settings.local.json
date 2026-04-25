@@ -80,7 +80,9 @@
       "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai -name \"*.py\" -exec grep -l \"topic_mapping\" {} \\\\;)",
       "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests -name \"__pycache__\" -type d -exec rm -rf {} +)",
       "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests -name \"*.pyc\" -delete)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(PYTHONPATH=. alembic:*)"
     ]
   }
 }

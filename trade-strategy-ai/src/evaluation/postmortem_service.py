@@ -55,7 +55,7 @@ class PostmortemResult:
     extra: dict[str, object] = field(default_factory=dict)
 
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from src.evaluation.evidence_pack import EvidencePack
@@ -82,20 +82,35 @@ class LLMValidator(Protocol):
         ...
 
 
+class LLMNotesClient(Protocol):
+    """LLM 复盘笔记生成客户端接口。"""
+
+    def is_enabled(self) -> bool:
+        """判断当前客户端是否可用。"""
+        ...
+
+    async def complete_json_with_retry(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        """生成 JSON 输出。"""
+        ...
+
+
 class PostmortemService:
     """盘后复盘 service。
 
     Args:
         llm_validator: LLM 校验器（可选，不提供则只做自动归因）
-        enable_llm_notes: 是否生成 LLM 复盘笔记（需要 llm_validator）
+        llm_notes_client: LLM 笔记生成客户端（可选，未配置则回退结构化摘要）
+        enable_llm_notes: 是否生成复盘笔记（优先返回结构化中文摘要，后续可替换为 LLM 输出）
     """
 
     def __init__(
         self,
         llm_validator: LLMValidator | None = None,
+        llm_notes_client: LLMNotesClient | None = None,
         enable_llm_notes: bool = False,
     ):
         self.llm_validator = llm_validator
+        self.llm_notes_client = llm_notes_client
         self.enable_llm_notes = enable_llm_notes
 
     def _auto_attribution(
@@ -151,6 +166,149 @@ class PostmortemService:
             extra["auto_original"] = auto
             return FailureAttribution(root_causes=[]), "llm_rejected", extra
 
+    def _build_postmortem_notes(
+        self,
+        *,
+        evidence_pack: EvidencePack,
+        final_attribution: FailureAttribution,
+        attribution_source: str,
+        mfe: float,
+        mae: float,
+        return_pct: float,
+        rules_hit: list[str],
+        exit_triggered: str | None,
+        exit_date: str | None,
+    ) -> str:
+        """生成可读的复盘摘要。
+
+        当前先输出结构化中文摘要，保证在没有外部 LLM 的情况下也能落地；
+        后续若接入 LLM，可直接替换这层实现。
+        """
+        symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else "unknown"
+        bars = evidence_pack.market_data.get("bars", [])
+        root_causes = "、".join(final_attribution.root_causes) if final_attribution.root_causes else "暂无明确根因"
+        rules_text = "、".join(rules_hit) if rules_hit else "无"
+        outcome = "盈利" if return_pct >= 0 else "亏损"
+
+        if not bars:
+            data_text = "市场 bars 缺失，已使用降级结果。"
+        elif exit_triggered:
+            data_text = f"已触发 {exit_triggered}，出场日期 {exit_date}。"
+        else:
+            data_text = f"未触发止盈/止损，使用最后一根 bar 的收盘价作为 exit。"
+
+        return (
+            f"{symbol} 于 {evidence_pack.trade_date} 的复盘：{outcome} {return_pct:.2%}，"
+            f"MFE {mfe:.2%}，MAE {mae:.2%}，bars={len(bars)}。"
+            f"归因来源 {attribution_source}，主要根因：{root_causes}。"
+            f"规则命中：{rules_text}。{data_text}"
+        )
+
+    def _build_llm_notes_prompt(
+        self,
+        *,
+        evidence_pack: EvidencePack,
+        final_attribution: FailureAttribution,
+        attribution_source: str,
+        mfe: float,
+        mae: float,
+        return_pct: float,
+        rules_hit: list[str],
+        exit_triggered: str | None,
+        exit_date: str | None,
+    ) -> str:
+        """构造 LLM 复盘笔记 prompt。"""
+        symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else "unknown"
+        bars = evidence_pack.market_data.get("bars", [])
+        bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "[]"
+        root_causes = "、".join(final_attribution.root_causes) if final_attribution.root_causes else "无明确根因"
+        rules_text = "、".join(rules_hit) if rules_hit else "无"
+        exit_text = exit_triggered or "none"
+        exit_date_text = exit_date or "none"
+        trade_side = evidence_pack.trade_idea.side if evidence_pack.trade_idea and evidence_pack.trade_idea.side else "unknown"
+        entry_value = evidence_pack.trade_idea.entry.price if evidence_pack.trade_idea and evidence_pack.trade_idea.entry else None
+        target_price = evidence_pack.market_data.get("target_price")
+        stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
+
+        template = _load_prompt("prompts/llm_postmortem_notes.md")
+        result = template.replace("{symbol}", str(symbol))
+        result = result.replace("{trade_date}", str(evidence_pack.trade_date))
+        result = result.replace("{side}", str(trade_side))
+        result = result.replace("{entry_price}", str(entry_value if entry_value is not None else "N/A"))
+        result = result.replace("{target_price}", str(target_price if target_price is not None else "N/A"))
+        result = result.replace("{stop_loss_price}", str(stop_loss_price if stop_loss_price is not None else "N/A"))
+        result = result.replace("{bars}", bars_str)
+        result = result.replace("{root_causes}", root_causes)
+        result = result.replace("{attribution_source}", attribution_source)
+        result = result.replace("{mfe}", f"{mfe:.6f}")
+        result = result.replace("{mae}", f"{mae:.6f}")
+        result = result.replace("{return_pct}", f"{return_pct:.6f}")
+        result = result.replace("{rules_hit}", rules_text)
+        result = result.replace("{exit_triggered}", exit_text)
+        result = result.replace("{exit_date}", exit_date_text)
+        return result
+
+    async def _generate_postmortem_notes(
+        self,
+        *,
+        evidence_pack: EvidencePack,
+        final_attribution: FailureAttribution,
+        attribution_source: str,
+        mfe: float,
+        mae: float,
+        return_pct: float,
+        rules_hit: list[str],
+        exit_triggered: str | None,
+        exit_date: str | None,
+    ) -> tuple[str | None, str]:
+        """优先使用 LLM 生成复盘笔记，失败时回退到结构化摘要。
+
+        Returns:
+            (notes, source)
+        """
+        client = self.llm_notes_client
+        if client is None:
+            from src.llm.client import LLMClient, from_env_and_config
+
+            cfg = from_env_and_config(
+                provider=None,
+                model=None,
+                url=None,
+                api_key=None,
+            )
+            client = LLMClient(cfg)
+
+        if not client.is_enabled():
+            return None, "fallback"
+
+        system_prompt = _load_prompt("prompts/llm_postmortem_notes.md")
+        user_prompt = self._build_llm_notes_prompt(
+            evidence_pack=evidence_pack,
+            final_attribution=final_attribution,
+            attribution_source=attribution_source,
+            mfe=mfe,
+            mae=mae,
+            return_pct=return_pct,
+            rules_hit=rules_hit,
+            exit_triggered=exit_triggered,
+            exit_date=exit_date,
+        )
+
+        try:
+            response = await client.complete_json_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+        except Exception:
+            return None, "fallback"
+
+        notes = response.get("notes") or response.get("summary") or response.get("content")
+        if isinstance(notes, list):
+            notes = "；".join(str(item) for item in notes if item)
+        if not isinstance(notes, str) or not notes.strip():
+            return None, "fallback"
+        return notes.strip(), "llm"
+
     async def generate(
         self,
         evidence_pack: EvidencePack,
@@ -201,10 +359,34 @@ class PostmortemService:
             validation = await self.llm_validator.validate(evidence_pack, auto_attribution)
             final_attribution, source, extra = self._apply_validation(auto_attribution, validation)
 
-        # Step 4: LLM 笔记生成（当前未实现，占位）
+        # Step 4: 生成复盘笔记（优先 LLM，失败时回退结构化摘要）
         notes = None
-        # if self.enable_llm_notes and self.llm_validator is not None:
-        #     notes = await self._generate_notes(evidence_pack, final_attribution)
+        notes_source = "none"
+        if self.enable_llm_notes:
+            notes, notes_source = await self._generate_postmortem_notes(
+                evidence_pack=evidence_pack,
+                final_attribution=final_attribution,
+                attribution_source=source,
+                mfe=mfe,
+                mae=mae,
+                return_pct=return_pct,
+                rules_hit=rules_hit,
+                exit_triggered=exit_triggered,
+                exit_date=exit_date,
+            )
+            if notes is None:
+                notes = self._build_postmortem_notes(
+                    evidence_pack=evidence_pack,
+                    final_attribution=final_attribution,
+                    attribution_source=source,
+                    mfe=mfe,
+                    mae=mae,
+                    return_pct=return_pct,
+                    rules_hit=rules_hit,
+                    exit_triggered=exit_triggered,
+                    exit_date=exit_date,
+                )
+                notes_source = "fallback"
 
         # 构建 extra（包含 NTL-S5-010 新增字段）
         result_extra: dict[str, object] = {
@@ -213,6 +395,7 @@ class PostmortemService:
             "exit_triggered": exit_triggered,
             "exit_date": exit_date,
             "is_final": exit_triggered is not None,
+            "notes_source": notes_source,
         }
 
         return PostmortemResult(
@@ -324,8 +507,10 @@ class PostmortemService:
         result = template.replace("{symbol}", str(trade_idea.get("symbol", "N/A")))
         result = result.replace("{side}", str(trade_idea.get("side", "N/A")))
         result = result.replace("{entry}", entry_str)
-        result = result.replace("{target}", str(trade_idea.get("target", "N/A")))
-        result = result.replace("{stop_loss}", str(trade_idea.get("stop_loss", "N/A")))
+        target_val = trade_idea.get("target_price", trade_idea.get("target", "N/A"))
+        stop_loss_val = trade_idea.get("stop_loss_price", trade_idea.get("stop_loss", "N/A"))
+        result = result.replace("{target}", str(target_val))
+        result = result.replace("{stop_loss}", str(stop_loss_val))
         result = result.replace("{bars}", bars_str)
         result = result.replace("{auto_reason}", str(auto_attribution.get("reason", "N/A")))
         result = result.replace("{auto_confidence}", str(auto_attribution.get("confidence", 0.0)))

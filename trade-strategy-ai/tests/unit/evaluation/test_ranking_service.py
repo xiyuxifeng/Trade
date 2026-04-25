@@ -265,6 +265,52 @@ async def test_add_entry_from_metrics_creates_entry():
 
 
 @pytest.mark.asyncio
+async def test_add_entry_uses_none_placeholder_strategy_version():
+    """strategy_version_id 缺失时统一写入 __none__。"""
+    mock_session = AsyncMock()
+    mock_repo = AsyncMock()
+    service = RankingService(mock_session)
+    service._repo = mock_repo
+
+    mock_pack = MagicMock()
+    mock_pack.trade_date = "2026-04-25"
+    mock_pack.strategy_version_id = None
+    mock_pack.trade_idea = MagicMock()
+    mock_pack.trade_idea.symbol = "SH600519"
+    mock_pack.trade_idea.trader_id = "trader_a"
+    mock_pack.signal_context = None
+
+    mock_postmortem = MagicMock()
+    mock_postmortem.idea_id = uuid4()
+    mock_postmortem.return_pct = 0.05
+    mock_postmortem.mfe = 0.08
+    mock_postmortem.mae = 0.02
+    mock_postmortem.attribution_source = "auto"
+
+    mock_record = MagicMock()
+    mock_record.entry_id = uuid4()
+    mock_record.trade_date = "2026-04-25"
+    mock_record.trader_id = "trader_a"
+    mock_record.strategy_version_id = "__none__"
+    mock_record.symbol = "SH600519"
+    mock_record.return_pct = 0.05
+    mock_record.mfe = 0.08
+    mock_record.mae = 0.02
+    mock_record.composite_score = 0.11
+    mock_record.rank = None
+    mock_record.is_latest = True
+    mock_record.idea_id = mock_postmortem.idea_id
+    mock_record.attribution_source = "auto"
+    mock_record.extra = {}
+    mock_repo.upsert.return_value = mock_record
+
+    await service.add_entry(mock_postmortem, mock_pack)
+
+    upsert_entry = mock_repo.upsert.call_args.args[0]
+    assert upsert_entry.strategy_version_id == "__none__"
+
+
+@pytest.mark.asyncio
 async def test_generate_ranking_and_save_creates_file(tmp_path):
     """generate_ranking_and_save 生成 nested + flat 视图并写入文件（NTL-S5-011）"""
     from pathlib import Path

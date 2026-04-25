@@ -1168,7 +1168,7 @@
   验收标准：能按 trader、策略版本、标的等维度输出 ranking。
   完成情况：新增 `RankingEntry` dataclass + `RankingService`（add_entry/generate_ranking/update_entry）+ `RankingRepository`（upsert/update_rank/query）+ `RankingEntryRecord` ORM；多级排序（return_pct + 赔率）；nested/flat 双视图输出；is_latest 版本淘汰；41 tests PASS。
 
-- [ ] `NTL-S5-005` `P1`
+- [x] `NTL-S5-005` `P1`
   目标：扩展 `TraderMemory` schema。
   输入：当前记忆结构。
   输出：新增 `postmortem`、`strategy_adjustment`、`market_regime_note`。
@@ -1176,6 +1176,7 @@
   前置依赖：Stage 4 完成。
   可并行：`NTL-S5-006`、`NTL-S5-007`。
   验收标准：记忆结构足以存储盘后结果。
+  完成情况：TraderMemoryType 新增 3 种类型（postmortem/strategy_adjustment/market_regime_note）；TraderMemoryItem 新增 idea_id/strategy_version_id/ranking_entry_id/postmortem_data/strategy_adjustment_data/market_regime_data 字段；TraderMemorySummary 新增 postmortem_notes/strategy_adjustments/market_regime_notes 字段；summarize_context 更新支持聚合 new types；22 tests PASS。
 
 - [ ] `NTL-S5-006` `P1`
   目标：扩展 `TraderMemory` service 检索能力。

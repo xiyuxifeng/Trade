@@ -1186,7 +1186,7 @@
   前置依赖：`NTL-S5-005`。
   可并行：`NTL-S5-007`。
   验收标准：下次盘前能按上下文取回相关记忆。
-  完成情况：TraderMemoryItem 新增 topic_source/raw_topic_ids 字段（JSONL schema）；TraderMemoryFilter 新增 tags/strategy_version_id 字段；_apply_filter 实现 tags 任一命中 + strategy_version_id 精确匹配；新增 topic_mapping Alembic migration；27 tests PASS。
+  完成情况：TraderMemoryItem 新增 topic_source/raw_topic_ids 字段（JSONL schema）；TraderMemoryFilter 新增 tags/strategy_version_id 字段；_apply_filter 实现 tags 任一命中 + strategy_version_id 精确匹配；新增 topic_mapping Alembic migration；27 tests PASS；NTL-S5-006 前置集成：DailyReport.market_universe_snapshot、generate_trade_ideas 关联 HotTopic 到 source_topic_ids、run_after_close canonical tag 写入；4 commits 完成。
 
 - [ ] `NTL-S5-007` `P1`
   目标：扩展 review task 结构。

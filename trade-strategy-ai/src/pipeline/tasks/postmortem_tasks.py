@@ -20,6 +20,32 @@ from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 
 
+def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
+    """从 evidence_packs 目录中查找对应 idea_id 的 pack_id。
+
+    遍历 evidence_packs 目录，按 idea_id 匹配。
+
+    Returns:
+        pack_id 字符串或 None
+    """
+    pack_dir = Path(".") / config.storage.output_dir / "evidence_packs"
+    if not pack_dir.exists():
+        return None
+    for pack_file in pack_dir.glob("*.json"):
+        try:
+            data = read_json(pack_file)
+            if data.get("idea_id") == idea_id_str:
+                return pack_file.stem
+        except Exception:
+            continue
+    return None
+
+
+def _evidence_pack_path(pack_id: str, config: AppConfig) -> Path:
+    """获取 EvidencePack JSON 文件路径。"""
+    return Path(".") / config.storage.output_dir / "evidence_packs" / f"{pack_id}.json"
+
+
 async def handle_postmortem_analysis(
     details: dict[str, Any],
     *,
@@ -65,16 +91,35 @@ async def handle_postmortem_analysis(
     # 获取当前价格（NTL-S5-009 完成前：用 last_price 代替完整行情）
     last_prices = await _fetch_last_prices([symbol or trade_idea.symbol], config)
 
-    # 构造 EvidencePack（NTL-S5-009 完成前：最小实现）
-    evidence_pack = EvidencePack(
-        idea_id=trade_idea.idea_id,
-        trade_date=str(trade_idea.as_of_date),
-        trade_idea=trade_idea,
-        signal_context=None,  # NTL-S5-009 后从 signal_versioning 加载
-        market_data={"last_price": last_prices.get(symbol or trade_idea.symbol)},
-        strategy_version_id=trade_idea.strategy_version_id,
-        strategy_version_snapshot=[],  # NTL-S5-009 后填充 rules_snapshot
-    )
+    # NTL-S5-009: 从持久化的 JSON 文件加载 EvidencePack
+    pack_id = _find_evidence_pack_id(idea_id_str, config)
+    if pack_id:
+        pack_path = _evidence_pack_path(pack_id, config)
+        if pack_path.exists():
+            pack_data = read_json(pack_path)
+            evidence_pack = EvidencePack.from_dict(pack_data)
+        else:
+            # fallback：降级到最小实现（保留容错）
+            evidence_pack = EvidencePack(
+                idea_id=trade_idea.idea_id,
+                trade_date=str(trade_idea.as_of_date),
+                trade_idea=trade_idea,
+                signal_context=None,
+                market_data={"last_price": last_prices.get(symbol or trade_idea.symbol)},
+                strategy_version_id=trade_idea.strategy_version_id,
+                strategy_version_snapshot=[],
+            )
+    else:
+        # fallback：降级到最小实现
+        evidence_pack = EvidencePack(
+            idea_id=trade_idea.idea_id,
+            trade_date=str(trade_idea.as_of_date),
+            trade_idea=trade_idea,
+            signal_context=None,
+            market_data={"last_price": last_prices.get(symbol or trade_idea.symbol)},
+            strategy_version_id=trade_idea.strategy_version_id,
+            strategy_version_snapshot=[],
+        )
 
     # 执行自动归因
     service = PostmortemService()

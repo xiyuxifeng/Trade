@@ -84,3 +84,19 @@ class PostmortemService:
     ):
         self.llm_validator = llm_validator
         self.enable_llm_notes = enable_llm_notes
+
+    def _auto_attribution(self, evidence_pack: EvidencePack) -> FailureAttribution:
+        """基于 EvidencePack 数据做自动归因。
+
+        目前实现：
+        - data_quality_issue：market_data 为空或异常
+
+        完整归因逻辑在 NTL-S5-010 后完善。
+        """
+        root_causes: list[str] = []
+
+        # 数据质量问题
+        if not evidence_pack.market_data:
+            root_causes.append("data_quality_issue")
+
+        return FailureAttribution(root_causes=root_causes)

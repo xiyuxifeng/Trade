@@ -113,3 +113,57 @@ class TestLLMValidator:
         service = PostmortemService(llm_validator=MockValidator(), enable_llm_notes=True)
         assert service.llm_validator is not None
         assert service.enable_llm_notes is True
+
+
+class TestAutoAttribution:
+    """自动归因逻辑测试。"""
+
+    def test_data_quality_issue(self):
+        """market_data 为空应标记 data_quality_issue。"""
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService()
+
+        evidence = EvidencePack(
+            idea_id=None,
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={},  # 空数据
+        )
+
+        result = service._auto_attribution(evidence)
+        assert "data_quality_issue" in result.root_causes
+
+    def test_no_issue_when_data_present(self):
+        """market_data 非空且 signal_context 为 None 时应返回空归因。"""
+        from src.evaluation.postmortem_service import PostmortemService
+        from src.evaluation.evidence_pack import EvidencePack
+        from src.schemas.contracts import TradeIdea
+        from datetime import date
+
+        service = PostmortemService()
+
+        evidence = EvidencePack(
+            idea_id=None,
+            trade_date="2026-04-25",
+            trade_idea=TradeIdea(
+                trader_id="trader1",
+                as_of_date=date.today(),
+                symbol="000001",
+                entry={"type": "limit", "price": 10.0},
+            ),
+            signal_context=None,
+            market_data={"000001": {"close": 10.5}},  # 非空数据
+        )
+
+        result = service._auto_attribution(evidence)
+        assert result.root_causes == []

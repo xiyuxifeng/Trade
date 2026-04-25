@@ -70,6 +70,7 @@ from src.strategy.types import (
     SynthesisMode,
 )
 from src.db.session import session_scope
+from src.evaluation.evidence_pack import EvidencePack
 
 if TYPE_CHECKING:
     from src.market_universe.schemas import MarketUniverse
@@ -218,6 +219,134 @@ class ManagerAgent:
 
     def _append_task(self, task: AgentTask) -> None:
         append_jsonl(self.tasks_path, task.model_dump())
+
+    def _load_signal_context(self, idea_id: UUID) -> SignalContext | None:
+        """从 signal_versioning 加载 SignalContext。
+
+        signal_versioning 将 {idea_id} 的完整上下文存储在
+        {output_dir}/signals/idea_{idea_id}.json 文件中。
+
+        Args:
+            idea_id: TradeIdea.idea_id
+
+        Returns:
+            SignalContext 或 None（不存在时）
+        """
+        signal_with_ctx = self.signal_versioning.get_version(f"idea_{idea_id}")
+        return signal_with_ctx.context if signal_with_ctx else None
+
+    async def _fetch_full_market_data(
+        self,
+        symbols: list[str],
+        config: AppConfig,
+    ) -> dict[str, Any]:
+        """从 DataAgent 获取完整行情（ohlcv_1d + indicators）。
+
+        用于 EvidencePack.market_data，供后续 MFE/MAE 计算。
+
+        Args:
+            symbols: 标的代码列表
+            config: 应用配置
+
+        Returns:
+            market_data dict，包含 ohlcv_1d 和 indicators
+        """
+        if not symbols:
+            return {}
+
+        agent = DataAgent(config=config)
+        req = DataRequest(
+            trader_id="manager",
+            symbols=symbols,
+            fields=["ohlcv_1d", "indicators"],
+        )
+        resp = await agent.handle(req)
+
+        if resp.status == DataResponseStatus.ok:
+            return resp.payload
+        return {}
+
+    async def _load_strategy_version_snapshot(
+        self,
+        strategy_version_id: str | None,
+        config: AppConfig,
+    ) -> list[dict]:
+        """从 StrategyLibraryService 加载 rules_snapshot。
+
+        Args:
+            strategy_version_id: 策略版本 ID
+            config: 应用配置
+
+        Returns:
+            rules_snapshot 列表
+        """
+        if not strategy_version_id:
+            return []
+
+        service = StrategyLibraryService()
+        async with session_scope() as session:
+            version = await service.get_version(session, strategy_version_id)
+            return version.rules_snapshot if version else []
+
+    def _save_evidence_pack(self, pack: EvidencePack) -> Path:
+        """将 EvidencePack 写入 JSON 文件。
+
+        路径：{output_dir}/evidence_packs/{pack_id}.json
+
+        Args:
+            pack: EvidencePack 实例
+
+        Returns:
+            文件路径
+        """
+        pack_dir = self.output_dir / "evidence_packs"
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        path = pack_dir / f"{pack.pack_id}.json"
+        write_json(path, pack.to_dict())
+        return path
+
+    async def _generate_evidence_pack(
+        self,
+        idea: "TradeIdea",
+        daily_report: DailyReport,
+        last_prices: dict[str, float],
+        config: AppConfig,
+    ) -> EvidencePack:
+        """为单条 TradeIdea 生成完整 EvidencePack。
+
+        包含：
+        - trade_idea：原始交易想法
+        - signal_context：从 signal_versioning 加载（NTL-S4-005 扩展的完整上下文）
+        - market_data：完整行情（ohlcv_1d + indicators + entry_price + current_price）
+        - strategy_version_snapshot：从 StrategyLibraryService 加载的 rules_snapshot
+
+        Args:
+            idea: 单条 TradeIdea
+            daily_report: 当前 DailyReport
+            last_prices: symbol -> current_price 字典
+            config: 应用配置
+
+        Returns:
+            EvidencePack 实例
+        """
+        # 1. 加载 SignalContext
+        signal_context = self._load_signal_context(idea.idea_id)
+
+        # 2. 获取完整行情
+        market_data = await self._fetch_full_market_data([idea.symbol], config)
+        market_data["entry_price"] = float(idea.entry.price) if idea.entry and idea.entry.price else None
+        market_data["current_price"] = last_prices.get(idea.symbol)
+
+        # 3. 获取策略版本快照
+        rules_snapshot = await self._load_strategy_version_snapshot(idea.strategy_version_id, config)
+
+        return EvidencePack.from_trade_idea(
+            trade_idea=idea,
+            signal_context=signal_context,
+            market_data=market_data,
+            strategy_version_id=idea.strategy_version_id,
+            strategy_version_snapshot=rules_snapshot,
+        )
 
     def _append_review_memory(
         self,

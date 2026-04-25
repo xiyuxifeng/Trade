@@ -70,7 +70,7 @@ from src.strategy.types import (
     SynthesisMode,
 )
 from src.db.session import session_scope
-from src.evaluation.evidence_pack import EvidencePack
+from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.evaluation.ranking_service import RankingService
 from src.evaluation.metrics_calculator import compute_mfe_mae_return, compute_return_pct
 
@@ -296,9 +296,10 @@ class ManagerAgent:
             return version.rules_snapshot if version else []
 
     def _save_evidence_pack(self, pack: EvidencePack) -> Path:
-        """将 EvidencePack 写入 JSON 文件。
+        """将 EvidencePack 写入 JSON 文件，并更新 idea_id -> pack_id 索引。
 
         路径：{output_dir}/evidence_packs/{pack_id}.json
+        索引：{output_dir}/evidence_packs/evidence_pack_index.json
 
         Args:
             pack: EvidencePack 实例
@@ -310,6 +311,19 @@ class ManagerAgent:
         pack_dir.mkdir(parents=True, exist_ok=True)
         path = pack_dir / f"{pack.pack_id}.json"
         write_json(path, pack.to_dict())
+
+        # 更新 idea_id -> pack_id 索引，供 postmortem_tasks O(1) 查询
+        if pack.idea_id is not None:
+            index_path = pack_dir / "evidence_pack_index.json"
+            index: dict[str, str] = {}
+            if index_path.exists():
+                try:
+                    index = read_json(index_path) or {}
+                except Exception:
+                    index = {}
+            index[str(pack.idea_id)] = str(pack.pack_id)
+            write_json(index_path, index)
+
         return path
 
     async def _generate_evidence_pack(
@@ -340,16 +354,19 @@ class ManagerAgent:
         signal_context = self._load_signal_context(idea.idea_id)
 
         # 2. 获取完整行情
-        market_data = await self._fetch_full_market_data([idea.symbol], config)
-        ohlcv_1d = market_data.get("ohlcv_1d", {}) or {}
+        raw_market_data = await self._fetch_full_market_data([idea.symbol], config)
+        ohlcv_1d = raw_market_data.get("ohlcv_1d", {}) or {}
         bars = ohlcv_1d.get(idea.symbol, [])
-        market_data["bars"] = bars
-        market_data["entry_price"] = float(idea.entry.price) if idea.entry and idea.entry.price else None
-        market_data["target_price"] = float(idea.target_price) if idea.target_price is not None else None
-        market_data["stop_loss_price"] = (
-            float(idea.stop_loss_price) if idea.stop_loss_price is not None else None
+
+        market_data = MarketDataSnapshot(
+            bars=bars,
+            ohlcv_1d=ohlcv_1d,
+            indicators=raw_market_data.get("indicators", {}),
+            entry_price=float(idea.entry.price) if idea.entry and idea.entry.price else None,
+            target_price=float(idea.target_price) if idea.target_price is not None else None,
+            stop_loss_price=float(idea.stop_loss_price) if idea.stop_loss_price is not None else None,
+            current_price=last_prices.get(idea.symbol),
         )
-        market_data["current_price"] = last_prices.get(idea.symbol)
 
         # 3. 获取策略版本快照
         rules_snapshot = await self._load_strategy_version_snapshot(idea.strategy_version_id, config)
@@ -775,17 +792,18 @@ class ManagerAgent:
             self._save_evidence_pack(evidence_pack)
 
             # NTL-S5-013: 使用 compute_mfe_mae_return 计算
-            bars = evidence_pack.market_data.get("bars", [])
+            bars = evidence_pack.market_data.bars
             entry_price_val = float(entry_price)
-            target_price = evidence_pack.market_data.get("target_price")
-            stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
+            target_price = evidence_pack.market_data.target_price
+            stop_loss_price = evidence_pack.market_data.stop_loss_price
 
-            mfe_val, mae_val, return_pct, exit_triggered, exit_date = compute_mfe_mae_return(
+            mfe_val, mae_val, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
                 bars=bars,
                 entry_price=entry_price_val,
                 entry_date=str(as_of_date),
                 target_price=target_price,
                 stop_loss_price=stop_loss_price,
+                symbol=idea.symbol,
             )
 
             # 判断数据情况并决定 status / 结构化扩展字段
@@ -846,6 +864,10 @@ class ManagerAgent:
                 # NTL-S5-013: 完整数据
                 eval_status = "ok"
                 notes_text = f"mfe={mfe_val:.4f}, mae={mae_val:.4f}, return_pct={round(return_pct, 6):.6f}, exit={exit_triggered}"
+
+            # 记录停牌/无成交信息（如有）
+            if halted_dates:
+                notes_text += f", halted_dates={halted_dates}"
 
             # NTL-S5-013: current_price 语义变为 exit_price（bars 末bar收盘价或 last_price）
             if bars:

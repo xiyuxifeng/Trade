@@ -7,7 +7,7 @@
 - 策略 ranking
 """
 
-from src.evaluation.evidence_pack import EvidencePack
+from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.evaluation.failure_taxonomy import (
     FailureRootCause,
     FailureStage,

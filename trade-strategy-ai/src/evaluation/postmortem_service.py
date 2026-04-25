@@ -130,7 +130,7 @@ class PostmortemService:
         root_causes: list[str] = []
 
         # 数据质量问题
-        if not evidence_pack.market_data or not evidence_pack.market_data.get("bars"):
+        if not evidence_pack.market_data.bars:
             root_causes.append("data_quality_issue")
 
         # 亏损归因
@@ -185,7 +185,7 @@ class PostmortemService:
         后续若接入 LLM，可直接替换这层实现。
         """
         symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else "unknown"
-        bars = evidence_pack.market_data.get("bars", [])
+        bars = evidence_pack.market_data.bars
         root_causes = "、".join(final_attribution.root_causes) if final_attribution.root_causes else "暂无明确根因"
         rules_text = "、".join(rules_hit) if rules_hit else "无"
         outcome = "盈利" if return_pct >= 0 else "亏损"
@@ -219,7 +219,7 @@ class PostmortemService:
     ) -> str:
         """构造 LLM 复盘笔记 prompt。"""
         symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else "unknown"
-        bars = evidence_pack.market_data.get("bars", [])
+        bars = evidence_pack.market_data.bars
         bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "[]"
         root_causes = "、".join(final_attribution.root_causes) if final_attribution.root_causes else "无明确根因"
         rules_text = "、".join(rules_hit) if rules_hit else "无"
@@ -227,8 +227,8 @@ class PostmortemService:
         exit_date_text = exit_date or "none"
         trade_side = evidence_pack.trade_idea.side if evidence_pack.trade_idea and evidence_pack.trade_idea.side else "unknown"
         entry_value = evidence_pack.trade_idea.entry.price if evidence_pack.trade_idea and evidence_pack.trade_idea.entry else None
-        target_price = evidence_pack.market_data.get("target_price")
-        stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
+        target_price = evidence_pack.market_data.target_price
+        stop_loss_price = evidence_pack.market_data.stop_loss_price
 
         template = _load_prompt("prompts/llm_postmortem_notes.md")
         result = template.replace("{symbol}", str(symbol))
@@ -322,17 +322,19 @@ class PostmortemService:
             PostmortemResult: 结构化复盘结果
         """
         # Step 1: 计算 MFE / MAE / return_pct（NTL-S5-010）
-        bars: list[dict] = evidence_pack.market_data.get("bars", [])
-        entry_price: float = evidence_pack.market_data.get("entry_price", 0.0)
-        target_price = evidence_pack.market_data.get("target_price")
-        stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
+        bars: list[dict] = evidence_pack.market_data.bars
+        entry_price: float = evidence_pack.market_data.entry_price or 0.0
+        target_price = evidence_pack.market_data.target_price
+        stop_loss_price = evidence_pack.market_data.stop_loss_price
 
-        mfe, mae, return_pct, exit_triggered, exit_date = compute_mfe_mae_return(
+        symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else ""
+        mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
             bars=bars,
             entry_price=entry_price,
             entry_date=evidence_pack.trade_date,
             target_price=target_price,
             stop_loss_price=stop_loss_price,
+            symbol=symbol,
         )
 
         # 提取 rules_hit
@@ -389,13 +391,17 @@ class PostmortemService:
                 notes_source = "fallback"
 
         # 构建 extra（包含 NTL-S5-010 新增字段）
+        # 停牌场景：exit_date 为 None 表示未实际出场，eval_date 为评估截止日
         result_extra: dict[str, object] = {
             **extra,
             "rules_hit": rules_hit,
             "exit_triggered": exit_triggered,
             "exit_date": exit_date,
+            "eval_date": eval_date,
             "is_final": exit_triggered is not None,
             "notes_source": notes_source,
+            "halted_dates": halted_dates,
+            "halted_count": len(halted_dates),
         }
 
         return PostmortemResult(

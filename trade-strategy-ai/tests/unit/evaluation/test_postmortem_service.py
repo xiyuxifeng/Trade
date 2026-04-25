@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from src.evaluation.evidence_pack import MarketDataSnapshot
 from src.evaluation.postmortem_service import ValidationDecision, LLMValidationResult
 
 
@@ -139,7 +140,7 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={},  # 空数据，bars 也缺失
+            market_data=MarketDataSnapshot(),  # 空数据，bars 也缺失
         )
 
         result = service._auto_attribution(evidence, rules_hit=[], return_pct=0.0)
@@ -164,9 +165,9 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
-            },  # 含 bars 的有效数据
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
+            ),  # 含 bars 的有效数据
         )
 
         result = service._auto_attribution(evidence, rules_hit=[], return_pct=8.0)
@@ -191,9 +192,9 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
-            },
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
+            ),
         )
 
         result = service._auto_attribution(evidence, rules_hit=["r1", "r2"], return_pct=-15.0)
@@ -219,9 +220,9 @@ class TestAutoAttribution:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
-            },
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 10.5, "low": 8.0, "close": 8.5}],
+            ),
         )
 
         result = service._auto_attribution(evidence, rules_hit=[], return_pct=-15.0)
@@ -302,7 +303,7 @@ class TestGenerate:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={},  # 空数据，触发 data_quality_issue
+            market_data=MarketDataSnapshot(),  # 空数据，触发 data_quality_issue
         )
 
         result = await service.generate(evidence)
@@ -334,12 +335,12 @@ class TestGenerate:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
-                "entry_price": 10.0,
-                "target_price": 10.5,
-                "stop_loss_price": 9.7,
-            },
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
+                entry_price=10.0,
+                target_price=10.5,
+                stop_loss_price=9.7,
+            ),
         )
 
         result = await service.generate(evidence)
@@ -368,12 +369,12 @@ class TestGenerate:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
-                "entry_price": 10.0,
-                "target_price": 10.5,
-                "stop_loss_price": 9.7,
-            },
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 10.3, "low": 9.8, "close": 10.2}],
+                entry_price=10.0,
+                target_price=10.5,
+                stop_loss_price=9.7,
+            ),
         )
 
         result = await service.generate(evidence)
@@ -406,12 +407,12 @@ class TestGenerate:
                 entry={"type": "limit", "price": 10.0},
             ),
             signal_context=None,
-            market_data={
-                "bars": [{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
-                "entry_price": 10.0,
-                "target_price": 11.0,
-                "stop_loss_price": 9.0,
-            },  # NTL-S5-010: 含 bars 的有效数据
+            market_data=MarketDataSnapshot(
+                bars=[{"date": "2026-04-25", "open": 10.0, "high": 11.0, "low": 9.5, "close": 10.8}],
+                entry_price=10.0,
+                target_price=11.0,
+                stop_loss_price=9.0,
+            ),  # NTL-S5-010: 含 bars 的有效数据
         )
 
         result = await service.generate(evidence)

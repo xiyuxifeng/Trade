@@ -163,21 +163,21 @@ async def test_manager_marks_partial_data_when_bars_are_incomplete(tmp_path: Pat
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
     partial_pack = None
-    from src.evaluation.evidence_pack import EvidencePack
+    from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 
     partial_pack = EvidencePack(
         idea_id=report.ideas[0].idea_id,
         trade_date=str(day),
         trade_idea=report.ideas[0],
         signal_context=None,
-        market_data={
-            "bars": [
+        market_data=MarketDataSnapshot(
+            bars=[
                 {"date": "2026-04-06", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.1},
             ],
-            "entry_price": 10.0,
-            "target_price": 10.5,
-            "stop_loss_price": 9.7,
-        },
+            entry_price=10.0,
+            target_price=10.5,
+            stop_loss_price=9.7,
+        ),
     )
 
     with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \

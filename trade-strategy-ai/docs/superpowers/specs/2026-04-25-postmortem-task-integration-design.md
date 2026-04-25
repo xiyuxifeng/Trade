@@ -15,9 +15,9 @@
 | NTL-S5-002 失败归因分类 | ✅ | FailureAttribution 已定义 |
 | NTL-S5-003 盘后复盘 Service | ✅ | PostmortemService 已实现 |
 | NTL-S5-007 ReviewTask 扩展 | ✅ | ReviewTaskDetails.failure_attribution 已存在 |
-| NTL-S5-009 Manager 生成 EvidencePack | ❌ | 未完成，handler 内构造最小 EvidencePack |
+| NTL-S5-009 Manager 生成 EvidencePack | ✅ | 已完成，handler 优先从 JSON 加载 EvidencePack，缺失时降级构造 |
 
-**说明**：NTL-S5-009 尚未完成，handler 内从 `DailyReport` 和 `last_price` 数据构造最小 `EvidencePack`。后续 NTL-S5-009 完成后，handler 改为直接加载已有 EvidencePack。
+**说明**：NTL-S5-009 已完成。handler 内优先通过 `evidence_pack_index.json` 查找并加载持久化的 EvidencePack；若未找到则降级构造最小 `EvidencePack`（含 last_price 映射为单日 bars）。
 
 ## 3. 任务类型定义
 
@@ -69,20 +69,37 @@ async def handle_postmortem_analysis(
     """
 ```
 
-### 4.3 EvidencePack 构造（NTL-S5-009 完成前）
+### 4.3 EvidencePack 加载与 fallback 构造
 
-由于 NTL-S5-009 未完成，handler 内构造最小 EvidencePack：
+handler 优先通过索引文件查找并加载已持久化的 EvidencePack：
 
 ```python
-evidence_pack = EvidencePack(
-    idea_id=trade_idea.idea_id,
-    trade_date=str(trade_idea.as_of_date),
-    trade_idea=trade_idea,
-    signal_context=None,  # NTL-S5-009 后从 signal_versioning 加载
-    market_data={"last_price": last_prices.get(trade_idea.symbol)},
-    strategy_version_id=trade_idea.strategy_version_id,
-    strategy_version_snapshot=[],  # NTL-S5-009 后填充
-)
+pack_id = _find_evidence_pack_id(idea_id_str, config)  # O(1) 索引查询
+if pack_id:
+    pack_path = _evidence_pack_path(pack_id, config)
+    if pack_path.exists():
+        pack_data = read_json(pack_path)
+        evidence_pack = EvidencePack.from_dict(pack_data)
+    else:
+        # fallback：降级到最小实现
+        ...
+else:
+    # fallback：降级到最小实现
+    evidence_pack = EvidencePack(
+        idea_id=trade_idea.idea_id,
+        trade_date=str(trade_idea.as_of_date),
+        trade_idea=trade_idea,
+        signal_context=None,
+        market_data=MarketDataSnapshot(
+            last_price=fallback_price,
+            bars=fallback_bars,
+            entry_price=float(trade_idea.entry.price) if trade_idea.entry else 0.0,
+            target_price=trade_idea.target_price,
+            stop_loss_price=trade_idea.stop_loss_price,
+        ),
+        strategy_version_id=trade_idea.strategy_version_id,
+        strategy_version_snapshot=[],
+    )
 ```
 
 ### 4.4 TraderMemory 写入

@@ -60,28 +60,23 @@
 
 ### 5.3 market_data 结构
 
+使用 `MarketDataSnapshot` dataclass（替代原来的裸 dict），字段如下：
+
 ```python
-market_data = {
-    "ohlcv_1d": {
-        "symbol": {
-            "open": float,
-            "high": float,
-            "low": float,
-            "close": float,
-            "volume": float,
-        }
-    },
-    "indicators": {
-        "symbol": {
-            "rsi_14": float | None,
-            "macd": {...},
-            ...
-        }
-    },
-    "entry_price": float,    # 来自 TradeIdea.entry.price
-    "current_price": float,  # 来自 DataAgent.last_price
-}
+@dataclass
+class MarketDataSnapshot:
+    bars: list[dict]              # 标准化后的 OHLCV bar 列表
+    ohlcv_1d: dict[str, list]    # 原始日线数据（symbol -> bar list）
+    indicators: dict[str, Any]   # 技术指标快照
+    entry_price: float | None
+    target_price: float | None
+    stop_loss_price: float | None
+    current_price: float | None
+    last_price: float | None
 ```
+
+`EvidencePack.market_data` 类型已统一为 `MarketDataSnapshot`，序列化时通过 `to_dict()` / `from_dict()` 保持 JSON 兼容。
+`from_trade_idea()` 保留 dict 入参兼容（内部自动转换），减少对现有调用方的冲击。
 
 ### 5.4 signal_context 加载
 
@@ -195,12 +190,21 @@ async def _load_strategy_version_snapshot(
 ### 7.5 `_save_evidence_pack`
 
 ```python
-def _save_evidence_pack(self, pack: EvidencePack) -> None:
-    """将 EvidencePack 写入 JSON 文件。"""
+def _save_evidence_pack(self, pack: EvidencePack) -> Path:
+    """将 EvidencePack 写入 JSON 文件，并更新 idea_id -> pack_id 索引。"""
     pack_dir = self.output_dir / "evidence_packs"
     pack_dir.mkdir(parents=True, exist_ok=True)
     path = pack_dir / f"{pack.pack_id}.json"
     write_json(path, pack.to_dict())
+
+    # 更新索引：供 postmortem_tasks O(1) 查询
+    if pack.idea_id is not None:
+        index_path = pack_dir / "evidence_pack_index.json"
+        index = read_json(index_path) if index_path.exists() else {}
+        index[str(pack.idea_id)] = str(pack.pack_id)
+        write_json(index_path, index)
+
+    return path
 ```
 
 ## 8. postmortem_tasks 修改

@@ -32,6 +32,16 @@ evaluation:
   min_expected_return: 0.0
   # 是否“亏损即触发复盘”
   loss_trigger: true
+  # A股交易规则约束
+  trade_constraint:
+    # 是否启用 T+1 约束（买入当日不能卖出）
+    t_plus_one: true
+    # 涨停幅度比例（null 表示按板块类型自动推断：主板 10%，创业板/科创板 20%，ST 5%）
+    limit_up_pct: null
+    # 跌停幅度比例（null 表示按板块类型自动推断）
+    limit_down_pct: null
+    # 板块类型：auto（自动推断）/ main（主板 10%）/ chinext（创业板 20%）/ star（科创板 20%）/ st（ST 5%）/ bse（北交所 30%）
+    board_type: "auto"
 
 data:
   # 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等

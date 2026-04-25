@@ -1216,7 +1216,13 @@
   前置依赖：`NTL-S5-001`、`NTL-S4-006`。
   可并行：`NTL-S5-010`、`NTL-S5-011`。
   验收标准：每条盘前建议都能生成对应证据包。
-  完成情况：新增 StrategyLibraryRepository.get_by_version_id + StrategyLibraryService.get_version；manager_agent 新增 5 个辅助方法（_generate_evidence_pack / _save_evidence_pack / _load_signal_context / _fetch_full_market_data / _load_strategy_version_snapshot）；run_after_close 中调用 EvidencePack 生成并持久化到 JSON；postmortem_tasks 从 JSON 加载；95 tests PASS。
+  完成情况：
+  - 新增 StrategyLibraryRepository.get_by_version_id + StrategyLibraryService.get_version
+  - manager_agent 新增 5 个辅助方法（_generate_evidence_pack / _save_evidence_pack / _load_signal_context / _fetch_full_market_data / _load_strategy_version_snapshot）
+  - run_after_close 中调用 EvidencePack 生成并持久化到 JSON；postmortem_tasks 从 JSON 加载
+  - EvidencePack.market_data 统一为 MarketDataSnapshot 结构化 schema，避免下游多处分支判断
+  - _save_evidence_pack 新增 evidence_pack_index.json 索引（idea_id -> pack_id），postmortem_tasks 查找从 O(n) 降为 O(1)
+  - 95 tests PASS。
 
 - [x] `NTL-S5-010` `P1`
   目标：升级盘后评分口径。
@@ -1226,7 +1232,13 @@
   前置依赖：`NTL-S5-001`、`NTL-S5-002`、`NTL-S1-005`。
   可并行：`NTL-S5-009`、`NTL-S5-011`。
   验收标准：盘后评估不再只依赖当前价格。
-  完成情况：新增 `metrics_calculator.py`（compute_mfe_mae_return + rules_hit 提取）；`postmortem_service.py` 集成计算并增强归因逻辑（亏损 + rules_hit 非空 → RULE_PRECONDITION_FAILED）；109 tests PASS。
+  完成情况：
+  - 新增 `metrics_calculator.py`（compute_mfe_mae_return + rules_hit 提取）
+  - `postmortem_service.py` 集成计算并增强归因逻辑（亏损 + rules_hit 非空 → RULE_PRECONDITION_FAILED）
+  - A股交易规则约束：新增 TradeConstraint 配置类，支持 T+1（entry_date 当日不检查止盈止损）和涨跌停限制（主板 10%/创业板 20%/科创板 20%/ST 5%），根据股票代码自动推断板块类型
+  - 停牌/无成交识别：新增 _is_bar_halted()，支持显式 is_halted 标志和 volume==0+价格无波动双重规则；volume 字段缺失时不默认视为 0，避免正常数据被误判为停牌
+  - 返回结果扩展为 7 元组：新增 halted_dates（停牌日期列表）和 eval_date（评估截止日），exit_date 语义修正为"实际出场日"（None 表示未出场）
+  - 109 tests PASS。
 
 - [x] `NTL-S5-011` `P1` ✅ 2026-04-25
   目标：在盘后生成 ranking。

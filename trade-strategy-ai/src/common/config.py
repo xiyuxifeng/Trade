@@ -19,9 +19,24 @@ class ScheduleConfig(BaseModel):
     after_close_time: str | None = None  # HH:MM
 
 
+class TradeConstraintConfig(BaseModel):
+    """A股交易规则约束配置（NTL-S5-010 扩展）。"""
+
+    # 是否启用 T+1 约束（买入当日不能卖出）
+    t_plus_one: bool = True
+    # 涨停幅度比例（None 表示按板块类型自动推断）
+    limit_up_pct: float | None = None
+    # 跌停幅度比例（None 表示按板块类型自动推断）
+    limit_down_pct: float | None = None
+    # 板块类型：auto/main/chinext/star/st/bse
+    # auto 表示根据股票代码自动推断
+    board_type: str = "auto"
+
+
 class EvaluationConfig(BaseModel):
     min_expected_return: float = 0.0
     loss_trigger: bool = True
+    trade_constraint: TradeConstraintConfig = Field(default_factory=TradeConstraintConfig)
 
 
 class TraderSourceConfig(BaseModel):

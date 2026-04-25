@@ -39,7 +39,7 @@ Memory Hint ────→ Idea Rationale    TraderMemoryStore.append/update()
 | `idea_id` | UUID | 关联的交易想法 |
 | `trade_idea` | TradeIdea | 原始交易想法 |
 | `signal_context` | SignalContext | 信号上下文（含 rules_snapshot） |
-| `market_data` | dict | 市场数据（含 bars） |
+| `market_data` | MarketDataSnapshot | 市场数据快照（含 bars/ohlcv_1d/indicators/价格字段） |
 | `strategy_version_id` | str | 策略版本 ID |
 | `strategy_version_snapshot` | StrategyVersion | 策略版本快照 |
 
@@ -225,7 +225,7 @@ def _auto_attribution(
    │
    ├→ 对每个 Idea 评估：
    │   ├→ EvidencePack.from_trade_idea()
-   │   │   └→ 获取 market_data["bars"]
+   │   │   └→ 获取 market_data.bars
    │   │
    │   ├→ compute_mfe_mae_return()
    │   │   └→ 计算 mfe/mae/return_pct
@@ -296,7 +296,7 @@ def from_trade_idea(
     cls,
     idea: TradeIdea,
     signal_context: SignalContext,
-    market_data: dict,
+    market_data: MarketDataSnapshot | dict,
 ) -> EvidencePack
 ```
 

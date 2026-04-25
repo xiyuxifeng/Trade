@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from src.common.config import AppConfig
-from src.evaluation.evidence_pack import EvidencePack
+from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.evaluation.postmortem_service import PostmortemService
 from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
@@ -22,9 +22,9 @@ from src.llm.client import LLMClient, from_env_and_config
 
 
 def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
-    """从 evidence_packs 目录中查找对应 idea_id 的 pack_id。
+    """从 evidence_packs 索引中查找对应 idea_id 的 pack_id。
 
-    遍历 evidence_packs 目录，按 idea_id 匹配。
+    优先读取 evidence_pack_index.json（O(1)），不存在时降级为目录遍历。
 
     Returns:
         pack_id 字符串或 None
@@ -32,7 +32,22 @@ def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
     pack_dir = Path(".") / config.storage.output_dir / "evidence_packs"
     if not pack_dir.exists():
         return None
+
+    # 优先读取索引文件（O(1)）
+    index_path = pack_dir / "evidence_pack_index.json"
+    if index_path.exists():
+        try:
+            index = read_json(index_path) or {}
+            pack_id = index.get(idea_id_str)
+            if pack_id:
+                return pack_id
+        except Exception:
+            pass
+
+    # 降级：目录遍历（兼容旧数据）
     for pack_file in pack_dir.glob("*.json"):
+        if pack_file.name == "evidence_pack_index.json":
+            continue
         try:
             data = read_json(pack_file)
             if data.get("idea_id") == idea_id_str:
@@ -146,13 +161,13 @@ async def handle_postmortem_analysis(
                 trade_date=str(trade_idea.as_of_date),
                 trade_idea=trade_idea,
                 signal_context=None,
-                market_data={
-                    "last_price": fallback_price,
-                    "bars": fallback_bars,
-                    "entry_price": float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
-                    "target_price": trade_idea.target_price,
-                    "stop_loss_price": trade_idea.stop_loss_price,
-                },
+                market_data=MarketDataSnapshot(
+                    last_price=fallback_price,
+                    bars=fallback_bars,
+                    entry_price=float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
+                    target_price=trade_idea.target_price,
+                    stop_loss_price=trade_idea.stop_loss_price,
+                ),
                 strategy_version_id=trade_idea.strategy_version_id,
                 strategy_version_snapshot=[],
             )
@@ -173,13 +188,13 @@ async def handle_postmortem_analysis(
             trade_date=str(trade_idea.as_of_date),
             trade_idea=trade_idea,
             signal_context=None,
-            market_data={
-                "last_price": fallback_price,
-                "bars": fallback_bars,
-                "entry_price": float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
-                "target_price": trade_idea.target_price,
-                "stop_loss_price": trade_idea.stop_loss_price,
-            },
+            market_data=MarketDataSnapshot(
+                last_price=fallback_price,
+                bars=fallback_bars,
+                entry_price=float(trade_idea.entry.price) if trade_idea.entry and trade_idea.entry.price else 0.0,
+                target_price=trade_idea.target_price,
+                stop_loss_price=trade_idea.stop_loss_price,
+            ),
             strategy_version_id=trade_idea.strategy_version_id,
             strategy_version_snapshot=[],
         )

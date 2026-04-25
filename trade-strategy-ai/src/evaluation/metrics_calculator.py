@@ -4,11 +4,125 @@
 - 从 ohlcv_1d bars 计算持仓期间的 MFE（最大有利偏移）和 MAE（最大不利偏移）
 - 计算入场到出场的收益率
 - 判定止盈/止损触发
+- 支持 A 股交易规则约束（T+1、涨跌停限制）
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass(frozen=True)
+class TradeConstraint:
+    """A股交易规则约束配置。
+
+    用于在 MFE/MAE/exit 判定中体现真实交易限制，避免回测高估止盈/止损触发概率。
+
+    属性：
+        t_plus_one: 是否启用 T+1 约束（买入当日不能卖出）
+        limit_up_pct: 涨停幅度比例（主板 0.10，创业板/科创板 0.20，ST 0.05）
+        limit_down_pct: 跌停幅度比例（主板 0.10，创业板/科创板 0.20，ST 0.05）
+        board_type: 板块类型，用于自动推断涨跌停幅度
+            - "auto": 根据 symbol 自动推断（6 开头上海主板/科创板，0/3 开头深圳主板/创业板）
+            - "main": 主板（10%）
+            - "chinext": 创业板（20%）
+            - "star": 科创板（20%）
+            - "st": ST 股票（5%）
+            - "bse": 北交所（30%，预留）
+    """
+
+    t_plus_one: bool = True
+    limit_up_pct: float | None = None
+    limit_down_pct: float | None = None
+    board_type: str = "auto"
+
+
+def _infer_board_type(symbol: str) -> str:
+    """根据股票代码推断板块类型。
+
+    A股代码规则：
+    - 600/601/603/605 开头：上海主板（10%）
+    - 688 开头：科创板（20%）
+    - 000/001/002/003 开头：深圳主板（10%）
+    - 300/301 开头：创业板（20%）
+    - 8/4 开头或含 "ST"：北交所/ST（预留，默认 5%）
+
+    对于非标准代码（如 ETF、指数），默认按主板 10% 处理。
+    """
+    s = symbol.strip().upper()
+    # 去掉后缀（如 .SH, .SZ）
+    code = s.split(".")[0] if "." in s else s
+
+    # ST 股票识别（代码中包含 ST 字样，且不是以数字开头——如 "ST0001"）
+    if "ST" in s and not s[0].isdigit():
+        return "st"
+
+    if not code or not code[0].isdigit():
+        return "main"  # 非数字代码（如 ETF）默认主板
+
+    # 科创板
+    if code.startswith("688"):
+        return "star"
+
+    # 创业板
+    if code.startswith("300") or code.startswith("301"):
+        return "chinext"
+
+    # 北交所（预留）
+    if code.startswith("8") or code.startswith("4"):
+        return "bse"
+
+    # 上海主板 / 深圳主板
+    return "main"
+
+
+def _get_limit_pct(board_type: str) -> tuple[float, float]:
+    """根据板块类型返回涨跌停幅度（limit_up_pct, limit_down_pct）。
+
+    Returns:
+        (limit_up_pct, limit_down_pct) 比例值
+    """
+    pct_map = {
+        "main": (0.10, 0.10),
+        "chinext": (0.20, 0.20),
+        "star": (0.20, 0.20),
+        "st": (0.05, 0.05),
+        "bse": (0.30, 0.30),  # 北交所预留
+    }
+    return pct_map.get(board_type, (0.10, 0.10))
+
+
+def _resolve_constraint(
+    constraint: TradeConstraint | None,
+    symbol: str,
+) -> TradeConstraint:
+    """解析并补全交易约束配置。
+
+    如果 constraint 为 None，返回默认配置。
+    如果 board_type="auto"，根据 symbol 自动推断。
+    如果 limit_up_pct/limit_down_pct 未设置，根据 board_type 补全。
+    """
+    if constraint is None:
+        constraint = TradeConstraint()
+
+    board = constraint.board_type
+    if board == "auto":
+        board = _infer_board_type(symbol)
+
+    limit_up = constraint.limit_up_pct
+    limit_down = constraint.limit_down_pct
+    if limit_up is None or limit_down is None:
+        default_up, default_down = _get_limit_pct(board)
+        limit_up = limit_up if limit_up is not None else default_up
+        limit_down = limit_down if limit_down is not None else default_down
+
+    return TradeConstraint(
+        t_plus_one=constraint.t_plus_one,
+        limit_up_pct=limit_up,
+        limit_down_pct=limit_down,
+        board_type=board,
+    )
 
 
 def compute_return_pct(entry_price: float, exit_price: float) -> float:
@@ -21,15 +135,51 @@ def compute_return_pct(entry_price: float, exit_price: float) -> float:
     return exit_price / entry_price - 1
 
 
-def _normalize_bar(bar: dict[str, Any]) -> dict[str, float]:
-    """统一 bar 数据格式，兼容不同 key 命名（lowercase / uppercase）。"""
-    return {
+def _normalize_bar(bar: dict[str, Any]) -> dict[str, Any]:
+    """统一 bar 数据格式，兼容不同 key 命名（lowercase / uppercase）。
+
+    同时归一化 volume 字段（仅当原始数据提供时），用于后续停牌/无成交识别。
+    volume 字段缺失时不默认填充 0，避免正常数据被误判为停牌。
+    """
+    result: dict[str, Any] = {
         "date": bar.get("date") or bar.get("Date") or "",
         "open": float(bar.get("open") or bar.get("Open") or 0),
         "high": float(bar.get("high") or bar.get("High") or 0),
         "low": float(bar.get("low") or bar.get("Low") or 0),
         "close": float(bar.get("close") or bar.get("Close") or 0),
     }
+    raw_volume = bar.get("volume") if "volume" in bar else bar.get("Volume") if "Volume" in bar else None
+    if raw_volume is not None:
+        result["volume"] = float(raw_volume)
+    return result
+
+
+def _is_bar_halted(bar: dict[str, Any]) -> bool:
+    """判断单个 bar 是否表示停牌或无成交。
+
+    识别规则（按优先级）：
+    1. 若 bar 显式包含 is_halted=True，直接判定为停牌
+    2. 若 volume == 0 且 high == low == open == close（价格无波动），判定为停牌
+    3. 若 volume == 0 但价格有波动，视为无成交但可能有竞价/盘前盘后价格，不判定为停牌
+
+    返回 True 表示该 bar 应被跳过（不参与 MFE/MAE 计算）。
+    """
+    # 规则1：显式停牌标志
+    if bar.get("is_halted") is True:
+        return True
+
+    # 规则2：无成交量且价格完全无波动 → 停牌
+    # 注意：volume 字段缺失时不默认视为 0（避免正常数据被误判为停牌）
+    if "volume" in bar:
+        volume = float(bar.get("volume") or 0)
+        high = float(bar.get("high") or 0)
+        low = float(bar.get("low") or 0)
+        open_price = float(bar.get("open") or 0)
+        close = float(bar.get("close") or 0)
+        if volume == 0 and high == low == open_price == close and close > 0:
+            return True
+
+    return False
 
 
 def _find_bar_index(bars: list[dict[str, Any]], target_date: str) -> int | None:
@@ -57,7 +207,9 @@ def compute_mfe_mae_return(
     entry_date: str,
     target_price: float | None = None,
     stop_loss_price: float | None = None,
-) -> tuple[float, float, float, str | None, str | None]:
+    symbol: str = "",
+    constraint: TradeConstraint | None = None,
+) -> tuple[float, float, float, str | None, str | None, list[str], str | None]:
     """计算 MFE / MAE / return_pct（比例口径，0.01=1%）。
 
     做多（buy）场景：
@@ -68,20 +220,42 @@ def compute_mfe_mae_return(
     则止盈触发（exit_triggered="target"）；遇到 low <= stop_loss_price
     则止损触发（exit_triggered="stop_loss"）。未触发则用最后 bar close。
 
+    A股交易规则约束（可选）：
+    - T+1：买入当日（entry_date）不能卖出，当日不检查止盈/止损触发
+    - 涨跌停：止盈/止损价格受涨停价/跌停价限制，不能超出当日涨跌停范围
+
+    停牌/无成交识别：遍历过程中跳过 is_halted 或 volume==0 且价格无波动的 bar，
+    避免停牌日价格对 MFE/MAE 产生误判，并在返回结果中记录被跳过的日期。
+
     Args:
         bars: ohlcv_1d 日线数据 list
         entry_price: 入场价格（元）
         entry_date: 入场日期（YYYY-MM-DD）
         target_price: 止盈价（可选）
         stop_loss_price: 止损价（可选）
+        symbol: 股票代码（用于自动推断板块类型和涨跌停幅度）
+        constraint: 交易规则约束配置（None 时使用默认 A 股规则）
 
     Returns:
-        (mfe, mae, return_pct, exit_triggered, exit_date)
-        exit_triggered: "target" | "stop_loss" | None
-        exit_date: 触发 exit 的日期或 None
+        (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)
+        exit_triggered: "target" | "stop_loss" | None（实际触发出场的类型）
+        exit_date: 触发 exit 的日期或 None（None 表示未实际出场）
+        halted_dates: 被识别为停牌/无成交的日期列表
+        eval_date: 评估截止日（最后一条 bar 的日期，无论是否停牌）
     """
     if not bars or entry_price <= 0:
-        return (0.0, 0.0, 0.0, None, None)
+        # entry_price 非法或 bars 为空：eval_date 仍取最后一条 bar 日期（如有）
+        eval_date_fallback = None
+        if bars:
+            eval_date_fallback = _normalize_bar(bars[-1]).get("date")
+        return (0.0, 0.0, 0.0, None, None, [], eval_date_fallback)
+
+    # 解析交易约束
+    resolved = _resolve_constraint(constraint, symbol)
+
+    # 评估截止日：始终取最后一条 bar 的日期
+    last_bar = _normalize_bar(bars[-1])
+    eval_date = last_bar["date"]
 
     # 找 entry bar index
     entry_idx = _find_bar_index(bars, entry_date)
@@ -94,28 +268,58 @@ def compute_mfe_mae_return(
     exit_triggered: str | None = None
     exit_date: str | None = None
     exit_price = entry_price  # 默认用 entry_price
+    halted_dates: list[str] = []
 
     for i in range(entry_idx, len(bars)):
         bar = _normalize_bar(bars[i])
+        bar_date = bar["date"]
+
+        # 跳过停牌/无成交 bar
+        if _is_bar_halted(bar):
+            halted_dates.append(bar_date)
+            continue
+
         high = bar["high"]
         low = bar["low"]
         close = bar["close"]
-        bar_date = bar["date"]
+        open_price = bar["open"]
 
-        # 累计 MFE / MAE
-        mfe = max(mfe, high - entry_price)
-        mae = max(mae, entry_price - low)
+        # 计算当日涨跌停价格约束
+        prev_close = open_price  # 用当日开盘价作为前收近似
+        if i > 0:
+            prev_close = _normalize_bar(bars[i - 1])["close"]
+        limit_up_price = prev_close * (1 + resolved.limit_up_pct)
+        limit_down_price = prev_close * (1 - resolved.limit_down_pct)
 
-        # 检查止盈
-        if target_price is not None and high >= target_price:
+        # 有效 high/low：受涨跌停限制
+        effective_high = min(high, limit_up_price)
+        effective_low = max(low, limit_down_price)
+
+        # T+1 约束：entry_date 当日不能卖出，仅累计 MFE/MAE，不检查止盈/止损
+        is_entry_day = (bar_date == entry_date)
+        if resolved.t_plus_one and is_entry_day:
+            mfe = max(mfe, effective_high - entry_price)
+            mae = max(mae, entry_price - effective_low)
+            exit_price = close
+            exit_date = bar_date
+            continue
+
+        # 累计 MFE / MAE（使用有效价格）
+        mfe = max(mfe, effective_high - entry_price)
+        mae = max(mae, entry_price - effective_low)
+
+        # 检查止盈（使用 effective_high）
+        if target_price is not None and effective_high >= target_price:
             exit_triggered = "target"
+            # exit_price 用当日收盘价（实际交易中以收盘价成交）
             exit_price = close
             exit_date = bar_date
             break
 
-        # 检查止损
-        if stop_loss_price is not None and low <= stop_loss_price:
+        # 检查止损（使用 effective_low）
+        if stop_loss_price is not None and effective_low <= stop_loss_price:
             exit_triggered = "stop_loss"
+            # exit_price 用当日收盘价
             exit_price = close
             exit_date = bar_date
             break
@@ -127,4 +331,4 @@ def compute_mfe_mae_return(
     # 计算收益率（比例口径：0.01 = 1%）
     return_pct = compute_return_pct(entry_price, exit_price)
 
-    return (mfe, mae, return_pct, exit_triggered, exit_date)
+    return (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)

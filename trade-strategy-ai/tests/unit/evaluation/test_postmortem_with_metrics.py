@@ -29,14 +29,14 @@ def make_evidence_pack(
     stop_loss_price: float | None = None,
     signal_context=None,
 ) -> EvidencePack:
-    market_data = {
-        "bars": bars,
-        "entry_price": entry_price,
-    }
-    if target_price is not None:
-        market_data["target_price"] = target_price
-    if stop_loss_price is not None:
-        market_data["stop_loss_price"] = stop_loss_price
+    from src.evaluation.evidence_pack import MarketDataSnapshot
+
+    market_data = MarketDataSnapshot(
+        bars=bars,
+        entry_price=entry_price,
+        target_price=target_price,
+        stop_loss_price=stop_loss_price,
+    )
     return EvidencePack(
         idea_id=trade_idea.idea_id,
         trade_date=str(trade_idea.as_of_date),

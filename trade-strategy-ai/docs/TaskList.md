@@ -1136,7 +1136,7 @@
   验收标准：任一建议都能生成证据包。
   **完成内容**：EvidencePack dataclass（trade_idea / signal_context / market_data / strategy_version_snapshot）+ converters.py 显式转换层 + EvidencePackRecord ORM 模型。
 
-- [ ] `NTL-S5-002` `P1`
+- [x] `NTL-S5-002` `P1` ✅ 2026-04-25
   目标：建立失败归因分类。
   输入：盘后评估需求。
   输出：`src/evaluation/failure_taxonomy.py`。
@@ -1144,6 +1144,7 @@
   前置依赖：Stage 4 完成。
   可并行：`NTL-S5-001`、`NTL-S5-003`。
   验收标准：失败原因分类结构稳定且可扩展。
+  完成情况：新增 `failure_taxonomy.py`（FailureRootCause/FailureStage/FailureRuleType/FailureAttribution/parse_failure_categories）；10 tests PASS；多维度标签体系设计文档已提交。
 
 - [ ] `NTL-S5-003` `P1`
   目标：建立盘后复盘 service。

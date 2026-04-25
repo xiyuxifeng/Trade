@@ -44,8 +44,8 @@ class TraderMemoryItem(BaseModel):
     ranking_entry_id: UUID | None = None
 
     # 新增：topic 关联（NTL-S5-006）
-    topic_source: str | None = None              # provider 名称，如 "kaipan"
-    raw_topic_ids: dict[str, str] | None = None  # {provider: raw_topic_id}
+    topic_source: str | None = None                        # provider 名称，如 "kaipan"
+    raw_topic_ids: dict[str, list[str]] | None = None     # {provider: [raw_topic_id, ...]}
 
     # 新增：盘后评估数据
     postmortem_data: dict | None = None

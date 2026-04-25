@@ -291,13 +291,16 @@ class ManagerAgent:
         self,
         idea: "TradeIdea",
         market_universe_snapshot: dict[str, Any] | None,
-    ) -> tuple[list[str], str | None, dict[str, str] | None]:
+    ) -> tuple[list[str], str | None, dict[str, list[str]] | None]:
         """从 market_universe_snapshot 构建 canonical tags.
 
         处理 JSON 序列化后的 dict 结构（asdict → json.dumps → json.load 后嵌套 dict）。
 
         Returns:
             tuple of (canonical_tags, topic_source, raw_topic_ids)
+            - canonical_tags: ["kaipan:{kind}:{topic_name}", ...]
+            - topic_source: provider 名称，如 "kaipan"（有 tags 时才返回）
+            - raw_topic_ids: {provider: [raw_topic_id, ...]}（保留所有 topic_id）
         """
         if not idea.source_topic_ids or not market_universe_snapshot:
             return [], None, None
@@ -311,13 +314,13 @@ class ManagerAgent:
         hot_topics_map: dict[str, dict] = {t.get("topic_id", ""): t for t in topics_list}
 
         canonical_tags = []
-        raw_ids = {}
+        raw_ids: dict[str, list[str]] = {}
 
         for tid in idea.source_topic_ids:
             ht = hot_topics_map.get(tid)
             if ht and ht.get("topic_name") and ht.get("kind"):
                 canonical_tags.append(f"kaipan:{ht['kind']}:{ht['topic_name']}")
-                raw_ids["kaipan"] = tid
+                raw_ids.setdefault("kaipan", []).append(tid)
 
         return canonical_tags, "kaipan" if canonical_tags else None, raw_ids or None
 

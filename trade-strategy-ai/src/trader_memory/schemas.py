@@ -13,6 +13,9 @@ class TraderMemoryType(str, Enum):
     success_case = "success_case"
     failure_case = "failure_case"
     review_note = "review_note"
+    postmortem = "postmortem"                        # 新增：盘后复盘结论
+    strategy_adjustment = "strategy_adjustment"     # 新增：策略调整建议
+    market_regime_note = "market_regime_note"        # 新增：市场状态备注
 
 
 class TraderMemoryItem(BaseModel):
@@ -34,6 +37,16 @@ class TraderMemoryItem(BaseModel):
     # P2-103: Soft delete support
     archived: bool = False
     archived_at: datetime | None = None
+
+    # 新增：交易上下文关联
+    idea_id: UUID | None = None
+    strategy_version_id: str | None = None
+    ranking_entry_id: UUID | None = None
+
+    # 新增：盘后评估数据
+    postmortem_data: dict | None = None
+    strategy_adjustment_data: dict | None = None
+    market_regime_data: dict | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -64,3 +77,8 @@ class TraderMemorySummary(BaseModel):
     recent_titles: list[str] = Field(default_factory=list)
     symbol_titles: list[str] = Field(default_factory=list)
     review_notes: list[str] = Field(default_factory=list)
+
+    # 新增字段
+    postmortem_notes: list[str] = Field(default_factory=list)
+    strategy_adjustments: list[str] = Field(default_factory=list)
+    market_regime_notes: list[str] = Field(default_factory=list)

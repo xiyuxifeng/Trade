@@ -856,6 +856,15 @@ class ManagerAgent:
                 self._append_task(review_task)
 
                 # NTL-S5-008: 创建 postmortem_analysis 任务
+                # NTL-S5-012: 从 signal_context 提取 auto_attribution
+                signal_ctx = evidence_pack.signal_context
+                if signal_ctx:
+                    auto_attribution = {
+                        "reason": str(signal_ctx.triggered_rules) if hasattr(signal_ctx, "triggered_rules") else "",
+                        "confidence": getattr(signal_ctx, "confidence", 0.5),
+                    }
+                else:
+                    auto_attribution = {}
                 postmortem_task = AgentTask(
                     type="postmortem_analysis",
                     title=f"Postmortem for {idea.symbol} on {as_of_date}",
@@ -866,6 +875,7 @@ class ManagerAgent:
                         "trade_date": str(as_of_date),
                         "trader_id": idea.trader_id,
                         "symbol": idea.symbol,
+                        "auto_attribution": auto_attribution,
                     },
                 )
                 self._append_task(postmortem_task)

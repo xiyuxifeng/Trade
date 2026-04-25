@@ -738,18 +738,52 @@ class ManagerAgent:
             entry_price = idea.entry.price
             current_price = last_prices.get(idea.symbol)
 
-            if entry_price is None or current_price is None:
+            if entry_price is None:
                 evaluations.append(
                     IdeaEvaluation(
                         idea_id=idea.idea_id,
                         symbol=idea.symbol,
-                        entry_price=entry_price,
+                        entry_price=None,
                         current_price=current_price,
                         status="not_evaluated",
-                        notes=["Missing entry price or current price"],
+                        notes=["Missing entry price"],
                     )
                 )
-                if current_price is None:
+                continue
+
+            # NTL-S5-009: 先生成 EvidencePack 获取 bars 数据
+            evidence_pack = await self._generate_evidence_pack(
+                idea=idea,
+                daily_report=daily_report,
+                last_prices=last_prices,
+                config=self.config,
+            )
+            self._save_evidence_pack(evidence_pack)
+
+            # NTL-S5-013: 使用 compute_mfe_mae_return 计算
+            bars = evidence_pack.market_data.get("bars", [])
+            entry_price_val = float(entry_price)
+            target_price = evidence_pack.market_data.get("target_price")
+            stop_loss_price = evidence_pack.market_data.get("stop_loss_price")
+
+            mfe_val, mae_val, return_pct, exit_triggered, exit_date = compute_mfe_mae_return(
+                bars=bars,
+                entry_price=entry_price_val,
+                entry_date=str(as_of_date),
+                target_price=target_price,
+                stop_loss_price=stop_loss_price,
+            )
+
+            # 判断数据情况并决定 status
+            if not bars:
+                # NTL-S5-013: fallback 到 last_prices（旧逻辑保留作为降级路径）
+                if current_price is not None:
+                    return_pct = (float(current_price) - entry_price_val) / entry_price_val
+                    eval_status = "fallback"
+                    notes_text = f"[fallback] return_pct={round(return_pct, 6):.6f}, reason=no_bars_data"
+                else:
+                    eval_status = "not_evaluated"
+                    notes_text = "Missing current price for fallback"
                     self._append_task(
                         AgentTask(
                             type="data_missing",
@@ -759,38 +793,37 @@ class ManagerAgent:
                             details={"symbol": idea.symbol, "field": "last_price"},
                         )
                     )
-                continue
+            elif len(bars) < 2:
+                # NTL-S5-013: partial data
+                eval_status = "partial"
+                notes_text = f"[partial] mfe={mfe_val:.4f}, mae={mae_val:.4f}, return_pct={round(return_pct, 6):.6f}"
+            else:
+                # NTL-S5-013: 完整数据
+                eval_status = "ok"
+                notes_text = f"mfe={mfe_val:.4f}, mae={mae_val:.4f}, return_pct={round(return_pct, 6):.6f}, exit={exit_triggered}"
 
-            return_pct = (float(current_price) - float(entry_price)) / float(entry_price)
+            # NTL-S5-013: current_price 语义变为 exit_price（bars 末bar收盘价或 last_price）
+            if bars:
+                exit_price = float(bars[-1]["close"])
+            elif current_price is not None:
+                exit_price = float(current_price)
+            else:
+                exit_price = None
+
             evaluations.append(
                 IdeaEvaluation(
                     idea_id=idea.idea_id,
                     symbol=idea.symbol,
-                    entry_price=float(entry_price),
-                    current_price=float(current_price),
+                    entry_price=entry_price_val,
+                    current_price=exit_price,  # deprecated: 语义变为 exit_price
                     return_pct=round(return_pct, 6),
-                    status="ok",
+                    status=eval_status,
+                    notes=[notes_text],
                 )
             )
 
-            # NTL-S5-009: 生成并持久化 EvidencePack
-            evidence_pack = await self._generate_evidence_pack(
-                idea=idea,
-                daily_report=daily_report,
-                last_prices=last_prices,
-                config=self.config,
-            )
-            self._save_evidence_pack(evidence_pack)
-
-            # NTL-S5-011: 计算 mfe/mae/return_pct 用于 ranking
-            mfe_val, mae_val, return_pct_for_ranking, _, _ = compute_mfe_mae_return(
-                bars=evidence_pack.market_data.get("bars", []),
-                entry_price=float(entry_price) if entry_price else 0.0,
-                entry_date=str(as_of_date),
-                target_price=evidence_pack.market_data.get("target_price"),
-                stop_loss_price=evidence_pack.market_data.get("stop_loss_price"),
-            )
-            pending_rankings.append((evidence_pack, mfe_val, mae_val, return_pct_for_ranking))
+            # NTL-S5-011: pending_rankings 使用已计算的 mfe/mae/return_pct
+            pending_rankings.append((evidence_pack, mfe_val, mae_val, return_pct))
 
             # trigger review tasks
             min_ret = float(self.config.evaluation.min_expected_return)
@@ -813,7 +846,7 @@ class ManagerAgent:
                     symbol=idea.symbol,
                     title=f"{idea.symbol} {memory_type.value.replace('_', ' ')}",
                     content=(
-                        f"entry={float(entry_price):.4f}, current={float(current_price):.4f}, "
+                        f"entry={entry_price_val:.4f}, exit={exit_price:.4f}, "
                         f"return_pct={round(return_pct, 6):.6f}, threshold={min_ret:.6f}"
                     ),
                     source="manager.run_after_close",

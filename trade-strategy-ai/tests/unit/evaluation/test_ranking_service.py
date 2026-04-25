@@ -262,3 +262,36 @@ async def test_add_entry_from_metrics_creates_entry():
     assert result.symbol == "AAPL"
     assert result.attribution_source == "auto"  # 固定为 auto
     assert result.is_latest is True
+
+
+@pytest.mark.asyncio
+async def test_generate_ranking_and_save_creates_file(tmp_path):
+    """generate_ranking_and_save 生成 nested + flat 视图并写入文件（NTL-S5-011）"""
+    from pathlib import Path
+    import json
+
+    mock_session = AsyncMock()
+    mock_repo = AsyncMock()
+    output_dir = tmp_path / "output"
+    service = RankingService(mock_session, output_dir=output_dir)
+    service._repo = mock_repo
+
+    # Mock query_by_date 返回空列表（generate_ranking 正常返回空 groups）
+    mock_repo.query_by_date = AsyncMock(return_value=[])
+
+    result = await service.generate_ranking_and_save(trade_date="2026-04-25")
+
+    # 验证返回值包含 nested 和 flat
+    assert "nested" in result
+    assert "flat" in result
+    assert result["trade_date"] == "2026-04-25"
+    assert "generated_at" in result
+
+    # 验证文件写入
+    ranking_file = output_dir / "rankings" / "2026-04-25.json"
+    assert ranking_file.exists()
+    with open(ranking_file) as f:
+        data = json.load(f)
+    assert data["trade_date"] == "2026-04-25"
+    assert "nested" in data
+    assert "flat" in data

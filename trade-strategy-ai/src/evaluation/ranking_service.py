@@ -11,7 +11,10 @@ NTL-S5-004
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
@@ -118,9 +121,10 @@ class RankingService:
       - 提供嵌套视图和扁平视图两种输出格式
     """
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, output_dir: Path | None = None):
         self.session = session
         self._repo = RankingRepository(session)
+        self._output_dir = output_dir or Path(".")
 
     def _entry_from_postmortem_and_pack(
         self,
@@ -345,6 +349,64 @@ class RankingService:
         else:
             # nested view：{trader_id: {strategy_version_id: [entries...]}}
             return groups
+
+    async def generate_ranking_and_save(
+        self,
+        trade_date: str,
+        trader_id: str | None = None,
+        strategy_version_id: str | None = None,
+    ) -> dict:
+        """生成 ranking 并持久化到文件（NTL-S5-011）。
+
+        调用链路：run_after_close 末尾 -> add_entry_from_metrics() -> 本方法
+
+        文件路径：{output_dir}/rankings/{trade_date}.json
+
+        排序规则（来自 generate_ranking）：
+          1. return_pct 降序
+          2. return_pct 相同时按 (mfe - mae) 降序
+          3. return_pct 为 None 的排在最后
+
+        Args:
+            trade_date: 交易日期（YYYY-MM-DD）
+            trader_id: 可选，限定 trader
+            strategy_version_id: 可选，限定策略版本
+
+        Returns:
+            dict: 包含 nested 和 flat 两种视图的完整结果
+        """
+        # 生成 nested view（generate_ranking 会更新 DB 中的 rank）
+        nested = await self.generate_ranking(
+            trade_date=trade_date,
+            trader_id=trader_id,
+            strategy_version_id=strategy_version_id,
+            view="nested",
+        )
+
+        # 生成 flat view
+        flat = await self.generate_ranking(
+            trade_date=trade_date,
+            trader_id=trader_id,
+            strategy_version_id=strategy_version_id,
+            view="flat",
+        )
+
+        result = {
+            "trade_date": trade_date,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "nested": nested,
+            "flat": flat,
+        }
+
+        # 写入文件
+        ranking_dir = self._output_dir / "rankings"
+        ranking_dir.mkdir(parents=True, exist_ok=True)
+        ranking_file = ranking_dir / f"{trade_date}.json"
+
+        with open(ranking_file, "w") as f:
+            json.dump(result, f, indent=2, default=str)
+
+        return result
 
     async def update_entry(self, entry_id: UUID, postmortem) -> RankingEntry | None:
         """当 postmortem 被 LLM 修正时，同步更新对应的 ranking 条目。

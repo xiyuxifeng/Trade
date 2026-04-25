@@ -56,6 +56,7 @@ from src.trader_profile.service import default_profiles_path, load_trader_profil
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 from src.market_data.service import MarketDataCache
+from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy.signal_version import SignalVersioning
@@ -218,115 +219,6 @@ class ManagerAgent:
     def _append_task(self, task: AgentTask) -> None:
         append_jsonl(self.tasks_path, task.model_dump())
 
-    def _plan_data_requests(
-        self,
-        strategy_version: "StrategyVersion",
-        candidate_symbols: list[str],
-    ) -> dict[str, Any]:
-        """分析 rules_snapshot 中引用的字段，决定需要发起哪些额外 DataRequest。
-
-        NTL-S4-007 定向深挖：
-        - 从 rules_snapshot 的 condition 表达式中提取字段名（如 rsi、macd、volume）
-        - 将字段名映射到 DataRequest 支持的 fields（indicators、ohlcv_1d 等）
-        - 返回需要发起额外取数的 fields 列表
-
-        Args:
-            strategy_version: 策略版本（含 rules_snapshot）
-            candidate_symbols: 候选标的列表
-
-        Returns:
-            dict，key 是 dataset，value 是需要的 fields 列表
-        """
-        from src.strategy_library.schemas import StrategyVersion
-
-        # 规则字段 → dataset 映射
-        FIELD_TO_DATASET: dict[str, str] = {
-            # 技术指标
-            "rsi": "indicators",
-            "macd": "indicators",
-            "bollinger": "indicators",
-            "atr": "indicators",
-            "kdj": "indicators",
-            "cci": "indicators",
-            "obv": "indicators",
-            # 行情数据
-            "close": "ohlcv_1d",
-            "open": "ohlcv_1d",
-            "high": "ohlcv_1d",
-            "low": "ohlcv_1d",
-            "volume": "ohlcv_1d",
-            "turnover": "ohlcv_1d",
-        }
-
-        needed_datasets: dict[str, set[str]] = {}
-
-        for rule in (strategy_version.rules_snapshot or []):
-            condition = rule.get("condition", {})
-            # condition 可能是 dict 或 string
-            if isinstance(condition, dict):
-                # 从 condition dict 中提取字段（简化处理：遍历所有 value）
-                self._extract_fields_from_condition(condition, FIELD_TO_DATASET, needed_datasets)
-            elif isinstance(condition, str):
-                # 从字符串中提取字段名（简化正则匹配）
-                import re
-                for field, dataset in FIELD_TO_DATASET.items():
-                    if field in condition.lower():
-                        needed_datasets.setdefault(dataset, set()).add(field)
-
-        return {dataset: list(fields) for dataset, fields in needed_datasets.items()}
-
-    def _extract_fields_from_condition(
-        self,
-        condition: dict[str, Any],
-        field_map: dict[str, str],
-        result: dict[str, set[str]],
-    ) -> None:
-        """递归从 condition dict 中提取字段名。"""
-        for value in condition.values():
-            if isinstance(value, dict):
-                self._extract_fields_from_condition(value, field_map, result)
-            elif isinstance(value, str):
-                for field, dataset in field_map.items():
-                    if field in value.lower():
-                        result.setdefault(dataset, set()).add(field)
-
-    def _build_topic_tags(
-        self,
-        idea: "TradeIdea",
-        market_universe_snapshot: dict[str, Any] | None,
-    ) -> tuple[list[str], str | None, dict[str, list[str]] | None]:
-        """从 market_universe_snapshot 构建 canonical tags。
-
-        source_topic_ids 编码格式："topic_name|kind"
-        直接解析编码字符串生成 canonical tag，不依赖 hot_topics 查表。
-
-        Returns:
-            tuple of (canonical_tags, topic_source, raw_topic_ids)
-            - canonical_tags: ["kaipan:{kind}:{topic_name}", ...]
-            - topic_source: provider 名称，如 "kaipan"（有 tags 时才返回）
-            - raw_topic_ids: {provider: [raw_topic_id, ...]}
-        """
-        if not idea.source_topic_ids or not market_universe_snapshot:
-            return [], None, None
-
-        # source_topic_ids 格式："topic_name|kind"（编码字符串）
-        # 直接解析生成 canonical tags，不查 hot_topics
-        canonical_tags = []
-        raw_ids: dict[str, list[str]] = {}
-
-        for encoded in idea.source_topic_ids:
-            if "|" not in encoded:
-                continue
-            parts = encoded.rsplit("|", 1)
-            if len(parts) != 2:
-                continue
-            topic_name, kind = parts
-            if topic_name and kind:
-                canonical_tags.append(f"kaipan:{kind}:{topic_name}")
-                raw_ids.setdefault("kaipan", []).append(encoded)
-
-        return canonical_tags, "kaipan" if canonical_tags else None, raw_ids or None
-
     def _append_review_memory(
         self,
         *,
@@ -344,7 +236,7 @@ class ManagerAgent:
         Returns the created memory item so callers can record the memory_id
         in the review task details (P2-109A close-loop tracking).
         """
-        canonical_tags, topic_source, raw_topic_ids = self._build_topic_tags(
+        canonical_tags, topic_source, raw_topic_ids = build_topic_tags(
             idea, market_universe_snapshot
         )
         memory = TraderMemoryItem(
@@ -758,7 +650,7 @@ class ManagerAgent:
             )
 
             # NTL-S5-006 前置：构建 canonical tags
-            canonical_tags, topic_source, raw_topic_ids = self._build_topic_tags(
+            canonical_tags, topic_source, raw_topic_ids = build_topic_tags(
                 idea, daily_report.market_universe_snapshot
             )
 
@@ -811,6 +703,21 @@ class ManagerAgent:
 
                 # 4. 落盘（此时 task 已包含完整信息）
                 self._append_task(review_task)
+
+                # NTL-S5-008: 创建 postmortem_analysis 任务
+                postmortem_task = AgentTask(
+                    type="postmortem_analysis",
+                    title=f"Postmortem for {idea.symbol} on {as_of_date}",
+                    trader_id=idea.trader_id,
+                    idea_id=idea.idea_id,
+                    details={
+                        "idea_id": str(idea.idea_id),
+                        "trade_date": str(as_of_date),
+                        "trader_id": idea.trader_id,
+                        "symbol": idea.symbol,
+                    },
+                )
+                self._append_task(postmortem_task)
 
         summary = [
             f"Evaluated {len(evaluations)} ideas",

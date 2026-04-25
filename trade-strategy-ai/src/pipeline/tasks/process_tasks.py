@@ -253,6 +253,12 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
     async def handle_build_trader_strategy_version_wrapped(details: dict[str, Any]) -> None:
         await handle_build_trader_strategy_version(details, config=config)
 
+    # postmortem_analysis handler（NTL-S5-008）
+    from src.pipeline.tasks.postmortem_tasks import handle_postmortem_analysis
+
+    async def handle_postmortem_analysis_wrapped(details: dict[str, Any]) -> None:
+        await handle_postmortem_analysis(details, config=config)
+
     return {
         "article_ingested": handle_article_ingested,
         "article_metadata_extracted": handle_article_metadata_extracted,
@@ -260,6 +266,7 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
         "topic_constituents_snapshot": handle_topic_constituents_snapshot_wrapped,
         "strong_symbols_snapshot": handle_strong_symbols_snapshot_wrapped,
         "build_trader_strategy_version": handle_build_trader_strategy_version_wrapped,
+        "postmortem_analysis": handle_postmortem_analysis_wrapped,
     }
 
 

@@ -23,6 +23,7 @@ from src.evaluation.postmortem_service import (
     LLMValidator,
 )
 from src.evaluation.ranking_service import RankingEntry, RankingService
+from src.evaluation.metrics_calculator import TradeConstraint, compute_mfe_mae_return
 
 __all__ = [
     "EvidencePack",
@@ -38,4 +39,7 @@ __all__ = [
     "LLMValidator",
     "RankingEntry",
     "RankingService",
+    # 共享评分口径（NTL-S6-007）
+    "TradeConstraint",
+    "compute_mfe_mae_return",
 ]

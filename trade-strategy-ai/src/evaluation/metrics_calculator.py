@@ -10,12 +10,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 
 @dataclass(frozen=True)
 class TradeConstraint:
-    """A股交易规则约束配置。
+    """A股交易规则约束配置（NTL-S6-003 扩展版）。
 
     用于在 MFE/MAE/exit 判定中体现真实交易限制，避免回测高估止盈/止损触发概率。
 
@@ -28,14 +29,18 @@ class TradeConstraint:
             - "main": 主板（10%）
             - "chinext": 创业板（20%）
             - "star": 科创板（20%）
-            - "st": ST 股票（5%）
+            - "st": ST 股票（5%，2026-07-06 起沪市调整为 10%）
             - "bse": 北交所（30%，预留）
+        market: 市场（"SH"=上海，"SZ"=深圳），用于区分沪市/深市 ST 规则
+        trade_date: 交易日期，用于判断 ST 规则切换时间点（2026-07-06 沪市 ST 调整为 10%）
     """
 
     t_plus_one: bool = True
     limit_up_pct: float | None = None
     limit_down_pct: float | None = None
     board_type: str = "auto"
+    market: str | None = None  # "SH" / "SZ"
+    trade_date: date | None = None  # 用于 ST 规则日期切换
 
 
 def _infer_board_type(symbol: str) -> str:
@@ -77,17 +82,41 @@ def _infer_board_type(symbol: str) -> str:
     return "main"
 
 
-def _get_limit_pct(board_type: str) -> tuple[float, float]:
+# 沪市 ST 规则变更生效日（2026-07-06 起涨跌幅从 5% 调整为 10%）
+ST_SH_RULE_EFFECTIVE_DATE = date(2026, 7, 6)
+
+
+def _get_limit_pct(
+    board_type: str,
+    trade_date: date | None = None,
+    market: str | None = None,
+) -> tuple[float, float]:
     """根据板块类型返回涨跌停幅度（limit_up_pct, limit_down_pct）。
+
+    ST 规则日期切换（NTL-S6-003 Step 6）：
+    - 沪市 ST（market="SH"）：2026-07-06 前为 5%，之后为 10%
+    - 深市 ST（market="SZ"）：维持 5%（截至 2026-04-26 无变化）
+
+    Args:
+        board_type: 板块类型
+        trade_date: 交易日期（用于判断 ST 规则切换）
+        market: 市场（"SH" / "SZ"，用于区分 ST 规则适用市场）
 
     Returns:
         (limit_up_pct, limit_down_pct) 比例值
     """
+    if board_type == "st":
+        # ST 规则需要区分市场 + 日期
+        if market == "SH" and trade_date is not None and trade_date >= ST_SH_RULE_EFFECTIVE_DATE:
+            # 2026-07-06 起沪市 ST 调整为 10%
+            return (0.10, 0.10)
+        # 其余情况默认 5%（深市 ST / 沪市 2026-07-06 前）
+        return (0.05, 0.05)
+
     pct_map = {
         "main": (0.10, 0.10),
         "chinext": (0.20, 0.20),
         "star": (0.20, 0.20),
-        "st": (0.05, 0.05),
         "bse": (0.30, 0.30),  # 北交所预留
     }
     return pct_map.get(board_type, (0.10, 0.10))
@@ -102,6 +131,8 @@ def _resolve_constraint(
     如果 constraint 为 None，返回默认配置。
     如果 board_type="auto"，根据 symbol 自动推断。
     如果 limit_up_pct/limit_down_pct 未设置，根据 board_type 补全。
+    market 未设置且 symbol 已知时，自动从 symbol 推断（6xx/688 → "SH"，0xx/3xx → "SZ"）。
+    trade_date 用于 ST 规则日期切换。
     """
     if constraint is None:
         constraint = TradeConstraint()
@@ -110,10 +141,19 @@ def _resolve_constraint(
     if board == "auto":
         board = _infer_board_type(symbol)
 
+    market = constraint.market
+    if market is None:
+        # 从 symbol 推断市场
+        code = symbol.split(".")[0] if "." in symbol else symbol
+        if code.startswith("6") or code.startswith("688"):
+            market = "SH"
+        elif code.startswith("0") or code.startswith("3"):
+            market = "SZ"
+
     limit_up = constraint.limit_up_pct
     limit_down = constraint.limit_down_pct
     if limit_up is None or limit_down is None:
-        default_up, default_down = _get_limit_pct(board)
+        default_up, default_down = _get_limit_pct(board, constraint.trade_date, market)
         limit_up = limit_up if limit_up is not None else default_up
         limit_down = limit_down if limit_down is not None else default_down
 
@@ -122,6 +162,8 @@ def _resolve_constraint(
         limit_up_pct=limit_up,
         limit_down_pct=limit_down,
         board_type=board,
+        market=market,
+        trade_date=constraint.trade_date,
     )
 
 

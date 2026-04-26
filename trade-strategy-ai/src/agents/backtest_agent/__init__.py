@@ -1,5 +1,8 @@
 """
-Backtest Agent（已冻结 NTL-S15-008）。
+历史 backtest agent 目录（已冻结 NTL-S15-008）。
+
+Stage 6 起，回测主路径统一迁移到 src/backtest/。
+本目录保留只读，不再承接新功能。
 
 ⚠️ 已冻结：BacktestAgent 主线职责已停止开发。
 - 本模块不再作为当前核心交付路径的一部分。

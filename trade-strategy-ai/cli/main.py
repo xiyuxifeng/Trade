@@ -1227,6 +1227,11 @@ def migrate_crawl_state(
 	typer.echo(f"迁移完成: {migrated} 个源已迁移, {skipped} 个跳过")
 
 
+# 注册 backtest 子命令（NTL-S6-008）
+from cli.backtest import app as backtest_app
+app.add_typer(backtest_app, name="backtest")
+
+
 def main() -> None:
 	app()
 

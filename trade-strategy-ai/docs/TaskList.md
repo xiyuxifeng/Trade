@@ -1317,7 +1317,7 @@
 
 ### 任务清单
 
-- [ ] `NTL-S6-001` `P1`
+- [x] `NTL-S6-001` `P1`
   目标：建立回测 schema。
   输入：快照、策略版本、评分口径。
   输出：`src/backtest/schemas.py`。
@@ -1325,9 +1325,10 @@
   前置依赖：Stage 2、Stage 3 完成。
   可并行：`NTL-S6-002`、`NTL-S6-003`。
   验收标准：回测输入输出结构清晰。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 1）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 1）
+  完成情况：✅ 13 tests PASS（BacktestRequest/TradeRecord/Summary/Result/RuleValidationResult）
 
-- [ ] `NTL-S6-002` `P1`
+- [x] `NTL-S6-002` `P1`
   目标：建立回测执行器。
   输入：回测 schema。
   输出：`src/backtest/execution.py`。
@@ -1335,19 +1336,21 @@
   前置依赖：`NTL-S6-001`。
   可并行：`NTL-S6-003`。
   验收标准：可按策略版本和快照执行回放。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 2）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 2）
+  完成情况：✅ 6 tests PASS（replay_candidates / classify_rules_snapshot_gap）
 
-- [ ] `NTL-S6-003` `P1`
+- [x] `NTL-S6-003` `P1`
   目标：建立回测评分模块。
   输入：线上评分口径。
   输出：`src/backtest/scoring.py`。
-  修改范围：`src/backtest/`。
+  修改范围：`src/backtest/`、`src/evaluation/metrics_calculator.py`（TradeConstraint 扩展）。
   前置依赖：Stage 5 评分设计或兼容口径。
   可并行：`NTL-S6-002`。
   验收标准：回测评分口径与线上一致。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 3）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 3）
+  完成情况：✅ 12 tests PASS（score_backtest_trade / ST 规则日期切换）
 
-- [ ] `NTL-S6-004` `P1`
+- [x] `NTL-S6-004` `P1`
   目标：建立回测引擎。
   输入：执行器和评分模块。
   输出：`src/backtest/engine.py`。
@@ -1355,9 +1358,10 @@
   前置依赖：`NTL-S6-002`、`NTL-S6-003`。
   可并行：`NTL-S6-005`。
   验收标准：能按 trader / 日期区间完整回测。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 4）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 4）
+  完成情况：✅ 10 tests PASS（BacktestEngine / iter_trade_dates）
 
-- [ ] `NTL-S6-005` `P1`
+- [x] `NTL-S6-005` `P1`
   目标：建立回测报告模块。
   输入：回测结果。
   输出：`src/backtest/reporting.py`。
@@ -1365,9 +1369,10 @@
   前置依赖：`NTL-S6-004`。
   可并行：`NTL-S6-008`。
   验收标准：回测结果有可读报告输出。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 5）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 5）
+  完成情况：✅ 8 tests PASS（render_backtest_markdown / render_backtest_json / render_rule_validation_markdown）
 
-- [ ] `NTL-S6-006` `P1`
+- [x] `NTL-S6-006` `P1`
   目标：让回测读取快照和策略版本，而不是实时取数。
   输入：快照服务和策略库。
   输出：离线回放读取逻辑。
@@ -1375,9 +1380,10 @@
   前置依赖：`NTL-S6-004`、Stage 2、Stage 3 完成。
   可并行：`NTL-S6-007`。
   验收标准：相同输入可重复回放。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 6）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 6）
+  完成情况：✅ 9 tests PASS（SnapshotLoader / load_market_context / load_version_for_date）
 
-- [ ] `NTL-S6-007` `P1`
+- [x] `NTL-S6-007` `P1`
   目标：回测与线上共用 scoring 口径。
   输入：线上评分逻辑与回测评分模块。
   输出：统一 scoring 组件或共享接口。
@@ -1385,9 +1391,10 @@
   前置依赖：`NTL-S6-003`、Stage 5 完成。
   可并行：`NTL-S6-006`。
   验收标准：同一案例线上线下评分结果差异可解释。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 7）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 7）
+  完成情况：✅ 3 tests PASS（线上线下 scoring 对齐 / compute_mfe_mae_return 7返回值）
 
-- [ ] `NTL-S6-008` `P1`
+- [x] `NTL-S6-008` `P1`
   目标：增加回测 CLI 入口。
   输入：回测引擎。
   输出：按 trader / 区间回测命令。
@@ -1395,9 +1402,10 @@
   前置依赖：`NTL-S6-004`、`NTL-S6-005`。
   可并行：无。
   验收标准：可直接从命令行运行回测。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 8）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 8）
+  完成情况：✅ 4 tests PASS（backtest run / report / validate-rules）
 
-- [ ] `NTL-S6-009` `P1`
+- [x] `NTL-S6-009` `P1`
   目标：建立 LLM 规则白名单。
   输入：现有规则抽取结果。
   输出：规则 -> 所需字段 / 可程序化程度映射。
@@ -1405,9 +1413,10 @@
   前置依赖：Stage 3 或现有规则抽取能力可用。
   可并行：`NTL-S6-010`。
   验收标准：可区分能直接验真的规则与不能直接验真的规则。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 9）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 9）
+  完成情况：✅ 11 tests PASS（RuleMeta / classify_rule / 指标模式匹配）
 
-- [ ] `NTL-S6-010` `P1`
+- [x] `NTL-S6-010` `P1`
   目标：对高频规则做命中验证。
   输入：规则白名单与历史快照。
   输出：10 到 20 条高频规则的命中验证结果。
@@ -1415,9 +1424,10 @@
   前置依赖：`NTL-S6-009`、`NTL-S6-006`。
   可并行：`NTL-S6-011`。
   验收标准：至少一批规则完成命中验证。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 10）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 10）
+  完成情况：✅ 2 tests PASS（validate_rule_hits 基本计数 / unsupported规则标记）
 
-- [ ] `NTL-S6-011` `P1`
+- [x] `NTL-S6-011` `P1`
   目标：输出规则覆盖率、命中率、后验收益分布。
   输入：规则验证结果。
   输出：验证报告。
@@ -1425,9 +1435,10 @@
   前置依赖：`NTL-S6-010`。
   可并行：无。
   验收标准：能据此筛掉明显无效规则。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 11）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 11）
+  完成情况：✅ 后验收益标签已加入 render_rule_validation_markdown
 
-- [ ] `NTL-S6-012` `P1`
+- [x] `NTL-S6-012` `P1`
   目标：停止继续扩展旧 `backtest_agent` 路线。
   输入：新 backtest 模块。
   输出：旧目录说明与主路径切换。
@@ -1435,9 +1446,10 @@
   前置依赖：`NTL-S6-004`。
   可并行：`NTL-S6-013`。
   验收标准：后续回测开发统一进入 `src/backtest/`。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 12）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 12）
+  完成情况：✅ backtest_agent 已冻结说明 + docs/Project.md 更新
 
-- [ ] `NTL-S6-013` `P1`
+- [x] `NTL-S6-013` `P1`
   目标：验证回测结果可复现。
   输入：相同快照、相同策略版本、相同 scoring 口径。
   输出：复现验证结果。
@@ -1445,7 +1457,8 @@
   前置依赖：`NTL-S6-006`、`NTL-S6-007`。
   可并行：无。
   验收标准：同一输入重复运行结果一致或差异可解释。
-  实施计划：[2026-04-25-stage6-implementation-plan.md](../superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 13）
+  实施计划：[2026-04-25-stage6-implementation-plan.md](superpowers/plans/2026-04-25-stage6-implementation-plan.md)（对应 Task 13）
+  完成情况：✅ 1 test PASS（fingerprint_result 两次运行结果一致）
 
 ### Stage 6 完成标准
 
@@ -1624,3 +1637,13 @@
 3. 不把多个独立交付混在一个任务里。
 4. 如果代码实现与目标不符，优先补“代码对齐改造项”。
 5. 如果某 Stage 的完成标准还没满足，不得把后续 Stage 标为主线已完成。
+
+
+## 21. 备注
+
+根据文档和项目代码，Review一下Stage 6的任务完成情况
+1. 代码是否符合设计目标，是否存在不合理的地方
+2. 和之前的Stage任务产生的代码之间是否可以正常串联，数据是否可以正常传递
+3. 是否存在代码缺陷或者设计缺陷
+4. 是否符合A股市场的实际情况
+5. 是否有需要改进的地方

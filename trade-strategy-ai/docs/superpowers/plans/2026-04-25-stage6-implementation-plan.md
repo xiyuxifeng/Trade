@@ -50,60 +50,20 @@
 
 ---
 
-### Task 0: Stage 6 连续性预检与补洞
+### Task 0: Stage 6 连续性预检与补洞（已验证 - 可跳过）
 
-**Files:**
-- Modify: `src/strategy_library/repository.py`
-- Modify: `src/strategy_library/service.py`
-- Test: `tests/unit/strategy_library/test_repository.py`
-- Test: `tests/unit/strategy_library/test_service.py`
+> **状态更新（2026-04-26）：** 经实际运行测试验证，`rules_snapshot` 持久化与发布链路已正确实现，测试全部通过（12 passed）。Task 0 可以跳过，直接进入 Task 1。
 
-- [ ] **Step 1: 写失败测试，验证 `rules_snapshot` 持久化与发布链路**
+**验证结果：**
+- `repository.py:117` 已将 `rules_snapshot` 写入 `strategy_payload`
+- `repository.py:148` 已从 ORM 读回 `rules_snapshot`
+- `service.py:137` 发布时已正确复制 `rules_snapshot`
+- `test_repository.py:test_schema_to_orm_converts_rules_snapshot` PASSED
+- `test_service.py:test_release_version_preserves_rules_snapshot` PASSED
 
-```python
-def test_schema_to_orm_converts_rules_snapshot():
-    version = StrategyVersion(
-        version_id="ver-001",
-        trader_id="trader-001",
-        strategy_date=date(2026, 4, 25),
-        status=StrategyVersionStatus.released,
-        rules_snapshot=[{"rule_id": "r1", "condition": "ma5_cross"}],
-    )
-    orm_obj = StrategyLibraryRepository._to_orm_model(version)
-    assert orm_obj.strategy_payload["rules_snapshot"] == [{"rule_id": "r1", "condition": "ma5_cross"}]
-```
-
-- [ ] **Step 2: 运行测试确认旧逻辑失败**
-
-Run: `pytest tests/unit/strategy_library/test_repository.py tests/unit/strategy_library/test_service.py -q`
-Expected: FAIL，`rules_snapshot` 未写入或未从 released version 透传
-
-- [ ] **Step 3: 实现 repository/service 修补**
-
-```python
-# src/strategy_library/repository.py
-strategy_payload = {
-    "recommendations": [...],
-    "rules_snapshot": version.rules_snapshot,
-}
-
-# src/strategy_library/service.py
-released = StrategyVersion(
-    ...,
-    rules_snapshot=draft_version.rules_snapshot,
-)
-```
-
-- [ ] **Step 4: 运行测试确认通过**
-
-Run: `pytest tests/unit/strategy_library/test_repository.py tests/unit/strategy_library/test_service.py tests/unit/strategy_library/test_service_uniqueness.py -q`
-Expected: PASS
-
-- [ ] **Step 5: 提交连续性补丁**
-
+如需重新验证，可运行：
 ```bash
-git add src/strategy_library/repository.py src/strategy_library/service.py tests/unit/strategy_library/test_repository.py tests/unit/strategy_library/test_service.py
-git commit -m "fix: persist strategy rules snapshot for stage6 replay"
+pytest tests/unit/strategy_library/test_repository.py tests/unit/strategy_library/test_service.py tests/unit/strategy_library/test_service_uniqueness.py -v
 ```
 
 ---
@@ -288,17 +248,21 @@ Expected: FAIL
 
 - [ ] **Step 3: 实现适配层，不复制公式**
 
+> **注意（2026-04-26）：** `compute_mfe_mae_return` 实际返回 7 个值 `(mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)`，不是 5 个值。实现时需正确解包。
+
 ```python
 from src.evaluation.metrics_calculator import compute_mfe_mae_return
 
 def score_backtest_trade(...):
-    mfe, mae, return_pct, exit_triggered, exit_date = compute_mfe_mae_return(...)
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(...)
     return {
         "mfe": mfe,
         "mae": mae,
         "return_pct": return_pct,
         "exit_triggered": exit_triggered,
         "exit_date": exit_date,
+        "halted_dates": halted_dates,
+        "eval_date": eval_date,
     }
 ```
 
@@ -312,6 +276,38 @@ Expected: PASS
 ```bash
 git add src/backtest/scoring.py tests/unit/backtest/test_scoring.py
 git commit -m "feat: add shared backtest scoring adapter"
+```
+
+- [ ] **Step 6（新增，2026-04-26）: 补充 ST 规则日期切换逻辑**
+
+> **来源：** Review 发现 `compute_mfe_mae_return` 当前 ST 涨跌幅为静态 5%，但上交所 2026-07-06 起已将沪市主板风险警示股票涨跌幅调整为 10%，必须在 scoring adapter 层支持"按市场 + 生效日期"的规则切换。
+
+**实现要求：**
+1. `TradeConstraint` 需扩展 `trade_date` 字段（用于判断规则生效时间）
+2. ST 规则判断需区分"沪市"vs"深市"：
+   - 沪市 ST（symbol 开头 6xxx）：`2026-07-06` 前为 5%，之后为 10%
+   - 深市 ST（symbol 开头 0xxx/3xxx）：维持 5%（截至 2026-04-26 无变化）
+3. `_get_limit_pct` 改为接受 `trade_date` 参数，按日期+市场返回正确涨跌幅
+4. 相关测试用例需覆盖 ST 规则切换边界：
+   - `trade_date=2026-07-05` + 沪市 ST → limit = 5%
+   - `trade_date=2026-07-06` + 沪市 ST → limit = 10%
+   - `trade_date=2026-07-06` + 深市 ST → limit = 5%
+5. 注意：当前 `_infer_board_type` 返回 `"st"` 后未携带市场信息（沪市 vs 深市），`compute_mfe_mae_return` 的 `symbol` 参数无法区分沪市 ST vs 深市 ST。需要在 `TradeConstraint` 中增加 `market` 字段（`"SH"` / `"SZ"`），并从 symbol 推断：
+   - 6xx / 688 开头 → `"SH"`（上海）
+   - 0xx / 3xx 开头 → `"SZ"`（深圳）
+
+**参考实现骨架：**
+
+```python
+# src/evaluation/metrics_calculator.py
+ST_RULE_EFFECTIVE_DATE = date(2026, 7, 6)  # 沪市 ST 规则变更生效日
+
+def _get_limit_pct(board_type: str, trade_date: date | None = None) -> tuple[float, float]:
+    if board_type == "st" and trade_date is not None:
+        # 沪市（6开头）ST 规则 2026-07-06 切换
+        if trade_date >= ST_RULE_EFFECTIVE_DATE:
+            return (0.10, 0.10)  # 调整后
+    return {"st": (0.05, 0.05), ...}[board_type]
 ```
 
 ---

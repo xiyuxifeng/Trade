@@ -116,28 +116,38 @@ Stage 6 的回测不是任意金融回测，必须遵守 A 股交易制度约束
 ### 3.2 Stage 6 对规则的实现原则
 
 1. 不把规则散落在 `engine/executor/scoring` 多处。
-2. 建立单独的 `MarketRuleSet` / `TradingConstraintSet`。
-3. 所有规则必须支持：
-   - `market`
-   - `board_type`
-   - `security_status`
-   - `trade_date`
+2. 复用并扩展现有 `TradeConstraint`（`src/evaluation/metrics_calculator.py`），不新建 `TradingConstraintSet`。
+3. 所有规则字段必须支持：
+   - `market`（"SH" / "SZ"，用于 ST 规则按市场区分）
+   - `board_type`（"main"/"chinext"/"star"/"st"/"bse"）
+   - `trade_date`（用于 ST 规则按生效日期切换）
+   - 注：`security_status`（是否 ST）通过 `board_type="st"` 隐式表达，不再单独列字段
 4. 规则变更必须可以按日期切换，而不是只能覆盖当前值。
 
-建议数据结构：
+建议扩展后的 `TradeConstraint` 数据结构：
 
 ```python
 @dataclass(frozen=True)
-class TradingConstraintSet:
-    market: str
-    board_type: str
-    trade_date: date
-    lot_size: int
-    t_plus_n_sell: int
-    price_limit_pct: float | None
-    allow_intraday_roundtrip: bool
-    first_n_days_no_limit: int
-    residual_sell_allowed: bool
+class TradeConstraint:
+    """A股交易规则约束配置（Stage 6 扩展版）。
+
+    扩展说明：
+    - 增加 market 字段（"SH" / "SZ"），用于区分沪市/深市 ST 规则切换
+    - 增加 trade_date 字段，用于判断规则生效时间（如 2026-07-06 沪市 ST 规则切换）
+    - limit_up_pct / limit_down_pct 未设置时，通过 board_type + trade_date 自动推断
+
+    已有字段（Stage 5）：
+    - t_plus_one: 是否启用 T+1 约束
+    - limit_up_pct / limit_down_pct: 涨跌停幅度
+    - board_type: 板块类型（"auto"/"main"/"chinext"/"star"/"st"/"bse"）
+    """
+
+    t_plus_one: bool = True
+    limit_up_pct: float | None = None
+    limit_down_pct: float | None = None
+    board_type: str = "auto"
+    market: str | None = None   # "SH" / "SZ" / None（自动推断）
+    trade_date: date | None = None  # 用于 ST 规则日期切换
 ```
 
 ### 3.3 官方规则参考
@@ -473,7 +483,7 @@ class BacktestEngine:
 **约束**
 
 - 引擎只负责编排，不负责任何交易规则细节
-- 交易规则应下沉到 `executor` / `TradingConstraintSet`
+- 交易规则应下沉到 `executor` / 扩展版 `TradeConstraint`
 - 输出必须包含：
   - per-trade records
   - per-day summary
@@ -871,7 +881,7 @@ class ReproducibilityCheckResult(BaseModel):
 - 买入后当日不得卖出（T+1）
 - 买入量按 100 股整数倍约束
 - 残股仅允许一次性卖出
-- 涨跌停板约束由 `TradingConstraintSet` 决定
+- 涨跌停板约束由扩展版 `TradeConstraint` 决定
 - 新股/注册制特殊时期“无涨跌幅限制”必须通过证券元数据识别
 
 ### 7.4 可解释性约束
@@ -894,7 +904,7 @@ Stage 6 必须自带验证，而不是上线后再对账。
 ### 8.1 单元测试
 
 - `schemas` 校验
-- `TradingConstraintSet` 规则切换
+- 扩展版 `TradeConstraint` 规则切换
 - `strategy_replayer` 输出稳定性
 - `scoring` 与 Stage 5 一致性
 - `rule_registry` 分类正确性

@@ -160,12 +160,14 @@ class BaseAgent:
 - `src/market_universe`
 - `src/strategy_library`
 - `src/evaluation`
-- `src/backtest`
+- `src/backtest`（回测主路径，Stage 6 起统一到此模块）
 - `src/agents/manager_agent`
 - `src/agents/data_agent`
 - `src/agents/trader_agent`
 - `src/agents/strategy_agent`
 - `src/agents/risk_agent`
+
+> **注意：** `src/agents/backtest_agent/` 为历史目录（已冻结），不再扩展。回测开发统一进入 `src/backtest/`。
 
 ### 3.2 DSL 引擎（`src/dsl/`）
 

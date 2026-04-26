@@ -60,9 +60,12 @@ class SnapshotLoader:
         """
         compatibility_fallback = False
 
+        # 默认值（snapshot_service 为 None 时使用）
+        bars_by_symbol: dict[str, list[dict]] = {}
+        indicators_by_symbol: dict[str, dict[str, Any]] = {}
+
         # 尝试加载 market_universe 快照
         market_universe = None
-        bars_by_symbol: dict[str, list[dict]] = {}
         if self.snapshot_service is not None:
             try:
                 market_universe = await self.snapshot_service.load(
@@ -72,6 +75,7 @@ class SnapshotLoader:
                 market_universe = None
 
             # 尝试加载 ohlcv_1d bars
+            bars_by_symbol: dict[str, list[dict]] = {}
             try:
                 bars_data = await self.snapshot_service.load(
                     trade_date.isoformat(), slot="ohlcv_1d"
@@ -87,6 +91,20 @@ class SnapshotLoader:
             except Exception:
                 bars_by_symbol = {}
 
+            # 尝试加载 indicators
+            indicators_by_symbol: dict[str, dict[str, Any]] = {}
+            try:
+                indicators_data = await self.snapshot_service.load(
+                    trade_date.isoformat(), slot="indicators"
+                )
+                if indicators_data and isinstance(indicators_data, dict):
+                    # indicators_data 格式: {"000001.SZ": {"rsi": 65.0, "ma5": 10.2}, ...}
+                    for symbol, ind_fields in indicators_data.items():
+                        if isinstance(ind_fields, dict):
+                            indicators_by_symbol[str(symbol)] = ind_fields
+            except Exception:
+                indicators_by_symbol = {}
+
         # 如果快照缺失且启用兜底，标记 compatibility_fallback
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
@@ -97,7 +115,7 @@ class SnapshotLoader:
         result: dict[str, Any] = {
             "trade_date": trade_date.isoformat(),
             "bars_by_symbol": bars_by_symbol,
-            "indicators_by_symbol": {},  # NTL-S6-006 完整实现时填充
+            "indicators_by_symbol": indicators_by_symbol,
             "market_universe": market_universe,
             "topic_snapshot": None,
             "source_refs": [],

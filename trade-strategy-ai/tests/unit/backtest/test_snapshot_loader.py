@@ -174,11 +174,13 @@ class TestSnapshotLoaderWithMockedService:
             symbols=["000001.SZ"],
         )
 
-        # snapshot_service.load 应被调用两次：market_universe 和 ohlcv_1d
-        assert mock_service.load.call_count == 2
+        # snapshot_service.load 应被调用三次：market_universe、ohlcv_1d 和 indicators
+        assert mock_service.load.call_count == 3
         # 第二次调用应该是 ohlcv_1d slot
         calls = mock_service.load.call_args_list
         assert calls[1][1]["slot"] == "ohlcv_1d"
+        # 第三次调用应该是 indicators slot
+        assert calls[2][1]["slot"] == "indicators"
         # bars_by_symbol 应被正确填充（按 symbol 归类）
         bars = result.get("bars_by_symbol", {})
         assert "000001.SZ" in bars

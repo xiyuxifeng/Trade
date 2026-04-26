@@ -55,7 +55,8 @@ async def validate_rules_for_trader(
 
     trade_dates = iter_trade_dates(date_from, date_to)
     all_contexts: list[dict] = []
-    rule_map: dict[str, dict] = {}
+    # rule_map: rule_id -> (rule_dict, strategy_version_id)
+    rule_map: dict[str, tuple[dict, str]] = {}
 
     for trade_date in trade_dates:
         # 加载市场上下文（收集 indicators）
@@ -68,19 +69,19 @@ async def validate_rules_for_trader(
         if version is None:
             continue
 
-        # 提取规则
+        # 提取规则（同时记录版本 ID）
         for rule_dict in version.rules_snapshot:
             rule_id = str(rule_dict.get("rule_id", ""))
             if rule_id and rule_id not in rule_map:
-                rule_map[rule_id] = rule_dict
+                rule_map[rule_id] = (rule_dict, version.version_id)
 
     # 对每条规则分类并验真
     results: list[RuleValidationResult] = []
-    for rule_id, rule_dict in rule_map.items():
+    for rule_id, (rule_dict, version_id) in rule_map.items():
         rule_meta = classify_rule(rule_dict)
         validation_result = validate_rule_hits(rule_meta, all_contexts)
         validation_result.trader_id = trader_id
-        validation_result.strategy_version_id = ""
+        validation_result.strategy_version_id = version_id
         results.append(validation_result)
 
     return results
@@ -273,6 +274,15 @@ class BacktestEngine:
             symbol=candidate["symbol"],
         )
 
+        # 从 bars 中查找 exit_date 对应的收盘价作为 exit_price
+        exit_price = None
+        exit_date_str = score_result.get("exit_date")
+        if exit_date_str and bars:
+            for bar in bars:
+                if str(bar.get("date")) == exit_date_str:
+                    exit_price = bar.get("close")
+                    break
+
         return BacktestTradeRecord(
             trade_date=trade_date,
             trader_id=request.trader_id,
@@ -280,9 +290,9 @@ class BacktestEngine:
             symbol=candidate["symbol"],
             status="closed",
             entry_price=candidate["entry_price"],
-            exit_price=score_result.get("exit_date"),
+            exit_price=exit_price,
             entry_date=trade_date.isoformat(),
-            exit_date=score_result.get("exit_date"),
+            exit_date=exit_date_str,
             return_pct=score_result.get("return_pct"),
             mfe=score_result.get("mfe"),
             mae=score_result.get("mae"),

@@ -251,6 +251,9 @@ class TestEngineIntegration:
         record = result.records[0]
         assert record.status != "skipped" or record.symbol == "000001"
         assert record.symbol == "000001"
+        # exit_price 应从 bars 中查找 exit_date 对应的收盘价（10.8）
+        assert record.exit_price == 10.8, f"exit_price 应为收盘价 10.8，实际为 {record.exit_price}"
+        assert record.exit_date == "2026-04-03"
 
     def test_engine_rule_validation_mode(self):
         """rule_validation 模式：仅做规则验真"""

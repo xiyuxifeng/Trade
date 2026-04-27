@@ -166,6 +166,8 @@ class TestSnapshotLoaderWithMockedService:
                     "volume": 1100000,
                 },
             ],
+            {"000001.SZ": {"rsi": 60.0}},  # indicators slot
+            {"000001.SZ": "2026-03-20"},  # listing_dates slot
         ]
 
         loader = SnapshotLoader(snapshot_service=mock_service)
@@ -174,13 +176,15 @@ class TestSnapshotLoaderWithMockedService:
             symbols=["000001.SZ"],
         )
 
-        # snapshot_service.load 应被调用三次：market_universe、ohlcv_1d 和 indicators
-        assert mock_service.load.call_count == 3
+        # snapshot_service.load 应被调用四次：market_universe、ohlcv_1d、indicators 和 listing_dates
+        assert mock_service.load.call_count == 4
         # 第二次调用应该是 ohlcv_1d slot
         calls = mock_service.load.call_args_list
         assert calls[1][1]["slot"] == "ohlcv_1d"
         # 第三次调用应该是 indicators slot
         assert calls[2][1]["slot"] == "indicators"
+        # 第四次调用应该是 listing_dates slot
+        assert calls[3][1]["slot"] == "listing_dates"
         # bars_by_symbol 应被正确填充（按 symbol 归类）
         bars = result.get("bars_by_symbol", {})
         assert "000001.SZ" in bars

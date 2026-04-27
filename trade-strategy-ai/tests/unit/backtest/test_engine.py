@@ -287,6 +287,104 @@ class TestEngineIntegration:
         result = engine.run_sync(req)
         assert isinstance(result.records, list)
 
+    @pytest.mark.asyncio
+    async def test_engine_checks_lot_size_for_buy(self):
+        """买入交易量必须是 100 股整数倍；卖出不校验"""
+        from datetime import datetime
+
+        from src.backtest.engine import BacktestEngine
+        from src.strategy_library.schemas import (
+            StrategyRecommendation,
+            StrategyVersion,
+            StrategyVersionStatus,
+        )
+
+        mock_loader = AsyncMock()
+        mock_loader.load_market_context.return_value = {
+            "trade_date": "2026-04-01",
+            "bars_by_symbol": {
+                "000001": [
+                    {
+                        "date": "2026-04-01",
+                        "open": 10.0,
+                        "high": 10.5,
+                        "low": 9.8,
+                        "close": 10.2,
+                        "volume": 1000000,
+                    }
+                ]
+            },
+            "indicators_by_symbol": {},
+            "market_universe": None,
+            "topic_snapshot": None,
+            "source_refs": [],
+        }
+
+        mock_strategy_loader = AsyncMock()
+        mock_strategy_loader.load_version_for_date.return_value = StrategyVersion(
+            version_id="v1",
+            trader_id="trader_a",
+            strategy_date=datetime(2026, 4, 1).date(),
+            status=StrategyVersionStatus.released,
+            recommendations=[
+                StrategyRecommendation(
+                    symbol="000001",
+                    decision="buy",
+                    confidence=0.8,
+                    entry_price=10.2,
+                    volume=150,  # 不是 100 的整数倍
+                ),
+                StrategyRecommendation(
+                    symbol="000001",
+                    decision="buy",
+                    confidence=0.8,
+                    entry_price=10.2,
+                    volume=200,  # 是 100 的整数倍
+                ),
+                StrategyRecommendation(
+                    symbol="000001",
+                    decision="sell",
+                    confidence=0.8,
+                    entry_price=10.2,
+                    volume=150,  # 卖出不校验
+                ),
+            ],
+        )
+
+        mock_scoring = Mock()
+        mock_scoring.return_value = {
+            "mfe": 0.08,
+            "mae": -0.02,
+            "return_pct": 0.058,
+            "exit_triggered": "target",
+            "exit_date": "2026-04-01",
+            "halted_dates": [],
+            "eval_date": "2026-04-01",
+        }
+
+        engine = BacktestEngine(
+            loader=mock_loader,
+            strategy_loader=mock_strategy_loader,
+            scoring_func=mock_scoring,
+        )
+        req = BacktestRequest(
+            trader_id="trader_a",
+            date_from=datetime(2026, 4, 1).date(),
+            date_to=datetime(2026, 4, 1).date(),
+        )
+        result = await engine.run(req)
+
+        assert len(result.records) == 3
+        # 150 股买入 → 不符合 100 股整数倍
+        assert result.records[0].volume == 150
+        assert result.records[0].is_valid_lot_size is False
+        # 200 股买入 → 符合
+        assert result.records[1].volume == 200
+        assert result.records[1].is_valid_lot_size is True
+        # 150 股卖出 → 不校验
+        assert result.records[2].volume == 150
+        assert result.records[2].is_valid_lot_size is None
+
 
 class TestValidateRuleHits:
     """NTL-S6-010: 规则命中验证测试"""
@@ -353,3 +451,125 @@ class TestIterTradeDates:
         # Wed(1), Thu(2), Fri(3), Mon(6) = 4 天
         assert date(2026, 4, 4) not in dates  # 周六
         assert date(2026, 4, 5) not in dates  # 周日
+
+
+class TestIterTradeDatesWithHolidays:
+    """节假日跨越测试（清明 4/4-4/6、五一 5/1-5/5）"""
+
+    def setup_method(self):
+        """每个测试前设置节假日，yield 后自动恢复（即使测试异常也能清理）"""
+        from src.backtest.engine import TradeCalendar
+
+        TradeCalendar.set_holidays({
+            "2026-04-04", "2026-04-05", "2026-04-06",  # 清明假期
+            "2026-05-01", "2026-05-02", "2026-05-03",  # 五一假期（5/4-5/5 本身是周末）
+            "2026-05-04", "2026-05-05",
+        })
+        TradeCalendar._loaded = True  # 阻止懒加载覆盖
+
+    def teardown_method(self):
+        """每个测试后清除节假日，恢复默认值"""
+        from src.backtest.engine import TradeCalendar
+
+        TradeCalendar.set_holidays(set())
+        TradeCalendar._loaded = False
+        TradeCalendar._trade_dates = None
+
+    def test_iter_trade_dates_skips_qingming_holiday(self):
+        """清明假期（4/4-4/6）应被跳过"""
+        from src.backtest.engine import iter_trade_dates
+
+        # 2026-04-01(周三) 到 2026-04-07(周二)
+        dates = list(iter_trade_dates(date(2026, 4, 1), date(2026, 4, 7)))
+        # 交易日：4/1, 4/2, 4/3, 4/7（4/4-4/6 为清明+周末全部跳过）
+        assert len(dates) == 4
+        assert date(2026, 4, 1) in dates  # 周三
+        assert date(2026, 4, 2) in dates  # 周四
+        assert date(2026, 4, 3) in dates  # 周五
+        assert date(2026, 4, 4) not in dates  # 清明周六
+        assert date(2026, 4, 5) not in dates  # 清明周日
+        assert date(2026, 4, 6) not in dates  # 清明周一（调休）
+        assert date(2026, 4, 7) in dates  # 周二
+
+    def test_iter_trade_dates_skips_labor_day_holiday(self):
+        """五一假期（5/1-5/5）应被跳过"""
+        from src.backtest.engine import iter_trade_dates
+
+        # 2026-05-01(周五) 到 2026-05-06(周三)
+        dates = list(iter_trade_dates(date(2026, 5, 1), date(2026, 5, 6)))
+        # 交易日：5/1 跨周末后只有 5/6
+        assert len(dates) == 1
+        assert date(2026, 5, 1) not in dates  # 五一周五
+        assert date(2026, 5, 2) not in dates  # 周六
+        assert date(2026, 5, 3) not in dates  # 周日
+        assert date(2026, 5, 4) not in dates  # 五一调休
+        assert date(2026, 5, 5) not in dates  # 五一调休
+        assert date(2026, 5, 6) in dates  # 周三
+
+    def test_engine_skips_holidays_across_qingming(self):
+        """引擎在清明假期跨越期间只处理交易日"""
+        from unittest.mock import AsyncMock
+
+        from src.backtest.engine import BacktestEngine
+        from src.backtest.snapshot_loader import SnapshotLoader
+
+        mock_loader = AsyncMock(spec=SnapshotLoader)
+        mock_loader.load_market_context.return_value = {
+            "trade_date": "2026-04-01",
+            "bars_by_symbol": {},
+            "indicators_by_symbol": {},
+            "market_universe": None,
+            "topic_snapshot": None,
+            "source_refs": [],
+        }
+
+        engine = BacktestEngine(loader=mock_loader)
+        req = BacktestRequest(
+            trader_id="trader_a",
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 7),
+        )
+        result = engine.run_sync(req)
+        # 清明假期跨越：4个交易日（4/1-4/3 + 4/7）
+        assert result.summary is not None
+        assert result.summary.total_days == 4
+        # 4/4-4/6 被跳过，不应产生这些日期的记录
+        trade_dates = {r.trade_date for r in result.records}
+        assert date(2026, 4, 4) not in trade_dates
+        assert date(2026, 4, 5) not in trade_dates
+        assert date(2026, 4, 6) not in trade_dates
+
+    def test_engine_skips_holidays_across_labor_day(self):
+        """引擎在五一假期跨越期间只处理交易日"""
+        from unittest.mock import AsyncMock
+
+        from src.backtest.engine import BacktestEngine
+        from src.backtest.snapshot_loader import SnapshotLoader
+
+        mock_loader = AsyncMock(spec=SnapshotLoader)
+        mock_loader.load_market_context.return_value = {
+            "trade_date": "2026-05-01",
+            "bars_by_symbol": {},
+            "indicators_by_symbol": {},
+            "market_universe": None,
+            "topic_snapshot": None,
+            "source_refs": [],
+        }
+
+        engine = BacktestEngine(loader=mock_loader)
+        req = BacktestRequest(
+            trader_id="trader_a",
+            date_from=date(2026, 5, 1),
+            date_to=date(2026, 5, 6),
+        )
+        result = engine.run_sync(req)
+        # 五一假期跨越：只有 5/6 是交易日
+        assert result.summary is not None
+        assert result.summary.total_days == 1
+        trade_dates = {r.trade_date for r in result.records}
+        assert date(2026, 5, 1) not in trade_dates
+        assert date(2026, 5, 2) not in trade_dates
+        assert date(2026, 5, 3) not in trade_dates
+        assert date(2026, 5, 4) not in trade_dates
+        assert date(2026, 5, 5) not in trade_dates
+        assert date(2026, 5, 6) in trade_dates

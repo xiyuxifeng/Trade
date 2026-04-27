@@ -23,7 +23,9 @@ class TradeConstraint:
     属性：
         t_plus_one: 是否启用 T+1 约束（买入当日不能卖出）
         limit_up_pct: 涨停幅度比例（主板 0.10，创业板/科创板 0.20，ST 0.05）
+            - None 表示无涨跌幅限制（如新股上市前 5 日）
         limit_down_pct: 跌停幅度比例（主板 0.10，创业板/科创板 0.20，ST 0.05）
+            - None 表示无涨跌幅限制
         board_type: 板块类型，用于自动推断涨跌停幅度
             - "auto": 根据 symbol 自动推断（6 开头上海主板/科创板，0/3 开头深圳主板/创业板）
             - "main": 主板（10%）
@@ -33,6 +35,8 @@ class TradeConstraint:
             - "bse": 北交所（30%，预留）
         market: 市场（"SH"=上海，"SZ"=深圳），用于区分沪市/深市 ST 规则
         trade_date: 交易日期，用于判断 ST 规则切换时间点（2026-07-06 沪市 ST 调整为 10%）
+        is_new_stock: 是否为新股（上市前 5 日无涨跌幅限制）
+        listing_date: 上市日期（用于自动判断 is_new_stock）
     """
 
     t_plus_one: bool = True
@@ -41,6 +45,8 @@ class TradeConstraint:
     board_type: str = "auto"
     market: str | None = None  # "SH" / "SZ"
     trade_date: date | None = None  # 用于 ST 规则日期切换
+    is_new_stock: bool = False  # 新股上市前 5 日无涨跌幅限制
+    listing_date: date | None = None  # 上市日期
 
 
 def _infer_board_type(symbol: str) -> str:
@@ -133,6 +139,7 @@ def _resolve_constraint(
     如果 limit_up_pct/limit_down_pct 未设置，根据 board_type 补全。
     market 未设置且 symbol 已知时，自动从 symbol 推断（6xx/688 → "SH"，0xx/3xx → "SZ"）。
     trade_date 用于 ST 规则日期切换。
+    listing_date + trade_date 用于判断新股（上市前 5 日无涨跌幅限制）。
     """
     if constraint is None:
         constraint = TradeConstraint()
@@ -150,9 +157,21 @@ def _resolve_constraint(
         elif code.startswith("0") or code.startswith("3"):
             market = "SZ"
 
+    # 新股判断：上市日期存在且当前日期在上市后 5 日内（含上市当日）
+    is_new_stock = constraint.is_new_stock
+    if not is_new_stock and constraint.listing_date is not None and constraint.trade_date is not None:
+        days_since_listing = (constraint.trade_date - constraint.listing_date).days
+        if 0 <= days_since_listing < 5:
+            is_new_stock = True
+
     limit_up = constraint.limit_up_pct
     limit_down = constraint.limit_down_pct
-    if limit_up is None or limit_down is None:
+
+    # 新股上市前 5 日无涨跌幅限制
+    if is_new_stock:
+        limit_up = None
+        limit_down = None
+    elif limit_up is None or limit_down is None:
         default_up, default_down = _get_limit_pct(board, constraint.trade_date, market)
         limit_up = limit_up if limit_up is not None else default_up
         limit_down = limit_down if limit_down is not None else default_down
@@ -164,6 +183,8 @@ def _resolve_constraint(
         board_type=board,
         market=market,
         trade_date=constraint.trade_date,
+        is_new_stock=is_new_stock,
+        listing_date=constraint.listing_date,
     )
 
 
@@ -330,12 +351,19 @@ def compute_mfe_mae_return(
         prev_close = open_price  # 用当日开盘价作为前收近似
         if i > 0:
             prev_close = _normalize_bar(bars[i - 1])["close"]
-        limit_up_price = prev_close * (1 + resolved.limit_up_pct)
-        limit_down_price = prev_close * (1 - resolved.limit_down_pct)
 
-        # 有效 high/low：受涨跌停限制
-        effective_high = min(high, limit_up_price)
-        effective_low = max(low, limit_down_price)
+        # 有效 high/low：受涨跌停限制（None 表示无限制，如新股上市前 5 日）
+        if resolved.limit_up_pct is not None:
+            limit_up_price = prev_close * (1 + resolved.limit_up_pct)
+            effective_high = min(high, limit_up_price)
+        else:
+            effective_high = high
+
+        if resolved.limit_down_pct is not None:
+            limit_down_price = prev_close * (1 - resolved.limit_down_pct)
+            effective_low = max(low, limit_down_price)
+        else:
+            effective_low = low
 
         # T+1 约束：entry_date 当日不能卖出，仅累计 MFE/MAE，不检查止盈/止损
         is_entry_day = (bar_date == entry_date)

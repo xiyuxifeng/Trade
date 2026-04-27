@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.backtest.schemas import RuleSnapshot
 
 
 # 可程序化指标的字段名（用于提取 required_fields）
@@ -31,7 +35,12 @@ INDICATOR_PATTERNS = {
     "rsi": re.compile(r"\brsi\b", re.IGNORECASE),
     "macd": re.compile(r"macd", re.IGNORECASE),
     # MA: 匹配 ma/ema 后面跟数字（ma5, ma20, ema12 等），或单独出现
-    "ma": re.compile(r"(?<![a-zA-Z])ma\d*(?![a-zA-Z0-9])|(?<![a-zA-Z])ema\d*(?![a-zA-Z0-9])", re.IGNORECASE),
+    # 前面不能是字母/数字（避免 "1ma" / "xma"），后面不能是字母/数字（避免 "market" / "max"）
+    # 允许后面跟下划线，使 "ma5_cross" 等复合表达式能被识别
+    "ma": re.compile(
+        r"(?<![a-zA-Z0-9])ma\d*(?:_[a-zA-Z0-9]+)?(?![a-zA-Z0-9])|(?<![a-zA-Z0-9])ema\d*(?:_[a-zA-Z0-9]+)?(?![a-zA-Z0-9])",
+        re.IGNORECASE,
+    ),
     "boll": re.compile(r"\bboll\b|\b布林\b", re.IGNORECASE),
     "kdj": re.compile(r"\bkdj\b", re.IGNORECASE),
     # volume: 必须作为独立词出现，不含 ma_volume 等复合词
@@ -61,7 +70,7 @@ class RuleMeta:
     programmatic_level: str = "unsupported"
 
 
-def classify_rule(rule: dict) -> RuleMeta:
+def classify_rule(rule: RuleSnapshot) -> RuleMeta:
     """对单条规则进行可程序化分类。
 
     分类逻辑：
@@ -72,7 +81,7 @@ def classify_rule(rule: dict) -> RuleMeta:
     5. 若未找到，返回 "unsupported" 或 "descriptive_only"
 
     Args:
-        rule: 规则字典，至少包含 condition/text 之一
+        rule: 规则快照（RuleSnapshot），至少包含 condition/text 之一
 
     Returns:
         RuleMeta 实例

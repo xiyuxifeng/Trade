@@ -49,9 +49,10 @@ def render_backtest_markdown(result: BacktestResult) -> str:
             status_icon = {"open": "🔓", "closed": "✅", "skipped": "⏭", "invalid": "❌"}.get(
                 rec.status, "?"
             )
+            return_str = f"{rec.return_pct:.2%}" if rec.return_pct is not None else "None"
             lines.append(
                 f"- {status_icon} {rec.trade_date} | {rec.symbol} | "
-                f"status={rec.status} | return={rec.return_pct} "
+                f"status={rec.status} | return={return_str} "
                 f"| skip_reason={rec.skip_reason}"
             )
         lines.append("")
@@ -95,8 +96,9 @@ def render_backtest_json(result: BacktestResult) -> str:
                     "total_trades": result.summary.total_trades,
                     "valid_trades": result.summary.valid_trades,
                     "skipped_trades": result.summary.skipped_trades,
-                    "win_rate": result.summary.win_rate,
-                    "avg_return_pct": result.summary.avg_return_pct,
+                    # 比例口径字段：统一用格式化字符串输出（与 Markdown 报告一致）
+                    "win_rate": f"{result.summary.win_rate:.2%}" if result.summary.win_rate is not None else None,
+                    "avg_return_pct": f"{result.summary.avg_return_pct:.2%}" if result.summary.avg_return_pct is not None else None,
                 }
                 if result.summary
                 else None

@@ -6,6 +6,7 @@ from datetime import date
 from typing import Literal
 
 import pytest
+from pydantic import ValidationError
 
 from src.backtest.schemas import (
     BacktestRequest,
@@ -73,6 +74,15 @@ class TestBacktestRequest:
             )
             assert req.mode == mode
 
+    def test_backtest_request_invalid_date_order_raises(self):
+        """date_from > date_to 时 Pydantic 应抛出 ValidationError"""
+        with pytest.raises(ValidationError):
+            BacktestRequest(
+                trader_id="trader_a",
+                date_from=date(2026, 4, 10),
+                date_to=date(2026, 4, 1),
+            )
+
 
 class TestBacktestTradeRecord:
     """BacktestTradeRecord 数据类测试"""
@@ -104,7 +114,7 @@ class TestBacktestTradeRecord:
             symbol="000001.SZ",
             status="open",
             entry_price=10.0,
-            entry_date=date(2026, 4, 1),
+            entry_date="2026-04-01",
         )
         assert record.status == "open"
         assert record.entry_price == 10.0
@@ -120,8 +130,8 @@ class TestBacktestTradeRecord:
             status="closed",
             entry_price=10.0,
             exit_price=10.6,
-            entry_date=date(2026, 4, 1),
-            exit_date=date(2026, 4, 3),
+            entry_date="2026-04-01",
+            exit_date="2026-04-03",
             return_pct=0.06,
             mfe=0.05,
             mae=0.01,

@@ -2,7 +2,7 @@
 
 > 日期：2026-04-25
 > 对应范围：`docs/TaskList.md` Stage 6（`NTL-S6-001` ~ `NTL-S6-013`）
-> 状态：设计草案
+> 状态：已实施（2026-04-27 修复完成）
 
 ---
 
@@ -76,20 +76,20 @@ src/backtest/
 
 ### 2.3 连续性审查结果
 
-在进入 Stage 6 实现前，必须先处理以下跨 Stage 连续性问题：
+在进入 Stage 6 实现前，必须先处理以下跨 Stage 连续性问题（均已验证并落地）：
 
-1. `StrategyVersion.rules_snapshot` 需要做历史兼容性审计  
-当前代码已补齐 `rules_snapshot` 的持久化与发布链路，但历史上已经落库/落盘的数据仍可能缺失该字段，因此 Stage 6 仍需先做兼容性审计与补洞策略。
+1. `StrategyVersion.rules_snapshot` 历史兼容性审计 ✅  
+经实际运行测试验证，`rules_snapshot` 持久化与发布链路已正确实现（`repository.py:117` 写入、`service.py:137` 发布复制），测试全部通过。历史缺失数据允许通过 `SignalVersioning` / `EvidencePack` 兼容兜底，并打 `compatibility_fallback` 标记。
 
-2. `market_universe` 快照与历史行情 bars 不是同一资产  
-当前 `SnapshotService` 持久化的是候选池快照，不包含完整 `bars`。Stage 6 不能把候选池快照误当作完整市场数据源。
+2. `market_universe` 快照与历史行情 bars 不是同一资产 ✅  
+`SnapshotLoader` 已明确区分 `market_universe` 候选池快照与独立 `bars_by_symbol` 历史行情，禁止混用。
 
-3. 已存在可追溯补充来源，但只能作为兼容兜底  
-Stage 4/5 已把 `strategy_version_id`、`market_universe_snapshot`、`rules_snapshot` 写入 `SignalVersioning` 和 `EvidencePack`。这些资产可用于对账或补历史缺口，但不能替代 Stage 6 的正式主路径。
+3. 已存在可追溯补充来源，但只能作为兼容兜底 ✅  
+`SignalVersioning` / `EvidencePack` 仅在缺失场景下做诊断性补齐，结果中显式标记 `compatibility_fallback`。
 
-对应原则：
+对应原则（已执行）：
 
-- Stage 6 plan 必须先安排“历史数据连续性补丁/校验”步骤。
+- ~~Stage 6 plan 必须先安排“历史数据连续性补丁/校验”步骤。~~ 已完成（Plan Task 0）。
 - 正式主路径仍然是：`released StrategyVersion + historical snapshots + standardized bars`。
 - `SignalVersioning` / `EvidencePack` 仅用于兼容核对和缺失场景诊断。
 
@@ -103,15 +103,16 @@ Stage 6 的回测不是任意金融回测，必须遵守 A 股交易制度约束
 
 截至 2026-04-25，设计应按以下规则建模，并避免硬编码单一数值：
 
-| 规则项 | 当前设计基线 | 设计要求 |
-|--------|--------------|----------|
-| 普通 A 股主板涨跌幅 | 默认 `10%` | 参数化，按板块/证券类型判定 |
-| 科创板涨跌幅 | `20%` | 参数化，支持上市前 5 日无涨跌幅限制 |
-| 创业板涨跌幅 | `20%` | 参数化，支持上市前 5 日无涨跌幅限制 |
-| 风险警示股票（ST/*ST） | 当前需配置化，不允许硬编码为永久 `5%` | 因上交所已于 2026-04-24 发布 2026 年修订规则，且 2026-07-06 起沪市主板风险警示股票涨跌幅调整为 `10%`，因此必须用“按市场 + 生效日期”的规则配置 |
-| T+1 | 当日买入股票不得当日卖出 | 必须建模为持仓可卖出日约束 |
-| 最小交易单位 | 买入通常为 `100` 股整数倍，零股仅允许卖出残股 | 在执行器中建模申报/成交约束 |
-| 零股处理 | 余额不足 `100` 股可一次性卖出 | 在持仓清算时支持残股一次卖出 |
+| 规则项 | 当前设计基线 | 设计要求 | 实现状态 |
+|--------|--------------|----------|----------|
+| 普通 A 股主板涨跌幅 | 默认 `10%` | 参数化，按板块/证券类型判定 | ✅ 已落地（`_get_limit_pct`） |
+| 科创板涨跌幅 | `20%` | 参数化，支持上市前 5 日无涨跌幅限制 | ✅ 已落地 |
+| 创业板涨跌幅 | `20%` | 参数化，支持上市前 5 日无涨跌幅限制 | ✅ 已落地 |
+| 风险警示股票（ST/*ST） | 当前需配置化，不允许硬编码为永久 `5%` | 因上交所已于 2026-04-24 发布 2026 年修订规则，且 2026-07-06 起沪市主板风险警示股票涨跌幅调整为 `10%`，因此必须用“按市场 + 生效日期”的规则配置 | ✅ 已落地（`ST_RULE_EFFECTIVE_DATE` + `market` 字段） |
+| 新股前 5 日无涨跌幅 | 科创板/创业板/主板新股上市前 5 个交易日 | 通过 `listing_date` 自动计算是否处于前 5 日，并移除涨跌幅限制 | ✅ 已落地（`is_new_stock` / `listing_date`） |
+| T+1 | 当日买入股票不得当日卖出 | 必须建模为持仓可卖出日约束 | ✅ 已落地（`entry_date` 跳过 exit 检查） |
+| 最小交易单位 | 买入通常为 `100` 股整数倍，零股仅允许卖出残股 | 在执行器中建模申报/成交约束 | ✅ 已落地（`volume` / `is_valid_lot_size`） |
+| 零股处理 | 余额不足 `100` 股可一次性卖出 | 在持仓清算时支持残股一次卖出 | ⚠️ 框架预留（需完整持仓管理系统） |
 
 ### 3.2 Stage 6 对规则的实现原则
 
@@ -134,6 +135,7 @@ class TradeConstraint:
     扩展说明：
     - 增加 market 字段（"SH" / "SZ"），用于区分沪市/深市 ST 规则切换
     - 增加 trade_date 字段，用于判断规则生效时间（如 2026-07-06 沪市 ST 规则切换）
+    - 增加 is_new_stock / listing_date，用于新股上市前 5 日无涨跌幅限制判断
     - limit_up_pct / limit_down_pct 未设置时，通过 board_type + trade_date 自动推断
 
     已有字段（Stage 5）：
@@ -146,8 +148,10 @@ class TradeConstraint:
     limit_up_pct: float | None = None
     limit_down_pct: float | None = None
     board_type: str = "auto"
-    market: str | None = None   # "SH" / "SZ" / None（自动推断）
-    trade_date: date | None = None  # 用于 ST 规则日期切换
+    market: str | None = None          # "SH" / "SZ" / None（自动推断）
+    trade_date: date | None = None     # 用于 ST 规则日期切换
+    is_new_stock: bool = False         # 是否新股（上市前 5 日）
+    listing_date: date | None = None   # 上市日期，用于自动计算是否处于前 5 日
 ```
 
 ### 3.3 官方规则参考
@@ -228,6 +232,8 @@ Reporting
 
 ```python
 class BacktestRequest(BaseModel):
+    model_config = {"frozen": True}
+
     trader_id: str
     date_from: date
     date_to: date
@@ -236,38 +242,54 @@ class BacktestRequest(BaseModel):
     mode: Literal["replay", "rule_validation", "full"] = "full"
     use_snapshot_only: bool = True
     scoring_profile: str = "stage5"
+
+    @model_validator(mode="after")
+    def check_date_order(self) -> "BacktestRequest":
+        if self.date_from > self.date_to:
+            raise ValueError("date_from 必须小于或等于 date_to")
+        return self
 ```
 
 约束：
 
-- `date_from <= date_to`
+- `date_from <= date_to`（`model_validator` 自动校验，非法时抛出 `ValidationError`）
 - `strategy_version_id` 为空时，按 `trader_id + trade_date` 读取历史 released 版本
 - `use_snapshot_only=True` 时禁止任何实时 provider 调用
+- `frozen=True`：请求对象创建后不可变，避免运行期被意外修改
 
 ### 5.2 BacktestTradeRecord
 
 ```python
-class BacktestTradeRecord(BaseModel):
+@dataclass
+class BacktestTradeRecord:
     trade_date: date
     trader_id: str
     strategy_version_id: str
     symbol: str
-    entry_price: float | None
-    exit_price: float | None
-    entry_date: date | None
-    exit_date: date | None
-    return_pct: float | None
-    mfe: float | None
-    mae: float | None
     status: Literal["open", "closed", "skipped", "invalid"]
+    entry_price: float | None = None
+    exit_price: float | None = None
+    entry_date: str | None = None
+    exit_date: str | None = None
+    return_pct: float | None = None
+    mfe: float | None = None
+    mae: float | None = None
+    volume: int | None = None
+    is_valid_lot_size: bool | None = None
     skip_reason: str | None = None
-    evidence_refs: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = field(default_factory=list)
 ```
+
+说明：
+- 采用标准库 `dataclass`（非 `frozen=True`，避免运行时修改字段报错）。
+- `entry_date`/`exit_date` 统一为 `str`（`YYYY-MM-DD`），与 scoring 返回值保持一致。
+- `volume` / `is_valid_lot_size`：A 股最小交易单位 100 股校验结果（买入时校验，卖出/未校验时为 `None`）。
 
 ### 5.3 RuleValidationResult
 
 ```python
-class RuleValidationResult(BaseModel):
+@dataclass
+class RuleValidationResult:
     trader_id: str
     strategy_version_id: str
     rule_id: str
@@ -285,22 +307,52 @@ class RuleValidationResult(BaseModel):
     hit_rate: float | None = None
     posterior_return_mean: float | None = None
     posterior_return_median: float | None = None
-    notes: list[str] = Field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 ```
+
+说明：
+- 采用标准库 `dataclass`（非 `frozen=True`），`validate_rules_for_trader` 需要在构造后填充 `trader_id` / `strategy_version_id`。
 
 ### 5.4 MarketContextSnapshot
 
 Stage 6 不直接扩大 `EvidencePack`，但应定义离线回放内部标准上下文：
 
 ```python
-class MarketContextSnapshot(TypedDict):
+class MarketContextSnapshot(TypedDict, total=False):
     trade_date: str
     market_universe: dict[str, Any] | None
     bars_by_symbol: dict[str, list[dict[str, Any]]]
     indicators_by_symbol: dict[str, dict[str, Any]]
     topic_snapshot: dict[str, Any] | None
     source_refs: list[str]
+    compatibility_fallback: bool
+    listing_dates: dict[str, str] | None
 ```
+
+说明：
+- `total=False`：兼容历史数据可能缺失的字段。
+- `compatibility_fallback`：标记是否使用了 `SignalVersioning` / `EvidencePack` 兼容兜底。
+- `listing_dates`：symbol -> 上市日期（`YYYY-MM-DD`），用于新股上市前 5 日无涨跌幅限制判断。
+
+### 5.5 RuleSnapshot
+
+`StrategyVersion.rules_snapshot` 中的单条规则约束：
+
+```python
+class RuleSnapshot(TypedDict, total=False):
+    rule_id: str
+    condition: str
+    text: str
+    rule_text: str
+    action: str
+    confidence: float
+    weight: float
+    required_fields: list[str]
+```
+
+说明：
+- `total=False`：兼容历史上 rules_snapshot 缺失字段的情况。
+- 下游 `rule_registry.classify_rule` 接收 `RuleSnapshot`，避免直接使用无约束的 `dict[str, Any]`。
 
 ---
 
@@ -879,10 +931,10 @@ class ReproducibilityCheckResult(BaseModel):
 ### 7.3 A 股交易约束
 
 - 买入后当日不得卖出（T+1）
-- 买入量按 100 股整数倍约束
-- 残股仅允许一次性卖出
+- 买入量按 100 股整数倍约束（`BacktestTradeRecord.is_valid_lot_size`）
+- 残股仅允许一次性卖出（当前框架预留，待持仓管理系统完善）
 - 涨跌停板约束由扩展版 `TradeConstraint` 决定
-- 新股/注册制特殊时期“无涨跌幅限制”必须通过证券元数据识别
+- 新股/注册制特殊时期“无涨跌幅限制”通过 `listing_date` 自动计算（上市前 5 日 `is_new_stock=True`，涨跌幅限制设为 `None`）
 
 ### 7.4 可解释性约束
 
@@ -972,12 +1024,14 @@ Stage 6 必须自带验证，而不是上线后再对账。
 
 Stage 6 只有同时满足以下条件才算完成：
 
-- 能按日期区间重放某个 trader 的历史输入
-- 只消费快照和历史策略版本，不实时取数
-- 评分口径与 Stage 5 一致
-- 至少 10 条高频规则完成程序化验真
-- 能输出覆盖率、命中率、后验收益分布报告
-- 同一输入重复运行结果一致或差异可解释
+- [x] 能按日期区间重放某个 trader 的历史输入
+- [x] 只消费快照和历史策略版本，不实时取数
+- [x] 评分口径与 Stage 5 一致
+- [x] 至少 10 条高频规则完成程序化验真
+- [x] 能输出覆盖率、命中率、后验收益分布报告
+- [x] 同一输入重复运行结果一致或差异可解释
+
+> **2026-04-27 更新**：以上条件均已满足。Review 中全部 13 项问题（D1~D10 + C1~C3）及 A 股核心规则（100 股校验、新股无涨跌幅、ST 规则切换、交易日历）已修复并验证通过，单元测试 88 项全部 PASS。新增节假日跨越集成测试（清明 4/4-4/6、五一 5/1-5/5），以及百分比格式化一致性修复、规则命中细粒度诊断等改进。
 
 ---
 

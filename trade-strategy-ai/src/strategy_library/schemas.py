@@ -37,6 +37,7 @@ class StrategyRecommendation:
     entry_price: float | None = None  # 入场价（可选）
     target_price: float | None = None  # 目标价（可选）
     stop_loss_price: float | None = None  # 止损价（可选）
+    volume: int | None = None  # 建议交易量（股），A股买入需为100的整数倍
     rationale: str | None = None  # 理由（可选）
     evidence_refs: list[str] = field(default_factory=list)  # 证据引用列表
 

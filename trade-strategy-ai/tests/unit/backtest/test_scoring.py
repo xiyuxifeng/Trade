@@ -171,3 +171,38 @@ class TestSTRuleDateSwitching:
             trade_date=date(2026, 7, 6),
         )
         assert constraint.trade_date == date(2026, 7, 6)
+
+    def test_new_stock_within_5_days_no_limit(self):
+        """新股上市前 5 日无涨跌幅限制"""
+        constraint = TradeConstraint(
+            board_type="main",
+            trade_date=date(2026, 4, 1),
+            listing_date=date(2026, 4, 1),
+        )
+        resolved = _resolve_constraint(constraint, "603001.SH")
+        assert resolved.is_new_stock is True
+        assert resolved.limit_up_pct is None
+        assert resolved.limit_down_pct is None
+
+    def test_new_stock_after_5_days_has_limit(self):
+        """新股上市后第 5 日起恢复涨跌幅限制"""
+        constraint = TradeConstraint(
+            board_type="main",
+            trade_date=date(2026, 4, 6),  # 上市 5 天后
+            listing_date=date(2026, 4, 1),
+        )
+        resolved = _resolve_constraint(constraint, "603001.SH")
+        assert resolved.is_new_stock is False
+        assert resolved.limit_up_pct == 0.10
+        assert resolved.limit_down_pct == 0.10
+
+    def test_explicit_new_stock_flag(self):
+        """显式设置 is_new_stock=True 时无涨跌幅限制"""
+        constraint = TradeConstraint(
+            board_type="main",
+            is_new_stock=True,
+        )
+        resolved = _resolve_constraint(constraint, "603001.SH")
+        assert resolved.is_new_stock is True
+        assert resolved.limit_up_pct is None
+        assert resolved.limit_down_pct is None

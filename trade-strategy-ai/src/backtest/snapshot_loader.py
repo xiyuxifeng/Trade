@@ -9,10 +9,13 @@
 
 from __future__ import annotations
 
+import inspect
+import warnings
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.backtest.schemas import BacktestRequest
+if TYPE_CHECKING:
+    from src.backtest.schemas import MarketContextSnapshot
 
 
 class SnapshotLoader:
@@ -40,9 +43,18 @@ class SnapshotLoader:
         self.use_evidence_pack_fallback = use_evidence_pack_fallback
         self.use_snapshot_only = use_snapshot_only
 
+    async def _load_snapshot(self, trade_date: date, slot: str) -> Any:
+        """兼容同步/异步 snapshot_service.load 调用。"""
+        if self.snapshot_service is None:
+            return None
+        loader = self.snapshot_service.load
+        if inspect.iscoroutinefunction(loader):
+            return await loader(trade_date.isoformat(), slot=slot)
+        return loader(trade_date.isoformat(), slot=slot)
+
     async def load_market_context(
         self, trade_date: date, symbols: list[str]
-    ) -> dict[str, Any]:
+    ) -> MarketContextSnapshot:
         """加载市场上下文快照。
 
         加载优先级：
@@ -63,47 +75,63 @@ class SnapshotLoader:
         # 默认值（snapshot_service 为 None 时使用）
         bars_by_symbol: dict[str, list[dict]] = {}
         indicators_by_symbol: dict[str, dict[str, Any]] = {}
+        listing_dates: dict[str, str] = {}
 
         # 尝试加载 market_universe 快照
         market_universe = None
         if self.snapshot_service is not None:
             try:
-                market_universe = await self.snapshot_service.load(
-                    trade_date.isoformat(), slot="market_universe"
-                )
+                market_universe = await self._load_snapshot(trade_date, "market_universe")
             except Exception:
                 market_universe = None
 
             # 尝试加载 ohlcv_1d bars
-            bars_by_symbol: dict[str, list[dict]] = {}
+            bars_by_symbol = {}
             try:
-                bars_data = await self.snapshot_service.load(
-                    trade_date.isoformat(), slot="ohlcv_1d"
-                )
+                bars_data = await self._load_snapshot(trade_date, "ohlcv_1d")
                 if bars_data and isinstance(bars_data, list):
+                    symbol_filter = set(symbols) if symbols else None
                     # 按 symbol 归类
                     for bar in bars_data:
                         symbol = bar.get("symbol") or bar.get("code") or ""
-                        if symbol:
+                        if symbol and (symbol_filter is None or symbol in symbol_filter):
                             if symbol not in bars_by_symbol:
                                 bars_by_symbol[symbol] = []
                             bars_by_symbol[symbol].append(bar)
+                    # 按日期升序排列，保证 _calc_t1_return 取 i+1 一定是 T+1 次日
+                    for symbol in bars_by_symbol:
+                        bars_by_symbol[symbol].sort(
+                            key=lambda b: str(b.get("date") or b.get("Date") or ""),
+                        )
             except Exception:
                 bars_by_symbol = {}
 
             # 尝试加载 indicators
-            indicators_by_symbol: dict[str, dict[str, Any]] = {}
+            indicators_by_symbol = {}
             try:
-                indicators_data = await self.snapshot_service.load(
-                    trade_date.isoformat(), slot="indicators"
-                )
+                indicators_data = await self._load_snapshot(trade_date, "indicators")
                 if indicators_data and isinstance(indicators_data, dict):
+                    symbol_filter = set(symbols) if symbols else None
                     # indicators_data 格式: {"000001.SZ": {"rsi": 65.0, "ma5": 10.2}, ...}
                     for symbol, ind_fields in indicators_data.items():
-                        if isinstance(ind_fields, dict):
+                        if isinstance(ind_fields, dict) and (
+                            symbol_filter is None or str(symbol) in symbol_filter
+                        ):
                             indicators_by_symbol[str(symbol)] = ind_fields
             except Exception:
                 indicators_by_symbol = {}
+
+            # 尝试加载 listing_dates（用于新股判断）
+            listing_dates = {}
+            try:
+                listing_data = await self._load_snapshot(trade_date, "listing_dates")
+                if listing_data and isinstance(listing_data, dict):
+                    symbol_filter = set(symbols) if symbols else None
+                    for symbol, listing_date in listing_data.items():
+                        if symbol_filter is None or str(symbol) in symbol_filter:
+                            listing_dates[str(symbol)] = str(listing_date)
+            except Exception:
+                listing_dates = {}
 
         # 如果快照缺失且启用兜底，标记 compatibility_fallback
         if market_universe is None and self.use_evidence_pack_fallback:
@@ -111,8 +139,8 @@ class SnapshotLoader:
             # 兜底：从 EvidencePack 补洞（未来 NTL-S6-006 完整实现）
             market_universe = None
 
-        # 构建返回结构
-        result: dict[str, Any] = {
+        # 构建返回结构（符合 MarketContextSnapshot 类型约束）
+        result: MarketContextSnapshot = {
             "trade_date": trade_date.isoformat(),
             "bars_by_symbol": bars_by_symbol,
             "indicators_by_symbol": indicators_by_symbol,
@@ -120,6 +148,7 @@ class SnapshotLoader:
             "topic_snapshot": None,
             "source_refs": [],
             "compatibility_fallback": compatibility_fallback,
+            "listing_dates": listing_dates,
         }
 
         return result
@@ -151,4 +180,9 @@ class SnapshotLoader:
             # 取最新发布的版本
             return sorted(versions, key=lambda v: v.released_at or date.min, reverse=True)[0]
         except Exception:
+            warnings.warn(
+                f"SnapshotLoader.load_version_for_date failed for trader={trader_id}, date={trade_date}: "
+                "strategy_repo raised an exception. Returning None.",
+                UserWarning,
+            )
             return None

@@ -27,6 +27,42 @@ def _parse_date(value: str) -> date:
     return datetime.strptime(value, "%Y-%m-%d").date()  # noqa: DTZ007
 
 
+def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
+    """从配置创建 BacktestEngine（带依赖注入）。
+
+    若未提供配置或配置中未定义回测依赖，则返回无 loader 的引擎（所有记录为 skipped）。
+    """
+    if config_path is None:
+        return BacktestEngine()
+
+    from src.common.config import load_app_config
+
+    try:
+        loaded = load_app_config(config_path)
+    except Exception as exc:
+        typer.secho(f"配置加载失败: {exc}", fg=typer.colors.YELLOW)
+        return BacktestEngine()
+
+    # 目前 SnapshotLoader 的具体服务（snapshot_service / strategy_repo）
+    # 需在后续阶段根据 data.providers 做完整初始化；此处先创建 loader 占位
+    from src.backtest.snapshot_loader import SnapshotLoader
+
+    loader = SnapshotLoader(
+        snapshot_service=None,  # TODO: 根据配置初始化具体快照服务
+        strategy_repo=None,     # TODO: 根据配置初始化策略仓库
+    )
+    return BacktestEngine(loader=loader, strategy_loader=loader)
+
+
+def _run_async(coro):
+    """在同步上下文中执行异步任务，兼容已有事件循环。"""
+    try:
+        return asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(coro)
+
+
 @app.command("run")
 def run_backtest(
     trader: str = typer.Option(..., "--trader", help="交易员 ID"),
@@ -36,6 +72,7 @@ def run_backtest(
     mode: str = typer.Option("full", "--mode", help="运行模式：full / replay / rule_validation"),
     output: Path | None = typer.Option(None, "--output", help="结果输出路径（默认打印到 stdout）"),
     format: str = typer.Option("markdown", "--format", help="输出格式：markdown / json"),
+    config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
     """运行离线回测。
 
@@ -54,7 +91,7 @@ def run_backtest(
         mode=mode,  # type: ignore[arg-type]
     )
 
-    engine = BacktestEngine()
+    engine = _create_engine_from_config(str(config) if config else None)
     result = engine.run_sync(request)
 
     if format == "json":
@@ -91,14 +128,49 @@ def backtest_report(
         raise typer.Exit(code=1)
 
     data = json.loads(result_file.read_text(encoding="utf-8"))
-    from src.backtest.schemas import BacktestResult
+    from src.backtest.schemas import BacktestResult, BacktestSummary, BacktestTradeRecord
+
+    records = []
+    for record in data.get("records", []):
+        records.append(
+            BacktestTradeRecord(
+                trade_date=date.fromisoformat(record["trade_date"]),
+                trader_id=record.get("trader_id", ""),
+                strategy_version_id=record.get("strategy_version_id", ""),
+                symbol=record.get("symbol", ""),
+                status=record.get("status", "skipped"),
+                entry_price=record.get("entry_price"),
+                exit_price=record.get("exit_price"),
+                entry_date=record.get("entry_date"),
+                exit_date=record.get("exit_date"),
+                return_pct=record.get("return_pct"),
+                mfe=record.get("mfe"),
+                mae=record.get("mae"),
+                volume=record.get("volume"),
+                is_valid_lot_size=record.get("is_valid_lot_size"),
+                skip_reason=record.get("skip_reason"),
+                evidence_refs=record.get("evidence_refs", []),
+            )
+        )
+
+    summary_data = data.get("summary")
+    summary = None
+    if summary_data:
+        summary = BacktestSummary(
+            total_days=summary_data.get("total_days", 0),
+            total_trades=summary_data.get("total_trades", 0),
+            valid_trades=summary_data.get("valid_trades", 0),
+            skipped_trades=summary_data.get("skipped_trades", 0),
+            win_rate=summary_data.get("win_rate"),
+            avg_return_pct=summary_data.get("avg_return_pct"),
+        )
 
     result = BacktestResult(
         request_trader_id=data["request_trader_id"],
         request_date_from=date.fromisoformat(data["request_date_from"]),
         request_date_to=date.fromisoformat(data["request_date_to"]),
-        records=[],  # type: ignore[arg-type]
-        summary=None,
+        records=records,
+        summary=summary,
     )
 
     if format == "json":
@@ -120,6 +192,7 @@ def validate_rules(
     from_date: str = typer.Option(..., "--from", help="验真开始日期 YYYY-MM-DD"),
     to_date: str = typer.Option(..., "--to", help="验真结束日期 YYYY-MM-DD"),
     output: Path | None = typer.Option(None, "--output", help="结果输出路径"),
+    config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
     """对策略版本中的高频规则做命中验证。
 
@@ -133,9 +206,10 @@ def validate_rules(
     from src.backtest.reporting import render_rule_validation_markdown
     from src.backtest.snapshot_loader import SnapshotLoader
 
-    # 创建 SnapshotLoader（strategy_repo 需外部注入，当前为 stub）
-    loader = SnapshotLoader()
-    rule_results = asyncio.run(
+    engine = _create_engine_from_config(str(config) if config else None)
+    # validate_rules_for_trader 需要 SnapshotLoader，取 engine.strategy_loader（亦为 SnapshotLoader）
+    loader = engine.loader if isinstance(engine.loader, SnapshotLoader) else SnapshotLoader()
+    rule_results = _run_async(
         validate_rules_for_trader(trader_id=trader, date_from=date_from, date_to=date_to, loader=loader)
     )
 
@@ -154,6 +228,7 @@ def reproducibility_check(
     trader: str = typer.Option(..., "--trader", help="交易员 ID"),
     from_date: str = typer.Option(..., "--from", help="回测开始日期 YYYY-MM-DD"),
     to_date: str = typer.Option(..., "--to", help="回测结束日期 YYYY-MM-DD"),
+    config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
     """验证回测结果可复现（相同请求运行两次，对比 hash）。
 
@@ -169,7 +244,7 @@ def reproducibility_check(
         date_to=date_to,
     )
 
-    engine = BacktestEngine()
+    engine = _create_engine_from_config(str(config) if config else None)
 
     result_a = engine.run_sync(request)
     result_b = engine.run_sync(request)

@@ -75,7 +75,7 @@ pytest tests/unit/strategy_library/test_repository.py tests/unit/strategy_librar
 - Create: `src/backtest/schemas.py`
 - Test: `tests/unit/backtest/test_schemas.py`
 
-- [ ] **Step 1: 写失败测试，定义请求与结果契约**
+- [x] **Step 1: 写失败测试，定义请求与结果契约**
 
 ```python
 def test_backtest_request_defaults():
@@ -98,12 +98,12 @@ def test_backtest_trade_record_fields():
     assert record.skip_reason is None
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/unit/backtest/test_schemas.py -q`
 Expected: FAIL，模块或类型不存在
 
-- [ ] **Step 3: 实现最小 schema**
+- [x] **Step 3: 实现最小 schema**
 
 ```python
 class BacktestRequest(BaseModel):
@@ -117,12 +117,12 @@ class BacktestRequest(BaseModel):
     scoring_profile: str = "stage5"
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_schemas.py -q`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/backtest/__init__.py src/backtest/schemas.py tests/unit/backtest/test_schemas.py
@@ -138,7 +138,7 @@ git commit -m "feat: add backtest schemas"
 - Create: `src/backtest/strategy_replayer.py`
 - Test: `tests/unit/backtest/test_execution.py`
 
-- [ ] **Step 1: 写失败测试，覆盖 recommendation-only 重放**
+- [x] **Step 1: 写失败测试，覆盖 recommendation-only 重放**
 
 ```python
 def test_replay_candidates_from_strategy_version():
@@ -157,12 +157,12 @@ def test_replay_candidates_from_strategy_version():
     assert result[0]["symbol"] == "000001.SZ"
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/unit/backtest/test_execution.py::test_replay_candidates_from_strategy_version -q`
 Expected: FAIL
 
-- [ ] **Step 3: 实现最小重放器与执行约束骨架**
+- [x] **Step 3: 实现最小重放器与执行约束骨架**
 
 ```python
 def replay_candidates(version: StrategyVersion, market_context: dict[str, Any]) -> list[dict[str, Any]]:
@@ -179,7 +179,7 @@ def replay_candidates(version: StrategyVersion, market_context: dict[str, Any]) 
     ]
 ```
 
-- [ ] **Step 4: 为历史兼容补洞写失败测试**
+- [x] **Step 4: 为历史兼容补洞写失败测试**
 
 ```python
 def test_detect_missing_rules_snapshot_as_compatibility_gap():
@@ -195,7 +195,7 @@ def test_detect_missing_rules_snapshot_as_compatibility_gap():
     assert result == "missing_or_legacy_gap"
 ```
 
-- [ ] **Step 5: 实现 gap 分类逻辑**
+- [x] **Step 5: 实现 gap 分类逻辑**
 
 ```python
 def classify_rules_snapshot_gap(version: StrategyVersion) -> str | None:
@@ -204,12 +204,12 @@ def classify_rules_snapshot_gap(version: StrategyVersion) -> str | None:
     return "missing_or_legacy_gap"
 ```
 
-- [ ] **Step 6: 运行测试确认通过**
+- [x] **Step 6: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_execution.py -q`
 Expected: PASS
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add src/backtest/execution.py src/backtest/strategy_replayer.py tests/unit/backtest/test_execution.py
@@ -224,7 +224,7 @@ git commit -m "feat: add backtest execution scaffolding"
 - Create: `src/backtest/scoring.py`
 - Test: `tests/unit/backtest/test_scoring.py`
 
-- [ ] **Step 1: 写失败测试，要求复用 Stage 5 scoring**
+- [x] **Step 1: 写失败测试，要求复用 Stage 5 scoring**
 
 ```python
 def test_score_backtest_trade_uses_stage5_metrics():
@@ -241,12 +241,12 @@ def test_score_backtest_trade_uses_stage5_metrics():
     assert result["return_pct"] == pytest.approx(0.06)
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `pytest tests/unit/backtest/test_scoring.py -q`
 Expected: FAIL
 
-- [ ] **Step 3: 实现适配层，不复制公式**
+- [x] **Step 3: 实现适配层，不复制公式**
 
 > **注意（2026-04-26）：** `compute_mfe_mae_return` 实际返回 7 个值 `(mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)`，不是 5 个值。实现时需正确解包。
 
@@ -266,19 +266,19 @@ def score_backtest_trade(...):
     }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_scoring.py -q`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add src/backtest/scoring.py tests/unit/backtest/test_scoring.py
 git commit -m "feat: add shared backtest scoring adapter"
 ```
 
-- [ ] **Step 6（新增，2026-04-26）: 补充 ST 规则日期切换逻辑**
+- [x] **Step 6（新增，2026-04-26）: 补充 ST 规则日期切换逻辑**
 
 > **来源：** Review 发现 `compute_mfe_mae_return` 当前 ST 涨跌幅为静态 5%，但上交所 2026-07-06 起已将沪市主板风险警示股票涨跌幅调整为 10%，必须在 scoring adapter 层支持"按市场 + 生效日期"的规则切换。
 
@@ -318,7 +318,7 @@ def _get_limit_pct(board_type: str, trade_date: date | None = None) -> tuple[flo
 - Create: `src/backtest/engine.py`
 - Test: `tests/unit/backtest/test_engine.py`
 
-- [ ] **Step 1: 写失败测试，串联 loader/replayer/scoring**
+- [x] **Step 1: 写失败测试，串联 loader/replayer/scoring**
 
 ```python
 @pytest.mark.asyncio
@@ -330,7 +330,7 @@ async def test_engine_runs_single_day_backtest():
     assert result.summary.total_days == 1
 ```
 
-- [ ] **Step 2: 实现最小引擎编排**
+- [x] **Step 2: 实现最小引擎编排**
 
 ```python
 class BacktestEngine:
@@ -341,12 +341,12 @@ class BacktestEngine:
         return BacktestResult(...)
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_engine.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/engine.py tests/unit/backtest/test_engine.py
@@ -361,7 +361,7 @@ git commit -m "feat: add backtest engine"
 - Create: `src/backtest/snapshot_loader.py`
 - Test: `tests/unit/backtest/test_snapshot_loader.py`
 
-- [ ] **Step 1: 写失败测试，优先读取 `market_universe` 与标准化 bars**
+- [x] **Step 1: 写失败测试，优先读取 `market_universe` 与标准化 bars**
 
 ```python
 def test_snapshot_loader_reads_market_universe_and_bars(tmp_path):
@@ -370,7 +370,7 @@ def test_snapshot_loader_reads_market_universe_and_bars(tmp_path):
     assert "bars_by_symbol" in context
 ```
 
-- [ ] **Step 2: 实现最小读取顺序**
+- [x] **Step 2: 实现最小读取顺序**
 
 ```python
 class SnapshotLoader:
@@ -380,7 +380,7 @@ class SnapshotLoader:
         return {...}
 ```
 
-- [ ] **Step 3: 为兼容兜底写失败测试**
+- [x] **Step 3: 为兼容兜底写失败测试**
 
 ```python
 def test_snapshot_loader_marks_compatibility_fallback_when_using_evidence_pack():
@@ -388,18 +388,18 @@ def test_snapshot_loader_marks_compatibility_fallback_when_using_evidence_pack()
     assert context["compatibility_fallback"] is True
 ```
 
-- [ ] **Step 4: 实现兼容标记**
+- [x] **Step 4: 实现兼容标记**
 
 ```python
 context["compatibility_fallback"] = used_evidence_pack or used_signal_version
 ```
 
-- [ ] **Step 5: 运行测试确认通过**
+- [x] **Step 5: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_snapshot_loader.py -q`
 Expected: PASS
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add src/backtest/snapshot_loader.py tests/unit/backtest/test_snapshot_loader.py
@@ -415,7 +415,7 @@ git commit -m "feat: add snapshot-only market context loader"
 - Modify: `src/backtest/scoring.py`
 - Test: `tests/unit/backtest/test_scoring.py`
 
-- [ ] **Step 1: 写失败测试，校验线上线下同输入同结果**
+- [x] **Step 1: 写失败测试，校验线上线下同输入同结果**
 
 ```python
 def test_online_offline_scoring_same_case_same_result():
@@ -425,7 +425,7 @@ def test_online_offline_scoring_same_case_same_result():
     assert offline["return_pct"] == online[2]
 ```
 
-- [ ] **Step 2: 导出公共 scoring 接口或工具**
+- [x] **Step 2: 导出公共 scoring 接口或工具**
 
 ```python
 __all__ = [
@@ -434,12 +434,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_scoring.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/evaluation/__init__.py src/backtest/scoring.py tests/unit/backtest/test_scoring.py
@@ -454,7 +454,7 @@ git commit -m "refactor: align backtest scoring with evaluation core"
 - Create: `src/backtest/reporting.py`
 - Test: `tests/unit/backtest/test_reporting.py`
 
-- [ ] **Step 1: 写失败测试，要求输出 markdown 摘要**
+- [x] **Step 1: 写失败测试，要求输出 markdown 摘要**
 
 ```python
 def test_render_backtest_markdown_summary():
@@ -463,19 +463,19 @@ def test_render_backtest_markdown_summary():
     assert "样本覆盖天数" in report
 ```
 
-- [ ] **Step 2: 实现最小报告渲染**
+- [x] **Step 2: 实现最小报告渲染**
 
 ```python
 def render_backtest_markdown(result: BacktestResult) -> str:
     return f"# Backtest Report\n\n- 样本覆盖天数: {result.summary.total_days}\n"
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_reporting.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/reporting.py tests/unit/backtest/test_reporting.py
@@ -490,13 +490,13 @@ git commit -m "feat: add backtest reporting"
 - Modify: `cli/backtest.py`
 - Modify: `cli/main.py`
 
-- [ ] **Step 1: 写失败测试或命令样例，锁定 CLI 形态**
+- [x] **Step 1: 写失败测试或命令样例，锁定 CLI 形态**
 
 ```python
 python -m cli.main backtest run --trader trader_a --from 2026-04-01 --to 2026-04-10
 ```
 
-- [ ] **Step 2: 在 `cli/backtest.py` 增加 Typer 命令**
+- [x] **Step 2: 在 `cli/backtest.py` 增加 Typer 命令**
 
 ```python
 app = typer.Typer(add_completion=False)
@@ -506,19 +506,19 @@ def run_backtest(...):
     ...
 ```
 
-- [ ] **Step 3: 在 `cli/main.py` 注册子应用**
+- [x] **Step 3: 在 `cli/main.py` 注册子应用**
 
 ```python
 from cli.backtest import app as backtest_app
 app.add_typer(backtest_app, name="backtest")
 ```
 
-- [ ] **Step 4: 手工运行命令校验**
+- [x] **Step 4: 手工运行命令校验**
 
 Run: `python -m cli.main backtest --help`
 Expected: 显示 `run / validate-rules / reproducibility-check`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add cli/backtest.py cli/main.py
@@ -533,7 +533,7 @@ git commit -m "feat: add stage6 backtest cli"
 - Create: `src/backtest/rule_registry.py`
 - Test: `tests/unit/backtest/test_rule_registry.py`
 
-- [ ] **Step 1: 写失败测试，分类 programmable level**
+- [x] **Step 1: 写失败测试，分类 programmable level**
 
 ```python
 def test_rule_registry_classifies_rule():
@@ -541,7 +541,7 @@ def test_rule_registry_classifies_rule():
     assert meta.programmatic_level == "fully_programmable"
 ```
 
-- [ ] **Step 2: 实现最小分类器**
+- [x] **Step 2: 实现最小分类器**
 
 ```python
 def classify_rule(rule: dict[str, Any]) -> RuleMeta:
@@ -550,12 +550,12 @@ def classify_rule(rule: dict[str, Any]) -> RuleMeta:
     return RuleMeta(..., programmatic_level="unsupported")
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_rule_registry.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/rule_registry.py tests/unit/backtest/test_rule_registry.py
@@ -571,7 +571,7 @@ git commit -m "feat: add rule registry for stage6 validation"
 - Modify: `src/backtest/rule_registry.py`
 - Test: `tests/unit/backtest/test_engine.py`
 
-- [ ] **Step 1: 写失败测试，验证单条规则 hit/miss 统计**
+- [x] **Step 1: 写失败测试，验证单条规则 hit/miss 统计**
 
 ```python
 def test_validate_single_rule_hit_count():
@@ -580,19 +580,19 @@ def test_validate_single_rule_hit_count():
     assert result.sample_count == len(contexts)
 ```
 
-- [ ] **Step 2: 实现最小 validator**
+- [x] **Step 2: 实现最小 validator**
 
 ```python
 def validate_rule_hits(rule_meta: RuleMeta, contexts: list[MarketContextSnapshot]) -> RuleValidationResult:
     ...
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_engine.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/engine.py src/backtest/rule_registry.py tests/unit/backtest/test_engine.py
@@ -607,7 +607,7 @@ git commit -m "feat: add high-frequency rule validation"
 - Modify: `src/backtest/reporting.py`
 - Test: `tests/unit/backtest/test_reporting.py`
 
-- [ ] **Step 1: 写失败测试，输出覆盖率和后验收益**
+- [x] **Step 1: 写失败测试，输出覆盖率和后验收益**
 
 ```python
 def test_render_rule_validation_summary():
@@ -616,19 +616,19 @@ def test_render_rule_validation_summary():
     assert "后验收益" in report
 ```
 
-- [ ] **Step 2: 实现规则报告渲染**
+- [x] **Step 2: 实现规则报告渲染**
 
 ```python
 def render_rule_validation_markdown(results: list[RuleValidationResult]) -> str:
     ...
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_reporting.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/reporting.py tests/unit/backtest/test_reporting.py
@@ -644,7 +644,7 @@ git commit -m "feat: add rule validation reporting"
 - Modify: `docs/Project.md`
 - Modify: `docs/TaskList.md`
 
-- [ ] **Step 1: 在旧 agent 目录加历史说明**
+- [x] **Step 1: 在旧 agent 目录加历史说明**
 
 ```python
 """历史 backtest agent 目录。
@@ -654,14 +654,14 @@ Stage 6 起，回测主路径统一迁移到 src/backtest/。
 """
 ```
 
-- [ ] **Step 2: 更新文档说明**
+- [x] **Step 2: 更新文档说明**
 
 ```md
 - 回测主路径：`src/backtest/`
 - `src/agents/backtest_agent/`：历史目录，不再扩展
 ```
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add src/agents/backtest_agent/__init__.py docs/Project.md docs/TaskList.md
@@ -676,7 +676,7 @@ git commit -m "docs: switch backtest main path to src/backtest"
 - Create: `src/backtest/reproducibility.py`
 - Test: `tests/unit/backtest/test_reproducibility.py`
 
-- [ ] **Step 1: 写失败测试，重复运行结果 hash 一致**
+- [x] **Step 1: 写失败测试，重复运行结果 hash 一致**
 
 ```python
 def test_reproducibility_hash_same_request():
@@ -684,7 +684,7 @@ def test_reproducibility_hash_same_request():
     assert result.is_equal is True
 ```
 
-- [ ] **Step 2: 实现最小 hash 对比**
+- [x] **Step 2: 实现最小 hash 对比**
 
 ```python
 def fingerprint_result(result: BacktestResult) -> str:
@@ -692,12 +692,12 @@ def fingerprint_result(result: BacktestResult) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `pytest tests/unit/backtest/test_reproducibility.py -q`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add src/backtest/reproducibility.py tests/unit/backtest/test_reproducibility.py

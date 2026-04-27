@@ -8,18 +8,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.strategy_library.schemas import StrategyVersion
 
+if TYPE_CHECKING:
+    from src.backtest.schemas import MarketContextSnapshot
+
 
 def replay_candidates(
-    version: StrategyVersion, market_context: dict[str, Any]
+    version: StrategyVersion, market_context: MarketContextSnapshot | None
 ) -> list[dict[str, Any]]:
     """从策略版本重放出候选决策列表。
 
     将 StrategyVersion.recommendations 转换为回测内部候选对象，
     不做信号生成或修改，只做格式转换。
+
+    注意：market_context 参数目前未直接使用（当前实现仅做格式转换，
+    不依赖快照中的市场数据）。保留此参数是为了未来扩展时无需修改调用方签名。
 
     Args:
         version: 策略版本
@@ -27,7 +33,7 @@ def replay_candidates(
 
     Returns:
         候选决策列表，每项包含 symbol、decision、confidence、
-        entry_price、target_price、stop_loss_price
+        entry_price、target_price、stop_loss_price、volume
     """
     return [
         {
@@ -37,6 +43,7 @@ def replay_candidates(
             "entry_price": rec.entry_price,
             "target_price": rec.target_price,
             "stop_loss_price": rec.stop_loss_price,
+            "volume": rec.volume,
         }
         for rec in version.recommendations
     ]

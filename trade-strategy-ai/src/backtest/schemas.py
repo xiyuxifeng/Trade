@@ -1,15 +1,27 @@
-"""NTL-S6-001: 回测 schema 定义"""
+"""NTL-S6-001: 回测 schema 定义
+
+包含：
+- BacktestRequest（Pydantic BaseModel，带字段校验）
+- BacktestTradeRecord / BacktestSummary / BacktestResult（dataclass）
+- RuleValidationResult（dataclass）
+- MarketContextSnapshot（TypedDict）：市场上下文快照类型约束
+- RuleSnapshot（TypedDict）：规则快照类型约束
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal
+from typing import Any, Literal, TypedDict
+
+from pydantic import BaseModel, Field, model_validator
 
 
-@dataclass(frozen=True)
-class BacktestRequest:
-    """回测请求参数。
+# ---------------------------------------------------------------------------
+# Pydantic 请求模型（C2：支持自动校验和 JSON 序列化）
+# ---------------------------------------------------------------------------
+class BacktestRequest(BaseModel):
+    """回测请求参数（Pydantic BaseModel，支持字段校验）。
 
     属性：
         trader_id: 交易员 ID
@@ -25,17 +37,64 @@ class BacktestRequest:
         scoring_profile: 评分配置名（默认 stage5）
     """
 
+    model_config = {"frozen": True}
+
     trader_id: str
     date_from: date
     date_to: date
     strategy_version_id: str | None = None
-    symbols: list[str] = field(default_factory=list)
+    symbols: list[str] = Field(default_factory=list)
     mode: Literal["full", "replay", "rule_validation"] = "full"
     use_snapshot_only: bool = True
     scoring_profile: str = "stage5"
 
+    @model_validator(mode="after")
+    def check_date_order(self) -> "BacktestRequest":
+        """校验 date_from <= date_to"""
+        if self.date_from > self.date_to:
+            raise ValueError("date_from 必须小于或等于 date_to")
+        return self
 
-@dataclass(frozen=True)
+
+# ---------------------------------------------------------------------------
+# TypedDict：上游数据结构约束（C1 / C3）
+# ---------------------------------------------------------------------------
+class MarketContextSnapshot(TypedDict, total=False):
+    """市场上下文快照（由 SnapshotLoader.load_market_context 返回）。
+
+    属性说明见 snapshot_loader.py；此 TypedDict 为下游模块提供类型约束。
+    """
+
+    trade_date: str  # YYYY-MM-DD
+    bars_by_symbol: dict[str, list[dict[str, Any]]]
+    indicators_by_symbol: dict[str, dict[str, Any]]
+    market_universe: Any
+    topic_snapshot: Any
+    source_refs: list[str]
+    compatibility_fallback: bool
+    listing_dates: dict[str, str]  # symbol -> YYYY-MM-DD，用于新股判断
+
+
+class RuleSnapshot(TypedDict, total=False):
+    """单条规则快照（StrategyVersion.rules_snapshot 中的元素）。
+
+    C3: 将松散的 list[dict] 约束为包含必要字段的 TypedDict。
+    """
+
+    rule_id: str
+    condition: str
+    text: str
+    rule_text: str
+    action: str
+    confidence: float
+    weight: float
+    required_fields: list[str]
+
+
+# ---------------------------------------------------------------------------
+# dataclass：回测核心数据结构
+# ---------------------------------------------------------------------------
+@dataclass
 class BacktestTradeRecord:
     """回测交易记录。
 
@@ -46,11 +105,16 @@ class BacktestTradeRecord:
         symbol: 标的代码
         entry_price: 入场价
         exit_price: 出场价
-        entry_date: 入场日期
-        exit_date: 出场日期
+        entry_date: 入场日期（YYYY-MM-DD）
+        exit_date: 出场日期（YYYY-MM-DD）
         return_pct: 收益率（比例口径，0.01=1%）
         mfe: 最大有利偏移（Max Favorable Excursion）
         mae: 最大不利偏移（Max Adverse Excursion）
+        volume: 交易量（股）
+        is_valid_lot_size: 买入交易量是否符合 100 股整数倍
+            - True: 符合 A 股最小交易单位
+            - False: 不符合（如 150 股）
+            - None: 未校验或卖出操作
         status: 交易状态
             - "open": 持仓中
             - "closed": 已平仓
@@ -67,16 +131,18 @@ class BacktestTradeRecord:
     status: Literal["open", "closed", "skipped", "invalid"]
     entry_price: float | None = None
     exit_price: float | None = None
-    entry_date: date | None = None
-    exit_date: date | None = None
+    entry_date: str | None = None
+    exit_date: str | None = None
     return_pct: float | None = None
     mfe: float | None = None
     mae: float | None = None
+    volume: int | None = None
+    is_valid_lot_size: bool | None = None
     skip_reason: str | None = None
     evidence_refs: list[str] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
+@dataclass
 class BacktestSummary:
     """回测汇总统计。
 
@@ -97,7 +163,7 @@ class BacktestSummary:
     avg_return_pct: float | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class BacktestResult:
     """回测结果聚合。
 
@@ -116,7 +182,7 @@ class BacktestResult:
     summary: BacktestSummary | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class RuleValidationResult:
     """单条规则验真结果。
 

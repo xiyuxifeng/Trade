@@ -11,11 +11,14 @@ from datetime import date
 from typing import Any
 
 from src.common.config import AppConfig
+from src.common.logger import get_logger
 from src.market_universe.hot_topics_builder import HotTopicsBuilder
 from src.market_universe.constituents_resolver import ConstituentsResolver
 from src.market_universe.strong_symbols_selector import StrongSymbolsSelector
 from src.market_universe.snapshot_service import SnapshotService
 from src.market_universe.schemas import MarketUniverse
+
+logger = get_logger(__name__)
 
 
 def _build_provider(config: AppConfig):
@@ -65,6 +68,11 @@ async def handle_hot_topics_snapshot(
 
     # 如果没有 provider，跳过
     if provider is None:
+        logger.warning(
+            "热点快照跳过: date=%s, slot=%s, 原因=kaipan配置缺失",
+            trade_date_str,
+            slot,
+        )
         return
 
     # 加载已有快照，若存在且非 force 则跳过
@@ -72,11 +80,24 @@ async def handle_hot_topics_snapshot(
     existing = snapshot_service.load(trade_date_str, slot)
     if existing is not None and existing.hot_topics is not None and not force:
         # 已存在，跳过
+        logger.debug("热点快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
     try:
         raw_payload = provider.fetch_hot_topics(trade_date=trade_date, slot=slot)
-    except Exception:  # noqa: BLE001
+        logger.info(
+            "热点快照获取成功: date=%s, slot=%s, topics=%d",
+            trade_date_str,
+            slot,
+            len(raw_payload) if raw_payload else 0,
+        )
+    except Exception as e:
+        logger.warning(
+            "热点快照获取失败: date=%s, slot=%s, error=%s",
+            trade_date_str,
+            slot,
+            e,
+        )
         return
 
     builder = HotTopicsBuilder()
@@ -100,6 +121,12 @@ async def handle_hot_topics_snapshot(
         )
 
     snapshot_service.save(mu)
+    logger.info(
+        "热点快照已保存: date=%s, slot=%s, topics=%d",
+        trade_date_str,
+        slot,
+        len(hot_topics_payload) if hot_topics_payload else 0,
+    )
 
 
 async def handle_topic_constituents_snapshot(
@@ -125,16 +152,34 @@ async def handle_topic_constituents_snapshot(
     provider = _build_provider(config)
 
     if provider is None:
+        logger.warning(
+            "题材成分快照跳过: date=%s, slot=%s, 原因=kaipan配置缺失",
+            trade_date_str,
+            slot,
+        )
         return
 
     snapshot_service = SnapshotService()
     existing = snapshot_service.load(trade_date_str, slot)
     if existing is not None and existing.topic_constituents is not None and not force:
+        logger.debug("题材成分快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
     try:
         raw_payload = provider.fetch_topic_constituents(trade_date=trade_date, slot=slot)
-    except Exception:  # noqa: BLE001
+        logger.info(
+            "题材成分快照获取成功: date=%s, slot=%s, constituents=%d",
+            trade_date_str,
+            slot,
+            len(raw_payload) if raw_payload else 0,
+        )
+    except Exception as e:
+        logger.warning(
+            "题材成分快照获取失败: date=%s, slot=%s, error=%s",
+            trade_date_str,
+            slot,
+            e,
+        )
         return
 
     resolver = ConstituentsResolver()
@@ -157,6 +202,12 @@ async def handle_topic_constituents_snapshot(
         )
 
     snapshot_service.save(mu)
+    logger.info(
+        "题材成分快照已保存: date=%s, slot=%s, constituents=%d",
+        trade_date_str,
+        slot,
+        len(constituents_payload) if constituents_payload else 0,
+    )
 
 
 async def handle_strong_symbols_snapshot(
@@ -182,16 +233,34 @@ async def handle_strong_symbols_snapshot(
     provider = _build_provider(config)
 
     if provider is None:
+        logger.warning(
+            "强势池快照跳过: date=%s, slot=%s, 原因=kaipan配置缺失",
+            trade_date_str,
+            slot,
+        )
         return
 
     snapshot_service = SnapshotService()
     existing = snapshot_service.load(trade_date_str, slot)
     if existing is not None and existing.strong_symbols is not None and not force:
+        logger.debug("强势池快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
     try:
         raw_payload = provider.fetch_strong_symbols(trade_date=trade_date, slot=slot)
-    except Exception:  # noqa: BLE001
+        logger.info(
+            "强势池快照获取成功: date=%s, slot=%s, symbols=%d",
+            trade_date_str,
+            slot,
+            len(raw_payload) if raw_payload else 0,
+        )
+    except Exception as e:
+        logger.warning(
+            "强势池快照获取失败: date=%s, slot=%s, error=%s",
+            trade_date_str,
+            slot,
+            e,
+        )
         return
 
     selector = StrongSymbolsSelector()
@@ -214,3 +283,9 @@ async def handle_strong_symbols_snapshot(
         )
 
     snapshot_service.save(mu)
+    logger.info(
+        "强势池快照已保存: date=%s, slot=%s, symbols=%d",
+        trade_date_str,
+        slot,
+        len(strong_symbols_payload) if strong_symbols_payload else 0,
+    )

@@ -9,12 +9,15 @@ from typing import Any
 from sqlalchemy import select
 
 from src.common.config import AppConfig
+from src.common.logger import get_logger
 from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy_library.schemas import StrategyVersionStatus
 from src.trader_profile.service import default_profiles_path, load_trader_profiles_file
+
+logger = get_logger(__name__)
 
 
 async def handle_build_trader_strategy_version(
@@ -40,25 +43,37 @@ async def handle_build_trader_strategy_version(
     force: bool = details.get("force", False)
 
     if not trader_id or not strategy_date_str:
-        print(f"[strategy_version] trader_id 或 strategy_date 缺失，跳过: {details}")
+        logger.warning(
+            "策略版本构建跳过: trader_id或strategy_date缺失, details=%s",
+            details,
+        )
         return
 
     try:
         strategy_date = date.fromisoformat(strategy_date_str)
     except ValueError:
-        print(f"[strategy_version] 日期格式错误: {strategy_date_str}")
+        logger.warning(
+            "策略版本构建跳过: 日期格式错误, strategy_date=%s",
+            strategy_date_str,
+        )
         return
 
     # 加载 trader profile
     profiles_path = default_profiles_path(base_dir=Path("."), config=config)
     if not profiles_path.exists():
-        print(f"[strategy_version] Trader profiles 文件不存在: {profiles_path}，跳过")
+        logger.warning(
+            "策略版本构建跳过: Trader profiles文件不存在, path=%s",
+            profiles_path,
+        )
         return
 
     profiles_file = load_trader_profiles_file(profiles_path)
     profile = profiles_file.profiles_by_trader.get(trader_id)
     if not profile:
-        print(f"[strategy_version] 未找到 trader {trader_id} 的 profile，跳过")
+        logger.warning(
+            "策略版本构建跳过: 未找到trader的profile, trader=%s",
+            trader_id,
+        )
         return
 
     service = StrategyLibraryService()
@@ -72,7 +87,11 @@ async def handle_build_trader_strategy_version(
                 strategy_date=strategy_date,
             )
             if existing is not None:
-                print(f"[strategy_version] trader={trader_id} date={strategy_date} 已有发布版本，跳过")
+                logger.info(
+                    "策略版本构建跳过（已有发布版本）: trader=%s, date=%s",
+                    trader_id,
+                    strategy_date,
+                )
                 return
 
     # 查询文章证据
@@ -127,7 +146,10 @@ async def handle_build_trader_strategy_version(
             profile=profile,
             source_articles=articles,
         )
-        print(
-            f"[strategy_version] 已构建 trader={trader_id} date={strategy_date} "
-            f"version={draft_version.version_id} recommendations={len(draft_version.recommendations)}"
+        logger.info(
+            "策略版本草稿已构建: trader=%s, date=%s, version=%s, recommendations=%d",
+            trader_id,
+            strategy_date,
+            draft_version.version_id,
+            len(draft_version.recommendations),
         )

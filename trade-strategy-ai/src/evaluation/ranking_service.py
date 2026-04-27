@@ -18,9 +18,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
+from src.common.logger import get_logger
+
 if TYPE_CHECKING:
     from src.evaluation.postmortem_service import PostmortemResult
     from src.evaluation.evidence_pack import EvidencePack
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -201,6 +205,13 @@ class RankingService:
         """
         entry = self._entry_from_postmortem_and_pack(postmortem, evidence_pack)
         record = await self._repo.upsert(entry)
+        logger.info(
+            "Ranking条目已写入: trader=%s, date=%s, symbol=%s, return_pct=%s",
+            entry.trader_id,
+            entry.trade_date,
+            entry.symbol,
+            f"{entry.return_pct:.2%}" if entry.return_pct is not None else "None",
+        )
         return RankingEntry.from_record(record)
 
     async def add_entry_from_metrics(
@@ -270,6 +281,13 @@ class RankingService:
         )
 
         record = await self._repo.upsert(entry)
+        logger.info(
+            "Ranking条目已写入(from_metrics): trader=%s, date=%s, symbol=%s, return_pct=%s",
+            trader_id,
+            trade_date,
+            symbol,
+            f"{return_pct:.2%}" if return_pct is not None else "None",
+        )
         return RankingEntry.from_record(record)
 
     async def generate_ranking(
@@ -333,6 +351,12 @@ class RankingService:
             entry_ids = [e.entry_id for e in all_entries_with_rank]
             ranks = [e.rank for e in all_entries_with_rank]
             await self._repo.update_rank(entry_ids, ranks)
+            logger.info(
+                "Ranking已生成: date=%s, total_entries=%d, traders=%d",
+                trade_date,
+                len(all_entries_with_rank),
+                len(groups),
+            )
 
         # 生成视图
         if view == "flat":

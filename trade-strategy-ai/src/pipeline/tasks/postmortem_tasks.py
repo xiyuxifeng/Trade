@@ -14,11 +14,14 @@ from typing import Any
 from src.common.config import AppConfig
 from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.evaluation.postmortem_service import PostmortemService
+from src.common.logger import get_logger
 from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore, default_memory_path
 from src.llm.client import LLMClient, from_env_and_config
+
+logger = get_logger(__name__)
 
 
 def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
@@ -111,13 +114,19 @@ async def handle_postmortem_analysis(
     symbol: str | None = details.get("symbol")
 
     if not idea_id_str or not trade_date_str:
-        print(f"[postmortem] idea_id 或 trade_date 缺失，跳过: {details}")
+        logger.warning(
+            "Postmortem跳过: idea_id或trade_date缺失, details=%s",
+            details,
+        )
         return
 
     # 加载 DailyReport
     report_path = _daily_report_path(trade_date_str, config)
     if not report_path.exists():
-        print(f"[postmortem] DailyReport 不存在: {report_path}，跳过")
+        logger.warning(
+            "Postmortem跳过: DailyReport不存在, path=%s",
+            report_path,
+        )
         return
 
     report_data = read_json(report_path)
@@ -131,7 +140,10 @@ async def handle_postmortem_analysis(
             break
 
     if trade_idea is None:
-        print(f"[postmortem] 未找到 idea_id={idea_id_str}，跳过")
+        logger.warning(
+            "Postmortem跳过: 未找到idea, idea_id=%s",
+            idea_id_str,
+        )
         return
 
     # 获取当前价格（NTL-S5-009 完成前：用 last_price 代替完整行情）
@@ -247,7 +259,11 @@ async def handle_postmortem_analysis(
         updated.extra = failure_case.extra or {}
         updated.extra["auto_original"] = auto_attribution
         store.update(failure_case.memory_id, updated)
-        print(f"[postmortem] 已更新 failure_case memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
+        logger.info(
+            "Postmortem已更新failure_case: idea_id=%s, attribution=%s",
+            idea_id_str,
+            result.failure_attribution.root_causes,
+        )
     else:
         # Fallback: append 新条目（兼容边界情况）
         memory = TraderMemoryItem(
@@ -270,9 +286,13 @@ async def handle_postmortem_analysis(
             extra={"auto_original": auto_attribution},
         )
         store.append(memory)
-        print(f"[postmortem] 已写入 memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
-
-    print(f"[postmortem] 已写入 memory for idea_id={idea_id_str}, attribution={result.failure_attribution.root_causes}")
+        logger.info(
+            "Postmortem已写入memory: idea_id=%s, attribution=%s, mfe=%.2f, mae=%.2f",
+            idea_id_str,
+            result.failure_attribution.root_causes,
+            result.mfe,
+            result.mae,
+        )
 
 
 def _daily_report_path(trade_date_str: str, config: AppConfig) -> Path:

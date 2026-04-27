@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.common.logger import get_logger
 from src.evaluation.metrics_calculator import (
     TradeConstraint,
     compute_mfe_mae_return,
 )
+
+logger = get_logger(__name__)
 
 
 def score_backtest_trade(
@@ -43,6 +46,14 @@ def score_backtest_trade(
     Returns:
         包含 mfe/mae/return_pct/exit_triggered/exit_date/halted_dates/eval_date 的字典
     """
+    logger.debug(
+        "评分输入: symbol=%s, entry_price=%.2f, entry_date=%s, target=%.2f, stop_loss=%.2f",
+        symbol,
+        entry_price,
+        entry_date,
+        target_price,
+        stop_loss_price,
+    )
     mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
         bars=bars,
         entry_price=entry_price,
@@ -51,6 +62,14 @@ def score_backtest_trade(
         stop_loss_price=stop_loss_price,
         symbol=symbol,
         constraint=constraint,
+    )
+    logger.debug(
+        "评分输出: symbol=%s, mfe=%.2f, mae=%.2f, return_pct=%s, exit_triggered=%s",
+        symbol,
+        mfe,
+        mae,
+        f"{return_pct * 100:.2f}%" if return_pct is not None else "None",
+        exit_triggered,
     )
     return {
         "mfe": mfe,

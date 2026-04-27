@@ -25,10 +25,13 @@ from src.backtest.schemas import (
     MarketContextSnapshot,
     RuleValidationResult,
 )
+from src.common.logger import get_logger
 
 if TYPE_CHECKING:
     from src.backtest.snapshot_loader import SnapshotLoader
     from src.backtest.scoring import score_backtest_trade
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +189,12 @@ async def validate_rules_for_trader(
     """
     from src.backtest.rule_registry import classify_rule
 
+    logger.info(
+        "规则验真开始: trader=%s, date_from=%s, date_to=%s",
+        trader_id,
+        date_from,
+        date_to,
+    )
     trade_dates = iter_trade_dates(date_from, date_to)
     all_contexts: list[MarketContextSnapshot] = []
     # rule_map: rule_id -> (rule_dict, strategy_version_id)
@@ -217,6 +226,13 @@ async def validate_rules_for_trader(
         )
         results.append(validation_result)
 
+    logger.info(
+        "规则验真结束: trader=%s, total_rules=%d, supported=%d, unsupported=%d",
+        trader_id,
+        len(results),
+        sum(1 for r in results if r.programmatic_level == "fully_programmable"),
+        sum(1 for r in results if r.programmatic_level == "unsupported"),
+    )
     return results
 
 
@@ -411,6 +427,13 @@ class BacktestEngine:
         Returns:
             BacktestResult
         """
+        logger.info(
+            "回测开始: trader=%s, date_from=%s, date_to=%s, mode=%s",
+            request.trader_id,
+            request.date_from,
+            request.date_to,
+            request.mode,
+        )
         trade_dates = iter_trade_dates(request.date_from, request.date_to)
         records: list[BacktestTradeRecord] = []
 
@@ -419,6 +442,15 @@ class BacktestEngine:
             records.extend(day_records)
 
         summary = self._build_summary(records, len(trade_dates))
+        logger.info(
+            "回测结束: trader=%s, date_from=%s, date_to=%s, total_records=%d, skipped=%d, traded=%d",
+            request.trader_id,
+            request.date_from,
+            request.date_to,
+            len(records),
+            sum(1 for r in records if r.status == "skipped"),
+            sum(1 for r in records if r.status == "traded"),
+        )
 
         return BacktestResult(
             request_trader_id=request.trader_id,
@@ -453,6 +485,10 @@ class BacktestEngine:
         """
         # 如果没有 loader，返回 skipped 记录
         if self.loader is None:
+            logger.debug(
+                "跳过交易日期 %s: loader 未配置 (no_loader_configured)",
+                trade_date,
+            )
             return [
                 BacktestTradeRecord(
                     trade_date=trade_date,
@@ -472,6 +508,7 @@ class BacktestEngine:
 
         # 规则验真模式：暂不处理交易评分
         if request.mode == "rule_validation":
+            logger.debug("跳过交易日期 %s: 规则验真模式", trade_date)
             return [
                 BacktestTradeRecord(
                     trade_date=trade_date,
@@ -485,6 +522,10 @@ class BacktestEngine:
 
         # 如果没有 strategy_loader，返回 skipped
         if self.strategy_loader is None:
+            logger.debug(
+                "跳过交易日期 %s: strategy_loader 未配置 (no_strategy_loader)",
+                trade_date,
+            )
             return [
                 BacktestTradeRecord(
                     trade_date=trade_date,
@@ -503,6 +544,10 @@ class BacktestEngine:
         )
 
         if strategy_version is None:
+            logger.debug(
+                "跳过交易日期 %s: 找不到策略版本 (no_strategy_version)",
+                trade_date,
+            )
             return [
                 BacktestTradeRecord(
                     trade_date=trade_date,
@@ -518,6 +563,10 @@ class BacktestEngine:
         candidates = replay_candidates(strategy_version, market_context)
 
         if not candidates:
+            logger.debug(
+                "跳过交易日期 %s: 无候选交易 (no_candidates)",
+                trade_date,
+            )
             return [
                 BacktestTradeRecord(
                     trade_date=trade_date,
@@ -536,6 +585,11 @@ class BacktestEngine:
             bars = market_context.get("bars_by_symbol", {}).get(symbol, [])
 
             if not bars:
+                logger.debug(
+                    "跳过标的 %s (%s): 缺少 bar 数据 (no_bars)",
+                    symbol,
+                    trade_date,
+                )
                 records.append(
                     BacktestTradeRecord(
                         trade_date=trade_date,

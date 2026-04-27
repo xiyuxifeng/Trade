@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from src.common.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True)
 class TradeConstraint:
@@ -339,6 +343,11 @@ def compute_mfe_mae_return(
 
         # 跳过停牌/无成交 bar
         if _is_bar_halted(bar):
+            logger.debug(
+                "停牌跳过: symbol=%s, date=%s",
+                symbol,
+                bar_date,
+            )
             halted_dates.append(bar_date)
             continue
 
@@ -380,6 +389,14 @@ def compute_mfe_mae_return(
 
         # 检查止盈（使用 effective_high）
         if target_price is not None and effective_high >= target_price:
+            logger.debug(
+                "止盈触发: symbol=%s, date=%s, entry=%.2f, target=%.2f, exit=%.2f",
+                symbol,
+                bar_date,
+                entry_price,
+                target_price,
+                close,
+            )
             exit_triggered = "target"
             # exit_price 用当日收盘价（实际交易中以收盘价成交）
             exit_price = close
@@ -388,6 +405,14 @@ def compute_mfe_mae_return(
 
         # 检查止损（使用 effective_low）
         if stop_loss_price is not None and effective_low <= stop_loss_price:
+            logger.debug(
+                "止损触发: symbol=%s, date=%s, entry=%.2f, stop_loss=%.2f, exit=%.2f",
+                symbol,
+                bar_date,
+                entry_price,
+                stop_loss_price,
+                close,
+            )
             exit_triggered = "stop_loss"
             # exit_price 用当日收盘价
             exit_price = close

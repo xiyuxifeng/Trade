@@ -1559,6 +1559,7 @@
 
 - 已形成“正式版本 + 候选优化版本”的双轨机制。
 - 关键链路可观察、可告警、可查询、可回归。
+- 关键步骤和数据有log可以追踪
 
 ---
 
@@ -1570,6 +1571,111 @@
 2. 一字涨停板无法买入成交， 除非盘中开板，如果买入的话可以按涨停价格计算
 3. 一字跌停板无法卖出成交， 除非盘中开板，如果卖出的话可以按跌停价格计算
 4. 如果以开盘价格买入和卖出 需要按照这个规则计算成交价: A股市场沪深主板、科创板、创业板的限价申报价格不得高于基准价格的 102% 且不得低于 98%，北交所则为 105% 和 95%
+
+---
+
+### Stage 9. 工程日志与可追溯性（P1）
+
+### Stage 目标
+
+- 为整个项目建立统一的日志规范和可追溯性体系
+- 覆盖回测、评估、策略库、快照加载等核心链路
+- 支持开发调试和生产环境的问题定位
+
+### 当前现状
+
+- `src/common/logger.py` 已提供 `configure_logging()` 和 `get_logger()` 基础接口
+- `src/backtest/` 模块目前仅使用 `warnings.warn`，无结构化日志
+- 各模块日志分散，缺少统一格式和日志级别规范
+
+### 任务清单
+
+- [x] `NTL-S9-001` `P1`
+  目标：建立统一的日志配置和模块级 logger 规范
+  修改范围：`src/common/logger.py`、`cli/`、`src/backtest/`
+  前置依赖：Stage 6 完成
+  可并行：NTL-S9-002、NTL-S9-003
+  验收标准：所有模块使用统一的 logger 命名规范（`get_logger(__name__)`）
+  完成情况：✅ `src/common/logger.py` 实现文件+控制台分流（DEBUG→文件，INFO+→控制台+文件），RotatingFileHandler 10MB 轮转，CLI main.py 启动时初始化日志
+
+- [x] `NTL-S9-002` `P1`
+  目标：为 `src/backtest/` 核心模块添加 DEBUG/INFO 级别日志
+  修改范围：`src/backtest/engine.py`、`src/backtest/snapshot_loader.py`、`src/backtest/execution.py`、`src/backtest/scoring.py`
+  前置依赖：NTL-S9-001
+  可并行：NTL-S9-001、NTL-S9-003
+  验收标准：回测执行链路每个关键节点有日志记录
+  完成情况：✅ engine.py（run INFO、validate_rules INFO、skip DEBUG）、snapshot_loader.py（INFO WARNING DEBUG）、scoring.py（DEBUG）；execution.py 已有 warnings.warn
+
+- [x] `NTL-S9-003` `P1`
+  目标：为 `src/evaluation/` 和 `src/strategy_library/` 添加必要日志
+  修改范围：`src/evaluation/metrics_calculator.py`、`src/strategy_library/service.py`
+  前置依赖：NTL-S9-001
+  可并行：NTL-S9-001、NTL-S9-002
+  验收标准：评分计算和策略版本发布链路可追溯
+  完成情况：✅ metrics_calculator.py（DEBUG止盈/止损/停牌）、ranking_service.py（INFO条目录入/ranking生成）；strategy_library/service.py（INFO版本发布/草稿保存）
+
+- [ ] `NTL-S9-004` `P1`
+  目标：扩展 `src/alerting/` 告警日志，补充数据新鲜度、快照缺失、provider 失败等告警
+  修改范围：`src/alerting/rules.py`、`src/backtest/snapshot_loader.py`
+  前置依赖：NTL-S9-002
+  可并行：无
+  验收标准：告警触发时日志同时输出到控制台和文件
+
+- [x] `NTL-S9-005` `P1`
+  目标：CLI 命令行日志规范化
+  修改范围：`cli/backtest.py`、`cli/main.py`
+  前置依赖：NTL-S9-001
+  可并行：NTL-S9-002
+  验收标准：所有 CLI 命令有关键节点 INFO 日志，DEBUG 日志写入文件
+  完成情况：✅ backtest.py（run/validate-rules/reproducibility-check 命令 INFO 日志）；main.py 初始化完成
+
+### 日志规范（参考）
+
+#### 日志级别定义
+
+| 级别 | 用途 | 出现场景 |
+|------|------|----------|
+| **ERROR** | 严重问题导致功能不可用 | 文件不存在、检查失败、关键链路断裂 |
+| **WARNING** | 异常但可继续，结果可能不准确 | 配置缺失、fallback 触发、字段缺失 |
+| **INFO** | 关键业务流程节点 | 任务开始/结束、结果摘要、告警触发 |
+| **DEBUG** | 开发调试信息 | 输入参数、中间变量、循环进度、skip 原因 |
+
+#### 模块 logger 命名规范
+
+```python
+from src.common.logger import get_logger
+
+# 每个模块在文件顶部获取 logger
+logger = get_logger(__name__)
+
+# 使用示例
+logger.info("回测开始: trader=%s, date_from=%s", trader_id, date_from)
+logger.debug("处理候选: symbol=%s, decision=%s", symbol, decision)
+logger.warning("compatibility_fallback 触发，数据可信度下降")
+logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_b)
+```
+
+#### 关键日志节点（必须覆盖）
+
+| 模块 | 节点 | 级别 |
+|------|------|------|
+| `BacktestEngine.run()` | 回测开始/结束 | INFO |
+| `BacktestEngine._process_single_day()` | skip 分支（loader 无配置/无版本/无候选/无 bars） | DEBUG |
+| `SnapshotLoader.load_market_context()` | compatibility_fallback 触发 | INFO |
+| `SnapshotLoader._load_snapshot()` | 快照加载成功/失败 | DEBUG/WARNING |
+| `SnapshotLoader.load_version_for_date()` | strategy_repo 异常 | WARNING |
+| `scoring.py score_backtest_trade()` | 评分输入/输出 | DEBUG |
+| `metrics_calculator.py compute_mfe_mae_return()` | 止盈/止损触发、停牌跳过 | DEBUG |
+| `cli/backtest.py` | 命令入口、结果摘要 | INFO |
+| `validate_rules_for_trader()` | 规则验真开始/结束、结果统计 | INFO |
+
+### Stage 9 完成标准
+
+- [x] 所有核心模块使用统一的 `get_logger(__name__)` 规范
+- [x] 回测链路：INFO 级别日志覆盖每个关键节点
+- [x] 调试链路：DEBUG 级别日志覆盖 skip 原因和数据加载状态
+- [ ] 告警链路：WARNING/ERROR 级别日志同时输出到控制台和文件
+- [-] CLI 命令：关键操作有 INFO 日志，DEBUG 日志持久化到文件
 
 ---
 

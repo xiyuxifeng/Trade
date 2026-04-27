@@ -1233,6 +1233,7 @@ app.add_typer(backtest_app, name="backtest")
 
 
 def main() -> None:
+	configure_logging()
 	app()
 
 

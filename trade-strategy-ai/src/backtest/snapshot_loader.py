@@ -14,8 +14,12 @@ import warnings
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+from src.common.logger import get_logger
+
 if TYPE_CHECKING:
     from src.backtest.schemas import MarketContextSnapshot
+
+logger = get_logger(__name__)
 
 
 class SnapshotLoader:
@@ -82,7 +86,17 @@ class SnapshotLoader:
         if self.snapshot_service is not None:
             try:
                 market_universe = await self._load_snapshot(trade_date, "market_universe")
-            except Exception:
+                if market_universe is not None:
+                    logger.debug(
+                        "快照加载成功: slot=market_universe, date=%s",
+                        trade_date,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "快照加载失败: slot=market_universe, date=%s, error=%s",
+                    trade_date,
+                    e,
+                )
                 market_universe = None
 
             # 尝试加载 ohlcv_1d bars
@@ -103,7 +117,17 @@ class SnapshotLoader:
                         bars_by_symbol[symbol].sort(
                             key=lambda b: str(b.get("date") or b.get("Date") or ""),
                         )
-            except Exception:
+                    logger.debug(
+                        "快照加载成功: slot=ohlcv_1d, date=%s, symbols=%d",
+                        trade_date,
+                        len(bars_by_symbol),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "快照加载失败: slot=ohlcv_1d, date=%s, error=%s",
+                    trade_date,
+                    e,
+                )
                 bars_by_symbol = {}
 
             # 尝试加载 indicators
@@ -118,7 +142,12 @@ class SnapshotLoader:
                             symbol_filter is None or str(symbol) in symbol_filter
                         ):
                             indicators_by_symbol[str(symbol)] = ind_fields
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "快照加载失败: slot=indicators, date=%s, error=%s",
+                    trade_date,
+                    e,
+                )
                 indicators_by_symbol = {}
 
             # 尝试加载 listing_dates（用于新股判断）
@@ -130,12 +159,22 @@ class SnapshotLoader:
                     for symbol, listing_date in listing_data.items():
                         if symbol_filter is None or str(symbol) in symbol_filter:
                             listing_dates[str(symbol)] = str(listing_date)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "快照加载失败: slot=listing_dates, date=%s, error=%s",
+                    trade_date,
+                    e,
+                )
                 listing_dates = {}
 
         # 如果快照缺失且启用兜底，标记 compatibility_fallback
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
+            logger.info(
+                "compatibility_fallback 触发: trader=%s, date=%s, market_universe 快照缺失",
+                None,
+                trade_date,
+            )
             # 兜底：从 EvidencePack 补洞（未来 NTL-S6-006 完整实现）
             market_universe = None
 
@@ -179,7 +218,13 @@ class SnapshotLoader:
                 return None
             # 取最新发布的版本
             return sorted(versions, key=lambda v: v.released_at or date.min, reverse=True)[0]
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "strategy_repo 异常: trader=%s, date=%s, error=%s",
+                trader_id,
+                trade_date,
+                e,
+            )
             warnings.warn(
                 f"SnapshotLoader.load_version_for_date failed for trader={trader_id}, date={trade_date}: "
                 "strategy_repo raised an exception. Returning None.",

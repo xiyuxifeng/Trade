@@ -21,6 +21,7 @@ from src.agents.trader_agent.agent import TraderAgent
 from src.agents.strategy_agent.agent import StrategyAgent
 from src.agents.risk_agent.agent import RiskAgent
 from src.common.config import AppConfig, Stage4Config, TraderConfig
+from src.common.logger import get_logger
 from src.market_universe.schemas import MarketUniverse
 from src.risk.types import AccountSnapshot
 from src.schemas.contracts import AgentTask, DataRequest, DataResponseStatus, TradeIdea
@@ -31,6 +32,8 @@ from src.trader_profile.schemas import TraderProfile
 
 if TYPE_CHECKING:
     from src.agents.data_agent import DataAgent
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -103,16 +106,40 @@ class PreMarketService:
                         trader_id=trader_cfg.trader_id,
                         strategy_date=as_of_date,
                     )
-            except Exception:  # noqa: BLE001
+                if strategy_version is not None:
+                    logger.debug(
+                        "策略版本加载成功: trader=%s, date=%s, version=%s",
+                        trader_cfg.trader_id,
+                        as_of_date,
+                        strategy_version.version_id,
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "策略版本加载异常: trader=%s, date=%s, error=%s",
+                    trader_cfg.trader_id,
+                    as_of_date,
+                    e,
+                )
                 if self.config.stage4.allow_phase0_fallback:
                     pass  # 降级到 Phase 0
                 else:
+                    logger.info(
+                        "Trader跳过（无策略版本且不允许降级）: trader=%s, date=%s",
+                        trader_cfg.trader_id,
+                        as_of_date,
+                    )
                     return PreMarketResult(
                         ideas=[],
                         strategy_version_id=None,
                         evaluated_signals=[],
                         missing_symbol_tasks=[],
                     )
+        else:
+            logger.debug(
+                "Stage4未启用，跳过策略版本加载: trader=%s, date=%s",
+                trader_cfg.trader_id,
+                as_of_date,
+            )
 
         # === TraderAgent 生成想法 ===
         trader = TraderAgent(
@@ -175,6 +202,14 @@ class PreMarketService:
             strategy_version_id=strategy_version.version_id if strategy_version else None,
             evaluated_signals=evaluated_signals,
             missing_symbol_tasks=missing_symbol_tasks,
+        )
+        logger.info(
+            "PreMarketService完成: trader=%s, date=%s, ideas=%d, evaluated=%d, missing_tasks=%d",
+            trader_cfg.trader_id,
+            as_of_date,
+            len(ideas),
+            len(evaluated_signals),
+            len(missing_symbol_tasks),
         )
 
     async def _evaluate_idea(self, idea: TradeIdea, market_data: dict[str, Any]) -> Signal | None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, UTC
 from typing import TYPE_CHECKING
 
+from src.common.logger import get_logger
 from src.strategy_library.builder import ArticleEvidence, StrategyVersionBuilder
 from src.strategy_library.repository import StrategyLibraryRepository
 from src.strategy_library.schemas import StrategyVersion, StrategyVersionStatus
@@ -12,6 +13,8 @@ from src.trader_profile.schemas import TraderProfile
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = get_logger(__name__)
 
 
 class StrategyLibraryService:
@@ -101,6 +104,13 @@ class StrategyLibraryService:
             source_articles=source_articles,
         )
         await self._repo.save(session=session, version=version)
+        logger.info(
+            "策略版本草稿已保存: trader=%s, date=%s, version=%s, recommendations=%d",
+            trader_id,
+            strategy_date,
+            version.version_id,
+            len(version.recommendations),
+        )
         return version
 
     async def release_version(
@@ -109,6 +119,12 @@ class StrategyLibraryService:
         draft_version: StrategyVersion,
     ) -> StrategyVersion:
         """将草稿版本升级为已发布版本（S3-010 唯一性保证）。"""
+        logger.info(
+            "策略版本发布: trader=%s, date=%s, draft_version=%s",
+            draft_version.trader_id,
+            draft_version.strategy_date,
+            draft_version.version_id,
+        )
         # S3-010：检查是否已有 released 版本（同一 trader 同日唯一）
         existing = await self.get_current_released_version(
             session=session,
@@ -137,4 +153,10 @@ class StrategyLibraryService:
             rules_snapshot=draft_version.rules_snapshot,
         )
         await self._repo.save(session=session, version=released)
+        logger.info(
+            "策略版本已发布: trader=%s, date=%s, released_version=%s",
+            released.trader_id,
+            released.strategy_date,
+            released.version_id,
+        )
         return released

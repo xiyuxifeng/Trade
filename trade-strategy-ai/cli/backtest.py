@@ -18,6 +18,9 @@ import typer
 from src.backtest.engine import BacktestEngine
 from src.backtest.reporting import render_backtest_json, render_backtest_markdown
 from src.backtest.schemas import BacktestRequest
+from src.common.logger import get_logger
+
+logger = get_logger(__name__)
 
 app = typer.Typer(add_completion=False, help="回测相关命令")
 
@@ -91,8 +94,26 @@ def run_backtest(
         mode=mode,  # type: ignore[arg-type]
     )
 
+    logger.info(
+        "CLI 回测命令: trader=%s, date_from=%s, date_to=%s, mode=%s",
+        trader,
+        date_from,
+        date_to,
+        mode,
+    )
     engine = _create_engine_from_config(str(config) if config else None)
     result = engine.run_sync(request)
+
+    # 结果摘要
+    traded = sum(1 for r in result.records if r.status == "traded")
+    skipped = sum(1 for r in result.records if r.status == "skipped")
+    logger.info(
+        "CLI 回测结果: trader=%s, total=%d, traded=%d, skipped=%d",
+        trader,
+        len(result.records),
+        traded,
+        skipped,
+    )
 
     if format == "json":
         output_str = render_backtest_json(result)
@@ -213,6 +234,13 @@ def validate_rules(
         validate_rules_for_trader(trader_id=trader, date_from=date_from, date_to=date_to, loader=loader)
     )
 
+    logger.info(
+        "CLI 规则验真完成: trader=%s, date_from=%s, date_to=%s, total_rules=%d",
+        trader,
+        date_from,
+        date_to,
+        len(rule_results),
+    )
     report = render_rule_validation_markdown(rule_results)
 
     if output:
@@ -253,6 +281,12 @@ def reproducibility_check(
     json_a = render_backtest_json(result_a)
     json_b = render_backtest_json(result_b)
 
+    logger.info(
+        "CLI Reproducibility Check: trader=%s, date_from=%s, date_to=%s",
+        trader,
+        date_from,
+        date_to,
+    )
     if json_a == json_b:
         typer.secho("✅ Reproducibility Check PASSED: 两次运行结果一致", fg=typer.colors.GREEN)
     else:

@@ -26,6 +26,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from src.common.config import TraderConfig
+from src.common.logger import get_logger
 from src.market_universe.schemas import MarketUniverse
 from src.schemas.contracts import DataRequest, DataResponseStatus, TradeEntry, TradeIdea
 from src.strategy_library.schemas import StrategyVersion
@@ -34,6 +35,8 @@ from src.trader_memory.service import TraderMemoryStore
 
 if TYPE_CHECKING:
     from src.agents.data_agent import DataAgent
+
+logger = get_logger(__name__)
 
 
 class TraderAgent:
@@ -190,6 +193,11 @@ class TraderAgent:
             # Stage 4 路径：基于策略版本推荐
             strategy_candidates = self._candidates_from_strategy(strategy_version)
             if not strategy_candidates:
+                logger.debug(
+                    "TraderAgent候选为空: trader=%s, date=%s, 原因=strategy_version无recommendations",
+                    self.trader.trader_id,
+                    as_of_date,
+                )
                 return []
             # 提取纯 symbol 列表用于行情请求
             candidate_symbols = [sym for sym, _, _, _ in strategy_candidates]
@@ -200,13 +208,31 @@ class TraderAgent:
                 sym: idx for sym, _, _, idx in strategy_candidates
             }
             idea_mode = "strategy"
+            logger.info(
+                "TraderAgent启动: trader=%s, date=%s, mode=strategy, candidates=%d, version=%s",
+                self.trader.trader_id,
+                as_of_date,
+                len(candidate_symbols),
+                strategy_version.version_id,
+            )
         else:
             # Phase 0 降级路径：使用 watchlist + profile.top_symbols
             candidate_symbols = self._candidate_symbols()
             if not candidate_symbols:
+                logger.debug(
+                    "TraderAgent候选为空: trader=%s, date=%s, 原因=watchlist和profile均无标的",
+                    self.trader.trader_id,
+                    as_of_date,
+                )
                 return []
             candidate_map = {sym: ("buy", 0.3) for sym in candidate_symbols}
             idea_mode = "phase0"
+            logger.info(
+                "TraderAgent启动: trader=%s, date=%s, mode=phase0, candidates=%d",
+                self.trader.trader_id,
+                as_of_date,
+                len(candidate_symbols),
+            )
 
         # === 获取行情数据 ===
         req = DataRequest(
@@ -217,6 +243,12 @@ class TraderAgent:
         resp = await data_agent.handle(req)
 
         if resp.status != DataResponseStatus.ok:
+            logger.warning(
+                "TraderAgent行情获取失败: trader=%s, date=%s, status=%s",
+                self.trader.trader_id,
+                as_of_date,
+                resp.status,
+            )
             return []
 
         prices: dict[str, float] = resp.payload.get("last_price", {})
@@ -313,4 +345,20 @@ class TraderAgent:
                 if topic_entries:
                     ideas[-1].source_topic_ids = topic_entries
 
+            logger.debug(
+                "TradeIdea生成: trader=%s, symbol=%s, side=%s, entry=%.2f, confidence=%.2f",
+                self.trader.trader_id,
+                symbol,
+                decision,
+                entry_price,
+                min(0.85, round(confidence, 3)),
+            )
+
+        logger.info(
+            "TraderAgent完成: trader=%s, date=%s, mode=%s, ideas=%d",
+            self.trader.trader_id,
+            as_of_date,
+            idea_mode,
+            len(ideas),
+        )
         return ideas

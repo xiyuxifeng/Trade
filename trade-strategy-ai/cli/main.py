@@ -1231,6 +1231,10 @@ def migrate_crawl_state(
 from cli.backtest import app as backtest_app
 app.add_typer(backtest_app, name="backtest")
 
+# 注册 optimize 子命令（S7-001/S7-002）
+from cli.optimize import app as optimize_app
+app.add_typer(optimize_app, name="optimize")
+
 
 def main() -> None:
 	configure_logging()

@@ -1,8 +1,9 @@
-"""S7-001/S7-002: 优化模块 CLI 入口
+"""S7-001/S7-002/S7-003: 优化模块 CLI 入口
 
 提供以下子命令：
-- optimize filter：活跃 trader 筛选
-- optimize advise：策略调整建议
+- optimize filter：活跃 trader 筛选（S7-001）
+- optimize advise：策略调整建议（S7-002）
+- optimize create-candidate：生成候选版本（S7-003）
 """
 
 from __future__ import annotations
@@ -188,3 +189,135 @@ def optimize_advise(
         }
         out_path.write_text(json.dumps(json_data, indent=2, ensure_ascii=False))
         typer.secho(f"结果已写入: {out_path}", fg=typer.colors.GREEN)
+
+
+@app.command("create-candidate")
+def optimize_create_candidate(
+    parent: str = typer.Option("", "--parent", "-p", help="正式版本 JSON 文件路径（released_version.json）"),
+    adjustments: str = typer.Option("", "--adjustments", "-a", help="S7-002 输出的调整建议 JSON 文件路径"),
+    trader: str = typer.Option("", "--trader", "-t", help="trader ID（与 --parent 二选一）"),
+    date: str = typer.Option("", "--date", "-d", help="策略日期 YYYY-MM-DD（与 --parent 二选一）"),
+    version_id: str = typer.Option("", "--version-id", "-v", help="parent version_id"),
+    output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON 文件路径"),
+):
+    """候选版本生成（S7-003）。
+
+    接收正式版本（released_version.json）和 S7-002 调整建议 JSON，
+    生成候选版本（draft，candidate 类型），不写 DB。
+    """
+    from datetime import date as Date
+
+    from src.optimization.candidate_builder import (
+        CandidateBuildInput,
+        build_candidate_version,
+    )
+    from src.optimization.strategy_advisor import RuleAdjustment
+    from src.strategy_library.schemas import StrategyVersion
+
+    adjustments_list: list[RuleAdjustment] = []
+    parent_rules_snapshot: list[dict] = []
+    parent_vid = version_id
+    parent_trader_id = trader
+    parent_date_str = date
+
+    # 加载调整建议
+    if adjustments:
+        adj_path = Path(adjustments)
+        if not adj_path.exists():
+            typer.secho(f"调整建议文件不存在: {adj_path}", fg=typer.colors.YELLOW)
+            return
+        try:
+            adj_data = json.loads(adj_path.read_text())
+            if isinstance(adj_data, dict) and "adjustments" in adj_data:
+                adj_data = adj_data["adjustments"]
+            adjustments_list = [RuleAdjustment(**adj) for adj in adj_data]
+        except Exception as exc:
+            typer.secho(f"加载调整建议失败 {adj_path}: {exc}", fg=typer.colors.YELLOW)
+            return
+
+    if not adjustments_list:
+        typer.echo("无调整建议数据，请检查 --adjustments 参数")
+        return
+
+    # 加载正式版本
+    if parent:
+        parent_path = Path(parent)
+        if not parent_path.exists():
+            typer.secho(f"正式版本文件不存在: {parent_path}", fg=typer.colors.YELLOW)
+            return
+        try:
+            parent_data = json.loads(parent_path.read_text())
+            pv = StrategyVersion(**parent_data)
+            parent_rules_snapshot = pv.rules_snapshot or []
+            parent_vid = pv.version_id
+            parent_trader_id = pv.trader_id
+            parent_date_str = pv.strategy_date.isoformat()
+        except Exception as exc:
+            typer.secho(f"加载正式版本失败 {parent_path}: {exc}", fg=typer.colors.YELLOW)
+            return
+    else:
+        if not trader or not date or not version_id:
+            typer.echo("请提供 --parent（正式版本 JSON）或 --trader + --date + --version-id")
+            return
+
+    # 构建候选版本
+    input_obj = CandidateBuildInput(
+        trader_id=parent_trader_id,
+        strategy_date=Date.fromisoformat(parent_date_str),
+        parent_version_id=parent_vid,
+        parent_rules_snapshot=parent_rules_snapshot,
+        adjustments=adjustments_list,
+        recommendations=[],
+    )
+
+    result = build_candidate_version(input_obj)
+
+    # 输出到控制台
+    typer.echo(f"\n=== 候选版本已生成 ===")
+    typer.echo(f"  version_id: {result.version.version_id}")
+    typer.echo(f"  parent_version_id: {result.version.parent_version_id}")
+    typer.echo(f"  status: {result.version.status.value}")
+    typer.echo(f"  version_type: {result.version.version_type.value}")
+    typer.echo(f"  rules_snapshot 变更:")
+    if result.deleted_rules:
+        typer.echo(f"    删除: {result.deleted_rules}")
+    if result.modified_rules:
+        typer.echo(f"    修改: {result.modified_rules}")
+    if result.kept_rules:
+        typer.echo(f"    保留: {result.kept_rules}")
+    typer.echo(f"  notes:\n{result.version.notes}")
+
+    # 输出到文件
+    if output:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        json_data = {
+            "version_id": result.version.version_id,
+            "trader_id": result.version.trader_id,
+            "strategy_date": result.version.strategy_date.isoformat(),
+            "status": result.version.status.value,
+            "version_type": result.version.version_type.value,
+            "parent_version_id": result.version.parent_version_id,
+            "recommendations": [
+                {
+                    "symbol": r.symbol,
+                    "decision": r.decision,
+                    "confidence": r.confidence,
+                    "entry_price": r.entry_price,
+                    "target_price": r.target_price,
+                    "stop_loss_price": r.stop_loss_price,
+                    "rationale": r.rationale,
+                    "evidence_refs": r.evidence_refs,
+                }
+                for r in result.version.recommendations
+            ],
+            "rules_snapshot": result.version.rules_snapshot,
+            "notes": result.version.notes,
+            "_build_summary": {
+                "deleted_rules": result.deleted_rules,
+                "modified_rules": result.modified_rules,
+                "kept_rules": result.kept_rules,
+            },
+        }
+        out_path.write_text(json.dumps(json_data, indent=2, ensure_ascii=False))
+        typer.secho(f"候选版本已写入: {out_path}", fg=typer.colors.GREEN)

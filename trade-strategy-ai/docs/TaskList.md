@@ -1493,36 +1493,55 @@
   验收标准：`SnapshotLoader` 能从配置正确注入依赖，回测命令可正常使用真实数据。
   **状态**：P0 阻塞项，修复后解锁 S7-005/006/007。
 
-- [ ] `NTL-S7-001` `P2`
+- [x] `NTL-S7-001` `P2` ✅ 2026-04-28
   目标：基于 ranking 与回测筛选活跃 trader。
   输入：Stage 5 ranking、Stage 6 回测结果。
   输出：活跃 trader 筛选逻辑。
-  修改范围：优化模块或 service。
+  修改范围：`src/optimization/`。
   前置依赖：Stage 5、Stage 6 完成。
   可并行：`NTL-S7-002`。
   验收标准：能识别值得继续优化的 trader。
-  **状态**：可立即开始（使用 Mock 数据独立开发）。
+  完成情况：✅ `ActiveTraderFilter` 实现，贝叶斯收缩公式（alpha=10, baseline=0.5），综合得分 + 样本置信度，10 tests PASS。CLI 命令 `optimize filter` 已接入 `cli/optimize.py`。
 
-- [ ] `NTL-S7-002` `P2`
+- [x] `NTL-S7-002` `P2` ✅ 2026-04-28
   目标：基于 postmortem 结果输出策略调整建议。
   输入：盘后归因和回测结果。
   输出：策略调整建议。
-  修改范围：优化模块、evaluation 或 strategy_library。
+  修改范围：`src/optimization/`。
   前置依赖：Stage 5、Stage 6 完成。
   可并行：`NTL-S7-001`。
   验收标准：调整建议有明确输入依据。
-  **状态**：可立即开始（使用 Mock 数据独立开发）。
+  完成情况：✅ `StrategyAdvisor` 实现，5 条调整规则（删除/复核止盈止损/升级程序化/检查快照/程序化低命中率），5 tests PASS。CLI 命令 `optimize advise` 已接入 `cli/optimize.py`。
 
-- [ ] `NTL-S7-003` `P2`
-  目标：把策略调整建议写入候选版本而不是覆盖 released 版本。
-  输入：策略调整建议与策略版本库。
-  输出：候选版本生成机制。
-  修改范围：`src/strategy_library/`。
+- [x] `NTL-S7-003` `P2` ✅ 2026-04-28
+  目标：把策略调整建议写入候选版本（文件链路），不覆盖 released 版本。
+  输入：released 版本 JSON + S7-002 输出的 RuleAdjustment[] JSON。
+  输出：`optimize create-candidate` CLI 命令，生成 candidate_version.json。
+  修改范围：`cli/optimize.py`、`src/optimization/candidate_builder.py`。
   前置依赖：`NTL-S7-002`。
   可并行：`NTL-S7-004`。
-  验收标准：正式版本不会被自动优化结果直接覆盖。
+  验收标准：正式版本不会被自动优化结果直接覆盖；候选版本 rules_snapshot 按调整类型确定性修改（删除/替换/新增）。
+  完成情况：✅ `build_candidate_version()` 实现，5 种 current_status → 确定性 rules_snapshot 修改；`cli/optimize create-candidate` 命令接入；8 tests PASS。
+  规则映射：
+  - hit_rate_too_low_and_return_negative → 从 rules_snapshot 删除该 rule_id
+  - high_hit_rate_but_negative_return → 修改该规则的 action，标记 _review_required=True
+  - missed_opportunity → 标记 rule programmable=True
+  - missing_snapshot → 保留原规则，附加 _notes
+  - programmable_but_rarely_hit → 映射为 delete_rule
 
-- [ ] `NTL-S7-004` `P2`
+- [ ] `NTL-S7-003b` `P2`
+  目标：把候选版本创建接入数据库（DB 链路），文件链路保留作为轻量替代。
+  输入：`NTL-S7-003` 文件链路验证通过 + S7-000（P0）阻塞项修复。
+  输出：`optimize create-candidate --db` 命令，ORM migration（version_type + parent_version_id 真实列）。
+  修改范围：`src/models/trader_strategy_version.py`、`src/db/migrations/`、`cli/optimize.py`。
+  前置依赖：`NTL-S7-003`（文件链路完成）、`NTL-S7-000`（P0 阻塞项修复）。
+  可并行：S7-005、S7-006。
+  验收标准：`optimize create-candidate --db` 可持久化候选版本到 DB；`--db` 默认 False（文件模式）。
+  双链路说明：
+  - 文件链路（默认）：`--db=False`，已有 S7-003 实现不变，轻量/无依赖/可 Git 管理
+  - DB 链路（`--db`）：`version_type` 和 `parent_version_id` 用真实列（不用 JSONB），可建索引和 SQL 查询，复用 `StrategyLibraryService.create_candidate_version()`
+
+- [x] `NTL-S7-004` `P2` ✅ 2026-04-28
   目标：建立滚动评估窗口。
   输入：ranking、回测结果和调整建议。
   输出：滚动评估逻辑。
@@ -1530,6 +1549,7 @@
   前置依赖：`NTL-S7-001`、`NTL-S7-002`。
   可并行：`NTL-S7-003`。
   验收标准：不会因为单日噪声直接触发过拟合调整。
+  完成情况：✅ `RollingEvaluator` 实现，交易日窗口 30 天，稳定性阈值 50%，样本量门槛 10 笔；`is_signal_stable / has_sufficient_samples / should_trigger_adjustment / get_trigger` 全部实现；9 tests PASS；`cli/optimize.py` 已接入。
 
 - [ ] `NTL-S7-005` `P2`
   目标：扩展 API 查询能力。

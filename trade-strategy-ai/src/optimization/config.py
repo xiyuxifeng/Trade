@@ -1,4 +1,4 @@
-"""优化模块配置（S7-001 / S7-002）。
+"""优化模块配置（S7-001 / S7-002 / S7-004）。
 
 贝叶斯收缩参数说明：
 - bayesian_alpha: 先验强度，值越大向 baseline_win_rate 收缩越强
@@ -6,6 +6,11 @@
   参考：alpha=5 收缩弱，alpha=20 收缩强
 - baseline_win_rate: 先验基准胜率，A 股市场建议 0.50
 - min_trades: 最小有效交易笔数，低于此值时 score 打折
+
+滚动评估参数说明（S7-004）：
+- window_days: 窗口大小（交易日），默认 30，按交易日计算
+- min_signal_frequency: 信号出现比例阈值（含），默认 50%
+- min_sample_trades: 最小有效交易样本量（含），默认 10
 """
 
 from dataclasses import dataclass

@@ -1,8 +1,13 @@
-"""优化模块：S7-001 活跃 trader 筛选 / S7-002 策略调整建议"""
+"""优化模块：S7-001~S7-004 活跃 trader 筛选 / 策略调整建议 / 滚动评估"""
 
 from src.optimization.active_trader_filter import ActiveTraderFilter, TraderFilterResult
 from src.optimization.strategy_advisor import StrategyAdvisor, RuleAdjustment, AdvisorResult
-from src.optimization.config import ActiveTraderFilterConfig
+from src.optimization.config import ActiveTraderFilterConfig, RollingEvaluatorConfig
+from src.optimization.rolling_evaluator import (
+    RollingEvaluator,
+    SignalObservation,
+    AdjustmentTrigger,
+)
 
 __all__ = [
     "ActiveTraderFilter",
@@ -11,4 +16,8 @@ __all__ = [
     "RuleAdjustment",
     "AdvisorResult",
     "ActiveTraderFilterConfig",
+    "RollingEvaluator",
+    "RollingEvaluatorConfig",
+    "SignalObservation",
+    "AdjustmentTrigger",
 ]

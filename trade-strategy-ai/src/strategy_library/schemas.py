@@ -14,6 +14,16 @@ class StrategyVersionStatus(StrEnum):
     archived = "archived"
 
 
+class StrategyVersionType(StrEnum):
+    """策略版本类型，区分创建来源
+
+    - manual: 手动创建的初始草稿版本，由 build_and_save_draft() 生成
+    - candidate: 优化流程生成的候选版本，由 create_candidate_version() 生成
+    """
+    manual = "manual"
+    candidate = "candidate"
+
+
 @dataclass
 class StrategyIdea:
     """单个标的的策略想法（未确认状态）"""
@@ -43,12 +53,34 @@ class StrategyRecommendation:
 
 
 @dataclass(frozen=True)
+class StrategyAdjustment:
+    """策略调整建议（S7-002/S7-003）。
+
+    由优化流程生成，用于指导候选版本的创建。
+    """
+    trader_id: str  # 交易员 ID
+    rule_id: str  # 规则 ID
+    current_status: str  # 当前状态，如 "hit_rate_too_low" / "return_negative"
+    suggestion: str  # 调整建议
+    confidence: float  # 建议置信度 0-1
+    依据: str  # 具体的指标数值依据
+
+
+@dataclass(frozen=True)
 class StrategyVersion:
-    """策略版本聚合（不可变）"""
+    """策略版本聚合（不可变）
+
+    版本类型说明：
+    - manual (默认): 手动创建的初始草稿，由 build_and_save_draft() 生成
+    - candidate: 优化流程生成的候选版本，由 create_candidate_version() 生成，
+      需人工 review 后才能通过 release_version() 晋升为 released
+    """
     version_id: str  # 版本 ID
     trader_id: str  # 交易员 ID
     strategy_date: date  # 策略日期
     status: StrategyVersionStatus  # 版本状态
+    version_type: StrategyVersionType = StrategyVersionType.manual  # 版本类型（S7-003 新增）
+    parent_version_id: str | None = None  # 父版本 ID，用于候选版本追溯正式版本（S7-003 新增）
     recommendations: list[StrategyRecommendation] = field(default_factory=list)  # 建议列表
     source_article_ids: list[str] = field(default_factory=list)  # 来源文章 ID 列表
     evidence_refs: list[str] = field(default_factory=list)  # 证据引用列表

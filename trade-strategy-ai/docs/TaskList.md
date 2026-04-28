@@ -1483,6 +1483,16 @@
 
 ### 任务清单
 
+- [ ] `NTL-S7-000` `P0`
+  目标：完成 `cli/backtest.py` 真实依赖注入，修复 `SnapshotLoader` 的 `snapshot_service` 和 `strategy_repo` 为 `None` 的问题。
+  输入：`config` YAML 中的 `data.providers` 配置结构。
+  输出：修复后的 `cli/backtest.py`，能正确初始化 `SnapshotLoader`。
+  修改范围：`cli/backtest.py`。
+  前置依赖：Stage 6 完成。
+  可并行：`NTL-S7-001`、`NTL-S7-002`。
+  验收标准：`SnapshotLoader` 能从配置正确注入依赖，回测命令可正常使用真实数据。
+  **状态**：P0 阻塞项，修复后解锁 S7-005/006/007。
+
 - [ ] `NTL-S7-001` `P2`
   目标：基于 ranking 与回测筛选活跃 trader。
   输入：Stage 5 ranking、Stage 6 回测结果。
@@ -1491,6 +1501,7 @@
   前置依赖：Stage 5、Stage 6 完成。
   可并行：`NTL-S7-002`。
   验收标准：能识别值得继续优化的 trader。
+  **状态**：可立即开始（使用 Mock 数据独立开发）。
 
 - [ ] `NTL-S7-002` `P2`
   目标：基于 postmortem 结果输出策略调整建议。
@@ -1500,6 +1511,7 @@
   前置依赖：Stage 5、Stage 6 完成。
   可并行：`NTL-S7-001`。
   验收标准：调整建议有明确输入依据。
+  **状态**：可立即开始（使用 Mock 数据独立开发）。
 
 - [ ] `NTL-S7-003` `P2`
   目标：把策略调整建议写入候选版本而不是覆盖 released 版本。
@@ -1524,27 +1536,30 @@
   输入：策略版本、快照、ranking、回测结果。
   输出：API 查询接口。
   修改范围：`api/`、`src/api/`。
-  前置依赖：Stage 5、Stage 6 完成。
+  前置依赖：Stage 5、Stage 6 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-006`、`NTL-S7-007`。
   验收标准：可通过 API 查询核心资产和结果。
+  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
 
 - [ ] `NTL-S7-006` `P2`
   目标：扩展 CLI。
   输入：快照、策略库、回测与评估能力。
   输出：构建快照、构建策略版本、执行回测等命令。
   修改范围：`cli/`。
-  前置依赖：Stage 5、Stage 6 完成。
+  前置依赖：Stage 5、Stage 6 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-005`、`NTL-S7-007`。
   验收标准：关键链路都能通过 CLI 触发。
+  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
 
 - [ ] `NTL-S7-007` `P2`
   目标：增加数据新鲜度、快照缺失、provider 失败告警。
   输入：运行日志与快照状态。
   输出：告警逻辑。
   修改范围：`src/alerting/`、任务系统或监控配置。
-  前置依赖：Stage 2、Stage 5 完成。
+  前置依赖：Stage 2、Stage 5 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-005`、`NTL-S7-006`。
   验收标准：关键数据问题能被及时发现。
+  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
 
 - [ ] `NTL-S7-008` `P2`
   目标：增加关键链路集成测试与回归测试。
@@ -1553,11 +1568,41 @@
   修改范围：`tests/`。
   前置依赖：Stage 4、Stage 5、Stage 6 完成。
   可并行：无。
-  验收标准：关键链路至少具备一组稳定回归用例。
+验收标准：关键链路至少具备一组稳定回归用例。
+
+- [ ] `NTL-S7-009` `P2`
+  目标：处理 BacktestResult 落盘格式稳定性问题。
+  输入：`BacktestResult` schema。
+  输出：添加 `result_version` 字段，下游消费方兼容处理。
+  修改范围：`src/backtest/schemas.py`。
+  前置依赖：Stage 6 完成。
+  可并行：S7-001~008。
+  验收标准：BacktestResult 有版本号，新旧格式可区分。
+  **状态**：技术债务 T1。
+
+- [ ] `NTL-S7-010` `P2`
+  目标：处理 akshare 懒加载网络依赖问题。
+  输入：`TradeCalendar` 配置。
+  输出：本地交易日历文件作为 fallback，akshare_stale 告警。
+  修改范围：`src/backtest/`、`src/alerting/rules.py`。
+  前置依赖：Stage 6 完成。
+  可并行：S7-007（告警逻辑）。
+  验收标准：网络不可用时有 fallback，不静默失败。
+  **状态**：技术债务 T3。
+
+- [ ] `NTL-S7-011` `P2`
+  目标：处理 `RuleValidationResult.notes` 字段 JSON 体积膨胀问题。
+  输入：`RuleValidationResult` 序列化逻辑。
+  输出：notes 字段截断或列表化。
+  修改范围：`src/backtest/engine.py`。
+  前置依赖：Stage 6 完成。
+  可并行：S7-002。
+验收标准：notes 字段超过 1KB 时截断或改为列表格式。
+  **状态**：技术债务 T4。
 
 ### Stage 7 完成标准
 
-- 已形成“正式版本 + 候选优化版本”的双轨机制。
+- 已形成”正式版本 + 候选优化版本”的双轨机制。
 - 关键链路可观察、可告警、可查询、可回归。
 - 关键步骤和数据有log可以追踪
 

@@ -73,6 +73,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "smoke: lightweight regression gate for the end-to-end orchestration path",
+    "integration: integration tests requiring real data or network (may fail in CI)",
 ]
 
 [tool.mypy]

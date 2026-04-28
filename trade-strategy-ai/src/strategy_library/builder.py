@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from src.strategy_library.schemas import (
     StrategyRecommendation,
     StrategyVersion,
     StrategyVersionStatus,
+    StrategyVersionType,
 )
 from src.trader_profile.schemas import (
     PositionBias,
@@ -134,13 +135,16 @@ class StrategyVersionBuilder:
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
     ) -> StrategyVersion:
-        """构建草稿状态的策略版本。"""
+        """构建草稿状态的策略版本（manual 类型）。"""
         return self._build(
             trader_id=trader_id,
             strategy_date=strategy_date,
             profile=profile,
             source_articles=source_articles,
             status=StrategyVersionStatus.draft,
+            version_type=StrategyVersionType.manual,
+            parent_version_id=None,
+            recommendations=None,
             released_at=None,
         )
 
@@ -152,14 +156,49 @@ class StrategyVersionBuilder:
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
     ) -> StrategyVersion:
-        """构建已发布状态的策略版本。"""
+        """构建已发布状态的策略版本（manual 类型）。"""
         return self._build(
             trader_id=trader_id,
             strategy_date=strategy_date,
             profile=profile,
             source_articles=source_articles,
             status=StrategyVersionStatus.released,
+            version_type=StrategyVersionType.manual,
+            parent_version_id=None,
+            recommendations=None,
             released_at=datetime.now(UTC),
+        )
+
+    def build_candidate(
+        self,
+        *,
+        trader_id: str,
+        strategy_date: date,
+        parent_version_id: str,
+        recommendations: list[StrategyRecommendation],
+        notes: str | None = None,
+    ) -> StrategyVersion:
+        """构建候选优化版本（draft 状态，candidate 类型，S7-003）。
+
+        候选版本：
+        - 状态为 draft，不由 Agent 自动发布
+        - version_type 为 candidate
+        - 引用 parent_version_id 追溯正式版本
+        - 由优化流程（S7-001/S7-002）生成
+        """
+        return StrategyVersion(
+            version_id=f"{trader_id}_{strategy_date.isoformat()}_candidate_{parent_version_id[:8]}",
+            trader_id=trader_id,
+            strategy_date=strategy_date,
+            status=StrategyVersionStatus.draft,
+            version_type=StrategyVersionType.candidate,
+            parent_version_id=parent_version_id,
+            recommendations=recommendations,
+            source_article_ids=[],
+            evidence_refs=[],
+            notes=notes,
+            released_at=None,
+            rules_snapshot=[],
         )
 
     def _build(
@@ -170,6 +209,9 @@ class StrategyVersionBuilder:
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
         status: StrategyVersionStatus,
+        version_type: StrategyVersionType,
+        parent_version_id: str | None,
+        recommendations: list[StrategyRecommendation] | None,
         released_at: datetime | None,
     ) -> StrategyVersion:
         """内部构建方法。"""
@@ -192,7 +234,7 @@ class StrategyVersionBuilder:
             scored = scored[:max_positions]
 
         # === 3. 生成 recommendations ===
-        recommendations: list[StrategyRecommendation] = []
+        generated_recommendations: list[StrategyRecommendation] = []
         source_article_ids: list[str] = []
         evidence_refs: list[str] = []
 
@@ -214,7 +256,7 @@ class StrategyVersionBuilder:
             # 估算止损价（conservative / balanced 风格）
             stop_loss = _estimate_stop_loss(article.entry_price, profile.risk_style, profile.position_bias)
 
-            recommendations.append(StrategyRecommendation(
+            generated_recommendations.append(StrategyRecommendation(
                 symbol=article.trading_symbols[0],
                 decision=decision,
                 confidence=confidence,
@@ -225,14 +267,19 @@ class StrategyVersionBuilder:
                 evidence_refs=[article.article_id],
             ))
 
+        final_recommendations = recommendations if recommendations is not None else generated_recommendations
+
         return StrategyVersion(
             version_id=f"{trader_id}_{strategy_date.isoformat()}_{status.value}",
             trader_id=trader_id,
             strategy_date=strategy_date,
             status=status,
-            recommendations=recommendations,
+            version_type=version_type,
+            parent_version_id=parent_version_id,
+            recommendations=final_recommendations,
             source_article_ids=source_article_ids,
             evidence_refs=evidence_refs,
             notes=None,
             released_at=released_at,
+            rules_snapshot=[],
         )

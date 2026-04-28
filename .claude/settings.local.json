@@ -82,7 +82,8 @@
       "Bash(find /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests -name \"*.pyc\" -delete)",
       "Bash(find:*)",
       "Bash(alembic upgrade:*)",
-      "Bash(PYTHONPATH=. alembic:*)"
+      "Bash(PYTHONPATH=. alembic:*)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

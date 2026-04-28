@@ -9,6 +9,7 @@
 """
 
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass
@@ -41,3 +42,25 @@ class ActiveTraderFilterConfig:
     baseline_win_rate: float = 0.50
     min_rule_hit_rate: float | None = None
     min_score: float = 0.30
+
+
+@dataclass
+class RollingEvaluatorConfig:
+    """滚动评估器配置（S7-004）。
+
+    参数说明：
+        window_days: 窗口大小（交易日），默认 30
+            — 按交易日计算，过滤节假日/周末
+        min_signal_frequency: 信号出现比例阈值（含），默认 0.5
+            — 窗口内信号出现比例 >= 此值才算稳定
+        min_sample_trades: 最小有效交易样本量（含），默认 10
+            — 窗口内有效交易笔数 >= 此值才认为样本足够
+        trading_days: 可选的交易日历列表，默认 None
+            — 若不注入则按自然日近似（简化实现）
+            — 传入后 _is_trading_day() 使用此列表判断
+    """
+
+    window_days: int = 30
+    min_signal_frequency: float = 0.5
+    min_sample_trades: int = 10
+    trading_days: list[date] | None = None

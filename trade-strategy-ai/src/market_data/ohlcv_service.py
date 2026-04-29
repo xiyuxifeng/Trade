@@ -124,3 +124,51 @@ class OHLCVService:
             ).order_by(OHLCVBar.trade_date)
             result = await session.scalars(stmt)
             return list(result.all())
+
+    async def get_latest_close(self, symbol: str) -> float | None:
+        """获取某标的最新收盘价。
+
+        Returns:
+            最新收盘价（float），如果不存在返回 None
+        """
+        async with self._factory() as session:
+            stmt = (
+                select(OHLCVBar.close)
+                .where(OHLCVBar.symbol == symbol)
+                .order_by(OHLCVBar.trade_date.desc())
+                .limit(1)
+            )
+            result = await session.scalar(stmt)
+            return float(result) if result is not None else None
+
+    def get_latest_close_sync(self, symbol: str) -> float | None:
+        """同步版本的 get_latest_close，供无法使用 async 的场景调用。
+
+        内部使用 asyncio.run() 包装，勿在已有 async 上下文中调用。
+
+        Returns:
+            最新收盘价（float），如果不存在返回 None
+        """
+        import asyncio
+        return asyncio.run(self.get_latest_close(symbol))
+
+    async def get_bars_as_df(
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> pd.DataFrame:
+        """查询指定区间 ohlcv 数据并返回 DataFrame。
+
+        返回的 DataFrame 包含 date, close 列（与 classify_market_state 兼容）。
+
+        Returns:
+            pd.DataFrame，带 date, close 列
+        """
+        bars = await self.get_bars(symbol, start_date, end_date)
+        if not bars:
+            return pd.DataFrame(columns=["date", "close"])
+        return pd.DataFrame([
+            {"date": bar.trade_date, "close": bar.close}
+            for bar in bars
+        ])

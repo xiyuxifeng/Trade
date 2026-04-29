@@ -41,7 +41,7 @@ from src.persona.cluster_builder import build_clusters_from_db
 from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.sample import build_sample_clusters_file
 from src.persona.storage import write_persona_clusters_file
-from src.market_data.service import MarketDataCache, MarketDataSyncService
+from src.market_data.service import MarketDataCache
 from src.backup.service import backup_project_state, restore_project_state
 from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
 from scripts.init_db import init_db
@@ -1006,86 +1006,6 @@ def market_state_build(
 	full_dest.write_text(ms.model_dump_json(indent=2), encoding="utf-8")
 	typer.echo(f"Wrote MarketState: {full_dest}")
 	typer.echo(f"regime={ms.regime} vol={ms.volatility}")
-
-
-@app.command("market-data-sync")
-def market_data_sync(
-	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
-	symbol: list[str] = typer.Option([], "--symbol", help="需要同步的标的，可重复传入"),
-	index_symbol: list[str] = typer.Option([], "--index-symbol", help="需要同步的指数，可重复传入"),
-	industry_board: list[str] = typer.Option([], "--industry-board", help="需要同步的行业板块，可重复传入"),
-	concept_board: list[str] = typer.Option([], "--concept-board", help="需要同步的概念板块，可重复传入"),
-	start_date: str | None = typer.Option(None, help="起始日期 YYYY-MM-DD"),
-	end_date: str | None = typer.Option(None, help="结束日期 YYYY-MM-DD"),
-	adjust: str = typer.Option("", help="复权方式（AkShare 参数）"),
-	cache_dir: Path | None = typer.Option(None, help="缓存目录，默认读取 config.data.market_data_cache_dir"),
-	log_level: str = typer.Option("INFO", help="日志级别"),
-) -> None:
-	"""同步市场数据到本地缓存，并为后续 DataAgent/MarketState 复用。"""
-
-	configure_logging(log_level)
-	loaded = load_app_config(config)
-	cfg = loaded.config
-	base_dir = _project_base_dir(loaded.config_path)
-
-	symbols = [item.strip() for item in symbol if item.strip()]
-	if not symbols:
-		if cfg.persona.market_state_benchmark_symbol:
-			symbols = [cfg.persona.market_state_benchmark_symbol]
-		else:
-			symbols = [s for s in cfg.data.mock_prices.keys() if s.strip()]
-	if not symbols:
-		symbols = []
-
-	resolved_cache_dir = cache_dir if cache_dir is not None else Path(cfg.data.market_data_cache_dir)
-	if not resolved_cache_dir.is_absolute():
-		resolved_cache_dir = base_dir / resolved_cache_dir
-
-	service = MarketDataSyncService(cache_dir=resolved_cache_dir)
-
-	results = []
-	if symbols:
-		results.extend(
-			service.sync_symbols(
-				symbols=symbols,
-				start_date=_parse_date(start_date) if start_date else None,
-				end_date=_parse_date(end_date) if end_date else None,
-				adjust=adjust,
-			)
-		)
-	for item in index_symbol:
-		results.append(
-			service.sync_index(
-				item,
-				start_date=_parse_date(start_date) if start_date else None,
-				end_date=_parse_date(end_date) if end_date else None,
-			)
-		)
-	for item in industry_board:
-		results.append(
-			service.sync_industry_board(
-				item,
-				start_date=_parse_date(start_date) if start_date else None,
-				end_date=_parse_date(end_date) if end_date else None,
-			)
-		)
-	for item in concept_board:
-		results.append(
-			service.sync_concept_board(
-				item,
-				start_date=_parse_date(start_date) if start_date else None,
-				end_date=_parse_date(end_date) if end_date else None,
-			)
-		)
-
-	if not results:
-		typer.echo("No symbols provided and no default benchmark or mock_prices configured")
-		raise typer.Exit(code=2)
-
-	for result in results:
-		typer.echo(
-			f"{result.symbol}: rows={result.rows_written} latest_close={result.latest_close} cache={result.cache_path}"
-		)
 
 
 @app.command("scheduler-start")

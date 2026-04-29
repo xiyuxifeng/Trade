@@ -10,14 +10,15 @@ DataAgent skill，支持返回最新价格（last_price）。
 
 数据来源优先级：
 1. mock_prices 配置（测试/本地环境）
-2. market_data_cache_dir 中的缓存日线数据
+2. ohlcv_bars 表（数据库）
 """
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from src.market_data.service import MarketDataCache
+from src.db.session import get_session_factory
+from src.market_data.ohlcv_service import OHLCVService
 
 
 def get_last_price_from_mock_prices(*, symbol: str, mock_prices: dict[str, float]) -> float | None:
@@ -25,12 +26,32 @@ def get_last_price_from_mock_prices(*, symbol: str, mock_prices: dict[str, float
     return mock_prices.get(symbol)
 
 
-def get_last_price_from_cache(*, symbol: str, market_data_cache_dir: str | Path | None) -> float | None:
-    """从缓存日线数据中读取最近收盘价作为 fallback。"""
-    if not market_data_cache_dir:
+async def get_last_price_from_db(*, symbol: str) -> float | None:
+    """从 ohlcv_bars 表读取最近收盘价作为 fallback。"""
+    factory = get_session_factory()
+    service = OHLCVService(session_factory=factory)
+    return await service.get_latest_close(symbol)
+
+
+async def batch_get_last_prices_async(
+    *,
+    symbols: list[str],
+    mock_prices: dict[str, float],
+) -> dict[str, float]:
+    """从 mock 配置优先解析价格，失败后并发查 ohlcv_bars 表。"""
+    import asyncio
+
+    async def get_price_for_symbol(s: str) -> tuple[str, float] | None:
+        v = mock_prices.get(s)
+        if v is not None:
+            return (s, float(v))
+        db_price = await get_last_price_from_db(symbol=s)
+        if db_price is not None:
+            return (s, float(db_price))
         return None
-    cache = MarketDataCache(Path(market_data_cache_dir))
-    return cache.latest_close(symbol)
+
+    results = await asyncio.gather(*[get_price_for_symbol(s) for s in symbols])
+    return {s: price for item in results if item is not None for s, price in [item]}
 
 
 def batch_get_last_prices(
@@ -39,19 +60,9 @@ def batch_get_last_prices(
     mock_prices: dict[str, float],
     market_data_cache_dir: str | Path | None = None,
 ) -> dict[str, float]:
-    """从 mock 配置优先解析价格，失败后读缓存。"""
-    result: dict[str, float] = {}
-    cache = MarketDataCache(Path(market_data_cache_dir)) if market_data_cache_dir else None
-    for s in symbols:
-        v = mock_prices.get(s)
-        if v is not None:
-            result[s] = float(v)
-            continue
-        if cache is not None:
-            cached = cache.latest_close(s)
-            if cached is not None:
-                result[s] = float(cached)
-    return result
+    """同步版本，内部调用异步版本。兼容现有同步调用方。"""
+    import asyncio
+    return asyncio.run(batch_get_last_prices_async(symbols=symbols, mock_prices=mock_prices))
 
 
 def supported_fields() -> list[str]:
@@ -59,7 +70,7 @@ def supported_fields() -> list[str]:
     return ["last_price"]
 
 
-def to_payload(
+async def to_payload(
     *,
     symbols: list[str],
     fields: list[str],
@@ -72,16 +83,15 @@ def to_payload(
         symbols: 股票代码列表
         fields: 请求字段列表（本 skill 只处理 last_price）
         mock_prices: mock 价格配置
-        market_data_cache_dir: 行情缓存目录
+        market_data_cache_dir: 行情缓存目录（已废弃，保留参数兼容性）
 
     Returns:
         包含 last_price 的 DataAgent payload 片段
     """
     payload: dict[str, Any] = {"symbols": symbols, "fields": fields}
     if "last_price" in fields:
-        payload["last_price"] = batch_get_last_prices(
+        payload["last_price"] = await batch_get_last_prices_async(
             symbols=symbols,
             mock_prices=mock_prices,
-            market_data_cache_dir=market_data_cache_dir,
         )
     return payload

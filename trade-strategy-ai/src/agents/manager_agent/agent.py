@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -56,6 +56,8 @@ from src.trader_profile.service import default_profiles_path, load_trader_profil
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
 from src.market_data.service import MarketDataCache
+from src.market_data.ohlcv_service import OHLCVService
+from src.db.session import get_session_factory
 from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
 from src.strategy_library.service import StrategyLibraryService
@@ -153,8 +155,11 @@ class ManagerAgent:
         return InstrumentFocus.stock
 
     def _load_market_state(self, *, as_of_date: date) -> MarketState:
-        """Resolve MarketState from file, benchmark CSV, or cached market data."""
+        """Resolve MarketState from file, benchmark CSV, or cached market data.
 
+        优先从 JSON 文件加载，其次从 benchmark CSV 加载，最后从 CSV 缓存加载。
+        如需从数据库加载，请使用 _load_market_state_from_db。
+        """
         p = self._resolve_path(getattr(self.config.persona, "market_state_path", None))
         if p and p.exists():
             try:
@@ -184,6 +189,39 @@ class ManagerAgent:
                 except Exception as exc:  # noqa: BLE001
                     self.logger.warning("failed to build MarketState from market data cache", error=str(exc))
         return MarketState(as_of_date=as_of_date)
+
+    async def _load_market_state_from_db(self, *, as_of_date: date) -> MarketState:
+        """从 ohlcv_bars 数据库加载 MarketState（异步）。
+
+        优先尝试从数据库获取 benchmark symbol 的历史数据，
+        失败后 fallback 到 CSV 缓存（_load_market_state 逻辑）。
+
+        Returns:
+            MarketState 实例
+        """
+        bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
+        if not bench_symbol:
+            return MarketState(as_of_date=as_of_date)
+
+        try:
+            factory = get_session_factory()
+            service = OHLCVService(session_factory=factory)
+            # 取足够长的历史（252 交易日约一年），供 classify_market_state 计算 ma20/ma60
+            lookback_start = as_of_date - timedelta(days=400)
+            df = await service.get_bars_as_df(bench_symbol, lookback_start, as_of_date)
+            if df is not None and len(df) >= 30:
+                return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
+            else:
+                self.logger.warning(
+                    "insufficient DB bars for market state, fallback to CSV cache",
+                    symbol=bench_symbol,
+                    bars_count=len(df) if df is not None else 0,
+                )
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("failed to build MarketState from DB, fallback to CSV", error=str(exc))
+
+        # fallback 到 CSV 缓存
+        return self._load_market_state(as_of_date=as_of_date)
 
     def _templates_dir(self) -> Path:
         # Keep template lookup relative to project root for both CLI and service runs.
@@ -609,7 +647,7 @@ class ManagerAgent:
             clusters_path = self._resolve_path(self.config.persona.clusters_path)
             if clusters_path and clusters_path.exists():
                 clusters_file = load_persona_clusters_file(clusters_path)
-                market_state = self._load_market_state(as_of_date=as_of_date)
+                market_state = await self._load_market_state_from_db(as_of_date=as_of_date)
                 decisions = []
                 for idea in ideas:
                     clusters = clusters_file.clusters_by_trader.get(idea.trader_id, [])

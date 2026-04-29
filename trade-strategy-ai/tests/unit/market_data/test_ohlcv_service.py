@@ -62,3 +62,62 @@ async def test_get_bars(mock_factory):
         )
 
     assert isinstance(bars, list)
+
+
+@pytest.mark.asyncio
+async def test_get_latest_close(mock_factory):
+    """测试 get_latest_close 返回最新收盘价"""
+    service = OHLCVService(session_factory=mock_factory)
+
+    mock_session = mock_factory.return_value.__aenter__.return_value
+    mock_session.scalar.return_value = 10.55  # 最新收盘价
+
+    result = await service.get_latest_close("000001.SZ")
+    assert result == 10.55
+
+    # 验证 SQL 降序排列并限制 1 条
+    call_args = mock_session.scalar.call_args
+    stmt = call_args[0][0]
+    assert "DESC" in str(stmt).upper()
+
+
+@pytest.mark.asyncio
+async def test_get_latest_close_returns_none_when_empty(mock_factory):
+    """测试 get_latest_close 无数据时返回 None"""
+    service = OHLCVService(session_factory=mock_factory)
+
+    mock_session = mock_factory.return_value.__aenter__.return_value
+    mock_session.scalar.return_value = None
+
+    result = await service.get_latest_close("000001.SZ")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_bars_as_df(mock_factory):
+    """测试 get_bars_as_df 返回 DataFrame"""
+    service = OHLCVService(session_factory=mock_factory)
+
+    from src.models.ohlcv_bar import OHLCVBar
+
+    mock_bar = OHLCVBar(
+        symbol="000001.SZ",
+        trade_date=date(2026, 4, 1),
+        open=10.0,
+        high=10.5,
+        low=9.8,
+        close=10.2,
+        volume=1000000,
+    )
+
+    with patch.object(service, "get_bars", return_value=[mock_bar]):
+        df = await service.get_bars_as_df(
+            symbol="000001.SZ",
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 28),
+        )
+
+    assert "date" in df.columns
+    assert "close" in df.columns
+    assert len(df) == 1
+    assert df["close"].iloc[0] == 10.2

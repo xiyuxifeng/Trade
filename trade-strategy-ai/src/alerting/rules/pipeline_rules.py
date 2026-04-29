@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_pipeline_failure_alert(
@@ -25,6 +29,14 @@ def fire_pipeline_failure_alert(
     """
     level = AlertLevel.CRITICAL if status == "failed" else AlertLevel.WARNING
     node_str = f"节点 {node_name} " if node_name else ""
+
+    logger.warning(
+        "Pipeline 失败告警触发: pipeline=%s, node=%s, status=%s, error=%s",
+        pipeline_name,
+        node_name,
+        status,
+        error,
+    )
 
     alert = AlertEvent(
         id=f"pipeline_failure_{pipeline_name}_{node_name or 'unknown'}",

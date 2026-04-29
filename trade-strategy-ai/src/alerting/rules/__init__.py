@@ -27,6 +27,8 @@ from src.alerting.rules.circuit_rules import fire_circuit_breaker_open_alert
 from src.alerting.rules.agent_rules import fire_agent_failure_alert
 from src.alerting.rules.backtest_rules import fire_backtest_failure_alert
 
+from src.alerting.rules.akshare_stale_rules import fire_akshare_stale_alert
+
 __all__ = [
     # 原有导出
     "DEFAULT_ALERT_RULES",
@@ -42,4 +44,5 @@ __all__ = [
     "fire_circuit_breaker_open_alert",
     "fire_agent_failure_alert",
     "fire_backtest_failure_alert",
+    "fire_akshare_stale_alert",
 ]

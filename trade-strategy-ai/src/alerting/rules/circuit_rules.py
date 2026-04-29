@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_circuit_breaker_open_alert(
@@ -19,6 +23,12 @@ def fire_circuit_breaker_open_alert(
         capability: 能力名称
         session: DB session（可选）
     """
+    logger.warning(
+        "Circuit Breaker 跳闸告警触发: provider=%s, capability=%s",
+        provider,
+        capability,
+    )
+
     alert = AlertEvent(
         id=f"circuit_breaker_{provider}_{capability}",
         level=AlertLevel.WARNING,

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_db_failure_alert(
@@ -19,6 +23,12 @@ def fire_db_failure_alert(
         error_message: 错误详细信息
         session: DB session（可选）
     """
+    logger.error(
+        "数据库异常告警触发: error_type=%s, error=%s",
+        error_type,
+        error_message,
+    )
+
     alert = AlertEvent(
         id=f"db_failure_{error_type}",
         level=AlertLevel.CRITICAL,

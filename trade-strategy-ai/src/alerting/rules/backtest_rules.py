@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_backtest_failure_alert(
@@ -19,6 +23,12 @@ def fire_backtest_failure_alert(
         error: 错误信息
         session: DB session（可选）
     """
+    logger.warning(
+        "回测任务失败告警触发: task_id=%s, error=%s",
+        task_id,
+        error,
+    )
+
     alert = AlertEvent(
         id=f"backtest_failure_{task_id}",
         level=AlertLevel.WARNING,

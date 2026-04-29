@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_agent_failure_alert(
@@ -21,6 +25,13 @@ def fire_agent_failure_alert(
         error: 错误信息
         session: DB session（可选）
     """
+    logger.warning(
+        "Agent 执行失败告警触发: agent=%s, run_type=%s, error=%s",
+        agent_name,
+        run_type,
+        error,
+    )
+
     alert = AlertEvent(
         id=f"agent_failure_{agent_name}_{run_type}",
         level=AlertLevel.WARNING,

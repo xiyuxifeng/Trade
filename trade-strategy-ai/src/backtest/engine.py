@@ -98,40 +98,242 @@ def _calc_t1_return(context: MarketContextSnapshot, symbol: str) -> float | None
 
 
 # ---------------------------------------------------------------------------
-# A股交易日历（支持 akshare 加载或外部注入节假日）
+# A股交易日历（支持 akshare 加载、外部注入节假日、本地文件 fallback）
 # ---------------------------------------------------------------------------
+
+# 本地交易日历文件路径（默认）
+_DEFAULT_CALENDAR_FILE = "data/backtest/trading_calendar.json"
+
+
 class TradeCalendar:
-    """A股交易日历（支持外部注入节假日或从 akshare 加载）"""
+    """A股交易日历（支持本地文件 / akshare 加载 / 外部注入节假日）。
+
+    加载优先级：
+    1. 本地文件（data/backtest/trading_calendar.json）
+    2. akshare 在线加载
+    3. 手动注入的 holidays
+
+    Staleness 检测：
+    - akshare 加载的数据超过 7 天未更新则视为 stale
+    - stale 时返回 True（可用于触发告警）
+    """
 
     _holidays: set[str] = set()
     _trade_dates: set[str] | None = None
     _loaded: bool = False
+    _last_loaded_at: str | None = None  # ISO format timestamp
+    _source: str = "none"  # "file" / "akshare" / "holidays" / "none"
 
     @classmethod
     def set_holidays(cls, holidays: set[str]) -> None:
         """手动设置节假日（用于测试或外部日历源）"""
         cls._holidays = holidays
+        cls._source = "holidays"
 
     @classmethod
-    def load_from_akshare(cls) -> None:
-        """从 akshare 加载交易日历"""
-        if cls._loaded:
+    def load_from_file(cls, file_path: str | None = None) -> bool:
+        """从本地 JSON 文件加载交易日历。
+
+        文件格式：{"trade_dates": ["2026-01-02", "2026-01-03", ...]}
+
+        加载逻辑：
+        1. 本地文件存在且数据充足（>= 100 天）→ 使用本地
+        2. 当前年份 <= 本地最大年份 → 使用本地（数据够新）
+        3. 当前年份 > 本地最大年份（进入新的一年）→ 自动从 akshare 刷新并写入文件
+
+        Args:
+            file_path: 日历文件路径，默认使用 data/backtest/trading_calendar.json
+
+        Returns:
+            True 表示加载成功，False 表示失败
+        """
+        import json
+        from pathlib import Path
+        from datetime import date
+
+        path = Path(file_path) if file_path else Path(_DEFAULT_CALENDAR_FILE)
+
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                dates = data.get("trade_dates", [])
+
+                # 数据量少于 100 天认为不充足
+                if len(dates) < 100:
+                    raise ValueError("Insufficient data")
+
+                # 检查是否需要刷新（当前年份 > 本地最大年份）
+                current_year = date.today().year
+                max_year = max(int(d[:4]) for d in dates if d[:4].isdigit()) if dates else 0
+
+                if current_year <= max_year:
+                    # 本地数据够新，直接使用
+                    cls._trade_dates = set(dates)
+                    cls._loaded = True
+                    cls._last_loaded_at = data.get("_last_updated", cls._now_iso())
+                    cls._source = "file"
+                    return True
+
+                # 当前年份 > 本地最大年份，需要刷新
+                cls._source = "file_refresh_needed"
+
+            except Exception:
+                pass
+
+        # 本地文件不存在、数据不足、或进入新的一年 → 从 akshare 刷新（重试 2 次）
+        last_error = None
+        for attempt in range(3):  # 最多 3 次（1 次 + 2 次重试）
+            if attempt > 0:
+                import time
+                time.sleep(1)  # 重试间隔 1 秒
+            if cls.load_from_akshare():
+                cls._save_to_file(path)
+                return True
+            last_error = f"akshare attempt {attempt + 1} failed"
+
+        # 3 次全部失败 → 触发告警
+        cls._fire_calendar_refresh_alert(last_error)
+        return False
+
+    @classmethod
+    def _fire_calendar_refresh_alert(cls, error: str) -> None:
+        """交易日历刷新失败时触发告警。"""
+        try:
+            from src.alerting.manager import AlertManager
+            from src.alerting.models import AlertLevel, AlertEvent
+
+            manager = AlertManager()
+            alert = AlertEvent(
+                id="calendar_refresh_failed",
+                level=AlertLevel.WARNING,
+                title="交易日历刷新失败",
+                message=f"交易日历从 akshare 刷新失败（{error}），请检查网络连接。本地日历可能已过期。",
+                tags=["freshness", "trading_calendar", "akshare"],
+                metadata={"error": error},
+            )
+            manager.fire_alert(alert)
+        except Exception as e:
+            logger.error(
+                "交易日历告警触发失败: error=%s, exception=%s",
+                error,
+                str(e),
+            )
+
+    @classmethod
+    def _save_to_file(cls, path: Path | None = None) -> None:
+        """将当前 _trade_dates 保存到本地文件。"""
+        import json
+        from pathlib import Path
+
+        if cls._trade_dates is None:
             return
+
+        file_path = Path(path) if path else Path(_DEFAULT_CALENDAR_FILE)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 按日期排序
+        sorted_dates = sorted(cls._trade_dates)
+        data = {
+            "_comment": "A股交易日历（自动从 akshare 生成）",
+            "_description": "当 akshare 不可用时使用此文件。格式：trade_dates 为 YYYY-MM-DD 字符串列表",
+            "_source": cls._source or "akshare",
+            "_last_updated": cls._now_iso(),
+            "trade_dates": sorted_dates,
+        }
+
+        try:
+            file_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass  # 写入失败不影响主流程
+
+    @classmethod
+    def load_from_akshare(cls) -> bool:
+        """从 akshare 加载交易日历。
+
+        Returns:
+            True 表示加载成功，False 表示失败（会触发 fallback）
+        """
+        if cls._loaded and cls._source == "akshare":
+            return True
+
         try:
             import akshare as ak
 
             df = ak.tool_trade_date_hist_sina()
             cls._trade_dates = set(df["trade_date"].astype(str))
+            cls._loaded = True
+            cls._last_loaded_at = cls._now_iso()
+            cls._source = "akshare"
+            return True
         except Exception:
-            # 失败时回退为 None，继续使用手动 holidays 逻辑
+            # 失败时不设置 _loaded，仍可 fallback 到本地文件
             cls._trade_dates = None
-        cls._loaded = True
+            cls._source = "none"
+            return False
+
+    @classmethod
+    def ensure_loaded(cls) -> bool:
+        """确保交易日历已加载（自动选择最优数据源）。
+
+        加载优先级：本地文件 > akshare > 已有 holidays
+
+        Returns:
+            True 表示加载成功，False 表示所有方式均失败
+        """
+        if cls._loaded:
+            return True
+
+        # 优先级1：本地文件
+        if cls.load_from_file():
+            return True
+
+        # 优先级2：akshare
+        if cls.load_from_akshare():
+            return True
+
+        # 优先级3：已有 holidays（通过 set_holidays 设置）
+        if cls._holidays:
+            cls._loaded = True
+            cls._source = "holidays"
+            return True
+
+        return False
+
+    @classmethod
+    def is_stale(cls) -> bool:
+        """判断日历数据是否过期（akshare 数据超过 7 天未更新视为 stale）。
+
+        仅针对 akshare 加载的数据做 stale 检测；本地文件由外部负责更新。
+        """
+        if cls._source == "akshare" and cls._last_loaded_at:
+            from datetime import datetime, timedelta, timezone
+
+            try:
+                loaded_dt = datetime.fromisoformat(cls._last_loaded_at)
+                age = datetime.now(timezone.utc) - loaded_dt
+                return age > timedelta(days=7)
+            except Exception:
+                return True  # 无法解析时间视为 stale
+        return False
+
+    @classmethod
+    def source(cls) -> str:
+        """返回当前数据来源（file / akshare / holidays / none）。"""
+        return cls._source
+
+    @classmethod
+    def _now_iso(cls) -> str:
+        """返回当前时间的 ISO 格式字符串。"""
+        from datetime import datetime, timezone
+
+        return datetime.now(timezone.utc).isoformat()
 
     @classmethod
     def is_trade_date(cls, d: date) -> bool:
         """判断是否为交易日（跳过周末和法定节假日）"""
-        if cls._trade_dates is None and not cls._loaded:
-            cls.load_from_akshare()
+        if not cls._loaded:
+            if not cls.ensure_loaded():
+                return False
         if d.weekday() >= 5:
             return False
         if cls._trade_dates is not None:
@@ -230,10 +432,38 @@ async def validate_rules_for_trader(
         "规则验真结束: trader=%s, total_rules=%d, supported=%d, unsupported=%d",
         trader_id,
         len(results),
-        sum(1 for r in results if r.programmatic_level == "fully_programmable"),
-        sum(1 for r in results if r.programmatic_level == "unsupported"),
+        sum(1 for r in results if r.programmable),
+        sum(1 for r in results if not r.programmable),
     )
     return results
+
+
+def _truncate_notes(notes: list[str], max_size: int = 1024) -> list[str]:
+    """截断 notes 列表使总大小不超过 max_size 字节。
+
+    策略：从前往后保留 notes，直到追加下一条会超过限制，然后添加截断标记。
+    """
+    import json
+
+    total_size = sum(len(n.encode("utf-8")) for n in notes)
+
+    if total_size <= max_size:
+        return notes
+
+    # 从前往后保留，直到追加下一条会超过限制
+    result: list[str] = []
+    current_size = 0
+    for note in notes:
+        note_size = len(note.encode("utf-8"))
+        if current_size + note_size <= max_size:
+            result.append(note)
+            current_size += note_size
+        else:
+            # 放不下了，停止并添加截断标记
+            break
+
+    result.append("[notes truncated due to size limit]")
+    return result
 
 
 def validate_rule_hits(
@@ -393,7 +623,7 @@ def validate_rule_hits(
         hit_rate=hit_rate,
         posterior_return_mean=posterior_mean,
         posterior_return_median=posterior_median,
-        notes=notes + ([f"hit_symbols: {','.join(hit_symbols_per_day)}"] if hit_symbols_per_day else []),
+        notes=_truncate_notes(notes + ([f"hit_symbols: {','.join(hit_symbols_per_day)}"] if hit_symbols_per_day else [])),
     )
 
 

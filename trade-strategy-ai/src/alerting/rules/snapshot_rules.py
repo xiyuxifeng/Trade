@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_snapshot_missing_alert(
@@ -25,6 +28,12 @@ def fire_snapshot_missing_alert(
 
     if snapshot_path.exists():
         return  # 快照存在，不告警
+
+    logger.warning(
+        "快照缺失告警触发: trade_date=%s, slot=%s",
+        trade_date,
+        slot,
+    )
 
     alert = AlertEvent(
         id=f"snapshot_missing_{trade_date}_{slot}",

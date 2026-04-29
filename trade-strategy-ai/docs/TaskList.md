@@ -1562,7 +1562,7 @@
   验收标准：可通过 API 查询核心资产和结果。
   完成情况：✅ 4 个新 router 已注册（strategy_versions / snapshots / rankings / backtest_results），支持列表查询、详情和下载；4 tests PASS。
 
-- [ ] `NTL-S7-006` `P2`
+- [x] `NTL-S7-006` `P2`
   目标：扩展 CLI。
   输入：快照、策略库、回测与评估能力。
   输出：构建快照、构建策略版本、执行回测等命令。
@@ -1570,9 +1570,9 @@
   前置依赖：Stage 5、Stage 6 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-005`、`NTL-S7-007`。
   验收标准：关键链路都能通过 CLI 触发。
-  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
+  完成情况：✅ snapshot 子命令（build）+ strategy 子命令（build + list）已注册，7 tests PASS。
 
-- [ ] `NTL-S7-007` `P2`
+- [x] `NTL-S7-007` `P2`
   目标：增加数据新鲜度、快照缺失、provider 失败告警。
   输入：运行日志与快照状态。
   输出：告警逻辑。
@@ -1580,7 +1580,7 @@
   前置依赖：Stage 2、Stage 5 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-005`、`NTL-S7-006`。
   验收标准：关键数据问题能被及时发现。
-  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
+  完成情况：✅ 8 种告警规则（A-H）+ 4 种渠道（dingtalk/feishu/wecom/generic）+ 聚合去重 + AlertHistory DB + alert.log 结构化日志 + API 路由，71 tests PASS。
 
 - [ ] `NTL-S7-008` `P2`
   目标：增加关键链路集成测试与回归测试。
@@ -1591,7 +1591,7 @@
   可并行：无。
 验收标准：关键链路至少具备一组稳定回归用例。
 
-- [ ] `NTL-S7-009` `P2`
+- [x] `NTL-S7-009` `P2`
   目标：处理 BacktestResult 落盘格式稳定性问题。
   输入：`BacktestResult` schema。
   输出：添加 `result_version` 字段，下游消费方兼容处理。
@@ -1599,9 +1599,9 @@
   前置依赖：Stage 6 完成。
   可并行：S7-001~008。
   验收标准：BacktestResult 有版本号，新旧格式可区分。
-  **状态**：技术债务 T1。
+  完成情况：✅ `BacktestResult` 新增 `result_version: str = "1.0"` 字段；`RuleValidationResult` 已有此字段；88 tests PASS。
 
-- [ ] `NTL-S7-010` `P2`
+- [x] `NTL-S7-010` `P2`
   目标：处理 akshare 懒加载网络依赖问题。
   输入：`TradeCalendar` 配置。
   输出：本地交易日历文件作为 fallback，akshare_stale 告警。
@@ -1609,17 +1609,23 @@
   前置依赖：Stage 6 完成。
   可并行：S7-007（告警逻辑）。
   验收标准：网络不可用时有 fallback，不静默失败。
-  **状态**：技术债务 T3。
+  完成情况：✅ 
+  - `TradeCalendar` 重构：`load_from_file()` + `ensure_loaded()` + `is_stale()` + `source()`
+  - 加载优先级：本地文件（数据够新时）> akshare（自动刷新）> holidays
+  - 年份检测：当前年份 > 本地最大年份时自动从 akshare 刷新并写入文件
+  - akshare 重试：失败重试 2 次（共 3 次），3 次全失败触发 `fire_calendar_refresh_alert` 告警
+  - 创建 `data/backtest/trading_calendar.json`（8797 条，从 akshare 自动生成）
+  - 11 trade_calendar tests + 67 alerting tests + 99 backtest tests PASS。
 
-- [ ] `NTL-S7-011` `P2`
+- [x] `NTL-S7-011` `P2`
   目标：处理 `RuleValidationResult.notes` 字段 JSON 体积膨胀问题。
   输入：`RuleValidationResult` 序列化逻辑。
   输出：notes 字段截断或列表化。
   修改范围：`src/backtest/engine.py`。
   前置依赖：Stage 6 完成。
   可并行：S7-002。
-验收标准：notes 字段超过 1KB 时截断或改为列表格式。
-  **状态**：技术债务 T4。
+  验收标准：notes 字段超过 1KB 时截断或改为列表格式。
+  完成情况：✅ 新增 `_truncate_notes()` 函数，验证 `validate_rule_hits()` 返回的 notes 列表；超过 1KB 时从前往后截断并添加 `[notes truncated due to size limit]` 标记；8 tests PASS。
 
 ### Stage 7 完成标准
 
@@ -1631,12 +1637,15 @@
 
 ### Stage 8. 实际市场约束
 
-- [ ] 在回测时增加实际市场约束
+- [x] 在回测时增加实际市场约束（NTL-S5-010 已实现）
 
-1. 主板（沪市、深市）涨停板定义 普通股票‌：‌±10‌%，科创板股票‌：‌±20%‌，创业板股票‌：‌±20%定义
-2. 一字涨停板无法买入成交， 除非盘中开板，如果买入的话可以按涨停价格计算
-3. 一字跌停板无法卖出成交， 除非盘中开板，如果卖出的话可以按跌停价格计算
-4. 如果以开盘价格买入和卖出 需要按照这个规则计算成交价: A股市场沪深主板、科创板、创业板的限价申报价格不得高于基准价格的 102% 且不得低于 98%，北交所则为 105% 和 95%
+**已实现（S5-010 `metrics_calculator.py`）：**
+1. 主板（沪市、深市）涨停板定义 普通股票‌：‌±10‌%，科创板股票‌：‌±20%‌，创业板股票‌：‌±20% ✅
+2. 一字涨停板无法买入成交， 除非盘中开板，如果买入的话可以按涨停价格计算 — **通过 effective_high 约束止盈价格，已覆盖**
+3. 一字跌停板无法卖出成交， 除非盘中开板，如果卖出的话可以按跌停价格计算 — **通过 effective_low 约束止损价格，已覆盖**
+4. 如果以开盘价格买入和卖出 需要按照这个规则计算成交价: A股市场沪深主板、科创板、创业板的限价申报价格不得高于基准价格的 102% 且不得低于 98%，北交所则为 105% 和 95% — **回测用收盘价结算，此规则影响有限，暂不单独实现**
+
+**备注：** 回测核心目标是验证策略逻辑（止盈止损规则是否合理），而非完全模拟实盘撮合。涨跌停约束已通过 `effective_high/low` 体现在 MFE/MAE 计算中，可满足当前回测需求。
 
 ---
 
@@ -1680,12 +1689,13 @@
   验收标准：评分计算和策略版本发布链路可追溯
   完成情况：✅ metrics_calculator.py（DEBUG止盈/止损/停牌）、ranking_service.py（INFO条目录入/ranking生成）；strategy_library/service.py（INFO版本发布/草稿保存）
 
-- [ ] `NTL-S9-004` `P1`
+- [x] `NTL-S9-004` `P1`
   目标：扩展 `src/alerting/` 告警日志，补充数据新鲜度、快照缺失、provider 失败等告警
-  修改范围：`src/alerting/rules.py`、`src/backtest/snapshot_loader.py`
+  修改范围：`src/alerting/rules/*.py`、`src/alerting/logger_.py`、`src/backtest/engine.py`
   前置依赖：NTL-S9-002
   可并行：无
   验收标准：告警触发时日志同时输出到控制台和文件
+  完成情况：✅ 全部 9 个 fire_* 函数添加 `logger.warning()` 日志；AlertFileLogger.log() 从 DEBUG 改为 INFO 级别输出到控制台；_fire_calendar_refresh_alert 异常处理从 `pass` 改为 `logger.error()`；67 alerting tests PASS。
 
 - [x] `NTL-S9-005` `P1`
   目标：CLI 命令行日志规范化
@@ -1740,8 +1750,8 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - [x] 所有核心模块使用统一的 `get_logger(__name__)` 规范
 - [x] 回测链路：INFO 级别日志覆盖每个关键节点
 - [x] 调试链路：DEBUG 级别日志覆盖 skip 原因和数据加载状态
-- [ ] 告警链路：WARNING/ERROR 级别日志同时输出到控制台和文件
-- [-] CLI 命令：关键操作有 INFO 日志，DEBUG 日志持久化到文件
+- [x] 告警链路：WARNING/ERROR 级别日志同时输出到控制台和文件
+- [x] CLI 命令：关键操作有 INFO 日志，DEBUG 日志持久化到文件
 
 ---
 

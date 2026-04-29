@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_provider_failure_alert(
@@ -21,6 +25,13 @@ def fire_provider_failure_alert(
         error: 错误信息
         session: DB session（可选）
     """
+    logger.warning(
+        "Provider 失败告警触发: provider=%s, capability=%s, error=%s",
+        provider,
+        capability,
+        error,
+    )
+
     alert = AlertEvent(
         id=f"provider_failure_{provider}_{capability}",
         level=AlertLevel.WARNING,

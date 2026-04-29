@@ -2966,7 +2966,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ## 节假日
 
-获取法定节假日列表。
+获取法定节假日列表: 从2015年到今年的所有节假日列表。
 
 **请求方式：** `POST`
 

@@ -56,4 +56,11 @@ class AlertFileLogger:
             self.log_path.read_text(encoding="utf-8") + line + "\n",
             encoding="utf-8",
         )
-        logger.debug("alert logged: %s", alert.title)
+        # INFO 级别输出到控制台，DEBUG 只写入文件
+        logger.info(
+            "告警已记录: level=%s, title=%s, channel=%s, status=%s",
+            alert.level.value,
+            alert.title,
+            channel,
+            status,
+        )

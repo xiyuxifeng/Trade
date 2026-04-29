@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.alerting.models import AlertEvent, AlertLevel
+
+logger = logging.getLogger(__name__)
 
 
 def fire_freshness_alert(
@@ -25,6 +29,13 @@ def fire_freshness_alert(
         return  # 数据足够新鲜
 
     level = AlertLevel.CRITICAL if hours > threshold_hours * 2 else AlertLevel.WARNING
+
+    logger.warning(
+        "数据新鲜度告警触发: data_type=%s, hours=%.1f, threshold=%.1f",
+        data_type,
+        hours,
+        threshold_hours,
+    )
 
     alert = AlertEvent(
         id=f"freshness_{data_type}_{hours:.0f}h",

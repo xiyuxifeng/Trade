@@ -46,15 +46,26 @@ def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
         typer.secho(f"配置加载失败: {exc}", fg=typer.colors.YELLOW)
         return BacktestEngine()
 
-    # 目前 SnapshotLoader 的具体服务（snapshot_service / strategy_repo）
-    # 需在后续阶段根据 data.providers 做完整初始化；此处先创建 loader 占位
+    # 初始化 SnapshotService
+    from src.market_universe.snapshot_service import SnapshotService
+
+    snapshot_service = SnapshotService(
+        base_dir="data/market_universe/snapshots"
+    )
+
+    # 初始化 StrategyRepoAdapter
+    from src.market_data.strategy_repo_adapter import StrategyRepoAdapter
+
+    strategy_repo_adapter = StrategyRepoAdapter()
+
     from src.backtest.snapshot_loader import SnapshotLoader
 
     loader = SnapshotLoader(
-        snapshot_service=None,  # TODO: 根据配置初始化具体快照服务
-        strategy_repo=None,     # TODO: 根据配置初始化策略仓库
+        snapshot_service=snapshot_service,
+        strategy_repo=strategy_repo_adapter,
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)
+
 
 
 def _run_async(coro):

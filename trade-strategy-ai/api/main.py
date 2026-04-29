@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import run, reports
+from api.routers import run, reports, strategy_versions, snapshots, rankings, backtest_results
 
 
 @asynccontextmanager
@@ -46,6 +46,10 @@ app.add_middleware(
 # 注册路由
 app.include_router(run.router)
 app.include_router(reports.router)
+app.include_router(strategy_versions.router)
+app.include_router(snapshots.router)
+app.include_router(rankings.router)
+app.include_router(backtest_results.router)
 
 
 @app.get("/")

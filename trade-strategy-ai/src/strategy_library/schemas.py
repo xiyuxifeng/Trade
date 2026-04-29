@@ -79,6 +79,11 @@ class StrategyVersion:
     trader_id: str  # 交易员 ID
     strategy_date: date  # 策略日期
     status: StrategyVersionStatus  # 版本状态
+
+    def __post_init__(self) -> None:
+        """自动将 strategy_date 的 str 格式转换为 date 对象（兼容 JSON 反序列化）。"""
+        if isinstance(self.strategy_date, str):
+            object.__setattr__(self, "strategy_date", date.fromisoformat(self.strategy_date))
     version_type: StrategyVersionType = StrategyVersionType.manual  # 版本类型（S7-003 新增）
     parent_version_id: str | None = None  # 父版本 ID，用于候选版本追溯正式版本（S7-003 新增）
     recommendations: list[StrategyRecommendation] = field(default_factory=list)  # 建议列表

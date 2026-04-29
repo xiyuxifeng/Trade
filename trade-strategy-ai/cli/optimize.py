@@ -212,6 +212,7 @@ output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON �
     if db:
         from datetime import date as Date
         from src.strategy_library.service import StrategyLibraryService
+        from src.optimization.strategy_advisor import RuleAdjustment
         from config.database import get_session_factory
 
         if not trader or not date:

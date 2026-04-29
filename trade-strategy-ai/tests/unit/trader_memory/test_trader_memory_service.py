@@ -1,50 +1,90 @@
+"""TraderMemoryStore 数据库实现测试。
+
+迁移自 JSONL 文件存储测试（NTL-S7-000）：
+- 所有测试方法改为 async（store 方法已全部 async）
+- 不再使用 tmp_path / path 参数（数据库实现忽略此参数）
+"""
+
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from datetime import date
 from uuid import uuid4
 
+import pytest
+
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
-from src.trader_memory.service import TraderMemoryStore
 
 
-def test_memory_store_append_and_list_recent(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "trader_memory.jsonl")
-    now = datetime.now(UTC)
-    older = now - timedelta(days=1)
+# ---------------------------------------------------------------------------
+# 辅助函数
+# ---------------------------------------------------------------------------
 
-    store.append(
-        TraderMemoryItem(
+def _make_item(
+    *,
+    trader_id: str = "trader_a",
+    memory_type: TraderMemoryType = TraderMemoryType.failure_case,
+    as_of_date: date | None = None,
+    symbol: str = "000001.SZ",
+    title: str | None = None,
+    content: str = "test content",
+    **kwargs,
+) -> TraderMemoryItem:
+    """构造 TraderMemoryItem 的工厂函数，减少重复代码。
+
+    title 默认使用 uuid4 以避免 unique constraint 冲突（测试数据库共享）。
+    """
+    if as_of_date is None:
+        as_of_date = date(2026, 4, 5)
+    if title is None:
+        title = str(uuid4())
+    return TraderMemoryItem(
+        trader_id=trader_id,
+        memory_type=memory_type,
+        as_of_date=as_of_date,
+        symbol=symbol,
+        title=title,
+        content=content,
+        **kwargs,
+    )
+
+
+# ---------------------------------------------------------------------------
+# P2-103: append / list_recent
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_memory_store_append_and_list_recent(store: TraderMemoryStore) -> None:
+    now = date(2026, 4, 6)
+    older = date(2026, 4, 5)
+
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.failure_case,
-            as_of_date=date(2026, 4, 5),
-            symbol="000001.SZ",
+            as_of_date=older,
             title="loss",
             content="gap down",
-            created_at=older,
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.success_case,
-            as_of_date=date(2026, 4, 6),
-            symbol="000001.SZ",
+            as_of_date=now,
             title="win",
             content="breakout",
-            created_at=now,
         )
     )
 
-    recent = store.list_recent(trader_id="trader_a", limit=1)
+    recent = await store.list_recent(trader_id="trader_a", limit=1)
     assert len(recent) == 1
     assert recent[0].title == "win"
 
 
-def test_memory_store_search_by_symbol(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "trader_memory.jsonl")
-    store.append(
-        TraderMemoryItem(
+@pytest.mark.asyncio
+async def test_memory_store_search_by_symbol(store: TraderMemoryStore) -> None:
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.review_note,
             as_of_date=date(2026, 4, 6),
@@ -53,8 +93,8 @@ def test_memory_store_search_by_symbol(tmp_path: Path) -> None:
             content="index ETF",
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.review_note,
             as_of_date=date(2026, 4, 6),
@@ -64,35 +104,33 @@ def test_memory_store_search_by_symbol(tmp_path: Path) -> None:
         )
     )
 
-    results = store.search_by_symbol(trader_id="trader_a", symbol="510300.SH")
+    results = await store.search_by_symbol(trader_id="trader_a", symbol="510300.SH")
     assert len(results) == 1
     assert results[0].title == "note"
 
 
-def test_memory_store_summarize_context(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "trader_memory.jsonl")
-    store.append(
-        TraderMemoryItem(
+@pytest.mark.asyncio
+async def test_memory_store_summarize_context(store: TraderMemoryStore) -> None:
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.success_case,
             as_of_date=date(2026, 4, 5),
-            symbol="000001.SZ",
             title="win",
             content="good entry",
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.review_note,
             as_of_date=date(2026, 4, 6),
-            symbol="000001.SZ",
             title="review",
             content="take profit earlier",
         )
     )
 
-    summary = store.summarize_context(trader_id="trader_a", symbol="000001.SZ", limit=5)
+    summary = await store.summarize_context(trader_id="trader_a", symbol="000001.SZ", limit=5)
     assert summary.total_items == 2
     assert summary.total_symbol_items == 2
     assert summary.by_type["success_case"] == 1
@@ -104,64 +142,67 @@ def test_memory_store_summarize_context(tmp_path: Path) -> None:
 # P2-103 / P2-109D: archive / restore / hard_delete
 # ---------------------------------------------------------------------------
 
-def test_archive_and_restore(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    memory = TraderMemoryItem(
+@pytest.mark.asyncio
+async def test_archive_and_restore(store: TraderMemoryStore) -> None:
+    memory = _make_item(
         trader_id="trader_a",
         memory_type=TraderMemoryType.failure_case,
-        as_of_date=date(2026, 4, 5),
-        symbol="000001.SZ",
         title="loss",
         content="gap down",
     )
-    store.append(memory)
-    assert len(store.list_recent(trader_id="trader_a")) == 1
+    await store.append(memory)
+    assert len(await store.list_recent(trader_id="trader_a")) == 1
 
     # archive
-    found = store.archive(memory.memory_id)
+    found = await store.archive(memory.memory_id)
     assert found is True
     # gone from default query
-    assert len(store.list_recent(trader_id="trader_a")) == 0
+    assert len(await store.list_recent(trader_id="trader_a")) == 0
     # visible when including archived
-    assert len(store.list_filtered(TraderMemoryFilter(trader_id="trader_a", include_archived=True))) == 1
+    assert (
+        len(
+            await store.list_filtered(
+                TraderMemoryFilter(trader_id="trader_a", include_archived=True)
+            )
+        )
+        == 1
+    )
 
     # restore
-    restored = store.restore(memory.memory_id)
+    restored = await store.restore(memory.memory_id)
     assert restored is True
-    assert len(store.list_recent(trader_id="trader_a")) == 1
+    assert len(await store.list_recent(trader_id="trader_a")) == 1
 
 
-def test_hard_delete(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    memory = TraderMemoryItem(
+@pytest.mark.asyncio
+async def test_hard_delete(store: TraderMemoryStore) -> None:
+    memory = _make_item(
         trader_id="trader_a",
         memory_type=TraderMemoryType.success_case,
         as_of_date=date(2026, 4, 6),
-        symbol="000001.SZ",
         title="win",
         content="breakout",
     )
-    store.append(memory)
-    assert len(store.list_recent(trader_id="trader_a")) == 1
+    await store.append(memory)
+    assert len(await store.list_recent(trader_id="trader_a")) == 1
 
-    deleted = store.hard_delete(memory.memory_id)
+    deleted = await store.hard_delete(memory.memory_id)
     assert deleted is True
-    assert len(store.list_recent(trader_id="trader_a")) == 0
+    assert len(await store.list_recent(trader_id="trader_a")) == 0
 
 
-def test_archive_not_found(tmp_path: Path) -> None:
-    from uuid import uuid4
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    assert store.archive(uuid4()) is False
+@pytest.mark.asyncio
+async def test_archive_not_found(store: TraderMemoryStore) -> None:
+    assert await store.archive(uuid4()) is False
 
 
 # ---------------------------------------------------------------------------
 # P2-103: list_filtered with various criteria
 # ---------------------------------------------------------------------------
 
-def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
+async def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
     items = [
-        TraderMemoryItem(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.success_case,
             as_of_date=date(2026, 4, 1),
@@ -169,7 +210,7 @@ def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
             title="win breakout",
             content="price broke 20d high",
         ),
-        TraderMemoryItem(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.failure_case,
             as_of_date=date(2026, 4, 3),
@@ -177,7 +218,7 @@ def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
             title="loss",
             content="gap down stop out",
         ),
-        TraderMemoryItem(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.review_note,
             as_of_date=date(2026, 4, 5),
@@ -185,7 +226,7 @@ def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
             title="ETF note",
             content="index ETF position reviewed",
         ),
-        TraderMemoryItem(
+        _make_item(
             trader_id="trader_b",
             memory_type=TraderMemoryType.success_case,
             as_of_date=date(2026, 4, 2),
@@ -195,26 +236,26 @@ def _seed_memories(store: TraderMemoryStore) -> list[TraderMemoryItem]:
         ),
     ]
     for item in items:
-        store.append(item)
+        await store.append(item)
     return items
 
 
-def test_filter_by_memory_types(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_filter_by_memory_types(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", memory_types=[TraderMemoryType.success_case])
     )
     assert len(result) == 1
     assert result[0].memory_type == TraderMemoryType.success_case
 
 
-def test_filter_by_date_range(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_filter_by_date_range(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(
             trader_id="trader_a",
             date_from=date(2026, 4, 2),
@@ -225,55 +266,55 @@ def test_filter_by_date_range(tmp_path: Path) -> None:
     assert result[0].as_of_date == date(2026, 4, 3)
 
 
-def test_filter_by_symbol(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_filter_by_symbol(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", symbol="000001.SZ")
     )
     assert len(result) == 2
 
 
-def test_filter_by_keyword(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_filter_by_keyword(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", keyword="gap")
     )
     assert len(result) == 1
     assert "gap" in result[0].content.lower()
 
 
-def test_filter_archived_excluded_by_default(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    item = _seed_memories(store)[0]  # success_case
-    store.archive(item.memory_id)
+@pytest.mark.asyncio
+async def test_filter_archived_excluded_by_default(store: TraderMemoryStore) -> None:
+    item = (await _seed_memories(store))[0]  # success_case
+    await store.archive(item.memory_id)
 
-    result = store.list_filtered(TraderMemoryFilter(trader_id="trader_a"))
+    result = await store.list_filtered(TraderMemoryFilter(trader_id="trader_a"))
     assert all(not r.archived for r in result)
 
 
-def test_filter_include_archived(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    item = _seed_memories(store)[0]
-    store.archive(item.memory_id)
+@pytest.mark.asyncio
+async def test_filter_include_archived(store: TraderMemoryStore) -> None:
+    item = (await _seed_memories(store))[0]
+    await store.archive(item.memory_id)
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", include_archived=True)
     )
     assert len(result) == 3  # 2 active + 1 archived
 
 
-def test_filter_limit_offset(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_filter_limit_offset(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    page1 = store.list_filtered(
+    page1 = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", limit=1, offset=0)
     )
-    page2 = store.list_filtered(
+    page2 = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", limit=1, offset=1)
     )
     assert len(page1) == 1
@@ -281,20 +322,20 @@ def test_filter_limit_offset(tmp_path: Path) -> None:
     assert page1[0].memory_id != page2[0].memory_id
 
 
-def test_count_filtered(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    _seed_memories(store)
+@pytest.mark.asyncio
+async def test_count_filtered(store: TraderMemoryStore) -> None:
+    await _seed_memories(store)
 
-    count = store.count_filtered(TraderMemoryFilter(trader_id="trader_a"))
+    count = await store.count_filtered(TraderMemoryFilter(trader_id="trader_a"))
     assert count == 3
 
 
-def test_summarize_excludes_archived(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    item = _seed_memories(store)[0]
-    store.archive(item.memory_id)
+@pytest.mark.asyncio
+async def test_summarize_excludes_archived(store: TraderMemoryStore) -> None:
+    item = (await _seed_memories(store))[0]
+    await store.archive(item.memory_id)
 
-    summary = store.summarize_context(trader_id="trader_a")
+    summary = await store.summarize_context(trader_id="trader_a")
     assert summary.total_items == 2  # archived item excluded
     assert summary.archived_items == 1
 
@@ -303,13 +344,11 @@ def test_summarize_excludes_archived(tmp_path: Path) -> None:
 # NTL-S5-005: new memory types in summarize_context
 # ---------------------------------------------------------------------------
 
-def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_summarize_context_new_memory_types(store: TraderMemoryStore) -> None:
     """验证 summarize_context 正确聚合 postmortem / strategy_adjustment / market_regime_note。"""
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-
-    # 写入各种类型的 memory
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 25),
@@ -318,8 +357,8 @@ def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
             content="Entry timing poor for SH600519",
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.strategy_adjustment,
             as_of_date=date(2026, 4, 25),
@@ -328,8 +367,8 @@ def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
             content="Increase entry price tolerance",
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.market_regime_note,
             as_of_date=date(2026, 4, 25),
@@ -339,7 +378,7 @@ def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
         )
     )
     # 验证 summary 正确聚合
-    summary = store.summarize_context(trader_id="trader_a", symbol="SH600519", limit=5)
+    summary = await store.summarize_context(trader_id="trader_a", symbol="SH600519", limit=5)
     assert summary.total_items == 3
     assert len(summary.postmortem_notes) == 1
     assert "Entry timing poor" in summary.postmortem_notes[0]
@@ -353,11 +392,11 @@ def test_summarize_context_new_memory_types(tmp_path: Path) -> None:
 # NTL-S5-006: tags and strategy_version_id filter
 # ---------------------------------------------------------------------------
 
-def test_filter_by_tags(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_filter_by_tags(store: TraderMemoryStore) -> None:
     """验证 tags 过滤：匹配任一 tag 即可命中."""
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 25),
@@ -367,8 +406,8 @@ def test_filter_by_tags(tmp_path: Path) -> None:
             tags=["AI_chip", "半导体"],
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 24),
@@ -379,18 +418,18 @@ def test_filter_by_tags(tmp_path: Path) -> None:
         )
     )
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", tags=["AI_chip"])
     )
     assert len(result) == 1
     assert result[0].title == "AI chip postmortem"
 
 
-def test_filter_by_strategy_version(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_filter_by_strategy_version(store: TraderMemoryStore) -> None:
     """验证 strategy_version_id 过滤：精确匹配."""
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 25),
@@ -400,8 +439,8 @@ def test_filter_by_strategy_version(tmp_path: Path) -> None:
             strategy_version_id="v_2026_04_25",
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 24),
@@ -412,18 +451,18 @@ def test_filter_by_strategy_version(tmp_path: Path) -> None:
         )
     )
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", strategy_version_id="v_2026_04_25")
     )
     assert len(result) == 1
     assert result[0].title == "v1 postmortem"
 
 
-def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_filter_by_tags_and_symbol(store: TraderMemoryStore) -> None:
     """验证 tags + symbol 组合过滤."""
-    store = TraderMemoryStore(path=tmp_path / "mem.jsonl")
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 25),
@@ -433,8 +472,8 @@ def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
             tags=["AI_chip"],
         )
     )
-    store.append(
-        TraderMemoryItem(
+    await store.append(
+        _make_item(
             trader_id="trader_a",
             memory_type=TraderMemoryType.postmortem,
             as_of_date=date(2026, 4, 25),
@@ -445,7 +484,7 @@ def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
         )
     )
 
-    result = store.list_filtered(
+    result = await store.list_filtered(
         TraderMemoryFilter(trader_id="trader_a", tags=["AI_chip"], symbol="SH600519")
     )
     assert len(result) == 1
@@ -456,12 +495,11 @@ def test_filter_by_tags_and_symbol(tmp_path: Path) -> None:
 # NTL-S5-012: extra field
 # ---------------------------------------------------------------------------
 
-def test_trader_memory_item_has_extra_field():
+def test_trader_memory_item_has_extra_field() -> None:
     """TraderMemoryItem 应有 extra 字段（NTL-S5-012）。"""
-    item = TraderMemoryItem(
+    item = _make_item(
         trader_id="trader_001",
         memory_type=TraderMemoryType.failure_case,
-        as_of_date=date(2026, 4, 25),
         title="test",
         content="test content",
     )
@@ -475,11 +513,10 @@ def test_trader_memory_item_has_extra_field():
 # NTL-S5-012: update() method
 # ---------------------------------------------------------------------------
 
-def test_update_modifies_existing_item(tmp_path):
+@pytest.mark.asyncio
+async def test_update_modifies_existing_item(store: TraderMemoryStore) -> None:
     """update() 应原地修改已有条目，不新增。"""
-    store = TraderMemoryStore(path=tmp_path / "memory.jsonl")
-
-    original = TraderMemoryItem(
+    original = _make_item(
         memory_id=uuid4(),
         trader_id="trader_001",
         memory_type=TraderMemoryType.failure_case,
@@ -488,34 +525,26 @@ def test_update_modifies_existing_item(tmp_path):
         title="原始 failure",
         content="原始内容",
     )
-    store.append(original)
+    await store.append(original)
 
     # 更新
     updated = original.model_copy(deep=True)
     updated.content = "更新后内容"
     updated.postmortem_data = {"return_pct": -3.5}
 
-    result = store.update(original.memory_id, updated)
+    result = await store.update(original.memory_id, updated)
 
     assert result is True
 
-    # 验证：文件只有一条
-    items = store._load_all()
+    # 验证：只有一条记录
+    items = await store.list_filtered(TraderMemoryFilter(trader_id="trader_001"))
     assert len(items) == 1
     assert items[0].content == "更新后内容"
     assert items[0].postmortem_data == {"return_pct": -3.5}
 
 
-def test_update_nonexistent_returns_false(tmp_path):
+@pytest.mark.asyncio
+async def test_update_nonexistent_returns_false(store: TraderMemoryStore) -> None:
     """update() 对不存在的 ID 返回 False。"""
-    from uuid import uuid4
-    store = TraderMemoryStore(path=tmp_path / "memory.jsonl")
-    item = TraderMemoryItem(
-        trader_id="trader_001",
-        memory_type=TraderMemoryType.failure_case,
-        as_of_date=date(2026, 4, 25),
-        title="test",
-        content="test",
-    )
-    result = store.update(uuid4(), item)
+    result = await store.update(uuid4(), _make_item())
     assert result is False

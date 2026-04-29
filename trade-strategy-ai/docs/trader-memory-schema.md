@@ -1,12 +1,17 @@
 # TraderMemory 数据结构文档
 
-> **最后更新：** 2026-04-25
+> **最后更新：** 2026-04-29（NTL-S7-000：迁移至 PostgreSQL 数据库）
+
+> **变更记录 (NTL-S7-000)：**
+> - 2026-04-29：存储后端由 JSONL 文件（`trader_memory.jsonl`）迁移至 PostgreSQL 数据库表 `trader_memory`
+> - 所有 `TraderMemoryStore` 方法改为 `async def`，调用方需使用 `await`
+> - `append()` 写入数据库；`update()` 在同一行上 `UPDATE`（由 `memory_id` 主键定位）
 
 ---
 
 ## TraderMemoryItem
 
-交易员记忆的最小单元，存储在 `trader_memory.jsonl`（JSONL 格式，append-only）。
+交易员记忆的最小单元，存储在 PostgreSQL `trader_memory` 表（NTL-S7-000 迁移后）。
 
 ### 核心字段
 
@@ -141,21 +146,18 @@
 
 ---
 
-## 文件格式
+## 存储方式
 
-存储路径：`{output_dir}/trader_memory.jsonl`
+**NTL-S7-000 变更：** 由 JSONL 文件迁移至 PostgreSQL 数据库。
 
-格式：JSONL（每行一个 JSON 对象）
-
-```jsonl
-{"memory_id": "...", "memory_type": "failure_case", "trader_id": "trader_001", ...}
-{"memory_id": "...", "memory_type": "postmortem", "trader_id": "trader_001", ...}
-```
+存储表：`trader_memory`（详见 `docs/db-struct.md`）
 
 ---
 
 ## 持久化规则
 
-- **Append-only**：仅通过 `append()` 添加新记录，不直接修改已有记录
-- **软删除**：使用 `archive()` 标记删除，不物理删除
-- **更新模式**：需要更新时，先 `list_filtered()` 找到记录，修改后调用 `update()` 重写全量文件
+- **Append**：通过 `await store.append(item)` 添加新记录
+- **软删除**：使用 `await store.archive(memory_id)` 标记删除（`archived=True`），不物理删除
+- **更新模式**：需要更新时，先 `await store.list_filtered(filter)` 找到记录，修改后 `await store.update(memory_id, updated_item)` 更新
+- **硬删除**：使用 `await store.hard_delete(memory_id)` 永久删除（极少使用）
+- **唯一约束**：(trader_id, memory_type, as_of_date, symbol) 组合唯一，允许同标题重复

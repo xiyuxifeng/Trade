@@ -16,6 +16,7 @@
 | `trade_logs` | 交易日志表 | 交易记录 |
 | `signals` | 交易信号表 | 信号生成 |
 | `data_audit_events` | 数据审计事件表 | 数据治理 |
+| `trader_memory` | 交易员记忆表 | 记忆存储 |
 | `stock_info` | 股票基本信息表 | 股票映射 |
 
 ---
@@ -272,7 +273,53 @@
 
 ---
 
-## 9. stock_info（股票基本信息表）
+## 9. trader_memory（交易员记忆表）
+
+存储交易员的成功/失败案例、复盘笔记、策略调整建议等。
+
+> **变更记录 (NTL-S7-000)：** 原为 JSONL 文件存储（`trader_memory.jsonl`），2026-04-29 迁移至 PostgreSQL 数据库。
+
+| 字段 | 类型 | 可空 | 说明 |
+|------|------|------|------|
+| `id` | UUID | 否 | 主键 |
+| `trader_id` | VARCHAR(64) | 否 | 交易员 ID |
+| `memory_type` | VARCHAR(32) | 否 | 记忆类型（success_case/failure_case/review_note/postmortem/strategy_adjustment/market_regime_note） |
+| `as_of_date` | DATE | 否 | 关联交易日期 |
+| `symbol` | VARCHAR(32) | 是 | 关联股票代码 |
+| `title` | VARCHAR(256) | 否 | 记忆标题 |
+| `content` | VARCHAR(4096) | 否 | 记忆内容 |
+| `source` | VARCHAR(64) | 否 | 来源（默认 "manager"） |
+| `source_ref` | VARCHAR(512) | 是 | 来源引用 |
+| `tags` | TEXT[] | 是 | 标签列表 |
+| `importance` | FLOAT | 否 | 重要性（0~1），默认 0.5 |
+| `archived` | BOOLEAN | 否 | 软删除标记，默认 false |
+| `archived_at` | TIMESTAMPTZ | 是 | 归档时间 |
+| `idea_id` | UUID | 是 | 关联的交易想法 ID |
+| `strategy_version_id` | VARCHAR(64) | 是 | 关联的策略版本 ID |
+| `ranking_entry_id` | UUID | 是 | 关联的 ranking 条目 ID |
+| `topic_source` | VARCHAR(64) | 是 | Topic 来源（如 "kaipan"） |
+| `raw_topic_ids` | JSONB | 是 | {provider: [raw_topic_id, ...]} |
+| `postmortem_data` | JSONB | 是 | 盘后评估数据 |
+| `strategy_adjustment_data` | JSONB | 是 | 策略调整数据 |
+| `market_regime_data` | JSONB | 是 | 市场状态数据 |
+| `extra` | JSONB | 是 | 附加数据 |
+| `created_at` | TIMESTAMPTZ | 否 | 创建时间 |
+| `updated_at` | TIMESTAMPTZ | 否 | 更新时间 |
+
+**约束：**
+- 唯一约束：`uq_memory_ctx` - (trader_id, memory_type, as_of_date, symbol)
+
+**索引：**
+- `ix_memory_trader_id` - trader_id
+- `ix_memory_trader_archived` - (trader_id, archived)
+- `ix_memory_trade_date` - as_of_date
+- `ix_memory_symbol` - symbol
+- `ix_memory_type` - memory_type
+- `ix_memory_created_at` - created_at
+
+---
+
+## 10. stock_info（股票基本信息表）
 
 存储 A 股股票名称→代码映射表，用于元数据提取时将中文股票名称转换为标准代码格式。
 
@@ -311,4 +358,5 @@ signals ─────────── 独立表（信号数据）
 data_audit_events ─ 独立表（审计日志）
 raw_articles ────── 独立表（原始爬取数据）
 crawl_state ─────── 独立表（爬取状态）
+trader_memory ───── 独立表（交易员记忆，NTL-S7-000 由 JSONL 迁移）
 ```

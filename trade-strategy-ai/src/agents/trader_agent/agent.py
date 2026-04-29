@@ -84,14 +84,9 @@ class TraderAgent:
 
         return candidates
 
-    def _memory_hint(self, *, symbol: str) -> str | None:
-        """Turn recent trader memories into a short prompt hint."""
-
-        if self.memory_store is None:
-            return None
-
-        summary = self.memory_store.summarize_context(trader_id=self.trader.trader_id, symbol=symbol, limit=3)
-        if summary.total_items == 0:
+    def _format_memory_hint(self, summary: "TraderMemorySummary | None") -> str | None:
+        """Format a pre-fetched memory summary into a hint string."""
+        if summary is None or summary.total_items == 0:
             return None
 
         parts: list[str] = []
@@ -120,11 +115,6 @@ class TraderAgent:
             parts.append(f"tags: {', '.join(self.trader_profile.concept_tags[:3])}")
         if self.trader_profile.style_cluster_ids:
             parts.append(f"clusters: {', '.join(self.trader_profile.style_cluster_ids[:2])}")
-        if self.memory_store is not None:
-            summary = self.memory_store.summarize_context(trader_id=self.trader.trader_id, symbol=symbol, limit=2)
-            if summary.by_type:
-                type_bits = ", ".join(f"{key}={value}" for key, value in sorted(summary.by_type.items()))
-                parts.append(f"memory mix: {type_bits}")
 
         if not parts:
             return None
@@ -254,6 +244,15 @@ class TraderAgent:
         prices: dict[str, float] = resp.payload.get("last_price", {})
         ideas: list[TradeIdea] = []
 
+        # 预取 memory summary（供所有 symbol 共用）
+        memory_summary_by_symbol: dict[str, Any] = {}
+        if self.memory_store is not None:
+            for symbol in candidate_symbols:
+                summary = await self.memory_store.summarize_context(
+                    trader_id=self.trader.trader_id, symbol=symbol, limit=3
+                )
+                memory_summary_by_symbol[symbol] = summary
+
         for symbol in candidate_symbols:
             last_price = prices.get(symbol)
             if last_price is None:
@@ -290,7 +289,8 @@ class TraderAgent:
                 rationale += profile_hint
 
             # memory 上下文
-            memory_hint = self._memory_hint(symbol=symbol)
+            memory_summary = memory_summary_by_symbol.get(symbol)
+            memory_hint = self._format_memory_hint(memory_summary) if memory_summary else None
             if memory_hint:
                 rationale += memory_hint
 
@@ -309,10 +309,10 @@ class TraderAgent:
                     if self.trader_profile.style_cluster_ids:
                         confidence += 0.05
                 if self.memory_store is not None:
-                    summary = self.memory_store.summarize_context(trader_id=self.trader.trader_id, symbol=symbol, limit=3)
-                    if summary.by_type.get("success_case", 0):
+                    summary = memory_summary_by_symbol.get(symbol)
+                    if summary and summary.by_type.get("success_case", 0):
                         confidence += 0.03
-                    if summary.by_type.get("failure_case", 0):
+                    if summary and summary.by_type.get("failure_case", 0):
                         confidence += 0.01
                 if memory_hint:
                     confidence += 0.05

@@ -14,6 +14,7 @@ from src.models.raw_article import RawArticle
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
 from src.models.trader_strategy_version import TraderStrategyVersion
+from src.models.trader_memory import TraderMemory
 from src.models.trade_log import TradeLog
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "StockInfo",
     "TopicConstituentsSnapshot",
     "TraderStrategyVersion",
+    "TraderMemory",
     "TradeLog",
 ]

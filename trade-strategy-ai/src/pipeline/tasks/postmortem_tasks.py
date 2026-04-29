@@ -18,7 +18,7 @@ from src.common.logger import get_logger
 from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
-from src.trader_memory.service import TraderMemoryStore, default_memory_path
+from src.trader_memory.service import TraderMemoryStore
 from src.llm.client import LLMClient, from_env_and_config
 
 logger = get_logger(__name__)
@@ -231,8 +231,7 @@ async def handle_postmortem_analysis(
     }
 
     # NTL-S5-012: 尝试找到对应的 failure_case 并原地更新
-    memory_path = default_memory_path(base_dir=Path("."), config=config)
-    store = TraderMemoryStore(path=memory_path)
+    store = TraderMemoryStore()
 
     # 从 details 提取 auto_attribution（NTL-S5-012 新增）
     auto_attribution = details.get("auto_attribution") or {}
@@ -245,7 +244,7 @@ async def handle_postmortem_analysis(
         date_to=trade_idea.as_of_date,
         include_archived=False,
     )
-    failure_cases = store.list_filtered(f)
+    failure_cases = await store.list_filtered(f)
 
     if failure_cases:
         # 原地更新已有的 failure_case 条目（NTL-S5-012）
@@ -258,7 +257,7 @@ async def handle_postmortem_analysis(
         )
         updated.extra = failure_case.extra or {}
         updated.extra["auto_original"] = auto_attribution
-        store.update(failure_case.memory_id, updated)
+        await store.update(failure_case.memory_id, updated)
         logger.info(
             "Postmortem已更新failure_case: idea_id=%s, attribution=%s",
             idea_id_str,
@@ -285,7 +284,7 @@ async def handle_postmortem_analysis(
             postmortem_data=postmortem_data,
             extra={"auto_original": auto_attribution},
         )
-        store.append(memory)
+        await store.append(memory)
         logger.info(
             "Postmortem已写入memory: idea_id=%s, attribution=%s, mfe=%.2f, mae=%.2f",
             idea_id_str,

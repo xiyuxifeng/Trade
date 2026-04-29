@@ -54,7 +54,7 @@ from src.schemas.review_task import (
 from src.trader_profile.schemas import TraderProfile
 from src.trader_profile.service import default_profiles_path, load_trader_profiles_file
 from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
-from src.trader_memory.service import TraderMemoryStore, default_memory_path
+from src.trader_memory.service import TraderMemoryStore
 from src.market_data.service import MarketDataCache
 from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
@@ -98,7 +98,7 @@ class ManagerAgent:
 
         self.output_dir = ensure_dir(self.base_dir / self.config.storage.output_dir)
         self.tasks_path = self.output_dir / "agent_tasks.jsonl"
-        self.memory_store = TraderMemoryStore(path=default_memory_path(base_dir=self.base_dir, config=self.config))
+        self.memory_store = TraderMemoryStore()
         self.trader_profiles = self._load_trader_profiles()
 
         self.data_agent = DataAgent(config=config)
@@ -378,7 +378,7 @@ class ManagerAgent:
             strategy_version_snapshot=rules_snapshot,
         )
 
-    def _append_review_memory(
+    async def _append_review_memory(
         self,
         *,
         as_of_date: date,
@@ -415,7 +415,7 @@ class ManagerAgent:
             raw_topic_ids=raw_topic_ids,
             importance=0.75,
         )
-        self.memory_store.append(memory)
+        await self.memory_store.append(memory)
         return memory
 
     def _build_review_task(
@@ -907,7 +907,7 @@ class ManagerAgent:
                 idea.source_topic_ids, daily_report.market_universe_snapshot
             )
 
-            self.memory_store.append(
+            await self.memory_store.append(
                 TraderMemoryItem(
                     trader_id=idea.trader_id,
                     memory_type=memory_type,
@@ -931,7 +931,7 @@ class ManagerAgent:
                 trigger_reason = ReviewTriggerReason.loss if return_pct < 0 else ReviewTriggerReason.below_expected
 
                 # 2. 创建 memory，获取 memory_id
-                memory = self._append_review_memory(
+                memory = await self._append_review_memory(
                     as_of_date=as_of_date,
                     idea=idea,
                     entry_price=float(entry_price),

@@ -1818,3 +1818,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 3. 和之前的Stage任务产生的代码之间是否可以正常串联，数据是否可以正常传递
 4. 是否符合A股市场的实际情况
 5. 是否有需要改进的地方
+
+==== 
+
+  4. data/signals/*.json — 与数据库冗余
+
+  问题：Signal 已经存了数据库，又写文件备份
+
+  建议：确认文件用途，或统一只用数据库

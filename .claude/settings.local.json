@@ -83,7 +83,9 @@
       "Bash(find:*)",
       "Bash(alembic upgrade:*)",
       "Bash(PYTHONPATH=. alembic:*)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(alembic revision:*)",
+      "Bash(alembic:*)"
     ]
   }
 }

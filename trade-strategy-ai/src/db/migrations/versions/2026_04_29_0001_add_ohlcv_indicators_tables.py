@@ -32,7 +32,8 @@ def upgrade() -> None:
         sa.Column("close", sa.Float(), nullable=False),
         sa.Column("volume", sa.Float(), nullable=False),
         sa.Column("turnover", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("symbol", "trade_date", name="uq_ohlcv_symbol_date"),
     )
@@ -56,7 +57,7 @@ def upgrade() -> None:
         sa.Column("price_vs_ma", sa.Float(), nullable=True),
         sa.Column("atr_ratio", sa.Float(), nullable=True),
         sa.Column("close_position", sa.Float(), nullable=True),
-        sa.Column("computed_at", sa.DateTime(), nullable=False),
+        sa.Column("computed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("symbol", "trade_date", name="uq_indicator_symbol_date"),
     )

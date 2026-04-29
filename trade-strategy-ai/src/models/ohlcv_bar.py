@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, Float, String, UniqueConstraint, Index
+from sqlalchemy import Date, Float, String, UniqueConstraint, Index, func, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base, TimestampMixin
 
 
-class OHLCVBar(Base):
+class OHLCVBar(TimestampMixin, Base):
     """日线行情数据表
 
     存储股票每日 OHLCV 数据，用于回测和规则验真。
@@ -36,4 +36,4 @@ class OHLCVBar(Base):
     volume: Mapped[float] = mapped_column(Float, nullable=False)
     # 成交额（可选）
     turnover: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+

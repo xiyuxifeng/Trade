@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, Float, String, UniqueConstraint, Index
+from sqlalchemy import Date, DateTime, Float, String, UniqueConstraint, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -52,4 +52,8 @@ class Indicator(Base):
     # 收盘位置
     close_position: Mapped[float | None] = mapped_column(Float, nullable=True)
     # 计算时间
-    computed_at: Mapped[datetime] = mapped_column(nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

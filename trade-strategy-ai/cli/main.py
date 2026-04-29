@@ -1235,6 +1235,10 @@ app.add_typer(backtest_app, name="backtest")
 from cli.optimize import app as optimize_app
 app.add_typer(optimize_app, name="optimize")
 
+# 注册 ohlcv 子命令（S7-000）
+from cli.ohlcv import app as ohlcv_app
+app.add_typer(ohlcv_app, name="ohlcv")
+
 
 def main() -> None:
 	configure_logging()

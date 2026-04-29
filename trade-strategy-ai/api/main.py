@@ -73,6 +73,27 @@ async def root():
                 "get_evaluation": "GET /reports/evaluation/{date}",
                 "evaluation_html": "GET /reports/evaluation/{date}/html",
             },
+            "strategy_versions": {
+                "list": "GET /strategy_versions/",
+                "get": "GET /strategy_versions/{version_id}",
+                "download": "GET /strategy_versions/{version_id}/download",
+            },
+            "snapshots": {
+                "list": "GET /snapshots/",
+                "get": "GET /snapshots/{snapshot_id}",
+                "download": "GET /snapshots/{snapshot_id}/download",
+            },
+            "rankings": {
+                "list": "GET /rankings/",
+                "get": "GET /rankings/{entry_id}",
+                "download": "GET /rankings/{entry_id}/download",
+            },
+            "backtest_results": {
+                "list": "GET /backtest_results/",
+                "get": "GET /backtest_results/{result_id}",
+                "report": "GET /backtest_results/{result_id}/report",
+                "validate_rules": "GET /backtest_results/{result_id}/validate_rules",
+            },
         },
     }
 

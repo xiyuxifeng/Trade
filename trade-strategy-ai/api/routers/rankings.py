@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -29,12 +29,6 @@ class PaginatedResponse(BaseModel):
 class RankingDetail(BaseModel):
     status: str = "success"
     item: dict
-
-
-async def get_db_session():
-    from src.db.session import session_scope
-    async with session_scope() as session:
-        yield session
 
 
 @router.get("/", response_model=PaginatedResponse)

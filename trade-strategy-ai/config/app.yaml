@@ -196,3 +196,21 @@ kaipan:
   max_retries: 3
   retry_backoff_seconds: [1.0, 2.0, 4.0]
   retry_status_codes: [403, 429, 500, 502, 503, 504]
+
+# 告警配置（S7-007）
+alerting:
+  enabled: true
+  channel: "dingtalk"              # dingtalk / feishu / wecom / generic
+  aggregation:
+    window_minutes: 60             # 聚合时间窗口（分钟）
+    max_count: 100                 # 超过此数量立即发送
+  dingtalk:
+    webhook_url: ""                 # 填入你的钉钉群机器人 Webhook URL
+    secret: ""                     # 可选，加签密钥
+  feishu:
+    webhook_url: ""                # 填入飞书群机器人 Webhook URL
+  wecom:
+    webhook_url: ""                # 填入企业微信群机器人 Webhook URL
+  min_level: "WARNING"            # INFO / WARNING / CRITICAL
+  console_output: true             # 是否同时打印到控制台
+

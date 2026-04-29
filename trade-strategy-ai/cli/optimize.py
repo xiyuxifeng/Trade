@@ -198,13 +198,112 @@ def optimize_create_candidate(
     trader: str = typer.Option("", "--trader", "-t", help="trader ID（与 --parent 二选一）"),
     date: str = typer.Option("", "--date", "-d", help="策略日期 YYYY-MM-DD（与 --parent 二选一）"),
     version_id: str = typer.Option("", "--version-id", "-v", help="parent version_id"),
-    output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON 文件路径"),
+output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON 文件路径"),
+    db: bool = typer.Option(False, "--db", help="启用 DB 链路（默认关闭，走文件链路）"),
 ):
     """候选版本生成（S7-003）。
 
     接收正式版本（released_version.json）和 S7-002 调整建议 JSON，
     生成候选版本（draft，candidate 类型），不写 DB。
+
+    --db 时从 DB 加载正式版本（trader_id + date），候选版本写入 DB。
     """
+    # S7-003b DB 链路
+    if db:
+        from datetime import date as Date
+        from src.strategy_library.service import StrategyLibraryService
+        from config.database import get_session_factory
+
+        if not trader or not date:
+            typer.secho("--db=True 时必须指定 --trader 和 --date", fg=typer.colors.RED)
+            return
+        if not adjustments:
+            typer.echo("无调整建议数据，请检查 --adjustments 参数")
+            return
+
+        # 加载调整建议
+        adj_path = Path(adjustments)
+        if not adj_path.exists():
+            typer.secho(f"调整建议文件不存在: {adj_path}", fg=typer.colors.YELLOW)
+            return
+        try:
+            adj_data = json.loads(adj_path.read_text())
+            if isinstance(adj_data, dict) and "adjustments" in adj_data:
+                adj_data = adj_data["adjustments"]
+            adjustments_list = [RuleAdjustment(**adj) for adj in adj_data]
+        except Exception as exc:
+            typer.secho(f"加载调整建议失败 {adj_path}: {exc}", fg=typer.colors.YELLOW)
+            return
+
+        # 从 DB 加载正式版本
+        svc = StrategyLibraryService()
+        factory = get_session_factory()
+
+        def _run_sync(coro):
+            import asyncio
+            try:
+                return asyncio.run(coro)
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
+                return loop.run_until_complete(coro)
+
+        async def load_parent():
+            async with factory() as session:
+                released = await svc._repo.get_released_by_trader_and_date(
+                    session=session,
+                    trader_id=trader,
+                    strategy_date=Date.fromisoformat(date),
+                )
+                return released
+
+        parent_versions = _run_sync(load_parent())
+        if not parent_versions:
+            typer.secho(f"未找到正式版本: trader={trader}, date={date}", fg=typer.colors.RED)
+            return
+        parent_version = parent_versions[0]
+
+        # 调用 create_candidate_version 写 DB
+        async def create_candidate():
+            async with factory() as session:
+                candidate = await svc.create_candidate_version(
+                    session=session,
+                    trader_id=trader,
+                    strategy_date=Date.fromisoformat(date),
+                    parent_version_id=parent_version.version_id,
+                    adjustments=adjustments_list,
+                    recommendations=[],
+                )
+                await session.commit()
+                return candidate
+
+        candidate = _run_sync(create_candidate())
+
+        typer.echo(f"\n=== 候选版本已写入 DB ===")
+        typer.echo(f"  version_id: {candidate.version_id}")
+        typer.echo(f"  parent_version_id: {candidate.parent_version_id}")
+        typer.echo(f"  status: {candidate.status.value}")
+        typer.echo(f"  version_type: {candidate.version_type.value}")
+
+        # 如果指定了 --output，同时写 JSON 文件
+        if output:
+            out_path = Path(output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            json_data = {
+                "version_id": candidate.version_id,
+                "trader_id": candidate.trader_id,
+                "strategy_date": candidate.strategy_date.isoformat(),
+                "status": candidate.status.value,
+                "version_type": candidate.version_type.value,
+                "parent_version_id": candidate.parent_version_id,
+                "rules_snapshot": candidate.rules_snapshot,
+                "notes": candidate.notes,
+            }
+            out_path.write_text(json.dumps(json_data, indent=2, ensure_ascii=False))
+            typer.secho(f"候选版本已写入: {out_path}", fg=typer.colors.GREEN)
+
+        return
+
+# 文件链路（默认）
     from datetime import date as Date
 
     from src.optimization.candidate_builder import (

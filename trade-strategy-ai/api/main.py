@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import run, reports, strategy_versions, snapshots, rankings, backtest_results
+from api.routers import run, reports, strategy_versions, snapshots, rankings, backtest_results, alerts
 
 
 @asynccontextmanager
@@ -50,6 +50,7 @@ app.include_router(strategy_versions.router)
 app.include_router(snapshots.router)
 app.include_router(rankings.router)
 app.include_router(backtest_results.router)
+app.include_router(alerts.router)
 
 
 @app.get("/")
@@ -93,6 +94,13 @@ async def root():
                 "get": "GET /backtest_results/{result_id}",
                 "report": "GET /backtest_results/{result_id}/report",
                 "validate_rules": "GET /backtest_results/{result_id}/validate_rules",
+            },
+            "alerts": {
+                "list_history": "GET /alerts/history",
+                "get_history": "GET /alerts/history/{record_id}",
+                "acknowledge": "POST /alerts/{record_id}/acknowledge",
+                "resolve": "POST /alerts/{record_id}/resolve",
+                "test": "POST /alerts/test",
             },
         },
     }

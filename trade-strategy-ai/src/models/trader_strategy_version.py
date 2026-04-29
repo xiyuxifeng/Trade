@@ -43,3 +43,5 @@ class TraderStrategyVersion(TimestampMixin, Base):
     evidence_refs: Mapped[list[str]] = mapped_column(JSONVariant, default=list, nullable=False)
     strategy_payload: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    version_type: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
+    parent_version_id: Mapped[str | None] = mapped_column(String(256), nullable=True)

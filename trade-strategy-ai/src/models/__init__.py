@@ -1,3 +1,4 @@
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.ranking_entry import RankingEntryRecord
 
 from src.models.article_metadata import ArticleMetadata
@@ -15,6 +16,7 @@ from src.models.trader_strategy_version import TraderStrategyVersion
 from src.models.trade_log import TradeLog
 
 __all__ = [
+    "OHLCVBar",
     "ArticleMetadata",
     "BlogArticle",
     "CrawlState",

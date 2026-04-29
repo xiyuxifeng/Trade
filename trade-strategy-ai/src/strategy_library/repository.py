@@ -13,10 +13,19 @@ from src.strategy_library.schemas import (
     StrategyRecommendation,
     StrategyVersion,
     StrategyVersionStatus,
+    StrategyVersionType,
 )
 
 if TYPE_CHECKING:
     from src.strategy_library.schemas import StrategyVersion
+
+
+def _get_version_type(orm_obj: TraderStrategyVersion) -> StrategyVersionType:
+    """从 ORM 对象安全读取 version_type，兼容旧记录和 mock 对象。"""
+    raw = getattr(orm_obj, "version_type", None)
+    if isinstance(raw, str) and raw in ("manual", "candidate"):
+        return StrategyVersionType(raw)
+    return StrategyVersionType.manual
 
 
 class StrategyLibraryRepository:
@@ -117,6 +126,8 @@ class StrategyLibraryRepository:
                 "rules_snapshot": version.rules_snapshot,
             },
             notes=version.notes,
+            version_type=version.version_type.value,
+            parent_version_id=version.parent_version_id,
         )
 
     @staticmethod
@@ -146,6 +157,8 @@ class StrategyLibraryRepository:
             notes=orm_obj.notes,
             released_at=orm_obj.released_at,
             rules_snapshot=orm_obj.strategy_payload.get("rules_snapshot", []),
+            version_type=_get_version_type(orm_obj),
+            parent_version_id=getattr(orm_obj, "parent_version_id", None),
         )
 
     # ---- 内部辅助方法 ----
@@ -185,3 +198,5 @@ class StrategyLibraryRepository:
             "rules_snapshot": version.rules_snapshot,
         }
         existing.notes = version.notes
+        existing.version_type = version.version_type.value
+        existing.parent_version_id = version.parent_version_id

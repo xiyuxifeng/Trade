@@ -221,7 +221,7 @@ output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON �
             typer.echo("无调整建议数据，请检查 --adjustments 参数")
             return
 
-        # 加载调整建议
+# 加载调整建议
         adj_path = Path(adjustments)
         if not adj_path.exists():
             typer.secho(f"调整建议文件不存在: {adj_path}", fg=typer.colors.YELLOW)
@@ -230,9 +230,28 @@ output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON �
             adj_data = json.loads(adj_path.read_text())
             if isinstance(adj_data, dict) and "adjustments" in adj_data:
                 adj_data = adj_data["adjustments"]
-            adjustments_list = [RuleAdjustment(**adj) for adj in adj_data]
         except Exception as exc:
             typer.secho(f"加载调整建议失败 {adj_path}: {exc}", fg=typer.colors.YELLOW)
+            return
+
+        # RuleAdjustment → StrategyAdjustment 转换（供 DB 链路使用）
+        from src.strategy_library.schemas import StrategyAdjustment
+
+        def _to_strategy_adjustment(adj_data: dict) -> StrategyAdjustment:
+            ra = RuleAdjustment(**adj_data)
+            return StrategyAdjustment(
+                trader_id=ra.trader_id,
+                rule_id=ra.rule_id,
+                current_status=ra.current_status,
+                suggestion=ra.suggestion,
+                confidence=ra.confidence,
+                依据=f"hit_rate={ra.hit_rate}, rule_text={ra.rule_text}",
+            )
+
+        try:
+            adjustments_list = [_to_strategy_adjustment(adj) for adj in adj_data]
+        except Exception as exc:
+            typer.secho(f"转换调整建议失败: {exc}", fg=typer.colors.YELLOW)
             return
 
         # 从 DB 加载正式版本

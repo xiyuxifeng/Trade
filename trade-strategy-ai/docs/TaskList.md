@@ -1483,15 +1483,15 @@
 
 ### 任务清单
 
-- [ ] `NTL-S7-000` `P0`
+- [x] `NTL-S7-000` `P0` ✅ 2026-04-29
   目标：完成 `cli/backtest.py` 真实依赖注入，修复 `SnapshotLoader` 的 `snapshot_service` 和 `strategy_repo` 为 `None` 的问题。
   输入：`config` YAML 中的 `data.providers` 配置结构。
   输出：修复后的 `cli/backtest.py`，能正确初始化 `SnapshotLoader`。
-  修改范围：`cli/backtest.py`。
+  修改范围：`cli/backtest.py`、`src/market_data/strategy_repo_adapter.py`。
   前置依赖：Stage 6 完成。
   可并行：`NTL-S7-001`、`NTL-S7-002`。
   验收标准：`SnapshotLoader` 能从配置正确注入依赖，回测命令可正常使用真实数据。
-  **状态**：P0 阻塞项，修复后解锁 S7-005/006/007。
+  完成情况：✅ `cli/backtest.py:49-67` 实现真实依赖注入（SnapshotService + StrategyRepoAdapter → SnapshotLoader）；新增 `src/market_data/strategy_repo_adapter.py`（StrategyRepoAdapter 包装 StrategyLibraryRepository，自动管理 AsyncSession）；`_create_engine_from_config` 正确初始化两个服务并注入 SnapshotLoader；TaskList 状态未及时同步。
 
 - [x] `NTL-S7-001` `P2` ✅ 2026-04-28
   目标：基于 ranking 与回测筛选活跃 trader。
@@ -1529,7 +1529,7 @@
   - missing_snapshot → 保留原规则，附加 _notes
   - programmable_but_rarely_hit → 映射为 delete_rule
 
-- [ ] `NTL-S7-003b` `P2`
+- [x] `NTL-S7-003b` `P2` ✅ 2026-04-29
   目标：把候选版本创建接入数据库（DB 链路），文件链路保留作为轻量替代。
   输入：`NTL-S7-003` 文件链路验证通过 + S7-000（P0）阻塞项修复。
   输出：`optimize create-candidate --db` 命令，ORM migration（version_type + parent_version_id 真实列）。
@@ -1537,6 +1537,7 @@
   前置依赖：`NTL-S7-003`（文件链路完成）、`NTL-S7-000`（P0 阻塞项修复）。
   可并行：S7-005、S7-006。
   验收标准：`optimize create-candidate --db` 可持久化候选版本到 DB；`--db` 默认 False（文件模式）。
+  完成情况：✅ Alembic migration（2026_04_29_0003）、ORM model 新增两列、Repository 映射更新（含旧记录兼容）、CLI `--db` flag 及 DB 链路处理、RuleAdjustment→StrategyAdjustment 类型转换；11 tests PASS。
   双链路说明：
   - 文件链路（默认）：`--db=False`，已有 S7-003 实现不变，轻量/无依赖/可 Git 管理
   - DB 链路（`--db`）：`version_type` 和 `parent_version_id` 用真实列（不用 JSONB），可建索引和 SQL 查询，复用 `StrategyLibraryService.create_candidate_version()`
@@ -1630,7 +1631,7 @@
 
 ### Stage 8. 实际市场约束
 
-- [ ] 增加实际市场约束
+- [ ] 在回测时增加实际市场约束
 
 1. 主板（沪市、深市）涨停板定义 普通股票‌：‌±10‌%，科创板股票‌：‌±20%‌，创业板股票‌：‌±20%定义
 2. 一字涨停板无法买入成交， 除非盘中开板，如果买入的话可以按涨停价格计算

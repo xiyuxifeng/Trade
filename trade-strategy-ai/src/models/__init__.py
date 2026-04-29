@@ -1,4 +1,5 @@
 from src.models.ohlcv_bar import OHLCVBar
+from src.models.indicator import Indicator
 from src.models.ranking_entry import RankingEntryRecord
 
 from src.models.article_metadata import ArticleMetadata
@@ -17,6 +18,7 @@ from src.models.trade_log import TradeLog
 
 __all__ = [
     "OHLCVBar",
+    "Indicator",
     "ArticleMetadata",
     "BlogArticle",
     "CrawlState",

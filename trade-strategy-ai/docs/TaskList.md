@@ -1552,7 +1552,7 @@
   验收标准：不会因为单日噪声直接触发过拟合调整。
   完成情况：✅ `RollingEvaluator` 实现，交易日窗口 30 天，稳定性阈值 50%，样本量门槛 10 笔；`is_signal_stable / has_sufficient_samples / should_trigger_adjustment / get_trigger` 全部实现；9 tests PASS；`cli/optimize.py` 已接入。
 
-- [ ] `NTL-S7-005` `P2`
+- [x] `NTL-S7-005` `P2` ✅ 2026-04-29
   目标：扩展 API 查询能力。
   输入：策略版本、快照、ranking、回测结果。
   输出：API 查询接口。
@@ -1560,7 +1560,7 @@
   前置依赖：Stage 5、Stage 6 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-006`、`NTL-S7-007`。
   验收标准：可通过 API 查询核心资产和结果。
-  **状态**：需等待 P0 阻塞项修复（cli/backtest.py 依赖注入）。
+  完成情况：✅ 4 个新 router 已注册（strategy_versions / snapshots / rankings / backtest_results），支持列表查询、详情和下载；4 tests PASS。
 
 - [ ] `NTL-S7-006` `P2`
   目标：扩展 CLI。

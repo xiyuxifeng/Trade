@@ -23,13 +23,20 @@ if TYPE_CHECKING:
 
 
 class ArticleEvidence(Protocol):
-    """文章证据协议（duck typing）。"""
+    """文章证据协议（duck typing）。
+
+    S10-002: 扩展增加规则相关字段
+    """
     article_id: str
     trading_symbols: list[str]
     sentiment_score: float | None
     confidence_score: float | None
     rationale: str | None
     entry_price: float | None  # 入场价（可选，用于计算止损）
+    # S10-002 新增规则相关字段
+    strategy_rules: list[dict] | None = None  # LLM 提取的策略规则
+    preconditions: list[dict] | None = None  # 规则前置条件
+    published_at: datetime | None = None  # 文章发布时间
 
 
 def _base_decision_from_sentiment(sentiment: float | None) -> str:

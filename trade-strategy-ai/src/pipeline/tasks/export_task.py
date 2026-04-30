@@ -252,7 +252,19 @@ async def run_export_task(
             article_sql = f"INSERT OR REPLACE INTO articles ({', '.join(ARTICLES_COLUMNS)}) VALUES ({article_placeholders})"
 
             metadata_placeholders = ", ".join(["?"] * len(METADATA_COLUMNS))
-            metadata_sql = f"INSERT OR REPLACE INTO metadata ({', '.join(METADATA_COLUMNS)}) VALUES ({metadata_placeholders})"
+            # S10-004 修复：明确冲突目标列为 (article_id, schema_version)
+            # 使用 INSERT ... ON CONFLICT DO UPDATE SET 代替 INSERT OR REPLACE
+            # INSERT OR REPLACE 是完整行替换，可能导致非冲突列被意外覆盖
+            metadata_sql = (
+                f"INSERT INTO metadata ({', '.join(METADATA_COLUMNS)}) "
+                f"VALUES ({metadata_placeholders}) "
+                f"ON CONFLICT (article_id, schema_version) DO UPDATE SET "
+                + ", ".join([
+                    f"{col} = EXCLUDED.{col}"
+                    for col in METADATA_COLUMNS
+                    if col not in ("article_id", "schema_version")
+                ])
+            )
 
             max_crawled_at: datetime | None = None
 

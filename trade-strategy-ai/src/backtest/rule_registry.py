@@ -110,3 +110,52 @@ def classify_rule(rule: RuleSnapshot) -> RuleMeta:
         required_fields=found_fields,
         programmatic_level=programmatic_level,
     )
+
+
+class RuleRegistry:
+    """规则注册表，支持可执行性过滤。
+
+    S10-006: 支持按可执行性水平过滤规则
+    """
+
+    def __init__(self):
+        self._rules: dict[str, RuleMeta] = {}
+
+    def register_rule(self, rule_meta: RuleMeta) -> None:
+        """注册一条规则"""
+        self._rules[rule_meta.rule_id] = rule_meta
+
+    def list_programmable_rules(
+        self, min_level: str = "fully_programmable"
+    ) -> list[RuleMeta]:
+        """列出可执行性 >= min_level 的规则。
+
+        Args:
+            min_level: 最低可执行性水平，可选值：
+                - "unsupported": 所有规则
+                - "descriptive_only": 包含 descriptive_only 及以上
+                - "partially_programmable": 包含 partially_programmable 及以上
+                - "fully_programmable" (默认): 仅 fully_programmable
+
+        Returns:
+            符合条件的 RuleMeta 列表
+        """
+        level_order = {
+            "unsupported": 0,
+            "descriptive_only": 1,
+            "partially_programmable": 2,
+            "fully_programmable": 3,
+        }
+        min_score = level_order.get(min_level, 0)
+        return [
+            r for r in self._rules.values()
+            if level_order.get(r.programmatic_level, 0) >= min_score
+        ]
+
+    def get_rule(self, rule_id: str) -> RuleMeta | None:
+        """根据 rule_id 获取规则元数据"""
+        return self._rules.get(rule_id)
+
+    def clear(self) -> None:
+        """清空所有已注册的规则"""
+        self._rules.clear()

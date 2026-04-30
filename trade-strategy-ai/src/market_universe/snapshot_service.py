@@ -15,6 +15,49 @@ from pathlib import Path
 from src.market_universe.schemas import MarketUniverse
 
 
+def generate_canonical_topic_tags(
+    hot_topics: list[dict],
+    topic_constituents: dict[str, list[str]],
+    target_symbols: list[str] | None = None,
+) -> list[str]:
+    """
+    统一生成 canonical topic tags。
+
+    双重校验逻辑：
+    1. topic_id 必须在 hot_topics 中存在（确保是热点话题）
+    2. topic 的 constituents 必须包含至少一个 target_symbol（如果有 target_symbols）
+
+    S10-010: 统一 source_topic_ids tag 生成逻辑
+
+    Args:
+        hot_topics: 热点话题列表，每项包含 topic_id
+        topic_constituents: 话题成分映射 {topic_id: [symbols]}
+        target_symbols: 目标交易标的可选列表
+
+    Returns:
+        符合条件的 topic_id 列表
+    """
+    if not hot_topics:
+        return []
+
+    hot_topic_ids = {t["topic_id"] for t in hot_topics if "topic_id" in t}
+
+    canonical_tags = []
+    for topic_id, constituents in topic_constituents.items():
+        # 校验1: topic_id 必须在 hot_topics 中
+        if topic_id not in hot_topic_ids:
+            continue
+
+        # 校验2: 如果指定了 target_symbols，必须至少有一个在 constituents 中
+        if target_symbols:
+            if not any(sym in constituents for sym in target_symbols):
+                continue
+
+        canonical_tags.append(topic_id)
+
+    return canonical_tags
+
+
 class SnapshotService:
     """管理候选池快照的持久化。"""
 

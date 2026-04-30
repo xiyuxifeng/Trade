@@ -180,6 +180,7 @@ class BacktestResult:
     request_date_to: date
     records: list[BacktestTradeRecord] = field(default_factory=list)
     summary: BacktestSummary | None = None
+    result_version: str = "1.0"  # S7-009: 用于区分新旧格式
 
 
 @dataclass
@@ -224,3 +225,4 @@ class RuleValidationResult:
     posterior_return_mean: float | None = None
     posterior_return_median: float | None = None
     notes: list[str] = field(default_factory=list)
+    result_version: str = "1.0"  # S7-009: 用于区分新旧格式

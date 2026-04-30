@@ -1159,6 +1159,14 @@ app.add_typer(optimize_app, name="optimize")
 from cli.ohlcv import app as ohlcv_app
 app.add_typer(ohlcv_app, name="ohlcv")
 
+# 注册 snapshot 子命令（S7-006）
+from cli.snapshot import app as snapshot_app
+app.add_typer(snapshot_app, name="snapshot")
+
+# 注册 strategy 子命令（S7-006）
+from cli.strategy import app as strategy_app
+app.add_typer(strategy_app, name="strategy")
+
 
 def main() -> None:
 	configure_logging()

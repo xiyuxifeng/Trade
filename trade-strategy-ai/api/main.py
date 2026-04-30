@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import run, reports
+from api.routers import run, reports, strategy_versions, snapshots, rankings, backtest_results, alerts
 
 
 @asynccontextmanager
@@ -46,6 +46,11 @@ app.add_middleware(
 # 注册路由
 app.include_router(run.router)
 app.include_router(reports.router)
+app.include_router(strategy_versions.router)
+app.include_router(snapshots.router)
+app.include_router(rankings.router)
+app.include_router(backtest_results.router)
+app.include_router(alerts.router)
 
 
 @app.get("/")
@@ -68,6 +73,34 @@ async def root():
                 "list_evaluation": "GET /reports/evaluation",
                 "get_evaluation": "GET /reports/evaluation/{date}",
                 "evaluation_html": "GET /reports/evaluation/{date}/html",
+            },
+            "strategy_versions": {
+                "list": "GET /strategy_versions/",
+                "get": "GET /strategy_versions/{version_id}",
+                "download": "GET /strategy_versions/{version_id}/download",
+            },
+            "snapshots": {
+                "list": "GET /snapshots/",
+                "get": "GET /snapshots/{snapshot_id}",
+                "download": "GET /snapshots/{snapshot_id}/download",
+            },
+            "rankings": {
+                "list": "GET /rankings/",
+                "get": "GET /rankings/{entry_id}",
+                "download": "GET /rankings/{entry_id}/download",
+            },
+            "backtest_results": {
+                "list": "GET /backtest_results/",
+                "get": "GET /backtest_results/{result_id}",
+                "report": "GET /backtest_results/{result_id}/report",
+                "validate_rules": "GET /backtest_results/{result_id}/validate_rules",
+            },
+            "alerts": {
+                "list_history": "GET /alerts/history",
+                "get_history": "GET /alerts/history/{record_id}",
+                "acknowledge": "POST /alerts/{record_id}/acknowledge",
+                "resolve": "POST /alerts/{record_id}/resolve",
+                "test": "POST /alerts/test",
             },
         },
     }

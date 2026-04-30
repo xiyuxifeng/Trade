@@ -84,7 +84,7 @@ class TestHandlePostmortemAnalysis:
         mock_report = DailyReport(as_of_date=date(2026, 4, 25), ideas=[mock_idea])
         mock_store = MagicMock()
         # list_filtered 返回空列表 → 走 append 分支（fallback）
-        mock_store.list_filtered.return_value = []
+        mock_store.list_filtered = AsyncMock(return_value=[])
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
@@ -140,9 +140,9 @@ class TestHandlePostmortemAnalysis:
 
         mock_store = MagicMock()
         # list_filtered 返回已有的 failure_case
-        mock_store.list_filtered.return_value = [existing_failure]
-        # update 方法
-        mock_store.update = MagicMock(return_value=True)
+        mock_store.list_filtered = AsyncMock(return_value=[existing_failure])
+        # update 方法（async）
+        mock_store.update = AsyncMock(return_value=True)
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"

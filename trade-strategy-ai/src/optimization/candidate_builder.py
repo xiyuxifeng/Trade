@@ -26,7 +26,7 @@ _OPERATION_MAP: dict[str, str] = {
     "high_hit_rate_but_negative_return": "review_stop_loss",
     "missed_opportunity": "upgrade_rule",
     "missing_snapshot": "check_snapshot",
-    "programmable_barely_hit": "delete_rule",
+    "programmable_but_rarely_hit": "delete_rule",
 }
 
 

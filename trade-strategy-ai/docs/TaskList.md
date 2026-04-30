@@ -1582,7 +1582,7 @@
   验收标准：关键数据问题能被及时发现。
   完成情况：✅ 8 种告警规则（A-H）+ 4 种渠道（dingtalk/feishu/wecom/generic）+ 聚合去重 + AlertHistory DB + alert.log 结构化日志 + API 路由，71 tests PASS。
 
-- [ ] `NTL-S7-008` `P2`
+- [x] `NTL-S7-008` `P2`
   目标：增加关键链路集成测试与回归测试。
   输入：盘前、盘后、回测主链路。
   输出：关键链路测试集合。
@@ -1590,6 +1590,7 @@
   前置依赖：Stage 4、Stage 5、Stage 6 完成。
   可并行：无。
 验收标准：关键链路至少具备一组稳定回归用例。
+  完成情况：✅ 17 个集成测试（盘前链路 4 + PreMarketService 1 + 盘后链路 3 + 回测链路 4 + E2E 冒烟 2 + CLI 回归 2 + 原有 4 个），21 tests PASS，覆盖盘前/盘后/回测三大主链路。
 
 - [x] `NTL-S7-009` `P2`
   目标：处理 BacktestResult 落盘格式稳定性问题。

@@ -131,10 +131,10 @@ class TestCandidateBuilder:
         assert any("check_snapshot" in n for n in notes)
         assert result.kept_rules == ["R1"]
 
-    def test_programmable_barely_hit_becomes_delete(self):
-        """programmable_barely_hit → 映射为 delete_rule（已删除）"""
+    def test_programmable_but_rarely_hit_becomes_delete(self):
+        """programmable_but_rarely_hit → 映射为 delete_rule（已删除）"""
         parent_rules = [make_rule("R1"), make_rule("R2")]
-        adj = make_adj("R1", "programmable_barely_hit")
+        adj = make_adj("R1", "programmable_but_rarely_hit")
         input_obj = CandidateBuildInput(
             trader_id="T1",
             strategy_date=date(2026, 4, 28),

@@ -1,6 +1,6 @@
 import pytest
 from src.backtest.schemas import RuleValidationResult
-from src.optimization.strategy_advisor import StrategyAdvisor, RuleAdjustment, AdvisorResult
+from src.optimization.strategy_advisor import StrategyAdvisor, RuleAdjustment, AdvisorResult, _format_return_mean
 
 
 def make_rvr(
@@ -82,3 +82,33 @@ class TestStrategyAdvisor:
         result = advisor.advise(validations)
         assert len(result.adjustments) == 3
         assert "R4" in result.skipped_rules
+
+    def test_format_return_mean_negative(self):
+        """负收益率显示为「亏损 X%」"""
+        assert _format_return_mean(-0.05) == "亏损 5.00%"
+        assert _format_return_mean(-0.1234) == "亏损 12.34%"
+
+    def test_format_return_mean_positive(self):
+        """正收益率显示为「+X%」"""
+        assert _format_return_mean(0.12) == "+12.00%"
+        assert _format_return_mean(0.05) == "+5.00%"
+
+    def test_negative_return_in_suggestion(self):
+        """负收益率在建议文本中正确格式化"""
+        advisor = StrategyAdvisor()
+        validations = [
+            make_rvr("R1", hit_rate=0.05, posterior_return_mean=-0.02),
+        ]
+        result = advisor.advise(validations)
+        assert "亏损" in result.adjustments[0].suggestion
+        assert "-2.00%" not in result.adjustments[0].suggestion
+
+    def test_positive_return_in_suggestion(self):
+        """正收益率在建议文本中正确格式化"""
+        advisor = StrategyAdvisor()
+        validations = [
+            make_rvr("R1", hit_rate=0.20, posterior_return_mean=0.08),
+        ]
+        result = advisor.advise(validations)
+        assert "+" in result.adjustments[0].suggestion
+        assert "8.00%" in result.adjustments[0].suggestion

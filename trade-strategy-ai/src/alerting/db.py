@@ -118,6 +118,36 @@ class AlertHistoryRepository:
         await session.refresh(record)
         return record
 
+    async def count_history(
+        self,
+        session,
+        status: str | None = None,
+        level: str | None = None,
+        tag: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> int:
+        """统计告警历史总数（支持过滤）。"""
+        from sqlalchemy import text, func
+
+        conditions = []
+        if status:
+            conditions.append(AlertHistory.status == status)
+        if level:
+            conditions.append(AlertHistory.level == level)
+        if tag:
+            conditions.append(
+                text(f"'{tag}' = ANY(SELECT jsonb_array_elements_text(tags))")
+            )
+        if date_from:
+            conditions.append(AlertHistory.created_at >= datetime.fromisoformat(date_from))
+        if date_to:
+            conditions.append(AlertHistory.created_at <= datetime.fromisoformat(date_to))
+
+        stmt = select(func.count()).select_from(AlertHistory).where(*conditions)
+        result = await session.execute(stmt)
+        return result.scalar() or 0
+
     async def list_history(
         self,
         session,

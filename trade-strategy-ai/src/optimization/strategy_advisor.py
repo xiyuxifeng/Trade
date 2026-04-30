@@ -11,11 +11,19 @@ ref: docs/superpowers/specs/2026-04-28-stage7-s7-001-s7-002-design.md
 """
 
 from dataclasses import dataclass, field
+from datetime import date
 
 from src.backtest.schemas import RuleValidationResult
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _format_return_mean(value: float) -> str:
+    """格式化收益率，负数显示为「亏损 X%」，正数显示为「+X%」。"""
+    if value < 0:
+        return f"亏损 {abs(value) * 100:.2f}%"
+    return f"+{value * 100:.2f}%"
 
 
 @dataclass
@@ -30,6 +38,7 @@ class RuleAdjustment:
     hit_rate: float | None
     posterior_return_mean: float | None
     posterior_return_median: float | None
+    trade_date: date | None = None  # 规则验真的交易日期，用于 RollingEvaluator 窗口计算
 
 
 @dataclass
@@ -53,7 +62,7 @@ _ADJUSTMENT_RULES = [
         ),
         "current_status": "hit_rate_too_low_and_return_negative",
         "suggestion": (
-            "建议删除该规则：命中率 {hit_rate:.0%} 且后验收益 {return_mean:.2%}，"
+            "建议删除该规则：命中率 {hit_rate:.0%} 且后验收益 {return_mean}，"
             "该规则当前净亏损，建议移除避免误导交易决策。"
         ),
     },
@@ -67,7 +76,7 @@ _ADJUSTMENT_RULES = [
         "current_status": "high_hit_rate_but_negative_return",
         "suggestion": (
             "建议复核止盈/止损参数：规则命中率 {hit_rate:.0%}，"
-            "但后验收益 {return_mean:.2%}，可能是止盈过紧或止损过宽。"
+            "但后验收益 {return_mean}，可能是止盈过紧或止损过宽。"
         ),
     },
     {
@@ -80,7 +89,7 @@ _ADJUSTMENT_RULES = [
         "current_status": "missed_opportunity",
         "suggestion": (
             "规则未充分触发（命中率 {hit_rate:.0%}），"
-            "但后验收益 {return_mean:.2%}，建议升级为可程序化执行。"
+            "但后验收益 {return_mean}，建议升级为可程序化执行。"
         ),
     },
     {
@@ -137,7 +146,7 @@ class StrategyAdvisor:
                     matched = True
                     suggestion = rule["suggestion"].format(
                         hit_rate=rvr.hit_rate or 0.0,
-                        return_mean=rvr.posterior_return_mean or 0.0,
+                        return_mean=_format_return_mean(rvr.posterior_return_mean or 0.0),
                     )
                     # 置信度与 hit_rate 相关
                     confidence = min((rvr.hit_rate or 0.0) + 0.3, 1.0)

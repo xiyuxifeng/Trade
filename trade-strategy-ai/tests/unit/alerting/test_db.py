@@ -98,3 +98,34 @@ class TestAlertHistoryRepository:
         record = await repo.get_by_id(session=mock_session, record_id=test_id)
 
         assert record.id == test_id
+
+    @pytest.mark.asyncio
+    async def test_count_history_returns_count(self):
+        """count_history() 返回过滤后的总数"""
+        from src.alerting.db import AlertHistoryRepository
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 42
+        mock_session.execute.return_value = mock_result
+
+        repo = AlertHistoryRepository()
+        total = await repo.count_history(session=mock_session, level="WARNING")
+
+        assert total == 42
+        mock_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_count_history_returns_zero_when_empty(self):
+        """无数据时返回 0"""
+        from src.alerting.db import AlertHistoryRepository
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        repo = AlertHistoryRepository()
+        total = await repo.count_history(session=mock_session)
+
+        assert total == 0

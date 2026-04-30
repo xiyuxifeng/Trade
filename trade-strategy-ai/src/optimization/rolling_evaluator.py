@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date as Date
 from typing import TYPE_CHECKING
 
+from src.backtest.engine import is_trade_date as _calendar_is_trade_date
 from src.common.logger import get_logger
 
 if TYPE_CHECKING:
@@ -89,9 +90,12 @@ class RollingEvaluator:
             self._trading_days_set = set(self.config.trading_days)
 
     def _is_trading_day(self, d) -> bool:
-        """判断是否为交易日。"""
+        """判断是否为交易日。
+
+        若未注入 trading_days，则 fallback 到 A 股日历（TradeCalendar）判断。
+        """
         if self._trading_days_set is None:
-            return True
+            return _calendar_is_trade_date(d)
         return d in self._trading_days_set
 
     def _get_sorted_trading_days(self) -> list:
@@ -126,17 +130,29 @@ class RollingEvaluator:
         if pruned > 0:
             logger.debug("滚动裁剪: 移除 %d 条旧记录，窗口起始=%s", pruned, window_start_date)
 
-    def push_adjustment(self, adjustment: "RuleAdjustment") -> None:
+    def push_adjustment(
+        self,
+        adjustment: "RuleAdjustment",
+        observation_date: Date | None = None,
+    ) -> None:
         """将 S7-002 的 RuleAdjustment 加入观察窗口。
 
         每次调用自动裁剪超窗观察记录。
+
+        Args:
+            adjustment: S7-002 输出的 RuleAdjustment（可带 trade_date）
+            observation_date: 观察日期，优先级最高
+                — 次选: adjustment.trade_date（来自历史验真）
+                — 默认: Date.today()
         """
         signal_type = _SIGNAL_TYPE_MAP.get(adjustment.current_status, "unknown")
+        # 优先级: explicit observation_date > adjustment.trade_date > today
+        obs_date = observation_date or adjustment.trade_date or Date.today()
         obs = SignalObservation(
             trader_id=adjustment.trader_id,
             signal_type=signal_type,
             rule_id=adjustment.rule_id,
-            observation_date=Date.today(),
+            observation_date=obs_date,
             confidence=adjustment.confidence,
         )
         self._observations.append(obs)

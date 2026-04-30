@@ -223,6 +223,7 @@ class AppConfig(BaseModel):
     kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
 
     traders: list[TraderConfig] = Field(default_factory=list)
+    alerting: dict[str, Any] | None = None  # S7-007 告警配置
 
 
 @dataclass(frozen=True)

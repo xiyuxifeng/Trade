@@ -39,6 +39,7 @@ class AlertHistoryItem(BaseModel):
 class PaginatedAlertHistory(BaseModel):
     """告警历史分页响应。"""
     count: int
+    total: int
     items: list[AlertHistoryItem]
 
 
@@ -89,6 +90,14 @@ async def list_alert_history(
 
     async with session_scope() as session:
         repo = AlertHistoryRepository()
+        total = await repo.count_history(
+            session=session,
+            status=status,
+            level=level,
+            tag=tag,
+            date_from=date_from,
+            date_to=date_to,
+        )
         rows = await repo.list_history(
             session=session,
             status=status,
@@ -101,7 +110,7 @@ async def list_alert_history(
         )
 
         items = [_row_to_item(row) for row in rows]
-        return PaginatedAlertHistory(count=len(items), items=items)
+        return PaginatedAlertHistory(count=len(items), total=total, items=items)
 
 
 @router.get("/history/{record_id}", response_model=AlertHistoryItem)
@@ -189,7 +198,7 @@ async def send_test_alert() -> dict:
 
     try:
         loaded = load_app_config()
-        manager = AlertManager(alerting_config=loaded.config)
+        manager = AlertManager(alerting_config=loaded.config.alerting)
         manager.send_test_alert(
             title="[测试] 告警系统连通性验证",
             message="如果你看到这条消息，说明告警 Webhook 配置正确。",

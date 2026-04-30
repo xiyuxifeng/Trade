@@ -747,17 +747,13 @@ class PredictionItem(BaseModel):
 
 ```
 src/
-├── article_classifier/          # 阶段一：文章分类
+├── article_classifier/          # 阶段一：文章分类（集成到 process 步骤）
 │   ├── __init__.py
 │   ├── classifier.py            # 分类器主逻辑
 │   ├── prompts.py               # 分类 prompt
 │   └── schemas.py               # 分类结果 schema
 │
-├── rule_extractor/              # 阶段二：分层提取
-│   ├── __init__.py
-│   ├── extractor.py             # 提取器主逻辑
-│   ├── prompts.py               # 各类别提取 prompt
-│   └── schemas.py               # 提取结果 schema
+│   注：rule_extractor 不需要新建，复用现有 extract_article_metadata.py
 │
 ├── rule_pool/                   # 阶段三~四：规则池管理
 │   ├── __init__.py
@@ -804,19 +800,19 @@ src/
 
 ### 5.3 CLI 命令扩展
 
+**复用现有命令**（不新增）：
+- `extract-articles` - 复用现有 LLM 提取逻辑
+- `backtest run` - 扩展支持规则池回测
+- `run-pre-market` - 扩展高置信度规则预测
+- `run-after-close` - 扩展规则归因
+
+**新增独立命令**：
+
 ```bash
-# 文章分类
-python -m cli.main article classify           # 分类待处理文章
-python -m cli.main article classify-review    # 人工复核噪音型文章
-
-# 规则提取
-python -m cli.main rule extract               # 从已分类文章提取规则
-python -m cli.main rule extract-single        # 从单篇文章提取
-
 # 规则池管理
-python -m cli.main rule-pool list             # 列出规则池
+python -m cli.main rule-pool list             # 列出规则
 python -m cli.main rule-pool review           # 人工审核待审核规则
-python -m cli.main rule-pool map              # 规则映射工具
+python -m cli.main rule-pool map             # DSL 映射工具
 python -m cli.main rule-pool trigger-backtest # 触发回测
 
 # 回测
@@ -835,44 +831,100 @@ python -m cli.main scheduler start            # 启动调度器
 
 ---
 
-## 6. 调度设计
+## 6. 与现有系统的集成
 
-### 6.1 每日调度
+### 6.1 设计原则：分层而不是平行
 
-```yaml
-schedule:
-  # 盘前
-  08:30:
-    - article_classify          # 分类新文章
-    - rule_extract              # 提取规则
-    - rule_pool_trigger         # 触发新规则回测
-    - prediction_run            # 运行盘前预测
+**核心原则**：新增层只做现有层做不了的事，不重复现有工作。
 
-  # 盘后
-  16:00:
-    - attribution_run           # 运行盘后归因
-    - rule_analyze              # 分析规则表现
-
-  # 定期
-  weekly:
-    - rule_backtest_full        # 全量规则回测
-    - rule_optimize             # 规则优化决策
-
-  monthly:
-    - rule_pool_cleanup         # 规则池清理
-    - report_generate           # 月度报告
+```
+现有层（不动）                              新增层（在其基础上）
+──────────────────────────────────────────────────────────────
+blog_articles                               blog_articles
+    ↓                                           ↓
+extract_article_metadata (process)    ←       继续用，复用 LLM 提取逻辑
+    ↓                                           ↓
+article_metadata                    ←       扩展：增加 article_type、trade_samples 字段
+    │                                           ↓
+    │                                    rule_pool (新增表)
+    │                                           ↓
+    │                                    回测验证 → 置信度调整
+    │                                           ↓
+StrategyVersion.rules_snapshot ← ← ← ← ← ← 高置信度规则
+    ↓                                           ↑
+run_pre_market / run_after_close   ← ← ← ← ← 扩展：增加规则归因
 ```
 
-### 6.2 触发机制
+### 6.2 调度集成
+
+**与现有 PipelineScheduler 的关系**：
+
+| 现有调度 | 时间 | 新增/扩展 | 说明 |
+|---------|------|----------|------|
+| `run_pipeline` | 08:00 | 不变 | 爬虫+清洗+提取，现有逻辑不变 |
+| `run_pre_market` | 08:30 | **扩展** | 增加高置信度规则盘前预测 |
+| `run_after_close` | 16:00 | **扩展** | 增加规则归因分析 |
+| `backtest run` | 按需 | **扩展** | 增加规则触发式回测 |
+
+**不新建独立调度器**，而是扩展现有调度任务。
+
+**新增独立模块**（不影响现有流程）：
+- `rule_pool` 表 + 审核工具
+- `article_classifier`（集成到 process）
+- `DSL 映射工具`
+- `置信度计算模块`
+
+### 6.3 任务重叠分析
+
+| 新任务 | 与现有任务关系 | 处理方式 |
+|--------|--------------|---------|
+| `article_classify` | 在 process 之前增加 | 集成到 process 步骤 |
+| `rule_extract` | 与 process 完全重叠 | **不需要**，复用现有 extract_article_metadata |
+| `rule_pool_trigger` | 新任务 | 新增独立模块 |
+| `prediction_run` | 部分重叠 run_pre_market | 扩展现有 run_pre_market |
+| `attribution_run` | 部分重叠 run_after_close | 扩展现有 run_after_close |
+| `rule_analyze` | 新任务 | 新增独立模块 |
+| `rule_backtest_full` | 与 backtest run 重叠 | 扩展现有 backtest run |
+
+### 6.4 CLI 命令集成
+
+**扩展现有命令**：
+
+```bash
+# 扩展 backtest run
+python -m cli.main backtest run --rules-pool  # 规则池回测模式
+python -m cli.main backtest run --full-scan   # 全量规则回测
+
+# 扩展 run-pre-market
+python -m cli.main run-pre-market --use-rules-pool  # 使用高置信度规则预测
+
+# 扩展 run-after-close
+python -m cli.main run-after-close --with-attribution  # 规则归因
+```
+
+**新增命令**：
+
+```bash
+# 规则池管理
+python -m cli.main rule-pool list              # 列出规则
+python -m cli.main rule-pool review             # 人工审核
+python -m cli.main rule-pool map                # DSL 映射
+python -m cli.main rule-pool trigger-backtest   # 触发回测
+
+# 规则分析
+python -m cli.main rule-analyze                 # 分析规则表现
+```
+
+### 6.5 触发机制
 
 | 触发类型 | 触发条件 | 动作 |
 |---------|---------|------|
-| 实时 | 新文章爬取完成 | 触发分类 |
-| 实时 | 分类完成（非噪音） | 触发提取 |
-| 实时 | 规则进入规则池 | 触发回测 |
-| 定时 | 每日 08:30 | 盘前预测 |
-| 定时 | 每日 16:00 | 盘后归因 |
-| 定时 | 每周日 00:00 | 全量回测 |
+| 实时 | 新文章处理完成 | 规则自动进入 rule_pool |
+| 实时 | 规则审核通过 | 触发回测验证 |
+| 定时 | 每日 08:30（run-pre-market） | 扩展：使用高置信度规则预测 |
+| 定时 | 每日 16:00（run-after-close） | 扩展：规则归因分析 |
+| 定时 | 每周日 00:00 | 全量规则回测 |
+| 手动 | CLI 触发 | rule_pool trigger-backtest |
 
 ---
 

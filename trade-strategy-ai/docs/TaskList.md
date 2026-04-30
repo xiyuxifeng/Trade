@@ -1824,12 +1824,13 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ## 21. 备注
 
-根据文档和项目代码，Review一下Stage 6的任务完成情况
+根据文档和项目代码，Review一下Stage 8的任务完成情况
 1. 代码是否符合设计目标，是否存在不合理的地方
 2. 是否存在代码缺陷或者设计缺陷
 3. 和之前的Stage任务产生的代码之间是否可以正常串联，数据是否可以正常传递
 4. 是否符合A股市场的实际情况
 5. 是否有需要改进的地方
+将review的结果写入review/04-30-mix.md
 
 ==== 
 

@@ -79,6 +79,7 @@ class DataConfig(BaseModel):
     providers: list[str] = Field(default_factory=lambda: ["mock"])  # Phase 0 default
     mock_prices: dict[str, float] = Field(default_factory=dict)
     market_data_cache_dir: str = "data/processed/market_data"
+    market_universe_snapshot_dir: str = "data/market_universe/snapshots"
 
 
 class CrawlAuthConfig(BaseModel):

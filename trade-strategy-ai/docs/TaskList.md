@@ -91,7 +91,7 @@
 - 配置加载、CLI、API、APScheduler、最小盘前/盘后闭环已经存在。
 - 文章抓取、清洗、抽取、增量处理 pipeline 已存在。
 - `blog_articles`、`article_metadata`、`market_data`、`trade_logs`、`raw_articles`、`crawl_state` 已落库。
-- `TraderProfile`、`TraderMemory`、`StrategyAgent`、`RiskAgent`、`SignalVersioning` 已有最小骨架。
+- `TraderProfile`、`TraderMemory`、`StrategyAgent`、`RiskAgent` 已有骨架；`SignalVersioning` 支持按日期分目录和 tar.gz 归档。
 - AKShare 个股、指数、行业板块、概念板块日线同步能力已存在。
 
 ### 4.2 关键缺口
@@ -101,7 +101,7 @@
 - `ManagerAgent` 仍然是最小编排，缺少策略版本、候选池、Evidence Pack、ranking。
 - 缺 `market_universe`、`strategy_library`、`evaluation`、`backtest` 等主线模块。
 - 缺稳定的数据快照资产，无法支持回测与学习闭环。
-- `TraderProfile`、`TraderMemory`、`SignalVersioning` 的结构都还不够支撑完整闭环。
+- `TraderProfile`、`TraderMemory` 的结构都还不够支撑完整闭环（NTL-S10-001/002 改进中）。
 
 ### 4.3 唯一主线
 
@@ -166,6 +166,8 @@
 7. Stage 5：盘后评估与学习闭环
 8. Stage 6：离线回测与规则验真
 9. Stage 7：自主优化与可观测性
+10. Stage 9：工程日志与可追溯性
+11. Stage 10：LLM 规则应用与持续优化
 
 ---
 
@@ -1756,7 +1758,136 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 17. 并行执行规则
+## 17. Stage 10：LLM 规则应用与持续优化（P1）
+
+### Stage 目标
+
+打通 LLM 提取规则到盘前决策的完整链路，使 S7-001~S7-004 的规则优化闭环真正运转起来，并修复遗留的工程问题。
+
+### 阶段交付物
+
+- `rules_snapshot` 从 ArticleMetadata 填充，规则可参与评估和验真
+- S7-002 的规则验真不再基于空规则集
+- 候选版本优化双轨机制完整可用
+- 遗留 P1 工程问题全部修复
+
+### 任务清单
+
+- [x] `NTL-S10-001` `P0` ✅ 2026-04-30
+  目标：将 `ArticleMetadata.strategy_rules` 填充到 `StrategyVersion.rules_snapshot`
+  输入：`ArticleMetadata.strategy_rules`、`builder.py` 构建逻辑
+  输出：`StrategyVersion.rules_snapshot` 非空，规则参与 StrategyAgent 评估
+  修改范围：`src/strategy_library/builder.py`
+  前置依赖：Stage 3 完成
+  可并行：`NTL-S10-002`
+  验收标准：同一 trader 同一日期的 `rules_snapshot` 包含该 trader 对应文章中 LLM 提取的规则；`validate_rule_hits()` 验的都是真实规则而非空集
+  完成情况：✅ `_collect_article_rules()` 新增；`_build()` 方法填充 rules_snapshot；5 tests PASS
+
+- [x] `NTL-S10-002` `P1` ✅ 2026-04-30
+  目标：扩展 `ArticleEvidence` protocol，增加规则相关字段
+  输入：现有 `ArticleEvidence` protocol 定义
+  输出：`ArticleEvidence` 新增 `strategy_rules`、`preconditions`、`published_at` 字段
+  修改范围：`src/strategy_library/builder.py`
+  前置依赖：`NTL-S10-001`
+  可并行：无
+  验收标准：`builder.py` 中 `_score_article_for_profile()` 可访问文章规则，`_build()` 方法可将规则写入 `rules_snapshot`
+  完成情况：✅ Protocol 扩展完成；5 tests PASS
+
+- [x] `NTL-S10-003` `P1` ✅ 2026-04-30
+  目标：将 `preconditions` 加入信号评估门槛检查
+  输入：`ArticleMetadata.preconditions`、StrategyAgent 评估逻辑
+  输出：规则评估时检查前置条件是否满足，不满足的规则不参与当日评估
+  修改范围：`src/agents/strategy_agent/agent.py`、`src/strategy/types.py`
+  前置依赖：`NTL-S10-001`、`NTL-S10-002`
+  可并行：无
+  验收标准：前置条件不满足的规则在 `generate_raw_signal()` 中被跳过，而非直接参与评估
+  完成情况：✅ `_filter_rules_by_preconditions()` 和 `_compare_values()` 新增；15 tests PASS
+
+- [x] `NTL-S10-004` `P1` ✅ 2026-04-30
+  目标：修复 DuckDB export_task UPSERT 冲突目标列不明确问题
+  输入：`src/pipeline/tasks/export_task.py:274`
+  输出：`_serialize_metadata()` 中明确 `ON CONFLICT (column) DO UPDATE SET` 目标列
+  修改范围：`src/pipeline/tasks/export_task.py`
+  前置依赖：Stage 5 完成
+  可并行：`NTL-S10-005`
+  验收标准：`TestRunExportTask.*` 全部测试 PASS
+  完成情况：✅ `INSERT OR REPLACE` 改为 `ON CONFLICT (article_id, schema_version) DO UPDATE SET`；10 tests PASS
+
+- [x] `NTL-S10-005` `P1` ✅ 2026-04-30
+  目标：重构 `data/signals/` 文件存储，按日期分目录并支持归档压缩
+  输入：`src/strategy/signal_version.py`
+  输出：按日期分目录（`data/signals/{YYYY-MM-DD}/`）+ tar.gz 归档（`archive/`）+ 流读取
+  修改范围：`src/strategy/signal_version.py`、`tests/unit/strategy/test_signal_version.py`
+  前置依赖：Stage 6 完成
+  可并行：`NTL-S10-004`
+  验收标准：
+  - 新格式：`data/signals/{date}/{signal_id}.json`
+  - 归档：`archive/{date}.tar.gz`，超过 retention_days（默认10天）自动压缩
+  - 读取：自动从内存/原始文件/归档文件（流读取）三级优先级查找
+  - 兼容：旧格式（根目录单个 JSON 文件）仍可读取
+  - signal_id 日期编码：`idea_{date}_{uuid}` 格式可直接定位归档文件
+  完成情况：✅ `signal_version.py` 已重构；8 tests PASS；`NTL-S10-005` 关闭
+
+- [x] `NTL-S10-006` `P2` ✅ 2026-04-30
+  目标：规则可执行性评分与淘汰
+  输入：`ArticleMetadata.confidence_score`、规则可程序化程度
+  输出：新增 `programmability` 评分；高置信度但不可执行的规则进入候选池待人工 review
+  修改范围：`src/backtest/rule_registry.py`
+  前置依赖：`NTL-S10-001`
+  可并行：`NTL-S10-007`
+  验收标准：规则在进入 `rules_snapshot` 前经过可执行性筛选；不可执行规则标记并允许人工 override
+  完成情况：✅ `RuleRegistry` 类新增；`list_programmable_rules()` 支持按可执行性过滤；10 tests PASS
+
+- [ ] `NTL-S10-007` `P2` ⏸️ 暂不实现
+  目标：规则时效性衰减
+  输入：`rules_snapshot` 中规则的 `published_at` 时间戳
+  输出：超过 N 天的规则在评估时降低权重或自动移出 active 规则集
+  修改范围：`src/strategy_library/builder.py`、`src/backtest/engine.py`
+  前置依赖：`NTL-S10-001`、`NTL-S10-006`
+  可并行：无
+  验收标准：规则附带时效信息；`validate_rule_hits()` 可区分新规则和老化规则；老化规则在回测中权重降低
+  说明：待后续需求明确后再推进
+
+- [x] `NTL-S10-008` `P2` ✅ 2026-04-30
+  目标：规则与标的联合验证
+  输入：当前规则级别验真（不考虑标的适用性）
+  输出：对于同一篇文章，同时验证 `trading_symbols` 和 `strategy_rules` 的关联性，避免"提到某股但无交易策略"的弱证据进入候选
+  修改范围：`src/strategy_library/builder.py`
+  前置依赖：`NTL-S10-001`
+  可并行：无
+  验收标准：builder 中 `source_articles` 处理时，要求该文章同时有 `trading_symbols` 和 `strategy_rules`（或 `preconditions`）才作为有效证据
+  完成情况：✅ `validate_rule_symbol_association()` 新增；7 tests PASS；30 builder tests PASS（无回归）
+
+- [x] `NTL-S10-009` `P2` ✅ 2026-04-30
+  目标：测试基础设施规范化（mock session_scope）
+  输入：所有依赖 PostgreSQL 连接的单元测试
+  输出：测试不再依赖真实数据库连接，使用 mock session_scope
+  修改范围：`tests/unit/trader_memory/conftest.py`
+  前置依赖：无（可独立推进）
+  可并行：`NTL-S10-004`、`NTL-S10-005`
+  验收标准：CI 环境中无需启动 PostgreSQL 即可运行全部单元测试；原有测试逻辑不变
+  完成情况：✅ `mock_session_scope` 和 `mock_session_scope_blocking` fixtures 新增
+
+- [x] `NTL-S10-010` `P2` ✅ 2026-04-30
+  目标：统一 `source_topic_ids` tag 生成逻辑
+  输入：当前 `TraderAgent` 中 `source_topic_ids` 仅从 `topic_constituents` 取
+  输出：在 `SnapshotService` 保存时统一生成 canonical tag 并持久化
+  修改范围：`src/market_universe/snapshot_service.py`
+  前置依赖：Stage 2 完成
+  可并行：无
+  验收标准：`source_topic_ids` 来自统一 tag 生成逻辑，经过 `hot_topics` 和 `topic_constituents` 双重校验，而非单一数据源
+  完成情况：✅ `generate_canonical_topic_tags()` 新增；6 tests PASS；8 existing tests PASS（无回归）
+
+### Stage 10 完成标准
+
+- `rules_snapshot` 非空，S7-002 规则验真闭环可运转
+- `preconditions` 参与信号评估门槛检查
+- 所有 P1 工程问题（UPSERT、signals 文件冗余）已修复
+- 候选版本双轨机制完整可用
+
+---
+
+## 18. 并行执行规则
 
 ### 17.1 明确可并行的任务包
 
@@ -1824,18 +1955,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ## 21. 备注
 
-根据文档和项目代码，Review一下Stage 8的任务完成情况
+根据文档和项目代码，Review一下当前项目所有的Stage任务完成情况
+0. 整个项目实现是否达到需求.md描述的目标
 1. 代码是否符合设计目标，是否存在不合理的地方
 2. 是否存在代码缺陷或者设计缺陷
-3. 和之前的Stage任务产生的代码之间是否可以正常串联，数据是否可以正常传递
+3. 所有Stage任务产生的代码之间是否可以正常串联，数据是否可以正常传递
 4. 是否符合A股市场的实际情况
 5. 是否有需要改进的地方
-将review的结果写入review/04-30-mix.md
-
-==== 
-
-  4. data/signals/*.json — 与数据库冗余
-
-  问题：Signal 已经存了数据库，又写文件备份
-
-  建议：确认文件用途，或统一只用数据库
+将review的结果写入docs/review/04-30-full-mix.md

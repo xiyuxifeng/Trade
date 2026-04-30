@@ -91,18 +91,27 @@ def _build_rules_snapshot(
             modified_rule = dict(rule)
             current_action = modified_rule.get("action", {})
             if isinstance(current_action, dict):
+                adjusted_fields: dict[str, dict[str, float]] = {}
+                for key in ("stop_loss", "stop_loss_pct", "stop_loss_price"):
+                    value = current_action.get(key)
+                    if isinstance(value, (int, float)) and value > 0:
+                        new_value = float(value) * 0.9
+                        current_action[key] = new_value
+                        adjusted_fields[key] = {"from": float(value), "to": new_value}
                 # 在原有 action 基础上标记需要复核
                 modified_rule["action"] = {
                     **current_action,
                     "_review_required": True,
                     "_review_reason": adjustment.suggestion,
                     "_confidence": adjustment.confidence,
+                    "_review_adjustment": adjusted_fields,
                 }
             else:
                 modified_rule["action"] = {
                     "_review_required": True,
                     "_review_reason": adjustment.suggestion,
                     "_confidence": adjustment.confidence,
+                    "_review_adjustment": {},
                 }
             new_rules.append(modified_rule)
             modified.append(rule_id)

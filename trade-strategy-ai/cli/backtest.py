@@ -49,9 +49,10 @@ def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
     # 初始化 SnapshotService
     from src.market_universe.snapshot_service import SnapshotService
 
-    snapshot_service = SnapshotService(
-        base_dir="data/market_universe/snapshots"
-    )
+    snapshot_base_dir = loaded.config.data.market_universe_snapshot_dir
+    if not snapshot_base_dir:
+        snapshot_base_dir = "data/market_universe/snapshots"
+    snapshot_service = SnapshotService(base_dir=snapshot_base_dir)
 
     # 初始化 StrategyRepoAdapter
     from src.market_data.strategy_repo_adapter import StrategyRepoAdapter

@@ -40,7 +40,57 @@ def optimize_filter(
     从 BacktestResult JSON 文件加载数据，执行筛选，输出结果到控制台和可选的 JSON 文件。
     当前版本暂不接真实数据库，仅支持文件输入。
     """
-    from src.backtest.schemas import BacktestResult
+    from datetime import date as Date
+
+    from src.backtest.schemas import BacktestResult, BacktestSummary
+
+    def _parse_percent(value):
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if text.endswith("%"):
+                try:
+                    return float(text.rstrip("%")) / 100
+                except ValueError:
+                    return None
+            try:
+                return float(text)
+            except ValueError:
+                return None
+        return None
+
+    def _build_summary(summary_data: dict | None) -> BacktestSummary | None:
+        if not isinstance(summary_data, dict):
+            return None
+        return BacktestSummary(
+            total_days=summary_data.get("total_days", 0),
+            total_trades=summary_data.get("total_trades", 0),
+            valid_trades=summary_data.get("valid_trades", 0),
+            skipped_trades=summary_data.get("skipped_trades", 0),
+            win_rate=_parse_percent(summary_data.get("win_rate")),
+            avg_return_pct=_parse_percent(summary_data.get("avg_return_pct")),
+        )
+
+    def _parse_backtest_result(data: dict) -> BacktestResult | None:
+        trader_id = data.get("request_trader_id") or data.get("trader_id")
+        date_from = data.get("request_date_from") or data.get("date_from")
+        date_to = data.get("request_date_to") or data.get("date_to")
+        if not trader_id or not date_from or not date_to:
+            return None
+        try:
+            return BacktestResult(
+                request_trader_id=trader_id,
+                request_date_from=Date.fromisoformat(str(date_from)),
+                request_date_to=Date.fromisoformat(str(date_to)),
+                records=[],
+                summary=_build_summary(data.get("summary")),
+                result_version=str(data.get("result_version", "1.0")),
+            )
+        except Exception:
+            return None
 
     config = ActiveTraderFilterConfig(
         min_win_rate=min_win_rate,
@@ -64,19 +114,26 @@ def optimize_filter(
                 data = json.loads(path.read_text())
                 # 单文件可能是 dict 或 list
                 if isinstance(data, dict):
-                    if "records" in data:
-                        br = BacktestResult(**data)
+                    br = _parse_backtest_result(data)
+                    if br is not None:
                         backtest_results[br.request_trader_id] = br
                 elif isinstance(data, list):
                     for item in data:
-                        br = BacktestResult(**item)
-                        backtest_results[br.request_trader_id] = br
+                        if not isinstance(item, dict):
+                            continue
+                        br = _parse_backtest_result(item)
+                        if br is not None:
+                            backtest_results[br.request_trader_id] = br
             except Exception as exc:
                 typer.secho(f"加载失败 {path}: {exc}", fg=typer.colors.YELLOW)
 
     # 限定 trader
-    if trader and backtest_results and trader not in backtest_results:
-        filtered = {trader: backtest_results[trader]}
+    if trader:
+        if trader in backtest_results:
+            filtered = {trader: backtest_results[trader]}
+        else:
+            filtered = {}
+            typer.secho(f"未找到 trader: {trader}", fg=typer.colors.YELLOW)
     else:
         filtered = backtest_results
 
@@ -90,7 +147,7 @@ def optimize_filter(
     typer.echo(f"\n=== Trader 筛选结果（{len(results)} 个）===")
     for r in results:
         status = "✅ 通过" if r.filter_passed else "❌ 未通过"
-        typer.echo(f"\n{trader}: {status}")
+        typer.echo(f"\n{r.trader_id}: {status}")
         typer.echo(f"  原始胜率: {r.raw_win_rate:.2%}" if r.raw_win_rate is not None else "  原始胜率: N/A")
         typer.echo(f"  收缩胜率: {r.adjusted_win_rate:.2%}")
         typer.echo(f"  置信度: {r.sample_confidence:.2%}")

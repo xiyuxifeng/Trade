@@ -74,6 +74,10 @@ def render_backtest_json(result: BacktestResult) -> str:
             "request_trader_id": result.request_trader_id,
             "request_date_from": str(result.request_date_from),
             "request_date_to": str(result.request_date_to),
+            "trader_id": result.request_trader_id,
+            "date_from": str(result.request_date_from),
+            "date_to": str(result.request_date_to),
+            "result_version": result.result_version,
             "records": [
                 {
                     "trade_date": str(r.trade_date),
@@ -96,9 +100,8 @@ def render_backtest_json(result: BacktestResult) -> str:
                     "total_trades": result.summary.total_trades,
                     "valid_trades": result.summary.valid_trades,
                     "skipped_trades": result.summary.skipped_trades,
-                    # 比例口径字段：统一用格式化字符串输出（与 Markdown 报告一致）
-                    "win_rate": f"{result.summary.win_rate:.2%}" if result.summary.win_rate is not None else None,
-                    "avg_return_pct": f"{result.summary.avg_return_pct:.2%}" if result.summary.avg_return_pct is not None else None,
+                    "win_rate": result.summary.win_rate,
+                    "avg_return_pct": result.summary.avg_return_pct,
                 }
                 if result.summary
                 else None

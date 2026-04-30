@@ -85,7 +85,8 @@
       "Bash(PYTHONPATH=. alembic:*)",
       "Bash(echo \"Exit: $?\")",
       "Bash(alembic revision:*)",
-      "Bash(alembic:*)"
+      "Bash(alembic:*)",
+      "Bash(grep -E \"\\\\.\\(md\\)$\")"
     ]
   }
 }

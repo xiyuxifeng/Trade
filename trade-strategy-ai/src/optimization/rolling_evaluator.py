@@ -10,7 +10,7 @@ ref: docs/superpowers/specs/2026-04-28-stage7-s7-004-design.md
 """
 
 from dataclasses import dataclass
-from datetime import date as Date
+from datetime import date as Date, timedelta
 from typing import TYPE_CHECKING
 
 from src.backtest.engine import is_trade_date as _calendar_is_trade_date
@@ -98,11 +98,27 @@ class RollingEvaluator:
             return _calendar_is_trade_date(d)
         return d in self._trading_days_set
 
-    def _get_sorted_trading_days(self) -> list:
+    def _get_sorted_trading_days(self) -> list[Date]:
         """获取排序后的交易日列表（用于窗口计算）。"""
         if self._trading_days_set:
             return sorted(self._trading_days_set)
-        return []
+
+        if not self._observations:
+            return []
+
+        anchor = max(obs.observation_date for obs in self._observations)
+        window_days = self.config.window_days
+        trading_days: list[Date] = []
+        current = anchor
+        attempts = 0
+        # 回退窗口：最多扫描 window_days * 6 个自然日，保证覆盖节假日
+        while len(trading_days) < window_days and attempts < window_days * 6:
+            if _calendar_is_trade_date(current):
+                trading_days.append(current)
+            current -= timedelta(days=1)
+            attempts += 1
+
+        return sorted(trading_days)
 
     def _prune_old_observations(self) -> None:
         """移除超出 window_days 窗口的旧观察记录。

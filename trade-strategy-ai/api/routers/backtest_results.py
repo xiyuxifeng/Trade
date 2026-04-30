@@ -31,9 +31,35 @@ class BacktestResultDetail(BaseModel):
     item: dict
 
 
-def _get_backtest_results_dir() -> Path:
-    """获取回测结果存储目录。"""
-    return Path("data/backtest/results")
+def _get_backtest_results_dirs() -> list[Path]:
+    """获取回测结果存储目录列表。"""
+    return [
+        Path("data/backtest/results"),
+        Path("data/processed/backtest"),
+    ]
+
+
+def _extract_meta(data: dict) -> tuple[str | None, str | None, str | None]:
+    trader_id = data.get("trader_id") or data.get("request_trader_id")
+    date_from = data.get("date_from") or data.get("request_date_from")
+    date_to = data.get("date_to") or data.get("request_date_to")
+    return trader_id, date_from, date_to
+
+
+def _iter_result_files() -> list[Path]:
+    files: list[Path] = []
+    for results_dir in _get_backtest_results_dirs():
+        if results_dir.exists():
+            files.extend(results_dir.glob("*.json"))
+    return sorted(files, reverse=True)
+
+
+def _find_result_file(result_id: str) -> Path | None:
+    for results_dir in _get_backtest_results_dirs():
+        candidate = results_dir / f"{result_id}.json"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 @router.get("/", response_model=PaginatedResponse)
@@ -45,30 +71,27 @@ async def list_backtest_results(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> PaginatedResponse:
     """列出回测结果（基于文件，分页）。"""
-    results_dir = _get_backtest_results_dir()
-
-    if not results_dir.exists():
+    all_files = _iter_result_files()
+    if not all_files:
         return PaginatedResponse(count=0, total=0, skip=skip, limit=limit, items=[])
-
-    all_files = sorted(results_dir.glob("*.json"), reverse=True)
 
     items = []
     for f in all_files:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
-            if trader_id and data.get("trader_id") != trader_id:
+            meta_trader_id, meta_date_from, meta_date_to = _extract_meta(data)
+            if trader_id and meta_trader_id != trader_id:
                 continue
-            date_str = data.get("date_from", "")
-            if date_from and date_str < date_from:
+            if date_from and (meta_date_from or "") < date_from:
                 continue
-            if date_to and date_str > date_to:
+            if date_to and (meta_date_to or "") > date_to:
                 continue
 
             items.append({
                 "result_id": f.stem,
-                "trader_id": data.get("trader_id"),
-                "date_from": data.get("date_from"),
-                "date_to": data.get("date_to"),
+                "trader_id": meta_trader_id,
+                "date_from": meta_date_from,
+                "date_to": meta_date_to,
                 "summary": data.get("summary", {}),
             })
         except Exception:
@@ -89,10 +112,8 @@ async def list_backtest_results(
 @router.get("/{result_id}", response_model=BacktestResultDetail)
 async def get_backtest_result(result_id: str) -> BacktestResultDetail:
     """获取回测结果详情。"""
-    results_dir = _get_backtest_results_dir()
-    result_file = results_dir / f"{result_id}.json"
-
-    if not result_file.exists():
+    result_file = _find_result_file(result_id)
+    if result_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="回测结果未找到")
 
     try:
@@ -106,10 +127,13 @@ async def get_backtest_result(result_id: str) -> BacktestResultDetail:
 @router.get("/{result_id}/report")
 async def download_backtest_report(result_id: str) -> FileResponse:
     """下载回测报告（Markdown）。"""
-    results_dir = _get_backtest_results_dir()
-    report_file = results_dir / f"{result_id}_report.md"
-
-    if not report_file.exists():
+    report_file = None
+    for results_dir in _get_backtest_results_dirs():
+        candidate = results_dir / f"{result_id}_report.md"
+        if candidate.exists():
+            report_file = candidate
+            break
+    if report_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="回测报告文件未找到")
 
     return FileResponse(
@@ -122,10 +146,13 @@ async def download_backtest_report(result_id: str) -> FileResponse:
 @router.get("/{result_id}/validate_rules")
 async def download_validate_rules(result_id: str) -> FileResponse:
     """下载规则验真报告（Markdown）。"""
-    results_dir = _get_backtest_results_dir()
-    validate_file = results_dir / f"{result_id}_validate_rules.md"
-
-    if not validate_file.exists():
+    validate_file = None
+    for results_dir in _get_backtest_results_dirs():
+        candidate = results_dir / f"{result_id}_validate_rules.md"
+        if candidate.exists():
+            validate_file = candidate
+            break
+    if validate_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规则验真报告未找到")
 
     return FileResponse(

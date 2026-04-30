@@ -50,6 +50,8 @@ data:
   mock_prices:
     000001.SZ: 10.0
     510300.SH: 3.5
+  # 候选池快照存储目录
+  market_universe_snapshot_dir: data/market_universe/snapshots
 
 # 数据质量配置
 data_quality:

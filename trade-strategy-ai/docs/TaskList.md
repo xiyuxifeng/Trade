@@ -1887,9 +1887,200 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 18. 并行执行规则
+## 19. Stage 11：文章到规则的完整闭环
 
-### 17.1 明确可并行的任务包
+### 设计文档
+`docs/superpowers/specs/2026-04-30-article-to-rule-pipeline-design.md`
+
+### 实现计划
+`docs/superpowers/plans/2026-04-30-article-to-rule-pipeline-plan.md`
+
+### 概述
+从文章提取可执行交易规则的完整闭环：分类→分层提取→规则池→回测验证→盘前预测→盘后归因
+
+### 设计原则
+- **分层而不是平行**：新增层只做现有层做不了的事，不重复现有工作
+- **复用 extract_article_metadata**：不新建 rule_extract，复用现有 LLM 提取逻辑
+- **不新建独立调度器**：扩展现有 PipelineScheduler 任务
+
+---
+
+### NTL-S11-001 `P1`
+
+目标：数据库模型定义
+输入：无
+输出：rule_pool、trade_sample、article_classification 三张表及 ORM models
+修改范围：
+- `src/rule_pool/models.py`（新建）
+- `src/rule_pool/schemas.py`（新建）
+- `src/db/migrations/versions/2026-04-30_create_rule_pool_tables.py`（新建）
+前置依赖：无（可独立推进）
+可并行：无
+验收标准：
+- RulePool 表包含所有设计文档中的字段
+- TradeSample 表可存储交易记录
+- ArticleClassification 表可存储分类结果
+- 单元测试 PASS
+
+---
+
+### NTL-S11-002 `P1`
+
+目标：扩展 article_metadata 表字段
+输入：现有 article_metadata 表
+输出：增加 extraction_version、standalone_rule_ids、derived_rule_ids、trade_sample_ids、article_type 字段
+修改范围：
+- `src/models/article_metadata.py`
+- `src/db/migrations/versions/2026-04-30_add_article_metadata_fields.py`
+前置依赖：无
+可并行：无
+验收标准：
+- 迁移脚本可正常执行
+- 现有功能不受影响
+- 单元测试 PASS
+
+---
+
+### NTL-S11-003 `P1`
+
+目标：article_classifier 分类器
+输入：文章（title + content_text）
+输出：ClassificationResult（article_type + confidence + type_scores）
+修改范围：
+- `src/article_classifier/__init__.py`（新建）
+- `src/article_classifier/classifier.py`（新建）
+- `src/article_classifier/prompts.py`（新建）
+- `src/article_classifier/schemas.py`（新建）
+前置依赖：无
+可并行：可与 NTL-S11-001、NTL-S11-002 并行
+验收标准：
+- 支持四分类：rule/record/concept/noise
+- LLM 调用返回正确格式
+- 单元测试 PASS
+
+---
+
+### NTL-S11-004 `P2`
+
+目标：rule_pool repository CRUD
+输入：RulePool 表
+输出：规则池的增删改查接口
+修改范围：`src/rule_pool/repository.py`（新建）
+前置依赖：NTL-S11-001
+可并行：无
+验收标准：
+- create_rule / get_rule_by_id / get_rules_by_status / update_mapping / update_review / update_backtest_result / get_high_confidence_rules
+- 单元测试 PASS
+
+---
+
+### NTL-S11-005 `P2`
+
+目标：置信度计算
+输入：initial_confidence + RuleBacktestResult
+输出：validated_confidence
+修改范围：`src/rule_backtest/confidence.py`（新建）
+前置依赖：NTL-S11-001
+可并行：可与 NTL-S11-004 并行
+验收标准：
+- 多指标综合评分（胜率 + 盈亏比 + 夏普 + 回撤）
+- 样本量保护（< 10 时保守调整）
+- 贝叶斯式加权更新
+- 单元测试 PASS
+
+---
+
+### NTL-S11-006 `P2`
+
+目标：DSL 映射工具
+输入：raw_condition（提取层）
+输出：mapped_condition（执行层）
+修改范围：`src/rule_pool/mapper.py`（新建）
+前置依赖：NTL-S11-001
+可并行：可与 NTL-S11-004、NTL-S11-005 并行
+验收标准：
+- suggest_mapping 根据关键词建议映射
+- validate_mapped_condition 验证条件合法性
+- build_and_condition / build_or_condition / build_cmp_condition 构造条件
+- 单元测试 PASS
+
+---
+
+### NTL-S11-007 `P1`
+
+目标：扩展 extract_article_metadata 支持 article_type
+输入：文章处理流程
+输出：meta.article_type 填充分类结果
+修改范围：`src/agents/data_agent/skills/extract_article_metadata.py`
+前置依赖：NTL-S11-002、NTL-S11-003
+可并行：无
+验收标准：
+- 提取前先进行文章分类
+- 分类结果存储到 meta.article_type
+- 现有功能不受影响
+- 集成测试 PASS
+
+---
+
+### NTL-S11-008 `P2`
+
+目标：扩展 BacktestEngine 支持规则池回测
+输入：rule_pool 中的规则
+输出：规则回测结果
+修改范围：`src/backtest/engine.py`
+前置依赖：NTL-S11-004、NTL-S11-005
+可并行：无
+验收标准：
+- run_rules_backtest 方法支持对规则池回测
+- 回测结果更新到 rule_pool 表
+- 单元测试 PASS
+
+---
+
+### NTL-S11-009 `P3`
+
+目标：CLI 命令扩展
+输入：无
+输出：rule-pool 命令组
+修改范围：`cli/main.py`
+前置依赖：NTL-S11-004
+可并行：无
+验收标准：
+- `python -m cli.main rule-pool list` 列出规则
+- `python -m cli.main rule-pool review --rule_id=xxx --decision=approve` 审核规则
+- 命令可正常执行
+
+---
+
+### NTL-S11-010 `P3`
+
+目标：回测触发与调度
+输入：无
+输出：每周日 00:00 自动执行全量规则回测
+修改范围：
+- `src/rule_backtest/scheduler.py`（新建）
+- `src/pipeline/scheduler.py`（扩展）
+前置依赖：NTL-S11-008
+可并行：无
+验收标准：
+- 调度器正常启动
+- 定时任务正确执行
+
+---
+
+### Stage 11 完成标准
+
+- 文章分类器正常工作（rule/record/concept/noise 四分类）
+- 规则可进入 rule_pool 并经过审核
+- 规则可完成 DSL 两层映射
+- 规则可触发回测并更新 validated_confidence
+- 高置信度规则（>=0.8）可进入盘前预测
+
+---
+
+## 20. 并行执行规则
+
+### 20.1 明确可并行的任务包
 
 - Stage 1 完成后：
   - `NTL-S2-002` ~ `NTL-S2-006`
@@ -1898,6 +2089,8 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - Stage 4 完成后：
   - `NTL-S5-001` ~ `NTL-S5-004`
   - `NTL-S6-001` ~ `NTL-S6-005`
+- Stage 11 完成后：
+  - `NTL-S11-001` ~ `NTL-S11-010`
 - 文档与样例验证：
   - `NTL-S0-011` 与 `NTL-S0-014`
   - `NTL-S1-013`
@@ -1905,7 +2098,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
   - `NTL-S5-014`
   - `NTL-S6-013`
 
-### 17.2 不建议并行的任务
+### 20.2 不建议并行的任务
 
 - 同时重写 `ManagerAgent` 与 `TraderAgent` 主流程。
 - 同时改配置层、契约层和 migration 但不先锁定 schema。
@@ -1914,17 +2107,18 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 18. 当前推荐执行顺序
+## 21. 当前推荐执行顺序
 
-### 18.1 最近必须先做的任务
+### 21.1 最近必须先做的任务
 
 1. `NTL-S0-007` ~ `NTL-S0-010`
 2. `NTL-S0-014`
 3. `NTL-S1-001` ~ `NTL-S1-013`
 4. `NTL-S15-001` ~ `NTL-S15-010`
 5. `NTL-S2-001` ~ `NTL-S2-024`
+6. `NTL-S11-001` ~ `NTL-S11-003`（基础设施，P1）
 
-### 18.2 当前不要做的事
+### 21.2 当前不要做的事
 
 - 不要先做 UI。
 - 不要先做分钟级高频回测。
@@ -1934,7 +2128,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 19. 与旧任务文档的关系
+## 22. 与旧任务文档的关系
 
 - 旧 `docs/TaskList.md` 中已完成的基础能力，默认视为本清单的“已有可复用基础”。
 - 旧多 Agent 草图、旧 Alignment 主线、宿主薄壳、图片处理等任务，不再作为当前主线。
@@ -1942,7 +2136,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 20. 维护规则
+## 23. 维护规则
 
 后续更新本清单时，必须遵守：
 
@@ -1953,7 +2147,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 5. 如果某 Stage 的完成标准还没满足，不得把后续 Stage 标为主线已完成。
 
 
-## 21. 备注
+## 24. 备注
 
 根据文档和项目代码，Review一下当前项目所有的Stage任务完成情况
 0. 整个项目实现是否达到需求.md描述的目标

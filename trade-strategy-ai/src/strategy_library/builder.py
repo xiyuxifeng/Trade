@@ -150,6 +150,39 @@ def _collect_article_rules(articles: list[ArticleEvidence]) -> list[dict]:
     return rules
 
 
+def validate_rule_symbol_association(article: ArticleEvidence) -> bool:
+    """验证文章是否有有效的规则-标的关联。
+
+    有效条件（满足其一即可）：
+    1. 有 trading_symbols + strategy_rules
+    2. 有 trading_symbols + preconditions
+    3. 有 trading_symbols（用于 sentiment 场景）
+
+    无效条件：
+    - 有 strategy_rules 但 trading_symbols 为空/None
+    - trading_symbols 和 strategy_rules 和 preconditions 都为空/None
+
+    S10-008: 规则与标的联合验证
+    """
+    has_symbols = bool(article.trading_symbols)
+    has_rules = bool(getattr(article, "strategy_rules", None))
+    has_preconditions = bool(getattr(article, "preconditions", None))
+
+    # 有效情况
+    if has_symbols and (has_rules or has_preconditions):
+        return True
+
+    # 只有 symbols 没有 rules（用于 sentiment 场景）也有效
+    if has_symbols and not has_rules and not has_preconditions:
+        return True
+
+    # 有 rules 但没有 symbols 关联 - 无效
+    if has_rules and not has_symbols:
+        return False
+
+    return False
+
+
 @dataclass
 class StrategyVersionBuilder:
     """策略版本构建器（增强版）。
@@ -247,10 +280,11 @@ class StrategyVersionBuilder:
     ) -> StrategyVersion:
         """内部构建方法。"""
         # === 1. 按主题偏好过滤和排序文章 ===
+        # S10-008: 同时应用规则-标的联合验证
         scored = [
             (article, _score_article_for_profile(article, profile))
             for article in source_articles
-            if article.trading_symbols
+            if article.trading_symbols and validate_rule_symbol_association(article)
         ]
         # 按 profile 匹配分数降序排列
         scored.sort(key=lambda x: x[1], reverse=True)

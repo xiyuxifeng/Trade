@@ -565,7 +565,7 @@ STANDARD_FIELDS = [
 
 ```python
 BACKTEST_CONFIG = {
-    "start_date": "2024-01-01",  # 可配置
+    "start_date": "2023-01-01",  # 可配置
     "end_date": "2026-04-30",    # 可配置
     "holding_days": [1, 3, 5],   # 持有期
     "min_sample_count": 10,      # 最小样本量

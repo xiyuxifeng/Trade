@@ -119,6 +119,30 @@ def _score_article_for_profile(
     return min(score, 1.0)
 
 
+def _collect_article_rules(articles: list[ArticleEvidence]) -> list[dict]:
+    """从文章列表中收集策略规则，填充 rules_snapshot。
+
+    每条规则保留原始 rule_id、rule_text、programmatic_indicators，
+    并补充来源文章信息用于后续验真。
+
+    S10-001: 将 ArticleMetadata.strategy_rules 填充到 StrategyVersion.rules_snapshot
+    """
+    rules = []
+    for article in articles:
+        # 获取文章的 strategy_rules（Protocol 支持 duck typing）
+        article_rules = getattr(article, "strategy_rules", None) or []
+        for rule in article_rules:
+            rules.append({
+                "rule_id": rule.get("rule_id", f"article_{article.article_id}_{len(rules)}"),
+                "rule_text": rule.get("rule_text", ""),
+                "programmatic_indicators": rule.get("programmatic_indicators", []),
+                "required_fields": rule.get("required_fields", []),
+                "source_article_id": str(article.article_id),
+                "source_symbols": article.trading_symbols or [],
+            })
+    return rules
+
+
 @dataclass
 class StrategyVersionBuilder:
     """策略版本构建器（增强版）。
@@ -269,6 +293,10 @@ class StrategyVersionBuilder:
 
         final_recommendations = recommendations if recommendations is not None else generated_recommendations
 
+        # S10-001: 从文章中收集 strategy_rules 填充 rules_snapshot
+        # 使用 scored 列表（已过滤无 trading_symbols 的文章）
+        rules_snapshot = _collect_article_rules([article for article, _ in scored])
+
         return StrategyVersion(
             version_id=f"{trader_id}_{strategy_date.isoformat()}_{status.value}",
             trader_id=trader_id,
@@ -281,5 +309,5 @@ class StrategyVersionBuilder:
             evidence_refs=evidence_refs,
             notes=None,
             released_at=released_at,
-            rules_snapshot=[],
+            rules_snapshot=rules_snapshot,
         )

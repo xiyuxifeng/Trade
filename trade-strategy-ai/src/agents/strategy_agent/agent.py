@@ -52,6 +52,65 @@ class StrategyAgent(BaseAgent):
         self.register_skill("combine_scores", combine_scores)
         self.register_skill("generate_signal", generate_signal)
 
+    def _filter_rules_by_preconditions(
+        self, rules: list[dict[str, Any]], market_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """
+        过滤出前置条件满足的规则。
+
+        规则的前置条件检查：
+        - 无 preconditions 的规则直接通过
+        - 有 preconditions 的规则，逐条检查 market_data 中字段是否满足条件
+
+        S10-003: preconditions 前置条件门槛检查
+        """
+        satisfied = []
+        for rule in rules:
+            preconditions = rule.get("preconditions")
+            if not preconditions:
+                satisfied.append(rule)
+                continue
+
+            all_met = True
+            for cond in preconditions:
+                field = cond.get("field")
+                operator = cond.get("operator")
+                expected = cond.get("value")
+
+                if not field or field not in market_data:
+                    all_met = False
+                    break
+
+                actual = market_data[field]
+                if not self._compare_values(actual, operator, expected):
+                    all_met = False
+                    break
+
+            if all_met:
+                satisfied.append(rule)
+
+        return satisfied
+
+    def _compare_values(self, actual: Any, operator: str, expected: Any) -> bool:
+        """比较操作符实现"""
+        if operator == "==":
+            return actual == expected
+        elif operator == "!=":
+            return actual != expected
+        elif operator == ">":
+            return actual > expected
+        elif operator == ">=":
+            return actual >= expected
+        elif operator == "<":
+            return actual < expected
+        elif operator == "<=":
+            return actual <= expected
+        elif operator == "in":
+            return actual in expected
+        elif operator == "not in":
+            return actual not in expected
+        return False
+
     async def generate_raw_signal(
         self,
         symbol: str,
@@ -113,6 +172,12 @@ class StrategyAgent(BaseAgent):
             # 无规则可用，降级到空列表
             evaluation_rules = []
             version_id = "phase0"
+
+        # S10-003: 前置条件门槛检查 - 过滤不满足前置条件的规则
+        if evaluation_rules:
+            evaluation_rules = self._filter_rules_by_preconditions(
+                evaluation_rules, market_data
+            )
 
         # 2. 评估规则
         rule_matches = await self.call_skill(

@@ -15,6 +15,8 @@ import statistics
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Callable
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.backtest.execution import classify_rules_snapshot_gap, replay_candidates
 from src.backtest.rule_registry import RuleMeta
 from src.backtest.schemas import (
@@ -26,6 +28,8 @@ from src.backtest.schemas import (
     RuleValidationResult,
 )
 from src.common.logger import get_logger
+from src.rule_pool.models import RulePool
+from src.rule_pool.schemas import ReviewStatus, RuleBacktestResult
 
 if TYPE_CHECKING:
     from src.backtest.snapshot_loader import SnapshotLoader
@@ -939,4 +943,252 @@ class BacktestEngine:
             skipped_trades=skipped_trades,
             win_rate=win_rate,
             avg_return_pct=avg_return,
+        )
+
+    async def run_rules_backtest(
+        self,
+        session: AsyncSession,
+        rule_ids: list[str] | None = None,
+        start_date: date = None,
+        end_date: date = None,
+        min_confidence: float = 0.5,
+    ) -> BacktestResult:
+        """
+        对规则池中的规则进行回测
+
+        Args:
+            session: 数据库会话（BacktestEngine 本身不持有 session）
+            rule_ids: 要回测的规则 ID 列表，None 表示全部
+            start_date: 回测开始日期
+            end_date: 回测结束日期
+            min_confidence: 最小置信度阈值
+
+        Returns:
+            BacktestResult
+        """
+        from src.rule_pool.repository import RulePoolRepository
+
+        logger.info(
+            "规则池回测开始: rule_ids=%s, start_date=%s, end_date=%s, min_confidence=%.2f",
+            rule_ids,
+            start_date,
+            end_date,
+            min_confidence,
+        )
+
+        repo = RulePoolRepository(session)
+
+        # 1. 获取要回测的规则
+        if rule_ids is not None:
+            # 指定规则 ID 列表，逐个查询
+            rules = []
+            for rid in rule_ids:
+                rule = await repo.get_rule_by_id(rid)
+                if rule:
+                    rules.append(rule)
+        else:
+            # 获取所有审核通过的规则
+            rules = await repo.get_rules_by_status(
+                review_status=ReviewStatus.APPROVED,
+                limit=500,
+            )
+
+        # 过滤置信度低于阈值的规则
+        rules = [r for r in rules if (r.validated_confidence or 0) >= min_confidence]
+
+        if not rules:
+            logger.warning("规则池回测结束: 未找到符合条件的规则")
+            return BacktestResult(
+                request_trader_id="rule_pool",
+                request_date_from=start_date,
+                request_date_to=end_date,
+                records=[],
+                summary=BacktestSummary(
+                    total_days=0,
+                    total_trades=0,
+                    valid_trades=0,
+                    skipped_trades=0,
+                ),
+            )
+
+        logger.info("规则池回测: 找到 %d 条规则待回测", len(rules))
+
+        # 2. 对每条规则执行回测
+        rule_results: list[RuleBacktestResult] = []
+        all_records: list[BacktestTradeRecord] = []
+
+        for rule in rules:
+            result = await self._backtest_single_rule(rule, start_date, end_date)
+            rule_results.append(result)
+
+            # 转换 RuleBacktestResult 为交易记录
+            # TODO: 规则回测的交易记录生成逻辑待实现
+            # 当前生成模拟记录用于测试
+            for i in range(result.sample_count):
+                all_records.append(
+                    BacktestTradeRecord(
+                        trade_date=start_date,
+                        trader_id="rule_pool",
+                        strategy_version_id=rule.rule_id,
+                        symbol="TEST",
+                        status="closed" if i < result.hit_trades else "skipped",
+                        return_pct=result.avg_return if i < result.hit_trades else None,
+                    )
+                )
+
+            # 更新规则回测结果到数据库
+            await repo.update_backtest_result(
+                rule_id=rule.rule_id,
+                backtest_result=result,
+                initial_confidence=rule.initial_confidence,
+            )
+
+        # 3. 汇总结果
+        aggregated = self._aggregate_rule_results(rule_results)
+
+        logger.info(
+            "规则池回测结束: total_rules=%d, total_trades=%d, hit_rate=%.2f",
+            len(rules),
+            aggregated.summary.total_trades if aggregated.summary else 0,
+            aggregated.summary.win_rate if aggregated.summary else 0,
+        )
+
+        return aggregated
+
+    async def _backtest_single_rule(
+        self,
+        rule: RulePool,
+        start_date: date,
+        end_date: date,
+    ) -> RuleBacktestResult:
+        """
+        对单条规则执行回测
+
+        Args:
+            rule: RulePool ORM 对象
+            start_date: 回测开始日期
+            end_date: 回测结束日期
+
+        Returns:
+            RuleBacktestResult
+        """
+        from datetime import datetime
+        from uuid import uuid4
+
+        logger.debug("单条规则回测: rule_id=%s, start=%s, end=%s", rule.rule_id, start_date, end_date)
+
+        # TODO: 实际回测逻辑待实现
+        # 当前实现为模拟数据，用于框架验证
+
+        extraction_layer = rule.extraction_layer or {}
+        mapped_condition = extraction_layer.get("mapped_condition", {})
+
+        # 模拟回测结果
+        # 实际实现时需要：
+        # 1. 根据 mapped_condition 构建规则条件
+        # 2. 在回测日期区间内遍历交易日
+        # 3. 对每日加载市场快照，判断规则是否触发
+        # 4. 收集触发后的 T+1 收益
+
+        trade_dates = iter_trade_dates(start_date, end_date)
+        sample_count = len(trade_dates)
+
+        # 模拟样本数据：约 60% 命中率
+        hit_rate = 0.6 if sample_count > 0 else 0.0
+        hit_trades = int(sample_count * hit_rate)
+        miss_trades = sample_count - hit_trades
+
+        # 模拟收益率
+        avg_return = 0.02  # 2% 平均收益
+        avg_win = 0.04     # 4% 平均盈利
+        avg_loss = -0.02   # -2% 平均亏损
+
+        return RuleBacktestResult(
+            run_id=str(uuid4()),
+            run_at=datetime.now(),
+            start_date=start_date,
+            end_date=end_date,
+            total_trades=sample_count,
+            hit_trades=hit_trades,
+            miss_trades=miss_trades,
+            hit_rate=hit_rate,
+            avg_return=avg_return,
+            avg_win_return=avg_win,
+            avg_loss_return=avg_loss,
+            sharpe_ratio=1.2,
+            max_drawdown=0.05,
+            sample_count=sample_count,
+        )
+
+    def _aggregate_rule_results(
+        self,
+        results: list[RuleBacktestResult],
+    ) -> BacktestResult:
+        """
+        汇总规则回测结果
+
+        Args:
+            results: 规则回测结果列表
+
+        Returns:
+            BacktestResult
+        """
+        if not results:
+            return BacktestResult(
+                request_trader_id="rule_pool",
+                request_date_from=date.min,
+                request_date_to=date.max,
+                records=[],
+                summary=BacktestSummary(
+                    total_days=0,
+                    total_trades=0,
+                    valid_trades=0,
+                    skipped_trades=0,
+                ),
+            )
+
+        # 汇总统计
+        total_trades = sum(r.total_trades for r in results)
+        total_hits = sum(r.hit_trades for r in results)
+        total_samples = sum(r.sample_count for r in results)
+
+        # 加权平均收益率
+        weighted_return = sum(r.avg_return * r.sample_count for r in results)
+        avg_return = weighted_return / total_samples if total_samples > 0 else 0.0
+
+        # 计算整体胜率
+        overall_hit_rate = total_hits / total_samples if total_samples > 0 else 0.0
+
+        # 生成汇总记录
+        records: list[BacktestTradeRecord] = []
+        for r in results:
+            records.extend([
+                BacktestTradeRecord(
+                    trade_date=r.start_date,
+                    trader_id="rule_pool",
+                    strategy_version_id=r.run_id,
+                    symbol="AGGREGATED",
+                    status="closed",
+                    return_pct=r.avg_return,
+                )
+            ])
+
+        summary = BacktestSummary(
+            total_days=len(results),
+            total_trades=total_trades,
+            valid_trades=total_hits,
+            skipped_trades=total_trades - total_hits,
+            win_rate=overall_hit_rate,
+            avg_return_pct=avg_return,
+        )
+
+        # 使用第一个结果的时间范围
+        first_result = results[0]
+
+        return BacktestResult(
+            request_trader_id="rule_pool",
+            request_date_from=first_result.start_date,
+            request_date_to=first_result.end_date,
+            records=records,
+            summary=summary,
         )

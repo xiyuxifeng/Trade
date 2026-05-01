@@ -66,6 +66,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 class RuleSourceType(StrEnum):
@@ -88,6 +89,7 @@ class ArticleType(StrEnum):
     RULE = "rule"
     RECORD = "record"
     CONCEPT = "concept"
+    MIXED = "mixed"
     NOISE = "noise"
 
 class RuleBacktestResult(BaseModel):
@@ -101,6 +103,8 @@ class RuleBacktestResult(BaseModel):
     miss_trades: int = 0
     hit_rate: float = 0.0
     avg_return: float = 0.0
+    avg_win_return: float | None = None  # 盈利交易平均收益（用于计算真实盈亏比）
+    avg_loss_return: float | None = None  # 亏损交易平均收益绝对值
     sharpe_ratio: float | None = None
     max_drawdown: float | None = None
     sample_count: int = 0
@@ -123,7 +127,7 @@ class ExtractionLayer(BaseModel):
 
 class RulePoolItem(BaseModel):
     """规则池条目"""
-    id: str | None = None
+    id: UUID | None = None
     rule_id: str
     source_article_ids: list[str]
     source_type: RuleSourceType
@@ -156,93 +160,98 @@ class RulePoolItem(BaseModel):
 # src/rule_pool/models.py
 from __future__ import annotations
 import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, ForeignKey, JSON, Index
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import declarative_base, relationship
+from datetime import date, datetime
+from typing import Any
+from uuid import UUID
 
-Base = declarative_base()
+from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-class RulePool(Base):
+from src.models.base import Base, TimestampMixin
+
+JSONVariant = JSONB  # PostgreSQL 环境下直接使用 JSONB
+
+
+class RulePool(TimestampMixin, Base):
     """规则池表"""
     __tablename__ = "rule_pool"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    rule_id = Column(String(64), unique=True, nullable=False)
-    source_article_ids = Column(JSON, nullable=False, default=list)
-    source_type = Column(String(32), nullable=False)
-
-    rule_type = Column(String(32), nullable=False)
-    instrument_focus = Column(String(32), default="mixed")
-    extraction_layer = Column(JSON, nullable=False)
-
-    mapping_status = Column(String(32), default="unmapped")
-    mapped_by = Column(String(64))
-    mapped_at = Column(DateTime)
-
-    initial_confidence = Column(Float, nullable=False)
-    validated_confidence = Column(Float)
-
-    review_status = Column(String(32), default="pending")
-    reviewed_by = Column(String(64))
-    reviewed_at = Column(DateTime)
-
-    backtest_triggered_at = Column(DateTime)
-    backtest_result = Column(JSON)
-    backtest_hits = Column(Integer, default=0)
-    backtest_misses = Column(Integer, default=0)
-    backtest_samples = Column(Integer, default=0)
-
-    used_in_prediction = Column(Boolean, default=False)
-    prediction_count = Column(Integer, default=0)
-    last_used_at = Column(DateTime)
-
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
     __table_args__ = (
         Index("idx_rule_pool_status", "review_status", "mapping_status"),
         Index("idx_rule_pool_confidence", "validated_confidence"),
         Index("idx_rule_pool_rule_type", "rule_type"),
     )
 
-class TradeSample(Base):
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    source_article_ids: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    rule_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    instrument_focus: Mapped[str] = mapped_column(String(32), default="mixed")
+    extraction_layer: Mapped[dict[str, Any]] = mapped_column(JSONVariant, nullable=False)
+    mapped_condition: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant, nullable=True)
+
+    mapping_status: Mapped[str] = mapped_column(String(32), default="unmapped")
+    mapped_by: Mapped[str | None] = mapped_column(String(64))
+    mapped_at: Mapped[datetime | None] = mapped_column()
+
+    initial_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    validated_confidence: Mapped[float | None] = mapped_column(Float)
+
+    review_status: Mapped[str] = mapped_column(String(32), default="pending")
+    reviewed_by: Mapped[str | None] = mapped_column(String(64))
+    reviewed_at: Mapped[datetime | None] = mapped_column()
+
+    backtest_triggered_at: Mapped[datetime | None] = mapped_column()
+    backtest_result: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
+    backtest_hits: Mapped[int] = mapped_column(Integer, default=0)
+    backtest_misses: Mapped[int] = mapped_column(Integer, default=0)
+    backtest_samples: Mapped[int] = mapped_column(Integer, default=0)
+
+    used_in_prediction: Mapped[bool] = mapped_column(default=False)
+    prediction_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[datetime | None] = mapped_column()
+
+
+class TradeSample(TimestampMixin, Base):
     """交易样本表"""
     __tablename__ = "trade_sample"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_article_id = Column(UUID(as_uuid=True), ForeignKey("blog_articles.id"), nullable=False)
-    symbol = Column(String(20), nullable=False)
-    side = Column(String(10), nullable=False)
-    entry_price = Column(Float)
-    exit_price = Column(Float)
-    quantity = Column(Float)
-    entry_date = Column(String(10))
-    exit_date = Column(String(10))
-    raw_description = Column(String)
-    derived_rule_id = Column(UUID(as_uuid=True), ForeignKey("rule_pool.id"))
-    created_at = Column(DateTime, default=datetime.now)
-
     __table_args__ = (
         Index("idx_trade_sample_symbol", "symbol"),
         Index("idx_trade_sample_date", "entry_date"),
     )
 
-class ArticleClassification(Base):
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    source_article_id: Mapped[UUID] = mapped_column(
+        ForeignKey("blog_articles.id", ondelete="CASCADE"), nullable=False
+    )
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    side: Mapped[str] = mapped_column(String(10), nullable=False)
+    entry_price: Mapped[float | None] = mapped_column(Float)
+    exit_price: Mapped[float | None] = mapped_column(Float)
+    quantity: Mapped[float | None] = mapped_column(Float)
+    entry_date: Mapped[date | None] = mapped_column(Date)
+    exit_date: Mapped[date | None] = mapped_column(Date)
+    raw_description: Mapped[str | None] = mapped_column(String)
+    derived_rule_id: Mapped[UUID | None] = mapped_column(ForeignKey("rule_pool.id"))
+
+
+class ArticleClassification(TimestampMixin, Base):
     """文章分类表"""
     __tablename__ = "article_classification"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    article_id = Column(UUID(as_uuid=True), ForeignKey("blog_articles.id"), unique=True, nullable=False)
-    article_type = Column(String(32), nullable=False)
-    article_type_confidence = Column(Float)
-    classification_version = Column(String(20))
-    type_scores = Column(JSON)
-    review_status = Column(String(32), default="pending")
-    reviewed_by = Column(String(64))
-    reviewed_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    article_id: Mapped[UUID] = mapped_column(
+        ForeignKey("blog_articles.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    article_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    article_type_confidence: Mapped[float | None] = mapped_column(Float)
+    classification_version: Mapped[str | None] = mapped_column(String(20))
+    type_scores: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
+    review_status: Mapped[str] = mapped_column(String(32), default="pending")
+    reviewed_by: Mapped[str | None] = mapped_column(String(64))
+    reviewed_at: Mapped[datetime | None] = mapped_column()
 ```
 
 - [ ] **Step 3: 编写单元测试**
@@ -313,13 +322,14 @@ CLASSIFICATION_PROMPT = """你是一个文章分类器。请判断以下文章�
 - rule: 描述一般性交易规则/策略，不针对具体历史操作
 - record: 描述具体历史操作（包含明确的时间、价格、数量）
 - concept: 纯理论/框架/心态分享，无具体条件
+- mixed: 同一篇文章包含多种类型内容（如：先讲方法论，再列具体案例）
 - noise: 个人观点、闲聊、新闻、无交易逻辑
 
 输出格式（严格 JSON，不要输出任何其他内容）：
 {{
-    "article_type": "rule|record|concept|noise",
+    "article_type": "rule|record|concept|mixed|noise",
     "confidence": 0.0~1.0,
-    "type_scores": {{"rule": 0.x, "record": 0.x, "concept": 0.x, "noise": 0.x}},
+    "type_scores": {{"rule": 0.x, "record": 0.x, "concept": 0.x, "mixed": 0.x, "noise": 0.x}},
     "reason": "简短原因"
 }}
 
@@ -339,7 +349,7 @@ from pydantic import BaseModel
 
 class ClassificationResult(BaseModel):
     """文章分类结果"""
-    article_type: str  # rule/record/concept/noise
+    article_type: str  # rule/record/concept/mixed/noise
     confidence: float  # 0.0~1.0
     type_scores: dict[str, float]  # 各类型得分
     reason: str  # 分类原因
@@ -361,7 +371,7 @@ from src.article_classifier.schemas import ClassificationResult
 def _read_prompt(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
-def classify_article(
+async def classify_article(
     client: LLMClient,
     title: str,
     content_text: str,
@@ -400,8 +410,7 @@ def classify_article(
 
     system_prompt = CLASSIFICATION_PROMPT
 
-    result = client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
-    data = result.data
+    data = await client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
 
     return ClassificationResult(
         article_type=data.get("article_type", "noise"),
@@ -423,14 +432,12 @@ from src.article_classifier.schemas import ClassificationResult
 @pytest.fixture
 def mock_client():
     client = MagicMock()
-    client.complete_json = AsyncMock(return_value=MagicMock(
-        data={
-            "article_type": "rule",
-            "confidence": 0.85,
-            "type_scores": {"rule": 0.85, "record": 0.1, "concept": 0.03, "noise": 0.02},
-            "reason": "文章描述了一般性MACD金叉买入规则"
-        }
-    ))
+    client.complete_json = AsyncMock(return_value={
+        "article_type": "rule",
+        "confidence": 0.85,
+        "type_scores": {"rule": 0.85, "record": 0.1, "concept": 0.03, "mixed": 0.01, "noise": 0.01},
+        "reason": "文章描述了一般性MACD金叉买入规则"
+    })
     return client
 
 @pytest.mark.asyncio
@@ -473,40 +480,86 @@ git commit -m "feat: add article_classifier module"
 
 ```python
 # src/models/article_metadata.py (现有结构)
-from sqlalchemy import Column, String, DateTime, JSON, DECIMAL
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.dialects.postgresql import UUID
+from __future__ import annotations
 
-Base = declarative_base()
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID, uuid4
 
-class ArticleMetadata(Base):
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Uuid, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
+
+from src.models.base import Base, TimestampMixin
+
+JSONVariant = JSON().with_variant(JSONB, "postgresql")
+
+
+class ArticleMetadata(TimestampMixin, Base):
     __tablename__ = "article_metadata"
-    id = Column(UUID(as_uuid=True), primary_key=True)
-    article_id = Column(UUID(as_uuid=True))
-    schema_version = Column(String(20))
-    processed_at = Column(DateTime)
-    extracted_concepts = Column(JSON)
-    trading_symbols = Column(JSON)
-    strategy_rules = Column(JSON)
-    preconditions = Column(JSON)
-    comment_insights = Column(JSON)
-    raw_llm_output = Column(JSON)
-    sentiment_score = Column(DECIMAL(4, 3))
-    confidence_score = Column(DECIMAL(4, 3))
-    provider = Column(String)
-    model = Column(String)
+    __table_args__ = (
+        UniqueConstraint("article_id", "schema_version", name="uq_article_metadata_article_id_version"),
+        Index("ix_article_metadata_processed_at", "processed_at"),
+        CheckConstraint(
+            "sentiment_score >= -1 AND sentiment_score <= 1",
+            name="sentiment_score_range",
+        ),
+        CheckConstraint(
+            "confidence_score >= 0 AND confidence_score <= 1",
+            name="confidence_score_range",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    article_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("blog_articles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[str] = mapped_column("schema_version", String(20), nullable=False, default="v1")
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    extracted_concepts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONVariant,
+        default=list,
+        nullable=False,
+    )
+    trading_symbols: Mapped[list[str]] = mapped_column(JSONVariant, default=list, nullable=False)
+    strategy_rules: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONVariant,
+        default=list,
+        nullable=False,
+    )
+    preconditions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONVariant,
+        default=list,
+        nullable=False,
+    )
+    comment_insights: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONVariant,
+        default=list,
+        nullable=False,
+    )
+    raw_llm_output: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    sentiment_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    confidence_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    article = relationship("BlogArticle", back_populates="metadata_record")
 ```
 
 - [ ] **Step 2: 添加新字段到模型**
 
 ```python
 # 在 ArticleMetadata 类中添加（保持现有字段不变）
-# 新增字段（在文件末尾添加）
-extraction_version = Column(String(20), nullable=True)  # 提取版本
-standalone_rule_ids = Column(JSON, nullable=True)  # 进入规则池的 standalone 规则 ID 列表
-derived_rule_ids = Column(JSON, nullable=True)  # 反推规则 ID 列表
-trade_sample_ids = Column(JSON, nullable=True)  # 交易样本 ID 列表
-article_type = Column(String(32), nullable=True)  # rule/record/concept/noise
+# 新增字段
+article_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # rule/record/concept/mixed/noise
+extraction_version: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 提取版本
+standalone_rule_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)  # 进入规则池的 standalone 规则 ID 列表
+derived_rule_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)  # 反推规则 ID 列表
+trade_sample_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)  # 交易样本 ID 列表
 ```
 
 - [ ] **Step 3: 编写迁移脚本**
@@ -571,7 +624,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.rule_pool.models import RulePool, TradeSample, ArticleClassification
-from src.rule_pool.schemas import RulePoolItem, TradeSample as TradeSampleSchema, ArticleClassification as ArticleClassificationSchema, MappingStatus, ReviewStatus, RuleBacktestResult
+from src.rule_pool.schemas import RulePoolItem, MappingStatus, ReviewStatus, RuleBacktestResult
 
 class RulePoolRepository:
     """规则池仓储"""
@@ -660,15 +713,22 @@ class RulePoolRepository:
         self,
         rule_id: str,
         backtest_result: RuleBacktestResult,
+        initial_confidence: float,
     ) -> bool:
         """更新规则回测结果"""
+        from src.rule_backtest.confidence import compute_confidence_adjustment
+
+        validated_confidence = compute_confidence_adjustment(
+            initial_confidence=initial_confidence,
+            backtest_result=backtest_result,
+        )
         result = await self.session.execute(
             update(RulePool)
             .where(RulePool.rule_id == rule_id)
             .values(
                 backtest_triggered_at=datetime.now(),
                 backtest_result=backtest_result.model_dump(),
-                validated_confidence=backtest_result.hit_rate,  # 简化处理
+                validated_confidence=validated_confidence,
                 backtest_hits=backtest_result.hit_trades,
                 backtest_misses=backtest_result.miss_trades,
                 backtest_samples=backtest_result.sample_count,
@@ -766,16 +826,23 @@ def compute_confidence_adjustment(
     返回：
         validated_confidence: 验证后的置信度
     """
-    # 1. 样本不足时保护性处理
-    if backtest_result.sample_count < 10:
+    # 1. 样本不足或零交易时保护性处理
+    total = backtest_result.total_trades
+    if backtest_result.sample_count < 10 or total == 0:
         return initial_confidence * 0.9
 
     # 2. 基本胜率
-    hit_rate = backtest_result.hit_trades / backtest_result.total_trades if backtest_result.total_trades > 0 else 0
+    hit_rate = backtest_result.hit_trades / total
 
-    # 3. 盈亏比（简化处理）
-    avg_return = backtest_result.avg_return
-    profit_loss_ratio = max(avg_return / abs(avg_return) if avg_return != 0 else 0, 0)
+    # 3. 盈亏比（盈利均值 / 亏损均值绝对值）
+    avg_win = backtest_result.avg_win_return
+    avg_loss = backtest_result.avg_loss_return
+    if avg_win is not None and avg_loss is not None and avg_loss > 0:
+        profit_loss_ratio = avg_win / avg_loss
+    else:
+        # 无细分数据时，用 avg_return 做保守近似
+        avg_return = backtest_result.avg_return
+        profit_loss_ratio = max(avg_return * 25 + 0.5, 0) if avg_return != 0 else 0.5
 
     # 4. 夏普比率调整
     sharpe = backtest_result.sharpe_ratio or 0
@@ -892,7 +959,7 @@ from __future__ import annotations
 from typing import Any
 
 # 标准操作符
-OPERATORS = ["and", "or", "not", "gt", "lt", "eq", "gte", "lte", "in", "not_in", "cross_above", "cross_below"]
+OPERATORS = ["and", "or", "not", "gt", "lt", "eq", "gte", "lte", "in", "not_in", "cross_above", "cross_below", "cmp"]
 
 # 标准字段库
 STANDARD_FIELDS = [
@@ -1075,7 +1142,7 @@ async def _process_one_article(
 
 ```python
 # 在 ArticleMetadata 类中添加
-article_type = Column(String(32), nullable=True)  # rule/record/concept/noise
+article_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # rule/record/concept/mixed/noise
 ```
 
 - [ ] **Step 4: 编写扩展测试**
@@ -1121,6 +1188,7 @@ git commit -m "feat: extend extract_article_metadata to support article_type cla
 
 async def run_rules_backtest(
     self,
+    session: AsyncSession,
     rule_ids: list[str] | None = None,  # None 表示全部规则
     start_date: date,
     end_date: date,
@@ -1130,6 +1198,7 @@ async def run_rules_backtest(
     对规则池中的规则进行回测
 
     Args:
+        session: 数据库会话（BacktestEngine 本身不持有 session）
         rule_ids: 要回测的规则 ID 列表，None 表示全部
         start_date: 回测开始日期
         end_date: 回测结束日期
@@ -1141,7 +1210,7 @@ async def run_rules_backtest(
     from src.rule_pool.repository import RulePoolRepository
 
     # 1. 获取要回测的规则
-    repo = RulePoolRepository(self.session)
+    repo = RulePoolRepository(session)
     if rule_ids:
         rules = []
         for rid in rule_ids:
@@ -1198,15 +1267,13 @@ git commit -m "feat: extend BacktestEngine for rule pool backtest"
 
 ```python
 # cli/main.py 中添加
+import typer
 from src.rule_pool.repository import RulePoolRepository
 from src.db.session import session_scope
 
-@app.command("rule-pool")
-def rule_pool():
-    """规则池管理命令组"""
-    pass
+rule_pool_app = typer.Typer()
 
-@rule_pool.command("list")
+@rule_pool_app.command("list")
 def rule_pool_list(limit: int = 100):
     """列出规则池中的规则"""
     import asyncio
@@ -1218,7 +1285,7 @@ def rule_pool_list(limit: int = 100):
                 print(f"{r.rule_id} | {r.rule_type} | confidence={r.validated_confidence or r.initial_confidence:.2f} | status={r.review_status}")
     asyncio.run(_run())
 
-@rule_pool.command("review")
+@rule_pool_app.command("review")
 def rule_pool_review(rule_id: str, decision: str):
     """审核规则 (approve/reject)"""
     import asyncio
@@ -1231,6 +1298,9 @@ def rule_pool_review(rule_id: str, decision: str):
             await repo.update_review(rule_id, status, reviewed_by="cli_user")
             print(f"Rule {rule_id} {status.value}")
     asyncio.run(_run())
+
+# 在 main.py 末尾（其他 add_typer 附近）注册
+app.add_typer(rule_pool_app, name="rule-pool")
 ```
 
 - [ ] **Step 2: 提交**
@@ -1277,9 +1347,12 @@ def build_rule_backtest_scheduler(
         from src.db.session import async_session_factory
 
         async def _run():
-            async with async_session_factory() as session:
-                engine = BacktestEngine(session=session)
+            from src.db.session import get_session_factory
+            AsyncSessionFactory = get_session_factory()
+            async with AsyncSessionFactory() as session:
+                engine = BacktestEngine()
                 result = await engine.run_rules_backtest(
+                    session=session,
                     start_date=date(2023, 1, 1),
                     end_date=date(2026, 4, 30),
                 )

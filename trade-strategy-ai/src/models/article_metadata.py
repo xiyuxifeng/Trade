@@ -66,5 +66,15 @@ class ArticleMetadata(TimestampMixin, Base):
     # LLM 调用信息
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 文章类型：rule/record/concept/mixed/noise
+    article_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 提取版本
+    extraction_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # 进入规则池的 standalone 规则 ID 列表
+    standalone_rule_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)
+    # 反推规则 ID 列表
+    derived_rule_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)
+    # 交易样本 ID 列表
+    trade_sample_ids: Mapped[list[str] | None] = mapped_column(JSONVariant, nullable=True)
 
     article = relationship("BlogArticle", back_populates="metadata_record")

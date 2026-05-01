@@ -516,6 +516,22 @@ async def _process_one_article(
     """
     stats.scanned += 1
 
+    # 文章分类：先判断类型，再决定后续处理
+    # 仅在 LLM 可用时进行分类，分类失败默认为噪音
+    if client.is_enabled():
+        try:
+            from src.article_classifier.classifier import classify_article
+
+            classification = await classify_article(
+                llm_client=client,
+                title=article.title,
+                content_text=article.content_text or "",
+            )
+            meta.article_type = classification.article_type
+        except Exception:
+            # 分类失败默认为噪音，不影响后续提取流程
+            meta.article_type = "noise"
+
     if not article.content_text or len(article.content_text.strip()) < 80:
         stats.skipped += 1
         return False
@@ -718,6 +734,22 @@ async def _process_article_isolated(
             await session.flush()
 
         result["scanned"] = 1
+
+        # 文章分类：先判断类型，再决定后续处理
+        # 仅在 LLM 可用时进行分类，分类失败默认为噪音
+        if client.is_enabled():
+            try:
+                from src.article_classifier.classifier import classify_article
+
+                classification = await classify_article(
+                    llm_client=client,
+                    title=article.title,
+                    content_text=article.content_text or "",
+                )
+                meta.article_type = classification.article_type
+            except Exception:
+                # 分类失败默认为噪音，不影响后续提取流程
+                meta.article_type = "noise"
 
         if not article.content_text or len(article.content_text.strip()) < 80:
             result["skipped"] = 1

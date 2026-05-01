@@ -51,13 +51,14 @@ LLM 提取 → article_metadata (strategy_rules, preconditions)
 
 ## 2. 核心概念定义
 
-### 2.1 四类文章
+### 2.1 五类文章
 
 | 类型 | 定义 | 处理方式 |
 |------|------|---------|
 | **规则型** | 描述一般性交易规则/策略（非具体历史操作） | 提取 standalone_rules，进入规则池 B |
 | **交易记录型** | 描述具体历史操作（时间、价格、数量明确） | 提取 trade_records，进入交易样本库，不回测 |
 | **概念型** | 纯理论/框架/心态分享，无具体条件 | 提取为标签，进入知识库，不生成可执行规则 |
+| **混合型** | 同一篇文章包含多种类型内容（如：先讲方法论，再列具体案例） | 分层提取：规则部分和交易记录部分分开存储，关联到同一篇文章 |
 | **噪音型** | 个人观点、闲聊、新闻、无交易逻辑 | 最小化提取，标记"待复核-忽略" |
 
 ### 2.2 三类规则
@@ -87,9 +88,10 @@ LLM 提取 → article_metadata (strategy_rules, preconditions)
 {
     "rule_type": "entry",
     "condition": {
-        "and": [
-            {"volume_ratio_above": 1.5},
-            {"close_above": {"ref": "high_20"}}
+        "op": "and",
+        "args": [
+            {"op": "cmp", "field": "volume_ratio", "cmp": "gt", "value": 1.5},
+            {"op": "cmp", "field": "close", "cmp": "gt", "value": {"ref": "high_20"}}
         ]
     },
     "action": {...},
@@ -202,15 +204,15 @@ CREATE TABLE article_classification (
     article_id UUID NOT NULL REFERENCES blog_articles(id) UNIQUE,
 
     -- 分类结果
-    article_type VARCHAR(32) NOT NULL,      -- rule / record / concept / noise
+    article_type VARCHAR(32) NOT NULL,      -- rule / record / concept / mixed / noise
     article_type_confidence FLOAT,          -- LLM 分类置信度
     classification_version VARCHAR(20),      -- 分类模型版本
 
     -- 各类型置信度（用于人工复核）
-    type_scores JSONB,                      -- {"rule": 0.8, "record": 0.1, "concept": 0.05, "noise": 0.05}
+    type_scores JSONB,                      -- {"rule": 0.8, "record": 0.1, "concept": 0.05, "mixed": 0.0, "noise": 0.05}
 
     -- 复核状态
-    review_status VARCHAR(32) DEFAULT 'pending',  -- pending / confirmed / corrected
+    review_status VARCHAR(32) DEFAULT 'pending',  -- pending / approved / rejected
     reviewed_by VARCHAR(64),
     reviewed_at TIMESTAMPTZ,
 
@@ -245,6 +247,8 @@ class RuleBacktestResult(BaseModel):
     miss_trades: int
     hit_rate: float
     avg_return: float
+    avg_win_return: float | None  # 盈利交易平均收益（用于计算真实盈亏比）
+    avg_loss_return: float | None  # 亏损交易平均收益绝对值
     sharpe_ratio: float | None
     max_drawdown: float | None
     sample_count: int  # 有效样本量（过少则不置信）
@@ -273,7 +277,8 @@ class RuleBacktestResult(BaseModel):
 │   - 规则型 → standalone_rules 提取                            │
 │   - 交易记录型 → trade_records 提取                           │
 │   - 概念型 → 标签/概念提取                                     │
-│   - 混合型 → 全部提取，分开存储                                 │
+│   - 混合型 → 规则部分 + 交易记录部分分开提取，关联同一文章       │
+│   - 噪音型 → 最小化提取                                         │
 └─────────────────────────────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -365,13 +370,14 @@ class RuleBacktestResult(BaseModel):
 - rule: 描述一般性交易规则/策略，不针对具体历史操作
 - record: 描述具体历史操作（包含明确的时间、价格、数量）
 - concept: 纯理论/框架/心态分享，无具体条件
+- mixed: 同一篇文章包含多种类型内容（如：先讲方法论，再列具体案例）
 - noise: 个人观点、闲聊、新闻、无交易逻辑
 
 输出格式（严格 JSON）：
 {
-    "article_type": "rule|record|concept|noise",
+    "article_type": "rule|record|concept|mixed|noise",
     "confidence": 0.0~1.0,
-    "type_scores": {"rule": 0.x, "record": 0.x, "concept": 0.x, "noise": 0.x},
+    "type_scores": {"rule": 0.x, "record": 0.x, "concept": 0.x, "mixed": 0.x, "noise": 0.x},
     "reason": "简短原因"
 }
 
@@ -394,7 +400,7 @@ class RuleBacktestResult(BaseModel):
 | record | trade_records | "只提取具体交易记录，不要泛化为规则" |
 | concept | 标签/概念 | "只提取概念性内容，不生成可执行规则" |
 | noise | 基本信息 | "最小化提取（代码、情感、作者），不做规则提取" |
-| mixed | 全部提取 | "识别并分开提取：方法论规则 + 具体交易记录 + 概念" |
+| mixed（混合型） | 规则部分 + 交易记录部分分开提取 | "识别并分开提取：规则 + 交易记录，关联到同一篇文章" |
 
 **standalone_rules 提取 Prompt（示例）**：
 
@@ -503,7 +509,7 @@ review_status = 'approved'（自动审核通过）
 
 ```python
 # 操作符
-OPERATORS = ["and", "or", "not", "gt", "lt", "eq", "gte", "lte", "in", "not_in", "cross_above", "cross_below"]
+OPERATORS = ["and", "or", "not", "gt", "lt", "eq", "gte", "lte", "in", "not_in", "cross_above", "cross_below", "cmp"]
 
 # 字段标准库
 STANDARD_FIELDS = [
@@ -521,9 +527,10 @@ STANDARD_FIELDS = [
 # raw_text: "放量突破前高"
 # mapped_condition:
 # {
-#     "and": [
-#         {"volume_ratio_above": 1.5},
-#         {"close_above": {"ref": "high_20"}}
+#     "op": "and",
+#     "args": [
+#         {"op": "cmp", "field": "volume_ratio", "cmp": "gt", "value": 1.5},
+#         {"op": "cmp", "field": "close", "cmp": "gt", "value": {"ref": "high_20"}}
 #     ]
 # }
 ```
@@ -595,16 +602,23 @@ def compute_confidence_adjustment(
         validated_confidence: 验证后的置信度
     """
 
-    # 1. 基本胜率
-    if backtest_result.sample_count < 10:
+    # 1. 样本不足或零交易时保护性处理
+    total = backtest_result.total_trades
+    if backtest_result.sample_count < 10 or total == 0:
         # 样本不足，保护性处理
         return initial_confidence * 0.9  # 轻微下调
 
-    hit_rate = backtest_result.hit_trades / backtest_result.total_trades
+    hit_rate = backtest_result.hit_trades / total
 
-    # 2. 盈亏比
-    avg_return = backtest_result.avg_return
-    profit_loss_ratio = max(avg_return / abs(avg_return) if avg_return != 0 else 0, 0)
+    # 2. 盈亏比（盈利均值 / 亏损均值绝对值）
+    avg_win = backtest_result.avg_win_return
+    avg_loss = backtest_result.avg_loss_return
+    if avg_win is not None and avg_loss is not None and avg_loss > 0:
+        profit_loss_ratio = avg_win / avg_loss
+    else:
+        # 无细分数据时，用 avg_return 做保守近似
+        avg_return = backtest_result.avg_return
+        profit_loss_ratio = max(avg_return * 25 + 0.5, 0) if avg_return != 0 else 0.5
 
     # 3. 夏普比率调整
     sharpe = backtest_result.sharpe_ratio or 0

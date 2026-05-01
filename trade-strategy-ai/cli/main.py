@@ -1147,6 +1147,45 @@ def migrate_crawl_state(
 	typer.echo(f"迁移完成: {migrated} 个源已迁移, {skipped} 个跳过")
 
 
+# rule-pool 命令组：规则池查询与审核（NTL-S11-009）
+from src.rule_pool.repository import RulePoolRepository
+from src.db.session import session_scope
+
+rule_pool_app = typer.Typer(help="规则池管理命令")
+
+
+@rule_pool_app.command("list")
+def rule_pool_list(
+    limit: int = typer.Option(100, help="返回结果数量上限"),
+):
+    """列出规则池中的规则"""
+    async def _run():
+        async with session_scope() as session:
+            repo = RulePoolRepository(session)
+            rules = await repo.get_rules_by_status(limit=limit)
+            for r in rules:
+                confidence = r.validated_confidence or r.initial_confidence
+                typer.echo(f"{r.rule_id} | {r.rule_type} | confidence={confidence:.2f} | status={r.review_status}")
+    asyncio.run(_run())
+
+
+@rule_pool_app.command("review")
+def rule_pool_review(
+    rule_id: str = typer.Option(..., help="规则 ID"),
+    decision: str = typer.Option(..., help="审核决定：approve 或 reject"),
+):
+    """审核规则 (approve/reject)"""
+    from src.rule_pool.schemas import ReviewStatus
+
+    async def _run():
+        async with session_scope() as session:
+            repo = RulePoolRepository(session)
+            status = ReviewStatus.APPROVED if decision == "approve" else ReviewStatus.REJECTED
+            await repo.update_review(rule_id, status, reviewed_by="cli_user")
+            typer.echo(f"Rule {rule_id} {status.value}")
+    asyncio.run(_run())
+
+
 # 注册 backtest 子命令（NTL-S6-008）
 from cli.backtest import app as backtest_app
 app.add_typer(backtest_app, name="backtest")
@@ -1166,6 +1205,9 @@ app.add_typer(snapshot_app, name="snapshot")
 # 注册 strategy 子命令（S7-006）
 from cli.strategy import app as strategy_app
 app.add_typer(strategy_app, name="strategy")
+
+# 注册 rule-pool 子命令（NTL-S11-009）
+app.add_typer(rule_pool_app, name="rule-pool")
 
 
 def main() -> None:

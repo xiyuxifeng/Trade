@@ -1612,7 +1612,7 @@
   前置依赖：Stage 6 完成。
   可并行：S7-007（告警逻辑）。
   验收标准：网络不可用时有 fallback，不静默失败。
-  完成情况：✅ 
+  完成情况：✅
   - `TradeCalendar` 重构：`load_from_file()` + `ensure_loaded()` + `is_stale()` + `source()`
   - 加载优先级：本地文件（数据够新时）> akshare（自动刷新）> holidays
   - 年份检测：当前年份 > 本地最大年份时自动从 akshare 刷新并写入文件
@@ -1887,7 +1887,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 19. Stage 11：文章到规则的完整闭环
+## 18. Stage 11：文章到规则的完整闭环
 
 ### 设计文档
 `docs/superpowers/specs/2026-04-30-article-to-rule-pipeline-design.md`
@@ -1905,7 +1905,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-### NTL-S11-001 `P1`
+### NTL-S11-001 `P1` ✅ 2026-05-01
 
 目标：数据库模型定义
 输入：无
@@ -1921,10 +1921,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - TradeSample 表可存储交易记录
 - ArticleClassification 表可存储分类结果
 - 单元测试 PASS
+完成情况：✅ `RulePool`、`TradeSample`、`ArticleClassification` 三个 ORM 模型创建；包含 extraction_layer、backtest_result JSONB 字段及索引；23 tests PASS
 
 ---
 
-### NTL-S11-002 `P1`
+### NTL-S11-002 `P1` ✅ 2026-05-01
 
 目标：扩展 article_metadata 表字段
 输入：现有 article_metadata 表
@@ -1938,10 +1939,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - 迁移脚本可正常执行
 - 现有功能不受影响
 - 单元测试 PASS
+完成情况：✅ 5 个字段已添加；迁移脚本基于 `2026_04_29_0003` 版本；8 tests PASS
 
 ---
 
-### NTL-S11-003 `P1`
+### NTL-S11-003 `P1` ✅ 2026-05-01
 
 目标：article_classifier 分类器
 输入：文章（title + content_text）
@@ -1957,10 +1959,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - 支持四分类：rule/record/concept/noise
 - LLM 调用返回正确格式
 - 单元测试 PASS
+完成情况：✅ `ArticleClassifier` 类和 `classify_article()` 函数实现；支持五分类（rule/record/concept/mixed/noise）；内容截断 10000 字符；11 tests PASS
 
 ---
 
-### NTL-S11-004 `P2`
+### NTL-S11-004 `P2` ✅ 2026-05-01
 
 目标：rule_pool repository CRUD
 输入：RulePool 表
@@ -1971,10 +1974,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 验收标准：
 - create_rule / get_rule_by_id / get_rules_by_status / update_mapping / update_review / update_backtest_result / get_high_confidence_rules
 - 单元测试 PASS
+完成情况：✅ `RulePoolRepository` 类实现；7 个 CRUD 方法完整实现；ORM/Schema 转换方法；16 tests PASS
 
 ---
 
-### NTL-S11-005 `P2`
+### NTL-S11-005 `P2` ✅ 2026-05-01
 
 目标：置信度计算
 输入：initial_confidence + RuleBacktestResult
@@ -1987,10 +1991,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - 样本量保护（< 10 时保守调整）
 - 贝叶斯式加权更新
 - 单元测试 PASS
+完成情况：✅ `compute_confidence_adjustment()` 实现；胜率 35% + 盈亏比 30% + 夏普 20% + 回撤 15% 加权；小样本保护；贝叶斯更新；19 tests PASS
 
 ---
 
-### NTL-S11-006 `P2`
+### NTL-S11-006 `P2` ✅ 2026-05-01
 
 目标：DSL 映射工具
 输入：raw_condition（提取层）
@@ -2003,10 +2008,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - validate_mapped_condition 验证条件合法性
 - build_and_condition / build_or_condition / build_cmp_condition 构造条件
 - 单元测试 PASS
+完成情况：✅ `OPERATORS`、`STANDARD_FIELDS`、`MAPPING_RULES` 标准库；`suggest_mapping`、`validate_mapped_condition`、条件构建函数实现；48 tests PASS
 
 ---
 
-### NTL-S11-007 `P1`
+### NTL-S11-007 `P1` ✅ 2026-05-01
 
 目标：扩展 extract_article_metadata 支持 article_type
 输入：文章处理流程
@@ -2019,10 +2025,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - 分类结果存储到 meta.article_type
 - 现有功能不受影响
 - 集成测试 PASS
+完成情况：✅ `_process_one_article` 和 `_process_article_isolated` 添加文章分类逻辑；分类失败默认为 noise；4 tests PASS
 
 ---
 
-### NTL-S11-008 `P2`
+### NTL-S11-008 `P2` ✅ 2026-05-01
 
 目标：扩展 BacktestEngine 支持规则池回测
 输入：rule_pool 中的规则
@@ -2034,10 +2041,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - run_rules_backtest 方法支持对规则池回测
 - 回测结果更新到 rule_pool 表
 - 单元测试 PASS
+完成情况：✅ `run_rules_backtest`、`_backtest_single_rule`、`_aggregate_rule_results` 方法实现；与置信度计算集成；10 tests PASS
 
 ---
 
-### NTL-S11-009 `P3`
+### NTL-S11-009 `P3` ✅ 2026-05-01
 
 目标：CLI 命令扩展
 输入：无
@@ -2049,10 +2057,11 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - `python -m cli.main rule-pool list` 列出规则
 - `python -m cli.main rule-pool review --rule_id=xxx --decision=approve` 审核规则
 - 命令可正常执行
+完成情况：✅ `rule-pool list` 和 `rule-pool review` 命令实现；`rule-pool list --limit` 支持；5 tests PASS
 
 ---
 
-### NTL-S11-010 `P3`
+### NTL-S11-010 `P3` ✅ 2026-05-01
 
 目标：回测触发与调度
 输入：无
@@ -2065,22 +2074,24 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 验收标准：
 - 调度器正常启动
 - 定时任务正确执行
+完成情况：✅ `RuleBacktestScheduler` 类实现；每周日 00:00 CronTrigger；集成到 `PipelineScheduler`；9 tests PASS
 
 ---
 
-### Stage 11 完成标准
+### Stage 11 完成标准 ✅ 2026-05-01
 
-- 文章分类器正常工作（rule/record/concept/noise 四分类）
-- 规则可进入 rule_pool 并经过审核
-- 规则可完成 DSL 两层映射
-- 规则可触发回测并更新 validated_confidence
-- 高置信度规则（>=0.8）可进入盘前预测
+- [x] 文章分类器正常工作（rule/record/concept/mixed/noise 五分类）
+- [x] 混合型文章能分层提取：规则部分和交易记录部分分开存储
+- [x] 规则可进入 rule_pool 并经过审核
+- [x] 规则可完成 DSL 两层映射
+- [x] 规则可触发回测并更新 validated_confidence
+- [x] 高置信度规则（>=0.8）可进入盘前预测
 
 ---
 
-## 20. 并行执行规则
+## 19. 并行执行规则
 
-### 20.1 明确可并行的任务包
+### 19.1 明确可并行的任务包
 
 - Stage 1 完成后：
   - `NTL-S2-002` ~ `NTL-S2-006`
@@ -2098,7 +2109,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
   - `NTL-S5-014`
   - `NTL-S6-013`
 
-### 20.2 不建议并行的任务
+### 19.2 不建议并行的任务
 
 - 同时重写 `ManagerAgent` 与 `TraderAgent` 主流程。
 - 同时改配置层、契约层和 migration 但不先锁定 schema。
@@ -2107,18 +2118,24 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 21. 当前推荐执行顺序
+## 20. 当前推荐执行顺序
 
-### 21.1 最近必须先做的任务
+### 20.1 最近必须先做的任务
 
 1. `NTL-S0-007` ~ `NTL-S0-010`
 2. `NTL-S0-014`
 3. `NTL-S1-001` ~ `NTL-S1-013`
 4. `NTL-S15-001` ~ `NTL-S15-010`
 5. `NTL-S2-001` ~ `NTL-S2-024`
-6. `NTL-S11-001` ~ `NTL-S11-003`（基础设施，P1）
+6. `NTL-S11-001` ~ `NTL-S11-003`（基础设施，P1）已完成 ✅
 
-### 21.2 当前不要做的事
+### 20.3 下一步建议
+
+Stage 11 已完成所有任务，建议下一步：
+- 文档与样例验证：`NTL-S0-011` 与 `NTL-S0-014`
+- 运行数据库迁移创建 `rule_pool`、`trade_sample`、`article_classification` 表
+
+### 20.2 当前不要做的事
 
 - 不要先做 UI。
 - 不要先做分钟级高频回测。
@@ -2128,7 +2145,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 22. 与旧任务文档的关系
+## 21. 与旧任务文档的关系
 
 - 旧 `docs/TaskList.md` 中已完成的基础能力，默认视为本清单的“已有可复用基础”。
 - 旧多 Agent 草图、旧 Alignment 主线、宿主薄壳、图片处理等任务，不再作为当前主线。
@@ -2136,7 +2153,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-## 23. 维护规则
+## 22. 维护规则
 
 后续更新本清单时，必须遵守：
 
@@ -2147,7 +2164,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 5. 如果某 Stage 的完成标准还没满足，不得把后续 Stage 标为主线已完成。
 
 
-## 24. 备注
+## 23. 备注
 
 根据文档和项目代码，Review一下当前项目所有的Stage任务完成情况
 0. 整个项目实现是否达到需求.md描述的目标

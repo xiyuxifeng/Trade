@@ -5,6 +5,7 @@ import json
 from datetime import date, datetime
 import os
 from pathlib import Path
+from typing import Any
 
 import typer
 from alembic import command
@@ -448,11 +449,12 @@ def pipeline_step(
 		return paths
 
 	def find_cleaned_paths():
-		"""查找 clean 产生的 .cleaned.jsonl 文件"""
+		"""查找 clean 产生的 *.articles.cleaned.jsonl 文件"""
 		out_dir = base_dir / "data" / "processed" / "pipeline" / "clean"
 		if not out_dir.exists():
 			return []
-		return list(out_dir.glob("*.cleaned.jsonl"))
+		# clean_task 输出文件名为 *.articles.cleaned.jsonl
+		return list(out_dir.glob("*.articles.cleaned.jsonl"))
 
 	def find_validated_paths():
 		"""查找 validate 产生的 .validated.jsonl 文件"""

@@ -196,7 +196,7 @@ class RulePoolRepository:
         """
         stmt = select(RulePool).where(
             and_(
-                RulePool.validated_confidence is not None,
+                RulePool.validated_confidence.is_not(None),
                 RulePool.validated_confidence >= threshold,
                 RulePool.review_status == ReviewStatus.APPROVED.value,
             )

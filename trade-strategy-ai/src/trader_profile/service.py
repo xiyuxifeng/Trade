@@ -14,6 +14,7 @@ from src.common.utils import read_json, write_json
 from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.trade_log import TradeLog
 from src.persona.schemas import PersonaClustersFile
 from src.persona.storage import load_persona_clusters_file
 from src.trader_profile.schemas import (
@@ -246,6 +247,19 @@ def _aggregate_profile(
     )
 
 
+def _build_trade_account_map(config: AppConfig) -> dict[str, str]:
+    """根据配置里的账户绑定关系构建 account_id → trader_id 映射。"""
+    account_map: dict[str, str] = {}
+    for trader in config.traders:
+        if not isinstance(trader.trader_id, str) or not trader.trader_id.strip():
+            continue
+        trader_id = trader.trader_id.strip()
+        for account_id in trader.trade_log_sources.account_ids:
+            if isinstance(account_id, str) and account_id.strip():
+                account_map[account_id.strip()] = trader_id
+    return account_map
+
+
 async def build_trader_profiles(
     *,
     config: AppConfig,
@@ -292,6 +306,9 @@ async def build_trader_profiles(
         symbols_map: dict[str, list[list[str]]] = {tid: [] for tid in trader_ids}
         concepts_map: dict[str, list[list[dict[str, Any]]]] = {tid: [] for tid in trader_ids}
         rules_map: dict[str, list[list[dict[str, Any]]]] = {tid: [] for tid in trader_ids}
+        article_rows_by_trader: dict[str, int] = {tid: 0 for tid in trader_ids}
+        trade_log_rows_by_trader: dict[str, int] = {tid: 0 for tid in trader_ids}
+        account_map = _build_trade_account_map(config)
 
         for author_id, raw_payload, symbols, concepts, rules in rows.all():
             tid = _infer_trader_id(raw_payload=raw_payload, author_id=author_id, config=config)
@@ -303,15 +320,38 @@ async def build_trader_profiles(
             symbols_map[tid].append(symbols if isinstance(symbols, list) else [])
             concepts_map[tid].append(concepts if isinstance(concepts, list) else [])
             rules_map[tid].append(rules if isinstance(rules, list) else [])
+            article_rows_by_trader[tid] += 1
+
+        trade_account_ids = list(account_map.keys())
+        if trade_account_ids:
+            trade_rows = await session.execute(
+                select(
+                    TradeLog.account_id,
+                    TradeLog.symbol,
+                )
+                .where(TradeLog.account_id.in_(trade_account_ids))
+                .order_by(TradeLog.executed_at.desc())
+                .limit(window),
+            )
+            for account_id, symbol in trade_rows.all():
+                tid = account_map.get(account_id)
+                if not tid or tid not in symbols_map:
+                    continue
+                if isinstance(symbol, str) and symbol.strip():
+                    symbols_map[tid].append([symbol.strip()])
+                    trade_log_rows_by_trader[tid] += 1
 
         for tid in trader_ids:
-            profiles[tid] = _aggregate_profile(
+            profile = _aggregate_profile(
                 trader_id=tid,
                 symbols_by_article=symbols_map[tid],
                 concepts_by_article=concepts_map[tid],
                 rules_by_article=rules_map[tid],
                 clusters_file=clusters_file,
             )
+            profile.evidence["articles_scanned"] = article_rows_by_trader[tid]
+            profile.evidence["trade_logs_scanned"] = trade_log_rows_by_trader[tid]
+            profiles[tid] = profile
 
     return TraderProfilesFile(updated_at=datetime.now(UTC), profiles_by_trader=profiles)
 

@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from src.agents.manager_agent.agent import ManagerAgent
 from src.agents.manager_agent.premarket_service import PreMarketService
-from src.backtest.engine import BacktestEngine
+from src.backtest.engine import BacktestEngine, TradeCalendar
 from src.backtest.schemas import BacktestRequest, BacktestTradeRecord
 from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig, TraderConfig
 from src.market_universe.schemas import HotTopic, HotTopicsPayload, MarketUniverse
@@ -448,6 +448,35 @@ class TestAfterClosePipeline:
 
 class TestBacktestPipeline:
     """回测链路集成测试"""
+
+    @pytest.fixture(autouse=True)
+    def _local_trade_calendar(self):
+        """固定本地交易日集合，避免集成测试依赖 akshare 或本地日历文件。"""
+        original_trade_dates = TradeCalendar._trade_dates
+        original_loaded = TradeCalendar._loaded
+        original_source = TradeCalendar._source
+        original_last_loaded_at = TradeCalendar._last_loaded_at
+
+        TradeCalendar._trade_dates = {
+            "2026-04-01",
+            "2026-04-02",
+            "2026-04-03",
+            "2026-04-06",
+            "2026-04-07",
+            "2026-04-08",
+            "2026-04-09",
+            "2026-04-10",
+        }
+        TradeCalendar._loaded = True
+        TradeCalendar._source = "holidays"
+        TradeCalendar._last_loaded_at = "2026-05-06T00:00:00+08:00"
+
+        yield
+
+        TradeCalendar._trade_dates = original_trade_dates
+        TradeCalendar._loaded = original_loaded
+        TradeCalendar._source = original_source
+        TradeCalendar._last_loaded_at = original_last_loaded_at
 
     def test_backtest_engine_run_sync_returns_result(self) -> None:
         """验证 BacktestEngine.run_sync 返回 BacktestResult"""

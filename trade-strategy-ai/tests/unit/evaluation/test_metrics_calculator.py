@@ -10,6 +10,7 @@ from src.evaluation.metrics_calculator import (
     TradeConstraint,
     _infer_board_type,
     _get_limit_pct,
+    _get_price_cage_pct,
     _resolve_constraint,
 )
 
@@ -346,6 +347,16 @@ def test_get_limit_pct():
     assert _get_limit_pct("unknown") == (0.10, 0.10)  # 默认值
 
 
+def test_get_price_cage_pct():
+    """价格笼子幅度查询。"""
+    assert _get_price_cage_pct("main") == (0.02, 0.02)
+    assert _get_price_cage_pct("chinext") == (0.02, 0.02)
+    assert _get_price_cage_pct("star") == (0.02, 0.02)
+    assert _get_price_cage_pct("st") == (0.02, 0.02)
+    assert _get_price_cage_pct("bse") == (0.05, 0.05)
+    assert _get_price_cage_pct("unknown") == (0.02, 0.02)
+
+
 def test_resolve_constraint_auto():
     """自动推断板块类型和涨跌停幅度。"""
     c = TradeConstraint(board_type="auto")
@@ -353,6 +364,7 @@ def test_resolve_constraint_auto():
     assert resolved.board_type == "main"
     assert resolved.limit_up_pct == 0.10
     assert resolved.limit_down_pct == 0.10
+    assert resolved.board_type == "main"
 
 
 def test_resolve_constraint_explicit():

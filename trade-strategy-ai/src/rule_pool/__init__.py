@@ -11,6 +11,8 @@ from src.rule_pool.schemas import (
     RawCondition,
     ExtractionLayer,
 )
+from src.rule_pool.prediction import RulePoolPredictionService, RulePredictionSnapshot
+from src.rule_pool.attribution import RulePoolAttributionService
 
 __all__ = [
     "RulePool",
@@ -24,4 +26,7 @@ __all__ = [
     "RuleBacktestResult",
     "RawCondition",
     "ExtractionLayer",
+    "RulePoolPredictionService",
+    "RulePredictionSnapshot",
+    "RulePoolAttributionService",
 ]

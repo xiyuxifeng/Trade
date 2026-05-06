@@ -39,7 +39,7 @@ class TestTradeCalendarFileFallback:
         finally:
             Path(path).unlink()
 
-    def test_load_from_file_triggers_refresh_when_new_year(self):
+    def test_load_from_file_triggers_refresh_when_new_year(self, monkeypatch):
         """当前年份 > 本地最大年份时，自动从 akshare 刷新"""
         from src.backtest.engine import TradeCalendar
 
@@ -52,6 +52,16 @@ class TestTradeCalendarFileFallback:
             path = f.name
 
         try:
+            def _fake_load_from_akshare():
+                TradeCalendar._trade_dates = {
+                    f"{date.today().year}-04-{i:02d}" for i in range(1, 121)
+                }
+                TradeCalendar._loaded = True
+                TradeCalendar._source = "akshare"
+                TradeCalendar._last_loaded_at = "2026-05-06T00:00:00+08:00"
+                return True
+
+            monkeypatch.setattr(TradeCalendar, "load_from_akshare", classmethod(lambda cls: _fake_load_from_akshare()))
             TradeCalendar._loaded = False
             TradeCalendar._trade_dates = None
             TradeCalendar._source = "none"
@@ -63,9 +73,20 @@ class TestTradeCalendarFileFallback:
         finally:
             Path(path).unlink()
 
-    def test_load_from_file_not_found_triggers_akshare(self):
+    def test_load_from_file_not_found_triggers_akshare(self, monkeypatch):
         """文件不存在时自动从 akshare 获取"""
         from src.backtest.engine import TradeCalendar
+
+        def _fake_load_from_akshare():
+            TradeCalendar._trade_dates = {
+                f"{date.today().year}-04-{i:02d}" for i in range(1, 121)
+            }
+            TradeCalendar._loaded = True
+            TradeCalendar._source = "akshare"
+            TradeCalendar._last_loaded_at = "2026-05-06T00:00:00+08:00"
+            return True
+
+        monkeypatch.setattr(TradeCalendar, "load_from_akshare", classmethod(lambda cls: _fake_load_from_akshare()))
 
         TradeCalendar._loaded = False
         TradeCalendar._trade_dates = None
@@ -79,9 +100,20 @@ class TestTradeCalendarFileFallback:
             assert TradeCalendar._trade_dates is not None
             assert len(TradeCalendar._trade_dates) >= 100
 
-    def test_load_from_file_invalid_json_triggers_akshare(self):
+    def test_load_from_file_invalid_json_triggers_akshare(self, monkeypatch):
         """无效 JSON 时自动从 akshare 获取"""
         from src.backtest.engine import TradeCalendar
+
+        def _fake_load_from_akshare():
+            TradeCalendar._trade_dates = {
+                f"{date.today().year}-04-{i:02d}" for i in range(1, 121)
+            }
+            TradeCalendar._loaded = True
+            TradeCalendar._source = "akshare"
+            TradeCalendar._last_loaded_at = "2026-05-06T00:00:00+08:00"
+            return True
+
+        monkeypatch.setattr(TradeCalendar, "load_from_akshare", classmethod(lambda cls: _fake_load_from_akshare()))
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("not valid json")
@@ -103,8 +135,9 @@ class TestTradeCalendarFileFallback:
 class TestTradeCalendarEnsureLoaded:
     """ensure_loaded 优先级测试"""
 
-    def test_ensure_loaded_prefers_file_over_akshare(self):
+    def test_ensure_loaded_prefers_file_over_akshare(self, monkeypatch):
         """本地文件优先于 akshare（数据够新时）"""
+        from src.backtest import engine as backtest_engine
         from src.backtest.engine import TradeCalendar
 
         current_year = date.today().year
@@ -116,6 +149,8 @@ class TestTradeCalendarEnsureLoaded:
             path = f.name
 
         try:
+            monkeypatch.setattr(backtest_engine, "_DEFAULT_CALENDAR_FILE", path)
+            monkeypatch.setattr(TradeCalendar, "load_from_akshare", classmethod(lambda cls: False))
             TradeCalendar._loaded = False
             TradeCalendar._trade_dates = None
             TradeCalendar._source = "none"

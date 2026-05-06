@@ -122,7 +122,7 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
     assert pipeline_kwargs["force"] is True
     assert pipeline_kwargs["skip_crawl"] is False
 
-    extract_mock.assert_awaited_once_with(config=loaded.config, base_dir=base_dir, limit=4)
+    extract_mock.assert_awaited_once_with(config=loaded.config, base_dir=base_dir, total_limit=4)
 
     full_clusters = base_dir / clusters_dest
     build_clusters_mock.assert_awaited_once_with(config=loaded.config, dest=full_clusters)

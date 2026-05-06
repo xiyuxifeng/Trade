@@ -14,6 +14,8 @@ from src.common.logger import get_logger
 from src.evaluation.metrics_calculator import (
     TradeConstraint,
     compute_mfe_mae_return,
+    _get_price_cage_pct,
+    _resolve_constraint,
 )
 
 logger = get_logger(__name__)
@@ -54,6 +56,16 @@ def score_backtest_trade(
         target_price,
         stop_loss_price,
     )
+    resolved_constraint = _resolve_constraint(constraint, symbol)
+    price_cage_up_pct, price_cage_down_pct = _get_price_cage_pct(resolved_constraint.board_type)
+    price_cage_limit_up = entry_price * (1 + price_cage_up_pct)
+    price_cage_limit_down = entry_price * (1 - price_cage_down_pct)
+    price_cage_violation = False
+    if target_price is not None and target_price > price_cage_limit_up:
+        price_cage_violation = True
+    if stop_loss_price is not None and stop_loss_price < price_cage_limit_down:
+        price_cage_violation = True
+
     mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
         bars=bars,
         entry_price=entry_price,
@@ -61,7 +73,7 @@ def score_backtest_trade(
         target_price=target_price,
         stop_loss_price=stop_loss_price,
         symbol=symbol,
-        constraint=constraint,
+        constraint=resolved_constraint,
     )
     logger.debug(
         "评分输出: symbol=%s, mfe=%.2f, mae=%.2f, return_pct=%s, exit_triggered=%s",
@@ -79,4 +91,9 @@ def score_backtest_trade(
         "exit_date": exit_date,
         "halted_dates": halted_dates,
         "eval_date": eval_date,
+        "price_cage_up_pct": price_cage_up_pct,
+        "price_cage_down_pct": price_cage_down_pct,
+        "price_cage_limit_up": price_cage_limit_up,
+        "price_cage_limit_down": price_cage_limit_down,
+        "price_cage_violation": price_cage_violation,
     }

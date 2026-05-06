@@ -15,6 +15,7 @@ from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.persona.claim_keys import ClaimKey
 from src.persona.schemas import ActionSpec, ArticlePrecondition, ArticleStrategyRule, InstrumentFocus
+from src.rule_pool.models import ArticleClassification
 
 
 def _make_article(*, content_text: str, raw_payload: dict | None = None) -> BlogArticle:
@@ -70,11 +71,30 @@ class _Result:
 class _Session:
     def __init__(self, rows: list[tuple[BlogArticle, ArticleMetadata]]) -> None:
         self._rows = rows
+        self.added: list[object] = []
+        self.committed = 0
 
     async def execute(self, _query: object) -> _Result:
         return _Result(self._rows)
 
     async def flush(self) -> None:
+        return None
+
+    async def commit(self) -> None:
+        self.committed += 1
+
+    def add(self, obj: object) -> None:
+        self.added.append(obj)
+
+    async def scalar(self, _query: object) -> object | None:
+        if self._rows:
+            return self._rows[0][1]
+        return None
+
+    async def get(self, _model: type, _id: object) -> object | None:
+        for article, _meta in self._rows:
+            if article.id == _id:
+                return article
         return None
 
 
@@ -128,6 +148,100 @@ def test_validate_rules_and_preconditions_are_json_serializable() -> None:
 
     assert isinstance(rules[0]["published_at"], str)
     assert isinstance(preconditions[0]["published_at"], str)
+
+
+@pytest.mark.asyncio
+async def test_persist_article_classification_creates_row() -> None:
+    article = _make_article(content_text="这是足够长的内容" * 10)
+
+    class _Session:
+        def __init__(self) -> None:
+            self.added: list[object] = []
+            self.committed = 0
+
+        async def scalar(self, _query: object) -> object | None:
+            return None
+
+        def add(self, obj: object) -> None:
+            self.added.append(obj)
+
+        async def flush(self) -> None:
+            return None
+
+    session = _Session()
+    classification = SimpleNamespace(
+        article_type="rule",
+        confidence=0.92,
+        type_scores={"rule": 0.92},
+        reason="rule article",
+    )
+
+    persisted = await mod._persist_article_classification(
+        session=session,
+        article=article,
+        classification=classification,
+        llm_provider="llm",
+        version="v1",
+    )
+
+    assert isinstance(persisted, ArticleClassification)
+    assert session.added and isinstance(session.added[0], ArticleClassification)
+    assert persisted.article_id == str(article.id)
+    assert persisted.article_type == "rule"
+    assert persisted.confidence == 0.92
+    assert persisted.reasons == ["rule article"]
+    assert persisted.extra_metadata["version"] == "v1"
+
+
+@pytest.mark.asyncio
+async def test_finalize_extraction_artifacts_auto_creates_rules() -> None:
+    article = _make_article(content_text="这是足够长的内容" * 10)
+    meta = _make_metadata(article)
+    rule = {
+        "claim_key": "entry.trigger",
+        "rule_type": "entry",
+        "instrument_focus": "stock",
+        "condition": {"op": "gt", "field": "close", "value": 1},
+        "action": {"type": "enter", "side": "buy"},
+        "confidence": 0.88,
+        "quoted_text": "放量突破",
+    }
+
+    created: list[object] = []
+
+    class FakeRulePoolRepository:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def get_rule_by_id(self, _rule_id: str) -> object | None:
+            return None
+
+        async def create_rule(self, item: object) -> object:
+            created.append(item)
+            return item
+
+    class _Session:
+        async def flush(self) -> None:
+            return None
+
+    original_repo = mod.RulePoolRepository
+    mod.RulePoolRepository = FakeRulePoolRepository
+    try:
+        await mod._finalize_extraction_artifacts(
+            session=_Session(),
+            article=article,
+            meta=meta,
+            classification_type="rule",
+            rules=[rule],
+            version="v1",
+        )
+    finally:
+        mod.RulePoolRepository = original_repo
+
+    assert meta.extraction_version == "v1"
+    assert meta.standalone_rule_ids and len(meta.standalone_rule_ids) == 1
+    assert meta.trade_sample_ids == []
+    assert created and created[0].rule_id.startswith(str(article.id))
 
 
 @pytest.mark.asyncio
@@ -232,17 +346,17 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
     monkeypatch.setattr(mod, "session_scope", fake_session_scope)
     monkeypatch.setattr(mod, "LLMClient", EnabledClient)
     monkeypatch.setattr(mod, "from_env_and_config", lambda **_: SimpleNamespace(provider=None))
-    monkeypatch.setattr(mod, "_extract_one", fake_extract_one)
+    monkeypatch.setattr(mod, "_extract_one_with_retry", fake_extract_one)
     monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize)
 
     config = SimpleNamespace(llm=SimpleNamespace(provider="qwen", model="qwen-plus", url="u", api_key="k"))
 
     stats = await mod.extract_and_store_metadata(config=config, base_dir=tmp_path, total_limit=1)
 
-    assert stats.extracted == 1
+    assert stats.extracted == 0
     assert stats.failed == 1
     assert stats.llm_calls == 1
-    assert stats.fallback_calls == 1
+    assert stats.fallback_calls == 0
     assert meta.raw_llm_output["mode"] == "fallback_on_error"
     assert meta.raw_llm_output["error"] == "network timeout"
-    assert meta.trading_symbols == ["600000.SH"]
+    assert meta.trading_symbols == []

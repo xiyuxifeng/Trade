@@ -132,6 +132,20 @@ def _get_limit_pct(
     return pct_map.get(board_type, (0.10, 0.10))
 
 
+def _get_price_cage_pct(board_type: str) -> tuple[float, float]:
+    """根据板块类型返回价格笼子幅度（上限, 下限）。
+
+    A 股常见限价申报规则：
+    - 沪深主板 / 创业板 / 科创板 / ST：102% / 98%
+    - 北交所：105% / 95%
+
+    这里仅做约束校验和记录，不改变当前回测的成交口径。
+    """
+    if board_type == "bse":
+        return (0.05, 0.05)
+    return (0.02, 0.02)
+
+
 def _resolve_constraint(
     constraint: TradeConstraint | None,
     symbol: str,

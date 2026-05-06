@@ -349,8 +349,8 @@ async def test_process_one_article_no_classification_when_llm_disabled(
 
     # 验证 LLM 禁用时没有调用分类
     assert not classify_called
-    # article_type 保持为 None
-    assert meta.article_type is None
+    # LLM 关闭时 article_type 仍然会被写入噪音类型，避免字段空缺
+    assert meta.article_type == "noise"
 
 
 @pytest.mark.asyncio

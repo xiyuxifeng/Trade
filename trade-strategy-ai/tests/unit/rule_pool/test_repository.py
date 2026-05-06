@@ -319,6 +319,22 @@ class TestRulePoolRepository:
 
         assert len(result) == 0
 
+    @pytest.mark.asyncio
+    async def test_get_high_confidence_rules_uses_not_null_filter(self, mock_session):
+        """测试 get_high_confidence_rules 会正确生成非空过滤条件。"""
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        repo = RulePoolRepository(mock_session)
+        await repo.get_high_confidence_rules(threshold=0.9)
+
+        stmt = mock_session.execute.call_args.args[0]
+        sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+
+        assert "IS NOT NULL" in sql
+        assert "review_status" in sql
+
 
 class TestRulePoolRepositoryConversion:
     """测试 RulePoolRepository 的 ORM <-> Schema 转换方法"""

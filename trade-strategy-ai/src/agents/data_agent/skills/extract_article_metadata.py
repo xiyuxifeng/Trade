@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,9 @@ from sqlalchemy import or_, select
 from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
+from src.rule_pool.models import ArticleClassification
+from src.rule_pool.repository import RulePoolRepository
+from src.rule_pool.schemas import ArticleType, ExtractionLayer, RawCondition, RulePoolItem, RuleSourceType
 from src.llm.client import LLMClient, LLMError, LLMResult, from_env_and_config
 from src.market_data.stock_info_service import get_stock_name_to_symbol_map
 from src.models.article_metadata import ArticleMetadata
@@ -448,6 +452,181 @@ def _validate_preconditions(
     return out
 
 
+def _normalize_article_type(article_type: str | None) -> str:
+    """将分类结果规范化到已知的文章类型。"""
+    normalized = (article_type or ArticleType.NOISE.value).strip().lower()
+    valid_types = {item.value for item in ArticleType}
+    return normalized if normalized in valid_types else ArticleType.NOISE.value
+
+
+async def _persist_article_classification(
+    *,
+    session: Any,
+    article: BlogArticle,
+    classification: Any,
+    llm_provider: str,
+    version: str,
+) -> ArticleClassification:
+    """将文章分类结果落库，并保持幂等更新。"""
+    article_id = str(article.id)
+    normalized_type = _normalize_article_type(getattr(classification, "article_type", None))
+    confidence = _clamp(_safe_float(getattr(classification, "confidence", None)), 0.0, 1.0) or 0.0
+    reasons = []
+    reason = getattr(classification, "reason", "")
+    if isinstance(reason, str) and reason.strip():
+        reasons.append(reason.strip())
+
+    existing = await session.scalar(
+        select(ArticleClassification).where(ArticleClassification.article_id == article_id)
+    )
+    payload = {
+        "article_id": article_id,
+        "article_type": normalized_type,
+        "confidence": confidence,
+        "classified_by": llm_provider,
+        "classified_at": _now_utc(),
+        "reasons": reasons,
+        "extra_metadata": {
+            "type_scores": getattr(classification, "type_scores", {}),
+            "version": version,
+        },
+    }
+
+    if existing is None:
+        existing = ArticleClassification(**payload)
+        session.add(existing)
+    else:
+        for key, value in payload.items():
+            setattr(existing, key, value)
+
+    await session.flush()
+    return existing
+
+
+def _raw_condition_text(rule: dict[str, Any]) -> str:
+    """生成用于追溯的原始条件文本。"""
+    quoted_text = rule.get("quoted_text")
+    if isinstance(quoted_text, str) and quoted_text.strip():
+        return quoted_text.strip()
+    condition = rule.get("condition")
+    if isinstance(condition, dict) and condition:
+        return json.dumps(condition, ensure_ascii=False, sort_keys=True)
+    claim_key = rule.get("claim_key")
+    if isinstance(claim_key, str) and claim_key.strip():
+        return claim_key.strip()
+    return rule.get("rule_type") or ""
+
+
+def _rule_source_type(article_type: str) -> RuleSourceType:
+    """根据文章类型选择规则来源类型。"""
+    return RuleSourceType.DERIVED if article_type == ArticleType.RECORD.value else RuleSourceType.STANDALONE
+
+
+def _build_rule_pool_item(
+    *,
+    article: BlogArticle,
+    rule: dict[str, Any],
+    rule_index: int,
+    article_type: str,
+    version: str,
+) -> RulePoolItem:
+    """将文章中的规则转换为 rule_pool 入库条目。"""
+    rule_type = str(rule.get("rule_type") or "entry")
+    instrument_focus = str(rule.get("instrument_focus") or "mixed")
+    action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+    confidence = _clamp(_safe_float(rule.get("confidence")), 0.0, 1.0)
+    source_type = _rule_source_type(article_type)
+    suffix = source_type.value
+
+    extraction_layer = ExtractionLayer(
+        rule_type=rule_type,
+        instrument_focus=instrument_focus,
+        raw_condition=RawCondition(
+            raw_text=_raw_condition_text(rule),
+            indicators=[str(rule.get("claim_key"))] if rule.get("claim_key") else [],
+            description=rule_type,
+        ),
+        mapped_condition=None,
+        action=action,
+        confidence=confidence if confidence is not None else 0.5,
+        quoted_text=rule.get("quoted_text"),
+    )
+
+    return RulePoolItem(
+        rule_id=f"{article.id}:{version}:{suffix}:{rule_index:03d}",
+        source_article_ids=[str(article.id)],
+        source_type=source_type,
+        rule_type=rule_type,
+        instrument_focus=instrument_focus,
+        extraction_layer=extraction_layer,
+        initial_confidence=confidence if confidence is not None else 0.5,
+    )
+
+
+async def _persist_extracted_rules(
+    *,
+    session: Any,
+    article: BlogArticle,
+    rules: list[dict[str, Any]],
+    article_type: str,
+    version: str,
+) -> list[str]:
+    """把文章中的规则自动写入 rule_pool，并返回 rule_id 列表。"""
+    repo = RulePoolRepository(session)
+    rule_ids: list[str] = []
+
+    for idx, rule in enumerate(rules):
+        item = _build_rule_pool_item(
+            article=article,
+            rule=rule,
+            rule_index=idx,
+            article_type=article_type,
+            version=version,
+        )
+        existing = await repo.get_rule_by_id(item.rule_id)
+        if existing is None:
+            await repo.create_rule(item)
+        rule_ids.append(item.rule_id)
+
+    return rule_ids
+
+
+async def _finalize_extraction_artifacts(
+    *,
+    session: Any,
+    article: BlogArticle,
+    meta: ArticleMetadata,
+    classification_type: str,
+    rules: list[dict[str, Any]],
+    version: str,
+) -> None:
+    """补齐文章元数据和规则池的落库副作用。"""
+    meta.extraction_version = version
+
+    if classification_type == ArticleType.RECORD.value:
+        meta.derived_rule_ids = meta.derived_rule_ids or []
+        meta.standalone_rule_ids = meta.standalone_rule_ids or []
+    else:
+        meta.standalone_rule_ids = meta.standalone_rule_ids or []
+        meta.derived_rule_ids = meta.derived_rule_ids or []
+
+    if classification_type in {ArticleType.RULE.value, ArticleType.MIXED.value, ArticleType.RECORD.value} and rules:
+        rule_ids = await _persist_extracted_rules(
+            session=session,
+            article=article,
+            rules=rules,
+            article_type=classification_type,
+            version=version,
+        )
+        if classification_type == ArticleType.RECORD.value:
+            meta.derived_rule_ids = list(dict.fromkeys([*(meta.derived_rule_ids or []), *rule_ids]))
+        else:
+            meta.standalone_rule_ids = list(dict.fromkeys([*(meta.standalone_rule_ids or []), *rule_ids]))
+
+    if meta.trade_sample_ids is None:
+        meta.trade_sample_ids = []
+
+
 async def _extract_one(
     *,
     client: LLMClient,
@@ -515,6 +694,7 @@ async def _process_one_article(
     Returns: True if processed successfully, False otherwise.
     """
     stats.scanned += 1
+    classification_type = ArticleType.NOISE.value
 
     # 文章分类：先判断类型，再决定后续处理
     # 仅在 LLM 可用时进行分类，分类失败默认为噪音
@@ -527,10 +707,37 @@ async def _process_one_article(
                 title=article.title,
                 content_text=article.content_text or "",
             )
-            meta.article_type = classification.article_type
+            persisted = await _persist_article_classification(
+                session=session,
+                article=article,
+                classification=classification,
+                llm_provider="llm",
+                version=version,
+            )
+            meta.article_type = persisted.article_type
+            classification_type = persisted.article_type
+            await session.commit()
         except Exception:
             # 分类失败默认为噪音，不影响后续提取流程
             meta.article_type = "noise"
+            fallback_classification = SimpleNamespace(
+                article_type="noise",
+                confidence=0.0,
+                type_scores={},
+                reason="classification failed",
+            )
+            persisted = await _persist_article_classification(
+                session=session,
+                article=article,
+                classification=fallback_classification,
+                llm_provider="llm",
+                version=version,
+            )
+            meta.article_type = persisted.article_type
+            classification_type = persisted.article_type
+            await session.commit()
+    else:
+        meta.article_type = ArticleType.NOISE.value
 
     if not article.content_text or len(article.content_text.strip()) < 80:
         stats.skipped += 1
@@ -553,6 +760,7 @@ async def _process_one_article(
             error_message = str(exc)
             stats.failed += 1
             stats.errors_by_type[ExtractErrorType.NETWORK.value] += 1
+            meta.raw_llm_output = {"mode": "fallback_on_error", "error": error_message}
             _record_error(
                 article_id=str(article.id),
                 source_url=article.source_url,
@@ -622,6 +830,16 @@ async def _process_one_article(
     if error_message:
         meta.raw_llm_output["error"] = error_message
     meta.processed_at = _now_utc()
+    meta.extraction_version = version
+
+    await _finalize_extraction_artifacts(
+        session=session,
+        article=article,
+        meta=meta,
+        classification_type=classification_type,
+        rules=rules,
+        version=version,
+    )
 
     stats.extracted += 1
 
@@ -734,6 +952,7 @@ async def _process_article_isolated(
             await session.flush()
 
         result["scanned"] = 1
+        classification_type = ArticleType.NOISE.value
 
         # 文章分类：先判断类型，再决定后续处理
         # 仅在 LLM 可用时进行分类，分类失败默认为噪音
@@ -746,10 +965,37 @@ async def _process_article_isolated(
                     title=article.title,
                     content_text=article.content_text or "",
                 )
-                meta.article_type = classification.article_type
+                persisted = await _persist_article_classification(
+                    session=session,
+                    article=article,
+                    classification=classification,
+                    llm_provider=llm_provider,
+                    version=version,
+                )
+                meta.article_type = persisted.article_type
+                classification_type = persisted.article_type
+                await session.commit()
             except Exception:
                 # 分类失败默认为噪音，不影响后续提取流程
                 meta.article_type = "noise"
+                fallback_classification = SimpleNamespace(
+                    article_type="noise",
+                    confidence=0.0,
+                    type_scores={},
+                    reason="classification failed",
+                )
+                persisted = await _persist_article_classification(
+                    session=session,
+                    article=article,
+                    classification=fallback_classification,
+                    llm_provider=llm_provider,
+                    version=version,
+                )
+                meta.article_type = persisted.article_type
+                classification_type = persisted.article_type
+                await session.commit()
+        else:
+            meta.article_type = ArticleType.NOISE.value
 
         if not article.content_text or len(article.content_text.strip()) < 80:
             result["skipped"] = 1
@@ -778,6 +1024,7 @@ async def _process_article_isolated(
                 result["failed"] = 1
                 result["error_type"] = ExtractErrorType.NETWORK.value
                 result["llm_provider"] = llm_provider
+                meta.raw_llm_output = {"mode": "fallback_on_error", "error": error_message}
                 _record_error(
                     article_id=str(article.id),
                     source_url=article.source_url,
@@ -849,6 +1096,16 @@ async def _process_article_isolated(
         meta.processed_at = _now_utc()
         meta.provider = result.get("llm_provider")
         meta.model = result.get("llm_model")
+        meta.extraction_version = version
+
+        await _finalize_extraction_artifacts(
+            session=session,
+            article=article,
+            meta=meta,
+            classification_type=classification_type,
+            rules=rules,
+            version=version,
+        )
 
         result["extracted"] = 1
         await session.commit()
@@ -1023,7 +1280,14 @@ async def extract_and_store_metadata(
                     .order_by(BlogArticle.crawled_at.desc())
                     .limit(BATCH_SIZE)
                 )
-            return [row[0] for row in rows.all()]
+            batch_ids: list[UUID] = []
+            for row in rows.all():
+                first = row[0]
+                if isinstance(first, BlogArticle):
+                    batch_ids.append(first.id)
+                else:
+                    batch_ids.append(first)
+            return batch_ids
 
     async def process_batch(article_ids: list[UUID]) -> list[dict]:
         results = await asyncio.gather(

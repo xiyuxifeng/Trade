@@ -40,6 +40,24 @@ class TestScoreBacktestTrade:
         assert "exit_date" in result
         assert "halted_dates" in result
         assert "eval_date" in result
+        assert "price_cage_up_pct" in result
+        assert "price_cage_violation" in result
+
+    def test_score_backtest_trade_marks_price_cage_violation(self):
+        """价格笼子超范围时应记录违反标记。"""
+        from src.backtest.scoring import score_backtest_trade
+
+        result = score_backtest_trade(
+            bars=[
+                {"date": "2026-04-01", "open": 10.0, "high": 10.5, "low": 9.8, "close": 10.2},
+                {"date": "2026-04-02", "open": 10.2, "high": 10.8, "low": 10.0, "close": 10.6},
+            ],
+            entry_price=10.0,
+            entry_date="2026-04-01",
+            target_price=10.3,
+            stop_loss_price=9.7,
+        )
+        assert result["price_cage_violation"] is True
 
     def test_score_backtest_trade_stop_loss_triggered(self):
         """止损触发场景"""

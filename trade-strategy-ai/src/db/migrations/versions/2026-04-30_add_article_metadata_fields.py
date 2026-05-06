@@ -1,6 +1,6 @@
 """Add fields to article_metadata
 
-Revision ID: 2026_04_30_add_article_metadata_fields
+Revision ID: 2026_04_30_0001
 Revises: 2026_04_29_0003
 Create Date: 2026-04-30
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "2026_04_30_add_article_metadata_fields"
+revision = "2026_04_30_0001"
 down_revision = "2026_04_29_0003"
 branch_labels = None
 depends_on = None

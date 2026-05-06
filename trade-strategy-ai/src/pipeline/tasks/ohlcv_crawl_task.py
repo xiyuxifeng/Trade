@@ -39,7 +39,14 @@ async def handle_ohlcv_crawl(
     end_date = date.fromisoformat(end_date_str) if end_date_str else date.today()
 
     factory = get_session_factory()
-    service = OHLCVService(session_factory=factory)
+    akshare_cfg = config.akshare
+    service = OHLCVService(
+        session_factory=factory,
+        min_request_interval_seconds=akshare_cfg.min_request_interval_seconds,
+        max_retries=akshare_cfg.max_retries,
+        retry_backoff_seconds=akshare_cfg.retry_backoff_seconds,
+        fallback_enabled=akshare_cfg.fallback_enabled,
+    )
 
     logger.info(
         "ohlcv_crawl task: mode=%s, symbols=%s, start=%s, end=%s",

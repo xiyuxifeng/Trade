@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "dataset": "strong_symbols",
+    "trade_date": "2026-04-17",
+    "slot": "17-30",
+    "fetched_at": "2026-05-06T22:51:11.043875",
+    "source": "kaipan",
+    "request": {
+      "endpoint": "https://apphis.longhuvip.com/w1/api/index.php",
+      "controller": "StockFengKData",
+      "action": "GetFengKListBest",
+      "params": {
+        "DeviceID": "aaebb746-a896-4458-ba83-6bb4ed99dbcc",
+        "PhoneOSNew": "1",
+        "VerSion": "5.23.0.1",
+        "apiv": "w44",
+        "Day": "20260417",
+        "Time": "",
+        "a": "GetFengKListBest",
+        "c": "StockFengKData"
+      }
+    }
+  },
+  "data": {
+    "errcode": "1001",
+    "errmsg": "登录状态失效！"
+  }
+}

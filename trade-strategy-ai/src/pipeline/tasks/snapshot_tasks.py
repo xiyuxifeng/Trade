@@ -125,7 +125,7 @@ async def handle_hot_topics_snapshot(
         "热点快照已保存: date=%s, slot=%s, topics=%d",
         trade_date_str,
         slot,
-        len(hot_topics_payload) if hot_topics_payload else 0,
+        len(hot_topics_payload.topics) if hot_topics_payload else 0,
     )
 
 
@@ -206,7 +206,7 @@ async def handle_topic_constituents_snapshot(
         "题材成分快照已保存: date=%s, slot=%s, constituents=%d",
         trade_date_str,
         slot,
-        len(constituents_payload) if constituents_payload else 0,
+        len(constituents_payload.constituents) if constituents_payload else 0,
     )
 
 
@@ -287,5 +287,5 @@ async def handle_strong_symbols_snapshot(
         "强势池快照已保存: date=%s, slot=%s, symbols=%d",
         trade_date_str,
         slot,
-        len(strong_symbols_payload) if strong_symbols_payload else 0,
+        len(strong_symbols_payload.symbols) if strong_symbols_payload else 0,
     )

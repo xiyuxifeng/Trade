@@ -207,6 +207,19 @@ class KaipanConfig(BaseModel):
     retry_status_codes: list[int] = Field(default_factory=lambda: [403, 429, 500, 502, 503, 504])
 
 
+class AkshareConfig(BaseModel):
+    """AkShare 数据源运行配置。"""
+
+    # 最小请求间隔（秒），避免连续请求触发反爬
+    min_request_interval_seconds: float = 1.0
+    # 失败重试次数
+    max_retries: int = 2
+    # 重试退避时间序列（秒），按序使用，超出则取最后一个
+    retry_backoff_seconds: list[float] = Field(default_factory=lambda: [1.0, 3.0])
+    # 东方财富源失败后，是否自动降级到新浪源（仅 A 股 stock 类型生效）
+    fallback_enabled: bool = True
+
+
 class AppConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
     run_mode: str = "interactive"  # interactive/service
@@ -222,6 +235,7 @@ class AppConfig(BaseModel):
     stage4: Stage4Config = Field(default_factory=Stage4Config)
     api: ApiConfig = Field(default_factory=ApiConfig)
     kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
+    akshare: AkshareConfig = Field(default_factory=AkshareConfig)
 
     traders: list[TraderConfig] = Field(default_factory=list)
     alerting: dict[str, Any] | None = None  # S7-007 告警配置

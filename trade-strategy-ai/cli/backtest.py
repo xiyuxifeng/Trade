@@ -70,9 +70,10 @@ def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
 
 
 def _run_async(coro):
-    """在同步上下文中执行异步任务，兼容已有事件循环。"""
+    """在同步上下文中执行异步任务，并在完成后优雅关闭数据库连接池。"""
+    from config.database import run_async_with_cleanup
     try:
-        return asyncio.run(coro)
+        return run_async_with_cleanup(coro)
     except RuntimeError:
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(coro)

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncIterator, Coroutine
 from functools import lru_cache
+from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from config.settings import get_settings
+
+T = TypeVar("T")
 
 
 def _build_engine_kwargs(database_url: str) -> dict[str, object]:
@@ -50,4 +54,19 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-__all__ = ["get_engine", "get_session_factory", "get_async_session"]
+__all__ = ["get_engine", "get_session_factory", "get_async_session", "run_async_with_cleanup"]
+
+
+def run_async_with_cleanup(coro: Coroutine[object, object, T]) -> T:
+    """在同步上下文中执行异步任务，并在完成后优雅关闭数据库连接池。
+
+    解决 CLI 命令中 asyncio.run() 未 dispose engine 导致的 ResourceWarning
+    和 "Future attached to a different loop" 问题。
+    """
+    async def _wrapper():
+        try:
+            return await coro
+        finally:
+            await get_engine().dispose()
+
+    return asyncio.run(_wrapper())

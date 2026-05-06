@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -7,10 +8,34 @@ from typing import Any
 
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 
 def _normalize_cn_symbol(symbol: str) -> str:
     """Normalize `510300.SH` -> `510300` for AkShare EM endpoints."""
     return symbol.split(".")[0].strip()
+
+
+def _to_sina_symbol(symbol: str) -> str:
+    """把 `300391.SZ` / `600000.SH` 转换为新浪格式 `sz300391` / `sh600000`。"""
+
+    parts = symbol.split(".")
+    code = parts[0].strip()
+    # 如果已经是新浪格式（sz/sh 开头），直接返回
+    if code.lower().startswith(("sz", "sh", "bj")):
+        return code.lower()
+    # 根据后缀推断市场：SZ -> sz, SH -> sh, BJ -> bj
+    suffix = parts[1].strip().lower() if len(parts) > 1 else ""
+    if suffix == "sz":
+        return f"sz{code}"
+    if suffix == "sh":
+        return f"sh{code}"
+    if suffix == "bj":
+        return f"bj{code}"
+    # 默认按代码规则推断：6 开头为沪市，其余为深市
+    if code.startswith("6"):
+        return f"sh{code}"
+    return f"sz{code}"
 
 
 def _to_yyyymmdd(d: date) -> str:
@@ -122,7 +147,7 @@ class AkshareMarketDataTool:
         return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.etf")
 
     def fetch_stock_daily_a(self, req: AkshareDailyRequest) -> pd.DataFrame:
-        """Fetch A-share daily history via AkShare."""
+        """Fetch A-share daily history via AkShare EastMoney endpoint (stock_zh_a_hist)。"""
 
         symbol = _normalize_cn_symbol(req.symbol)
         kwargs: dict[str, Any] = {
@@ -136,9 +161,48 @@ class AkshareMarketDataTool:
             kwargs["end_date"] = _to_yyyymmdd(req.end_date)
 
         df = self._ak.stock_zh_a_hist(**kwargs)
+        # 调试日志：打印东方财富源返回的原始数据结构
+        # logger.info(
+        #     f"[EM] symbol={req.symbol}, "
+        #     f"shape={df.shape if df is not None else 'None'}, "
+        #     f"columns={list(df.columns) if df is not None else 'None'}"
+        # )
+        # if df is not None and not df.empty:
+        #     logger.info(f"[EM] head(3):\n{df.head(3).to_string()}")
         if df is None or df.empty:
             raise ValueError(f"AkShare returned empty stock daily data: {req.symbol}")
         return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.stock")
+
+    def fetch_stock_daily_a_sina(self, req: AkshareDailyRequest) -> pd.DataFrame:
+        """Fetch A-share daily history via AkShare Sina endpoint (stock_zh_a_daily)。
+
+        新浪源作为东方财富的 fallback，反爬策略更宽松，但可能缺少 turnover 字段。
+        注意：新浪源 symbol 格式为 sz300391 / sh600000（需要带市场前缀）。
+        """
+
+        symbol = _to_sina_symbol(req.symbol)
+        kwargs: dict[str, Any] = {
+            "symbol": symbol,
+            "adjust": req.adjust,
+        }
+        if req.start_date:
+            kwargs["start_date"] = _to_yyyymmdd(req.start_date)
+        if req.end_date:
+            kwargs["end_date"] = _to_yyyymmdd(req.end_date)
+
+        df = self._ak.stock_zh_a_daily(**kwargs)
+        # 调试日志：打印新浪源返回的原始数据结构
+        # logger.info(
+        #     f"[Sina] symbol={req.symbol}, sina_symbol={symbol}, "
+        #     f"shape={df.shape if df is not None else 'None'}, "
+        #     f"columns={list(df.columns) if df is not None else 'None'}, "
+        #     f"dtypes=\n{df.dtypes if df is not None else 'None'}"
+        # )
+        # if df is not None and not df.empty:
+        #     logger.info(f"[Sina] head(3):\n{df.head(3).to_string()}")
+        if df is None or df.empty:
+            raise ValueError(f"AkShare Sina returned empty stock daily data: {req.symbol}")
+        return self._normalize_daily_frame(df=df, symbol=req.symbol, source="akshare.stock.sina")
 
     def fetch_index_daily_em(self, req: AkshareDailyRequest) -> pd.DataFrame:
         """Fetch mainland index history via AkShare Eastmoney endpoint."""

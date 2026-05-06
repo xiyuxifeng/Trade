@@ -7,8 +7,8 @@ import sqlalchemy as sa
 import uuid
 
 # 迁移版本号
-revision = '2026-04-30_0001_create_rule_pool_tables'
-down_revision = '2026-04-29_0003_add_version_type_and_parent_version_id'
+revision = '2026_04_30_0002'
+down_revision = '2026_04_30_0001'
 branch_labels = None
 depends_on = None
 

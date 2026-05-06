@@ -62,8 +62,8 @@ def strategy_build(
             logger.warning(f"策略版本构建失败: {exc}")
             return False, str(exc)
 
-    import asyncio
-    success, error = asyncio.run(_run())
+    from config.database import run_async_with_cleanup
+    success, error = run_async_with_cleanup(_run())
 
     if success:
         typer.echo(f"\n=== 策略版本构建完成 ===")
@@ -124,8 +124,8 @@ def strategy_list(
             rows = result.scalars().all()
             return rows
 
-    import asyncio
-    rows = asyncio.run(_run())
+    from config.database import run_async_with_cleanup
+    rows = run_async_with_cleanup(_run())
 
     if not rows:
         typer.echo("未找到策略版本")

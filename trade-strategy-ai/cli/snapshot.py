@@ -81,8 +81,8 @@ def snapshot_build(
 
         return results
 
-    import asyncio
-    results = asyncio.run(_run())
+    from config.database import run_async_with_cleanup
+    results = run_async_with_cleanup(_run())
 
     typer.echo(f"\n=== 快照构建完成 ===")
     typer.echo(f"  date={date}, slot={slot}")

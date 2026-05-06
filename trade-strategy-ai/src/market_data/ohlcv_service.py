@@ -24,8 +24,22 @@ class OHLCVService:
     - 提供按日期/标的查询接口
     """
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        min_request_interval_seconds: float = 1.0,
+        max_retries: int = 2,
+        retry_backoff_seconds: list[float] | None = None,
+        fallback_enabled: bool = True,
+    ) -> None:
         self._factory = session_factory
+        # 限速参数，传递给 AkshareProvider
+        self._min_request_interval_seconds = min_request_interval_seconds
+        self._max_retries = max_retries
+        self._retry_backoff_seconds = retry_backoff_seconds or [1.0, 3.0]
+        # fallback 开关：东方财富失败后是否尝试新浪源
+        self._fallback_enabled = fallback_enabled
 
     async def crawl_bars(
         self,
@@ -45,7 +59,12 @@ class OHLCVService:
         """
         from src.providers.akshare_provider import AkshareProvider
 
-        provider = AkshareProvider()
+        provider = AkshareProvider(
+            min_request_interval_seconds=self._min_request_interval_seconds,
+            max_retries=self._max_retries,
+            retry_backoff_seconds=self._retry_backoff_seconds,
+            fallback_enabled=self._fallback_enabled,
+        )
         results: dict[str, int] = {}
 
         for symbol in symbols:

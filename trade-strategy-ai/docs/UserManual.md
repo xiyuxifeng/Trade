@@ -491,6 +491,7 @@ python -m cli.main <command> --help
 	- `--symbols-file`：每行一个代码
 	- `--from` / `--to`：日期区间
 	- `--limit`：标的数量上限
+	- `--config`：配置文件路径（用于读取 `akshare.*` 限速参数）
 
 ### 2.6 回测（backtest 子命令）
 
@@ -701,6 +702,8 @@ Kaipan 可选鉴权参数（如有）：
 
 - 用途：盘后评估（计算 return/mfe/mae）、回测、市场状态识别等。
 - 获取方式：`python -m cli.main ohlcv crawl ...` 入库到 `market_data` 表。
+- 数据源：默认使用东方财富（`stock_zh_a_hist`），失败后自动 fallback 到新浪源（`stock_zh_a_daily`），仅 A 股生效。
+- 限速配置：`config/app.yaml` 中的 `akshare.min_request_interval_seconds` 等参数控制请求节奏，避免触发数据源反爬。
 
 ### 4.4 交易记录（Trade Logs）
 
@@ -799,6 +802,15 @@ python -m cli.main import-trade-logs --config config/app.yaml --csv-path /path/t
 - `kaipan.token / kaipan.user_id`：可选鉴权。
 - `kaipan.fetch_schedule.*`：Kaipan scheduler 的抓取时间。
 - `kaipan.*retries*`：重试与反爬节流。
+
+### 5.11 akshare
+
+- `akshare.min_request_interval_seconds`：最小请求间隔（秒），避免连续请求触发东方财富反爬（默认 `1.0`）。
+- `akshare.max_retries`：请求失败后的重试次数（默认 `2`）。
+- `akshare.retry_backoff_seconds`：重试退避时间序列（秒），按序使用，超出索引则取最后一个值（默认 `[1.0, 3.0]`）。
+- `akshare.fallback_enabled`：东方财富源失败后，是否自动降级到新浪源（仅 A 股 stock 类型生效，默认 `true`）。
+
+说明：这些参数影响 `ohlcv crawl` 等 AkShare 数据抓取命令的请求节奏。如果抓取时频繁出现 `RemoteDisconnected` 或连接中断，系统会在东方财富源重试失败后自动尝试新浪源（fallback），无需手动干预。如需关闭 fallback，可将 `fallback_enabled` 设为 `false`。
 
 ### 5.11 alerting / dashboard（可选）
 
@@ -1017,7 +1029,25 @@ python -m cli.main snapshot build --date 2026-04-29 --slot 09-25 --type all
 
 或者在 `config` 中允许降级（默认允许）：`stage4.allow_phase0_fallback=true`。
 
-### 8.6 日志如何定位
+### 8.6 OHLCV 抓取频繁失败（RemoteDisconnected）
+
+现象：`ohlcv crawl` 日志中大量 `RemoteDisconnected` / `Connection aborted` 警告。
+
+原因：AKShare 底层访问东方财富接口，短时间内高频请求被限流。
+
+处理：
+
+1）确认 fallback 已启用：默认 `akshare.fallback_enabled: true`，东方财富重试失败后会自动降级到新浪源，日志中会看到 `新浪源 fallback 成功` 提示。
+
+2）增大请求间隔：修改 `config/app.yaml` 中 `akshare.min_request_interval_seconds`（如从 `0.5` 改为 `1.0` 或更大）。
+
+3）增大重试退避：调整 `akshare.retry_backoff_seconds`（如改为 `[2.0, 5.0]`）。
+
+4）减少单次抓取量：使用 `--limit` 减少标的数量，分批执行。
+
+5）如果 fallback 后仍全部失败，可能是网络问题，检查网络连接后重试。
+
+### 8.7 日志如何定位
 
 1）优先看 `logs/app.log`。
 

@@ -199,6 +199,17 @@ kaipan:
   retry_backoff_seconds: [1.0, 2.0, 4.0]
   retry_status_codes: [403, 429, 500, 502, 503, 504]
 
+# AkShare 公共行情数据源配置
+akshare:
+  # 最小请求间隔（秒），避免连续请求触发东方财富反爬
+  min_request_interval_seconds: 1.0
+  # 失败重试次数
+  max_retries: 2
+  # 重试退避时间序列（秒），按序使用
+  retry_backoff_seconds: [1.0, 3.0]
+  # 东方财富源失败后，是否自动降级到新浪源（仅 A 股 stock 类型生效）
+  fallback_enabled: true
+
 # 告警配置（S7-007）
 alerting:
   enabled: true
@@ -215,4 +226,3 @@ alerting:
     webhook_url: ""                # 填入企业微信群机器人 Webhook URL
   min_level: "WARNING"            # INFO / WARNING / CRITICAL
   console_output: true             # 是否同时打印到控制台
-

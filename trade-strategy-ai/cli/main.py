@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from cli.crawl import run_crawl_command
 from src.agents.manager_agent.agent import ManagerAgent
+from config.database import get_engine, run_async_with_cleanup
 from config.settings import get_settings
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.common.logger import configure_logging
@@ -294,7 +295,7 @@ def import_trade_logs(
 		typer.echo(f"{issue.severity.value.upper()}: {issue.code}: {issue.message}")
 
 	if not dry_run:
-		imported = asyncio.run(store_trade_logs(records))
+		imported = run_async_with_cleanup(store_trade_logs(records))
 		typer.echo(f"Stored trade logs: {imported}")
 
 
@@ -384,7 +385,7 @@ def pipeline_run(
 		)
 		return result
 
-	result = asyncio.run(_run_and_cleanup())
+	result = run_async_with_cleanup(_run_and_cleanup())
 
 	typer.echo("Pipeline done")
 	typer.echo(f"crawl={result.crawl.outputs}")
@@ -580,7 +581,7 @@ def pipeline_step(
 			return cleanup_result
 
 	# 执行步骤
-	result = asyncio.run(run_step())
+	result = run_async_with_cleanup(run_step())
 	typer.echo(f"步骤 {step} 执行完成")
 
 
@@ -596,7 +597,7 @@ def extract_articles(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	stats = asyncio.run(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, total_limit=limit))
+	stats = run_async_with_cleanup(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, total_limit=limit))
 	typer.echo(
 		f"Extract done scanned={stats.scanned} extracted={stats.extracted} skipped={stats.skipped} failed={stats.failed}"
 	)
@@ -617,7 +618,7 @@ def clusters_build(
 
 	full_dest = dest if dest.is_absolute() else (base_dir / dest)
 	full_dest.parent.mkdir(parents=True, exist_ok=True)
-	written, stats = asyncio.run(
+	written, stats = run_async_with_cleanup(
 		build_clusters_from_db(config=loaded.config, dest=full_dest, max_articles=max_articles)
 	)
 	typer.echo(f"Wrote clusters: {written}")
@@ -693,7 +694,7 @@ def e2e_regression(
 	command.upgrade(cfg, "head")
 
 	# 2-5) run all async steps in a single event loop
-	asyncio.run(_e2e_regression_async(
+	run_async_with_cleanup(_e2e_regression_async(
 		config=config,
 		max_articles=max_articles,
 		extract_limit=extract_limit,
@@ -733,7 +734,7 @@ def seed_data(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	stats = asyncio.run(seed_project_data(config=loaded.config, base_dir=base_dir))
+	stats = run_async_with_cleanup(seed_project_data(config=loaded.config, base_dir=base_dir))
 	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
 	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
 	typer.echo(f"Article JSONL paths: {len(stats.article_jsonl_paths)}")
@@ -753,7 +754,7 @@ def init_project(
 	base_dir = _project_base_dir(loaded.config_path)
 
 	init_db(project_root=base_dir)
-	stats = asyncio.run(seed_project_data(config=loaded.config, base_dir=base_dir))
+	stats = run_async_with_cleanup(seed_project_data(config=loaded.config, base_dir=base_dir))
 	typer.echo("Project initialization complete")
 	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
 	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
@@ -773,7 +774,7 @@ def backup_data(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	result = asyncio.run(
+	result = run_async_with_cleanup(
 		backup_project_state(
 			base_dir=base_dir,
 			backup_dir=dest,
@@ -800,7 +801,7 @@ def restore_data(
 	apply_database_config_to_env(loaded.config)
 	base_dir = _project_base_dir(loaded.config_path)
 
-	result = asyncio.run(
+	result = run_async_with_cleanup(
 		restore_project_state(
 			base_dir=base_dir,
 			backup_dir=source,
@@ -828,7 +829,7 @@ def run_pre_market(
 	mgr = ManagerAgent(config=loaded.config, base_dir=base_dir)
 	as_of_date = _parse_date(as_of)
 
-	report = asyncio.run(mgr.run_pre_market(as_of_date=as_of_date, force=force))
+	report = run_async_with_cleanup(mgr.run_pre_market(as_of_date=as_of_date, force=force))
 	typer.echo(f"Daily report written. ideas={len(report.ideas)}")
 	if export_html:
 		html_path = mgr.export_daily_report_html(report=report)
@@ -851,7 +852,7 @@ def run_after_close(
 	mgr = ManagerAgent(config=loaded.config, base_dir=base_dir)
 	as_of_date = _parse_date(as_of)
 
-	result = asyncio.run(mgr.run_after_close(as_of_date=as_of_date, force=force))
+	result = run_async_with_cleanup(mgr.run_after_close(as_of_date=as_of_date, force=force))
 	typer.echo(f"Evaluation written. items={len(result.evaluations)}")
 	if export_html:
 		html_path = mgr.export_evaluation_html(result=result)
@@ -1040,11 +1041,14 @@ def scheduler_start(
 	pre_h, pre_m = cfg.schedule.pre_market_time.split(":")
 	after_h, after_m = cfg.schedule.after_close_time.split(":")
 
+	# scheduler 是长期运行进程，使用持久事件循环避免连接池问题
+	_loop = asyncio.new_event_loop()
+
 	def _run_pre_market_job() -> None:
-		asyncio.run(mgr.run_pre_market(as_of_date=date.today(), force=False))
+		_loop.run_until_complete(mgr.run_pre_market(as_of_date=date.today(), force=False))
 
 	def _run_after_close_job() -> None:
-		asyncio.run(mgr.run_after_close(as_of_date=date.today(), force=False))
+		_loop.run_until_complete(mgr.run_after_close(as_of_date=date.today(), force=False))
 
 	scheduler.add_job(
 		_run_pre_market_job,
@@ -1089,6 +1093,8 @@ def migrate_crawl_state(
 	migrated = 0
 	skipped = 0
 
+	# 收集需要迁移的源数据（同步部分）
+	sources_to_migrate = []
 	for source_cfg in loaded.config.crawl.sources:
 		if not source_cfg.enabled:
 			continue
@@ -1102,14 +1108,17 @@ def migrate_crawl_state(
 			continue
 
 		state_data = read_json(state_path)
-		seen_urls = state_data.get("seen_urls", [])
-		seen_hashes = state_data.get("seen_hashes", [])
-		last_url = state_data.get("last_seen_article_url")
-		last_published = state_data.get("last_seen_published_at")
+		sources_to_migrate.append((source_cfg, state_data))
 
-		import asyncio
-		async def _upsert():
-			nonlocal migrated
+	# 统一在一个事件循环中执行所有数据库操作
+	async def _migrate_all():
+		nonlocal migrated
+		for source_cfg, state_data in sources_to_migrate:
+			seen_urls = state_data.get("seen_urls", [])
+			seen_hashes = state_data.get("seen_hashes", [])
+			last_url = state_data.get("last_seen_article_url")
+			last_published = state_data.get("last_seen_published_at")
+
 			async with session_scope() as session:
 				result = await session.execute(
 					select(CrawlState).where(
@@ -1134,7 +1143,7 @@ def migrate_crawl_state(
 					# 如果数据库中已有数据且更完整，保留数据库版本
 					if len(existing.seen_urls or []) >= len(seen_urls):
 						typer.echo(f"保留数据库状态 {source_cfg.source}/{source_cfg.author_id}: DB有{len(existing.seen_urls)}条 >= JSON有{len(seen_urls)}条")
-						return
+						continue
 					existing.seen_urls = seen_urls
 					existing.seen_hashes = seen_hashes
 					existing.last_seen_article_url = last_url
@@ -1144,7 +1153,7 @@ def migrate_crawl_state(
 				typer.echo(f"迁移 {source_cfg.source}/{source_cfg.author_id}: {len(seen_urls)} URLs, {len(seen_hashes)} hashes")
 				migrated += 1
 
-		asyncio.run(_upsert())
+	run_async_with_cleanup(_migrate_all())
 
 	typer.echo(f"迁移完成: {migrated} 个源已迁移, {skipped} 个跳过")
 
@@ -1168,7 +1177,7 @@ def rule_pool_list(
             for r in rules:
                 confidence = r.validated_confidence or r.initial_confidence
                 typer.echo(f"{r.rule_id} | {r.rule_type} | confidence={confidence:.2f} | status={r.review_status}")
-    asyncio.run(_run())
+    run_async_with_cleanup(_run())
 
 
 @rule_pool_app.command("review")
@@ -1185,7 +1194,7 @@ def rule_pool_review(
             status = ReviewStatus.APPROVED if decision == "approve" else ReviewStatus.REJECTED
             await repo.update_review(rule_id, status, reviewed_by="cli_user")
             typer.echo(f"Rule {rule_id} {status.value}")
-    asyncio.run(_run())
+    run_async_with_cleanup(_run())
 
 
 # 注册 backtest 子命令（NTL-S6-008）

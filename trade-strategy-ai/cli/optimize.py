@@ -318,8 +318,9 @@ output: str = typer.Option("", "--output", "-o", help="输出候选版本 JSON �
 
         def _run_sync(coro):
             import asyncio
+            from config.database import run_async_with_cleanup
             try:
-                return asyncio.run(coro)
+                return run_async_with_cleanup(coro)
             except RuntimeError:
                 loop = asyncio.get_event_loop()
                 return loop.run_until_complete(coro)

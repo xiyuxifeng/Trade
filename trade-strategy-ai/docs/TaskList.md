@@ -96,12 +96,12 @@
 
 ### 4.2 关键缺口
 
-- `DataAgent` 仍然只支持 `last_price`。
-- `TraderAgent` 仍然是 `watchlist + last_price` 模板。
-- `ManagerAgent` 仍然是最小编排，缺少策略版本、候选池、Evidence Pack、ranking。
-- 缺 `market_universe`、`strategy_library`、`evaluation`、`backtest` 等主线模块。
-- 缺稳定的数据快照资产，无法支持回测与学习闭环。
-- `TraderProfile`、`TraderMemory` 的结构都还不够支撑完整闭环（NTL-S10-001/002 改进中）。
+- `DataAgent` 已支持 `last_price` 之外的主要数据路由，并逐步向 capability router 收敛。
+- `TraderAgent` 仍然保留 `watchlist + last_price` 的兼容模板，但主流程已开始迁移到 `strategy_library + market_universe`。
+- `ManagerAgent` 仍然是最小编排，盘前/盘后链路仍需要继续收敛到策略版本、候选池、Evidence Pack、ranking。
+- `market_universe`、`strategy_library`、`evaluation`、`backtest` 等主线模块已存在，但部分链路仍在补齐真实闭环。
+- 缺稳定的数据快照资产，仍会影响回测与学习闭环的可信度。
+- `TraderProfile`、`TraderMemory` 的结构已比早期版本完整，但距离完全闭环仍有差距（仍在持续改进）。
 
 ### 4.3 唯一主线
 
@@ -2078,7 +2078,7 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-### Stage 11 完成标准 ✅ 2026-05-01
+### Stage 11 完成标准（代码实现已完成，真实闭环仍待收口）
 
 - [x] 文章分类器正常工作（rule/record/concept/mixed/noise 五分类）
 - [x] 混合型文章能分层提取：规则部分和交易记录部分分开存储
@@ -2131,8 +2131,9 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ### 20.3 下一步建议
 
-Stage 11 已完成所有任务，建议下一步：
+Stage 11 的任务实现已基本完成，但真实闭环仍有待收口，建议下一步：
 - 文档与样例验证：`NTL-S0-011` 与 `NTL-S0-014`
+- 按 review 文档中的 `待修复` 顺序继续收口真实规则回测、分层提取和审核流程
 - 运行数据库迁移创建 `rule_pool`、`trade_sample`、`article_classification` 表
 
 ### 20.2 当前不要做的事

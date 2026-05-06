@@ -331,6 +331,57 @@
 - 用途：涨停原因、龙虎榜、公告、异动等事件驱动规则
 - 没有时不阻塞第一版真实回测，但这类规则暂时不能准确验证
 
+#### Phase 4 数据获取命令（建议顺序）
+
+说明：下面命令用于把 Phase 4 的“最小数据需求清单”落到可执行步骤上。
+
+- 约定：在 `trade-strategy-ai` 目录下执行；若系统没有 `python` 命令（例如只存在 venv），用 `.venv/bin/python` 替代。
+
+1) 确认 DB 可用 + 迁移到最新表结构（用于写入 `stock_info` / `market_data` 等）
+
+```bash
+python -m cli.main db-check --config config/app.yaml
+python -m cli.main db-migrate --config config/app.yaml --project-root . --revision head
+```
+
+2) 生成/刷新交易日历文件（默认落盘到 `data/backtest/trading_calendar.json`）
+
+```bash
+python -c "from src.backtest.engine import TradeCalendar; TradeCalendar.ensure_loaded(); print('calendar_source=', TradeCalendar.source())"
+```
+
+3) 更新标的基础信息（写入 DB 的 `stock_info` 表）
+
+用途：
+- 为 `ohlcv crawl` 的默认标的列表提供来源（未提供 `--symbols-file` 时会从 `stock_info` 取 symbol）。
+
+```bash
+python -m cli.main pipeline-step stock_info_update --config config/app.yaml --force --log-level INFO
+```
+
+产物：统计文件写入 `data/processed/pipeline/stock_info/stock_info_stats.json`。
+
+4) 抓取日线 OHLCV 并入库（写入 DB 的 `market_data` 表）
+
+建议：先用小样本（20~60 个交易日）跑通回归，再扩大范围。
+
+```bash
+# 全量区间：抓取一段历史数据（用于真实规则回测）
+python -m cli.main ohlcv crawl --mode full --from 2026-01-01 --to 2026-03-31 --limit 200
+
+# 或显式提供标的列表（避免依赖 stock_info 的默认列表）
+# python -m cli.main ohlcv crawl --mode full --from 2026-01-01 --to 2026-03-31 --symbols-file symbols.txt
+```
+
+5)（可选）生成市场候选池快照（落盘到 `data/market_universe/snapshots/{YYYY-MM-DD}/{slot}.json`）
+
+用途：只有当你要回测“依赖热点/题材/强势股等候选池输入”的规则时才需要。第一版真实回测若只支持“纯价格/技术指标规则”，可以先跳过。
+
+```bash
+# 为某个交易日生成快照（建议先挑 1~3 个交易日验证链路）
+python -m cli.main snapshot build --date 2026-04-29 --type all --config config/app.yaml
+```
+
 #### 第一版真实规则回测的建议边界
 
 如果现在还没有正式抓取数据，建议 Phase 4 第一版只支持以下规则：

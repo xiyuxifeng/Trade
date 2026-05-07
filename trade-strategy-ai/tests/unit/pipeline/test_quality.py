@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 
 from src.models.blog_article import BlogArticle
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 from src.pipeline.validation import (
     DataValidator,
@@ -26,38 +26,32 @@ from src.pipeline.validation import (
 def test_price_outliers_detected():
     validator = DataValidator()
     records = [
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 1),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 1),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         ),
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 2),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 2),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         ),
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 3),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("100"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 3),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=100.0,
+            volume=1000.0,
         ),
     ]
     issues = validator.detect_price_outliers(records)
@@ -69,16 +63,14 @@ def test_price_outliers_detected():
 def test_price_outliers_no_false_positive():
     validator = DataValidator()
     records = [
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, i),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, i),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         )
         for i in range(1, 8)
     ]
@@ -117,16 +109,14 @@ def test_missing_fields_trade():
 
 def test_missing_fields_market_data():
     validator = DataValidator()
-    record = MarketData(
+    record = OHLCVBar(
         symbol="",
-        market="SZ",
-        timeframe="1d",
-        traded_at=datetime(2026, 4, 1),
-        open=Decimal("0"),
-        high=Decimal("0"),
-        low=Decimal("0"),
-        close=Decimal("0"),
-        volume=Decimal("1000"),
+        trade_date=date(2026, 4, 1),
+        open=0.0,
+        high=0.0,
+        low=0.0,
+        close=0.0,
+        volume=1000.0,
     )
     issues = validator.detect_missing_fields([record])
     assert len(issues) >= 1
@@ -140,28 +130,24 @@ def test_missing_fields_market_data():
 def test_sequence_gap_detected():
     validator = DataValidator()
     records = [
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 1),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 1),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         ),
         # Gap: missing 2026-04-02
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 3),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 3),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         ),
     ]
     issues = validator.detect_sequence_gaps(records)
@@ -233,27 +219,23 @@ def test_article_duplicate_hash_and_url_same_article():
 def test_market_duplicate_by_key():
     validator = DataValidator()
     records = [
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 1),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("1000"),
+            trade_date=date(2026, 4, 1),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
         ),
-        MarketData(
+        OHLCVBar(
             symbol="000001",
-            market="SZ",
-            timeframe="1d",
-            traded_at=datetime(2026, 4, 1),
-            open=Decimal("10"),
-            high=Decimal("10"),
-            low=Decimal("10"),
-            close=Decimal("10"),
-            volume=Decimal("2000"),
+            trade_date=date(2026, 4, 1),
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=2000.0,
         ),
     ]
     issues = validator.detect_market_duplicates(records)

@@ -253,7 +253,7 @@ crawl_task → clean_task → validate_task → feature_task → export_task
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  blog_articles   │     │   trade_logs      │     │  market_data      │
+│  blog_articles   │     │   trade_logs      │     │  ohlcv_bars       │
 ├─────────────────┤     ├──────────────────┤     ├──────────────────┤
 │ id (PK)          │     │ id (PK)           │     │ id (PK)           │
 │ title            │     │ stock_code        │     │ stock_code        │
@@ -298,7 +298,7 @@ crawl_task → clean_task → validate_task → feature_task → export_task
 |------|------|---------|
 | `blog_articles` | 存储爬取的博客文章 | 千级 |
 | `trade_logs` | 存储交易记录 | 万级 |
-| `market_data` | 存储股票 K 线数据 | 百万级 |
+| `ohlcv_bars` | 存储股票日线 OHLCV 数据 | 百万级 |
 | `article_metadata` | 文章经 NLP 处理后的元数据 | 千级 |
 | `strategy_dsl` | 生成的策略 DSL | 百级 |
 | `alignment_result` | 策略对齐结果 | 百级 |

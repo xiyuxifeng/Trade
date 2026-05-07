@@ -6,10 +6,10 @@ import sys
 sys.path.insert(0, "src")
 
 from decimal import Decimal
-from datetime import datetime
+from datetime import date, datetime
 
 from src.models.trade_log import TradeLog
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.persona.behavior_labeler import ContextBuilder, RuleCondition, Rule, RuleBasedClassifier
 from src.persona.behavior import BehaviorLabel
 
@@ -17,14 +17,14 @@ from src.persona.behavior import BehaviorLabel
 def test_compute_price_vs_ma():
     """价格 vs MA20 比率计算正确。"""
     bars = [
-        MarketData(symbol="000001", market="SZ", timeframe="1d",
-                   traded_at=datetime(2026, 4, 1),
-                   open=Decimal("10"), high=Decimal("10.5"), low=Decimal("9.5"),
-                   close=Decimal("10"), volume=Decimal("1000")),
-        MarketData(symbol="000001", market="SZ", timeframe="1d",
-                   traded_at=datetime(2026, 4, 3),
-                   open=Decimal("10.2"), high=Decimal("10.8"), low=Decimal("10"),
-                   close=Decimal("10.5"), volume=Decimal("1200")),
+        OHLCVBar(symbol="000001",
+                 trade_date=date(2026, 4, 1),
+                 open=10.0, high=10.5, low=9.5,
+                 close=10.0, volume=1000.0),
+        OHLCVBar(symbol="000001",
+                 trade_date=date(2026, 4, 3),
+                 open=10.2, high=10.8, low=10.0,
+                 close=10.5, volume=1200.0),
     ]
     trade = TradeLog(
         source="test", account_id="acc1", symbol="000001", market="SZ",
@@ -117,18 +117,18 @@ def test_labeler_facade():
     from src.persona.behavior_labeler import BehaviorLabeler
 
     bars = [
-        MarketData(symbol="000001", market="SZ", timeframe="1d",
-                   traded_at=datetime(2026, 4, 1),
-                   open=Decimal("10"), high=Decimal("10.5"), low=Decimal("9.5"),
-                   close=Decimal("10"), volume=Decimal("1000")),
-        MarketData(symbol="000001", market="SZ", timeframe="1d",
-                   traded_at=datetime(2026, 4, 2),
-                   open=Decimal("10.1"), high=Decimal("10.6"), low=Decimal("10"),
-                   close=Decimal("10.4"), volume=Decimal("1100")),
-        MarketData(symbol="000001", market="SZ", timeframe="1d",
-                   traded_at=datetime(2026, 4, 3),
-                   open=Decimal("10.3"), high=Decimal("10.8"), low=Decimal("10.2"),
-                   close=Decimal("10.6"), volume=Decimal("1500")),
+        OHLCVBar(symbol="000001",
+                 trade_date=date(2026, 4, 1),
+                 open=10.0, high=10.5, low=9.5,
+                 close=10.0, volume=1000.0),
+        OHLCVBar(symbol="000001",
+                 trade_date=date(2026, 4, 2),
+                 open=10.1, high=10.6, low=10.0,
+                 close=10.4, volume=1100.0),
+        OHLCVBar(symbol="000001",
+                 trade_date=date(2026, 4, 3),
+                 open=10.3, high=10.8, low=10.2,
+                 close=10.6, volume=1500.0),
     ]
 
     trade = TradeLog(

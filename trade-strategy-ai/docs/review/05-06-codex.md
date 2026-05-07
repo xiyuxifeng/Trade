@@ -147,14 +147,14 @@
 
 已复核 `docs/review/05-01-mix.md` 的 10 个问题，**当前仍需要修复并应继续保留到待办** 的有：
 
-- #1 回测使用硬编码 60% 命中率：仍存在
-- #2 分层提取未实现：仍存在
+- #1 回测使用硬编码 60% 命中率：✅已修复（2026-05-07）
+- #2 分层提取未实现：✅已修复（2026-05-07）
 - #3 分类结果未持久化：✅已修复
 - #4 规则无法自动入库：✅已修复
-- #5 置信度权重与设计文档不一致：仍存在
-- #6 `article_id` 类型不匹配外键：仍存在 [models.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/src/rule_pool/models.py:217)
+- #5 置信度权重与设计文档不一致：✅已修复（2026-05-07）
+- #6 `article_id` 类型不匹配外键：✅已修复（2026-05-07）
 - #7 盘前预测 / 盘后归因缺失：✅已修复
-- #8 `compute_confidence_adjustment()` 存在但未被调用：仍存在
+- #8 `compute_confidence_adjustment()` 存在但未被调用：✅已修复（2026-05-07）
 - #9 `article_metadata` 扩展字段未填充：✅已修复
 - #10 `review_status` 自动审核流程缺失：仍存在；当前只有手工 CLI 审核入口 [cli/main.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/cli/main.py:1172)
 
@@ -176,14 +176,14 @@
 
 下面只列仍然没有真正闭环的问题，按依赖关系排序。顺序原则是：**先修数据可信度，再修规则闭环，再修数据模型和审核流，最后收敛文档与增强项**。
 
-| 顺序 | 重点问题 | 关联问题 | 目标 |
-|---|---|---|---|
-| 1 | Stage 11 真实规则回测与置信度闭环 | `#1` `#5` `#8` / Phase 4 | 去掉模拟回测，接入真实历史样本，并让 `validated_confidence` 走统一更新口径。 |
-| 2 | Stage 11 分层提取真正独立化 | `#2` / Phase 3 残留 | 让 `rule / record / mixed` 真正走不同提取分支，并把 `standalone_rule_ids`、`derived_rule_ids`、`trade_sample_ids` 完整写回。 |
-| 3 | 数据模型一致性修正 | `#6` | 统一 `article_id` 与外键类型，避免后续入池、归因、审核再被类型漂移影响。 |
-| 4 | 自动审核流程补齐 | `#10` | 把 `review_status` 从手工 CLI 审核推进到可复用的自动化流程。 |
-| 5 | 交易记录进入风控 / 决策主闭环 | P1-2 残留 | 让 `trade_logs` 不只进入画像，也真正影响风控状态与策略决策。 |
-| 6 | A 股实际约束与验证增强 | P2-1 | 在主闭环稳定后，再补更细粒度的 A 股约束和更真实的依赖验证。 |
+| 顺序 | 重点问题 | 关联问题 | 目标 | 状态 |
+|---|---|---|---|---|
+| 1 | Stage 11 真实规则回测与置信度闭环 | `#1` `#5` `#8` / Phase 4 | 去掉模拟回测，接入真实历史样本，并让 `validated_confidence` 走统一更新口径。 | ✅已修复 |
+| 2 | Stage 11 分层提取真正独立化 | `#2` / Phase 3 残留 | 让 `rule / record / mixed` 真正走不同提取分支，并把 `standalone_rule_ids`、`derived_rule_ids`、`trade_sample_ids` 完整写回。 | ✅已修复 |
+| 3 | 数据模型一致性修正 | `#6` | 统一 `article_id` 与外键类型，避免后续入池、归因、审核再被类型漂移影响。 | ✅已修复 |
+| 4 | 自动审核流程补齐 | `#10` | 把 `review_status` 从手工 CLI 审核推进到可复用的自动化流程。 | |
+| 5 | 交易记录进入风控 / 决策主闭环 | P1-2 残留 | 让 `trade_logs` 不只进入画像，也真正影响风控状态与策略决策。 | |
+| 6 | A 股实际约束与验证增强 | P2-1 | 在主闭环稳定后，再补更细粒度的 A 股约束和更真实的依赖验证。 | |
 
 ## 已执行修复顺序
 
@@ -546,4 +546,43 @@ python -m cli.main snapshot build --date 2026-04-29 --type all --config config/a
 - Stage 7 / 8：是“基本完成”
 - Stage 11：是“未完成”
 
-因此，当前项目**不应被认定为“所有 Stage 任务均已完成并满足需求目标”**。
+因此，当前项目**不应被认定为”所有 Stage 任务均已完成并满足需求目标”**。
+
+---
+
+## 2026-05-07 修复记录
+
+### 已修复：待修复项 #1 - Stage 11 真实规则回测与置信度闭环
+
+**修改文件：**
+- `src/backtest/engine.py` — 重写 `_backtest_single_rule()` 实现真实回测；新增 `_evaluate_mapped_condition()` 结构化条件评估器；新增 `_calc_sharpe()`/`_calc_max_drawdown()` 统计函数；新增 `_preload_forward_bars()` 预加载前向 OHLCV；新增 `_derive_indicators_from_bars()` fallback 指标派生；新增 `_calc_t1_return_from_bars()` 从预加载 bars 计算 T+1 收益
+- `src/rule_backtest/confidence.py` — 权重对齐设计文档 (0.40/0.20/0.20/0.20)；样本保护系数 0.9；修复 `avg_loss > 0` 条件错误
+- `src/rule_pool/repository.py` — `update_backtest_result()` 调用 `compute_confidence_adjustment()` 替代简化公式
+- `src/rule_pool/attribution.py` — 延迟导入修复循环依赖
+
+**关联问题：** `#1` `#5` `#8` / Phase 4
+
+### 已修复：待修复项 #2 - Stage 11 分层提取真正独立化
+
+**修改文件：**
+- `src/agents/data_agent/skills/extract_article_metadata.py` — 重写 `_finalize_extraction_artifacts()` 实现 rule/record/mixed/concept/noise 五路独立分流；新增 `_extract_trade_samples_from_content()` 启发式交易样本提取；新增 `_persist_trade_samples()` 交易样本幂等写入；新增 `_find_sentence_bounds()` 句子边界检测
+
+**关联问题：** `#2` / Phase 3 残留
+
+### 已修复：待修复项 #3 - 数据模型一致性修正
+
+**修改文件：**
+- `src/rule_pool/models.py` — `TradeSample.article_id` 和 `ArticleClassification.article_id` 从 `String(128)` 改为 `Uuid` + `ForeignKey(“blog_articles.id”)`
+- `src/agents/data_agent/skills/extract_article_metadata.py` — `_persist_article_classification()` 和 `_persist_trade_samples()` 改为传递 UUID 对象
+- `src/db/migrations/versions/2026_05_07_0001_fix_article_id_type_to_uuid.py` — 新增 DB 迁移
+
+**关联问题：** `#6`
+
+### 验证结果
+
+```
+78 passed in 3.21s
+```
+- 无循环导入
+- ForeignKey 约束正确
+- 数据流：文章分类 → 分层提取 → 规则入池 → 真实回测 → 置信度更新 完整闭环

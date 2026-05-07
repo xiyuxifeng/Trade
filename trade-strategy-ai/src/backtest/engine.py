@@ -45,6 +45,195 @@ _CONDITION_PATTERN = re.compile(
     r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*([<>!=]+)\s*([+-]?\d+(?:\.\d+)?)\s*$"
 )
 
+# ---------------------------------------------------------------------------
+# mapped_condition 结构化条件评估
+# ---------------------------------------------------------------------------
+
+_CMP_OPS: dict[str, Callable[[float, float], bool]] = {
+    "gt": operator.gt,
+    "lt": operator.lt,
+    "eq": operator.eq,
+    "gte": operator.ge,
+    "lte": operator.le,
+}
+
+
+def _evaluate_mapped_condition(
+    condition: dict[str, Any],
+    indicators: dict[str, Any],
+    bars: list[dict[str, Any]] | None = None,
+) -> bool | None:
+    """评估结构化 mapped_condition 是否满足。
+
+    支持的条件结构：
+    - 比较条件: {"op": "gt/lt/eq/gte/lte", "field": "rsi6", "value": 30}
+    - 逻辑条件: {"op": "and/or", "conditions": [...]}
+    - 取反条件: {"op": "not", "condition": {...}}
+    - 交叉条件: {"op": "cross_above/cross_below", "field": "ma5", "other_field": "ma10"}
+    - IN 条件: {"op": "in/not_in", "field": "board_type", "values": [...]}
+
+    Args:
+        condition: mapped_condition 字典
+        indicators: 当前交易日的指标值
+        bars: OHLCV bar 历史列表（交叉条件需要），按日期升序排列
+
+    Returns:
+        True: 条件满足
+        False: 条件不满足或字段缺失
+        None: 无法评估
+    """
+    if not isinstance(condition, dict) or "op" not in condition:
+        return None
+
+    op = condition.get("op", "")
+
+    # -- 逻辑操作符 --
+    if op == "and":
+        sub_conditions = condition.get("conditions", [])
+        if not sub_conditions:
+            return False
+        for sub in sub_conditions:
+            result = _evaluate_mapped_condition(sub, indicators, bars)
+            if result is not True:
+                return result  # False 或 None → 不满足
+        return True
+
+    if op == "or":
+        sub_conditions = condition.get("conditions", [])
+        if not sub_conditions:
+            return False
+        has_none = False
+        for sub in sub_conditions:
+            result = _evaluate_mapped_condition(sub, indicators, bars)
+            if result is True:
+                return True
+            if result is None:
+                has_none = True
+        return None if has_none else False
+
+    if op == "not":
+        sub = condition.get("condition")
+        if sub is None:
+            return None
+        result = _evaluate_mapped_condition(sub, indicators, bars)
+        return not result if result is not None else None
+
+    # -- 比较操作符 --
+    if op in _CMP_OPS:
+        field = condition.get("field", "")
+        value = condition.get("value")
+        if not field or value is None:
+            return None
+        if field not in indicators:
+            return False
+        try:
+            indicator_val = float(indicators[field])
+            threshold = float(value)
+            return _CMP_OPS[op](indicator_val, threshold)
+        except (ValueError, TypeError):
+            return False
+
+    # -- IN / NOT_IN 操作符 --
+    if op == "in":
+        field = condition.get("field", "")
+        values = condition.get("values", [])
+        if not field or not values:
+            return None
+        return indicators.get(field) in values
+
+    if op == "not_in":
+        field = condition.get("field", "")
+        values = condition.get("values", [])
+        if not field or not values:
+            return None
+        return indicators.get(field) not in values
+
+    # -- 交叉条件 (金叉/死叉)：需要 bars 历史 --
+    if op in ("cross_above", "cross_below"):
+        field = condition.get("field", "")
+        other_field = condition.get("other_field")
+        if not field:
+            return None
+        if bars is None or len(bars) < 2:
+            return None  # 无历史数据，无法判断交叉
+
+        # 获取最近两个 bar 的指标值
+        # indicators 是当前交易日的值，bars[-1] 是当前交易日
+        # 需要从 bars 中找到前一天的指标值
+        curr_val = indicators.get(field)
+        if curr_val is None:
+            return False
+
+        # 尝试从前一天的 indicators 或 bar 中获取前值
+        prev_val = None
+        if other_field:
+            # 双线交叉：比较 field 和 other_field 的关系
+            curr_other = indicators.get(other_field)
+            if curr_other is None:
+                return False
+            # 需要前一天的 field 和 other_field 值来判断交叉
+            # 从 bars[-2] 的原始数据近似
+            prev_bar = bars[-2]
+            prev_field_val = prev_bar.get(field) if isinstance(prev_bar, dict) else None
+            prev_other_val = prev_bar.get(other_field) if isinstance(prev_bar, dict) else None
+            if prev_field_val is None or prev_other_val is None:
+                return None
+            try:
+                prev_val = float(prev_field_val)
+                prev_other = float(prev_other_val)
+                curr_val_f = float(curr_val)
+                curr_other_f = float(curr_other)
+            except (ValueError, TypeError):
+                return False
+            if op == "cross_above":
+                # field 从下方向上穿过 other_field
+                return prev_val <= prev_other and curr_val_f > curr_other_f
+            else:
+                # field 从上方向下穿过 other_field
+                return prev_val >= prev_other and curr_val_f < curr_other_f
+        else:
+            # 单线交叉：field 穿过 value 阈值
+            threshold = condition.get("value")
+            if threshold is None:
+                return None
+            prev_bar = bars[-2]
+            prev_val = prev_bar.get(field) if isinstance(prev_bar, dict) else None
+            if prev_val is None:
+                return None
+            try:
+                prev_val_f = float(prev_val)
+                curr_val_f = float(curr_val)
+                threshold_f = float(threshold)
+            except (ValueError, TypeError):
+                return False
+            if op == "cross_above":
+                return prev_val_f <= threshold_f < curr_val_f
+            else:
+                return prev_val_f >= threshold_f > curr_val_f
+
+    return None
+
+
+def _mapped_condition_to_text(condition: dict[str, Any]) -> str | None:
+    """将结构化 mapped_condition 转换为可评估的简单文本条件。
+
+    仅处理最简形式 {"op": "gt/lt/eq/gte/lte", "field": "...", "value": ...}
+    复杂条件返回 None，需使用 _evaluate_mapped_condition 递归评估。
+
+    Args:
+        condition: mapped_condition 字典
+
+    Returns:
+        条件文本（如 "rsi6 < 30"）或 None
+    """
+    if not isinstance(condition, dict):
+        return None
+    op = condition.get("op", "")
+    op_map = {"gt": ">", "lt": "<", "eq": "==", "gte": ">=", "lte": "<="}
+    if op in op_map and "field" in condition and "value" in condition:
+        return f"{condition['field']} {op_map[op]} {condition['value']}"
+    return None
+
 _COMPARISON_OPS: dict[str, Callable[[float, float], bool]] = {
     "<": operator.lt,
     "<=": operator.le,
@@ -99,6 +288,200 @@ def _calc_t1_return(context: MarketContextSnapshot, symbol: str) -> float | None
                     return (next_close - curr_close) / curr_close
             break
     return None
+
+
+def _calc_sharpe(returns: list[float], risk_free: float = 0.02) -> float | None:
+    """计算年化夏普比率
+
+    Args:
+        returns: 收益率序列（小数表示，如 0.02 = 2%）
+        risk_free: 无风险利率（默认 2%）
+
+    Returns:
+        年化夏普比率，数据不足时返回 None
+    """
+    if len(returns) < 2:
+        return None
+    import math
+
+    mean_ret = statistics.mean(returns)
+    std_ret = statistics.stdev(returns) if len(returns) > 1 else 0.0
+    if std_ret == 0:
+        return 0.0
+    # 日度收益年化：sqrt(252)
+    daily_excess = mean_ret - risk_free / 252
+    return daily_excess / std_ret * math.sqrt(252)
+
+
+def _calc_max_drawdown(returns: list[float]) -> float | None:
+    """计算最大回撤
+
+    Args:
+        returns: 收益率序列（小数表示）
+
+    Returns:
+        最大回撤（小数表示，如 0.15 = 15%），数据不足时返回 None
+    """
+    if len(returns) < 2:
+        return None
+
+    # 构建累计收益曲线
+    cumulative = 1.0
+    peak = 1.0
+    max_dd = 0.0
+
+    for r in returns:
+        cumulative *= 1.0 + r
+        peak = max(peak, cumulative)
+        dd = (peak - cumulative) / peak
+        max_dd = max(max_dd, dd)
+
+    return max_dd
+
+
+async def _preload_forward_bars(
+    *,
+    session: Any | None,
+    start_date: date,
+    end_date: date,
+    forward_days: int = 5,
+) -> dict[str, list[dict[str, Any]]]:
+    """预加载 OHLCV bars，含前向天数用于 T+N 收益计算。
+
+    从 DB 加载 start_date 前 90 天到 end_date + forward_days 的全量 bars，
+    按 symbol 分组并按日期升序排列。
+
+    Args:
+        session: 数据库会话（None 时返回空字典）
+        start_date: 回测开始日期
+        end_date: 回测结束日期
+        forward_days: 额外前向天数（用于 T+N 收益）
+
+    Returns:
+        {symbol: [bar_dict, ...]} 字典
+    """
+    if session is None:
+        return {}
+
+    from src.models.ohlcv_bar import OHLCVBar
+
+    lookback = start_date - timedelta(days=90)
+    forward_end = end_date + timedelta(days=forward_days)
+
+    try:
+        stmt = (
+            select(OHLCVBar)
+            .where(OHLCVBar.trade_date >= lookback)
+            .where(OHLCVBar.trade_date <= forward_end)
+            .order_by(OHLCVBar.trade_date.asc())
+        )
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+    except Exception as e:
+        logger.warning("预加载 OHLCV bars 失败: %s", e)
+        return {}
+
+    bars_by_symbol: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        if r.symbol not in bars_by_symbol:
+            bars_by_symbol[r.symbol] = []
+        bars_by_symbol[r.symbol].append({
+            "symbol": r.symbol,
+            "date": r.trade_date.isoformat(),
+            "open": r.open,
+            "high": r.high,
+            "low": r.low,
+            "close": r.close,
+            "volume": r.volume,
+        })
+
+    return bars_by_symbol
+
+
+def _calc_t1_return_from_bars(
+    bars: list[dict[str, Any]],
+    trade_date_str: str,
+) -> float | None:
+    """从预加载的 bars 列表中计算 T+1 收益。
+
+    在 bars 中找到 trade_date_str 对应的 bar，取其后一根 bar 的 close
+    计算收益率。
+
+    Args:
+        bars: 按日期升序排列的 bar 列表
+        trade_date_str: 触发日期（YYYY-MM-DD）
+
+    Returns:
+        T+1 收益率（小数表示），无法计算时返回 None
+    """
+    if len(bars) < 2:
+        return None
+
+    for i, bar in enumerate(bars):
+        if str(bar.get("date")) == trade_date_str:
+            if i + 1 < len(bars):
+                curr_close = bar.get("close")
+                next_close = bars[i + 1].get("close")
+                if curr_close and next_close and curr_close != 0:
+                    return (next_close - curr_close) / curr_close
+            break
+    return None
+
+
+def _derive_indicators_from_bars(
+    bars_by_symbol: dict[str, list[dict[str, Any]]],
+    trade_date_str: str,
+) -> dict[str, dict[str, Any]]:
+    """从预加载的 OHLCV bars 派生基础指标（无 loader 时的 fallback）。
+
+    对每个 symbol，找到 trade_date_str 对应的 bar，提取：
+    - OHLCV 基础字段：close, open, high, low, volume
+    - 简单均线：ma5, ma10, ma20（基于 bar 的 close 序列计算）
+
+    Args:
+        bars_by_symbol: {symbol: [bar_dict, ...]} 字典
+        trade_date_str: 交易日期（YYYY-MM-DD）
+
+    Returns:
+        {symbol: {field: value}} 字典
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for symbol, bars in bars_by_symbol.items():
+        # 找到当前交易日的 bar 索引
+        idx = None
+        for i, bar in enumerate(bars):
+            if str(bar.get("date")) == trade_date_str:
+                idx = i
+                break
+        if idx is None:
+            continue
+
+        bar = bars[idx]
+        indicators: dict[str, Any] = {}
+
+        # 基础 OHLCV
+        for field in ("open", "high", "low", "close", "volume"):
+            if field in bar:
+                indicators[field] = bar[field]
+
+        # 简单均线（需要足够的历史 bar）
+        closes = [b.get("close") for b in bars[: idx + 1] if b.get("close") is not None]
+        for period in (5, 10, 20):
+            if len(closes) >= period:
+                ma_val = sum(closes[-period:]) / period
+                indicators[f"ma{period}"] = ma_val
+
+        # 成交量均线
+        volumes = [b.get("volume") for b in bars[: idx + 1] if b.get("volume") is not None]
+        if len(volumes) >= 5:
+            avg_vol = sum(volumes[-5:]) / 5
+            if avg_vol > 0:
+                indicators["volume_ratio"] = bar.get("volume", 0) / avg_vol
+
+        if indicators:
+            result[symbol] = indicators
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1018,21 +1401,19 @@ class BacktestEngine:
         all_records: list[BacktestTradeRecord] = []
 
         for rule in rules:
-            result = await self._backtest_single_rule(rule, start_date, end_date)
+            result = await self._backtest_single_rule(rule, start_date, end_date, session=session)
             rule_results.append(result)
 
-            # 转换 RuleBacktestResult 为交易记录
-            # TODO: 规则回测的交易记录生成逻辑待实现
-            # 当前生成模拟记录用于测试
-            for i in range(result.sample_count):
+            # 生成规则回测汇总交易记录（基于真实评估结果）
+            if result.total_trades > 0:
                 all_records.append(
                     BacktestTradeRecord(
-                        trade_date=start_date,
+                        trade_date=end_date,
                         trader_id="rule_pool",
                         strategy_version_id=rule.rule_id,
-                        symbol="TEST",
-                        status="closed" if i < result.hit_trades else "skipped",
-                        return_pct=result.avg_return if i < result.hit_trades else None,
+                        symbol=f"RULE:{rule.rule_id}",
+                        status="closed",
+                        return_pct=result.avg_return,
                     )
                 )
 
@@ -1060,63 +1441,152 @@ class BacktestEngine:
         rule: RulePool,
         start_date: date,
         end_date: date,
+        session: AsyncSession | None = None,
     ) -> RuleBacktestResult:
         """
-        对单条规则执行回测
+        对单条规则执行真实回测
+
+        流程：
+        1. 解析 mapped_condition 构建可评估条件
+        2. 预加载 OHLCV bars（含前向天数用于 T+1 收益计算）
+        3. 遍历交易日，通过 loader 加载指标数据
+        4. 对每个标的逐日评估规则是否触发
+        5. 使用预加载的 bars 计算 T+1 收益
+        6. 计算真实统计指标（胜率、收益率、夏普、回撤）
 
         Args:
             rule: RulePool ORM 对象
             start_date: 回测开始日期
             end_date: 回测结束日期
+            session: 数据库会话（用于预加载 OHLCV 数据）
 
         Returns:
-            RuleBacktestResult
+            RuleBacktestResult（真实统计指标）
         """
         from datetime import datetime
         from uuid import uuid4
 
         logger.debug("单条规则回测: rule_id=%s, start=%s, end=%s", rule.rule_id, start_date, end_date)
 
-        # TODO: 实际回测逻辑待实现
-        # 当前实现为模拟数据，用于框架验证
-
         extraction_layer = rule.extraction_layer or {}
         mapped_condition = extraction_layer.get("mapped_condition", {})
 
-        # 模拟回测结果
-        # 实际实现时需要：
-        # 1. 根据 mapped_condition 构建规则条件
-        # 2. 在回测日期区间内遍历交易日
-        # 3. 对每日加载市场快照，判断规则是否触发
-        # 4. 收集触发后的 T+1 收益
+        # 无映射条件 → 无法回测
+        if not mapped_condition:
+            return RuleBacktestResult(
+                run_id=str(uuid4()),
+                run_at=datetime.now(),
+                start_date=start_date,
+                end_date=end_date,
+                total_trades=0,
+                hit_trades=0,
+                miss_trades=0,
+                hit_rate=0.0,
+                avg_return=0.0,
+                sample_count=0,
+            )
+
+        # 尝试将 mapped_condition 转为简单文本条件（兼容 _evaluate_simple_condition）
+        simple_condition_text = _mapped_condition_to_text(mapped_condition)
 
         trade_dates = iter_trade_dates(start_date, end_date)
         sample_count = len(trade_dates)
 
-        # 模拟样本数据：约 60% 命中率
-        hit_rate = 0.6 if sample_count > 0 else 0.0
-        hit_trades = int(sample_count * hit_rate)
-        miss_trades = sample_count - hit_trades
+        # 预加载全量 OHLCV bars（含前向天数，用于 T+1 收益计算）
+        forward_bars = await _preload_forward_bars(
+            session=session,
+            start_date=start_date,
+            end_date=end_date,
+            forward_days=5,
+        )
 
-        # 模拟收益率
-        avg_return = 0.02  # 2% 平均收益
-        avg_win = 0.04     # 4% 平均盈利
-        avg_loss = -0.02   # -2% 平均亏损
+        # 收集每次命中的收益率
+        hit_returns: list[float] = []
+        hit_count = 0
+        total_checks = 0
+
+        # 确定加载策略：loader 可用时走 loader，否则从预加载的 bars 派生基础 OHLCV 指标
+        use_loader = self.loader is not None
+
+        for trade_date in trade_dates:
+            trade_date_str = trade_date.isoformat()
+
+            # 加载指标数据
+            indicators_by_symbol: dict[str, dict[str, Any]] = {}
+            if use_loader:
+                try:
+                    ctx = await self.loader.load_market_context(trade_date=trade_date, symbols=[])
+                    if ctx:
+                        indicators_by_symbol = ctx.get("indicators_by_symbol") or {}
+                except Exception as e:
+                    logger.debug("加载市场上下文失败: date=%s, error=%s", trade_date, e)
+                    continue
+            else:
+                # 无 loader：从预加载 bars 派生基础 OHLCV 指标
+                indicators_by_symbol = _derive_indicators_from_bars(
+                    forward_bars, trade_date_str
+                )
+
+            if not indicators_by_symbol:
+                continue
+
+            # 对每个标的检查条件
+            for symbol, indicators in indicators_by_symbol.items():
+                if not isinstance(indicators, dict):
+                    continue
+
+                total_checks += 1
+
+                # 条件评估
+                triggered = False
+                if simple_condition_text:
+                    result = _evaluate_simple_condition(simple_condition_text, indicators)
+                    if result is True:
+                        triggered = True
+                else:
+                    bars = forward_bars.get(symbol, [])
+                    result = _evaluate_mapped_condition(mapped_condition, indicators, bars)
+                    if result is True:
+                        triggered = True
+
+                if triggered:
+                    hit_count += 1
+                    t1_ret = _calc_t1_return_from_bars(
+                        forward_bars.get(symbol, []), trade_date_str
+                    )
+                    if t1_ret is not None:
+                        hit_returns.append(t1_ret)
+
+        # 计算统计指标
+        hit_rate = hit_count / total_checks if total_checks > 0 else 0.0
+        avg_return = statistics.mean(hit_returns) if hit_returns else 0.0
+
+        # 盈亏细分
+        win_returns = [r for r in hit_returns if r > 0]
+        loss_returns = [r for r in hit_returns if r < 0]
+        avg_win = statistics.mean(win_returns) if win_returns else None
+        avg_loss = statistics.mean(loss_returns) if loss_returns else None
+
+        # 夏普比率（年化）
+        sharpe_ratio = _calc_sharpe(hit_returns) if hit_returns else None
+
+        # 最大回撤
+        max_drawdown = _calc_max_drawdown(hit_returns) if hit_returns else None
 
         return RuleBacktestResult(
             run_id=str(uuid4()),
             run_at=datetime.now(),
             start_date=start_date,
             end_date=end_date,
-            total_trades=sample_count,
-            hit_trades=hit_trades,
-            miss_trades=miss_trades,
+            total_trades=total_checks,
+            hit_trades=hit_count,
+            miss_trades=total_checks - hit_count,
             hit_rate=hit_rate,
             avg_return=avg_return,
             avg_win_return=avg_win,
             avg_loss_return=avg_loss,
-            sharpe_ratio=1.2,
-            max_drawdown=0.05,
+            sharpe_ratio=sharpe_ratio,
+            max_drawdown=max_drawdown,
             sample_count=sample_count,
         )
 

@@ -59,16 +59,14 @@ class TestComputeConfidenceAdjustment:
         result = _make_result(total_trades=0, sample_count=0)
         initial = 0.7
         validated = compute_confidence_adjustment(initial, result)
-        assert validated == initial * 0.8  # 降低 20%
+        assert validated == initial * 0.9  # 轻微下调 10%
 
     def test_small_sample_protection(self):
-        """样本数 < 10 时启用保护机制"""
+        """样本数 < 10 时启用保护机制，轻微下调初始置信度"""
         result = _make_result(total_trades=5, sample_count=5)
         initial = 0.8
         validated = compute_confidence_adjustment(initial, result, prior_weight=20)
-        # 保护因子 = 0.5，分数会降低
-        # composite_score 约 0.6，保护后 0.3
-        # 后验 = (0.3 * 20 + 0.8 * 5) / (20 + 5) ≈ 0.44
+        # 样本不足 → 返回 initial * 0.9 = 0.72
         assert validated < initial
 
     def test_perfect_backtest(self):

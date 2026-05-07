@@ -18,7 +18,7 @@ from sqlalchemy import or_, select
 from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
-from src.rule_pool.models import ArticleClassification
+from src.rule_pool.models import ArticleClassification, TradeSample
 from src.rule_pool.repository import RulePoolRepository
 from src.rule_pool.schemas import ArticleType, ExtractionLayer, RawCondition, RulePoolItem, RuleSourceType
 from src.llm.client import LLMClient, LLMError, LLMResult, from_env_and_config
@@ -468,7 +468,7 @@ async def _persist_article_classification(
     version: str,
 ) -> ArticleClassification:
     """将文章分类结果落库，并保持幂等更新。"""
-    article_id = str(article.id)
+    article_id = article.id
     normalized_type = _normalize_article_type(getattr(classification, "article_type", None))
     confidence = _clamp(_safe_float(getattr(classification, "confidence", None)), 0.0, 1.0) or 0.0
     reasons = []
@@ -591,6 +591,196 @@ async def _persist_extracted_rules(
     return rule_ids
 
 
+def _find_sentence_bounds(content: str, pos: int) -> tuple[int, int]:
+    """找到包含 pos 位置的句子边界。
+
+    句子分隔符：。！？\\n 以及连续换行
+    """
+    # 向前找句子开头
+    start = pos
+    for i in range(pos - 1, max(0, pos - 200), -1):
+        if content[i] in "。！？\n":
+            start = i + 1
+            break
+    else:
+        start = max(0, pos - 200)
+
+    # 向后找句子结尾
+    end = pos
+    for i in range(pos, min(len(content), pos + 200)):
+        if content[i] in "。！？\n":
+            end = i
+            break
+    else:
+        end = min(len(content), pos + 200)
+
+    return start, end
+
+
+def _extract_trade_samples_from_content(
+    *,
+    article: BlogArticle,
+    symbols: list[str],
+) -> list[dict[str, Any]]:
+    """从文章内容中启发式提取交易记录样本。
+
+    针对 record / mixed 类型文章，从正文中逐句识别：
+    - 标的代码（优先使用已提取的 symbols）
+    - 买卖方向（买入/卖出/做多/做空）
+    - 入场/出场价格
+    - 持仓周期
+
+    Args:
+        article: 博客文章
+        symbols: 已提取的标准化标的代码列表
+
+    Returns:
+        交易样本列表，每个元素包含 symbol/side/entry_price/exit_price/quantity/holding_period/tags
+    """
+    content = article.content_text or ""
+    if not content or not symbols:
+        return []
+
+    samples: list[dict[str, Any]] = []
+
+    # 关键词
+    buy_keywords = ["买入", "买进", "做多", "开多", "入场", "建仓", "扫板", "打板", "低吸", "抄底"]
+    sell_keywords = ["卖出", "卖空", "做空", "开空", "出场", "平仓", "止盈", "止损", "板砸", "割肉"]
+
+    # 价格模式
+    price_pattern = re.compile(r"(\d+(?:\.\d{1,2})?)\s*[元块]")
+
+    for symbol in symbols:
+        code = symbol.split(".")[0] if "." in symbol else symbol
+
+        # 找到该标的在文中第一次出现的位置
+        pos = content.find(code)
+        if pos == -1:
+            continue
+
+        # 提取所在句子的上下文
+        sent_start, sent_end = _find_sentence_bounds(content, pos)
+        sentence = content[sent_start:sent_end].strip()
+        if not sentence:
+            continue
+
+        # 判断买卖方向：找离标的位置最近的方向关键词
+        code_pos_in_sent = sentence.find(code)
+        best_kw = None
+        best_dist = 9999
+
+        for kw in buy_keywords:
+            kw_pos = sentence.find(kw)
+            if kw_pos != -1:
+                dist = abs(kw_pos - code_pos_in_sent)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_kw = "BUY"
+
+        for kw in sell_keywords:
+            kw_pos = sentence.find(kw)
+            if kw_pos != -1:
+                dist = abs(kw_pos - code_pos_in_sent)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_kw = "SELL"
+
+        if best_kw is None:
+            continue
+        side = best_kw
+
+        # 提取句子中的价格
+        prices = price_pattern.findall(sentence)
+        entry_price = float(prices[0]) if prices else None
+
+        # 提取持仓周期
+        hold_pattern = re.compile(r"(?:持有|拿了|持仓|捂了)\s*(\d+)\s*(?:天|个交易日|日)")
+        hold_match = hold_pattern.search(sentence)
+        holding_period = int(hold_match.group(1)) if hold_match else None
+
+        # 提取标签
+        tags: list[str] = []
+        if "打板" in sentence or "扫板" in sentence:
+            tags.append("打板")
+        if "低吸" in sentence or "抄底" in sentence:
+            tags.append("低吸")
+        if "止盈" in sentence:
+            tags.append("止盈")
+        if "止损" in sentence or "割肉" in sentence:
+            tags.append("止损")
+        if holding_period:
+            tags.append(f"持仓{holding_period}天")
+
+        samples.append({
+            "symbol": symbol,
+            "side": side,
+            "entry_price": entry_price,
+            "exit_price": None,
+            "quantity": 100,
+            "holding_period": holding_period,
+            "tags": tags,
+            "notes": f"从文章 {article.title[:50]} 启发式提取",
+        })
+
+    return samples
+
+
+async def _persist_trade_samples(
+    *,
+    session: Any,
+    article: BlogArticle,
+    samples: list[dict[str, Any]],
+    version: str,
+) -> list[str]:
+    """将交易样本写入 trade_sample 表。
+
+    Args:
+        session: 数据库会话
+        article: 来源文章
+        samples: 交易样本列表
+        version: 提取版本
+
+    Returns:
+        成功写入的 sample_id 列表
+    """
+    from uuid import uuid4
+
+    sample_ids: list[str] = []
+    now = _now_utc()
+
+    for idx, sample in enumerate(samples):
+        sample_id = f"{article.id}:{version}:trade:{idx:03d}"
+        existing = await session.scalar(
+            select(TradeSample).where(TradeSample.sample_id == sample_id)
+        )
+        if existing is not None:
+            sample_ids.append(sample_id)
+            continue
+
+        orm_obj = TradeSample(
+            id=uuid4(),
+            sample_id=sample_id,
+            article_id=article.id,
+            symbol=sample.get("symbol", ""),
+            side=sample.get("side", "BUY"),
+            entry_price=sample.get("entry_price") or 0.0,
+            exit_price=sample.get("exit_price"),
+            quantity=sample.get("quantity", 100),
+            entry_at=article.published_at or now,
+            exit_at=None,
+            holding_period=sample.get("holding_period"),
+            tags=sample.get("tags", []),
+            notes=sample.get("notes"),
+            created_at=now,
+        )
+        session.add(orm_obj)
+        sample_ids.append(sample_id)
+
+    if sample_ids:
+        await session.flush()
+    return sample_ids
+
+
 async def _finalize_extraction_artifacts(
     *,
     session: Any,
@@ -600,31 +790,106 @@ async def _finalize_extraction_artifacts(
     rules: list[dict[str, Any]],
     version: str,
 ) -> None:
-    """补齐文章元数据和规则池的落库副作用。"""
+    """按文章类型执行独立的分层提取落库。
+
+    分流逻辑：
+    - rule:    提取 standalone rules → standalone_rule_ids
+    - record:  提取 trade samples → trade_sample_ids, 反推 derived rules → derived_rule_ids
+    - mixed:   同时提取 standalone rules + trade samples → 分别写入对应字段
+    - concept: 仅保留概念信息，不提取规则/样本
+    - noise:   跳过，不提取任何内容
+    """
     meta.extraction_version = version
 
-    if classification_type == ArticleType.RECORD.value:
-        meta.derived_rule_ids = meta.derived_rule_ids or []
-        meta.standalone_rule_ids = meta.standalone_rule_ids or []
-    else:
-        meta.standalone_rule_ids = meta.standalone_rule_ids or []
-        meta.derived_rule_ids = meta.derived_rule_ids or []
-
-    if classification_type in {ArticleType.RULE.value, ArticleType.MIXED.value, ArticleType.RECORD.value} and rules:
-        rule_ids = await _persist_extracted_rules(
-            session=session,
-            article=article,
-            rules=rules,
-            article_type=classification_type,
-            version=version,
-        )
-        if classification_type == ArticleType.RECORD.value:
-            meta.derived_rule_ids = list(dict.fromkeys([*(meta.derived_rule_ids or []), *rule_ids]))
-        else:
-            meta.standalone_rule_ids = list(dict.fromkeys([*(meta.standalone_rule_ids or []), *rule_ids]))
-
+    # 确保扩展字段初始化
+    if meta.standalone_rule_ids is None:
+        meta.standalone_rule_ids = []
+    if meta.derived_rule_ids is None:
+        meta.derived_rule_ids = []
     if meta.trade_sample_ids is None:
         meta.trade_sample_ids = []
+
+    # === 规则型文章：提取 standalone rules ===
+    if classification_type == ArticleType.RULE.value:
+        if rules:
+            rule_ids = await _persist_extracted_rules(
+                session=session,
+                article=article,
+                rules=rules,
+                article_type=classification_type,
+                version=version,
+            )
+            meta.standalone_rule_ids = list(dict.fromkeys([
+                *(meta.standalone_rule_ids or []), *rule_ids
+            ]))
+
+    # === 记录型文章：提取 trade samples + 反推 derived rules ===
+    elif classification_type == ArticleType.RECORD.value:
+        # 优先提取交易样本
+        trade_samples = _extract_trade_samples_from_content(
+            article=article,
+            symbols=meta.trading_symbols or [],
+        )
+        if trade_samples:
+            sample_ids = await _persist_trade_samples(
+                session=session,
+                article=article,
+                samples=trade_samples,
+                version=version,
+            )
+            meta.trade_sample_ids = list(dict.fromkeys([
+                *(meta.trade_sample_ids or []), *sample_ids
+            ]))
+
+        # 从 LLM 提取结果中获取 derived rules（交易记录反推的规则）
+        if rules:
+            rule_ids = await _persist_extracted_rules(
+                session=session,
+                article=article,
+                rules=rules,
+                article_type=classification_type,
+                version=version,
+            )
+            meta.derived_rule_ids = list(dict.fromkeys([
+                *(meta.derived_rule_ids or []), *rule_ids
+            ]))
+
+    # === 混合型文章：同时提取 standalone rules + trade samples ===
+    elif classification_type == ArticleType.MIXED.value:
+        # 提取 standalone rules
+        if rules:
+            rule_ids = await _persist_extracted_rules(
+                session=session,
+                article=article,
+                rules=rules,
+                article_type=classification_type,
+                version=version,
+            )
+            meta.standalone_rule_ids = list(dict.fromkeys([
+                *(meta.standalone_rule_ids or []), *rule_ids
+            ]))
+
+        # 提取交易样本
+        trade_samples = _extract_trade_samples_from_content(
+            article=article,
+            symbols=meta.trading_symbols or [],
+        )
+        if trade_samples:
+            sample_ids = await _persist_trade_samples(
+                session=session,
+                article=article,
+                samples=trade_samples,
+                version=version,
+            )
+            meta.trade_sample_ids = list(dict.fromkeys([
+                *(meta.trade_sample_ids or []), *sample_ids
+            ]))
+
+    # === 概念型文章：不提取规则/样本 ===
+    elif classification_type == ArticleType.CONCEPT.value:
+        pass  # 仅保留概念信息，不提取规则
+
+    # noise 类型不提取任何规则/样本
 
 
 async def _extract_one(

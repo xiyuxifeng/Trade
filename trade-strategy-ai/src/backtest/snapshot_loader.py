@@ -2,7 +2,7 @@
 
 职责：
 - 只读历史快照和历史策略版本，不调用实时 provider
-- 提供 market_context 加载
+- 提供 market_context 加载（market_universe 从快照文件，ohlcv/indicators 从 DB）
 - 提供 strategy_version 加载
 - 支持 compatibility_fallback（SignalVersioning/EvidencePack）
 """
@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import inspect
 import warnings
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+
 from src.common.logger import get_logger
+from src.models.ohlcv_bar import OHLCVBar
 
 if TYPE_CHECKING:
     from src.backtest.schemas import MarketContextSnapshot
@@ -28,9 +32,14 @@ class SnapshotLoader:
     加载历史快照和市场数据，用于离线回测。
     禁止在 use_snapshot_only=True 时调用实时 provider。
 
+    ohlcv_1d 和 indicators 数据从 DB 直读（不再依赖 JSON 快照文件）；
+    indicators 首次访问时自动计算并缓存到 indicators 表。
+
     Attributes:
-        snapshot_service: 快照服务（必须实现 load 方法）
-        strategy_repo: 策略版本 Repository（必须实现 get_released_by_trader_and_date）
+        snapshot_service: 快照服务（必须实现 load 方法，用于 market_universe）
+        strategy_repo: 策略版本 Repository
+        indicator_service: 指标服务（可选，None 时跳过指标加载）
+        session_factory: DB session factory（用于 ohlcv_bars 查询）
         use_evidence_pack_fallback: 当快照缺失时是否用 EvidencePack 补洞
         use_snapshot_only: 是否禁止实时取数（默认 True）
     """
@@ -39,16 +48,20 @@ class SnapshotLoader:
         self,
         snapshot_service: Any = None,
         strategy_repo: Any = None,
+        indicator_service: Any = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
         use_evidence_pack_fallback: bool = False,
         use_snapshot_only: bool = True,
     ) -> None:
         self.snapshot_service = snapshot_service
         self.strategy_repo = strategy_repo
+        self.indicator_service = indicator_service
+        self.session_factory = session_factory
         self.use_evidence_pack_fallback = use_evidence_pack_fallback
         self.use_snapshot_only = use_snapshot_only
 
     async def _load_snapshot(self, trade_date: date, slot: str) -> Any:
-        """兼容同步/异步 snapshot_service.load 调用。"""
+        """兼容同步/异步 snapshot_service.load 调用（仅用于 market_universe）。"""
         if self.snapshot_service is None:
             return None
         loader = self.snapshot_service.load
@@ -56,16 +69,82 @@ class SnapshotLoader:
             return await loader(trade_date.isoformat(), slot=slot)
         return loader(trade_date.isoformat(), slot=slot)
 
+    async def _load_ohlcv_from_db(
+        self, trade_date: date, symbols: list[str]
+    ) -> dict[str, list[dict]]:
+        """从 ohlcv_bars 表加载 OHLCV 数据（T-60 日范围内），按 symbol 归类。"""
+        if self.session_factory is None:
+            return {}
+
+        lookback = trade_date - timedelta(days=90)
+        bars_by_symbol: dict[str, list[dict]] = {}
+        symbol_set = set(symbols) if symbols else None
+
+        async with self.session_factory() as session:
+            stmt = (
+                select(OHLCVBar)
+                .where(OHLCVBar.trade_date >= lookback)
+                .where(OHLCVBar.trade_date <= trade_date)
+                .order_by(OHLCVBar.trade_date.asc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+
+        for r in rows:
+            if symbol_set is not None and r.symbol not in symbol_set:
+                continue
+            if r.symbol not in bars_by_symbol:
+                bars_by_symbol[r.symbol] = []
+            bars_by_symbol[r.symbol].append({
+                "symbol": r.symbol,
+                "date": r.trade_date.isoformat(),
+                "open": r.open,
+                "high": r.high,
+                "low": r.low,
+                "close": r.close,
+                "volume": r.volume,
+            })
+
+        logger.debug(
+            "ohlcv_bars DB 加载: date=%s, symbols=%d",
+            trade_date,
+            len(bars_by_symbol),
+        )
+        return bars_by_symbol
+
+    async def _load_indicators_from_db(
+        self, trade_date: date, symbols: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """从 indicators 表加载指标数据（首次访问时自动计算并缓存）。"""
+        if self.indicator_service is None:
+            return {}
+
+        try:
+            result = await self.indicator_service.get_for_date(symbols, trade_date)
+            logger.debug(
+                "indicators 加载: date=%s, symbols=%d",
+                trade_date,
+                len(result),
+            )
+            return result
+        except Exception as e:
+            logger.warning(
+                "indicators 加载失败: date=%s, error=%s",
+                trade_date,
+                e,
+            )
+            return {}
+
     async def load_market_context(
         self, trade_date: date, symbols: list[str]
     ) -> MarketContextSnapshot:
         """加载市场上下文快照。
 
-        加载优先级：
-        1. market_universe 快照
-        2. ohlcv_1d bars（从标准化历史数据）
-        3. topic 快照
-        4. 兜底：EvidencePack / SignalVersioning（标记 compatibility_fallback）
+        加载顺序：
+        1. market_universe 快照（从 JSON 文件）
+        2. ohlcv_1d bars（从 DB ohlcv_bars 表）
+        3. indicators（从 DB indicators 表，首次计算并缓存）
+        4. 兜底：EvidencePack / SignalVersioning
 
         Args:
             trade_date: 交易日期
@@ -75,110 +154,30 @@ class SnapshotLoader:
             MarketContextSnapshot 字典
         """
         compatibility_fallback = False
-
-        # 默认值（snapshot_service 为 None 时使用）
-        bars_by_symbol: dict[str, list[dict]] = {}
-        indicators_by_symbol: dict[str, dict[str, Any]] = {}
         listing_dates: dict[str, str] = {}
 
-        # 尝试加载 market_universe 快照
+        # 1. 加载 market_universe 快照
         market_universe = None
         if self.snapshot_service is not None:
             try:
                 market_universe = await self._load_snapshot(trade_date, "market_universe")
-                if market_universe is not None:
-                    logger.debug(
-                        "快照加载成功: slot=market_universe, date=%s",
-                        trade_date,
-                    )
             except Exception as e:
-                logger.warning(
-                    "快照加载失败: slot=market_universe, date=%s, error=%s",
-                    trade_date,
-                    e,
-                )
-                market_universe = None
+                logger.warning("快照加载失败: slot=market_universe, date=%s, error=%s", trade_date, e)
 
-            # 尝试加载 ohlcv_1d bars
-            bars_by_symbol = {}
-            try:
-                bars_data = await self._load_snapshot(trade_date, "ohlcv_1d")
-                if bars_data and isinstance(bars_data, list):
-                    symbol_filter = set(symbols) if symbols else None
-                    # 按 symbol 归类
-                    for bar in bars_data:
-                        symbol = bar.get("symbol") or bar.get("code") or ""
-                        if symbol and (symbol_filter is None or symbol in symbol_filter):
-                            if symbol not in bars_by_symbol:
-                                bars_by_symbol[symbol] = []
-                            bars_by_symbol[symbol].append(bar)
-                    # 按日期升序排列，保证 _calc_t1_return 取 i+1 一定是 T+1 次日
-                    for symbol in bars_by_symbol:
-                        bars_by_symbol[symbol].sort(
-                            key=lambda b: str(b.get("date") or b.get("Date") or ""),
-                        )
-                    logger.debug(
-                        "快照加载成功: slot=ohlcv_1d, date=%s, symbols=%d",
-                        trade_date,
-                        len(bars_by_symbol),
-                    )
-            except Exception as e:
-                logger.warning(
-                    "快照加载失败: slot=ohlcv_1d, date=%s, error=%s",
-                    trade_date,
-                    e,
-                )
-                bars_by_symbol = {}
+        # 2. 从 DB 加载 ohlcv_1d
+        bars_by_symbol = await self._load_ohlcv_from_db(trade_date, symbols)
 
-            # 尝试加载 indicators
-            indicators_by_symbol = {}
-            try:
-                indicators_data = await self._load_snapshot(trade_date, "indicators")
-                if indicators_data and isinstance(indicators_data, dict):
-                    symbol_filter = set(symbols) if symbols else None
-                    # indicators_data 格式: {"000001.SZ": {"rsi": 65.0, "ma5": 10.2}, ...}
-                    for symbol, ind_fields in indicators_data.items():
-                        if isinstance(ind_fields, dict) and (
-                            symbol_filter is None or str(symbol) in symbol_filter
-                        ):
-                            indicators_by_symbol[str(symbol)] = ind_fields
-            except Exception as e:
-                logger.warning(
-                    "快照加载失败: slot=indicators, date=%s, error=%s",
-                    trade_date,
-                    e,
-                )
-                indicators_by_symbol = {}
+        # 3. 从 DB 加载 indicators（首次计算并缓存）
+        indicators_by_symbol = await self._load_indicators_from_db(trade_date, symbols)
 
-            # 尝试加载 listing_dates（用于新股判断）
-            listing_dates = {}
-            try:
-                listing_data = await self._load_snapshot(trade_date, "listing_dates")
-                if listing_data and isinstance(listing_data, dict):
-                    symbol_filter = set(symbols) if symbols else None
-                    for symbol, listing_date in listing_data.items():
-                        if symbol_filter is None or str(symbol) in symbol_filter:
-                            listing_dates[str(symbol)] = str(listing_date)
-            except Exception as e:
-                logger.warning(
-                    "快照加载失败: slot=listing_dates, date=%s, error=%s",
-                    trade_date,
-                    e,
-                )
-                listing_dates = {}
-
-        # 如果快照缺失且启用兜底，标记 compatibility_fallback
+        # 4. 兜底：EvidencePack
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
             logger.info(
-                "compatibility_fallback 触发: trader=%s, date=%s, market_universe 快照缺失",
-                None,
+                "compatibility_fallback 触发: date=%s, market_universe 快照缺失",
                 trade_date,
             )
-            # 兜底：从 EvidencePack 补洞（未来 NTL-S6-006 完整实现）
-            market_universe = None
 
-        # 构建返回结构（符合 MarketContextSnapshot 类型约束）
         result: MarketContextSnapshot = {
             "trade_date": trade_date.isoformat(),
             "bars_by_symbol": bars_by_symbol,

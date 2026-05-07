@@ -7,7 +7,7 @@ from src.models.hot_topics_snapshot import HotTopicsSnapshot
 from src.models.blog_article import BlogArticle
 from src.models.crawl_state import CrawlState
 from src.models.data_audit_event import DataAuditEvent
-from src.models.market_data import MarketData
+
 from src.models.strong_symbols_snapshot import StrongSymbolsSnapshot
 from src.models.topic_constituents_snapshot import TopicConstituentsSnapshot
 from src.models.raw_article import RawArticle
@@ -25,7 +25,7 @@ __all__ = [
     "CrawlState",
     "DataAuditEvent",
     "HotTopicsSnapshot",
-    "MarketData",
+
     "RankingEntryRecord",
     "RawArticle",
     "Signal",

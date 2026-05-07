@@ -60,10 +60,17 @@ def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
     strategy_repo_adapter = StrategyRepoAdapter()
 
     from src.backtest.snapshot_loader import SnapshotLoader
+    from src.indicators.indicator_service import IndicatorService
+    from config.database import get_session_factory
+
+    session_factory = get_session_factory()
+    indicator_service = IndicatorService(session_factory)
 
     loader = SnapshotLoader(
         snapshot_service=snapshot_service,
         strategy_repo=strategy_repo_adapter,
+        indicator_service=indicator_service,
+        session_factory=session_factory,
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)
 

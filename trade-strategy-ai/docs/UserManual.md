@@ -252,7 +252,7 @@ python -m cli.main snapshot build --date 2026-04-29 --type hot_topics --force
 
 ### 1.5 OHLCV 行情入库（ohlcv crawl）
 
-抓取日线 OHLCV 并写入数据库表（`market_data`）：
+抓取日线 OHLCV 并写入数据库表（`ohlcv_bars`）：
 
 ```bash
 python -m cli.main ohlcv crawl --mode incremental
@@ -701,7 +701,7 @@ Kaipan 可选鉴权参数（如有）：
 ### 4.3 行情数据（OHLCV 日线）
 
 - 用途：盘后评估（计算 return/mfe/mae）、回测、市场状态识别等。
-- 获取方式：`python -m cli.main ohlcv crawl ...` 入库到 `market_data` 表。
+- 获取方式：`python -m cli.main ohlcv crawl ...` 入库到 `ohlcv_bars` 表。
 - 数据源：默认使用东方财富（`stock_zh_a_hist`），失败后自动 fallback 到新浪源（`stock_zh_a_daily`），仅 A 股生效。
 - 限速配置：`config/app.yaml` 中的 `akshare.min_request_interval_seconds` 等参数控制请求节奏，避免触发数据源反爬。
 

@@ -2078,14 +2078,16 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ---
 
-### Stage 11 完成标准（代码实现已完成，真实闭环仍待收口）
+### Stage 11 完成标准（2026-05-07 更新：真实回测与分层提取已落地）
 
 - [x] 文章分类器正常工作（rule/record/concept/mixed/noise 五分类）
-- [x] 混合型文章能分层提取：规则部分和交易记录部分分开存储
+- [x] 混合型文章能分层提取：规则部分和交易记录部分分开存储（2026-05-07 已实现五路独立分流）
 - [x] 规则可进入 rule_pool 并经过审核
 - [x] 规则可完成 DSL 两层映射
-- [x] 规则可触发回测并更新 validated_confidence
+- [x] 规则可触发回测并更新 validated_confidence（2026-05-07 已替换模拟回测为真实回测，接入 compute_confidence_adjustment）
 - [x] 高置信度规则（>=0.8）可进入盘前预测
+
+> 2026-05-07 修复：`_backtest_single_rule()` 已移除硬编码 60% 命中率模拟，改为解析 mapped_condition + 加载真实 OHLCV/指标 + 计算 T+1 收益 + 多指标置信度更新。分层提取已按 rule/record/mixed/concept/noise 五路独立分流。article_id 类型已统一为 UUID + ForeignKey。
 
 ---
 
@@ -2131,10 +2133,10 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 
 ### 20.3 下一步建议
 
-Stage 11 的任务实现已基本完成，但真实闭环仍有待收口，建议下一步：
+Stage 11 的任务实现已基本完成，真实回测与分层提取已落地（2026-05-07），建议下一步：
 - 文档与样例验证：`NTL-S0-011` 与 `NTL-S0-014`
-- 按 review 文档中的 `待修复` 顺序继续收口真实规则回测、分层提取和审核流程
-- 运行数据库迁移创建 `rule_pool`、`trade_sample`、`article_classification` 表
+- 按 review 文档中的 `待修复` 顺序继续收口：待修复项 #4（自动审核流程补齐）、#5（交易记录进入风控/决策主闭环）、#6（A 股实际约束与验证增强）
+- 运行数据库迁移：`2026_05_07_0001_fix_article_id_type_to_uuid.py`（article_id 类型修正）
 
 ### 20.2 当前不要做的事
 

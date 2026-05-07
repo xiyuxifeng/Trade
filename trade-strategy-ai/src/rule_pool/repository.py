@@ -171,14 +171,13 @@ class RulePoolRepository:
         orm_obj.backtest_misses = backtest_result.miss_trades
         orm_obj.backtest_samples = backtest_result.sample_count
 
-        # 回测后更新 validated_confidence
-        # 使用 hit_rate 作为主要依据，结合样本数进行调整
-        hit_rate = backtest_result.hit_rate
-        sample_count = backtest_result.sample_count
-        # 样本数越少，置信度调整幅度越大（不确定性高）
-        sample_weight = min(sample_count / 100.0, 1.0)
-        validated_confidence = initial_confidence * sample_weight + hit_rate * (1 - sample_weight)
-        orm_obj.validated_confidence = validated_confidence
+        # 回测后更新 validated_confidence：调用多指标综合置信度调整
+        from src.rule_backtest.confidence import compute_confidence_adjustment
+
+        orm_obj.validated_confidence = compute_confidence_adjustment(
+            initial_confidence=initial_confidence,
+            backtest_result=backtest_result,
+        )
 
         await self.session.flush()
         return True

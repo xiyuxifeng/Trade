@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from src.models.blog_article import BlogArticle
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 from src.pipeline.validation import DataValidator, ValidationSeverity
 
@@ -51,18 +51,15 @@ def test_trade_amount_mismatch_is_error() -> None:
 
 def test_market_gap_is_flagged() -> None:
     validator = DataValidator()
-    record = MarketData(
-        source="akshare",
+    record = OHLCVBar(
         symbol="000001.SZ",
-        market="CN",
-        timeframe="1d",
-        traded_at=datetime.now(UTC) - timedelta(days=1),
-        open=Decimal("12"),
-        high=Decimal("12.5"),
-        low=Decimal("11.8"),
-        close=Decimal("12.4"),
-        volume=Decimal("1000000"),
-        turnover=Decimal("12400000"),
+        trade_date=(datetime.now(UTC) - timedelta(days=1)).date(),
+        open=12.0,
+        high=12.5,
+        low=11.8,
+        close=12.4,
+        volume=1000000.0,
+        turnover=12400000.0,
     )
 
     result = validator.validate_market_record(record, previous_close=Decimal("10"))

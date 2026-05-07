@@ -8,7 +8,7 @@ from typing import Any
 
 from src.common.utils import ensure_dir
 from src.models.blog_article import BlogArticle
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 from src.pipeline.validation import DataValidator, ValidationIssue
 
@@ -79,19 +79,17 @@ def _to_trade_log(record: dict[str, Any]) -> TradeLog:
     )
 
 
-def _to_market_data(record: dict[str, Any]) -> MarketData:
-    return MarketData(
+def _to_ohlcv_bar(record: dict[str, Any]) -> OHLCVBar:
+    trade_date_val = _parse_dt(record.get("trade_date")) or datetime.now(UTC)
+    return OHLCVBar(
         symbol=str(record.get("symbol") or ""),
-        market=record.get("market", ""),
-        timeframe=record.get("timeframe", ""),
-        traded_at=_parse_dt(record.get("traded_at")) or datetime.now(UTC),
-        open=record.get("open", 0),
-        high=record.get("high", 0),
-        low=record.get("low", 0),
-        close=record.get("close", 0),
-        volume=record.get("volume", 0),
-        turnover=record.get("turnover", 0),
-        source=record.get("source", ""),
+        trade_date=trade_date_val.date() if hasattr(trade_date_val, "date") else trade_date_val,
+        open=float(record.get("open", 0)),
+        high=float(record.get("high", 0)),
+        low=float(record.get("low", 0)),
+        close=float(record.get("close", 0)),
+        volume=float(record.get("volume", 0)),
+        turnover=float(record.get("turnover", 0)) if record.get("turnover") else None,
     )
 
 
@@ -118,7 +116,7 @@ def run_anomaly_detection_task(
 
     articles: list[BlogArticle] = []
     trades: list[TradeLog] = []
-    market_records: list[MarketData] = []
+    market_records: list[OHLCVBar] = []
 
     for input_path in input_paths:
         records = _iter_jsonl(input_path)
@@ -127,7 +125,7 @@ def run_anomaly_detection_task(
             if record_type == "trade_log":
                 trades.append(_to_trade_log(record))
             elif record_type == "market_data":
-                market_records.append(_to_market_data(record))
+                market_records.append(_to_ohlcv_bar(record))
             else:
                 # Default to article
                 articles.append(_to_blog_article(record))

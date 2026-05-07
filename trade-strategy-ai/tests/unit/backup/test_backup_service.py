@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.backup.service import backup_project_state, restore_project_state
-from src.models import ArticleMetadata, BlogArticle, MarketData, TradeLog
+from src.models import ArticleMetadata, BlogArticle, OHLCVBar, TradeLog
 
 
 async def _create_sqlite_schema(engine) -> None:
@@ -156,20 +156,15 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
             )
         )
         session.add(
-            MarketData(
-                source="akshare",
+            OHLCVBar(
                 symbol="000001.SZ",
-                market="CN",
-                timeframe="1d",
-                traded_at=datetime.now(UTC),
-                open=Decimal("10"),
-                high=Decimal("10.5"),
-                low=Decimal("9.8"),
-                close=Decimal("10.2"),
-                volume=Decimal("1000"),
-                turnover=Decimal("10200"),
-                indicators={"ma5": 10.1},
-                raw_payload={"source": "akshare"},
+                trade_date=datetime.now(UTC).date(),
+                open=10.0,
+                high=10.5,
+                low=9.8,
+                close=10.2,
+                volume=1000.0,
+                turnover=10200.0,
             )
         )
         session.add(
@@ -210,7 +205,7 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert audit_record.call_args.kwargs["event_type"] == "backup_project_state"
 
     async with engine.begin() as conn:
-        for table in reversed([BlogArticle.__table__, ArticleMetadata.__table__, MarketData.__table__, TradeLog.__table__]):
+        for table in reversed([BlogArticle.__table__, ArticleMetadata.__table__, OHLCVBar.__table__, TradeLog.__table__]):
             await conn.execute(delete(table))
 
     restored = await restore_project_state(
@@ -229,7 +224,7 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     async with engine.connect() as conn:
         article_count = await conn.scalar(select(func.count()).select_from(BlogArticle))
         metadata_count = await conn.scalar(select(func.count()).select_from(ArticleMetadata))
-        market_count = await conn.scalar(select(func.count()).select_from(MarketData))
+        market_count = await conn.scalar(select(func.count()).select_from(OHLCVBar))
         trade_count = await conn.scalar(select(func.count()).select_from(TradeLog))
 
     assert article_count == 1

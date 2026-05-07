@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.rule_backtest.confidence import compute_confidence_adjustment
 from src.rule_pool.repository import RulePoolRepository
 from src.rule_pool.schemas import RuleBacktestResult
 
@@ -57,6 +56,8 @@ class RulePoolAttributionService:
             max_drawdown=0.0,
             sample_count=1,
         )
+        from src.rule_backtest.confidence import compute_confidence_adjustment
+
         rule.validated_confidence = compute_confidence_adjustment(
             initial_confidence=float(rule.initial_confidence or 0.0),
             backtest_result=synthetic_result,

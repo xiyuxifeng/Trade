@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.blog_article import BlogArticle
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 from src.alerting.models import AlertLevel, AlertRule
 from src.alerting.manager import AlertManager as AlertingManager
@@ -30,13 +30,13 @@ class StatsCollector:
         stats = DashboardStats(
             articles=await self._collect_entity_stats(BlogArticle, today_start),
             trades=await self._collect_entity_stats(TradeLog, today_start),
-            market_data=await self._collect_entity_stats(MarketData, today_start),
+            market_data=await self._collect_entity_stats(OHLCVBar, today_start),
             generated_at=datetime.now(UTC),
         )
         return stats
 
     async def _collect_entity_stats(
-        self, model: type[BlogArticle | TradeLog | MarketData], today_start: datetime
+        self, model: type[BlogArticle | TradeLog | OHLCVBar], today_start: datetime
     ) -> EntityStats:
         # 总数
         total_result = await self.session.execute(select(func.count(model.id)))
@@ -94,14 +94,14 @@ class DataSourceFreshnessChecker:
                 is_stale=freshness > self.threshold if freshness is not None else False,
             ))
 
-        # 检查 MarketData 按 source
-        market_sources = await self._get_sources(MarketData, "traded_at")
-        for source, last_updated in market_sources:
-            freshness = self._calc_freshness(last_updated)
+        # 检查 OHLCVBar 新鲜度（无 source 列，统一记为 ohlcv_bars）
+        ohlcv_last = await self._get_max_date(OHLCVBar, OHLCVBar.trade_date)
+        if ohlcv_last is not None:
+            freshness = self._calc_freshness(ohlcv_last)
             results.append(DataSourceFreshness(
-                source=source,
+                source="ohlcv_bars",
                 entity_type="market",
-                last_updated=last_updated,
+                last_updated=ohlcv_last,
                 freshness_hours=freshness,
                 is_stale=freshness > self.threshold if freshness is not None else False,
             ))
@@ -119,6 +119,13 @@ class DataSourceFreshnessChecker:
         )
         result = await self.session.execute(query)
         return result.all()
+
+    async def _get_max_date(self, model, time_column) -> Any:
+        """获取某模型指定列的最新值（用于无 source 列的表）。"""
+        from sqlalchemy import func, select
+        query = select(func.max(time_column))
+        result = await self.session.execute(query)
+        return result.scalar()
 
     def _calc_freshness(self, last_updated: datetime | None) -> float | None:
         """计算新鲜度（小时）。"""

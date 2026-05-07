@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Index, Numeric, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -140,8 +140,9 @@ class TradeSample(Base, TimestampMixin):
         unique=True,
         index=True,
     )
-    article_id: Mapped[str | None] = mapped_column(
-        String(128),
+    article_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("blog_articles.id", ondelete="SET NULL"),
         nullable=True,
     )
     rule_id: Mapped[str | None] = mapped_column(
@@ -214,8 +215,9 @@ class ArticleClassification(Base, TimestampMixin):
         primary_key=True,
         default=lambda: UUID('00000000-0000-0000-0000-000000000000'),
     )
-    article_id: Mapped[str] = mapped_column(
-        String(128),
+    article_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("blog_articles.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,

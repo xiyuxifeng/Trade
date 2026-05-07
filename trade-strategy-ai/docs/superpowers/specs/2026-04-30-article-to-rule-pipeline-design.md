@@ -613,8 +613,8 @@ def compute_confidence_adjustment(
     # 2. 盈亏比（盈利均值 / 亏损均值绝对值）
     avg_win = backtest_result.avg_win_return
     avg_loss = backtest_result.avg_loss_return
-    if avg_win is not None and avg_loss is not None and avg_loss > 0:
-        profit_loss_ratio = avg_win / avg_loss
+    if avg_win is not None and avg_loss is not None and avg_loss != 0:
+        profit_loss_ratio = abs(avg_win / avg_loss)
     else:
         # 无细分数据时，用 avg_return 做保守近似
         avg_return = backtest_result.avg_return

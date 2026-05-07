@@ -12,7 +12,8 @@
 | `article_metadata` | 文章元数据表（LLM 提取） | 文章处理 |
 | `raw_articles` | 原始文章表（爬取阶段） | 文章爬取 |
 | `crawl_state` | 增量爬取状态表 | 文章爬取 |
-| `market_data` | 市场行情数据表 | 行情数据 |
+| `ohlcv_bars` | 日线 OHLCV 行情数据 | 行情数据 |
+| `indicators` | 技术指标缓存表 | 指标计算 |
 | `trade_logs` | 交易日志表 | 交易记录 |
 | `signals` | 交易信号表 | 信号生成 |
 | `data_audit_events` | 数据审计事件表 | 数据治理 |
@@ -143,38 +144,64 @@
 
 ---
 
-## 5. market_data（市场行情数据表）
+## 5. ohlcv_bars（日线 OHLCV 行情数据表）
 
-存储股票/ETF 等金融资产的 OHLCV 行情数据。
+存储股票日线 OHLCV 数据，用于回测和规则验真。
+数据通过 `cli/ohlcv.py crawl` 从 akshare 抓取。
 
 | 字段 | 类型 | 可空 | 说明 |
 |------|------|------|------|
 | `id` | UUID | 否 | 主键 |
-| `source` | VARCHAR(50) | 否 | 数据来源（如 "tushare"、"akshare"） |
 | `symbol` | VARCHAR(32) | 否 | 标的代码（如 "000001.SZ"） |
-| `market` | VARCHAR(32) | 否 | 市场（默认 "CN"） |
-| `timeframe` | VARCHAR(16) | 否 | 时间周期（默认 "1d"） |
-| `traded_at` | DATETIME | 否 | 交易时间（含时区） |
-| `open` | DECIMAL(20,6) | 否 | 开盘价 |
-| `high` | DECIMAL(20,6) | 否 | 最高价 |
-| `low` | DECIMAL(20,6) | 否 | 最低价 |
-| `close` | DECIMAL(20,6) | 否 | 收盘价 |
-| `volume` | DECIMAL(20,6) | 否 | 成交量 |
-| `turnover` | DECIMAL(20,6) | 否 | 成交额，默认 0 |
-| `adj_factor` | DECIMAL(20,6) | 是 | 复权因子 |
-| `is_adjusted` | BOOLEAN | 否 | 是否复权，默认 false |
-| `indicators` | JSONB | 否 | 技术指标数据 |
-| `raw_payload` | JSONB | 否 | 原始数据 |
+| `trade_date` | DATE | 否 | 交易日期 |
+| `open` | FLOAT | 否 | 开盘价 |
+| `high` | FLOAT | 否 | 最高价 |
+| `low` | FLOAT | 否 | 最低价 |
+| `close` | FLOAT | 否 | 收盘价 |
+| `volume` | FLOAT | 否 | 成交量 |
+| `turnover` | FLOAT | 是 | 成交额 |
 | `created_at` | DATETIME | 否 | 创建时间（含时区） |
 | `updated_at` | DATETIME | 否 | 更新时间（含时区） |
 
 **索引：**
-- `ix_market_data_symbol_timeframe_traded_at` - (symbol, timeframe, traded_at)
-- `ix_market_data_market_traded_at` - (market, traded_at)
-- `ix_market_data_source_traded_at` - (source, traded_at)
+- `ix_ohlcv_symbol` - symbol
+- `ix_ohlcv_trade_date` - trade_date
 
 **唯一约束：**
-- `uq_market_data_symbol_market_timeframe_traded_at_source` - (symbol, market, timeframe, traded_at, source)
+- `uq_ohlcv_symbol_date` - (symbol, trade_date)
+
+---
+
+## 5.1. indicators（技术指标缓存表）
+
+存储从 ohlcv_bars 计算的技术指标。首次回测时按需计算并写入，后续直接读取。
+
+| 字段 | 类型 | 可空 | 说明 |
+|------|------|------|------|
+| `id` | UUID | 否 | 主键 |
+| `symbol` | VARCHAR(32) | 否 | 标的代码 |
+| `trade_date` | DATE | 否 | 交易日期 |
+| `rsi` | FLOAT | 是 | RSI(14) |
+| `macd_histogram` | FLOAT | 是 | MACD 柱状图 |
+| `bb_width` | FLOAT | 是 | 布林带宽度 |
+| `cci` | FLOAT | 是 | CCI 指标 |
+| `ma50` | FLOAT | 是 | 50日均线 |
+| `ma200` | FLOAT | 是 | 200日均线 |
+| `stoch_k` | FLOAT | 是 | 随机指标 %K |
+| `volume_ratio` | FLOAT | 是 | 量比 |
+| `price_vs_ma` | FLOAT | 是 | 价格相对均线比率 |
+| `atr_ratio` | FLOAT | 是 | ATR 比率 |
+| `close_position` | FLOAT | 是 | 收盘在振幅中的位置 |
+| `computed_at` | DATETIME | 否 | 计算时间 |
+
+**索引：**
+- `ix_indicator_symbol` - symbol
+- `ix_indicator_trade_date` - trade_date
+
+**唯一约束：**
+- `uq_indicator_symbol_date` - (symbol, trade_date)
+
+> **变更记录：** `market_data` 表已于 2026-05-07 移除，数据迁移至 `ohlcv_bars` + `indicators` 两表分离架构。
 
 ---
 
@@ -352,7 +379,8 @@ blog_articles ──1:1── article_metadata
     └─────────────── trade_logs (article_id → blog_articles.id, ON DELETE SET NULL)
 
 stock_info ──────── 独立表（用于名称→代码映射）
-market_data ─────── 独立表（行情数据）
+ohlcv_bars ──────── 独立表（日线行情，回测引擎直读）
+indicators ──────── 关联 ohlcv_bars（首次计算缓存，后续直接读取）
 trade_logs ──────── 独立表（交易记录）
 signals ─────────── 独立表（信号数据）
 data_audit_events ─ 独立表（审计日志）

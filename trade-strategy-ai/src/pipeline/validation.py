@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Any, Iterable, Sequence
 
 from src.models.blog_article import BlogArticle
-from src.models.market_data import MarketData
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 
 
@@ -141,12 +141,12 @@ class DataValidator:
 
     def validate_market_record(
         self,
-        record: MarketData,
+        record: OHLCVBar,
         previous_close: Decimal | None = None,
     ) -> ValidationResult:
         result = ValidationResult(record_type="market_data")
 
-        if record.traded_at > datetime.now(UTC) + timedelta(minutes=5):
+        if record.trade_date > datetime.now(UTC).date() + timedelta(days=1):
             result.add_issue(
                 "market.traded_at.future",
                 ValidationSeverity.ERROR,
@@ -218,7 +218,7 @@ class DataValidator:
 
         return issues
 
-    def detect_volume_anomalies(self, records: Iterable[MarketData]) -> list[ValidationIssue]:
+    def detect_volume_anomalies(self, records: Iterable[OHLCVBar]) -> list[ValidationIssue]:
         record_list = list(records)
         volumes = [Decimal(record.volume) for record in record_list]
         if len(volumes) < 3:
@@ -243,10 +243,10 @@ class DataValidator:
         return issues
 
     def detect_price_outliers(
-        self, records: Sequence[MarketData], iqr_multiplier: float = 1.5
+        self, records: Sequence[OHLCVBar], iqr_multiplier: float = 1.5
     ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-        by_symbol: dict[str, list[MarketData]] = {}
+        by_symbol: dict[str, list[OHLCVBar]] = {}
         for r in records:
             by_symbol.setdefault(r.symbol, []).append(r)
 
@@ -285,7 +285,7 @@ class DataValidator:
         return issues
 
     def detect_missing_fields(
-        self, records: Sequence[BlogArticle | TradeLog | MarketData]
+        self, records: Sequence[BlogArticle | TradeLog | OHLCVBar]
     ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
 
@@ -318,8 +318,8 @@ class DataValidator:
                             )
                         )
 
-            elif isinstance(record, MarketData):
-                for field in ("symbol", "traded_at", "open", "high", "low", "close", "volume"):
+            elif isinstance(record, OHLCVBar):
+                for field in ("symbol", "trade_date", "open", "high", "low", "close", "volume"):
                     val = getattr(record, field, None)
                     if val is None or (isinstance(val, (int, float, Decimal)) and val == 0):
                         issues.append(
@@ -335,31 +335,31 @@ class DataValidator:
         return issues
 
     def detect_sequence_gaps(
-        self, records: Sequence[MarketData], expected_interval_minutes: int = 1440
+        self, records: Sequence[OHLCVBar], expected_interval_minutes: int = 1440
     ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-        by_symbol: dict[str, list[MarketData]] = {}
+        by_symbol: dict[str, list[OHLCVBar]] = {}
         for r in records:
             by_symbol.setdefault(r.symbol, []).append(r)
 
         for symbol, symbol_records in by_symbol.items():
-            sorted_records = sorted(symbol_records, key=lambda r: r.traded_at)
+            sorted_records = sorted(symbol_records, key=lambda r: r.trade_date)
             for i in range(len(sorted_records) - 1):
                 curr = sorted_records[i]
                 next_r = sorted_records[i + 1]
-                gap = next_r.traded_at - curr.traded_at
+                gap = next_r.trade_date - curr.trade_date
                 expected = timedelta(minutes=expected_interval_minutes)
                 if gap > expected * 1.5:
                     issues.append(
                         ValidationIssue(
                             code="market.series.gap",
                             severity=ValidationSeverity.WARNING,
-                            message=f"Gap of {gap.days} days detected between {curr.traded_at.date()} and {next_r.traded_at.date()}.",
+                            message=f"Gap of {gap.days} days detected between {curr.trade_date} and {next_r.trade_date}.",
                             field_name="traded_at",
                             context={
                                 "symbol": symbol,
-                                "before": str(curr.traded_at),
-                                "after": str(next_r.traded_at),
+                                "before": str(curr.trade_date),
+                                "after": str(next_r.trade_date),
                                 "gap_days": gap.days,
                             },
                         )
@@ -406,19 +406,19 @@ class DataValidator:
 
         return issues
 
-    def detect_market_duplicates(self, records: Sequence[MarketData]) -> list[ValidationIssue]:
+    def detect_market_duplicates(self, records: Sequence[OHLCVBar]) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
         seen_keys: set[tuple[str, str, str, datetime]] = set()
 
         for record in records:
-            key = (record.symbol, record.market, record.timeframe, record.traded_at)
+            key = (record.symbol, record.trade_date)
             if key in seen_keys:
                 issues.append(
                     ValidationIssue(
                         code="market.duplicate.key",
                         severity=ValidationSeverity.ERROR,
                         message="Duplicate market data record detected.",
-                        context={"symbol": record.symbol, "traded_at": str(record.traded_at)},
+                        context={"symbol": record.symbol, "traded_at": str(record.trade_date)},
                     )
                 )
             else:

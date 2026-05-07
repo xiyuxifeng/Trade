@@ -59,6 +59,25 @@ class TestScoreBacktestTrade:
         )
         assert result["price_cage_violation"] is True
 
+    def test_score_backtest_trade_etf_keeps_t0_rules(self):
+        """ETF 默认按 T+0 规则处理。"""
+        from src.backtest.scoring import score_backtest_trade
+
+        result = score_backtest_trade(
+            bars=[
+                {"date": "2026-04-01", "open": 10.0, "high": 10.9, "low": 9.8, "close": 10.8},
+                {"date": "2026-04-02", "open": 10.8, "high": 11.1, "low": 10.5, "close": 11.0},
+            ],
+            entry_price=10.0,
+            entry_date="2026-04-01",
+            target_price=10.6,
+            stop_loss_price=9.5,
+            symbol="510300.SH",
+        )
+        assert result["exit_triggered"] == "target"
+        assert result["exit_date"] == "2026-04-01"
+        assert result["price_cage_violation"] is False
+
     def test_score_backtest_trade_stop_loss_triggered(self):
         """止损触发场景"""
         from src.backtest.scoring import score_backtest_trade
@@ -147,7 +166,7 @@ class TestSTRuleDateSwitching:
 
     def test_non_st_unchanged_after_rule_switch(self):
         """非 ST 股票规则不受影响"""
-        for board_type in ["main", "chinext", "star"]:
+        for board_type in ["main", "chinext", "star", "etf", "convertible_bond"]:
             constraint = TradeConstraint(
                 board_type=board_type,
                 trade_date=date(2026, 7, 6),
@@ -157,6 +176,12 @@ class TestSTRuleDateSwitching:
                 assert resolved.limit_up_pct == 0.10
             elif board_type == "chinext" or board_type == "star":
                 assert resolved.limit_up_pct == 0.20
+            elif board_type == "etf":
+                assert resolved.limit_up_pct == 0.10
+                assert resolved.t_plus_one is False
+            elif board_type == "convertible_bond":
+                assert resolved.limit_up_pct is None
+                assert resolved.t_plus_one is False
 
     def test_infer_board_type_st(self):
         """ST 股票识别"""
@@ -169,6 +194,8 @@ class TestSTRuleDateSwitching:
         assert _infer_board_type("688001.SH") == "star"
         assert _infer_board_type("300001.SZ") == "chinext"
         assert _infer_board_type("000001.SZ") == "main"
+        assert _infer_board_type("510300.SH") == "etf"
+        assert _infer_board_type("113601.SH") == "convertible_bond"
 
     def test_trade_constraint_market_field(self):
         """TradeConstraint 支持 market 字段（沪市/深市区分）"""
@@ -213,6 +240,24 @@ class TestSTRuleDateSwitching:
         assert resolved.is_new_stock is False
         assert resolved.limit_up_pct == 0.10
         assert resolved.limit_down_pct == 0.10
+
+    def test_etf_auto_resolve_t_plus_zero(self):
+        """ETF 默认 T+0 且使用 10% 涨跌幅。"""
+        constraint = TradeConstraint(board_type="auto")
+        resolved = _resolve_constraint(constraint, "510300.SH")
+        assert resolved.board_type == "etf"
+        assert resolved.t_plus_one is False
+        assert resolved.limit_up_pct == 0.10
+        assert resolved.limit_down_pct == 0.10
+
+    def test_convertible_bond_auto_resolve_no_limit(self):
+        """可转债默认 T+0 且不套用涨跌幅限制。"""
+        constraint = TradeConstraint(board_type="auto")
+        resolved = _resolve_constraint(constraint, "113601.SH")
+        assert resolved.board_type == "convertible_bond"
+        assert resolved.t_plus_one is False
+        assert resolved.limit_up_pct is None
+        assert resolved.limit_down_pct is None
 
     def test_explicit_new_stock_flag(self):
         """显式设置 is_new_stock=True 时无涨跌幅限制"""

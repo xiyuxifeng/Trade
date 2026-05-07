@@ -12,7 +12,10 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from src.common.logger import get_logger
 from src.market_universe.schemas import MarketUniverse
+
+logger = get_logger(__name__)
 
 
 def generate_canonical_topic_tags(
@@ -196,10 +199,13 @@ class SnapshotService:
         if not path.exists():
             return None
 
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return self._deserialize(data)
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return self._deserialize(data)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, KeyError, TypeError) as exc:
+            logger.warning("快照文件损坏或格式不合法，已跳过读取: path=%s error=%s", path, exc)
+            return None
 
     def _deserialize(self, data: dict) -> MarketUniverse:
         """将 JSON 数据反序列化为 MarketUniverse。"""

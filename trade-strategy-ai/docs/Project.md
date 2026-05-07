@@ -14,7 +14,7 @@
 
 - 本文档的定位是“项目结构说明”，不是任务清单。
 - 当前唯一主清单是 `docs/TaskList.md`。
-- `Project.md / Plan.md / 需求.md` 是当前有效文档入口；历史方案和旧任务文档已迁移到 `docs/bak` 与 `docs/Deprecated`。
+- `Project.md / Plan.md / 需求.md` 是当前有效文档入口；`UserManual.md` 保留在根目录作为运行手册；历史方案和旧任务文档已迁移到 `docs/bak` 与 `docs/Deprecated`。
 
 ---
 
@@ -37,6 +37,7 @@ trade-strategy-ai/
 │   ├── 需求.md
 │   ├── TaskList.md
 │   ├── Kaipan-Interface-Mapping.md
+│   ├── UserManual.md
 │   ├── bak/
 │   ├── Deprecated/
 │   └── superpowers/

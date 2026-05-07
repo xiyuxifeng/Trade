@@ -86,7 +86,7 @@ def test_compute_target_hit():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 10.0      # high=110 - entry=100
     assert mae == 1.0       # entry=100 - low=99
     assert return_pct == pytest.approx(0.09)  # (109/100-1) = 9%
@@ -109,7 +109,7 @@ def test_compute_stop_loss_hit():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 2.0        # high=102 - entry=100
     assert mae == 6.0        # entry=100 - low=94
     assert return_pct == pytest.approx(-0.05)  # (95/100-1) = -5%
@@ -132,7 +132,7 @@ def test_compute_no_exit_still_holding():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 5.0        # max(high) - entry = 105 - 100
     assert mae == 2.0        # entry - min(low) = 100 - 98
     assert return_pct == pytest.approx(0.04)  # (104/100-1) = 4%
@@ -154,7 +154,7 @@ def test_compute_entry_date_only():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 3.0        # high=103 - entry=100
     assert mae == 2.0        # entry=100 - low=98
     assert return_pct == pytest.approx(0.02)  # (102/100-1) = 2%
@@ -172,7 +172,7 @@ def test_compute_empty_bars():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 0.0
     assert mae == 0.0
     assert return_pct == pytest.approx(0.0)
@@ -194,7 +194,7 @@ def test_compute_entry_date_not_in_bars():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     # 从第一条 bar 开始
     assert mfe == 5.0
     assert mae == 2.0
@@ -212,7 +212,7 @@ def test_compute_zero_entry_price():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert mfe == 0.0
     assert mae == 0.0
     assert return_pct == pytest.approx(0.0)
@@ -268,7 +268,7 @@ def test_compute_skip_halted_bars():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert halted_dates == ["2026-04-02"]
     assert mfe == 10.0       # high=110 - entry=100（跳过停牌日）
     assert mae == 2.0        # entry=100 - low=98（跳过停牌日）
@@ -291,7 +291,7 @@ def test_compute_all_bars_halted():
         target_price=110.0,
         stop_loss_price=95.0,
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert halted_dates == ["2026-04-01", "2026-04-02"]
     assert mfe == 0.0
     assert mae == 0.0
@@ -332,9 +332,15 @@ def test_infer_board_type_st():
 
 
 def test_infer_board_type_etf():
-    """ETF 等非股票代码默认主板。"""
-    assert _infer_board_type("510300.SH") == "main"
-    assert _infer_board_type("ETF500") == "main"
+    """ETF 代码应识别为 etf。"""
+    assert _infer_board_type("510300.SH") == "etf"
+    assert _infer_board_type("ETF500") == "etf"
+
+
+def test_infer_board_type_convertible_bond():
+    """可转债代码应识别为 convertible_bond。"""
+    assert _infer_board_type("113601.SH") == "convertible_bond"
+    assert _infer_board_type("123456.SZ") == "convertible_bond"
 
 
 def test_get_limit_pct():
@@ -344,6 +350,8 @@ def test_get_limit_pct():
     assert _get_limit_pct("star") == (0.20, 0.20)
     assert _get_limit_pct("st") == (0.05, 0.05)
     assert _get_limit_pct("bse") == (0.30, 0.30)
+    assert _get_limit_pct("etf") == (0.10, 0.10)
+    assert _get_limit_pct("convertible_bond") == (None, None)
     assert _get_limit_pct("unknown") == (0.10, 0.10)  # 默认值
 
 
@@ -354,6 +362,8 @@ def test_get_price_cage_pct():
     assert _get_price_cage_pct("star") == (0.02, 0.02)
     assert _get_price_cage_pct("st") == (0.02, 0.02)
     assert _get_price_cage_pct("bse") == (0.05, 0.05)
+    assert _get_price_cage_pct("etf") == (0.10, 0.10)
+    assert _get_price_cage_pct("convertible_bond") == (0.30, 0.30)
     assert _get_price_cage_pct("unknown") == (0.02, 0.02)
 
 
@@ -365,6 +375,26 @@ def test_resolve_constraint_auto():
     assert resolved.limit_up_pct == 0.10
     assert resolved.limit_down_pct == 0.10
     assert resolved.board_type == "main"
+
+
+def test_resolve_constraint_etf_t0():
+    """ETF 默认按 T+0 且 10% 涨跌幅处理。"""
+    c = TradeConstraint(board_type="auto")
+    resolved = _resolve_constraint(c, "510300.SH")
+    assert resolved.board_type == "etf"
+    assert resolved.t_plus_one is False
+    assert resolved.limit_up_pct == 0.10
+    assert resolved.limit_down_pct == 0.10
+
+
+def test_resolve_constraint_convertible_bond_t0_no_limit():
+    """可转债默认按 T+0 且无涨跌幅限制处理。"""
+    c = TradeConstraint(board_type="auto")
+    resolved = _resolve_constraint(c, "113601.SH")
+    assert resolved.board_type == "convertible_bond"
+    assert resolved.t_plus_one is False
+    assert resolved.limit_up_pct is None
+    assert resolved.limit_down_pct is None
 
 
 def test_resolve_constraint_explicit():
@@ -391,7 +421,7 @@ def test_t_plus_one_constraint():
         symbol="600000.SH",
         constraint=TradeConstraint(t_plus_one=True),
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert exit_triggered is None  # 未触发出场（T+1 阻止了当日卖出，第二天也没触发）
     assert exit_date == "2026-04-02"  # 最后持仓日
 
@@ -405,9 +435,49 @@ def test_t_plus_one_constraint():
         symbol="600000.SH",
         constraint=TradeConstraint(t_plus_one=False),
     )
-    mfe2, mae2, return_pct2, exit_triggered2, exit_date2, _, _ = result2
+    mfe2, mae2, return_pct2, exit_triggered2, exit_date2, _, _, _ = result2
     assert exit_triggered2 == "target"  # 触发出场
     assert exit_date2 == "2026-04-01"
+
+
+def test_etf_t_plus_zero_allows_same_day_target():
+    """ETF 默认 T+0，同日可触发止盈。"""
+    bars = [
+        {"date": "2026-04-01", "open": 100.0, "high": 105.0, "low": 99.0, "close": 104.0, "volume": 50000},
+        {"date": "2026-04-02", "open": 104.0, "high": 106.0, "low": 103.0, "close": 105.0, "volume": 50000},
+    ]
+    result = compute_mfe_mae_return(
+        bars=bars,
+        entry_price=100.0,
+        entry_date="2026-04-01",
+        target_price=104.5,
+        stop_loss_price=95.0,
+        symbol="510300.SH",
+    )
+    _, _, _, exit_triggered, exit_date, _, _, _ = result
+    assert exit_triggered == "target"
+    assert exit_date == "2026-04-01"
+
+
+def test_convertible_bond_t_plus_zero_and_no_limit():
+    """可转债默认 T+0 且无涨跌幅限制。"""
+    bars = [
+        {"date": "2026-04-01", "open": 100.0, "high": 125.0, "low": 99.0, "close": 120.0, "volume": 50000},
+    ]
+    result = compute_mfe_mae_return(
+        bars=bars,
+        entry_price=100.0,
+        entry_date="2026-04-01",
+        target_price=120.0,
+        stop_loss_price=95.0,
+        symbol="113601.SH",
+    )
+    mfe, mae, return_pct, exit_triggered, exit_date, _, _, _ = result
+    assert mfe == 25.0
+    assert mae == 1.0
+    assert return_pct == pytest.approx(0.20)
+    assert exit_triggered == "target"
+    assert exit_date == "2026-04-01"
 
 
 def test_limit_up_constraint():
@@ -427,7 +497,7 @@ def test_limit_up_constraint():
         symbol="600000.SH",
         constraint=TradeConstraint(t_plus_one=False),
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert exit_triggered is None  # 未触发（被涨停限制）
     assert mfe == pytest.approx(10.0)  # MFE 受涨停限制：110 - 100 = 10
 
@@ -449,7 +519,7 @@ def test_limit_down_constraint():
         symbol="600000.SH",
         constraint=TradeConstraint(t_plus_one=False),
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert exit_triggered == "stop_loss"  # 触发（effective_low = 90 <= 92）
     assert mae == 10.0  # MAE 受跌停限制：100 - 90 = 10
 
@@ -469,6 +539,6 @@ def test_chinext_limit_up():
         symbol="300750.SZ",
         constraint=TradeConstraint(t_plus_one=False),
     )
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = result
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = result
     assert exit_triggered is None  # 未触发（被 20% 涨停限制）
     assert mfe == 20.0  # MFE 受涨停限制：120 - 100 = 20

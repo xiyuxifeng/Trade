@@ -121,7 +121,7 @@ trade-strategy-ai/
 ### `providers`
 - 抽象数据源能力，隔离 AKShare 与未来第三方接口。
 - 统一热点、主题成分、行情、指标的取数接口。
-- 私有 App 接口（如 `kaipan.md`）也应通过 provider 隔离，先落 raw/normalized/snapshot，再供上层消费。
+- 私有 App 接口（如 `docs/bak/kaipan.md`）也应通过 provider 隔离，先落 raw/normalized/snapshot，再供上层消费。
 
 ### `backtest`
 - 提供开发期离线日线回测能力。

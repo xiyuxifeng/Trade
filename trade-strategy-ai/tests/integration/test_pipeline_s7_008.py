@@ -224,6 +224,9 @@ class TestPreMarketService:
             )
         )
 
+        mock_strategy_library_service = MagicMock()
+        mock_strategy_library_service.get_current_released_version = AsyncMock(return_value=None)
+
         service = PreMarketService(
             data_agent=mock_data_agent,
             strategy_agent=MagicMock(),
@@ -232,7 +235,7 @@ class TestPreMarketService:
             trader_profiles={},
             config=config,
             snapshot_service=MagicMock(),
-            strategy_library_service=MagicMock(),
+            strategy_library_service=mock_strategy_library_service,
         )
 
         trader_cfg = config.traders[0]

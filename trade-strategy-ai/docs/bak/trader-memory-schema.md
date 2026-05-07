@@ -150,7 +150,7 @@
 
 **NTL-S7-000 变更：** 由 JSONL 文件迁移至 PostgreSQL 数据库。
 
-存储表：`trader_memory`（详见 `docs/db-struct.md`）
+存储表：`trader_memory`（详见 `docs/bak/db-struct.md`）
 
 ---
 

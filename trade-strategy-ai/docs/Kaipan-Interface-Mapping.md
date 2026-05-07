@@ -1,4 +1,4 @@
-# `kaipan.md` 接口 -> Proposed-Plan 任务号 -> 建议字段映射
+# `docs/bak/kaipan.md` 接口 -> Proposed-Plan 任务号 -> 建议字段映射
 
 > 本表只保留与当前主线直接相关或中高价值的接口。  
 > 优先服务三类能力：`hot_topics`、`topic_constituents`、`strong_symbols`，其次是盘后评估与解释层。
@@ -64,4 +64,3 @@
 - `strong_symbols`
 - `market_context`
 - `evidence_refs`
-

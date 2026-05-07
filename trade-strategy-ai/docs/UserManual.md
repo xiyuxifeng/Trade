@@ -4,6 +4,7 @@
 > 适用版本：仓库当前 `pyproject.toml` 中的 `trade-strategy-ai==0.1.0`（以代码为准）。
 > 
 > 本手册面向“第一次接触项目的人”，目标是：**按步骤照做即可跑通**抓取 → 处理 → 盘前日报 → 盘后考核 → 回测/优化 的主链路。
+> 本文档的 CLI 章节按当前 `cli/main.py` 已注册命令整理，包含配置、数据处理、盘前盘后、快照、回测、优化、规则池和调度等全部常用操作入口。
 
 ---
 
@@ -596,7 +597,7 @@ Kaipan 的抓取/转换调度器入口是：
 python -m src.providers.kaipan_scheduler <command> [options]
 ```
 
-命令包括：`fetch` / `normalize` / `status` / `run`，详见 `docs/kaipan_CLI.md`。
+命令包括：`fetch` / `normalize` / `status` / `run`，详见 `docs/bak/kaipan_CLI.md`。
 
 ### 2.10 数据监控 Dashboard（独立 CLI，非 `cli.main`）
 
@@ -904,7 +905,7 @@ CLI 大多数命令还会把 INFO 级别打印到控制台。
 
 ### 6.2.1 规则池相关数据（数据库表）
 
-`extract-articles` 命令执行后，结果写入以下数据库表（详见 `docs/db-struct.md`）：
+`extract-articles` 命令执行后，结果写入以下数据库表（详见 `docs/bak/db-struct.md`）：
 
 | 表 | 内容 |
 |---|---|
@@ -1255,4 +1256,3 @@ make smoke
 ```bash
 pytest -q
 ```
-

@@ -130,7 +130,7 @@ def _collect_article_rules(articles: list[ArticleEvidence]) -> list[dict]:
     """从文章列表中收集策略规则，填充 rules_snapshot。
 
     每条规则保留原始 rule_id、rule_text、programmatic_indicators，
-    并补充来源文章信息用于后续验真。
+    并补充来源文章信息和 rule_pool_id 用于后续验真与追溯。
 
     S10-001: 将 ArticleMetadata.strategy_rules 填充到 StrategyVersion.rules_snapshot
     """
@@ -146,6 +146,7 @@ def _collect_article_rules(articles: list[ArticleEvidence]) -> list[dict]:
                 "required_fields": rule.get("required_fields", []),
                 "source_article_id": str(article.article_id),
                 "source_symbols": article.trading_symbols or [],
+                **({"rule_pool_id": rule["rule_pool_id"]} if rule.get("rule_pool_id") else {}),
             })
     return rules
 

@@ -188,3 +188,16 @@ class TestSnapshotService:
         assert len(loaded.hot_topics.topics) == 1
         assert loaded.hot_topics.topics[0].topic_name == "芯片"
         assert loaded.hot_topics.topics[0].score == 90.0
+
+    def test_load_returns_none_for_corrupted_json(self, tmp_path):
+        """损坏的快照文件应被跳过，不应让读取流程直接抛异常。"""
+        from src.market_universe.snapshot_service import SnapshotService
+
+        service = SnapshotService(base_dir=str(tmp_path))
+        bad_path = tmp_path / "2026-04-23" / "17-30.json"
+        bad_path.parent.mkdir(parents=True, exist_ok=True)
+        bad_path.write_text("{not-valid-json", encoding="utf-8")
+
+        loaded = service.load(trade_date="2026-04-23", slot="17-30")
+
+        assert loaded is None

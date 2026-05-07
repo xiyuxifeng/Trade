@@ -186,7 +186,7 @@ async def test_persist_article_classification_creates_row() -> None:
 
     assert isinstance(persisted, ArticleClassification)
     assert session.added and isinstance(session.added[0], ArticleClassification)
-    assert persisted.article_id == str(article.id)
+    assert persisted.article_id == article.id
     assert persisted.article_type == "rule"
     assert persisted.confidence == 0.92
     assert persisted.reasons == ["rule article"]
@@ -220,6 +220,9 @@ async def test_finalize_extraction_artifacts_auto_creates_rules() -> None:
             created.append(item)
             return item
 
+        async def auto_review_rule(self, *, rule_id: str, initial_confidence: float, has_mapped_condition: bool) -> str:
+            return "PENDING"
+
     class _Session:
         async def flush(self) -> None:
             return None
@@ -241,6 +244,7 @@ async def test_finalize_extraction_artifacts_auto_creates_rules() -> None:
     assert meta.extraction_version == "v1"
     assert meta.standalone_rule_ids and len(meta.standalone_rule_ids) == 1
     assert meta.trade_sample_ids == []
+    assert meta.strategy_rules and meta.strategy_rules[0]["rule_pool_id"] == meta.standalone_rule_ids[0]
     assert created and created[0].rule_id.startswith(str(article.id))
 
 

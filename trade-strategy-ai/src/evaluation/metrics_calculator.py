@@ -37,6 +37,8 @@ class TradeConstraint:
             - "star": 科创板（20%）
             - "st": ST 股票（5%，2026-07-06 起沪市调整为 10%）
             - "bse": 北交所（30%，预留）
+            - "etf": 交易型开放式基金（10%，T+0）
+            - "convertible_bond": 可转债（无涨跌幅限制，T+0）
         market: 市场（"SH"=上海，"SZ"=深圳），用于区分沪市/深市 ST 规则
         trade_date: 交易日期，用于判断 ST 规则切换时间点（2026-07-06 沪市 ST 调整为 10%）
         is_new_stock: 是否为新股（上市前 5 日无涨跌幅限制）
@@ -63,7 +65,7 @@ def _infer_board_type(symbol: str) -> str:
     - 300/301 开头：创业板（20%）
     - 8/4 开头或含 "ST"：北交所/ST（预留，默认 5%）
 
-    对于非标准代码（如 ETF、指数），默认按主板 10% 处理。
+    对于非标准代码（如 ETF、可转债），优先识别对应规则。
     """
     s = symbol.strip().upper()
     # 去掉后缀（如 .SH, .SZ）
@@ -74,7 +76,17 @@ def _infer_board_type(symbol: str) -> str:
         return "st"
 
     if not code or not code[0].isdigit():
-        return "main"  # 非数字代码（如 ETF）默认主板
+        if "ETF" in s:
+            return "etf"
+        return "main"
+
+    # 交易型开放式基金
+    if code.startswith(("51", "52", "56", "58", "15")):
+        return "etf"
+
+    # 可转债
+    if code.startswith(("110", "111", "112", "113", "118", "123", "127", "128", "129")):
+        return "convertible_bond"
 
     # 科创板
     if code.startswith("688"):
@@ -100,7 +112,7 @@ def _get_limit_pct(
     board_type: str,
     trade_date: date | None = None,
     market: str | None = None,
-) -> tuple[float, float]:
+) -> tuple[float | None, float | None]:
     """根据板块类型返回涨跌停幅度（limit_up_pct, limit_down_pct）。
 
     ST 规则日期切换（NTL-S6-003 Step 6）：
@@ -128,6 +140,8 @@ def _get_limit_pct(
         "chinext": (0.20, 0.20),
         "star": (0.20, 0.20),
         "bse": (0.30, 0.30),  # 北交所预留
+        "etf": (0.10, 0.10),
+        "convertible_bond": (None, None),  # 可转债无涨跌幅限制
     }
     return pct_map.get(board_type, (0.10, 0.10))
 
@@ -138,11 +152,17 @@ def _get_price_cage_pct(board_type: str) -> tuple[float, float]:
     A 股常见限价申报规则：
     - 沪深主板 / 创业板 / 科创板 / ST：102% / 98%
     - 北交所：105% / 95%
+    - ETF：与涨跌停幅度保持一致，暂按 10% 处理
+    - 可转债：申报价格波动空间更大，风控仅做宽口径告警
 
     这里仅做约束校验和记录，不改变当前回测的成交口径。
     """
     if board_type == "bse":
         return (0.05, 0.05)
+    if board_type == "etf":
+        return (0.10, 0.10)
+    if board_type == "convertible_bond":
+        return (0.30, 0.30)
     return (0.02, 0.02)
 
 
@@ -182,6 +202,12 @@ def _resolve_constraint(
         if 0 <= days_since_listing < 5:
             is_new_stock = True
 
+    # ETF / 可转债默认 T+0；若显式传入了更严格的约束，也以市场实际交易规则为准
+    if board in {"etf", "convertible_bond"}:
+        t_plus_one = False
+    else:
+        t_plus_one = constraint.t_plus_one
+
     limit_up = constraint.limit_up_pct
     limit_down = constraint.limit_down_pct
 
@@ -195,7 +221,7 @@ def _resolve_constraint(
         limit_down = limit_down if limit_down is not None else default_down
 
     return TradeConstraint(
-        t_plus_one=constraint.t_plus_one,
+        t_plus_one=t_plus_one,
         limit_up_pct=limit_up,
         limit_down_pct=limit_down,
         board_type=board,

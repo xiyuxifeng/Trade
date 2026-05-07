@@ -62,6 +62,7 @@ from src.market_data.ohlcv_service import OHLCVService
 from src.db.session import get_session_factory
 from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
+from src.evaluation.evaluation_context_service import EvaluationContextService
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy.signal_version import SignalVersioning
 from src.strategy.types import (
@@ -109,13 +110,18 @@ class ManagerAgent:
         self.strategy_agent = StrategyAgent()
         self.risk_agent = RiskAgent()
 
-        # Stage 4 新增 service（NTL-S4-006）
-        self.strategy_library_service = StrategyLibraryService()
-        self.snapshot_service = SnapshotService()
-
         # 信号版本控制 - 记录所有生成的交易想法
         self.signal_versioning = SignalVersioning(
             storage_path=self.output_dir / "signals"
+        )
+
+        # Stage 4 新增 service（NTL-S4-006）
+        self.strategy_library_service = StrategyLibraryService()
+        self.snapshot_service = SnapshotService()
+        self.evaluation_context_service = EvaluationContextService(
+            data_agent=self.data_agent,
+            strategy_library_service=self.strategy_library_service,
+            signal_versioning=self.signal_versioning,
         )
 
         self._persona_router: PersonaRouter | None = None
@@ -263,17 +269,7 @@ class ManagerAgent:
         append_jsonl(self.tasks_path, task.model_dump())
 
     def _load_signal_context(self, idea_id: UUID) -> SignalContext | None:
-        """从 signal_versioning 加载 SignalContext。
-
-        signal_versioning 将 {idea_id} 的完整上下文存储在
-        {output_dir}/signals/idea_{idea_id}.json 文件中。
-
-        Args:
-            idea_id: TradeIdea.idea_id
-
-        Returns:
-            SignalContext 或 None（不存在时）
-        """
+        """从 signal_versioning 加载 SignalContext。"""
         signal_with_ctx = self.signal_versioning.get_version(f"idea_{idea_id}")
         return signal_with_ctx.context if signal_with_ctx else None
 
@@ -282,58 +278,17 @@ class ManagerAgent:
         symbols: list[str],
         config: AppConfig,
     ) -> dict[str, Any]:
-        """从 DataAgent 获取完整行情（ohlcv_1d + indicators）。
-
-        用于 EvidencePack.market_data，供后续 MFE/MAE 计算。
-
-        Args:
-            symbols: 标的代码列表
-            config: 应用配置
-
-        Returns:
-            market_data dict，包含 ohlcv_1d 和 indicators
-        """
-        if not symbols:
-            return {}
-
-        agent = DataAgent(config=config)
-        market_data: dict[str, Any] = {}
-
-        # DataAgent 按 dataset 路由，需分别拉取 ohlcv_1d / indicators。
-        for dataset in ("ohlcv_1d", "indicators"):
-            req = DataRequest(
-                trader_id="manager",
-                symbols=symbols,
-                dataset=dataset,
-                fields=[dataset],
-            )
-            resp = await agent.handle(req)
-            if resp.status == DataResponseStatus.ok:
-                market_data.update(resp.payload)
-
-        return market_data
+        """从 DataAgent 获取完整行情（ohlcv_1d + indicators）。"""
+        return await self.evaluation_context_service._fetch_full_market_data(symbols)
 
     async def _load_strategy_version_snapshot(
         self,
         strategy_version_id: str | None,
         config: AppConfig,
     ) -> list[dict]:
-        """从 StrategyLibraryService 加载 rules_snapshot。
-
-        Args:
-            strategy_version_id: 策略版本 ID
-            config: 应用配置
-
-        Returns:
-            rules_snapshot 列表
-        """
-        if not strategy_version_id:
-            return []
-
-        service = StrategyLibraryService()
-        async with session_scope() as session:
-            version = await service.get_version(session, strategy_version_id)
-            return version.rules_snapshot if version else []
+        """从 StrategyLibraryService 加载 rules_snapshot。"""
+        strategy_version = await self.evaluation_context_service._load_strategy_version(strategy_version_id)
+        return strategy_version.rules_snapshot if strategy_version else []
 
     def _save_evidence_pack(self, pack: EvidencePack) -> Path:
         """将 EvidencePack 写入 JSON 文件，并更新 idea_id -> pack_id 索引。
@@ -373,49 +328,10 @@ class ManagerAgent:
         last_prices: dict[str, float],
         config: AppConfig,
     ) -> EvidencePack:
-        """为单条 TradeIdea 生成完整 EvidencePack。
-
-        包含：
-        - trade_idea：原始交易想法
-        - signal_context：从 signal_versioning 加载（NTL-S4-005 扩展的完整上下文）
-        - market_data：完整行情（ohlcv_1d + indicators + entry_price + current_price）
-        - strategy_version_snapshot：从 StrategyLibraryService 加载的 rules_snapshot
-
-        Args:
-            idea: 单条 TradeIdea
-            daily_report: 当前 DailyReport
-            last_prices: symbol -> current_price 字典
-            config: 应用配置
-
-        Returns:
-            EvidencePack 实例
-        """
-        # 1. 加载 SignalContext
-        signal_context = self._load_signal_context(idea.idea_id)
-
-        # 2. 获取完整行情
-        raw_market_data = await self._fetch_full_market_data([idea.symbol], config)
-        ohlcv_1d = raw_market_data.get("ohlcv_1d", {}) or {}
-        bars = ohlcv_1d.get(idea.symbol, [])
-
-        market_data = MarketDataSnapshot(
-            bars=bars,
-            ohlcv_1d=ohlcv_1d,
-            indicators=raw_market_data.get("indicators", {}),
-            entry_price=float(idea.entry.price) if idea.entry and idea.entry.price else None,
-            target_price=float(idea.target_price) if idea.target_price is not None else None,
-            stop_loss_price=float(idea.stop_loss_price) if idea.stop_loss_price is not None else None,
-            current_price=last_prices.get(idea.symbol),
-        )
-
-        # 3. 获取策略版本快照
-        rules_snapshot = await self._load_strategy_version_snapshot(idea.strategy_version_id, config)
-
-        return EvidencePack.from_trade_idea(
-            trade_idea=idea,
-            signal_context=signal_context,
-            market_data=market_data,
-            strategy_version_snapshot=rules_snapshot,
+        """为单条 TradeIdea 生成完整 EvidencePack。"""
+        return await self.evaluation_context_service.generate_evidence_pack(
+            idea=idea,
+            last_prices=last_prices,
         )
 
     async def _append_review_memory(
@@ -730,55 +646,12 @@ class ManagerAgent:
         trade_idea: "TradeIdea" = None,
         account_id: str = "default",
     ) -> "AccountSnapshot":
-        """从真实 TradeLog 构建 AccountSnapshot。
-
-        优先使用交易记录计算真实持仓与资金状态；
-        当 DB 中无该账户记录或查询失败时，fallback 到模拟账户。
-
-        Args:
-            trade_idea: 交易想法（用于获取 trader_id 作为 account_id）
-            account_id: 账户 ID
-
-        Returns:
-            AccountSnapshot
-        """
-        from src.risk.account_service import build_account_snapshot
-        from src.risk.types import AccountSnapshot
-
-        # 尝试从 trade_idea 推断 account_id
-        if trade_idea and hasattr(trade_idea, 'trader_id') and trade_idea.trader_id:
-            account_id = str(trade_idea.trader_id)
-
-        try:
-            async with session_scope() as session:
-                snapshot = await build_account_snapshot(
-                    session=session,
-                    account_id=account_id,
-                )
-                logger.debug(
-                    "账户快照已构建: account=%s, net_value=%.2f, positions=%d",
-                    account_id,
-                    snapshot.net_value,
-                    len(snapshot.positions),
-                )
-                return snapshot
-        except Exception as e:
-            logger.warning(
-                "真实账户快照构建失败: %s，使用模拟账户 fallback",
-                e,
-            )
-
-        # Fallback: 模拟账户
-        return AccountSnapshot(
+        """从真实 TradeLog 构建 AccountSnapshot。"""
+        snapshot = await self.evaluation_context_service.get_account_snapshot(
+            trade_idea=trade_idea,
             account_id=account_id,
-            timestamp=datetime.now(timezone.utc),
-            net_value=100000.0,
-            cash=50000.0,
-            total_position_value=50000.0,
-            positions=[],
-            daily_pnl=0.0,
-            total_pnl=0.0,
         )
+        return snapshot
 
     async def evaluate_signal(
         self,

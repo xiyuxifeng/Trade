@@ -53,8 +53,8 @@
 - [x] `docs/superpowers/specs/2026-04-11-raw-articles-db-design.md` - 设计文档
 - [x] `docs/superpowers/specs/2026-04-11-from-step-design.md` - --from-step 和 --use-db 设计文档
 - [x] `docs/superpowers/specs/2026-04-04-tgb-incremental-crawl-design.md` - 更新参考
-- [x] `docs/crawl.md` - 更新架构说明和 --from-step、--use-db 使用说明
-- [x] `docs/使用说明.md` - 添加 --from-step、--use-db 使用示例
+- [x] `docs/bak/crawl.md` - 更新架构说明和 --from-step、--use-db 使用说明
+- [x] `docs/Deprecated/使用说明.md` - 添加 --from-step、--use-db 使用示例
 - [x] `docs/TaskList.md` - 新增 P1-026K、P1-026L、P1-026M、P1-026N 任务
 
 ## 3. 待完成事项

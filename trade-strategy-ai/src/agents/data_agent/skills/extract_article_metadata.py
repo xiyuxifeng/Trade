@@ -594,6 +594,19 @@ async def _persist_extracted_rules(
     return rule_ids
 
 
+def _attach_rule_pool_ids(
+    rules: list[dict[str, Any]],
+    rule_ids: list[str],
+) -> list[dict[str, Any]]:
+    """把已入库的 rule_id 回写到规则快照里，形成可追溯链路。"""
+    annotated_rules: list[dict[str, Any]] = []
+    for rule, rule_id in zip(rules, rule_ids):
+        annotated = dict(rule)
+        annotated["rule_pool_id"] = rule_id
+        annotated_rules.append(annotated)
+    return annotated_rules
+
+
 async def _auto_review_rules(
     *,
     session: Any,
@@ -888,6 +901,7 @@ async def _finalize_extraction_artifacts(
                 article_type=classification_type,
                 version=version,
             )
+            meta.strategy_rules = _attach_rule_pool_ids(rules, rule_ids)
             meta.standalone_rule_ids = list(dict.fromkeys([
                 *(meta.standalone_rule_ids or []), *rule_ids
             ]))
@@ -924,6 +938,7 @@ async def _finalize_extraction_artifacts(
                 article_type=classification_type,
                 version=version,
             )
+            meta.strategy_rules = _attach_rule_pool_ids(rules, rule_ids)
             meta.derived_rule_ids = list(dict.fromkeys([
                 *(meta.derived_rule_ids or []), *rule_ids
             ]))
@@ -944,6 +959,7 @@ async def _finalize_extraction_artifacts(
                 article_type=classification_type,
                 version=version,
             )
+            meta.strategy_rules = _attach_rule_pool_ids(rules, rule_ids)
             meta.standalone_rule_ids = list(dict.fromkeys([
                 *(meta.standalone_rule_ids or []), *rule_ids
             ]))
@@ -1027,6 +1043,176 @@ async def _extract_one(
     return await client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
 
 
+@dataclass(slots=True)
+class ExtractionRunState:
+    """单篇文章抽取流水线的运行状态。"""
+
+    classification_type: str = ArticleType.NOISE.value
+    mode: str = "unknown"
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    error_message: str | None = None
+    error_type: ExtractErrorType | None = None
+    skipped: bool = False
+    failed: bool = False
+    success: bool = False
+
+
+async def _run_article_extraction_pipeline(
+    *,
+    session: Any,
+    article: BlogArticle,
+    meta: ArticleMetadata,
+    client: LLMClient,
+    prompts_dir: Path,
+    error_log_path: Path,
+    checkpoint_path: Path,
+    version: str,
+    llm_provider: str,
+) -> ExtractionRunState:
+    """执行分类、抽取、校验和落库的公共流水线。"""
+    state = ExtractionRunState(llm_provider=llm_provider)
+
+    if client.is_enabled():
+        try:
+            from src.article_classifier.classifier import classify_article
+
+            classification = await classify_article(
+                llm_client=client,
+                title=article.title,
+                content_text=article.content_text or "",
+            )
+            persisted = await _persist_article_classification(
+                session=session,
+                article=article,
+                classification=classification,
+                llm_provider=llm_provider,
+                version=version,
+            )
+            meta.article_type = persisted.article_type
+            state.classification_type = persisted.article_type
+            await session.commit()
+        except Exception:
+            meta.article_type = ArticleType.NOISE.value
+            fallback_classification = SimpleNamespace(
+                article_type=ArticleType.NOISE.value,
+                confidence=0.0,
+                type_scores={},
+                reason="classification failed",
+            )
+            persisted = await _persist_article_classification(
+                session=session,
+                article=article,
+                classification=fallback_classification,
+                llm_provider=llm_provider,
+                version=version,
+            )
+            meta.article_type = persisted.article_type
+            state.classification_type = persisted.article_type
+            await session.commit()
+    else:
+        meta.article_type = ArticleType.NOISE.value
+        state.classification_type = ArticleType.NOISE.value
+
+    if not article.content_text or len(article.content_text.strip()) < 80:
+        state.skipped = True
+        return state
+
+    raw: dict[str, Any] | None = None
+
+    if not client.is_enabled():
+        raw = _heuristic_extract(article)
+        state.mode = "fallback_heuristic"
+    else:
+        state.mode = "llm"
+        state.llm_provider = llm_provider
+        try:
+            llm_result = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
+            raw = llm_result.data
+            state.llm_model = llm_result.model
+        except LLMError as exc:
+            state.failed = True
+            state.error_type = ExtractErrorType.NETWORK
+            state.error_message = str(exc)
+            meta.raw_llm_output = {"mode": "fallback_on_error", "error": state.error_message}
+            _record_error(
+                article_id=str(article.id),
+                source_url=article.source_url,
+                error_type=ExtractErrorType.NETWORK,
+                error_message=state.error_message,
+                raw_output=None,
+                error_log_path=error_log_path,
+            )
+            _add_to_checkpoint(
+                article_id=str(article.id),
+                error=state.error_message,
+                checkpoint_path=checkpoint_path,
+            )
+            return state
+        except Exception as exc:  # noqa: BLE001
+            state.failed = True
+            state.error_type = ExtractErrorType.QUALITY
+            state.error_message = str(exc)
+            meta.raw_llm_output = {"error": state.error_message}
+            _record_error(
+                article_id=str(article.id),
+                source_url=article.source_url,
+                error_type=ExtractErrorType.QUALITY,
+                error_message=state.error_message,
+                raw_output=None,
+                error_log_path=error_log_path,
+            )
+            return state
+
+    try:
+        raw_rules = raw.get("strategy_rules") if raw else None
+        raw_preconds = raw.get("preconditions") if raw else None
+        rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
+        preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
+    except Exception as exc:  # noqa: BLE001
+        state.failed = True
+        state.error_type = ExtractErrorType.SCHEMA_VALIDATION
+        state.error_message = str(exc)
+        meta.raw_llm_output = {"error": state.error_message}
+        _record_error(
+            article_id=str(article.id),
+            source_url=article.source_url,
+            error_type=ExtractErrorType.SCHEMA_VALIDATION,
+            error_message=state.error_message,
+            raw_output=raw if isinstance(raw, dict) else None,
+            error_log_path=error_log_path,
+        )
+        return state
+
+    meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
+    raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
+    meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
+    meta.strategy_rules = rules
+    meta.preconditions = preconds
+    meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
+    meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
+    meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
+    meta.raw_llm_output = {"mode": state.mode, "raw": raw, "version": version}
+    if state.error_message:
+        meta.raw_llm_output["error"] = state.error_message
+    meta.processed_at = _now_utc()
+    meta.provider = state.llm_provider
+    meta.model = state.llm_model
+    meta.extraction_version = version
+
+    await _finalize_extraction_artifacts(
+        session=session,
+        article=article,
+        meta=meta,
+        classification_type=state.classification_type,
+        rules=rules,
+        version=version,
+    )
+
+    state.success = True
+    return state
+
+
 async def _process_one_article(
     *,
     session: Any,
@@ -1045,153 +1231,42 @@ async def _process_one_article(
     Returns: True if processed successfully, False otherwise.
     """
     stats.scanned += 1
-    classification_type = ArticleType.NOISE.value
-
-    # 文章分类：先判断类型，再决定后续处理
-    # 仅在 LLM 可用时进行分类，分类失败默认为噪音
-    if client.is_enabled():
-        try:
-            from src.article_classifier.classifier import classify_article
-
-            classification = await classify_article(
-                llm_client=client,
-                title=article.title,
-                content_text=article.content_text or "",
-            )
-            persisted = await _persist_article_classification(
-                session=session,
-                article=article,
-                classification=classification,
-                llm_provider="llm",
-                version=version,
-            )
-            meta.article_type = persisted.article_type
-            classification_type = persisted.article_type
-            await session.commit()
-        except Exception:
-            # 分类失败默认为噪音，不影响后续提取流程
-            meta.article_type = "noise"
-            fallback_classification = SimpleNamespace(
-                article_type="noise",
-                confidence=0.0,
-                type_scores={},
-                reason="classification failed",
-            )
-            persisted = await _persist_article_classification(
-                session=session,
-                article=article,
-                classification=fallback_classification,
-                llm_provider="llm",
-                version=version,
-            )
-            meta.article_type = persisted.article_type
-            classification_type = persisted.article_type
-            await session.commit()
-    else:
-        meta.article_type = ArticleType.NOISE.value
-
-    if not article.content_text or len(article.content_text.strip()) < 80:
-        stats.skipped += 1
-        return False
-
-    error_message: str | None = None
-    mode = "unknown"
-    raw = None
-
-    if not client.is_enabled():
-        raw = _heuristic_extract(article)
-        mode = "fallback_heuristic"
-        stats.fallback_calls += 1
-    else:
-        stats.llm_calls += 1
-        try:
-            raw = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
-            mode = "llm"
-        except LLMError as exc:
-            error_message = str(exc)
-            stats.failed += 1
-            stats.errors_by_type[ExtractErrorType.NETWORK.value] += 1
-            meta.raw_llm_output = {"mode": "fallback_on_error", "error": error_message}
-            _record_error(
-                article_id=str(article.id),
-                source_url=article.source_url,
-                error_type=ExtractErrorType.NETWORK,
-                error_message=error_message,
-                raw_output=None,
-                error_log_path=error_log_path,
-            )
-            _add_to_checkpoint(
-                article_id=str(article.id),
-                error=error_message,
-                checkpoint_path=checkpoint_path,
-            )
-            return False
-        except Exception as exc:  # noqa: BLE001
-            error_msg = str(exc)
-            stats.failed += 1
-            stats.errors_by_type[ExtractErrorType.QUALITY.value] += 1
-            meta.raw_llm_output = {"error": error_msg}
-            _record_error(
-                article_id=str(article.id),
-                source_url=article.source_url,
-                error_type=ExtractErrorType.QUALITY,
-                error_message=error_msg,
-                raw_output=None,
-                error_log_path=error_log_path,
-            )
-            return False
-
-    try:
-        raw_rules = raw.get("strategy_rules")
-        raw_preconds = raw.get("preconditions")
-        raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
-        raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
-
-        rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
-        preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
-
-        stats.schema_valid_rules += len(rules)
-        stats.schema_invalid_rules += raw_rules_count - len(rules)
-        stats.schema_valid_preconds += len(preconds)
-        stats.schema_invalid_preconds += raw_preconds_count - len(preconds)
-    except Exception as exc:  # noqa: BLE001
-        stats.failed += 1
-        error_msg = str(exc)
-        stats.errors_by_type[ExtractErrorType.SCHEMA_VALIDATION.value] += 1
-        meta.raw_llm_output = {"error": error_msg}
-        _record_error(
-            article_id=str(article.id),
-            source_url=article.source_url,
-            error_type=ExtractErrorType.SCHEMA_VALIDATION,
-            error_message=error_msg,
-            raw_output=raw if isinstance(raw, dict) else None,
-            error_log_path=error_log_path,
-        )
-        return False
-
-    meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
-    raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
-    meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
-    meta.strategy_rules = rules
-    meta.preconditions = preconds
-    meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
-    meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
-    meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
-    meta.raw_llm_output = {"mode": mode, "raw": raw, "version": version}
-    if error_message:
-        meta.raw_llm_output["error"] = error_message
-    meta.processed_at = _now_utc()
-    meta.extraction_version = version
-
-    await _finalize_extraction_artifacts(
+    state = await _run_article_extraction_pipeline(
         session=session,
         article=article,
         meta=meta,
-        classification_type=classification_type,
-        rules=rules,
+        client=client,
+        prompts_dir=prompts_dir,
+        error_log_path=error_log_path,
+        checkpoint_path=checkpoint_path,
         version=version,
+        llm_provider="llm",
     )
 
+    if state.mode == "llm":
+        stats.llm_calls += 1
+    elif state.mode == "fallback_heuristic":
+        stats.fallback_calls += 1
+
+    if state.skipped:
+        stats.skipped += 1
+        return False
+
+    if state.failed:
+        stats.failed += 1
+        if state.error_type is not None:
+            stats.errors_by_type[state.error_type.value] += 1
+        return False
+
+    raw = meta.raw_llm_output.get("raw") if isinstance(meta.raw_llm_output, dict) else None
+    raw_rules = raw.get("strategy_rules") if isinstance(raw, dict) else []
+    raw_preconds = raw.get("preconditions") if isinstance(raw, dict) else []
+    raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
+    raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
+    stats.schema_valid_rules += len(meta.strategy_rules)
+    stats.schema_invalid_rules += raw_rules_count - len(meta.strategy_rules)
+    stats.schema_valid_preconds += len(meta.preconditions)
+    stats.schema_invalid_preconds += raw_preconds_count - len(meta.preconditions)
     stats.extracted += 1
 
     # 每篇文章处理完立即写入数据库
@@ -1212,10 +1287,10 @@ async def _process_one_article(
         details={
             "article_id": str(article.id),
             "source_url": article.source_url,
-            "mode": mode,
+            "mode": state.mode,
             "version": version,
-            "strategy_rules": len(rules),
-            "preconditions": len(preconds),
+            "strategy_rules": len(meta.strategy_rules),
+            "preconditions": len(meta.preconditions),
         },
     )
     append_jsonl(pending_path, task.model_dump())
@@ -1303,161 +1378,45 @@ async def _process_article_isolated(
             await session.flush()
 
         result["scanned"] = 1
-        classification_type = ArticleType.NOISE.value
-
-        # 文章分类：先判断类型，再决定后续处理
-        # 仅在 LLM 可用时进行分类，分类失败默认为噪音
-        if client.is_enabled():
-            try:
-                from src.article_classifier.classifier import classify_article
-
-                classification = await classify_article(
-                    llm_client=client,
-                    title=article.title,
-                    content_text=article.content_text or "",
-                )
-                persisted = await _persist_article_classification(
-                    session=session,
-                    article=article,
-                    classification=classification,
-                    llm_provider=llm_provider,
-                    version=version,
-                )
-                meta.article_type = persisted.article_type
-                classification_type = persisted.article_type
-                await session.commit()
-            except Exception:
-                # 分类失败默认为噪音，不影响后续提取流程
-                meta.article_type = "noise"
-                fallback_classification = SimpleNamespace(
-                    article_type="noise",
-                    confidence=0.0,
-                    type_scores={},
-                    reason="classification failed",
-                )
-                persisted = await _persist_article_classification(
-                    session=session,
-                    article=article,
-                    classification=fallback_classification,
-                    llm_provider=llm_provider,
-                    version=version,
-                )
-                meta.article_type = persisted.article_type
-                classification_type = persisted.article_type
-                await session.commit()
-        else:
-            meta.article_type = ArticleType.NOISE.value
-
-        if not article.content_text or len(article.content_text.strip()) < 80:
-            result["skipped"] = 1
-            return result
-
-        error_message: str | None = None
-        mode = "unknown"
-        raw = None
-
-        if not client.is_enabled():
-            raw = _heuristic_extract(article)
-            mode = "fallback_heuristic"
-            result["fallback_calls"] = 1
-            result["llm_provider"] = llm_provider
-            result["llm_model"] = None
-        else:
-            result["llm_calls"] = 1
-            try:
-                llm_result = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
-                raw = llm_result.data
-                result["llm_model"] = llm_result.model
-                result["llm_provider"] = llm_provider
-                mode = "llm"
-            except LLMError as exc:
-                error_message = str(exc)
-                result["failed"] = 1
-                result["error_type"] = ExtractErrorType.NETWORK.value
-                result["llm_provider"] = llm_provider
-                meta.raw_llm_output = {"mode": "fallback_on_error", "error": error_message}
-                _record_error(
-                    article_id=str(article.id),
-                    source_url=article.source_url,
-                    error_type=ExtractErrorType.NETWORK,
-                    error_message=error_message,
-                    raw_output=None,
-                    error_log_path=error_log_path,
-                )
-                _add_to_checkpoint(
-                    article_id=str(article.id),
-                    error=error_message,
-                    checkpoint_path=checkpoint_path,
-                )
-                return result
-            except Exception as exc:  # noqa: BLE001
-                error_msg = str(exc)
-                result["failed"] = 1
-                result["error_type"] = ExtractErrorType.QUALITY.value
-                meta.raw_llm_output = {"error": error_msg}
-                _record_error(
-                    article_id=str(article.id),
-                    source_url=article.source_url,
-                    error_type=ExtractErrorType.QUALITY,
-                    error_message=error_msg,
-                    raw_output=None,
-                    error_log_path=error_log_path,
-                )
-                return result
-
-        try:
-            raw_rules = raw.get("strategy_rules")
-            raw_preconds = raw.get("preconditions")
-            raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
-            raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
-
-            rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
-            preconds = _validate_preconditions(raw_preconds, source_url=article.source_url, published_at=article.published_at)
-
-            result["schema_valid_rules"] = len(rules)
-            result["schema_invalid_rules"] = raw_rules_count - len(rules)
-            result["schema_valid_preconds"] = len(preconds)
-            result["schema_invalid_preconds"] = raw_preconds_count - len(preconds)
-        except Exception as exc:  # noqa: BLE001
-            result["failed"] = 1
-            error_msg = str(exc)
-            result["error_type"] = ExtractErrorType.SCHEMA_VALIDATION.value
-            meta.raw_llm_output = {"error": error_msg}
-            _record_error(
-                article_id=str(article.id),
-                source_url=article.source_url,
-                error_type=ExtractErrorType.SCHEMA_VALIDATION,
-                error_message=error_msg,
-                raw_output=raw if isinstance(raw, dict) else None,
-                error_log_path=error_log_path,
-            )
-            return result
-
-        meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
-        raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
-        meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
-        meta.strategy_rules = rules
-        meta.preconditions = preconds
-        meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
-        meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
-        meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
-        meta.raw_llm_output = {"mode": mode, "raw": raw, "version": version}
-        if error_message:
-            meta.raw_llm_output["error"] = error_message
-        meta.processed_at = _now_utc()
-        meta.provider = result.get("llm_provider")
-        meta.model = result.get("llm_model")
-        meta.extraction_version = version
-
-        await _finalize_extraction_artifacts(
+        state = await _run_article_extraction_pipeline(
             session=session,
             article=article,
             meta=meta,
-            classification_type=classification_type,
-            rules=rules,
+            client=client,
+            prompts_dir=prompts_dir,
+            error_log_path=error_log_path,
+            checkpoint_path=checkpoint_path,
             version=version,
+            llm_provider=llm_provider,
         )
 
+        if state.mode == "llm":
+            result["llm_calls"] = 1
+        elif state.mode == "fallback_heuristic":
+            result["fallback_calls"] = 1
+
+        result["llm_provider"] = state.llm_provider
+        result["llm_model"] = state.llm_model
+
+        if state.skipped:
+            result["skipped"] = 1
+            return result
+
+        if state.failed:
+            result["failed"] = 1
+            result["error_type"] = state.error_type.value if state.error_type else None
+            return result
+
+        raw = meta.raw_llm_output.get("raw") if isinstance(meta.raw_llm_output, dict) else None
+        raw_rules = raw.get("strategy_rules") if isinstance(raw, dict) else []
+        raw_preconds = raw.get("preconditions") if isinstance(raw, dict) else []
+        raw_rules_count = len(raw_rules) if isinstance(raw_rules, list) else 0
+        raw_preconds_count = len(raw_preconds) if isinstance(raw_preconds, list) else 0
+
+        result["schema_valid_rules"] = len(meta.strategy_rules)
+        result["schema_invalid_rules"] = raw_rules_count - len(meta.strategy_rules)
+        result["schema_valid_preconds"] = len(meta.preconditions)
+        result["schema_invalid_preconds"] = raw_preconds_count - len(meta.preconditions)
         result["extracted"] = 1
         await session.commit()
 
@@ -1476,10 +1435,10 @@ async def _process_article_isolated(
             details={
                 "article_id": str(article.id),
                 "source_url": article.source_url,
-                "mode": mode,
+                "mode": state.mode,
                 "version": version,
-                "strategy_rules": len(rules),
-                "preconditions": len(preconds),
+                "strategy_rules": len(meta.strategy_rules),
+                "preconditions": len(meta.preconditions),
             },
         )
         append_jsonl(pending_path, task.model_dump())

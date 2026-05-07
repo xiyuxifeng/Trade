@@ -208,7 +208,7 @@
 
 - [x] `NTL-S0-003` `P0`
   目标：把 `kaipan` 私有接口纳入规划入口，但不直接绑主流程。
-  输入：`kaipan.md` 接口说明。
+  输入：`docs/bak/kaipan.md` 接口说明。
   输出：接口映射文档与 provider 规划说明。
   修改范围：`docs/Kaipan-Interface-Mapping.md`、规划文档。
   前置依赖：无。
@@ -227,7 +227,7 @@
 - [x] `NTL-S0-005` `P0`
   目标：收敛最终保留文档并归档无效文档。
   输入：当前 `docs/` 目录。
-  输出：保留 `Project.md / Plan.md / 需求.md / TaskList.md / Kaipan-Interface-Mapping.md`，其余按 `bak` 或 `Deprecated` 归档。
+  输出：保留 `Project.md / Plan.md / 需求.md / TaskList.md / Kaipan-Interface-Mapping.md / UserManual.md`，其余按 `bak` 或 `Deprecated` 归档。
   修改范围：`docs/`。
   前置依赖：无。
   可并行：`NTL-S0-001` ~ `NTL-S0-004`。
@@ -244,7 +244,7 @@
 
 - [x] `NTL-S0-007` `P0`
   目标：定义 `kaipan` 数据目录规范。
-  输入：现有 `data/` 目录和 `kaipan.md`。
+  输入：现有 `data/` 目录和 `docs/bak/kaipan.md`。
   输出：`raw / snapshots` 目录结构说明与样例路径约定。
   修改范围：`data/` 目录规范文档。
   前置依赖：`NTL-S0-003`。
@@ -254,7 +254,7 @@
 
 - [x] `NTL-S0-008` `P0`
   目标：确定首批 13 个高价值接口并实现原始 JSON 保存。
-  输入：`kaipan.md` 接口列表。
+  输入：`docs/bak/kaipan.md` 接口列表。
   输出：首批接口名单和原始响应保存逻辑。
   修改范围：`src/providers/kaipan_provider.py`、样例数据目录。
   前置依赖：`NTL-S0-007`。
@@ -1640,6 +1640,9 @@
 
 ### Stage 8. 实际市场约束
 
+### 设计文档
+`docs/superpowers/specs/2026-05-07-stage8-a-share-risk-control-design.md`
+
 - [x] 在回测时增加实际市场约束（NTL-S5-010 已实现）
 
 **已实现（S5-010 `metrics_calculator.py`）：**
@@ -1649,6 +1652,8 @@
 4. 如果以开盘价格买入和卖出 需要按照这个规则计算成交价: A股市场沪深主板、科创板、创业板的限价申报价格不得高于基准价格的 102% 且不得低于 98%，北交所则为 105% 和 95% — **回测用收盘价结算，此规则影响有限，暂不单独实现**
 
 **备注：** 回测核心目标是验证策略逻辑（止盈止损规则是否合理），而非完全模拟实盘撮合。涨跌停约束已通过 `effective_high/low` 体现在 MFE/MAE 计算中，可满足当前回测需求。
+
+**补充：** 当前约束实现与 `docs/superpowers/specs/2026-05-07-stage8-a-share-risk-control-design.md` 保持一致，后续新增交易品种时优先更新该设计文档，再同步代码与测试。
 
 ---
 

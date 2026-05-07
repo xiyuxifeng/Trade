@@ -93,6 +93,7 @@ class TestBuildRulesSnapshot:
                         "rule_text": "当RSI<30时买入",
                         "programmatic_indicators": ["rsi"],
                         "required_fields": ["rsi"],
+                        "rule_pool_id": "pool-r001",
                     },
                     {
                         "rule_id": "R002",
@@ -118,6 +119,7 @@ class TestBuildRulesSnapshot:
         # 验证规则中包含来源文章信息
         assert version.rules_snapshot[0]["source_article_id"] == "art-001"
         assert version.rules_snapshot[0]["source_symbols"] == ["AAPL"]
+        assert version.rules_snapshot[0]["rule_pool_id"] == "pool-r001"
 
     def test_rules_snapshot_empty_when_no_articles(self, trader_profile):
         """没有文章时 rules_snapshot 为空列表（而非 None）"""

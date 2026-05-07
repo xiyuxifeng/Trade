@@ -1236,8 +1236,8 @@ async def _backtest_single_rule(
     end_date: date,
 ) -> RuleBacktestResult:
     """对单条规则执行回测"""
-    # TODO: 实现规则回测逻辑
-    pass
+    # ✅ 已实现（2026-05-07）：解析 mapped_condition → 加载 OHLCV/指标 → 评估 → T+1 收益
+    pass  # 详见 src/backtest/engine.py:_backtest_single_rule
 
 def _aggregate_rule_results(
     self,

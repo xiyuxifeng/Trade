@@ -156,7 +156,7 @@
 - #7 盘前预测 / 盘后归因缺失：✅已修复
 - #8 `compute_confidence_adjustment()` 存在但未被调用：✅已修复（2026-05-07）
 - #9 `article_metadata` 扩展字段未填充：✅已修复
-- #10 `review_status` 自动审核流程缺失：仍存在；当前只有手工 CLI 审核入口 [cli/main.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/cli/main.py:1172)
+- #10 `review_status` 自动审核流程缺失：✅已修复（2026-05-07）
 
 此外，本次新增应一并纳入后续修复的问题：
 
@@ -181,9 +181,9 @@
 | 1 | Stage 11 真实规则回测与置信度闭环 | `#1` `#5` `#8` / Phase 4 | 去掉模拟回测，接入真实历史样本，并让 `validated_confidence` 走统一更新口径。 | ✅已修复 |
 | 2 | Stage 11 分层提取真正独立化 | `#2` / Phase 3 残留 | 让 `rule / record / mixed` 真正走不同提取分支，并把 `standalone_rule_ids`、`derived_rule_ids`、`trade_sample_ids` 完整写回。 | ✅已修复 |
 | 3 | 数据模型一致性修正 | `#6` | 统一 `article_id` 与外键类型，避免后续入池、归因、审核再被类型漂移影响。 | ✅已修复 |
-| 4 | 自动审核流程补齐 | `#10` | 把 `review_status` 从手工 CLI 审核推进到可复用的自动化流程。 | |
-| 5 | 交易记录进入风控 / 决策主闭环 | P1-2 残留 | 让 `trade_logs` 不只进入画像，也真正影响风控状态与策略决策。 | |
-| 6 | A 股实际约束与验证增强 | P2-1 | 在主闭环稳定后，再补更细粒度的 A 股约束和更真实的依赖验证。 | |
+| 4 | 自动审核流程补齐 | `#10` | 把 `review_status` 从手工 CLI 审核推进到可复用的自动化流程。 | ✅已修复 |
+| 5 | 交易记录进入风控 / 决策主闭环 | P1-2 残留 | 让 `trade_logs` 不只进入画像，也真正影响风控状态与策略决策。 | ✅已修复 |
+| 6 | A 股实际约束与验证增强 | P2-1 | 在主闭环稳定后，再补更细粒度的 A 股约束和更真实的依赖验证。 | ✅已修复 |
 
 ## 已执行修复顺序
 
@@ -578,11 +578,48 @@ python -m cli.main snapshot build --date 2026-04-29 --type all --config config/a
 
 **关联问题：** `#6`
 
+### 已修复：待修复项 #4 - 自动审核流程补齐
+
+**修改文件：**
+- `src/rule_pool/repository.py` — `update_review()` 新增 `force` 参数；新增 `auto_review_rule()` 自动审核方法
+- `src/agents/data_agent/skills/extract_article_metadata.py` — 新增 `_auto_review_rules()` 和 `_has_mappable_condition()`；在 `_finalize_extraction_artifacts()` 各分支集成自动审核
+- `cli/main.py` — 新增 `rule-pool show` 命令；`list` 支持 `--status`/`--rule-type`/`--skip-no-mapped` 过滤；`review` 支持 `--force` 和 `pending` 决定；新增 `review-batch` 批量审核
+
+**关联问题：** `#10`
+
 ### 验证结果
 
 ```
-78 passed in 3.21s
+143 passed in 4.04s
 ```
 - 无循环导入
 - ForeignKey 约束正确
-- 数据流：文章分类 → 分层提取 → 规则入池 → 真实回测 → 置信度更新 完整闭环
+- 数据流：文章分类 → 分层提取 → 规则入池 → 自动审核 → 真实回测 → 置信度更新 完整闭环
+
+### 已修复：待修复项 #5 - 交易记录进入风控/决策主闭环
+
+**修改文件：**
+- `src/risk/account_service.py` — 新建：`build_account_snapshot()` 从真实 TradeLog 聚合持仓/资金/PnL，从 OHLCV 获取最新价格估算市值
+- `src/agents/manager_agent/agent.py` — `evaluate_signal()` 中硬编码模拟 AccountSnapshot 替换为 `_get_account_snapshot()`；优先从 TradeLog 构建真实账户，失败时 fallback 模拟账户
+
+**关联问题：** P1-2 残留
+
+### 已修复：待修复项 #6 - A 股实际约束与验证增强
+
+**修改文件：**
+- `src/evaluation/metrics_calculator.py` — 新增 `_is_bar_limit_locked()` 一字板识别；新增 `classify_bar_status()` bar 状态分类（normal/halted/limit_up_locked/limit_down_locked/low_liquidity）；`compute_mfe_mae_return` 返回值新增 `limit_locked_dates`
+- `src/backtest/scoring.py` — `score_backtest_trade` 解包新增 `limit_locked_dates`
+- `src/evaluation/postmortem_service.py` — 复盘中新增 `limit_locked_dates`/`limit_locked_count` 统计
+- `src/agents/manager_agent/agent.py` — 评估 notes 中记录一字板日期
+- `src/evaluation/__init__.py` — 导出 `classify_bar_status`
+
+**关联问题：** P2-1
+
+### 验证结果（全部修复后）
+
+```
+69 passed in 5.40s
+```
+- 一字板识别 6 项测试全部通过
+- 账户快照 fallback 机制正常
+- 无循环导入

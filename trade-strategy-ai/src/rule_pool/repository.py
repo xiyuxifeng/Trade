@@ -8,7 +8,10 @@ from uuid import UUID
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.common.logger import get_logger
 from src.rule_pool.models import RulePool
+
+logger = get_logger(__name__)
 from src.rule_pool.schemas import (
     MappingStatus,
     ReviewStatus,
@@ -41,6 +44,7 @@ class RulePoolRepository:
         orm_obj = self._to_orm_model(rule)
         self.session.add(orm_obj)
         await self.session.flush()
+        logger.debug("规则入库: rule_id=%s, type=%s, confidence=%.3f", rule.rule_id, rule.rule_type, rule.initial_confidence)
         return orm_obj
 
     async def get_rule_by_id(self, rule_id: str) -> RulePool | None:
@@ -123,13 +127,15 @@ class RulePoolRepository:
         rule_id: str,
         review_status: ReviewStatus,
         reviewed_by: str,
+        force: bool = False,
     ) -> bool:
         """更新规则审核状态
 
         Args:
             rule_id: 规则 ID
             review_status: 新的审核状态
-            reviewed_by: 审核操作人
+            reviewed_by: 审核操作人（auto_review 或 cli_user）
+            force: 是否强制覆盖已有审核结果
 
         Returns:
             是否更新成功
@@ -138,12 +144,79 @@ class RulePoolRepository:
         if orm_obj is None:
             return False
 
+        # 非强制模式下，已审核通过的规则不允许重复审核
+        if not force and orm_obj.review_status != ReviewStatus.PENDING.value:
+            return False
+
         orm_obj.review_status = review_status.value
         orm_obj.reviewed_by = reviewed_by
         orm_obj.reviewed_at = datetime.now()
 
         await self.session.flush()
         return True
+
+    async def auto_review_rule(
+        self,
+        rule_id: str,
+        initial_confidence: float,
+        has_mapped_condition: bool = False,
+        auto_approve_threshold: float = 0.7,
+        auto_reject_threshold: float = 0.2,
+    ) -> str:
+        """自动审核单条规则
+
+        根据初始置信度和映射状态自动决定审核结果：
+        - initial_confidence >= auto_approve_threshold 且 has_mapped_condition → APPROVED
+        - initial_confidence < auto_reject_threshold → REJECTED
+        - 其余 → PENDING
+
+        Args:
+            rule_id: 规则 ID
+            initial_confidence: 初始置信度
+            has_mapped_condition: 是否有 mapped_condition
+            auto_approve_threshold: 自动通过阈值（默认 0.7）
+            auto_reject_threshold: 自动拒绝阈值（默认 0.2）
+
+        Returns:
+            审核结果状态值 (approved/pending/rejected)
+        """
+        orm_obj = await self.get_rule_by_id(rule_id)
+        if orm_obj is None:
+            return "not_found"
+
+        # 只对 pending 状态的规则执行自动审核
+        if orm_obj.review_status != ReviewStatus.PENDING.value:
+            return orm_obj.review_status
+
+        if initial_confidence >= auto_approve_threshold and has_mapped_condition:
+            decision = ReviewStatus.APPROVED
+            reason = f"auto: confidence({initial_confidence:.3f}) >= {auto_approve_threshold} + has_mapped"
+        elif initial_confidence < auto_reject_threshold:
+            decision = ReviewStatus.REJECTED
+            reason = f"auto: confidence({initial_confidence:.3f}) < {auto_reject_threshold}"
+        else:
+            # 保持 pending，等待人工审核
+            return ReviewStatus.PENDING.value
+
+        orm_obj.review_status = decision.value
+        orm_obj.reviewed_by = "auto_review"
+        orm_obj.reviewed_at = datetime.now()
+
+        # 将审核原因写入 extraction_layer 的扩展字段
+        extraction = dict(orm_obj.extraction_layer or {})
+        extraction["_auto_review"] = {
+            "decision": decision.value,
+            "reason": reason,
+            "reviewed_at": orm_obj.reviewed_at.isoformat(),
+        }
+        orm_obj.extraction_layer = extraction
+
+        await self.session.flush()
+        logger.info(
+            "自动审核: rule_id=%s, confidence=%.3f, has_mapped=%s → %s (%s)",
+            rule_id, initial_confidence, has_mapped_condition, decision.value, reason,
+        )
+        return decision.value
 
     async def update_backtest_result(
         self,
@@ -180,6 +253,13 @@ class RulePoolRepository:
         )
 
         await self.session.flush()
+        logger.info(
+            "回测结果更新: rule_id=%s, hit_rate=%.3f, samples=%d, validated_confidence=%.3f",
+            rule_id,
+            backtest_result.hit_rate,
+            backtest_result.sample_count,
+            orm_obj.validated_confidence,
+        )
         return True
 
     async def get_high_confidence_rules(self, threshold: float = 0.7) -> list[RulePool]:

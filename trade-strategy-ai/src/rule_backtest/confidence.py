@@ -1,7 +1,10 @@
 """置信度计算模块 - 基于回测结果调整规则置信度"""
 from __future__ import annotations
 
+from src.common.logger import get_logger
 from src.rule_pool.schemas import RuleBacktestResult
+
+logger = get_logger(__name__)
 
 
 def compute_confidence_adjustment(
@@ -74,6 +77,10 @@ def compute_confidence_adjustment(
     # 确保结果在 [0.0, 1.0] 范围内
     validated_confidence = max(0.0, min(1.0, posterior))
 
+    logger.debug(
+        "置信度更新: initial=%.3f → validated=%.3f (hit_rate=%.3f, score=%.3f, n=%d)",
+        initial_confidence, validated_confidence, hit_rate, score, n,
+    )
     return validated_confidence
 
 

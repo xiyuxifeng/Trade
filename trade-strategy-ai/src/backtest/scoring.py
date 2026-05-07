@@ -66,7 +66,7 @@ def score_backtest_trade(
     if stop_loss_price is not None and stop_loss_price < price_cage_limit_down:
         price_cage_violation = True
 
-    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
+    mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = compute_mfe_mae_return(
         bars=bars,
         entry_price=entry_price,
         entry_date=entry_date,
@@ -90,6 +90,7 @@ def score_backtest_trade(
         "exit_triggered": exit_triggered,
         "exit_date": exit_date,
         "halted_dates": halted_dates,
+        "limit_locked_dates": limit_locked_dates,
         "eval_date": eval_date,
         "price_cage_up_pct": price_cage_up_pct,
         "price_cage_down_pct": price_cage_down_pct,

@@ -371,12 +371,122 @@
 
 ---
 
+## rule_pool — 规则池表
+
+存储从文章中提取的交易规则（Stage 11）。
+
+| 字段 | 类型 | 可空 | 说明 |
+|---|---|---|---|
+| `id` | UUID | 否 | 主键 |
+| `rule_id` | VARCHAR(128) | 否 | 规则唯一 ID（格式：`{article_id}:{version}:{source_type}:{idx}`） |
+| `source_article_ids` | JSONB | 否 | 来源文章 ID 列表 |
+| `source_type` | VARCHAR(32) | 否 | 规则来源类型（standalone/derived/experience） |
+| `rule_type` | VARCHAR(64) | 否 | 规则类型（entry/exit/filter） |
+| `instrument_focus` | VARCHAR(32) | 否 | 标的类型（stock/index/mixed），默认 mixed |
+| `extraction_layer` | JSONB | 否 | 提取层完整信息（raw_condition、mapped_condition、action 等） |
+| `mapping_status` | VARCHAR(32) | 否 | 映射状态（unmapped/pending/mapped/unmappable），默认 unmapped |
+| `mapped_by` | VARCHAR(64) | 是 | 映射操作人 |
+| `mapped_at` | DATETIME | 是 | 映射时间 |
+| `initial_confidence` | NUMERIC(4,3) | 否 | 提取时的初始置信度 |
+| `validated_confidence` | NUMERIC(4,3) | 是 | 回测验证后的置信度（由 `compute_confidence_adjustment()` 更新） |
+| `review_status` | VARCHAR(32) | 否 | 审核状态（pending/approved/rejected），默认 pending |
+| `reviewed_by` | VARCHAR(64) | 是 | 审核操作人（auto_review 或 cli_user） |
+| `reviewed_at` | DATETIME | 是 | 审核时间 |
+| `backtest_result` | JSONB | 是 | 回测结果（hit_rate、avg_return、sharpe_ratio、max_drawdown 等） |
+| `backtest_hits` | INTEGER | 否 | 回测命中次数，默认 0 |
+| `backtest_misses` | INTEGER | 否 | 回测失效次数，默认 0 |
+| `backtest_samples` | INTEGER | 否 | 回测样本总数，默认 0 |
+| `backtest_triggered_at` | DATETIME | 是 | 最近一次回测触发时间 |
+| `used_in_prediction` | BOOLEAN | 否 | 是否已用于盘前预测，默认 false |
+| `prediction_count` | INTEGER | 否 | 预测使用次数，默认 0 |
+| `last_used_at` | DATETIME | 是 | 最近一次预测使用时间 |
+| `created_at` | DATETIME | 否 | 创建时间 |
+| `updated_at` | DATETIME | 否 | 更新时间 |
+
+**索引：**
+- `ix_rule_pool_rule_id` - rule_id（唯一）
+- `ix_rule_pool_rule_type` - rule_type
+- `ix_rule_pool_mapping_status` - mapping_status
+- `ix_rule_pool_review_status` - review_status
+- `ix_rule_pool_created_at` - created_at
+
+**自动审核规则：**
+- `initial_confidence >= 0.7` 且 `extraction_layer.mapped_condition` 非空 → 自动 APPROVED
+- `initial_confidence < 0.2` → 自动 REJECTED
+- 其余 → PENDING（等待人工 CLI 审核）
+
+---
+
+## trade_sample — 交易样本表
+
+存储从文章或规则中提取的交易记录样本（Stage 11）。
+
+| 字段 | 类型 | 可空 | 说明 |
+|---|---|---|---|
+| `id` | UUID | 否 | 主键 |
+| `sample_id` | VARCHAR(128) | 否 | 样本唯一 ID（格式：`{article_id}:{version}:trade:{idx}`） |
+| `article_id` | UUID | 是 | 来源文章 ID（FK → blog_articles.id, ON DELETE SET NULL） |
+| `rule_id` | VARCHAR(128) | 是 | 关联规则 ID |
+| `symbol` | VARCHAR(32) | 否 | 标的代码 |
+| `side` | VARCHAR(16) | 否 | 买卖方向（BUY/SELL） |
+| `entry_price` | NUMERIC(18,6) | 否 | 入场价格 |
+| `exit_price` | NUMERIC(18,6) | 是 | 出场价格 |
+| `quantity` | NUMERIC(18,6) | 否 | 数量 |
+| `entry_at` | DATETIME | 否 | 入场时间 |
+| `exit_at` | DATETIME | 是 | 出场时间 |
+| `pnl` | NUMERIC(18,4) | 是 | 盈亏金额 |
+| `pnl_pct` | NUMERIC(8,4) | 是 | 盈亏百分比 |
+| `holding_period` | INTEGER | 是 | 持仓周期（天） |
+| `tags` | JSONB | 否 | 标签列表（如：打板、低吸、止盈、止损） |
+| `notes` | TEXT | 是 | 备注说明 |
+| `created_at` | DATETIME | 否 | 创建时间 |
+| `updated_at` | DATETIME | 否 | 更新时间 |
+
+**索引：**
+- `ix_trade_sample_sample_id` - sample_id（唯一）
+- `ix_trade_sample_symbol` - symbol
+- `ix_trade_sample_entry_at` - entry_at
+- `ix_trade_sample_article_id` - article_id
+- `ix_trade_sample_rule_id` - rule_id
+
+---
+
+## article_classification — 文章分类表
+
+存储文章类型分类结果（Stage 11）。
+
+| 字段 | 类型 | 可空 | 说明 |
+|---|---|---|---|
+| `id` | UUID | 否 | 主键 |
+| `article_id` | UUID | 否 | 文章 ID（FK → blog_articles.id, ON DELETE CASCADE，唯一） |
+| `article_type` | VARCHAR(32) | 否 | 文章类型（rule/record/concept/mixed/noise） |
+| `confidence` | NUMERIC(4,3) | 否 | 分类置信度 |
+| `classified_by` | VARCHAR(64) | 是 | 分类器标识 |
+| `classified_at` | DATETIME | 是 | 分类时间 |
+| `reasons` | JSONB | 否 | 分类依据列表 |
+| `extra_metadata` | JSONB | 否 | 扩展元数据（type_scores、version 等） |
+| `created_at` | DATETIME | 否 | 创建时间 |
+| `updated_at` | DATETIME | 否 | 更新时间 |
+
+**索引：**
+- `ix_article_classification_article_id` - article_id（唯一）
+- `ix_article_classification_article_type` - article_type
+- `ix_article_classification_confidence` - confidence
+
+---
+
 ## 表关系图
 
 ```
 blog_articles ──1:1── article_metadata
     │
-    └─────────────── trade_logs (article_id → blog_articles.id, ON DELETE SET NULL)
+    ├─────────────── trade_logs (article_id → blog_articles.id, ON DELETE SET NULL)
+    ├─────────────── article_classification (article_id → blog_articles.id, ON DELETE CASCADE)
+    └─────────────── trade_sample (article_id → blog_articles.id, ON DELETE SET NULL)
+
+rule_pool ───────── 独立表（规则通过 rule_id 关联）
+    ↕ trade_sample (rule_id → rule_pool.rule_id)
+    ↕ article_metadata.standalone_rule_ids / derived_rule_ids (JSONB 引用 rule_id)
 
 stock_info ──────── 独立表（用于名称→代码映射）
 ohlcv_bars ──────── 独立表（日线行情，回测引擎直读）

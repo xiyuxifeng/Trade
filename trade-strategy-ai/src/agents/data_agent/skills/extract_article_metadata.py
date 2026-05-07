@@ -26,7 +26,10 @@ from src.market_data.stock_info_service import get_stock_name_to_symbol_map
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.persona.schemas import ArticlePrecondition, ArticleStrategyRule
+from src.common.logger import get_logger
 from src.schemas.contracts import AgentTask
+
+logger = get_logger(__name__)
 
 
 class ExtractErrorType(StrEnum):
@@ -591,6 +594,67 @@ async def _persist_extracted_rules(
     return rule_ids
 
 
+async def _auto_review_rules(
+    *,
+    session: Any,
+    rule_ids: list[str],
+    rules: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    """对刚入库的规则执行自动审核。
+
+    审核分级：
+    - 置信度 >= 0.7 且有 mapped_condition → auto APPROVE
+    - 置信度 < 0.2 → auto REJECT
+    - 其余 → 保持 PENDING
+
+    Args:
+        session: 数据库会话
+        rule_ids: 规则 ID 列表
+        rules: 原始规则列表（用于获取 mapped_condition 状态）
+
+    Returns:
+        审核结果列表 [{"rule_id": ..., "decision": ...}]
+    """
+    repo = RulePoolRepository(session)
+    results: list[dict[str, str]] = []
+
+    for idx, rule_id in enumerate(rule_ids):
+        rule = rules[idx] if idx < len(rules) else {}
+        confidence = _clamp(_safe_float(rule.get("confidence")), 0.0, 1.0) or 0.5
+        has_mapped = _has_mappable_condition(rule)
+
+        decision = await repo.auto_review_rule(
+            rule_id=rule_id,
+            initial_confidence=confidence,
+            has_mapped_condition=has_mapped,
+        )
+        results.append({"rule_id": rule_id, "decision": decision, "confidence": str(confidence)})
+
+        logger.info(
+            "自动审核: rule_id=%s, confidence=%.3f, has_mapped=%s → %s",
+            rule_id, confidence, has_mapped, decision,
+        )
+
+    return results
+
+
+def _has_mappable_condition(rule: dict[str, Any]) -> bool:
+    """判断规则是否有可映射的条件。
+
+    检查规则中是否有 claim_key、condition、quoted_text 等可用于映射的字段。
+    """
+    if rule.get("claim_key"):
+        return True
+    condition = rule.get("condition")
+    if isinstance(condition, dict) and condition:
+        return True
+    if isinstance(condition, str) and condition.strip():
+        return True
+    if rule.get("quoted_text"):
+        return True
+    return False
+
+
 def _find_sentence_bounds(content: str, pos: int) -> tuple[int, int]:
     """找到包含 pos 位置的句子边界。
 
@@ -801,6 +865,11 @@ async def _finalize_extraction_artifacts(
     """
     meta.extraction_version = version
 
+    logger.info(
+        "分层提取开始: article_id=%s, type=%s, rules=%d",
+        article.id, classification_type, len(rules),
+    )
+
     # 确保扩展字段初始化
     if meta.standalone_rule_ids is None:
         meta.standalone_rule_ids = []
@@ -822,6 +891,11 @@ async def _finalize_extraction_artifacts(
             meta.standalone_rule_ids = list(dict.fromkeys([
                 *(meta.standalone_rule_ids or []), *rule_ids
             ]))
+            await _auto_review_rules(session=session, rule_ids=rule_ids, rules=rules)
+            logger.info(
+                "规则型提取完成: article_id=%s, rules=%d, standalone_ids=%s",
+                article.id, len(rule_ids), meta.standalone_rule_ids[-len(rule_ids):],
+            )
 
     # === 记录型文章：提取 trade samples + 反推 derived rules ===
     elif classification_type == ArticleType.RECORD.value:
@@ -853,6 +927,11 @@ async def _finalize_extraction_artifacts(
             meta.derived_rule_ids = list(dict.fromkeys([
                 *(meta.derived_rule_ids or []), *rule_ids
             ]))
+            await _auto_review_rules(session=session, rule_ids=rule_ids, rules=rules)
+            logger.info(
+                "记录型提取完成: article_id=%s, samples=%d, derived_rules=%d",
+                article.id, len(sample_ids) if trade_samples else 0, len(rule_ids),
+            )
 
     # === 混合型文章：同时提取 standalone rules + trade samples ===
     elif classification_type == ArticleType.MIXED.value:
@@ -868,6 +947,7 @@ async def _finalize_extraction_artifacts(
             meta.standalone_rule_ids = list(dict.fromkeys([
                 *(meta.standalone_rule_ids or []), *rule_ids
             ]))
+            await _auto_review_rules(session=session, rule_ids=rule_ids, rules=rules)
 
         # 提取交易样本
         trade_samples = _extract_trade_samples_from_content(
@@ -884,6 +964,12 @@ async def _finalize_extraction_artifacts(
             meta.trade_sample_ids = list(dict.fromkeys([
                 *(meta.trade_sample_ids or []), *sample_ids
             ]))
+
+        logger.info(
+            "混合型提取完成: article_id=%s, rules=%d, samples=%d",
+            article.id, len(rule_ids) if rules else 0,
+            len(meta.trade_sample_ids or []),
+        )
 
     # === 概念型文章：不提取规则/样本 ===
     elif classification_type == ArticleType.CONCEPT.value:

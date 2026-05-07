@@ -328,7 +328,7 @@ class PostmortemService:
         stop_loss_price = evidence_pack.market_data.stop_loss_price
 
         symbol = evidence_pack.trade_idea.symbol if evidence_pack.trade_idea else ""
-        mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
+        mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = compute_mfe_mae_return(
             bars=bars,
             entry_price=entry_price,
             entry_date=evidence_pack.trade_date,
@@ -402,6 +402,8 @@ class PostmortemService:
             "notes_source": notes_source,
             "halted_dates": halted_dates,
             "halted_count": len(halted_dates),
+            "limit_locked_dates": limit_locked_dates,
+            "limit_locked_count": len(limit_locked_dates),
         }
 
         return PostmortemResult(

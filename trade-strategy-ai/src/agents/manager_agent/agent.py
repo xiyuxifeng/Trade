@@ -689,6 +689,62 @@ class ManagerAgent:
         write_json(report_path, report.model_dump())
         return report
 
+    async def _get_account_snapshot(
+        self,
+        *,
+        trade_idea: "TradeIdea" = None,
+        account_id: str = "default",
+    ) -> "AccountSnapshot":
+        """从真实 TradeLog 构建 AccountSnapshot。
+
+        优先使用交易记录计算真实持仓与资金状态；
+        当 DB 中无该账户记录或查询失败时，fallback 到模拟账户。
+
+        Args:
+            trade_idea: 交易想法（用于获取 trader_id 作为 account_id）
+            account_id: 账户 ID
+
+        Returns:
+            AccountSnapshot
+        """
+        from src.risk.account_service import build_account_snapshot
+        from src.risk.types import AccountSnapshot
+
+        # 尝试从 trade_idea 推断 account_id
+        if trade_idea and hasattr(trade_idea, 'trader_id') and trade_idea.trader_id:
+            account_id = str(trade_idea.trader_id)
+
+        try:
+            async with session_scope() as session:
+                snapshot = await build_account_snapshot(
+                    session=session,
+                    account_id=account_id,
+                )
+                logger.debug(
+                    "账户快照已构建: account=%s, net_value=%.2f, positions=%d",
+                    account_id,
+                    snapshot.net_value,
+                    len(snapshot.positions),
+                )
+                return snapshot
+        except Exception as e:
+            logger.warning(
+                "真实账户快照构建失败: %s，使用模拟账户 fallback",
+                e,
+            )
+
+        # Fallback: 模拟账户
+        return AccountSnapshot(
+            account_id=account_id,
+            timestamp=datetime.now(timezone.utc),
+            net_value=100000.0,
+            cash=50000.0,
+            total_position_value=50000.0,
+            positions=[],
+            daily_pnl=0.0,
+            total_pnl=0.0,
+        )
+
     async def evaluate_signal(
         self,
         trade_idea: "TradeIdea",
@@ -714,17 +770,9 @@ class ManagerAgent:
             synthesis_mode=SynthesisMode.PRIORITY
         )
 
-        # 2. 获取 AccountSnapshot（模拟）
-        from src.risk.types import AccountSnapshot
-        account = AccountSnapshot(
-            account_id="default",
-            timestamp=datetime.now(timezone.utc),
-            net_value=100000.0,
-            cash=50000.0,
-            total_position_value=50000.0,
-            positions=[],
-            daily_pnl=0.0,
-            total_pnl=0.0
+        # 2. 获取 AccountSnapshot（优先从真实交易记录构建，失败时 fallback 模拟账户）
+        account = await self._get_account_snapshot(
+            trade_idea=trade_idea,
         )
 
         # 3. RiskAgent 风控检查
@@ -835,7 +883,7 @@ class ManagerAgent:
             target_price = evidence_pack.market_data.target_price
             stop_loss_price = evidence_pack.market_data.stop_loss_price
 
-            mfe_val, mae_val, return_pct, exit_triggered, exit_date, halted_dates, eval_date = compute_mfe_mae_return(
+            mfe_val, mae_val, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date = compute_mfe_mae_return(
                 bars=bars,
                 entry_price=entry_price_val,
                 entry_date=str(as_of_date),
@@ -906,6 +954,8 @@ class ManagerAgent:
             # 记录停牌/无成交信息（如有）
             if halted_dates:
                 notes_text += f", halted_dates={halted_dates}"
+            if limit_locked_dates:
+                notes_text += f", limit_locked_dates={limit_locked_dates}"
 
             # NTL-S5-013: current_price 语义变为 exit_price（bars 末bar收盘价或 last_price）
             if bars:

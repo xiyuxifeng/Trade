@@ -236,21 +236,18 @@ def _normalize_bar(bar: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_bar_halted(bar: dict[str, Any]) -> bool:
-    """判断单个 bar 是否表示停牌或无成交。
+    """判断单个 bar 是否表示停牌。
 
-    识别规则（按优先级）：
-    1. 若 bar 显式包含 is_halted=True，直接判定为停牌
-    2. 若 volume == 0 且 high == low == open == close（价格无波动），判定为停牌
-    3. 若 volume == 0 但价格有波动，视为无成交但可能有竞价/盘前盘后价格，不判定为停牌
+    仅识别真实停牌（交易暂停），不包括一字板。
+    如需区分一字板，请使用 _classify_bar_status。
 
-    返回 True 表示该 bar 应被跳过（不参与 MFE/MAE 计算）。
+    识别规则：
+    1. 显式 is_halted=True
+    2. volume == 0 且价格完全无波动，且不在涨跌停价格上
     """
-    # 规则1：显式停牌标志
     if bar.get("is_halted") is True:
         return True
 
-    # 规则2：无成交量且价格完全无波动 → 停牌
-    # 注意：volume 字段缺失时不默认视为 0（避免正常数据被误判为停牌）
     if "volume" in bar:
         volume = float(bar.get("volume") or 0)
         high = float(bar.get("high") or 0)
@@ -261,6 +258,100 @@ def _is_bar_halted(bar: dict[str, Any]) -> bool:
             return True
 
     return False
+
+
+def _is_bar_limit_locked(
+    bar: dict[str, Any],
+    prev_close: float | None = None,
+    limit_up_pct: float | None = None,
+    limit_down_pct: float | None = None,
+) -> tuple[bool, str]:
+    """判断单个 bar 是否为涨跌停一字板。
+
+    一字板特征：
+    - 开盘价 = 涨停价/跌停价
+    - 成交量极低（无法买入/卖出）
+    - 价格全天无波动（high == low == close）
+
+    与停牌的区别：
+    - 停牌：无价格、无成交、原因是不交易
+    - 一字板：有价格（涨跌停价）、可能有极少成交、原因是买卖力量极端
+
+    Args:
+        bar: OHLCV bar 数据
+        prev_close: 前一日收盘价（用于计算涨跌停价格）
+        limit_up_pct: 涨停比例（None 表示无限制）
+        limit_down_pct: 跌停比例（None 表示无限制）
+
+    Returns:
+        (is_locked, direction) — direction 为 "up"/"down"/""
+    """
+    if prev_close is None or prev_close <= 0:
+        return False, ""
+
+    open_price = float(bar.get("open") or 0)
+    high = float(bar.get("high") or 0)
+    low = float(bar.get("low") or 0)
+    close = float(bar.get("close") or 0)
+    volume = float(bar.get("volume") or 0)
+
+    if open_price <= 0:
+        return False, ""
+
+    # 检查是否在涨停价上且价格无波动
+    if limit_up_pct is not None:
+        limit_up_price = prev_close * (1 + limit_up_pct)
+        if (abs(open_price - limit_up_price) < 0.01
+                and high == low == open_price == close
+                and volume < 100):  # 极低成交量
+            return True, "up"
+
+    # 检查是否在跌停价上且价格无波动
+    if limit_down_pct is not None:
+        limit_down_price = prev_close * (1 - limit_down_pct)
+        if (abs(open_price - limit_down_price) < 0.01
+                and high == low == open_price == close
+                and volume < 100):
+            return True, "down"
+
+    return False, ""
+
+
+def classify_bar_status(
+    bar: dict[str, Any],
+    prev_close: float | None = None,
+    limit_up_pct: float | None = None,
+    limit_down_pct: float | None = None,
+) -> str:
+    """分类 bar 的交易状态。
+
+    检查顺序：一字板 > 停牌 > 低流动性 > 正常
+    一字板优先于停牌判断（一字板是极端市场行为，不是暂停交易）。
+
+    Returns:
+        "normal" — 正常交易
+        "halted" — 停牌（无交易）
+        "limit_up_locked" — 涨停一字板
+        "limit_down_locked" — 跌停一字板
+        "low_liquidity" — 低流动性（有价格但成交量极小）
+    """
+    # 1. 优先检查一字板（涨跌停锁死），避免与停牌混淆
+    is_locked, direction = _is_bar_limit_locked(
+        bar, prev_close, limit_up_pct, limit_down_pct
+    )
+    if is_locked:
+        return f"limit_{direction}_locked"
+
+    # 2. 停牌检查
+    if _is_bar_halted(bar):
+        return "halted"
+
+    # 3. 流动性检查
+    volume = float(bar.get("volume") or 0)
+    if 0 < volume < 100:
+        return "low_liquidity"
+
+    return "normal"
 
 
 def _find_bar_index(bars: list[dict[str, Any]], target_date: str) -> int | None:
@@ -318,10 +409,11 @@ def compute_mfe_mae_return(
         constraint: 交易规则约束配置（None 时使用默认 A 股规则）
 
     Returns:
-        (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)
+        (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date)
         exit_triggered: "target" | "stop_loss" | None（实际触发出场的类型）
         exit_date: 触发 exit 的日期或 None（None 表示未实际出场）
-        halted_dates: 被识别为停牌/无成交的日期列表
+        halted_dates: 被识别为停牌的日期列表
+        limit_locked_dates: 被识别为一字板（涨跌停锁死）的日期列表
         eval_date: 评估截止日（最后一条 bar 的日期，无论是否停牌）
     """
     if not bars or entry_price <= 0:
@@ -329,7 +421,7 @@ def compute_mfe_mae_return(
         eval_date_fallback = None
         if bars:
             eval_date_fallback = _normalize_bar(bars[-1]).get("date")
-        return (0.0, 0.0, 0.0, None, None, [], eval_date_fallback)
+        return (0.0, 0.0, 0.0, None, None, [], [], eval_date_fallback)
 
     # 解析交易约束
     resolved = _resolve_constraint(constraint, symbol)
@@ -350,30 +442,44 @@ def compute_mfe_mae_return(
     exit_date: str | None = None
     exit_price = entry_price  # 默认用 entry_price
     halted_dates: list[str] = []
+    limit_locked_dates: list[str] = []  # 一字板日期（区分于停牌）
 
     for i in range(entry_idx, len(bars)):
         bar = _normalize_bar(bars[i])
         bar_date = bar["date"]
 
-        # 跳过停牌/无成交 bar
-        if _is_bar_halted(bar):
-            logger.debug(
-                "停牌跳过: symbol=%s, date=%s",
-                symbol,
-                bar_date,
-            )
+        # 计算前收价（用于涨跌停约束和一字板判断）
+        prev_close_for_limit = bar["open"]
+        if i > 0:
+            prev_close_for_limit = _normalize_bar(bars[i - 1])["close"]
+
+        # 分类 bar 状态：停牌 / 一字板 / 低流动性 / 正常
+        bar_status = classify_bar_status(
+            bar,
+            prev_close=prev_close_for_limit,
+            limit_up_pct=resolved.limit_up_pct,
+            limit_down_pct=resolved.limit_down_pct,
+        )
+
+        # 停牌：跳过
+        if bar_status == "halted":
+            logger.debug("停牌跳过: symbol=%s, date=%s", symbol, bar_date)
             halted_dates.append(bar_date)
             continue
+
+        # 一字板：记录但使用涨跌停价格参与 MFE 计算（理论极值）
+        if bar_status in ("limit_up_locked", "limit_down_locked"):
+            logger.debug("一字板: symbol=%s, date=%s, direction=%s", symbol, bar_date, bar_status)
+            limit_locked_dates.append(bar_date)
+            # 一字板日不跳过，但成交量极低，MFE/MAE 使用涨跌停价作为极值参考
 
         high = bar["high"]
         low = bar["low"]
         close = bar["close"]
         open_price = bar["open"]
 
-        # 计算当日涨跌停价格约束
-        prev_close = open_price  # 用当日开盘价作为前收近似
-        if i > 0:
-            prev_close = _normalize_bar(bars[i - 1])["close"]
+        # 涨跌停价格约束
+        prev_close = prev_close_for_limit
 
         # 有效 high/low：受涨跌停限制（None 表示无限制，如新股上市前 5 日）
         if resolved.limit_up_pct is not None:
@@ -440,4 +546,4 @@ def compute_mfe_mae_return(
     # 计算收益率（比例口径：0.01 = 1%）
     return_pct = compute_return_pct(entry_price, exit_price)
 
-    return (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, eval_date)
+    return (mfe, mae, return_pct, exit_triggered, exit_date, halted_dates, limit_locked_dates, eval_date)

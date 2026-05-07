@@ -1168,32 +1168,183 @@ rule_pool_app = typer.Typer(help="规则池管理命令")
 @rule_pool_app.command("list")
 def rule_pool_list(
     limit: int = typer.Option(100, help="返回结果数量上限"),
+    status: str = typer.Option(None, help="按审核状态过滤：pending、approved、rejected"),
+    rule_type: str = typer.Option(None, help="按规则类型过滤：entry、exit、filter"),
+    skip_no_mapped: bool = typer.Option(False, help="只显示有 mapped_condition 的规则"),
 ):
-    """列出规则池中的规则"""
+    """列出规则池中的规则（支持过滤）"""
+    from src.rule_pool.schemas import ReviewStatus
+
     async def _run():
         async with session_scope() as session:
             repo = RulePoolRepository(session)
-            rules = await repo.get_rules_by_status(limit=limit)
+            review_filter = None
+            if status:
+                status_lower = status.lower()
+                for s in ReviewStatus:
+                    if s.value == status_lower:
+                        review_filter = s
+                        break
+                if review_filter is None:
+                    typer.echo(f"无效的 status: {status}，可选值: pending, approved, rejected", err=True)
+                    return
+            rules = await repo.get_rules_by_status(review_status=review_filter, limit=limit)
             for r in rules:
+                if rule_type and r.rule_type != rule_type:
+                    continue
+                if skip_no_mapped:
+                    extraction = r.extraction_layer or {}
+                    if not extraction.get("mapped_condition"):
+                        continue
                 confidence = r.validated_confidence or r.initial_confidence
-                typer.echo(f"{r.rule_id} | {r.rule_type} | confidence={confidence:.2f} | status={r.review_status}")
+                mapped_tag = " [mapped]" if (r.extraction_layer or {}).get("mapped_condition") else ""
+                typer.echo(f"{r.rule_id} | {r.rule_type} | {r.source_type} | confidence={confidence:.3f} | review={r.review_status}{mapped_tag}")
+    run_async_with_cleanup(_run())
+
+
+@rule_pool_app.command("show")
+def rule_pool_show(
+    rule_id: str = typer.Option(..., help="规则 ID"),
+):
+    """查看单条规则完整详情"""
+    import json
+
+    async def _run():
+        async with session_scope() as session:
+            repo = RulePoolRepository(session)
+            rule = await repo.get_rule_by_id(rule_id)
+            if rule is None:
+                typer.echo(f"规则不存在: {rule_id}", err=True)
+                return
+
+            extraction = rule.extraction_layer or {}
+            raw = extraction.get("raw_condition", {})
+            mapped = extraction.get("mapped_condition")
+            action = extraction.get("action", {})
+            bt = rule.backtest_result or {}
+
+            typer.echo("━━━ 规则详情 ━━━")
+            typer.echo(f"  rule_id:            {rule.rule_id}")
+            typer.echo(f"  rule_type:          {rule.rule_type}")
+            typer.echo(f"  source_type:        {rule.source_type}")
+            typer.echo(f"  instrument_focus:   {rule.instrument_focus}")
+            typer.echo()
+            typer.echo("━━━ 来源 ━━━")
+            typer.echo(f"  source_article_ids: {json.dumps(rule.source_article_ids, ensure_ascii=False)}")
+            typer.echo()
+            typer.echo("━━━ 置信度 ━━━")
+            typer.echo(f"  initial_confidence:   {rule.initial_confidence}")
+            vc = rule.validated_confidence
+            typer.echo(f"  validated_confidence: {vc:.3f}" if vc is not None else "  validated_confidence: -")
+            typer.echo()
+            typer.echo("━━━ 审核 ━━━")
+            typer.echo(f"  review_status:  {rule.review_status}")
+            typer.echo(f"  reviewed_by:    {rule.reviewed_by or '-'}")
+            reviewed_at = rule.reviewed_at.isoformat() if rule.reviewed_at else "-"
+            typer.echo(f"  reviewed_at:    {reviewed_at}")
+            typer.echo()
+            typer.echo("━━━ 提取层 ━━━")
+            typer.echo(f"  raw_text:          {raw.get('raw_text', '-')[:100]}")
+            typer.echo(f"  indicators:        {json.dumps(raw.get('indicators', []))}")
+            typer.echo(f"  mapped_condition:  {json.dumps(mapped, ensure_ascii=False, indent=2) if mapped else '(未映射)'}")
+            typer.echo(f"  action:            {json.dumps(action, ensure_ascii=False)}")
+            typer.echo(f"  extract_confidence:{extraction.get('confidence', '-')}")
+            typer.echo(f"  quoted_text:       {(extraction.get('quoted_text') or '-')[:100]}")
+            typer.echo()
+            typer.echo("━━━ 回测结果 ━━━")
+            if bt:
+                typer.echo(f"  hit_rate:      {bt.get('hit_rate', '-'):.3f}" if isinstance(bt.get('hit_rate'), float) else f"  hit_rate:      {bt.get('hit_rate', '-')}")
+                typer.echo(f"  avg_return:    {bt.get('avg_return', '-')}")
+                typer.echo(f"  sharpe_ratio:  {bt.get('sharpe_ratio', '-')}")
+                typer.echo(f"  max_drawdown:  {bt.get('max_drawdown', '-')}")
+            typer.echo(f"  backtest_hits:   {rule.backtest_hits}")
+            typer.echo(f"  backtest_misses: {rule.backtest_misses}")
+            typer.echo(f"  backtest_samples:{rule.backtest_samples}")
+            typer.echo()
+            typer.echo("━━━ 映射 ━━━")
+            typer.echo(f"  mapping_status:  {rule.mapping_status}")
+            typer.echo(f"  mapped_by:       {rule.mapped_by or '-'}")
+            typer.echo()
+            typer.echo("━━━ 预测 ━━━")
+            typer.echo(f"  used_in_prediction: {rule.used_in_prediction}")
+            typer.echo(f"  prediction_count:   {rule.prediction_count}")
     run_async_with_cleanup(_run())
 
 
 @rule_pool_app.command("review")
 def rule_pool_review(
     rule_id: str = typer.Option(..., help="规则 ID"),
-    decision: str = typer.Option(..., help="审核决定：approve 或 reject"),
+    decision: str = typer.Option(..., help="审核决定：approve、reject 或 pending"),
+    force: bool = typer.Option(False, help="强制覆盖已有审核结果"),
 ):
-    """审核规则 (approve/reject)"""
+    """审核规则 (approve/reject/pending)"""
     from src.rule_pool.schemas import ReviewStatus
+
+    _DECISION_MAP = {
+        "approve": ReviewStatus.APPROVED,
+        "reject": ReviewStatus.REJECTED,
+        "pending": ReviewStatus.PENDING,
+    }
+    if decision not in _DECISION_MAP:
+        typer.echo(f"无效的 decision: {decision}，可选值: approve, reject, pending", err=True)
+        return
 
     async def _run():
         async with session_scope() as session:
             repo = RulePoolRepository(session)
-            status = ReviewStatus.APPROVED if decision == "approve" else ReviewStatus.REJECTED
-            await repo.update_review(rule_id, status, reviewed_by="cli_user")
-            typer.echo(f"Rule {rule_id} {status.value}")
+            if force:
+                rule = await repo.get_rule_by_id(rule_id)
+                if rule is None:
+                    typer.echo(f"规则不存在: {rule_id}", err=True)
+                    return
+            status = _DECISION_MAP[decision]
+            success = await repo.update_review(rule_id, status, reviewed_by="cli_user", force=force)
+            if success:
+                typer.echo(f"Rule {rule_id} → {status.value}" + (" (force)" if force else ""))
+            else:
+                typer.echo(f"更新失败: 规则 {rule_id} 不存在或已审核（使用 --force 强制覆盖）", err=True)
+    run_async_with_cleanup(_run())
+
+
+@rule_pool_app.command("review-batch")
+def rule_pool_review_batch(
+    decision: str = typer.Option(..., help="审核决定：approve、reject 或 pending"),
+    status: str = typer.Option("pending", help="筛选当前状态：pending、approved、rejected"),
+    limit: int = typer.Option(50, help="批量处理上限"),
+    force: bool = typer.Option(False, help="强制覆盖已有审核结果"),
+):
+    """批量审核规则 (approve/reject/pending)"""
+    from src.rule_pool.schemas import ReviewStatus
+
+    _DECISION_MAP = {
+        "approve": ReviewStatus.APPROVED,
+        "reject": ReviewStatus.REJECTED,
+        "pending": ReviewStatus.PENDING,
+    }
+    _STATUS_MAP = {
+        "pending": ReviewStatus.PENDING,
+        "approved": ReviewStatus.APPROVED,
+        "rejected": ReviewStatus.REJECTED,
+    }
+    if decision not in _DECISION_MAP:
+        typer.echo(f"无效的 decision: {decision}，可选值: approve, reject, pending", err=True)
+        return
+    if status not in _STATUS_MAP:
+        typer.echo(f"无效的 status: {status}，可选值: pending, approved, rejected", err=True)
+        return
+
+    async def _run():
+        async with session_scope() as session:
+            repo = RulePoolRepository(session)
+            target_status = _DECISION_MAP[decision]
+            filter_status = _STATUS_MAP[status]
+            rules = await repo.get_rules_by_status(review_status=filter_status, limit=limit)
+            count = 0
+            for rule in rules:
+                if force or rule.review_status == filter_status.value:
+                    await repo.update_review(rule.rule_id, target_status, reviewed_by="cli_user", force=force)
+                    count += 1
+            typer.echo(f"批量审核完成: {count} 条规则 {filter_status.value} → {target_status.value}")
     run_async_with_cleanup(_run())
 
 

@@ -8,8 +8,11 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.common.logger import get_logger
 from src.rule_pool.repository import RulePoolRepository
 from src.rule_pool.schemas import RuleBacktestResult
+
+logger = get_logger(__name__)
 
 
 class RulePoolAttributionService:
@@ -69,4 +72,8 @@ class RulePoolAttributionService:
         }
 
         await self.session.flush()
+        logger.info(
+            "预测归因记录: rule_id=%s, hit=%s, validated_confidence=%.3f",
+            rule_id, hit, rule.validated_confidence,
+        )
         return True

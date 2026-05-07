@@ -17,6 +17,11 @@
 - [5. 可配置参数清单（含含义）](#5-可配置参数清单含含义)
 - [6. 结果与中间文件在哪里看](#6-结果与中间文件在哪里看)
 - [7. 如何进行调优/优化](#7-如何进行调优优化)
+  - [7.1 文章→规则完整链路](#71-文章规则完整链路端到端)
+  - [7.2 trader 策略回测与规则验真](#72-trader-策略回测与规则验真)
+  - [7.3 风控账户快照](#73-风控账户快照)
+  - [7.4 trader 筛选与策略建议](#74-trader-筛选与策略建议optimize)
+  - [7.5 规则池管理命令速查](#75-规则池管理命令速查rule-pool)
 - [8. 常见问题与日志排障](#8-常见问题与日志排障)
 - [9. 其他重要信息](#9-其他重要信息)
 
@@ -34,13 +39,14 @@
 
 ### 0.2 创建 Python 虚拟环境并安装依赖
 
-推荐在 workspace 根目录创建统一虚拟环境（与项目 README 保持一致）：
+在 workspace 根目录（`trade-strategy-ai` 的上一层）创建虚拟环境：
 
 ```bash
-cd ..
+# 在 workspace 根目录执行
 python -m venv .venv
 source .venv/bin/activate
 
+# 进入项目目录，可编辑安装
 cd trade-strategy-ai
 pip install -e ".[dev]"
 ```
@@ -418,7 +424,7 @@ python -m cli.main <command> --help
 
 - `extract-articles`
 	- `--config`：配置文件路径
-	- `--limit`：最多抽取多少篇（默认 20）
+	- `--limit`：最多抽取多少篇（默认 20）；`--force` 强制重跑（清空断点）；`--version` 提取版本号（默认 v1，升级 prompts 后应使用 v2/v3）
 	- `--log-level`：日志级别（默认 `INFO`）
 	- 说明：未配置 LLM 时会使用启发式降级抽取，并写入 `article_metadata.raw_llm_output.mode=fallback_heuristic`
 
@@ -535,16 +541,52 @@ python -m cli.main optimize <subcommand> [options]
 
 > 注意：`optimize create-candidate` 支持 `--output` 输出候选版本 JSON；`--db` 模式要求提供 `--trader` 与 `--date`。
 
-### 2.8 规则池审核（rule-pool）
+### 2.8 规则池管理（rule-pool）
 
-入口：
+**查看规则详情：**
 
 ```bash
-python -m cli.main rule-pool list --limit 100
-python -m cli.main rule-pool review --rule-id <RULE_ID> --decision approve
+# 查看单条规则完整信息（基本属性、提取层、回测结果、审核状态等）
+python -m cli.main rule-pool show --rule-id <RULE_ID>
 ```
 
-用于对规则池内的规则做人工审核（approve/reject）。
+**列出规则（支持过滤）：**
+
+```bash
+# 列出所有规则
+python -m cli.main rule-pool list --limit 100
+
+# 按审核状态过滤
+python -m cli.main rule-pool list --status pending
+
+# 按规则类型过滤
+python -m cli.main rule-pool list --rule-type entry
+
+# 只显示有映射条件的规则（可参与回测）
+python -m cli.main rule-pool list --skip-no-mapped
+```
+
+**审核规则：**
+
+```bash
+# 单条审核（approve / reject / pending）
+python -m cli.main rule-pool review --rule-id <RULE_ID> --decision approve
+
+# 强制覆盖已有审核结果
+python -m cli.main rule-pool review --rule-id <RULE_ID> --decision reject --force
+
+# 批量审核：将 pending 规则批量 approve
+python -m cli.main rule-pool review-batch --decision approve --status pending --limit 50
+```
+
+**自动审核机制：**
+
+规则在文章提取入库时自动触发审核，无需人工干预：
+- `initial_confidence >= 0.7` 且规则有可映射条件 → **自动通过** (auto_review)
+- `initial_confidence < 0.2` → **自动拒绝**
+- `0.2 <= initial_confidence < 0.7` → 保持 **pending**，等待人工审核
+
+人工审核通过 CLI `review` 命令执行，`--force` 可覆盖自动审核结果。
 
 ### 2.9 KaipanScheduler（独立 CLI，非 `cli.main`）
 
@@ -583,13 +625,26 @@ export TGB_COOKIE='(你的淘股吧 Cookie)'
 python -m cli.main db-migrate --config config/app.yaml
 ```
 
-3）跑数据 pipeline：
+3）跑数据 pipeline（抓取文章 → 清洗 → 入库）：
 
 ```bash
 python -m cli.main pipeline-run --config config/app.yaml --max-articles 10
 ```
 
-4）生成盘前/盘后：
+4）抓取 OHLCV 行情 + 构建候选池快照（盘前/盘后依赖）：
+
+```bash
+python -m cli.main ohlcv crawl --mode full --from 2026-01-01 --to 2026-04-30 --limit 50
+python -m cli.main snapshot build --date 2026-04-29 --type all
+```
+
+5）文章提取 → 规则入库（Stage 11 链路）：
+
+```bash
+python -m cli.main extract-articles --config config/app.yaml --limit 50
+```
+
+6）生成盘前/盘后：
 
 ```bash
 python -m cli.main run-pre-market --config config/app.yaml --export-html
@@ -847,6 +902,23 @@ CLI 大多数命令还会把 INFO 级别打印到控制台。
 
 > 若使用 `--use-db`：crawl/raw 会写入数据库 `raw_articles`，增量状态写 `crawl_state` 表。
 
+### 6.2.1 规则池相关数据（数据库表）
+
+`extract-articles` 命令执行后，结果写入以下数据库表（详见 `docs/db-struct.md`）：
+
+| 表 | 内容 |
+|---|---|
+| `article_classification` | 文章类型分类结果（rule/record/mixed/concept/noise） |
+| `article_metadata` | 文章元数据（概念、标的、规则、前置条件、情绪） |
+| `rule_pool` | 提取的规则（含置信度、审核状态、回测结果） |
+| `trade_sample` | 从 record/mixed 文章提取的交易记录样本 |
+
+查看方式：
+```bash
+python -m cli.main rule-pool list --limit 50
+python -m cli.main rule-pool show --rule-id <RULE_ID>
+```
+
 ### 6.3 盘前/盘后产物（统一在 `storage.output_dir`）
 
 默认输出目录：`data/processed/phase0`（可配置）。
@@ -897,26 +969,74 @@ data/kaipan/
 2. **回测/验真**（验证规则是否可程序化、是否有效）
 3. **生成候选策略版本**（不直接覆盖 released，先生成 candidate）
 
-### 7.1 抽取质量调优（建议顺序）
+### 7.1 文章→规则完整链路（端到端）
 
-1）确认 `prompts/` 目录存在（`extract-articles` 依赖它）。
+从文章到可用于预测的规则，完整链路分为 4 步。每步都是自动化的，但可以人工干预。
 
-2）开启/配置 LLM：在 `config/app.yaml` 中设置 `llm.*`，API Key 建议用环境变量注入。
-
-3）执行抽取：
+#### Step 1: 文章提取（自动分类 + 提取 + 入库 + 审核）
 
 ```bash
 python -m cli.main extract-articles --config config/app.yaml --limit 50
 ```
 
-4）查看失败与断点：抽取会写错误日志与断点记录（用于定位失败原因）。
+这一条命令内部自动完成：
+1. **文章分类**：LLM 将文章分为 rule/record/mixed/concept/noise 五类 → 写入 `article_classification` 表
+2. **元数据提取**：LLM 提取概念、标的、交易规则、前置条件、情绪分数
+3. **分层落库**（按文章类型分流）：
+   - `rule` → 提取 standalone rules → 写入 `rule_pool` 表 → `standalone_rule_ids`
+   - `record` → 提取 trade samples → 写入 `trade_sample` 表 + 反推 derived rules → `derived_rule_ids`
+   - `mixed` → 同时提取规则 + 交易样本
+   - `concept`/`noise` → 跳过
+4. **自动审核**（入库后立即执行）：
+   - `confidence >= 0.7` 且规则有可映射条件 → **自动 APPROVED**
+   - `confidence < 0.2` → **自动 REJECTED**
+   - 中间 → 保持 **PENDING**（等待人工审核）
 
+产物与日志：
 - 错误日志（JSONL）：`data/processed/llm_extraction_errors.jsonl`
 - 断点文件（JSONL）：`data/processed/pipeline/llm_checkpoint.jsonl`
 
-### 7.2 回测与规则验真
+#### Step 2: 查看与人工审核
 
-运行回测（建议输出 JSON，方便后续 optimize/filter 使用）：
+```bash
+# 查看待审核的规则
+python -m cli.main rule-pool list --status pending --limit 50
+
+# 查看单条规则完整详情（提取层、回测结果、审核状态）
+python -m cli.main rule-pool show --rule-id <RULE_ID>
+
+# 单条审核
+python -m cli.main rule-pool review --rule-id <RULE_ID> --decision approve
+
+# 批量审核
+python -m cli.main rule-pool review-batch --decision approve --status pending --limit 50
+
+# 只看已审核通过且有映射条件的规则（可直接回测）
+python -m cli.main rule-pool list --status approved --skip-no-mapped
+```
+
+#### Step 3: 规则回测（自动调度 + 结果查看）
+
+规则回测由调度器自动执行（每周日凌晨），使用真实 OHLCV/指标数据评估每条规则的命中率和 T+1 收益。
+
+回测结果自动写回 `rule_pool` 表（`backtest_result`/`backtest_hits`/`validated_confidence` 字段），可通过 `rule-pool show` 查看。
+
+```bash
+# 查看规则的回测结果
+python -m cli.main rule-pool show --rule-id <RULE_ID>
+# 输出中查看 "回测结果" 和 "置信度" 段落：
+#   validated_confidence ← 回测后的多指标综合置信度
+#   hit_rate / avg_return / sharpe_ratio / max_drawdown
+```
+
+#### Step 4: 预测与归因（高置信度规则参与）
+
+- `validated_confidence >= 0.8`（A 级）→ 自动进入盘前预测池
+- 盘后归因记录预测命中/失效 → 更新 `backtest_hits`/`backtest_misses` → 触发置信度重算
+
+### 7.2 trader 策略回测与规则验真
+
+trader 层面的回测（基于 `strategy_version.rules_snapshot`，不同于 rule_pool）：
 
 ```bash
 python -m cli.main backtest run --trader trader_a --from 2026-04-01 --to 2026-04-20 --format json --output data/processed/backtest/trader_a_2026-04-01_2026-04-20.json
@@ -928,7 +1048,44 @@ python -m cli.main backtest run --trader trader_a --from 2026-04-01 --to 2026-04
 python -m cli.main backtest validate-rules --trader trader_a --from 2026-04-01 --to 2026-04-20 --output data/processed/backtest/trader_a_validate_rules.md
 ```
 
-### 7.3 trader 筛选与策略建议（optimize）
+#### A 股交易约束
+
+回测引擎内置 A 股规则校验，自动根据股票代码推断板块类型和涨跌停幅度：
+
+| 板块 | 代码前缀 | 涨跌幅限制 |
+|---|---|---|
+| 上海主板 | 600/601/603/605 | ±10% |
+| 深圳主板 | 000/001/002/003 | ±10% |
+| 科创板 | 688 | ±20% |
+| 创业板 | 300/301 | ±20% |
+| 北交所 | 8/4 开头 | ±30%（预留） |
+| ST 股票 | 含 ST | ±5%（沪市 2026-07-06 起调整为 ±10%） |
+
+额外约束：
+- **T+1**：买入当日不能卖出
+- **新股前 5 日**：无涨跌幅限制
+- **价格笼子**：申报价格不超过基准价的 102%/98%（北交所 105%/95%）
+- **一字板识别**：区分真实停牌与涨跌停锁死，回测评分中分别记录
+- **停牌跳过**：volume==0 且价格无波动 → 不参与 MFE/MAE 计算
+
+回测评分输出中包含 `halted_dates`（停牌日）和 `limit_locked_dates`（一字板日），便于事后审查。
+
+### 7.3 风控账户快照
+
+`ManagerAgent` 在评估交易信号时，优先从 `trade_logs` 表构建真实账户快照。
+
+前置步骤：导入交易记录。
+
+```bash
+python -m cli.main import-trade-logs --config config/app.yaml --csv-path /path/to/trades.csv
+```
+
+导入后，`evaluate_signal()` 内部自动：
+- 按 `account_id` 聚合历史交易，计算当前持仓、平均成本、浮动盈亏
+- 从 `ohlcv_bars` 获取最新收盘价估算持仓市值
+- 无交易记录或查询失败时 fallback 到模拟账户（初始资金 100,000）
+
+### 7.4 trader 筛选与策略建议（optimize）
 
 活跃 trader 筛选：
 
@@ -959,13 +1116,23 @@ python -m cli.main optimize create-candidate \
 python -m cli.main optimize create-candidate --db --trader trader_a --date 2026-04-29 --adjustments data/processed/optimize/advise.json
 ```
 
-### 7.4 规则池人工审核（rule-pool）
-
-当规则进入规则池后，可以用 CLI 做人工审核：
+### 7.5 规则池管理命令速查（rule-pool）
 
 ```bash
-python -m cli.main rule-pool list --limit 100
+# 查看详情
+python -m cli.main rule-pool show --rule-id <RULE_ID>
+
+# 列出规则（支持 --status/--rule-type/--skip-no-mapped 过滤）
+python -m cli.main rule-pool list --status approved --skip-no-mapped --limit 50
+
+# 单条审核 (approve/reject/pending)
 python -m cli.main rule-pool review --rule-id <RULE_ID> --decision approve
+
+# 批量审核
+python -m cli.main rule-pool review-batch --decision approve --status pending --limit 50
+
+# 强制覆盖自动审核结果
+python -m cli.main rule-pool review --rule-id <RULE_ID> --decision reject --force
 ```
 
 ---

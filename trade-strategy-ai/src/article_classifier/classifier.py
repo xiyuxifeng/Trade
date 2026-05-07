@@ -12,6 +12,9 @@ from src.article_classifier.prompts import (
     MAX_CONTENT_LENGTH,
 )
 from src.article_classifier.schemas import ClassificationResult
+from src.common.logger import get_logger
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from src.llm.client import LLMClient
@@ -60,12 +63,17 @@ class ArticleClassifier:
         )
 
         # 解析并返回分类结果
-        return ClassificationResult(
+        classification = ClassificationResult(
             article_type=result.get("article_type", "noise"),
             confidence=result.get("confidence", 0.0),
             type_scores=result.get("type_scores", {}),
             reason=result.get("reason", ""),
         )
+        logger.info(
+            "文章分类: title=%.50s, type=%s, confidence=%.3f",
+            title, classification.article_type, classification.confidence,
+        )
+        return classification
 
 
 async def classify_article(

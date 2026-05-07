@@ -1,9 +1,10 @@
 """NTL-S11-008: 规则池回测单元测试"""
 import pytest
 from datetime import date, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.backtest.engine import BacktestEngine
+from src.backtest.engine import BacktestEngine, _preload_forward_bars
 from src.backtest.schemas import BacktestResult, BacktestSummary, BacktestTradeRecord
 from src.rule_pool.models import RulePool
 from src.rule_pool.schemas import RuleBacktestResult
@@ -20,6 +21,34 @@ class TestBacktestEngineRulePool:
         session.execute = AsyncMock()
         session.add = MagicMock()
         return session
+
+    @pytest.mark.asyncio
+    async def test_preload_forward_bars_accepts_asyncmock_scalar_chain(self, mock_session):
+        """预加载 bars 应兼容 AsyncMock 模拟出的 awaitable scalars/all 链路。"""
+        rows = [
+            SimpleNamespace(
+                symbol="000001.SZ",
+                trade_date=date(2026, 4, 1),
+                open=10.0,
+                high=10.5,
+                low=9.8,
+                close=10.2,
+                volume=100000,
+            )
+        ]
+        scalar_result = MagicMock()
+        scalar_result.all = AsyncMock(return_value=rows)
+        execute_result = MagicMock()
+        execute_result.scalars = AsyncMock(return_value=scalar_result)
+        mock_session.execute.return_value = execute_result
+
+        bars = await _preload_forward_bars(
+            session=mock_session,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 2),
+        )
+
+        assert bars["000001.SZ"][0]["close"] == 10.2
 
     @pytest.fixture
     def mock_loader(self):
@@ -55,7 +84,13 @@ class TestBacktestEngineRulePool:
         engine = BacktestEngine()
 
         # Mock repository 返回空列表
-        with patch("src.rule_pool.repository.RulePoolRepository") as MockRepo:
+        with (
+            patch("src.rule_pool.repository.RulePoolRepository") as MockRepo,
+            patch(
+                "src.backtest.engine.iter_trade_dates",
+                return_value=[date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)],
+            ),
+        ):
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_rules_by_status = AsyncMock(return_value=[])
 
@@ -63,7 +98,7 @@ class TestBacktestEngineRulePool:
                 session=mock_session,
                 rule_ids=None,
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
             )
 
             assert result is not None
@@ -76,7 +111,13 @@ class TestBacktestEngineRulePool:
         """测试规则池回测基本流程"""
         engine = BacktestEngine()
 
-        with patch("src.rule_pool.repository.RulePoolRepository") as MockRepo:
+        with (
+            patch("src.rule_pool.repository.RulePoolRepository") as MockRepo,
+            patch(
+                "src.backtest.engine.iter_trade_dates",
+                return_value=[date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)],
+            ),
+        ):
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_rules_by_status = AsyncMock(return_value=sample_rules)
             mock_repo_instance.get_rule_by_id = AsyncMock(side_effect=lambda rid: next((r for r in sample_rules if r.rule_id == rid), None))
@@ -86,7 +127,7 @@ class TestBacktestEngineRulePool:
                 session=mock_session,
                 rule_ids=None,
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
                 min_confidence=0.5,
             )
 
@@ -108,7 +149,7 @@ class TestBacktestEngineRulePool:
                 session=mock_session,
                 rule_ids=["rule_test_001", "rule_test_002"],
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
             )
 
             assert result is not None
@@ -131,7 +172,7 @@ class TestBacktestEngineRulePool:
                 session=mock_session,
                 rule_ids=None,
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
                 min_confidence=0.9,  # 高于所有规则的置信度
             )
 
@@ -157,7 +198,7 @@ class TestBacktestEngineRulePool:
                 run_id="run_001",
                 run_at=datetime.now(),
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
                 total_trades=20,
                 hit_trades=12,
                 miss_trades=8,
@@ -188,7 +229,7 @@ class TestBacktestEngineRulePool:
                 run_id="run_001",
                 run_at=datetime.now(),
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
                 total_trades=20,
                 hit_trades=12,
                 miss_trades=8,
@@ -204,7 +245,7 @@ class TestBacktestEngineRulePool:
                 run_id="run_002",
                 run_at=datetime.now(),
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
                 total_trades=30,
                 hit_trades=18,
                 miss_trades=12,
@@ -243,14 +284,14 @@ class TestBacktestEngineRulePool:
         result = await engine._backtest_single_rule(
             rule=rule,
             start_date=date(2026, 4, 1),
-            end_date=date(2026, 4, 30),
+            end_date=date(2026, 4, 3),
         )
 
         assert result is not None
         assert isinstance(result, RuleBacktestResult)
         assert result.run_id is not None
         assert result.start_date == date(2026, 4, 1)
-        assert result.end_date == date(2026, 4, 30)
+        assert result.end_date == date(2026, 4, 3)
 
     @pytest.mark.asyncio
     async def test_run_rules_backtest_updates_db(self, mock_session, sample_rules):
@@ -266,7 +307,7 @@ class TestBacktestEngineRulePool:
                 session=mock_session,
                 rule_ids=None,
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
             )
 
             # 验证每条规则都调用了 update_backtest_result
@@ -302,9 +343,29 @@ class TestBacktestEngineRulePoolIntegration:
         rule.initial_confidence = 0.8
         rule.validated_confidence = 0.7
         rule.review_status = "approved"
-        rule.extraction_layer = {"rule_type": "breakout"}
+        rule.extraction_layer = {
+            "rule_type": "breakout",
+            "mapped_condition": {"op": "gt", "field": "close", "value": 9.0},
+        }
 
-        with patch("src.rule_pool.repository.RulePoolRepository") as MockRepo:
+        rows = [
+            SimpleNamespace(symbol="000001.SZ", trade_date=date(2026, 4, 1), open=10.0, high=10.4, low=9.8, close=10.1, volume=100000),
+            SimpleNamespace(symbol="000001.SZ", trade_date=date(2026, 4, 2), open=10.1, high=10.6, low=10.0, close=10.4, volume=110000),
+            SimpleNamespace(symbol="000001.SZ", trade_date=date(2026, 4, 3), open=10.4, high=10.7, low=10.2, close=10.6, volume=120000),
+        ]
+        scalar_result = MagicMock()
+        scalar_result.all.return_value = rows
+        execute_result = MagicMock()
+        execute_result.scalars.return_value = scalar_result
+        mock_session.execute.return_value = execute_result
+
+        with (
+            patch("src.rule_pool.repository.RulePoolRepository") as MockRepo,
+            patch(
+                "src.backtest.engine.iter_trade_dates",
+                return_value=[date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)],
+            ),
+        ):
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_rule_by_id = AsyncMock(return_value=rule)
             mock_repo_instance.update_backtest_result = AsyncMock(return_value=True)
@@ -313,7 +374,7 @@ class TestBacktestEngineRulePoolIntegration:
                 session=mock_session,
                 rule_ids=["rule_conf_001"],
                 start_date=date(2026, 4, 1),
-                end_date=date(2026, 4, 30),
+                end_date=date(2026, 4, 3),
             )
 
             # 验证置信度更新被调用
@@ -332,3 +393,30 @@ class TestBacktestEngineRulePoolIntegration:
                 prior_weight=20,
             )
             assert 0.0 <= adjusted <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_run_rules_backtest_skips_confidence_update_when_rule_has_zero_samples(self, mock_session):
+        """无法产生样本的规则不应更新回测结果，避免空样本污染置信度。"""
+        engine = BacktestEngine()
+
+        rule = MagicMock(spec=RulePool)
+        rule.rule_id = "rule_unmapped_001"
+        rule.initial_confidence = 0.8
+        rule.validated_confidence = 0.7
+        rule.review_status = "approved"
+        rule.extraction_layer = {"rule_type": "breakout"}
+
+        with patch("src.rule_pool.repository.RulePoolRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_rule_by_id = AsyncMock(return_value=rule)
+            mock_repo_instance.update_backtest_result = AsyncMock(return_value=True)
+
+            result = await engine.run_rules_backtest(
+                session=mock_session,
+                rule_ids=["rule_unmapped_001"],
+                start_date=date(2026, 4, 1),
+                end_date=date(2026, 4, 3),
+            )
+
+            assert result.summary.total_trades == 0
+            mock_repo_instance.update_backtest_result.assert_not_called()

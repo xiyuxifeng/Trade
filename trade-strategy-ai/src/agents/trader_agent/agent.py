@@ -94,6 +94,12 @@ class TraderAgent:
             parts.append("symbol: " + ", ".join(summary.symbol_titles[:2]))
         if summary.review_notes:
             parts.append("review: " + ", ".join(summary.review_notes[:2]))
+        if summary.postmortem_notes:
+            parts.append("postmortem: " + ", ".join(summary.postmortem_notes[:2]))
+        if summary.strategy_adjustments:
+            parts.append("strategy_adjustment: " + ", ".join(summary.strategy_adjustments[:2]))
+        if summary.market_regime_notes:
+            parts.append("market_regime: " + ", ".join(summary.market_regime_notes[:2]))
         if summary.recent_titles:
             parts.append("recent: " + ", ".join(summary.recent_titles[:2]))
 

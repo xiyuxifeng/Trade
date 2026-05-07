@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import operator
 import re
 import statistics
@@ -36,6 +37,13 @@ if TYPE_CHECKING:
     from src.backtest.scoring import score_backtest_trade
 
 logger = get_logger(__name__)
+
+
+async def _resolve_maybe_awaitable(value: Any) -> Any:
+    """兼容 SQLAlchemy 同步 Result 与单元测试 AsyncMock 的 awaitable 链路。"""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +385,8 @@ async def _preload_forward_bars(
             .order_by(OHLCVBar.trade_date.asc())
         )
         result = await session.execute(stmt)
-        rows = result.scalars().all()
+        scalars = await _resolve_maybe_awaitable(result.scalars())
+        rows = await _resolve_maybe_awaitable(scalars.all())
     except Exception as e:
         logger.warning("预加载 OHLCV bars 失败: %s", e)
         return {}
@@ -1459,12 +1468,20 @@ class BacktestEngine:
                     )
                 )
 
-            # 更新规则回测结果到数据库
-            await repo.update_backtest_result(
-                rule_id=rule.rule_id,
-                backtest_result=result,
-                initial_confidence=rule.initial_confidence,
-            )
+            extraction_layer = rule.extraction_layer or {}
+            has_mapped_condition = bool(extraction_layer.get("mapped_condition"))
+
+            # 仅跳过完全无法映射且无样本的规则，避免空规则污染置信度。
+            if result.sample_count > 0 or has_mapped_condition:
+                await repo.update_backtest_result(
+                    rule_id=rule.rule_id,
+                    backtest_result=result,
+                    initial_confidence=rule.initial_confidence,
+                )
+            else:
+                logger.warning(
+                    "规则回测无有效样本，跳过置信度更新: rule_id=%s", rule.rule_id
+                )
 
         # 4. 汇总结果
         aggregated = self._aggregate_rule_results(rule_results)

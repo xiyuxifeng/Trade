@@ -562,23 +562,27 @@ class ManagerAgent:
         # === NTL-S7-007: 规则池预测集成 ===
         # 从规则池加载高置信度规则预测，作为盘前辅助信号
         rule_prediction_count = 0
+        rule_predictions = []
         if self.config.stage4.enable:
             try:
                 async with session_scope() as session:
                     from src.rule_pool.prediction import RulePoolPredictionService
                     prediction_svc = RulePoolPredictionService(session)
-                    predictions = await prediction_svc.predict_high_confidence_rules(
+                    rule_predictions = await prediction_svc.predict_high_confidence_rules(
                         threshold=0.8, limit=20
                     )
-                    rule_prediction_count = len(predictions)
-                    if predictions:
+                    rule_prediction_count = len(rule_predictions)
+                    if rule_predictions:
                         self.logger.info(
                             "规则池预测已加载: %d 条高置信度规则（rule_types=%s）",
-                            len(predictions),
-                            [p.rule_type for p in predictions[:5]],
+                            len(rule_predictions),
+                            [p.rule_type for p in rule_predictions[:5]],
                         )
             except Exception as e:
                 self.logger.warning("规则池预测加载失败: %s", e)
+
+        if rule_predictions and ideas:
+            self._apply_rule_pool_predictions_to_ideas(ideas, rule_predictions)
 
         # 构建 highlights
         highlights = [f"Generated {len(ideas)} trade ideas"]
@@ -639,6 +643,40 @@ class ManagerAgent:
 
         write_json(report_path, report.model_dump())
         return report
+
+    def _apply_rule_pool_predictions_to_ideas(
+        self,
+        ideas: list[TradeIdea],
+        predictions: list[object],
+    ) -> None:
+        """将高置信度规则池预测注入 TradeIdea，使规则池真实影响盘前推荐。"""
+        if not ideas or not predictions:
+            return
+
+        top_predictions = predictions[:3]
+        rule_ids = [
+            str(getattr(prediction, "rule_id", ""))
+            for prediction in top_predictions
+            if getattr(prediction, "rule_id", None)
+        ]
+        if not rule_ids:
+            return
+
+        confidence_boost = min(0.08, 0.05 + 0.01 * max(0, len(rule_ids) - 1))
+        rule_hint = "规则池预测: " + ", ".join(rule_ids)
+
+        for idea in ideas:
+            current_confidence = float(idea.confidence or 0.0)
+            idea.confidence = round(min(0.95, current_confidence + confidence_boost), 3)
+            for rule_id in rule_ids:
+                ref = f"rule_pool:{rule_id}"
+                if ref not in idea.evidence_refs:
+                    idea.evidence_refs.append(ref)
+            idea.rationale = (
+                f"{idea.rationale or ''} | {rule_hint}"
+                if idea.rationale
+                else rule_hint
+            )
 
     async def _get_account_snapshot(
         self,

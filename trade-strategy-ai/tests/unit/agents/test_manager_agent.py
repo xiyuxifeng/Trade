@@ -14,7 +14,7 @@ from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig
 from src.market_universe.schemas import MarketUniverse, HotTopicsPayload, HotTopic
 from src.schemas.contracts import DailyReport, TradeEntry, TradeIdea
 from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus
-from src.trader_memory.schemas import TraderMemoryType
+from src.trader_memory.schemas import TraderMemorySummary, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
 from src.strategy.types import SignalSide, SynthesisMode, RawSignal, Signal
 
@@ -34,6 +34,20 @@ def _make_config() -> AppConfig:
         ],
     )
 
+def _make_memory_store_stub(
+    summary: TraderMemorySummary | None = None,
+) -> MagicMock:
+    """构造内存版 TraderMemoryStore，避免单元测试连接真实数据库。"""
+    store = MagicMock(spec=TraderMemoryStore)
+    store.append = AsyncMock()
+    store.list_recent = AsyncMock(return_value=[])
+    store.summarize_context = AsyncMock(
+        return_value=summary
+        or TraderMemorySummary(trader_id="trader_a", total_items=0)
+    )
+    return store
+
+
 @asynccontextmanager
 async def _mock_session_scope():
     """避免单元测试连接真实数据库。"""
@@ -44,6 +58,7 @@ async def _mock_session_scope():
 async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
     config = _make_config()
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 6)
 
     report = DailyReport(
@@ -73,11 +88,17 @@ async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
     assert "reason=no_bars_data" in result.evaluations[0].notes[0]
 
     # Mock memory store to verify memory was written
-    mock_store = MagicMock(spec=TraderMemoryStore)
-    mock_store.list_recent = AsyncMock(return_value=[
-        MagicMock(symbol="000001.SZ", content="test memory")
-    ])
-    manager.memory_store = mock_store
+    manager.memory_store = _make_memory_store_stub(
+        TraderMemorySummary(
+            trader_id="trader_a",
+            symbol="000001.SZ",
+            total_items=1,
+            total_symbol_items=1,
+            by_type={TraderMemoryType.success_case.value: 1},
+            recent_titles=["success case"],
+            symbol_titles=["success case"],
+        )
+    )
 
     rerun_report = await manager.run_pre_market(as_of_date=day, force=True)
     assert "memory summary" in (rerun_report.ideas[0].rationale or "")
@@ -100,6 +121,7 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 6)
 
     report = DailyReport(
@@ -134,11 +156,16 @@ async def test_manager_creates_structured_review_task_and_review_note(tmp_path: 
     assert details["evaluation_snapshot"]["threshold"] == 0.0
 
     # Mock memory store to verify review note was written
-    mock_store = MagicMock(spec=TraderMemoryStore)
-    mock_store.list_recent = AsyncMock(return_value=[
-        MagicMock(symbol="000001.SZ", memory_type=TraderMemoryType.review_note)
-    ])
-    manager.memory_store = mock_store
+    manager.memory_store = _make_memory_store_stub(
+        TraderMemorySummary(
+            trader_id="trader_a",
+            symbol="000001.SZ",
+            total_items=1,
+            total_symbol_items=1,
+            by_type={TraderMemoryType.review_note.value: 1},
+            review_notes=["review note"],
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -146,6 +173,7 @@ async def test_manager_marks_partial_data_when_bars_are_incomplete(tmp_path: Pat
     """当只有部分 bars 时，应标记 partial_data 并保留结构化说明。"""
     config = _make_config()
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 6)
 
     report = DailyReport(
@@ -212,6 +240,7 @@ async def test_run_after_close_writes_canonical_topic_tags(tmp_path: Path) -> No
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 6)
 
     report = DailyReport(
@@ -231,24 +260,24 @@ async def test_run_after_close_writes_canonical_topic_tags(tmp_path: Path) -> No
     manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
     # Mock memory store to verify topic tags were written
-    mock_store = MagicMock(spec=TraderMemoryStore)
-    mock_memories = [
+    manager.memory_store.list_recent = AsyncMock(return_value=[
         MagicMock(
             tags=["kaipan:concept:AI算力"],
             topic_source="kaipan",
             raw_topic_ids={"kaipan": ["AI算力|concept"]},
         )
-    ]
-    mock_store.list_recent = AsyncMock(return_value=mock_memories)
-    manager.memory_store = mock_store
+    ])
 
     with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
         patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
         patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"):
         await manager.run_after_close(as_of_date=day, force=True)
 
-    # Verify memory store was called
-    mock_store.list_recent.assert_called_once()
+    # Verify canonical topic tags were written into evaluation memory.
+    manager.memory_store.append.assert_awaited()
+    appended = [call.args[0] for call in manager.memory_store.append.call_args_list]
+    assert any("kaipan:concept:AI算力" in item.tags for item in appended)
+    assert any(item.topic_source == "kaipan" for item in appended)
 
 
 @pytest.mark.asyncio
@@ -256,6 +285,7 @@ async def test_manager_records_ideas_as_signals(tmp_path: Path) -> None:
     """P4-025: 验证 ManagerAgent 将交易想法记录为信号版本"""
     config = _make_config()
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 9)
 
     # 运行 pre_market，ideas 会被记录为信号
@@ -297,6 +327,7 @@ async def test_list_signals_filters_by_symbol(tmp_path: Path) -> None:
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 9)
 
     await manager.run_pre_market(as_of_date=day, force=True)
@@ -375,6 +406,7 @@ async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     # 构造一个 strategy_version（含 recommendations）
@@ -420,6 +452,7 @@ async def test_phase0_fallback_when_no_strategy_version(tmp_path: Path) -> None:
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     # Mock StrategyLibraryService 抛出异常（模拟 DB 不可用）
@@ -453,6 +486,7 @@ async def test_allow_phase0_false_skips_trader(tmp_path: Path) -> None:
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     # Mock StrategyLibraryService 抛出异常
@@ -482,6 +516,7 @@ async def test_daily_report_includes_strategy_version_ids(tmp_path: Path) -> Non
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     strategy_version = StrategyVersion(
@@ -504,6 +539,64 @@ async def test_daily_report_includes_strategy_version_ids(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_rule_pool_prediction_boosts_premarket_ideas(tmp_path: Path) -> None:
+    """高置信度规则池预测应真实影响盘前 TradeIdea。"""
+    from src.rule_pool.prediction import RulePredictionSnapshot
+
+    config = AppConfig(
+        storage=StorageConfig(output_dir="data/processed/phase0"),
+        data=DataConfig(mock_prices={"600000.SH": 10.0}),
+        stage4=Stage4Config(enable=True),
+        traders=[
+            TraderConfig(
+                trader_id="trader_a",
+                display_name="Trader A",
+                watchlist=[],
+                default_target_pct=0.05,
+                default_stop_pct=0.03,
+            )
+        ],
+    )
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
+    day = date(2026, 4, 20)
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:released:v2",
+        trader_id="trader_a",
+        strategy_date=day,
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="600000.SH", decision="buy", confidence=0.72),
+        ],
+    )
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
+
+    predictions = [
+        RulePredictionSnapshot(
+            rule_id="rule_001",
+            rule_type="entry",
+            confidence=0.93,
+            source_article_ids=["article_001"],
+            predicted_at=datetime.now(timezone.utc),
+        )
+    ]
+
+    with (
+        patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope),
+        patch(
+            "src.rule_pool.prediction.RulePoolPredictionService.predict_high_confidence_rules",
+            AsyncMock(return_value=predictions),
+        ),
+    ):
+        report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    idea = report.ideas[0]
+    assert idea.confidence == 0.77
+    assert "rule_pool:rule_001" in idea.evidence_refs
+    assert "规则池预测" in (idea.rationale or "")
+
+
+@pytest.mark.asyncio
 async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> None:
     """NTL-S4-011: StrategyVersion.recommendations 的 decision 正确传递到 TradeIdea.side"""
     config = AppConfig(
@@ -521,6 +614,7 @@ async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> Non
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     strategy_version = StrategyVersion(
@@ -564,6 +658,7 @@ async def test_market_universe_snapshot_populated_in_signal(tmp_path: Path) -> N
         ],
     )
     manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
     # 预先保存 market_universe snapshot

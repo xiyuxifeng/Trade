@@ -13,22 +13,22 @@ from src.market_universe.schemas import MarketUniverse, StrongSymbol, StrongSymb
 from src.schemas.contracts import DataResponse, DataResponseStatus
 from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus
 from src.trader_profile.schemas import SymbolStat, TraderProfile
-from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
-from src.trader_memory.service import TraderMemoryStore
+from src.trader_memory.schemas import TraderMemorySummary, TraderMemoryType
 
 
 @pytest.mark.asyncio
 async def test_generate_trade_ideas_includes_memory_hint(tmp_path: Path) -> None:
-    store = TraderMemoryStore(path=tmp_path / "trader_memory.jsonl")
-    store.append(
-        TraderMemoryItem(
-            trader_id="trader_a",
-            memory_type=TraderMemoryType.failure_case,
-            as_of_date=date(2026, 4, 5),
-            symbol="000001.SZ",
-            title="previous loss",
-            content="gap down",
-            created_at=datetime.now(UTC),
+    store = SimpleNamespace(
+        summarize_context=AsyncMock(
+            return_value=TraderMemorySummary(
+                trader_id="trader_a",
+                symbol="000001.SZ",
+                total_items=1,
+                total_symbol_items=1,
+                by_type={TraderMemoryType.failure_case.value: 1},
+                recent_titles=["previous loss"],
+                symbol_titles=["previous loss"],
+            )
         )
     )
 
@@ -56,6 +56,50 @@ async def test_generate_trade_ideas_includes_memory_hint(tmp_path: Path) -> None
     assert len(ideas) == 1
     assert "memory summary" in (ideas[0].rationale or "")
     assert "previous loss" in (ideas[0].rationale or "")
+
+
+@pytest.mark.asyncio
+async def test_generate_trade_ideas_uses_postmortem_and_adjustment_memory() -> None:
+    """盘后复盘和策略调整记忆应进入后续盘前推荐上下文。"""
+    memory_store = SimpleNamespace(
+        summarize_context=AsyncMock(
+            return_value=TraderMemorySummary(
+                trader_id="trader_a",
+                symbol="000001.SZ",
+                total_items=2,
+                total_symbol_items=2,
+                by_type={
+                    TraderMemoryType.postmortem.value: 1,
+                    TraderMemoryType.strategy_adjustment.value: 1,
+                },
+                postmortem_notes=["昨日追高失败，回撤超阈值"],
+                strategy_adjustments=["降低开仓仓位并等待放量确认"],
+            )
+        )
+    )
+    trader = TraderConfig(
+        trader_id="trader_a",
+        display_name="Trader A",
+        watchlist=["000001.SZ"],
+        default_target_pct=0.05,
+        default_stop_pct=0.03,
+    )
+    agent = TraderAgent(trader=trader, memory_store=memory_store)
+    data_agent = SimpleNamespace(
+        handle=AsyncMock(
+            return_value=DataResponse(
+                request_id="00000000-0000-0000-0000-000000000000",
+                status=DataResponseStatus.ok,
+                payload={"last_price": {"000001.SZ": 10.0}},
+            )
+        )
+    )
+
+    ideas = await agent.generate_trade_ideas(as_of_date=date(2026, 4, 6), data_agent=data_agent)
+
+    assert len(ideas) == 1
+    assert "postmortem" in (ideas[0].rationale or "")
+    assert "strategy_adjustment" in (ideas[0].rationale or "")
 
 
 @pytest.mark.asyncio

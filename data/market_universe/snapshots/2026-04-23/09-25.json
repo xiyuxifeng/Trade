@@ -1,0 +1,15 @@
+{
+  "trade_date": "2026-04-23",
+  "slot": "09-25",
+  "fetched_at": null,
+  "metadata": {},
+  "hot_topics": {
+    "trade_date": "2026-04-23",
+    "slot": "09-25",
+    "sources": [
+      "board_strength"
+    ],
+    "fetched_at": null,
+    "topics": []
+  }
+}

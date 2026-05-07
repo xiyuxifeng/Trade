@@ -425,9 +425,9 @@ python -m cli.main <command> --help
 
 - `extract-articles`
 	- `--config`：配置文件路径
-	- `--limit`：最多抽取多少篇（默认 20）；`--force` 强制重跑（清空断点）；`--version` 提取版本号（默认 v1，升级 prompts 后应使用 v2/v3）
+	- `--limit`：最多抽取多少篇（默认 20）
 	- `--log-level`：日志级别（默认 `INFO`）
-	- 说明：未配置 LLM 时会使用启发式降级抽取，并写入 `article_metadata.raw_llm_output.mode=fallback_heuristic`
+	- 说明：当前命令不支持 `--force`、`--version`；未配置 LLM 时会使用启发式降级抽取，并写入 `article_metadata.raw_llm_output.mode=fallback_heuristic`
 
 - `clusters-build`
 	- `--config`：配置文件路径
@@ -527,6 +527,26 @@ python -m cli.main backtest <subcommand> [options]
 - `backtest reproducibility-check`
 	- 相同请求跑两次，对比序列化结果是否一致（可复现性检查）
 	- `--config`：应用配置文件路径（可选）
+
+- `backtest rule-pool-run`
+	- 对规则池做回测并更新置信度
+	- `--start-date`：回测起始日期，格式 `YYYY-MM-DD`
+	- `--end-date`：回测结束日期，格式 `YYYY-MM-DD`
+	- `--rule-ids`：可选，逗号分隔的规则 ID 列表；不传则回测已审核通过规则
+	- `--min-confidence`：最小置信度阈值（默认 `0.5`）
+	- `--config`：应用配置文件路径
+
+示例：
+
+```bash
+python -m cli.main backtest rule-pool-run \
+  --start-date 2026-04-01 \
+  --end-date 2026-04-03 \
+  --min-confidence 0.7 \
+  --config config/app.yaml
+```
+
+说明：该命令会在回测完成后写回规则池的回测结果和置信度相关字段，适合用于 Stage 6 / Stage 11 的规则池验收。
 
 ### 2.7 优化（optimize 子命令）
 
@@ -658,6 +678,21 @@ python -m cli.main run-after-close --config config/app.yaml --export-html
 
 1) `api/main.py`（推荐，路由在 `api/routers/*`）
 2) `src/api/main.py`（历史/备用入口，带 `X-API-Key` 鉴权依赖 `src/api/dependencies.py:verify_api_key`）
+
+完整逐路由参考见 [APIReference.md](APIReference.md)。
+
+职责对照：
+
+| 入口 | 主要职责 | 是否建议新用户优先使用 |
+| --- | --- | --- |
+| `api/main.py` | 运行/报告/策略版本/快照/排名/回测结果/告警等管理接口 | 是 |
+| `src/api/main.py` | 文章、交易、市场数据等查询接口，以及带 `X-API-Key` 的内部 API | 否，除非你明确需要内部鉴权入口 |
+
+说明：
+
+- 这两套入口不是同一个应用的不同启动方式，而是两个不同的 FastAPI app。
+- 如果你在做日常验收、调试或本地演示，优先用 `api/main.py`。
+- 如果你需要带 `X-API-Key` 的内部 API 或兼容旧调用，再用 `src/api/main.py`。
 
 #### 方式 A（推荐）：启动 `api/main.py`
 

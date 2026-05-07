@@ -363,6 +363,7 @@ async def _preload_forward_bars(
     if session is None:
         return {}
 
+    from sqlalchemy import select
     from src.models.ohlcv_bar import OHLCVBar
 
     lookback = start_date - timedelta(days=90)
@@ -1328,6 +1329,33 @@ class BacktestEngine:
             avg_return_pct=avg_return,
         )
 
+    async def _preload_rule_backtest_bars(
+        self,
+        session: AsyncSession | None,
+        start_date: date,
+        end_date: date,
+        forward_days: int = 5,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """批量预加载 OHLCV bars（所有规则共享同一份市场数据）。
+
+        相比逐条规则独立加载，避免 N 次重复查询和派生计算。
+
+        Args:
+            session: 数据库会话
+            start_date: 回测开始日期
+            end_date: 回测结束日期
+            forward_days: 前向天数（T+N 收益计算需要）
+
+        Returns:
+            {symbol: [bar_dict, ...]} 字典
+        """
+        return await _preload_forward_bars(
+            session=session,
+            start_date=start_date,
+            end_date=end_date,
+            forward_days=forward_days,
+        )
+
     async def run_rules_backtest(
         self,
         session: AsyncSession,
@@ -1396,12 +1424,26 @@ class BacktestEngine:
 
         logger.info("规则池回测: 找到 %d 条规则待回测", len(rules))
 
-        # 2. 对每条规则执行回测
+        # 2. 批量预加载 OHLCV bars（所有规则共享，避免 N 次独立加载）
+        forward_bars = await self._preload_rule_backtest_bars(
+            session=session,
+            start_date=start_date,
+            end_date=end_date,
+            forward_days=5,
+        )
+        logger.debug(
+            "批量预加载 OHLCV bars 完成: symbols=%d", len(forward_bars)
+        )
+
+        # 3. 对每条规则执行回测（共享预加载的 forward_bars）
         rule_results: list[RuleBacktestResult] = []
         all_records: list[BacktestTradeRecord] = []
 
         for rule in rules:
-            result = await self._backtest_single_rule(rule, start_date, end_date, session=session)
+            result = await self._backtest_single_rule(
+                rule, start_date, end_date,
+                session=session, forward_bars=forward_bars,
+            )
             rule_results.append(result)
 
             # 生成规则回测汇总交易记录（基于真实评估结果）
@@ -1424,7 +1466,7 @@ class BacktestEngine:
                 initial_confidence=rule.initial_confidence,
             )
 
-        # 3. 汇总结果
+        # 4. 汇总结果
         aggregated = self._aggregate_rule_results(rule_results)
 
         logger.info(
@@ -1442,13 +1484,14 @@ class BacktestEngine:
         start_date: date,
         end_date: date,
         session: AsyncSession | None = None,
+        forward_bars: dict[str, list[dict[str, Any]]] | None = None,
     ) -> RuleBacktestResult:
         """
         对单条规则执行真实回测
 
         流程：
         1. 解析 mapped_condition 构建可评估条件
-        2. 预加载 OHLCV bars（含前向天数用于 T+1 收益计算）
+        2. 加载 OHLCV bars（优先使用共享预加载数据，避免 N 次独立查询）
         3. 遍历交易日，通过 loader 加载指标数据
         4. 对每个标的逐日评估规则是否触发
         5. 使用预加载的 bars 计算 T+1 收益
@@ -1459,6 +1502,7 @@ class BacktestEngine:
             start_date: 回测开始日期
             end_date: 回测结束日期
             session: 数据库会话（用于预加载 OHLCV 数据）
+            forward_bars: 共享预加载的 OHLCV bars（由 run_rules_backtest 批量传入）
 
         Returns:
             RuleBacktestResult（真实统计指标）
@@ -1493,12 +1537,14 @@ class BacktestEngine:
         sample_count = len(trade_dates)
 
         # 预加载全量 OHLCV bars（含前向天数，用于 T+1 收益计算）
-        forward_bars = await _preload_forward_bars(
-            session=session,
-            start_date=start_date,
-            end_date=end_date,
-            forward_days=5,
-        )
+        # 优先使用共享预加载的数据（批量优化），否则独立加载
+        if forward_bars is None:
+            forward_bars = await _preload_forward_bars(
+                session=session,
+                start_date=start_date,
+                end_date=end_date,
+                forward_days=5,
+            )
 
         # 收集每次命中的收益率
         hit_returns: list[float] = []

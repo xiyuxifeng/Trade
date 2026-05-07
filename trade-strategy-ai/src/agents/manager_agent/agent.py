@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -44,6 +45,7 @@ from src.schemas.contracts import (
 	DataResponseStatus,
 	EvaluationResult,
 	IdeaEvaluation,
+	TradeIdea,
 )
 from src.schemas.review_task import (
 	ReviewEvaluationSnapshot,
@@ -602,8 +604,15 @@ class ManagerAgent:
             try:
                 slot = self.config.stage4.market_universe_slot
                 market_universe = self.snapshot_service.load(as_of_date.isoformat(), slot)
-            except Exception:  # noqa: BLE001
-                self.logger.warning("failed to load market universe snapshot, Stage 4 path disabled")
+            except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+                self.logger.warning("failed to load market universe snapshot, Stage 4 path disabled: %s", e)
+                self._append_task(
+                    AgentTask(
+                        type="data_missing",
+                        title="Market universe snapshot load failed",
+                        details={"error": str(e), "date": as_of_date.isoformat()},
+                    )
+                )
 
         ideas = []
         used_strategy_version_ids: list[str] = []  # NTL-S4-008: 追踪本次使用的策略版本
@@ -634,10 +643,36 @@ class ManagerAgent:
             for task in result.missing_symbol_tasks:
                 self._append_task(task)
 
+        # === NTL-S7-007: 规则池预测集成 ===
+        # 从规则池加载高置信度规则预测，作为盘前辅助信号
+        rule_prediction_count = 0
+        if self.config.stage4.enable:
+            try:
+                async with session_scope() as session:
+                    from src.rule_pool.prediction import RulePoolPredictionService
+                    prediction_svc = RulePoolPredictionService(session)
+                    predictions = await prediction_svc.predict_high_confidence_rules(
+                        threshold=0.8, limit=20
+                    )
+                    rule_prediction_count = len(predictions)
+                    if predictions:
+                        self.logger.info(
+                            "规则池预测已加载: %d 条高置信度规则（rule_types=%s）",
+                            len(predictions),
+                            [p.rule_type for p in predictions[:5]],
+                        )
+            except Exception as e:
+                self.logger.warning("规则池预测加载失败: %s", e)
+
+        # 构建 highlights
+        highlights = [f"Generated {len(ideas)} trade ideas"]
+        if rule_prediction_count:
+            highlights.append(f"规则池预测: {rule_prediction_count} 条高置信度规则已集成")
+
         report = DailyReport(
             as_of_date=as_of_date,
             ideas=ideas,
-            highlights=[f"Generated {len(ideas)} trade ideas"],
+            highlights=highlights,
             strategy_version_ids=list(dict.fromkeys(used_strategy_version_ids)),  # NTL-S4-008: 去重后保留顺序
             market_universe_snapshot=asdict(market_universe) if market_universe else None,
         )

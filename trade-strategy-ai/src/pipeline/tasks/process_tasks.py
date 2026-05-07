@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any, Callable, Awaitable
 
 from src.common.config import AppConfig
+from src.common.logger import get_logger
+
+_logger = get_logger(__name__)
 
 
 @dataclass
@@ -421,4 +424,30 @@ async def run_process_tasks(
     _save_tasks(p_path, [])
 
     stats.duration_ms = int((time.monotonic() - start) * 1000)
+
+    # 记录 Pipeline 健康快照（process_tasks 作为独立入口时的健康状态）
+    try:
+        from src.pipeline.health import PipelineHealthSnapshot, PipelineNodeResult
+        from src.health.pipeline_checker import record_pipeline_snapshot
+
+        snap = PipelineHealthSnapshot(graph_name="process_tasks")
+        result = PipelineNodeResult(
+            name="run_process_tasks",
+            status="success" if stats.failed == 0 else "failed",
+            duration_seconds=stats.duration_ms / 1000.0,
+            error=f"{stats.failed} failed" if stats.failed > 0 else None,
+        )
+        snap.add_result(result)
+        record_pipeline_snapshot(snap.finalize())
+        _logger.debug(
+            "process_tasks健康快照已记录: processed=%d failed=%d skipped_dedup=%d dead=%d duration=%dms",
+            stats.processed,
+            stats.failed,
+            stats.skipped_dedup,
+            stats.dead,
+            stats.duration_ms,
+        )
+    except Exception:
+        _logger.warning("process_tasks健康快照记录失败", exc_info=True)
+
     return stats

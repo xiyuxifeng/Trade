@@ -22,18 +22,60 @@ STANDARD_FIELDS = [
 
 # 常用映射规则
 MAPPING_RULES = {
-    # 量能相关
+    # ========== 量能相关 ==========
     ("放量", "volume_ratio_above"): {"op": "gt", "field": "volume_ratio", "value": 1.5},
     ("缩量", "volume_ratio_below"): {"op": "lt", "field": "volume_ratio", "value": 0.7},
     ("巨量", "volume_ratio_above"): {"op": "gt", "field": "volume_ratio", "value": 3.0},
-    # 价格相关
+    ("地量", "volume_ratio_below"): {"op": "lt", "field": "volume_ratio", "value": 0.3},
+    # ========== 价格相关 ==========
     ("突破", "close_above"): None,  # 需要更多上下文
     ("跌破", "close_below"): None,
-    # 指标相关
+    ("创新高", "close_above_ma"): None,  # 需要指定参考均线
+    ("创新低", "close_below_ma"): None,
+    ("涨停", "close_pct_above"): {"op": "gte", "field": "close_pct_change", "value": 9.8},
+    ("跌停", "close_pct_below"): {"op": "lte", "field": "close_pct_change", "value": -9.8},
+    # ========== MACD 相关 ==========
+    ("macd金叉", "macd_cross_above_signal"): {"op": "cross_above", "field": "macd", "other_field": "macd_signal"},
+    ("macd死叉", "macd_cross_below_signal"): {"op": "cross_below", "field": "macd", "other_field": "macd_signal"},
+    ("macd柱翻红", "macd_hist_above"): {"op": "gt", "field": "macd_hist", "value": 0},
+    ("macd柱翻绿", "macd_hist_below"): {"op": "lt", "field": "macd_hist", "value": 0},
+    # ========== KDJ 相关 ==========
+    ("kdj金叉", "kdj_cross_above"): {"op": "cross_above", "field": "kdj_k", "other_field": "kdj_d"},
+    ("kdj死叉", "kdj_cross_below"): {"op": "cross_below", "field": "kdj_k", "other_field": "kdj_d"},
+    ("kdj超买", "kdj_above"): {"op": "gt", "field": "kdj_k", "value": 80},
+    ("kdj超卖", "kdj_below"): {"op": "lt", "field": "kdj_k", "value": 20},
+    # ========== 指标相关 ==========
     ("金叉", "cross_above"): None,
     ("死叉", "cross_below"): None,
     ("超卖", "rsi_below"): {"op": "lt", "field": "rsi6", "value": 30},
     ("超买", "rsi_above"): {"op": "gt", "field": "rsi6", "value": 70},
+    # ========== 均线系统 ==========
+    ("ma多头排列", "ma_bullish_aligned"): {"op": "and", "conditions": [
+        {"op": "gt", "field": "ma5", "value_field": "ma10"},
+        {"op": "gt", "field": "ma10", "value_field": "ma20"},
+        {"op": "gt", "field": "ma20", "value_field": "ma60"},
+    ]},
+    ("ma空头排列", "ma_bearish_aligned"): {"op": "and", "conditions": [
+        {"op": "lt", "field": "ma5", "value_field": "ma10"},
+        {"op": "lt", "field": "ma10", "value_field": "ma20"},
+        {"op": "lt", "field": "ma20", "value_field": "ma60"},
+    ]},
+    # ========== 布林带 ==========
+    ("bollinger上轨", "close_above_bollinger_upper"): {"op": "gt", "field": "close", "value_field": "bollinger_upper"},
+    ("bollinger中轨", "close_above_bollinger_middle"): {"op": "gt", "field": "close", "value_field": "bollinger_middle"},
+    ("bollinger下轨", "close_below_bollinger_lower"): {"op": "lt", "field": "close", "value_field": "bollinger_lower"},
+    # ========== 量价关系 ==========
+    ("价涨量增", "price_up_volume_up"): {"op": "and", "conditions": [
+        {"op": "gt", "field": "close_pct_change", "value": 0},
+        {"op": "gt", "field": "volume_ratio", "value": 1.2},
+    ]},
+    ("价跌量缩", "price_down_volume_down"): {"op": "and", "conditions": [
+        {"op": "lt", "field": "close_pct_change", "value": 0},
+        {"op": "lt", "field": "volume_ratio", "value": 0.8},
+    ]},
+    # ========== 换手率 ==========
+    ("高换手", "turnover_high"): {"op": "gt", "field": "turnover_rate", "value": 10},
+    ("低换手", "turnover_low"): {"op": "lt", "field": "turnover_rate", "value": 1},
 }
 
 
@@ -53,7 +95,7 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
     suggestions = []
     raw_lower = raw_text.lower()
 
-    # 放量相关
+    # ========== 量能相关 ==========
     if "放量" in raw_text:
         suggestions.append({
             "pattern": "放量",
@@ -62,7 +104,6 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
             "requires_context": False,
         })
 
-    # 缩量相关
     if "缩量" in raw_text:
         suggestions.append({
             "pattern": "缩量",
@@ -71,7 +112,6 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
             "requires_context": False,
         })
 
-    # 巨量相关
     if "巨量" in raw_text:
         suggestions.append({
             "pattern": "巨量",
@@ -80,43 +120,15 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
             "requires_context": False,
         })
 
-    # 金叉相关
-    if "金叉" in raw_text:
+    if "地量" in raw_text:
         suggestions.append({
-            "pattern": "金叉",
-            "confidence": 0.8,
-            "suggestion": {"op": "cross_above"},
-            "requires_context": True,
-        })
-
-    # 死叉相关
-    if "死叉" in raw_text:
-        suggestions.append({
-            "pattern": "死叉",
-            "confidence": 0.8,
-            "suggestion": {"op": "cross_below"},
-            "requires_context": True,
-        })
-
-    # 超卖相关
-    if "超卖" in raw_text:
-        suggestions.append({
-            "pattern": "超卖",
-            "confidence": 0.9,
-            "suggestion": {"op": "lt", "field": "rsi6", "value": 30},
+            "pattern": "地量",
+            "confidence": 0.85,
+            "suggestion": {"op": "lt", "field": "volume_ratio", "value": 0.3},
             "requires_context": False,
         })
 
-    # 超买相关
-    if "超买" in raw_text:
-        suggestions.append({
-            "pattern": "超买",
-            "confidence": 0.9,
-            "suggestion": {"op": "gt", "field": "rsi6", "value": 70},
-            "requires_context": False,
-        })
-
-    # 突破相关
+    # ========== 价格突破相关 ==========
     if "突破" in raw_text:
         suggestions.append({
             "pattern": "突破",
@@ -125,12 +137,140 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
             "requires_context": True,
         })
 
-    # 跌破相关
     if "跌破" in raw_text:
         suggestions.append({
             "pattern": "跌破",
             "confidence": 0.6,
             "suggestion": {"op": "lt"},
+            "requires_context": True,
+        })
+
+    if "创新高" in raw_text:
+        suggestions.append({
+            "pattern": "创新高",
+            "confidence": 0.7,
+            "suggestion": {"op": "gt", "field": "close", "requires_context": True},
+            "requires_context": True,
+        })
+
+    if "创新低" in raw_text:
+        suggestions.append({
+            "pattern": "创新低",
+            "confidence": 0.7,
+            "suggestion": {"op": "lt", "field": "close", "requires_context": True},
+            "requires_context": True,
+        })
+
+    if "涨停" in raw_text:
+        suggestions.append({
+            "pattern": "涨停",
+            "confidence": 0.8,
+            "suggestion": {"op": "gte", "field": "close_pct_change", "value": 9.8},
+            "requires_context": False,
+        })
+
+    if "跌停" in raw_text:
+        suggestions.append({
+            "pattern": "跌停",
+            "confidence": 0.8,
+            "suggestion": {"op": "lte", "field": "close_pct_change", "value": -9.8},
+            "requires_context": False,
+        })
+
+    # ========== MACD 相关 ==========
+    if "macd金叉" in raw_lower or "macd金叉" in raw_text:
+        suggestions.append({
+            "pattern": "MACD金叉",
+            "confidence": 0.9,
+            "suggestion": {"op": "cross_above", "field": "macd", "other_field": "macd_signal"},
+            "requires_context": False,
+        })
+    elif "macd" in raw_lower and "金叉" in raw_text:
+        suggestions.append({
+            "pattern": "MACD金叉",
+            "confidence": 0.9,
+            "suggestion": {"op": "cross_above", "field": "macd", "other_field": "macd_signal"},
+            "requires_context": False,
+        })
+
+    if "macd死叉" in raw_lower or "macd死叉" in raw_text:
+        suggestions.append({
+            "pattern": "MACD死叉",
+            "confidence": 0.9,
+            "suggestion": {"op": "cross_below", "field": "macd", "other_field": "macd_signal"},
+            "requires_context": False,
+        })
+    elif "macd" in raw_lower and "死叉" in raw_text:
+        suggestions.append({
+            "pattern": "MACD死叉",
+            "confidence": 0.9,
+            "suggestion": {"op": "cross_below", "field": "macd", "other_field": "macd_signal"},
+            "requires_context": False,
+        })
+
+    if "macd" in raw_lower and ("翻红" in raw_text or "转正" in raw_text or "红柱" in raw_text):
+        suggestions.append({
+            "pattern": "MACD柱翻红",
+            "confidence": 0.85,
+            "suggestion": {"op": "gt", "field": "macd_hist", "value": 0},
+            "requires_context": False,
+        })
+
+    if "macd" in raw_lower and ("翻绿" in raw_text or "转负" in raw_text or "绿柱" in raw_text):
+        suggestions.append({
+            "pattern": "MACD柱翻绿",
+            "confidence": 0.85,
+            "suggestion": {"op": "lt", "field": "macd_hist", "value": 0},
+            "requires_context": False,
+        })
+
+    # ========== KDJ 相关 ==========
+    if "kdj" in raw_lower and "金叉" in raw_text:
+        suggestions.append({
+            "pattern": "KDJ金叉",
+            "confidence": 0.85,
+            "suggestion": {"op": "cross_above", "field": "kdj_k", "other_field": "kdj_d"},
+            "requires_context": False,
+        })
+
+    if "kdj" in raw_lower and "死叉" in raw_text:
+        suggestions.append({
+            "pattern": "KDJ死叉",
+            "confidence": 0.85,
+            "suggestion": {"op": "cross_below", "field": "kdj_k", "other_field": "kdj_d"},
+            "requires_context": False,
+        })
+
+    if "kdj" in raw_lower and ("超买" in raw_text or "高于80" in raw_text):
+        suggestions.append({
+            "pattern": "KDJ超买",
+            "confidence": 0.85,
+            "suggestion": {"op": "gt", "field": "kdj_k", "value": 80},
+            "requires_context": False,
+        })
+
+    if "kdj" in raw_lower and ("超卖" in raw_text or "低于20" in raw_text):
+        suggestions.append({
+            "pattern": "KDJ超卖",
+            "confidence": 0.85,
+            "suggestion": {"op": "lt", "field": "kdj_k", "value": 20},
+            "requires_context": False,
+        })
+
+    # ========== 均线相关 ==========
+    if "金叉" in raw_text:
+        suggestions.append({
+            "pattern": "金叉",
+            "confidence": 0.8,
+            "suggestion": {"op": "cross_above"},
+            "requires_context": True,
+        })
+
+    if "死叉" in raw_text:
+        suggestions.append({
+            "pattern": "死叉",
+            "confidence": 0.8,
+            "suggestion": {"op": "cross_below"},
             "requires_context": True,
         })
 
@@ -151,22 +291,149 @@ def suggest_mapping(raw_text: str) -> list[dict[str, Any]]:
                 "requires_context": True,
             })
 
-    # RSI 相关
-    if "rsi" in raw_lower:
-        if "超卖" in raw_text or "低于30" in raw_text:
+    # 均线多头排列
+    if "多头排列" in raw_text or "ma多头" in raw_text:
+        suggestions.append({
+            "pattern": "MA多头排列",
+            "confidence": 0.8,
+            "suggestion": {"op": "and", "conditions": [
+                {"op": "gt", "field": "ma5", "value_field": "ma10"},
+                {"op": "gt", "field": "ma10", "value_field": "ma20"},
+                {"op": "gt", "field": "ma20", "value_field": "ma60"},
+            ]},
+            "requires_context": False,
+        })
+
+    # 均线空头排列
+    if "空头排列" in raw_text or "ma空头" in raw_text:
+        suggestions.append({
+            "pattern": "MA空头排列",
+            "confidence": 0.8,
+            "suggestion": {"op": "and", "conditions": [
+                {"op": "lt", "field": "ma5", "value_field": "ma10"},
+                {"op": "lt", "field": "ma10", "value_field": "ma20"},
+                {"op": "lt", "field": "ma20", "value_field": "ma60"},
+            ]},
+            "requires_context": False,
+        })
+
+    # 均线粘连/发散
+    if "均线粘连" in raw_text or "均线粘合" in raw_text or "均线收敛" in raw_text:
+        suggestions.append({
+            "pattern": "均线粘连",
+            "confidence": 0.7,
+            "suggestion": {"op": "and", "requires_context": True},
+            "requires_context": True,
+        })
+    if "均线发散" in raw_text:
+        suggestions.append({
+            "pattern": "均线发散",
+            "confidence": 0.7,
+            "suggestion": {"op": "and", "requires_context": True},
+            "requires_context": True,
+        })
+
+    # ========== RSI 相关 ==========
+    if "超卖" in raw_text or "低于30" in raw_text:
+        suggestions.append({
+            "pattern": "超卖" if "rsi" not in raw_lower else "RSI超卖",
+            "confidence": 0.9,
+            "suggestion": {"op": "lt", "field": "rsi6", "value": 30},
+            "requires_context": False,
+        })
+    if "超买" in raw_text or "高于70" in raw_text:
+        suggestions.append({
+            "pattern": "超买" if "rsi" not in raw_lower else "RSI超买",
+            "confidence": 0.9,
+            "suggestion": {"op": "gt", "field": "rsi6", "value": 70},
+            "requires_context": False,
+        })
+
+    # ========== 布林带相关 ==========
+    if "布林" in raw_text or "boll" in raw_lower:
+        if "上轨" in raw_text or "上沿" in raw_text:
             suggestions.append({
-                "pattern": "RSI超卖",
-                "confidence": 0.9,
-                "suggestion": {"op": "lt", "field": "rsi6", "value": 30},
+                "pattern": "布林上轨",
+                "confidence": 0.85,
+                "suggestion": {"op": "gt", "field": "close", "value_field": "bollinger_upper"},
                 "requires_context": False,
             })
-        if "超买" in raw_text or "高于70" in raw_text:
+        if "中轨" in raw_text or "中沿" in raw_text:
             suggestions.append({
-                "pattern": "RSI超买",
-                "confidence": 0.9,
-                "suggestion": {"op": "gt", "field": "rsi6", "value": 70},
+                "pattern": "布林中轨",
+                "confidence": 0.8,
+                "suggestion": {"op": "gt", "field": "close", "value_field": "bollinger_middle"},
                 "requires_context": False,
             })
+        if "下轨" in raw_text or "下沿" in raw_text:
+            suggestions.append({
+                "pattern": "布林下轨",
+                "confidence": 0.85,
+                "suggestion": {"op": "lt", "field": "close", "value_field": "bollinger_lower"},
+                "requires_context": False,
+            })
+        if "收口" in raw_text or "收缩" in raw_text or "变窄" in raw_text:
+            suggestions.append({
+                "pattern": "布林收口",
+                "confidence": 0.7,
+                "suggestion": {"op": "and", "requires_context": True},
+                "requires_context": True,
+            })
+        if "张口" in raw_text or "扩张" in raw_text or "变宽" in raw_text:
+            suggestions.append({
+                "pattern": "布林张口",
+                "confidence": 0.7,
+                "suggestion": {"op": "and", "requires_context": True},
+                "requires_context": True,
+            })
+
+    # ========== 量价关系 ==========
+    if "价涨量增" in raw_text or ("量增" in raw_text and "价涨" in raw_text):
+        suggestions.append({
+            "pattern": "价涨量增",
+            "confidence": 0.8,
+            "suggestion": {"op": "and", "conditions": [
+                {"op": "gt", "field": "close_pct_change", "value": 0},
+                {"op": "gt", "field": "volume_ratio", "value": 1.2},
+            ]},
+            "requires_context": False,
+        })
+
+    if "价跌量缩" in raw_text or ("量缩" in raw_text and "价跌" in raw_text):
+        suggestions.append({
+            "pattern": "价跌量缩",
+            "confidence": 0.8,
+            "suggestion": {"op": "and", "conditions": [
+                {"op": "lt", "field": "close_pct_change", "value": 0},
+                {"op": "lt", "field": "volume_ratio", "value": 0.8},
+            ]},
+            "requires_context": False,
+        })
+
+    if "量价背离" in raw_text:
+        suggestions.append({
+            "pattern": "量价背离",
+            "confidence": 0.6,
+            "suggestion": {"op": "and", "requires_context": True},
+            "requires_context": True,
+        })
+
+    # ========== 换手率 ==========
+    if "高换手" in raw_text or "换手率高" in raw_text:
+        suggestions.append({
+            "pattern": "高换手",
+            "confidence": 0.8,
+            "suggestion": {"op": "gt", "field": "turnover_rate", "value": 10},
+            "requires_context": False,
+        })
+
+    if "低换手" in raw_text or "换手率低" in raw_text:
+        suggestions.append({
+            "pattern": "低换手",
+            "confidence": 0.8,
+            "suggestion": {"op": "lt", "field": "turnover_rate", "value": 1},
+            "requires_context": False,
+        })
 
     return suggestions
 

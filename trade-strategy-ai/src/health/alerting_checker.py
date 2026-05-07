@@ -25,16 +25,20 @@ class AlertingHealthChecker:
     async def check(self) -> ComponentCheck:
         """获取告警系统状态。"""
         try:
-            from src.alerting.manager import AlertManager
+            from src.alerting.manager import AlertManager, get_default_manager
 
             manager = self._manager
             if manager is None:
-                # AlertManager 目前无全局单例，只能检查注入的实例
+                # 尝试从全局默认实例获取
+                manager = get_default_manager()
+
+            if manager is None:
+                # 告警系统未配置属于正常状态（非强制组件）
                 return ComponentCheck(
                     name=self.name,
-                    status=HealthStatus.WARNING,
+                    status=HealthStatus.OK,
                     details={"manager_instance": None},
-                    error="AlertManager not injected, skipping",
+                    error=None,
                 )
 
             stats = await asyncio.to_thread(manager.get_statistics)

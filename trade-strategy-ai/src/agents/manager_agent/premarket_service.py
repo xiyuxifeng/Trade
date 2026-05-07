@@ -113,7 +113,7 @@ class PreMarketService:
                         as_of_date,
                         strategy_version.version_id,
                     )
-            except Exception as e:  # noqa: BLE001
+            except (OSError, RuntimeError, ValueError, KeyError, ConnectionError) as e:
                 logger.warning(
                     "策略版本加载异常: trader=%s, date=%s, error=%s",
                     trader_cfg.trader_id,

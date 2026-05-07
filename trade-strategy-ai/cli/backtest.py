@@ -315,5 +315,69 @@ def reproducibility_check(
         raise typer.Exit(code=1)
 
 
+@app.command("rule-pool-run")
+def rule_pool_run(
+    start_date: str = typer.Option(..., "--start-date", help="回测开始日期 YYYY-MM-DD"),
+    end_date: str = typer.Option(..., "--end-date", help="回测结束日期 YYYY-MM-DD"),
+    rule_ids: str | None = typer.Option(None, "--rule-ids", help="规则 ID 列表（逗号分隔，不传则回测全部审核通过的规则）"),
+    min_confidence: float = typer.Option(0.5, "--min-confidence", help="最小置信度阈值"),
+    config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
+) -> None:
+    """对规则池中的规则执行回测。
+
+    从规则池中获取审核通过的规则（或指定规则 ID），逐条执行回测并汇总统计。
+
+    示例：
+        python -m cli.main backtest rule-pool-run --start-date 2026-01-01 --end-date 2026-04-30
+        python -m cli.main backtest rule-pool-run --start-date 2026-01-01 --end-date 2026-04-30 --rule-ids R001,R002 --min-confidence 0.8
+    """
+    date_from = _parse_date(start_date)
+    date_to = _parse_date(end_date)
+
+    parsed_rule_ids: list[str] | None = None
+    if rule_ids:
+        parsed_rule_ids = [rid.strip() for rid in rule_ids.split(",")]
+
+    engine = _create_engine_from_config(str(config) if config else None)
+    from src.backtest.schemas import BacktestResult
+
+    async def _run_rule_pool_backtest() -> BacktestResult:
+        from src.db.session import session_scope
+        async with session_scope() as session:
+            return await engine.run_rules_backtest(
+                session=session,
+                rule_ids=parsed_rule_ids,
+                start_date=date_from,
+                end_date=date_to,
+                min_confidence=min_confidence,
+            )
+
+    result: BacktestResult = _run_async(_run_rule_pool_backtest())
+
+    summary = result.summary
+    if summary is None:
+        typer.echo("规则池回测结果为空（未找到符合条件的规则）")
+        return
+
+    typer.echo("=" * 60)
+    typer.echo("规则池回测汇总")
+    typer.echo("=" * 60)
+    typer.echo(f"  总交易日:   {summary.total_days}")
+    typer.echo(f"  总交易数:   {summary.total_trades}")
+    typer.echo(f"  有效交易:   {summary.valid_trades}")
+    typer.echo(f"  跳过交易:   {summary.skipped_trades}")
+    typer.echo(f"  胜率:       {summary.win_rate or 0:.2%}")
+    typer.echo(f"  平均收益率: {summary.avg_return_pct or 0:.4%}")
+    typer.echo(f"  规则数:     {len(result.records)}")
+
+    if result.records:
+        typer.echo("")
+        typer.echo("各规则结果:")
+        for rec in result.records[:20]:  # 最多显示 20 条
+            typer.echo(f"  {rec.strategy_version_id}: return={rec.return_pct or 0:+.4%}")
+        if len(result.records) > 20:
+            typer.echo(f"  ... 还有 {len(result.records) - 20} 条未显示")
+
+
 if __name__ == "__main__":
     app()

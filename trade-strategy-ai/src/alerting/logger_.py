@@ -51,11 +51,9 @@ class AlertFileLogger:
         }
 
         line = json.dumps(record, ensure_ascii=False)
-        # 追加写入
-        self.log_path.write_text(
-            self.log_path.read_text(encoding="utf-8") + line + "\n",
-            encoding="utf-8",
-        )
+        # 追加写入（避免 O(n) 全文件读写）
+        with self.log_path.open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
         # INFO 级别输出到控制台，DEBUG 只写入文件
         logger.info(
             "告警已记录: level=%s, title=%s, channel=%s, status=%s",

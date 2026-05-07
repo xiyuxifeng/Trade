@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -10,6 +11,8 @@ from typing import Any
 from src.pipeline.graph import PipelineGraphRegistry, PipelineGraphSpec
 from src.pipeline.health import PipelineHealthSnapshot, PipelineNodeResult
 from src.health.pipeline_checker import record_pipeline_snapshot
+
+_logger = logging.getLogger(__name__)
 
 
 PipelineHandler = Callable[[dict[str, Any]], Any]
@@ -154,4 +157,11 @@ class PipelineRunner:
 
         snapshot_finalized = snapshot.finalize()
         record_pipeline_snapshot(snapshot_finalized)
+        _logger.debug(
+            "Pipeline健康快照已记录: graph=%s status=%s nodes=%d failed=%d",
+            snapshot_finalized.graph_name,
+            snapshot_finalized.status,
+            len(snapshot_finalized.node_results),
+            len(snapshot_finalized.failed_nodes),
+        )
         return snapshot_finalized

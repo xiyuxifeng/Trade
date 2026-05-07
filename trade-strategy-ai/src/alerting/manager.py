@@ -27,6 +27,20 @@ if TYPE_CHECKING:
 
 logger = get_logger("alerting.manager")
 
+# 全局默认 AlertManager 实例（供健康检查等模块发现）
+_default_manager: "AlertManager | None" = None
+
+
+def get_default_manager() -> "AlertManager | None":
+    """获取全局默认 AlertManager 实例。"""
+    return _default_manager
+
+
+def set_default_manager(manager: "AlertManager") -> None:
+    """设置全局默认 AlertManager 实例。"""
+    global _default_manager
+    _default_manager = manager
+
 
 class AlertManager:
     """增强版告警管理器。
@@ -68,6 +82,11 @@ class AlertManager:
         # S7-007 扩展：告警配置
         self._alerting_config = alerting_config
         self._init_alerting_extensions()
+
+        # 自动注册为全局默认实例（供健康检查等模块发现）
+        global _default_manager
+        if _default_manager is None:
+            _default_manager = self
 
     def _init_alerting_extensions(self) -> None:
         """初始化 S7-007 告警扩展（渠道/聚合/日志）。"""

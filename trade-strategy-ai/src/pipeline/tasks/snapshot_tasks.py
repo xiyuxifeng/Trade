@@ -21,10 +21,13 @@ from src.market_universe.schemas import MarketUniverse
 logger = get_logger(__name__)
 
 
-def _build_provider(config: AppConfig):
-    """构建 KaipanProvider 实例（懒加载）。"""
+def _build_provider(config: AppConfig, *, offline: bool = False):
+    """构建 KaipanProvider 实例（懒加载）。
+
+    offline 模式下不要求 kaipan 配置存在，因为不需要发起网络请求。
+    """
     kaipan_cfg = getattr(config, "kaipan", None)
-    if kaipan_cfg is None:
+    if kaipan_cfg is None and not offline:
         return None
 
     from pathlib import Path
@@ -59,12 +62,13 @@ async def handle_hot_topics_snapshot(
     trade_date_str = details.get("trade_date")
     slot = details.get("slot", "17-30")
     force = details.get("force", False)
+    offline = details.get("offline", False)
 
     if not trade_date_str:
         raise ValueError("trade_date is required for hot_topics_snapshot")
 
     trade_date = date.fromisoformat(trade_date_str)
-    provider = _build_provider(config)
+    provider = _build_provider(config, offline=offline)
 
     # 如果没有 provider，跳过
     if provider is None:
@@ -84,7 +88,7 @@ async def handle_hot_topics_snapshot(
         return
 
     try:
-        raw_payload = provider.fetch_hot_topics(trade_date=trade_date, slot=slot)
+        raw_payload = provider.fetch_hot_topics(trade_date=trade_date, slot=slot, offline=offline)
         logger.info(
             "热点快照获取成功: date=%s, slot=%s, topics=%d",
             trade_date_str,
@@ -98,7 +102,7 @@ async def handle_hot_topics_snapshot(
             slot,
             e,
         )
-        return
+        raise
 
     builder = HotTopicsBuilder()
     hot_topics_payload = builder.build(raw_payload)
@@ -144,12 +148,13 @@ async def handle_topic_constituents_snapshot(
     trade_date_str = details.get("trade_date")
     slot = details.get("slot", "17-30")
     force = details.get("force", False)
+    offline = details.get("offline", False)
 
     if not trade_date_str:
         raise ValueError("trade_date is required for topic_constituents_snapshot")
 
     trade_date = date.fromisoformat(trade_date_str)
-    provider = _build_provider(config)
+    provider = _build_provider(config, offline=offline)
 
     if provider is None:
         logger.warning(
@@ -166,7 +171,7 @@ async def handle_topic_constituents_snapshot(
         return
 
     try:
-        raw_payload = provider.fetch_topic_constituents(trade_date=trade_date, slot=slot)
+        raw_payload = provider.fetch_topic_constituents(trade_date=trade_date, slot=slot, offline=offline)
         logger.info(
             "题材成分快照获取成功: date=%s, slot=%s, constituents=%d",
             trade_date_str,
@@ -180,7 +185,7 @@ async def handle_topic_constituents_snapshot(
             slot,
             e,
         )
-        return
+        raise
 
     resolver = ConstituentsResolver()
     constituents_payload = resolver.build(raw_payload)
@@ -225,12 +230,13 @@ async def handle_strong_symbols_snapshot(
     trade_date_str = details.get("trade_date")
     slot = details.get("slot", "17-30")
     force = details.get("force", False)
+    offline = details.get("offline", False)
 
     if not trade_date_str:
         raise ValueError("trade_date is required for strong_symbols_snapshot")
 
     trade_date = date.fromisoformat(trade_date_str)
-    provider = _build_provider(config)
+    provider = _build_provider(config, offline=offline)
 
     if provider is None:
         logger.warning(
@@ -247,7 +253,7 @@ async def handle_strong_symbols_snapshot(
         return
 
     try:
-        raw_payload = provider.fetch_strong_symbols(trade_date=trade_date, slot=slot)
+        raw_payload = provider.fetch_strong_symbols(trade_date=trade_date, slot=slot, offline=offline)
         logger.info(
             "强势池快照获取成功: date=%s, slot=%s, symbols=%d",
             trade_date_str,
@@ -261,7 +267,7 @@ async def handle_strong_symbols_snapshot(
             slot,
             e,
         )
-        return
+        raise
 
     selector = StrongSymbolsSelector()
     strong_symbols_payload = selector.build(raw_payload)

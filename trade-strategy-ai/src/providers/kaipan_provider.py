@@ -153,8 +153,15 @@ class KaipanProvider(ProviderBase):
             return self._normalize_strong_symbols(raw=raw, request=request)
         self.unsupported(capability)
 
-    def fetch_hot_topics(self, *, trade_date: date | str, slot: str = "09-25", **kwargs: Any) -> dict[str, Any]:
-        """获取并返回标准化热点结构。"""
+    def fetch_hot_topics(self, *, trade_date: date | str, slot: str = "09-25", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回标准化热点结构。
+
+        offline=True 时跳过 HTTP 请求，直接从 data/kaipan/raw/ 加载已有 raw 数据。
+        """
+
+        if offline:
+            raw = self._load_hot_topics_raw(trade_date=trade_date, slot=slot)
+            return self._normalize_hot_topics(raw=raw, request={"trade_date": trade_date, "slot": slot})
 
         result = self.run("hot_topics", request={"trade_date": trade_date, "slot": slot, **kwargs})
         if result.status != ProviderStatus.ok:
@@ -166,17 +173,32 @@ class KaipanProvider(ProviderBase):
         *,
         trade_date: date | str,
         slot: str = "17-30",
+        offline: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """获取并返回标准化题材成分结构。"""
+        """获取并返回标准化题材成分结构。
+
+        offline=True 时跳过 HTTP 请求，直接从 data/kaipan/raw/ 加载已有 raw 数据。
+        """
+
+        if offline:
+            raw = self._load_topic_constituents_raw(trade_date=trade_date, slot=slot)
+            return self._normalize_topic_constituents(raw=raw, request={"trade_date": trade_date, "slot": slot})
 
         result = self.run("topic_constituents", request={"trade_date": trade_date, "slot": slot, **kwargs})
         if result.status != ProviderStatus.ok:
             raise ProviderError("; ".join(result.errors) or "failed to fetch topic_constituents")
         return result.payload
 
-    def fetch_strong_symbols(self, *, trade_date: date | str, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
-        """获取并返回标准化强势标的结构。"""
+    def fetch_strong_symbols(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回标准化强势标的结构。
+
+        offline=True 时跳过 HTTP 请求，直接从 data/kaipan/raw/ 加载已有 raw 数据。
+        """
+
+        if offline:
+            raw = self._load_strong_symbols_raw(trade_date=trade_date, slot=slot)
+            return self._normalize_strong_symbols(raw=raw, request={"trade_date": trade_date, "slot": slot})
 
         result = self.run("strong_symbols", request={"trade_date": trade_date, "slot": slot, **kwargs})
         if result.status != ProviderStatus.ok:
@@ -284,6 +306,45 @@ class KaipanProvider(ProviderBase):
         base = self.retry_backoff_seconds[min(attempt, len(self.retry_backoff_seconds) - 1)]
         jitter = random.uniform(0, 0.3)
         time.sleep(base + jitter)
+
+    def _read_raw_files(self, dataset: str, subdir: str, prefix: str, *, required: bool = True) -> dict[str, Any]:
+        """从本地 raw 目录读取匹配前缀的所有 API 响应文件，合并分页后返回 data 部分。
+
+        离线模式下：扫描 {raw_dir}/{dataset}/{subdir}/{prefix}*.json，
+        将多页数据的 list 数组合并，输出与单次请求相同的结构。
+
+        required=False 时，文件不存在返回空 dict 而不抛异常（用于可选数据源）。
+        """
+        dir_path = self.raw_dir / dataset / subdir
+        if not dir_path.exists():
+            if not required:
+                return {}
+            raise ProviderError(f"离线模式: raw 目录不存在 {dir_path}")
+
+        matches = sorted(dir_path.glob(f"{prefix}*.json"))
+        if not matches:
+            if not required:
+                return {}
+            raise ProviderError(f"离线模式: raw 文件不存在 {dir_path}/{prefix}*.json")
+
+        merged: dict[str, Any] = {}
+        total_list: list[Any] = []
+
+        for path in matches:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            data = raw.get("data", {})
+            # 第一个文件提供基础结构
+            if not merged:
+                merged = {k: v for k, v in data.items() if k != "list"}
+            # 合并 list 数组
+            page_list = data.get("list", [])
+            if isinstance(page_list, list):
+                total_list.extend(page_list)
+
+        merged["list"] = total_list
+        merged["Count"] = len(total_list)
+        return merged
 
     def _save_raw(self, raw_path: Path, request: KaipanRequest, response_data: Any, dataset: str) -> None:
         """将 raw JSON 保存到文件，顶部嵌入 meta 元信息。
@@ -431,6 +492,106 @@ class KaipanProvider(ProviderBase):
         if pd.isna(parsed):
             raise ProviderError("trade_date is required and must be a date or ISO string")
         return parsed.date()
+
+    # -----------------------------
+    # 离线模式：从本地 raw 文件加载数据（跳过 HTTP 请求）
+    # -----------------------------
+
+    def _load_hot_topics_raw(self, *, trade_date: date | str, slot: str) -> dict[str, Any]:
+        """从本地 raw 文件加载热点主题原始数据（与 _request_hot_topics 返回结构一致）。
+
+        自动合并分页：按文件前缀匹配所有分页文件，合并 list 数组。
+        """
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        date_str = td.isoformat()
+        subdir = f"{date_str}_{slot}"
+        return {
+            "trade_date": date_str,
+            "slot": slot,
+            "board_strength": self._read_raw_files("hot_topics", subdir, "hot_topics_RealRankingInfo_ZSType7"),
+            "industry": self._read_raw_files("hot_topics", subdir, "hot_topics_RealRankingInfo_ZSType4"),
+            "concept_fengkou": self._read_raw_files("hot_topics", subdir, "hot_topics_GetFengKYDPlate"),
+        }
+
+    def _load_topic_constituents_raw(
+        self,
+        *,
+        trade_date: date | str,
+        slot: str,
+        stock_id: str | None = None,
+        topic_ids: list[str] | None = None,
+        theme_id: str | None = None,
+    ) -> dict[str, Any]:
+        """从本地 raw 文件加载题材成分原始数据（与 _request_topic_constituents 返回结构一致）。"""
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        date_str = td.isoformat()
+        subdir = f"{date_str}_{slot}"
+
+        raw: dict[str, Any] = {
+            "trade_date": date_str,
+            "slot": slot,
+            "limit_up_reason": self._read_raw_files("topic_constituents", subdir, "topic_constituents_GetPlateInfo_w38"),
+            "limit_up_info": self._read_raw_files("topic_constituents", subdir, "topic_constituents_GetZhangTingTianTi"),
+            "lhb_list": self._read_raw_files("topic_constituents", subdir, "topic_constituents_GetStockList", required=False),
+        }
+
+        if stock_id:
+            raw["stock_sector_v2"] = self._read_raw_files("topic_constituents", subdir, "topic_constituents_GetFeaturedSection")
+
+        requested_topic_ids = list(topic_ids or [])
+        if theme_id:
+            requested_topic_ids.append(theme_id)
+        if requested_topic_ids:
+            theme_details = []
+            for _tid in requested_topic_ids:
+                try:
+                    theme_details.append(self._read_raw_files("topic_constituents", subdir, "topic_constituents_InfoGet"))
+                except ProviderError:
+                    pass  # 可选文件，缺失时跳过
+            raw["theme_detail"] = theme_details
+        else:
+            raw["theme_detail"] = []
+
+        return raw
+
+    def _load_strong_symbols_raw(
+        self,
+        *,
+        trade_date: date | str,
+        slot: str,
+        start_date: date | str | None = None,
+        end_date: date | str | None = None,
+        universe: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """从本地 raw 文件加载强势标的原始数据（与 _request_strong_symbols 返回结构一致）。"""
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        date_str = td.isoformat()
+        subdir = f"{date_str}_{slot}"
+
+        raw: dict[str, Any] = {
+            "trade_date": date_str,
+            "slot": slot,
+            "strong_fengkou": self._read_raw_files("strong_symbols", subdir, "strong_symbols_GetFengKListBest"),
+            "interval_stats_stock": self._read_raw_files("strong_symbols", subdir, "strong_symbols_GetInterviewsByDateStock_Type2"),
+            "universe": universe or [],
+        }
+
+        if slot == "09-25":
+            raw["morning_bidding_list"] = self._read_raw_files("strong_symbols", subdir, "strong_symbols_MorningBiddingList_PidType0")
+        else:
+            raw["morning_bidding_list"] = {"info": []}
+
+        return raw
+
+    # -----------------------------
+    # capability 级别的请求与归一化逻辑
+    # -----------------------------
 
     def _request_hot_topics(self, *, trade_date: Any, slot: str = "09-25", **kwargs: Any) -> dict[str, Any]:
         """拉取热点主题所需的 raw 数据。"""

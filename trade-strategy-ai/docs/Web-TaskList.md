@@ -457,13 +457,13 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   备注：返回字段应包含 time/open/high/low/close/volume。
 
 - [ ] `WEB-S3-006` `P1`
-  目标：将 API 入口最终收敛为单一入口，删除另一个入口，并确保文档和代码都只指向同一个主入口。
+  目标：将 API 入口最终收敛为单一入口，删除另一个入口，并确保文档和代码都只指向同一个主入口, 同时将`src/api/`下的代码和文件迁移到`api/`下, 保证项目结构清晰。
   输入：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`。
   输出：单一 API 入口说明、旧入口删除说明、迁移完成后的文档收口。
   修改范围：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`、`docs/web-plan.md`、相关测试。
   前置依赖：`WEB-S3-001`。
   可并行：无。
-  验收标准：仓库只保留一个对外 API 启动入口；`src/api/main.py` 已删除；所有文档、测试和部署说明都已切换到唯一主入口；旧入口不再作为运行时契约出现。
+  验收标准：仓库只保留一个对外 API 启动入口；`src/api/main.py` 已删除；`src/api/`下的代码和文件已迁移到`api/`下；所有文档、测试和部署说明都已切换到唯一主入口；旧入口不再作为运行时契约出现。
   完成情况：未完成。
   备注：以 `api/main.py` 作为唯一主入口，迁移期兼容层在任务完成时一并清理。
 

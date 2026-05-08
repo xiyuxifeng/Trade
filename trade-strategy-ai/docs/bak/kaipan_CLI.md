@@ -1,5 +1,7 @@
 # KaipanScheduler CLI 使用说明
 
+> 说明：本文档为历史归档内容，对应的实现位于项目目录 `trade-strategy-ai/src/providers/kaipan_scheduler.py`。工作区根目录下的重复 wrapper 已删除，当前已进入兼容/退役过渡期，新功能不应继续依赖该入口。
+
 > 本文档描述 `kaipan_scheduler.py` 的使用方法，用于调度 kaipan 开盘啦数据的抓取和快照转换。
 
 ---

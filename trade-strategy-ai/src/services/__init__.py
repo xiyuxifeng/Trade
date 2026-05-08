@@ -1,0 +1,48 @@
+"""Web 管理后台和 CLI 共用的服务层入口。
+
+本阶段只建立基础约定：
+- 服务不依赖 Typer
+- 服务不直接输出终端文本
+- 服务返回结构化结果
+"""
+
+from src.services.base import BaseService, ServiceResult
+from src.services.backtest_service import BacktestService
+from src.services.dashboard_service import DashboardService
+from src.services.config_service import ConfigService
+from src.services.job_service import JobService
+from src.services.job_runner import JobRunner
+from src.services.kaipan_service import KaipanService
+from src.services.market_service import MarketService
+from src.services.optimize_service import OptimizeService
+from src.services.persona_service import PersonaService
+from src.services.pipeline_service import PipelineService
+from src.services.signal_service import SignalService
+from src.services.rule_pool_service import RulePoolService
+from src.services.setup_service import SetupService
+from src.services.run_service import RunService
+from src.services.snapshot_service import SnapshotService
+from src.services.strategy_service import StrategyService
+from src.services.system_service import SystemService
+
+__all__ = [
+    "BaseService",
+    "ServiceResult",
+    "BacktestService",
+    "DashboardService",
+    "ConfigService",
+    "JobService",
+    "JobRunner",
+    "SystemService",
+    "RunService",
+    "PipelineService",
+    "SnapshotService",
+    "MarketService",
+    "StrategyService",
+    "PersonaService",
+    "SignalService",
+    "KaipanService",
+    "OptimizeService",
+    "RulePoolService",
+    "SetupService",
+]

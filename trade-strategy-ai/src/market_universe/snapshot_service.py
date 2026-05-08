@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 from src.market_universe.schemas import MarketUniverse
 
 logger = get_logger(__name__)
@@ -72,7 +73,7 @@ class SnapshotService:
         """
         if base_dir is None:
             base_dir = "data/market_universe/snapshots"
-        self.base_dir = Path(base_dir)
+        self.base_dir = resolve_project_path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def _snapshot_path(self, trade_date: str, slot: str) -> Path:

@@ -682,10 +682,10 @@ python -m cli.main run-after-close --config config/app.yaml --export-html
 
 ### 3.2 运行 API 服务（FastAPI）
 
-仓库目前存在两套 FastAPI 应用入口：
+仓库当前已经收敛为**单一 FastAPI app 构建源**：
 
-1) `api/main.py`（推荐，路由在 `api/routers/*`）
-2) `src/api/main.py`（历史/备用入口，带 `X-API-Key` 鉴权依赖 `src/api/dependencies.py:verify_api_key`）
+- `src/api/app.py`：唯一的应用工厂，负责组装所有路由
+- `api/main.py`：唯一对外主入口，导出共享 `app`
 
 完整逐路由参考见 [APIReference.md](APIReference.md)。
 
@@ -693,14 +693,13 @@ python -m cli.main run-after-close --config config/app.yaml --export-html
 
 | 入口 | 主要职责 | 是否建议新用户优先使用 |
 | --- | --- | --- |
-| `api/main.py` | 运行/报告/策略版本/快照/排名/回测结果/告警等管理接口 | 是 |
-| `src/api/main.py` | 文章、交易、市场数据等查询接口，以及带 `X-API-Key` 的内部 API | 否，除非你明确需要内部鉴权入口 |
+| `api/main.py` | 对外主入口，承载管理接口、UI BFF 和 legacy 触发接口 | 是 |
 
 说明：
 
-- 这两套入口不是同一个应用的不同启动方式，而是两个不同的 FastAPI app。
-- 如果你在做日常验收、调试或本地演示，优先用 `api/main.py`。
-- 如果你需要带 `X-API-Key` 的内部 API 或兼容旧调用，再用 `src/api/main.py`。
+- 当前仓库只保留 `api/main.py` 作为对外 FastAPI 入口。
+- 如果你在做日常验收、调试或本地演示，直接使用 `api/main.py`。
+- `X-API-Key` 是具体路由级别的鉴权要求，不再等同于“另一个入口”。
 
 #### 方式 A（推荐）：启动 `api/main.py`
 
@@ -722,14 +721,6 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 备注：该入口当前未在 `api/routers/*` 路由上强制 `X-API-Key` 校验。
 
-#### 方式 B（可选）：启动 `src/api/main.py`（带 X-API-Key）
-
-```bash
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-当 `config/app.yaml` 中 `api.auth.enabled=true` 且配置了 `api.auth.api_keys` 时，该入口的部分端点会要求在 Header 中携带 `X-API-Key`。
-
 ### 3.3 启动调度（两套调度器）
 
 #### 3.3.1 盘前/盘后调度器（APScheduler，来自 `cli.main scheduler-start`）
@@ -746,13 +737,13 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 python -m cli.main scheduler-start --config config/app.yaml
 ```
 
-#### 3.3.2 Kaipan 数据抓取调度器（来自 `src.providers.kaipan_scheduler run`）
+#### 3.3.2 Kaipan 数据抓取调度器（历史兼容入口，来自 `src.providers.kaipan_scheduler run`）
 
 ```bash
 python -m src.providers.kaipan_scheduler run
 ```
 
-说明：该调度器会用 AkShare 的交易日历判断是否交易日，非交易日会自动退出。
+说明：这是历史兼容入口，对应实现位于项目目录 `trade-strategy-ai/src/providers/kaipan_scheduler.py`；工作区根目录下的重复 wrapper 已删除。后续若迁移完成，应优先使用 `trade-strategy-ai` 内的 service / job 入口。该调度器会用 AkShare 的交易日历判断是否交易日，非交易日会自动退出。
 
 ---
 
@@ -894,8 +885,8 @@ python -m cli.main import-trade-logs --config config/app.yaml --csv-path /path/t
 - `api.host / api.port`：API 服务监听配置。
 - `api.timeout_seconds`：`/run/*` 触发接口的超时（0 表示不限制）。
 - `api.auth.enabled / api.auth.api_keys`：`X-API-Key` 鉴权配置。
-	- 对 `src/api/main.py` 入口生效（使用 `src/api/dependencies.py:verify_api_key`）。
-	- 对 `api/main.py`（`api/routers/*`）入口当前不强制生效（后续可扩展为统一鉴权）。
+	- 对需要鉴权的具体路由生效。
+	- 不再按入口拆分为两套不同规则；入口本身只是同一个 app 的导出路径。
 
 ### 5.10 kaipan
 
@@ -935,6 +926,8 @@ python -m cli.main import-trade-logs --config config/app.yaml --csv-path /path/t
 - `logs/app.log`（RotatingFileHandler，默认 10MB 轮转，保留 5 份）
 
 CLI 大多数命令还会把 INFO 级别打印到控制台。
+
+说明：文档里出现的 `config/...`、`data/...`、`logs/...` 相对路径，默认都以 `trade-strategy-ai` 项目根目录为基准解析，而不是以当前 shell 目录为准。
 
 ### 6.2 数据 Pipeline 中间产物（文件模式）
 

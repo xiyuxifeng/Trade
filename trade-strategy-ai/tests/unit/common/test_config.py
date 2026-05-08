@@ -6,6 +6,7 @@ import yaml
 
 from cli.main import _DEFAULT_CONFIG_YAML
 from src.common.config import load_app_config
+from src.common.paths import project_root
 
 
 def test_load_app_config_supports_crawl_sources_and_auth(tmp_path: Path, monkeypatch) -> None:
@@ -94,6 +95,13 @@ kaipan:
     assert kaipan.max_retries == 3
     assert kaipan.retry_backoff_seconds == [1.0, 2.0, 4.0]
     assert kaipan.retry_status_codes == [403, 429, 500, 502, 503, 504]
+
+
+def test_load_app_config_resolves_project_relative_config_path() -> None:
+    """相对 config/app.yaml 应解析到 trade-strategy-ai 项目根目录。"""
+    loaded = load_app_config("config/app.yaml")
+
+    assert loaded.config_path == project_root() / "config" / "app.yaml"
 
 
 def test_init_config_template_exposes_required_top_level_sections() -> None:

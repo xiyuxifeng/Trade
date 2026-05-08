@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import load_app_config
+from src.common.paths import resolve_project_path
 from src.schemas.contracts import DailyReport, EvaluationResult
 
 router = APIRouter(prefix="/run", tags=["run"])
@@ -33,14 +34,14 @@ def get_config_path() -> Path:
     """获取配置文件路径。"""
     global _config_path
     if _config_path is None:
-        _config_path = Path("config/app.yaml")
-    return _config_path
+        _config_path = resolve_project_path("config/app.yaml")
+    return resolve_project_path(_config_path)
 
 
 def set_config_path(path: Path) -> None:
     """设置配置文件路径（在应用启动时调用）。"""
     global _config_path
-    _config_path = path
+    _config_path = resolve_project_path(path)
 
 
 def get_base_dir() -> Path:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.models import HotTopicsSnapshot, StrongSymbolsSnapshot, TopicConstituentsSnapshot, TraderStrategyVersion
+from src.models import HotTopicsSnapshot, Job, StrongSymbolsSnapshot, TopicConstituentsSnapshot, TraderStrategyVersion
 from src.models.base import Base
 
 
@@ -11,6 +11,7 @@ def test_stage1_models_are_registered_in_metadata() -> None:
     assert "hot_topics_snapshots" in table_names
     assert "topic_constituents_snapshots" in table_names
     assert "strong_symbols_snapshots" in table_names
+    assert "jobs" in table_names
 
 
 def test_stage1_models_are_exported_from_models_package() -> None:
@@ -18,3 +19,4 @@ def test_stage1_models_are_exported_from_models_package() -> None:
     assert HotTopicsSnapshot.__tablename__ == "hot_topics_snapshots"
     assert TopicConstituentsSnapshot.__tablename__ == "topic_constituents_snapshots"
     assert StrongSymbolsSnapshot.__tablename__ == "strong_symbols_snapshots"
+    assert Job.__tablename__ == "jobs"

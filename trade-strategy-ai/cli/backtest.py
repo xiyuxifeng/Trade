@@ -1,11 +1,4 @@
-"""NTL-S6-008: 回测 CLI 入口
-
-提供以下子命令：
-- backtest run：运行回测
-- backtest report：生成回测报告
-- backtest validate-rules：规则验真
-- backtest reproducibility-check：复现验证
-"""
+"""NTL-S6-008: 回测 CLI 入口。"""
 
 from __future__ import annotations
 
@@ -15,10 +8,8 @@ from pathlib import Path
 
 import typer
 
-from src.backtest.engine import BacktestEngine
-from src.backtest.reporting import render_backtest_json, render_backtest_markdown
-from src.backtest.schemas import BacktestRequest
 from src.common.logger import get_logger
+from src.services.backtest_service import BacktestService
 
 logger = get_logger(__name__)
 
@@ -26,59 +17,14 @@ app = typer.Typer(add_completion=False, help="回测相关命令")
 
 
 def _parse_date(value: str) -> date:
-    """解析 YYYY-MM-DD 格式日期"""
+    """解析 YYYY-MM-DD 格式日期。"""
     return datetime.strptime(value, "%Y-%m-%d").date()  # noqa: DTZ007
-
-
-def _create_engine_from_config(config_path: str | None) -> BacktestEngine:
-    """从配置创建 BacktestEngine（带依赖注入）。
-
-    若未提供配置或配置中未定义回测依赖，则返回无 loader 的引擎（所有记录为 skipped）。
-    """
-    if config_path is None:
-        return BacktestEngine()
-
-    from src.common.config import load_app_config
-
-    try:
-        loaded = load_app_config(config_path)
-    except Exception as exc:
-        typer.secho(f"配置加载失败: {exc}", fg=typer.colors.YELLOW)
-        return BacktestEngine()
-
-    # 初始化 SnapshotService
-    from src.market_universe.snapshot_service import SnapshotService
-
-    snapshot_base_dir = loaded.config.data.market_universe_snapshot_dir
-    if not snapshot_base_dir:
-        snapshot_base_dir = "data/market_universe/snapshots"
-    snapshot_service = SnapshotService(base_dir=snapshot_base_dir)
-
-    # 初始化 StrategyRepoAdapter
-    from src.market_data.strategy_repo_adapter import StrategyRepoAdapter
-
-    strategy_repo_adapter = StrategyRepoAdapter()
-
-    from src.backtest.snapshot_loader import SnapshotLoader
-    from src.indicators.indicator_service import IndicatorService
-    from config.database import get_session_factory
-
-    session_factory = get_session_factory()
-    indicator_service = IndicatorService(session_factory)
-
-    loader = SnapshotLoader(
-        snapshot_service=snapshot_service,
-        strategy_repo=strategy_repo_adapter,
-        indicator_service=indicator_service,
-        session_factory=session_factory,
-    )
-    return BacktestEngine(loader=loader, strategy_loader=loader)
-
 
 
 def _run_async(coro):
     """在同步上下文中执行异步任务，并在完成后优雅关闭数据库连接池。"""
     from config.database import run_async_with_cleanup
+
     try:
         return run_async_with_cleanup(coro)
     except RuntimeError:
@@ -97,22 +43,10 @@ def run_backtest(
     format: str = typer.Option("markdown", "--format", help="输出格式：markdown / json"),
     config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
-    """运行离线回测。
-
-    示例：
-        python -m cli.main backtest run --trader trader_a --from 2026-04-01 --to 2026-04-10
-        python -m cli.main backtest run --trader trader_a --from 2026-04-01 --to 2026-04-20 --mode replay
-    """
+    """运行离线回测。"""
     date_from = _parse_date(from_date)
     date_to = _parse_date(to_date)
-
-    request = BacktestRequest(
-        trader_id=trader,
-        date_from=date_from,
-        date_to=date_to,
-        strategy_version_id=strategy_version_id,
-        mode=mode,  # type: ignore[arg-type]
-    )
+    service = BacktestService()
 
     logger.info(
         "CLI 回测命令: trader=%s, date_from=%s, date_to=%s, mode=%s",
@@ -121,24 +55,27 @@ def run_backtest(
         date_to,
         mode,
     )
-    engine = _create_engine_from_config(str(config) if config else None)
-    result = engine.run_sync(request)
+    result = service.run_backtest(
+        trader_id=trader,
+        date_from=date_from,
+        date_to=date_to,
+        strategy_version_id=strategy_version_id,
+        mode=mode,
+        config_path=config,
+    )
 
-    # 结果摘要
-    traded = sum(1 for r in result.records if r.status == "traded")
-    skipped = sum(1 for r in result.records if r.status == "skipped")
+    traded = sum(1 for r in result.payload["result"]["records"] if r["status"] == "traded")
+    skipped = sum(1 for r in result.payload["result"]["records"] if r["status"] == "skipped")
     logger.info(
         "CLI 回测结果: trader=%s, total=%d, traded=%d, skipped=%d",
         trader,
-        len(result.records),
+        len(result.payload["result"]["records"]),
         traded,
         skipped,
     )
 
-    if format == "json":
-        output_str = render_backtest_json(result)
-    else:
-        output_str = render_backtest_markdown(result)
+    rendered = service.render_backtest_report(result.payload["result"], format=format)
+    output_str = rendered.payload["content"]
 
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -157,67 +94,16 @@ def backtest_report(
     output: Path | None = typer.Option(None, "--output", help="报告输出路径"),
     format: str = typer.Option("markdown", "--format", help="输出格式：markdown / json"),
 ) -> None:
-    """基于已有回测结果文件生成报告。
-
-    示例：
-        python -m cli.main backtest report --trader trader_a --from 2026-04-01 --to 2026-04-10 --result-file data/processed/backtest/result.json
-    """
-    import json
+    """基于已有回测结果文件生成报告。"""
+    service = BacktestService()
 
     if not result_file.exists():
         typer.echo(f"结果文件不存在: {result_file}")
         raise typer.Exit(code=1)
 
-    data = json.loads(result_file.read_text(encoding="utf-8"))
-    from src.backtest.schemas import BacktestResult, BacktestSummary, BacktestTradeRecord
-
-    records = []
-    for record in data.get("records", []):
-        records.append(
-            BacktestTradeRecord(
-                trade_date=date.fromisoformat(record["trade_date"]),
-                trader_id=record.get("trader_id", ""),
-                strategy_version_id=record.get("strategy_version_id", ""),
-                symbol=record.get("symbol", ""),
-                status=record.get("status", "skipped"),
-                entry_price=record.get("entry_price"),
-                exit_price=record.get("exit_price"),
-                entry_date=record.get("entry_date"),
-                exit_date=record.get("exit_date"),
-                return_pct=record.get("return_pct"),
-                mfe=record.get("mfe"),
-                mae=record.get("mae"),
-                volume=record.get("volume"),
-                is_valid_lot_size=record.get("is_valid_lot_size"),
-                skip_reason=record.get("skip_reason"),
-                evidence_refs=record.get("evidence_refs", []),
-            )
-        )
-
-    summary_data = data.get("summary")
-    summary = None
-    if summary_data:
-        summary = BacktestSummary(
-            total_days=summary_data.get("total_days", 0),
-            total_trades=summary_data.get("total_trades", 0),
-            valid_trades=summary_data.get("valid_trades", 0),
-            skipped_trades=summary_data.get("skipped_trades", 0),
-            win_rate=summary_data.get("win_rate"),
-            avg_return_pct=summary_data.get("avg_return_pct"),
-        )
-
-    result = BacktestResult(
-        request_trader_id=data["request_trader_id"],
-        request_date_from=date.fromisoformat(data["request_date_from"]),
-        request_date_to=date.fromisoformat(data["request_date_to"]),
-        records=records,
-        summary=summary,
-    )
-
-    if format == "json":
-        output_str = render_backtest_json(result)
-    else:
-        output_str = render_backtest_markdown(result)
+    loaded = service.load_backtest_result(result_file=result_file)
+    rendered = service.render_backtest_report(loaded.payload["result"], format=format)
+    output_str = rendered.payload["content"]
 
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -235,23 +121,18 @@ def validate_rules(
     output: Path | None = typer.Option(None, "--output", help="结果输出路径"),
     config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
-    """对策略版本中的高频规则做命中验证。
-
-    示例：
-        python -m cli.main backtest validate-rules --trader trader_a --from 2026-04-01 --to 2026-04-10
-    """
+    """对策略版本中的高频规则做命中验证。"""
     date_from = _parse_date(from_date)
     date_to = _parse_date(to_date)
+    service = BacktestService()
 
-    from src.backtest.engine import validate_rules_for_trader
-    from src.backtest.reporting import render_rule_validation_markdown
-    from src.backtest.snapshot_loader import SnapshotLoader
-
-    engine = _create_engine_from_config(str(config) if config else None)
-    # validate_rules_for_trader 需要 SnapshotLoader，取 engine.strategy_loader（亦为 SnapshotLoader）
-    loader = engine.loader if isinstance(engine.loader, SnapshotLoader) else SnapshotLoader()
-    rule_results = _run_async(
-        validate_rules_for_trader(trader_id=trader, date_from=date_from, date_to=date_to, loader=loader)
+    result = _run_async(
+        service.validate_rules(
+            trader_id=trader,
+            date_from=date_from,
+            date_to=date_to,
+            config_path=config,
+        )
     )
 
     logger.info(
@@ -259,10 +140,10 @@ def validate_rules(
         trader,
         date_from,
         date_to,
-        len(rule_results),
+        len(result.payload["results"]),
     )
-    report = render_rule_validation_markdown(rule_results)
 
+    report = result.payload["report"]
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(report, encoding="utf-8")
@@ -278,28 +159,17 @@ def reproducibility_check(
     to_date: str = typer.Option(..., "--to", help="回测结束日期 YYYY-MM-DD"),
     config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
-    """验证回测结果可复现（相同请求运行两次，对比 hash）。
-
-    示例：
-        python -m cli.main backtest reproducibility-check --trader trader_a --from 2026-04-01 --to 2026-04-10
-    """
+    """验证回测结果可复现。"""
     date_from = _parse_date(from_date)
     date_to = _parse_date(to_date)
+    service = BacktestService()
 
-    request = BacktestRequest(
+    result = service.reproducibility_check(
         trader_id=trader,
         date_from=date_from,
         date_to=date_to,
+        config_path=config,
     )
-
-    engine = _create_engine_from_config(str(config) if config else None)
-
-    result_a = engine.run_sync(request)
-    result_b = engine.run_sync(request)
-
-    # 比较两次结果的 JSON 序列化
-    json_a = render_backtest_json(result_a)
-    json_b = render_backtest_json(result_b)
 
     logger.info(
         "CLI Reproducibility Check: trader=%s, date_from=%s, date_to=%s",
@@ -307,7 +177,7 @@ def reproducibility_check(
         date_from,
         date_to,
     )
-    if json_a == json_b:
+    if result.payload["matches"]:
         typer.secho("✅ Reproducibility Check PASSED: 两次运行结果一致", fg=typer.colors.GREEN)
     else:
         typer.secho("❌ Reproducibility Check FAILED: 两次运行结果不一致", fg=typer.colors.RED)
@@ -323,38 +193,25 @@ def rule_pool_run(
     min_confidence: float = typer.Option(0.5, "--min-confidence", help="最小置信度阈值"),
     config: Path | None = typer.Option(None, "--config", help="应用配置文件路径（YAML）"),
 ) -> None:
-    """对规则池中的规则执行回测。
-
-    从规则池中获取审核通过的规则（或指定规则 ID），逐条执行回测并汇总统计。
-
-    示例：
-        python -m cli.main backtest rule-pool-run --start-date 2026-01-01 --end-date 2026-04-30
-        python -m cli.main backtest rule-pool-run --start-date 2026-01-01 --end-date 2026-04-30 --rule-ids R001,R002 --min-confidence 0.8
-    """
+    """对规则池中的规则执行回测。"""
     date_from = _parse_date(start_date)
     date_to = _parse_date(end_date)
-
     parsed_rule_ids: list[str] | None = None
     if rule_ids:
-        parsed_rule_ids = [rid.strip() for rid in rule_ids.split(",")]
+        parsed_rule_ids = [rid.strip() for rid in rule_ids.split(",") if rid.strip()]
 
-    engine = _create_engine_from_config(str(config) if config else None)
-    from src.backtest.schemas import BacktestResult
+    service = BacktestService()
+    result = _run_async(
+        service.run_rule_pool_backtest(
+            start_date=date_from,
+            end_date=date_to,
+            rule_ids=parsed_rule_ids,
+            min_confidence=min_confidence,
+            config_path=config,
+        )
+    )
 
-    async def _run_rule_pool_backtest() -> BacktestResult:
-        from src.db.session import session_scope
-        async with session_scope() as session:
-            return await engine.run_rules_backtest(
-                session=session,
-                rule_ids=parsed_rule_ids,
-                start_date=date_from,
-                end_date=date_to,
-                min_confidence=min_confidence,
-            )
-
-    result: BacktestResult = _run_async(_run_rule_pool_backtest())
-
-    summary = result.summary
+    summary = result.payload["summary"]
     if summary is None:
         typer.echo("规则池回测结果为空（未找到符合条件的规则）")
         return
@@ -362,21 +219,21 @@ def rule_pool_run(
     typer.echo("=" * 60)
     typer.echo("规则池回测汇总")
     typer.echo("=" * 60)
-    typer.echo(f"  总交易日:   {summary.total_days}")
-    typer.echo(f"  总交易数:   {summary.total_trades}")
-    typer.echo(f"  有效交易:   {summary.valid_trades}")
-    typer.echo(f"  跳过交易:   {summary.skipped_trades}")
-    typer.echo(f"  胜率:       {summary.win_rate or 0:.2%}")
-    typer.echo(f"  平均收益率: {summary.avg_return_pct or 0:.4%}")
-    typer.echo(f"  规则数:     {len(result.records)}")
+    typer.echo(f"  总交易日:   {summary['total_days']}")
+    typer.echo(f"  总交易数:   {summary['total_trades']}")
+    typer.echo(f"  有效交易:   {summary['valid_trades']}")
+    typer.echo(f"  跳过交易:   {summary['skipped_trades']}")
+    typer.echo(f"  胜率:       {summary['win_rate'] or 0:.2%}")
+    typer.echo(f"  平均收益率: {summary['avg_return_pct'] or 0:.4%}")
+    typer.echo(f"  规则数:     {len(result.payload['result']['records'])}")
 
-    if result.records:
+    if result.payload["result"]["records"]:
         typer.echo("")
         typer.echo("各规则结果:")
-        for rec in result.records[:20]:  # 最多显示 20 条
-            typer.echo(f"  {rec.strategy_version_id}: return={rec.return_pct or 0:+.4%}")
-        if len(result.records) > 20:
-            typer.echo(f"  ... 还有 {len(result.records) - 20} 条未显示")
+        for rec in result.payload["result"]["records"][:20]:
+            typer.echo(f"  {rec['strategy_version_id']}: return={rec['return_pct'] or 0:+.4%}")
+        if len(result.payload["result"]["records"]) > 20:
+            typer.echo(f"  ... 还有 {len(result.payload['result']['records']) - 20} 条未显示")
 
 
 if __name__ == "__main__":

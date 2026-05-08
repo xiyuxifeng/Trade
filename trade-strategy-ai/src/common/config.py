@@ -11,6 +11,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from src.common.exceptions import ConfigError
+from src.common.paths import resolve_project_path
 
 
 class ScheduleConfig(BaseModel):
@@ -248,7 +249,7 @@ class LoadedConfig:
 
 
 def load_app_config(path: str | Path) -> LoadedConfig:
-    config_path = Path(path).expanduser().resolve()
+    config_path = resolve_project_path(path).resolve()
     if not config_path.exists():
         raise ConfigError(f"Config file not found: {config_path}")
 

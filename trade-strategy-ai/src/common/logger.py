@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
+
+from src.common.paths import resolve_project_path
 
 # 日志目录，默认在项目根目录的 logs 文件夹
-_LOG_DIR = Path("logs")
+_LOG_DIR = resolve_project_path("logs")
 _LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 # 默认日志文件路径
@@ -66,7 +66,7 @@ def configure_logging(
         _configured = True
         return
 
-    log_path = Path(log_file) if log_file else _DEFAULT_LOG_FILE
+    log_path = resolve_project_path(log_file) if log_file else _DEFAULT_LOG_FILE
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # 文件 handler：捕获所有级别（DEBUG + INFO + WARNING + ERROR）

@@ -498,7 +498,7 @@ git commit -m "feat: implement APScheduler run command in kaipan_scheduler"
 ## Task 8: 添加 kaipan_scheduler 测试
 
 **Files:**
-- Create: `tests/providers/test_kaipan_scheduler.py`
+- Create: `trade-strategy-ai/tests/providers/test_kaipan_scheduler.py`
 
 - [ ] **Step 1: 编写测试**
 
@@ -590,7 +590,7 @@ class TestConfigLoading:
 
 ```bash
 cd /Users/wanghui/Documents/Claude/trade-strategy-ai
-pytest tests/providers/test_kaipan_scheduler.py -v
+pytest trade-strategy-ai/tests/providers/test_kaipan_scheduler.py -v
 ```
 
 预期：所有测试 PASS
@@ -598,7 +598,7 @@ pytest tests/providers/test_kaipan_scheduler.py -v
 - [ ] **Step 3: 提交**
 
 ```bash
-git add tests/providers/test_kaipan_scheduler.py
+git add trade-strategy-ai/tests/providers/test_kaipan_scheduler.py
 git commit -m "feat: add kaipan_scheduler CLI tests"
 ```
 

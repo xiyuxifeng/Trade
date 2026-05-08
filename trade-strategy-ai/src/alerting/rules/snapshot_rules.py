@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from src.alerting.models import AlertEvent, AlertLevel
+from src.common.paths import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def fire_snapshot_missing_alert(
         slot: 时段，如 "17-30"
         session: DB session（可选）
     """
-    snapshot_path = Path(f"data/market_universe/snapshots/{trade_date}/{slot}.json")
+    snapshot_path = resolve_project_path(Path(f"data/market_universe/snapshots/{trade_date}/{slot}.json"))
 
     if snapshot_path.exists():
         return  # 快照存在，不告警

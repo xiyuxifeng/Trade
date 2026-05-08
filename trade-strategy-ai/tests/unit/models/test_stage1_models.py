@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.models.hot_topics_snapshot import HotTopicsSnapshot
+from src.models.job import Job
 from src.models.signal import Signal
 from src.models.strong_symbols_snapshot import StrongSymbolsSnapshot
 from src.models.topic_constituents_snapshot import TopicConstituentsSnapshot
@@ -20,6 +21,31 @@ def test_stage1_snapshot_tables_have_daily_identity() -> None:
     for model in (HotTopicsSnapshot, TopicConstituentsSnapshot, StrongSymbolsSnapshot):
         column_names = set(model.__table__.columns.keys())
         assert {"trade_date", "slot", "source", "dataset_version", "payload"} <= column_names
+
+
+def test_job_table_has_job_center_fields() -> None:
+    column_names = set(Job.__table__.columns.keys())
+    assert {
+        "job_type",
+        "status",
+        "params",
+        "result",
+        "error",
+        "artifacts",
+        "idempotency_key",
+        "retry_count",
+        "max_retries",
+        "retry_backoff_seconds",
+        "timeout_seconds",
+        "cancel_requested",
+        "worker_id",
+        "lock_token",
+        "lock_acquired_at",
+        "heartbeat_at",
+        "scheduled_at",
+        "started_at",
+        "finished_at",
+    } <= column_names
 
 
 def test_signal_tracks_strategy_version_and_review_context() -> None:

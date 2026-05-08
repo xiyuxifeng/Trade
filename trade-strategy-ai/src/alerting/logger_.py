@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.alerting.models import AlertEvent
+from src.common.paths import resolve_project_path
 
 logger = logging.getLogger("alerting")
 
@@ -19,7 +20,7 @@ class AlertFileLogger:
     """告警结构化文件日志。"""
 
     def __init__(self, log_path: str | Path = "data/logs/alert.log") -> None:
-        self.log_path = Path(log_path)
+        self.log_path = resolve_project_path(log_path)
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         # 确保文件存在
         if not self.log_path.exists():

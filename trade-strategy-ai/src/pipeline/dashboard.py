@@ -13,6 +13,7 @@ from src.alerting.models import AlertLevel
 from src.pipeline.dashboard_models import DashboardReport
 from src.pipeline.dashboard_service import DashboardService
 from src.pipeline.dashboard_renderers import CLIRenderer, HTMLRenderer
+from src.services.dashboard_service import DashboardService as DashboardCommandService
 
 
 def load_config() -> AppConfig:
@@ -45,26 +46,14 @@ async def build_report(settings: AppConfig) -> DashboardReport:
 @click.option("--config", type=click.Path(path_type=Path), default=None, help="配置文件路径")
 def main(mode: str, output: Path | None, config: Path | None):
     """数据监控 Dashboard CLI"""
-    settings = load_config()
+    config_path = config or Path("config/app.yaml")
+    result = asyncio.run(DashboardCommandService().build_report(config_path=config_path, mode=mode, output=output))
 
-    report: DashboardReport = asyncio.run(build_report(settings))
+    if mode in ("html", "both") and result.payload.get("html_path"):
+        click.echo(f"HTML 报告已生成: {result.payload['html_path']}")
 
-    if mode in ("cli", "both"):
-        renderer = CLIRenderer()
-        renderer.render(report)
-
-    if mode in ("html", "both"):
-        template_path = Path("src/reporting/templates/dashboard.html")
-        if output is None:
-            output = Path("data/processed/dashboard/dashboard.html")
-        html_renderer = HTMLRenderer(template_path, output)
-        result_path = html_renderer.render(report)
-        click.echo(f"HTML 报告已生成: {result_path}")
-
-    # 如果有关键告警，返回非零退出码
-    critical_alerts = [e for e in report.alerts if e.level == AlertLevel.CRITICAL]
-    if critical_alerts:
-        sys.exit(1)
+    if result.payload.get("exit_code", 0):
+        sys.exit(result.payload["exit_code"])
 
 
 if __name__ == "__main__":

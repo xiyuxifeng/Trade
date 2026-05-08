@@ -20,6 +20,7 @@ from src.models import (  # noqa: F401
     hot_topics_snapshot,
     market_data,
     ranking_entry,
+    job,
     raw_article,
     signal,
     stock_info,

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 
 router = APIRouter(prefix="/backtest_results", tags=["backtest_results"])
 logger = get_logger(__name__)
@@ -34,8 +35,8 @@ class BacktestResultDetail(BaseModel):
 def _get_backtest_results_dirs() -> list[Path]:
     """获取回测结果存储目录列表。"""
     return [
-        Path("data/backtest/results"),
-        Path("data/processed/backtest"),
+        resolve_project_path("data/backtest/results"),
+        resolve_project_path("data/processed/backtest"),
     ]
 
 

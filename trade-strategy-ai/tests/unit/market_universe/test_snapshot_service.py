@@ -10,8 +10,10 @@ class TestSnapshotService:
     def test_save_and_load_market_universe(self):
         """保存完整 MarketUniverse 后可正常读取。"""
         from src.market_universe.snapshot_service import SnapshotService
+        from src.common.paths import project_root
 
         service = SnapshotService()
+        assert service.base_dir == project_root() / "data" / "market_universe" / "snapshots"
 
         mu = MarketUniverse(
             trade_date="2026-04-23",

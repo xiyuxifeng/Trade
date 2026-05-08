@@ -231,9 +231,14 @@ FastAPI static files -> 托管 web/dist
 │ Service Layer                              │
 │ - ConfigService                            │
 │ - JobService                               │
+│ - JobRunner                                │
 │ - WorkflowService                          │
 │ - PipelineService                          │
 │ - MarketService                            │
+│ - PersonaService                           │
+│ - SignalService                            │
+│ - KaipanService                            │
+│ - DashboardService                         │
 │ - BacktestService                          │
 │ - RulePoolService                          │
 │ - ArtifactService                          │
@@ -260,27 +265,38 @@ FastAPI static files -> 托管 web/dist
 
 新增 `src/services/`，作为 CLI 与 Web API 的共享业务层。
 
+基础约定：
+
+- `BaseService`：所有 Web/CLI 共享服务的基类，只承载公共约定，不依赖 Typer，也不直接输出终端文本。
+- `ServiceResult`：服务层统一返回结构，包含 `status`、`message`、`payload` 和 `warnings`，由 CLI 和 Web API 再做各自渲染。
+- 服务命名统一使用 `*Service`，例如 `ConfigService`、`SystemService`、`JobService`。
+- 业务方法返回结构化对象，不返回拼接好的终端字符串。
+
 建议模块：
 
-- `config_service.py`：配置读取、配置脱敏、配置校验、配置状态检查。
+- `config_service.py`：配置读取、原始 YAML 读取、配置脱敏、配置校验、配置状态检查。
+- `setup_service.py`：封装 init-config、init-project、seed-data、import-trade-logs 和 migrate-crawl-state。
 - `config_edit_service.py`：配置草稿、字段级校验、保存、备份、恢复和敏感项写入策略。
-- `system_service.py`：Python 版本、依赖、数据库连通性、目录状态、API 健康检查。
+- `system_service.py`：Python 版本、依赖、数据库连通性、关键目录状态、API 健康检查。
+- `run_service.py`：封装 run-pre-market、run-after-close 和 HTML 导出。
 - `job_service.py`：Job 创建、执行、状态流转、日志和产物记录。
+- `job_registry.py`：定义 Job 白名单、参数 schema、权限与风险等级，并供 UI 提交前校验。
 - `workflow_service.py`：定义 UserManual 流程、步骤、前置条件和下一步建议。
-- `pipeline_service.py`：封装 crawl、pipeline-run、pipeline-step、extract、clusters。
-- `run_service.py`：封装 run-pre-market、run-after-close。
-- `snapshot_service.py`：封装 snapshot build 和快照查询。
-- `market_service.py`：封装 OHLCV crawl、K 线查询、行情导出。
-- `strategy_service.py`：封装 strategy build/list。
+- `pipeline_service.py`：封装 crawl、pipeline-run、pipeline-step、extract、clusters、e2e-regression。
+- `snapshot_service.py`：封装 snapshot build、快照查询和删除。
+- `market_service.py`：封装 OHLCV crawl、K 线查询、最新收盘价查询。
+- `strategy_service.py`：封装 strategy build/list/detail/download。
 - `backtest_service.py`：封装 backtest run/report/validate-rules/reproducibility-check/rule-pool-run。
 - `optimize_service.py`：封装 optimize filter/advise/create-candidate。
 - `rule_pool_service.py`：封装 rule-pool show/list/review/review-batch。
+- `api/routers/ui/jobs.py`：提供 Job 定义查询与提交参数校验接口，禁止前端提交任意 job type。
 - `artifact_service.py`：统一发现日报、考核、HTML、快照、回测、规则验真、backup 等产物。
 - `scheduler_service.py`：封装调度状态、配置读取、启动提示和运行记录。
 
 ### 5.2 Job Center
 
 Job 状态必须使用数据库持久化，便于查询、分页、审计和服务重启后的恢复。
+`JobService` 负责状态流转和持久化，`JobRunner` 负责按白名单执行受控任务。
 
 最小字段：
 
@@ -299,6 +315,7 @@ created_by
 idempotency_key
 retry_count
 max_retries
+retry_backoff_seconds
 timeout_seconds
 worker_id
 heartbeat_at
@@ -311,6 +328,13 @@ cancel_requested_at
 data/jobs/{job_id}/job.log
 data/jobs/{job_id}/result.json
 ```
+
+Worker 协议要求：
+- `JobRunner` 只能领取白名单 `job_type`
+- `claim_job()` 负责原子领取 Job
+- `heartbeat_job()` 定期刷新运行中任务的心跳
+- `cancel_job()` 对运行中任务只设置 `cancel_requested`
+- `fail_job()` 和 `recover_stale_jobs()` 会根据 `retry_backoff_seconds` 生成下一次可领取时间
 
 ### 5.3 API 路由
 
@@ -355,9 +379,8 @@ GET  /api/ui/v1/market/symbols
 当前项目存在：
 
 - `api/main.py`
-- `src/api/main.py`
 
-Web 管理后台建议以 `api/main.py` 作为主入口，逐步吸收 `src/api/main.py` 的查询能力，避免前端面对两套服务。
+Web 管理后台以 `api/main.py` 作为唯一主入口，底层通过 `src/api/app.py` 统一构建 FastAPI app；仓库不再保留 `src/api/main.py` 这个运行入口。
 
 Web 前端只能依赖版本化 UI API，不直接依赖内部领域 API。
 

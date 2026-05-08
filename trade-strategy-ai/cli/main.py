@@ -21,7 +21,6 @@ from config.database import get_engine, run_async_with_cleanup
 from config.settings import get_settings
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.common.logger import configure_logging
-from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 from src.common.utils import ensure_dir
 from src.pipeline.dag import run_pipeline
 from src.pipeline.tasks.clean_task import run_clean_task, run_clean_from_db_task
@@ -40,12 +39,10 @@ from src.agents.data_agent.skills.import_trade_logs import (
 	store_trade_logs,
 )
 from src.persona.cluster_builder import build_clusters_from_db
-from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
-from src.persona.sample import build_sample_clusters_file
-from src.persona.storage import write_persona_clusters_file
-from src.market_data.service import MarketDataCache
 from src.backup.service import backup_project_state, restore_project_state
 from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
+from src.services.persona_service import PersonaService
+from src.services.signal_service import SignalService
 from scripts.init_db import init_db
 from scripts.seed_data import seed_project_data
 
@@ -254,49 +251,37 @@ def import_trade_logs(
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ):
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	apply_database_config_to_env(loaded.config)
-
 	account_map = json.loads(trader_account_map) if trader_account_map else None
 	if account_map is not None and not isinstance(account_map, dict):
 		raise typer.BadParameter("trader_account_map must be a JSON object")
 
-	suffix = csv_path.suffix.lower()
-	if suffix in {".xlsx", ".xlsm", ".xls"}:
-		records, stats = import_trade_logs_from_excel(
-			xlsx_path=csv_path,
-			source=source,
-			trader_account_map=account_map,
-		)
-	elif suffix in {".html", ".htm"}:
-		records, stats = import_trade_logs_from_html(
-			html_path=csv_path,
-			source=source,
-			trader_account_map=account_map,
-		)
-	elif suffix == ".pdf":
-		records, stats = import_trade_logs_from_pdf(
-			pdf_path=csv_path,
-			source=source,
-			trader_account_map=account_map,
-		)
-	else:
-		records, stats = import_trade_logs_from_csv(
+	from src.services.setup_service import SetupService
+
+	result = run_async_with_cleanup(
+		SetupService(
+			csv_importer=import_trade_logs_from_csv,
+			excel_importer=import_trade_logs_from_excel,
+			html_importer=import_trade_logs_from_html,
+			pdf_importer=import_trade_logs_from_pdf,
+			store_trade_logs_runner=store_trade_logs,
+		).import_trade_logs(
+			config_path=config,
 			csv_path=csv_path,
 			source=source,
 			trader_account_map=account_map,
+			dry_run=dry_run,
 		)
+	)
 	typer.echo(
-		f"Parsed trade logs: rows={stats.rows_seen} imported={len(records)} "
-		f"invalid={stats.invalid} duplicates={stats.duplicates}"
+		f"Parsed trade logs: rows={result.payload['rows_seen']} imported={result.payload['parsed_count']} "
+		f"invalid={result.payload['invalid']} duplicates={result.payload['duplicates']}"
 	)
 
-	for issue in stats.issues:
-		typer.echo(f"{issue.severity.value.upper()}: {issue.code}: {issue.message}")
+	for issue in result.payload["issues"]:
+		typer.echo(f"{issue['severity'].upper()}: {issue['code']}: {issue['message']}")
 
 	if not dry_run:
-		imported = run_async_with_cleanup(store_trade_logs(records))
-		typer.echo(f"Stored trade logs: {imported}")
+		typer.echo(f"Stored trade logs: {result.payload['stored_count']}")
 
 
 @app.command("db-check")
@@ -712,13 +697,12 @@ def init_config(
 	),
 	force: bool = typer.Option(False, help="覆盖已存在文件"),
 ):
-	if dest.exists() and not force:
+	from src.services.config_service import ConfigService
+
+	result = ConfigService().write_default_template(dest, force=force)
+	if result.status != "ok":
 		typer.echo(f"Config already exists: {dest}")
 		raise typer.Exit(code=1)
-
-	dest.parent.mkdir(parents=True, exist_ok=True)
-	# 将模板中的制表符归一化为空格，避免生成无效 YAML。
-	dest.write_text(_DEFAULT_CONFIG_YAML.replace("\t", "  "), encoding="utf-8")
 	typer.echo(f"Wrote config: {dest}")
 
 
@@ -730,15 +714,16 @@ def seed_data(
 	"""Import crawl JSONL and trade logs into the local database."""
 
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	apply_database_config_to_env(loaded.config)
-	base_dir = _project_base_dir(loaded.config_path)
+	from src.services.setup_service import SetupService
 
-	stats = run_async_with_cleanup(seed_project_data(config=loaded.config, base_dir=base_dir))
-	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
-	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
-	typer.echo(f"Article JSONL paths: {len(stats.article_jsonl_paths)}")
-	typer.echo(f"Trade log paths: {len(stats.trade_log_paths)}")
+	result = run_async_with_cleanup(
+		SetupService(seed_runner=seed_project_data).seed_data(config_path=config)
+	)
+	stats = result.payload["stats"]
+	typer.echo(f"Seeded articles: {stats['articles_inserted']} inserted, {stats['articles_updated']} updated")
+	typer.echo(f"Seeded trade logs: {stats['trade_logs_imported']}")
+	typer.echo(f"Article JSONL paths: {len(stats['article_jsonl_paths'])}")
+	typer.echo(f"Trade log paths: {len(stats['trade_log_paths'])}")
 
 
 @app.command("init-project")
@@ -749,15 +734,17 @@ def init_project(
 	"""Run migrations and seed local data in one step."""
 
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	apply_database_config_to_env(loaded.config)
-	base_dir = _project_base_dir(loaded.config_path)
+	from src.services.setup_service import SetupService
 
-	init_db(project_root=base_dir)
-	stats = run_async_with_cleanup(seed_project_data(config=loaded.config, base_dir=base_dir))
+	result = run_async_with_cleanup(
+		SetupService(init_db_runner=init_db, seed_runner=seed_project_data).init_project(
+			config_path=config
+		)
+	)
+	stats = result.payload["stats"]
 	typer.echo("Project initialization complete")
-	typer.echo(f"Seeded articles: {stats.articles_inserted} inserted, {stats.articles_updated} updated")
-	typer.echo(f"Seeded trade logs: {stats.trade_logs_imported}")
+	typer.echo(f"Seeded articles: {stats['articles_inserted']} inserted, {stats['articles_updated']} updated")
+	typer.echo(f"Seeded trade logs: {stats['trade_logs_imported']}")
 
 
 @app.command("backup-data")
@@ -873,34 +860,19 @@ def list_signals(
 	用于查询盘前生成的交易信号及其上下文。
 	"""
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	base_dir = _project_base_dir(loaded.config_path)
-
-	mgr = ManagerAgent(config=loaded.config, base_dir=base_dir)
-
-	# 解析日期
-	since_date = None
-	if since:
-		from datetime import datetime as dt
-
-		since_date = dt.fromisoformat(since).date()
-
-	versions = mgr.signal_versioning.list_versions(
-		symbol=symbol,
-		since=since_date,
-		limit=limit,
-	)
-
-	if not versions:
+	result = SignalService().list_signals(config_path=config, symbol=symbol, since=since, limit=limit)
+	if result.status == "error":
+		typer.echo(result.message or "list signals failed")
+		raise typer.Exit(code=2)
+	if result.payload.get("count", 0) == 0:
 		typer.echo("No signals found.")
 		return
 
-	typer.echo(f"Found {len(versions)} signal(s):")
-	for v in versions:
-		s = v.signal
+	typer.echo(f"Found {result.payload['count']} signal(s):")
+	for v in result.payload["signals"]:
 		typer.echo(
-			f"  {s.signal_id} | {s.symbol} | side={s.side.value} | "
-			f"confidence={s.confidence:.2f} | {s.metadata.get('trader_id', 'N/A')}"
+			f"  {v['signal_id']} | {v['symbol']} | side={v['side']} | "
+			f"confidence={v['confidence']:.2f} | {v['trader_id'] or 'N/A'}"
 		)
 
 
@@ -919,21 +891,11 @@ def persona_init_sample(
 	"""
 
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	cfg = loaded.config
-
-	trader_ids = [t.trader_id for t in cfg.traders]
-	clusters = build_sample_clusters_file(trader_ids=trader_ids)
-
-	path = dest
-	if path is None:
-		if cfg.persona.clusters_path:
-			path = Path(cfg.persona.clusters_path)
-		else:
-			path = Path("data/processed/persona/clusters.sample.json")
-
-	written = write_persona_clusters_file(path=path, data=clusters)
-	typer.echo(f"Wrote sample clusters: {written}")
+	result = PersonaService().build_sample_clusters(config_path=config, dest=dest)
+	if result.status == "error":
+		typer.echo(result.message or "persona init sample failed")
+		raise typer.Exit(code=2)
+	typer.echo(f"Wrote sample clusters: {result.payload['clusters_path']}")
 	typer.echo("Next: set persona.enable=true and run run-pre-market")
 
 
@@ -952,63 +914,18 @@ def market_state_build(
 	"""
 
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	cfg = loaded.config
-	as_of_date = _parse_date(as_of)
-
-	if not cfg.persona.market_state_benchmark_symbol:
-		typer.echo("persona.market_state_benchmark_symbol is not set")
-		raise typer.Exit(code=3)
-
-	base_dir = _project_base_dir(loaded.config_path)
-
-	# Prefer CSV if configured
-	ms = None
-	if cfg.persona.market_state_benchmark_csv:
-		csv_path = Path(cfg.persona.market_state_benchmark_csv)
-		if not csv_path.is_absolute():
-			csv_path = base_dir / csv_path
-		src = DailySeriesSource(symbol=cfg.persona.market_state_benchmark_symbol, csv_path=csv_path)
-		df = load_daily_close_series(src)
-		ms = classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=src.symbol)
-	elif from_akshare:
-		tool = AkshareMarketDataTool()
-		etf_df = tool.fetch_etf_daily_em(
-			AkshareDailyRequest(symbol=cfg.persona.market_state_benchmark_symbol)
-		)
-		if cache_csv:
-			# If config has no csv path, write to default under processed/persona
-			csv_path = (
-				Path(cfg.persona.market_state_benchmark_csv)
-				if cfg.persona.market_state_benchmark_csv
-				else Path("data/processed/persona") / f"{cfg.persona.market_state_benchmark_symbol}_daily.csv"
-			)
-			if not csv_path.is_absolute():
-				csv_path = base_dir / csv_path
-			tool.write_daily_csv(df=etf_df, dest_path=csv_path)
-		ms = classify_market_state(
-			as_of_date=as_of_date,
-			daily_df=etf_df,
-			symbol=cfg.persona.market_state_benchmark_symbol,
-		)
-	else:
-		cache_dir = base_dir / cfg.data.market_data_cache_dir
-		cached_csv = MarketDataCache(cache_dir).path_for_symbol(cfg.persona.market_state_benchmark_symbol)
-		if cached_csv.exists():
-			src = DailySeriesSource(symbol=cfg.persona.market_state_benchmark_symbol, csv_path=cached_csv)
-			df = load_daily_close_series(src)
-			ms = classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=src.symbol)
-		else:
-			typer.echo("persona.market_state_benchmark_csv is not set; pass --from-akshare or sync cache first")
-			raise typer.Exit(code=2)
-
-	assert ms is not None
-
-	full_dest = dest if dest.is_absolute() else (base_dir / dest)
-	full_dest.parent.mkdir(parents=True, exist_ok=True)
-	full_dest.write_text(ms.model_dump_json(indent=2), encoding="utf-8")
-	typer.echo(f"Wrote MarketState: {full_dest}")
-	typer.echo(f"regime={ms.regime} vol={ms.volatility}")
+	result = PersonaService().build_market_state(
+		config_path=config,
+		as_of=as_of,
+		dest=dest,
+		from_akshare=from_akshare,
+		cache_csv=cache_csv,
+	)
+	if result.status == "error":
+		typer.echo(result.message or "market state build failed")
+		raise typer.Exit(code=2)
+	typer.echo(f"Wrote MarketState: {result.payload['market_state_path']}")
+	typer.echo(f"regime={result.payload['market_state']['regime']} vol={result.payload['market_state']['volatility']}")
 
 
 @app.command("scheduler-start")
@@ -1081,81 +998,10 @@ def migrate_crawl_state(
 	写入数据库的 crawl_state 表。
 	"""
 	configure_logging(log_level)
-	loaded = load_app_config(config)
-	base_dir = _project_base_dir(loaded.config_path)
+	from src.services.setup_service import SetupService
 
-	from datetime import datetime
-	from src.db.session import session_scope
-	from src.models.crawl_state import CrawlState
-	from src.common.utils import read_json
-	from sqlalchemy import select
-
-	migrated = 0
-	skipped = 0
-
-	# 收集需要迁移的源数据（同步部分）
-	sources_to_migrate = []
-	for source_cfg in loaded.config.crawl.sources:
-		if not source_cfg.enabled:
-			continue
-
-		state_dir = base_dir / "data" / "processed" / "crawl" / source_cfg.source / source_cfg.author_id
-		state_path = state_dir / "state.json"
-
-		if not state_path.exists():
-			typer.echo(f"跳过 {source_cfg.source}/{source_cfg.author_id}: state.json 不存在")
-			skipped += 1
-			continue
-
-		state_data = read_json(state_path)
-		sources_to_migrate.append((source_cfg, state_data))
-
-	# 统一在一个事件循环中执行所有数据库操作
-	async def _migrate_all():
-		nonlocal migrated
-		for source_cfg, state_data in sources_to_migrate:
-			seen_urls = state_data.get("seen_urls", [])
-			seen_hashes = state_data.get("seen_hashes", [])
-			last_url = state_data.get("last_seen_article_url")
-			last_published = state_data.get("last_seen_published_at")
-
-			async with session_scope() as session:
-				result = await session.execute(
-					select(CrawlState).where(
-						CrawlState.source == source_cfg.source,
-						CrawlState.author_id == source_cfg.author_id
-					)
-				)
-				existing = result.scalar_one_or_none()
-
-				if existing is None:
-					state = CrawlState(
-						source=source_cfg.source,
-						author_id=source_cfg.author_id,
-						seen_urls=seen_urls,
-						seen_hashes=seen_hashes,
-						last_seen_article_url=last_url,
-						last_seen_published_at=datetime.fromisoformat(last_published) if last_published else None,
-						last_success_article_count=state_data.get("last_success_article_count", 0),
-					)
-					session.add(state)
-				else:
-					# 如果数据库中已有数据且更完整，保留数据库版本
-					if len(existing.seen_urls or []) >= len(seen_urls):
-						typer.echo(f"保留数据库状态 {source_cfg.source}/{source_cfg.author_id}: DB有{len(existing.seen_urls)}条 >= JSON有{len(seen_urls)}条")
-						continue
-					existing.seen_urls = seen_urls
-					existing.seen_hashes = seen_hashes
-					existing.last_seen_article_url = last_url
-					existing.last_seen_published_at = datetime.fromisoformat(last_published) if last_published else None
-					existing.last_success_article_count = state_data.get("last_success_article_count", 0)
-
-				typer.echo(f"迁移 {source_cfg.source}/{source_cfg.author_id}: {len(seen_urls)} URLs, {len(seen_hashes)} hashes")
-				migrated += 1
-
-	run_async_with_cleanup(_migrate_all())
-
-	typer.echo(f"迁移完成: {migrated} 个源已迁移, {skipped} 个跳过")
+	result = run_async_with_cleanup(SetupService().migrate_crawl_state(config_path=config))
+	typer.echo(f"迁移完成: {result.payload['migrated']} 个源已迁移, {result.payload['skipped']} 个跳过")
 
 
 # rule-pool 命令组：规则池查询与审核（NTL-S11-009）

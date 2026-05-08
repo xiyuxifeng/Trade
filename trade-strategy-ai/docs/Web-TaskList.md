@@ -95,7 +95,7 @@ Web 管理后台完成后，必须达到以下状态：
 ### 4.1 已有基础
 
 - 项目已有 Typer CLI，入口在 `cli/main.py` 和多个 `cli/*.py` 子模块。
-- 项目已有 FastAPI，入口包括 `api/main.py` 和 `src/api/main.py`。
+- 项目已有 FastAPI，入口通过 `src/api/app.py` 收敛，`api/main.py` 作为唯一对外入口。
 - 已有部分管理 API：盘前/盘后、报表、快照、策略版本、ranking、回测结果、告警。
 - 已有部分查询 API：文章、交易、市场数据、报表。
 - 已有 OHLCV 数据模型，可支持 K 线数据查询。
@@ -107,7 +107,7 @@ Web 管理后台完成后，必须达到以下状态：
 - CLI 背后部分逻辑仍直接写在命令函数中，缺少统一 service layer。
 - Web 不能直接复用所有 CLI 操作。
 - 长任务缺少统一 Job Center。
-- 现有两套 FastAPI 入口需要收敛。
+- 现有 FastAPI 入口已经收敛为单一 app 构建源，后续重点是维护版本化 UI API。
 - 缺少 Web 前端工程。
 - 缺少操作向导。
 - 缺少统一产物中心。
@@ -148,10 +148,11 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - `docs/web-plan.md`
 - `docs/Web-TaskList.md`
+- `docs/Web-UserManual-Coverage.md`
 
 ### 任务清单
 
-- [ ] `WEB-S0-001` `P0`
+- [x] `WEB-S0-001` `P0`
   目标：新增 Web 管理后台总体计划。
   输入：`docs/UserManual.md`、`docs/TaskList.md`、当前 CLI/API 代码。
   输出：`docs/web-plan.md`。
@@ -159,10 +160,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：无。
   可并行：`WEB-S0-002`。
   验收标准：文档说明目标、架构、技术栈、模块设计、实施顺序、安全策略和验收标准。
-  完成情况：未完成。
+  完成情况：已完成 `docs/web-plan.md`，并补充了 Web 不做远程 shell、CLI 服务化、Job Center、UserManual 覆盖矩阵、生产部署与验收要求。
   备注：不得写成临时 demo 方案，必须以长期维护为目标。
 
-- [ ] `WEB-S0-002` `P0`
+- [x] `WEB-S0-002` `P0`
   目标：新增 Web 专项任务清单。
   输入：`docs/web-plan.md`、`docs/TaskList.md`。
   输出：`docs/Web-TaskList.md`。
@@ -170,18 +171,18 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：无。
   可并行：`WEB-S0-001`。
   验收标准：任务拆分清晰，有优先级、执行顺序、前置依赖和验收标准。
-  完成情况：未完成。
+  完成情况：已完成 `docs/Web-TaskList.md`，按 Stage/P0-P2 拆分 Web 化改造主线，并整理了任务依赖与验收标准。
   备注：本文件只管理 Web 化改造，不替代主 `TaskList.md`。
 
-- [ ] `WEB-S0-003` `P0`
+- [x] `WEB-S0-003` `P0`
   目标：建立 UserManual 到 Web 功能的覆盖矩阵。
   输入：`docs/UserManual.md`、`docs/APIReference.md`、当前 CLI/API 代码。
-  输出：UserManual 功能覆盖矩阵。
-  修改范围：`docs/Web-TaskList.md` 或新增 `docs/Web-UserManual-Coverage.md`。
+  输出：`docs/Web-UserManual-Coverage.md`。
+  修改范围：`docs/Web-UserManual-Coverage.md`、`docs/Web-TaskList.md`。
   前置依赖：`WEB-S0-001`、`WEB-S0-002`。
   可并行：无。
   验收标准：逐条列出 UserManual 中每个命令/功能对应的 Web 页面、API、Service、Job 类型、权限级别、风险等级和验收用例；未覆盖项必须标记为阻塞，不能进入最终验收。
-  完成情况：未完成。
+  完成情况：已完成 `docs/Web-UserManual-Coverage.md`，覆盖配置、数据库、Pipeline、盘前盘后、快照、策略、行情、回测、优化、规则池、KaipanScheduler 和 Dashboard。
   备注：必须覆盖 `init-config`、`db-check`、`db-migrate`、`init-project`、`seed-data`、`backup-data`、`restore-data`、`scheduler-start`、`crawl`、`import-trade-logs`、`pipeline-run`、`pipeline-step`、`migrate-crawl-state`、`extract-articles`、`clusters-build`、`e2e-regression`、`run-pre-market`、`run-after-close`、`list-signals`、`persona-init-sample`、`market-state-build`、`snapshot build`、`strategy build/list`、`ohlcv crawl`、`backtest`、`optimize`、`rule-pool`、KaipanScheduler、数据监控 Dashboard。
 
 ---
@@ -201,18 +202,18 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S1-001` `P0`
+- [x] `WEB-S1-001` `P0`
   目标：建立 service layer 目录与基础约定。
-  输入：现有 `cli/main.py`、`api/main.py`、`src/api/main.py`。
+  输入：现有 `cli/main.py`、`api/main.py`。
   输出：`src/services/__init__.py`、service 命名和返回模型约定。
   修改范围：`src/services/`、`docs/web-plan.md`。
   前置依赖：`WEB-S0-001`。
   可并行：无。
   验收标准：新增 service 目录；明确 service 不依赖 Typer，不直接输出终端文本。
-  完成情况：未完成。
+  完成情况：已完成 `src/services/` 基础骨架，定义 `BaseService`、`ServiceResult`、`ConfigService`、`SystemService`，并在 `docs/web-plan.md` 补充了服务层约定。
   备注：service 应返回结构化结果，CLI 负责把结果渲染成终端输出。
 
-- [ ] `WEB-S1-002` `P0`
+- [x] `WEB-S1-002` `P0`
   目标：抽取配置与系统状态 service。
   输入：`config/settings.py`、`src/common/config.py`、`cli/main.py` 中配置和数据库命令。
   输出：`ConfigService`、`SystemService`。
@@ -220,10 +221,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-003`。
   验收标准：能读取配置、脱敏配置、检查配置文件、检查数据库连接、检查关键目录；配置写入能力只在 `WEB-S7-005` 后开放。
-  完成情况：未完成。
+  完成情况：已完成 `ConfigService` 与 `SystemService` 的最小实现，支持配置加载、原始 YAML 读取、递归脱敏、配置文件检查、数据库连通性检查和关键目录检查。
   备注：任何 cookie、token、api_key、password、secret 必须脱敏。
 
-- [ ] `WEB-S1-003` `P0`
+- [x] `WEB-S1-003` `P0`
   目标：抽取盘前/盘后 service。
   输入：`api/routers/run.py`、`src/host/handler.py`、`ManagerAgent`。
   输出：`RunService`。
@@ -231,10 +232,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-002`。
   验收标准：service 支持 `run_pre_market`、`run_after_close`、`export_html`，API 与 CLI 可复用。
-  完成情况：未完成。
+  完成情况：已完成 `RunService`，支持盘前/盘后调用、可选 HTML 导出，并补充了对应单测。
   备注：原有 `/run/pre_market`、`/run/after_close` 行为不能回退。
 
-- [ ] `WEB-S1-004` `P0`
+- [x] `WEB-S1-004` `P0`
   目标：抽取 pipeline service。
   输入：`cli/main.py` 中 `crawl`、`pipeline-run`、`pipeline-step`、`extract-articles`、`clusters-build`、`e2e-regression`。
   输出：`PipelineService`。
@@ -242,10 +243,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-005`、`WEB-S1-006`。
   验收标准：UserManual 中数据处理相关操作均可通过 service 调用；CLI 行为保持一致。
-  完成情况：未完成。
+  完成情况：已完成 `PipelineService`，覆盖 crawl、pipeline-run、pipeline-step、extract-articles、clusters-build 和 e2e-regression 的共享业务封装，并补充了单测。
   备注：长任务执行本身由 Job Center 调度，service 只负责业务执行。
 
-- [ ] `WEB-S1-005` `P0`
+- [x] `WEB-S1-005` `P0`
   目标：抽取快照与 OHLCV service。
   输入：`cli/snapshot.py`、`cli/ohlcv.py`、`src/api/routes/market.py`、`api/routers/snapshots.py`。
   输出：`SnapshotOperationService`、`MarketService`。
@@ -253,10 +254,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-004`。
   验收标准：支持快照构建、快照查询、OHLCV 抓取、K 线数据查询。
-  完成情况：未完成。
+  完成情况：已完成 `SnapshotService` 和 `MarketService`，支持快照构建/查询/删除、OHLCV 抓取、最新收盘价、bars 和 DataFrame 查询，并补充了单测。
   备注：K 线接口必须按 symbol 和日期范围查询，返回前端图表友好的数据结构。
 
-- [ ] `WEB-S1-006` `P1`
+- [x] `WEB-S1-006` `P1`
   目标：抽取策略版本 service。
   输入：`cli/strategy.py`、`api/routers/strategy_versions.py`。
   输出：`StrategyOperationService`。
@@ -264,21 +265,21 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-004`、`WEB-S1-005`。
   验收标准：支持策略版本构建、列表、详情和下载信息查询。
-  完成情况：未完成。
+  完成情况：已完成 `StrategyService`，支持构建、列表、详情和 JSON 下载准备，并补充了单测。
   备注：保留 trader/status/date 过滤能力。
 
-- [ ] `WEB-S1-007` `P1`
+- [x] `WEB-S1-007` `P1`
   目标：抽取回测与规则验真 service。
   输入：`cli/backtest.py`、`api/routers/backtest_results.py`。
-  输出：`BacktestOperationService`。
+  输出：`BacktestService`。
   修改范围：`src/services/backtest_service.py`、相关 CLI/API 和测试。
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-008`。
   验收标准：支持 backtest run、report、validate-rules、reproducibility-check、rule-pool-run。
-  完成情况：未完成。
+  完成情况：已完成 `BacktestService`，支持回测执行、结果报告加载与渲染、规则验真、复现检查和规则池回测；`cli/backtest.py` 已切换为复用 service，补充了单测并通过回归验证。
   备注：回测结果必须可记录为 Job 产物。
 
-- [ ] `WEB-S1-008` `P1`
+- [x] `WEB-S1-008` `P1`
   目标：抽取优化和规则池 service。
   输入：`cli/optimize.py`、`cli/main.py` 中 rule-pool 命令。
   输出：`OptimizeService`、`RulePoolService`。
@@ -286,18 +287,18 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-007`。
   验收标准：支持 optimize filter/advise/create-candidate 和 rule-pool show/list/review/review-batch。
-  完成情况：未完成。
+  完成情况：已完成 `OptimizeService` 与 `RulePoolService`，覆盖活跃 trader 筛选、策略调整建议、候选版本生成、规则列表/详情/审核/批量审核，并补充了单测。
   备注：批量审核必须暴露风险信息，供 Web 二次确认。
 
-- [ ] `WEB-S1-009` `P0`
+- [x] `WEB-S1-009` `P0`
   目标：补齐 UserManual 中未纳入前述 service 的命令服务化。
   输入：`docs/UserManual.md`、`WEB-S0-003` 覆盖矩阵、当前 CLI/API 代码。
   输出：配置/初始化/导入/迁移/信号/persona/market-state/Kaipan/Dashboard 等补充 service。
-  修改范围：`src/services/config_service.py`、`src/services/pipeline_service.py`、`src/services/run_service.py`、`src/services/kaipan_service.py`、`src/services/dashboard_service.py`、相关 CLI/API 和测试。
+  修改范围：`src/services/config_service.py`、`src/services/setup_service.py`、`src/services/signal_service.py`、`src/services/persona_service.py`、`src/services/kaipan_service.py`、`src/services/dashboard_service.py`、`src/services/pipeline_service.py`、`src/services/run_service.py`、相关 CLI/API 和测试。
   前置依赖：`WEB-S0-003`、`WEB-S1-001`。
   可并行：`WEB-S1-004`、`WEB-S1-005`。
   验收标准：`init-config`、`init-project`、`seed-data`、`import-trade-logs`、`migrate-crawl-state`、`list-signals`、`persona-init-sample`、`market-state-build`、KaipanScheduler `fetch/normalize/status/run`、`src.pipeline.dashboard` 均可通过 service 调用；CLI 行为保持一致。
-  完成情况：未完成。
+  完成情况：A/B/C 子任务已完成，新增 `ConfigService.write_default_template()`、`SetupService`、`SignalService`、`PersonaService`、`KaipanService`、`DashboardService`，已接入 `init-config`、`init-project`、`seed-data`、`import-trade-logs`、`migrate-crawl-state`、`list-signals`、`persona-init-sample`、`market-state-build`、KaipanScheduler `fetch/normalize/status/run`、`src.pipeline.dashboard` 的 service 化与回归测试。
   备注：KaipanScheduler 和数据监控 Dashboard 是独立入口，不能因不在 `cli.main` 中而遗漏。
 
 ---
@@ -317,7 +318,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S2-001` `P0`
+- [x] `WEB-S2-001` `P0`
   目标：定义 Job 数据模型和存储方案。
   输入：长任务列表、现有数据库迁移体系。
   输出：Job 模型和迁移。
@@ -325,10 +326,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-001`。
   可并行：无。
   验收标准：Job 可持久化保存任务类型、状态、参数、结果、错误、产物、幂等键、重试次数、超时时间、取消标记、Worker 标识和时间字段。
-  完成情况：未完成。
+  完成情况：已完成 `Job` ORM 模型与 Alembic migration，新增 `jobs` 表并补充了模型注册与单测；表字段覆盖任务类型、状态、参数、结果、错误、产物、幂等键、重试次数、超时时间、取消标记、Worker 标识、锁与时间字段。
   备注：生产交付必须使用持久化存储；文件存储只能作为日志和产物目录，不能作为唯一任务状态来源。
 
-- [ ] `WEB-S2-002` `P0`
+- [x] `WEB-S2-002` `P0`
   目标：实现 JobService。
   输入：Job 模型、service layer。
   输出：`src/services/job_service.py`。
@@ -336,10 +337,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-001`。
   可并行：无。
   验收标准：支持创建、启动、完成、失败、取消、查询、分页、日志追加、产物绑定、幂等创建、任务锁、超时标记、重试计数和状态恢复。
-  完成情况：未完成。
+  完成情况：已完成 `JobService`，支持创建、查询、分页、启动、完成、失败、取消、日志追加、产物绑定、幂等创建、任务锁、超时标记、重试计数和状态恢复；新增了对应单测并通过验证。
   备注：失败状态必须保留异常摘要和可读错误信息。
 
-- [ ] `WEB-S2-003` `P0`
+- [x] `WEB-S2-003` `P0`
   目标：接入生产级长任务执行器。
   输入：JobService、已抽取 service。
   输出：受控任务执行入口。
@@ -347,7 +348,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-002`、`WEB-S1-003`。
   可并行：无。
   验收标准：至少支持盘前、盘后、pipeline-run 三类任务通过 Job 执行；服务重启后 running 任务可恢复为 failed/retryable；同一幂等键不能重复创建破坏性任务；任务执行超时后状态可追踪。
-  完成情况：未完成。
+  完成情况：已完成 `JobRunner`，支持 `run-pre-market`、`run-after-close`、`pipeline-run` 白名单执行；执行结果会写入 `data/jobs/{job_id}/result.json` 并绑定产物；补充了受控执行、pending 轮询和 stale 恢复可重试信息的单测并通过验证。
   备注：生产交付不得只依赖 FastAPI 进程内 background task；如暂不引入外部队列，必须实现数据库轮询 Worker、心跳和锁。
 
 - [ ] `WEB-S2-004` `P1`
@@ -361,7 +362,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：日志中不得输出敏感配置。
 
-- [ ] `WEB-S2-005` `P0`
+- [x] `WEB-S2-005` `P0`
   目标：实现 Job Worker 心跳、并发控制、重试和取消协议。
   输入：JobService、JobRunner、数据库会话。
   输出：生产级 Job Worker 协议。
@@ -369,10 +370,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-001`、`WEB-S2-002`、`WEB-S2-003`。
   可并行：无。
   验收标准：Worker 定期写入心跳；超过心跳阈值的任务可恢复；支持按任务类型限制并发；支持可配置最大重试次数和退避；取消请求能阻止未开始任务并标记运行中任务为 cancel_requested。
-  完成情况：未完成。
+  完成情况：已完成 `JobRunner` Worker 协议增强；支持 `claim_job` 原子领取、`heartbeat_job` 定期刷新心跳、按 job type 限制并发、`retry_backoff_seconds` 退避重试、运行中任务取消请求保留 `cancel_requested` 标记；补充了服务层与 worker 协议单测并通过验证。
   备注：对不能安全中断的任务，取消语义必须明确为“请求取消”，并在 UI 中说明。
 
-- [ ] `WEB-S2-006` `P0`
+- [x] `WEB-S2-006` `P0`
   目标：补齐所有 UserManual 长任务的 Job 类型白名单。
   输入：`WEB-S0-003` 覆盖矩阵、各 service。
   输出：Job 类型注册表。
@@ -380,7 +381,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S0-003`、`WEB-S1-009`、`WEB-S2-003`。
   可并行：无。
   验收标准：覆盖矩阵中所有需要执行的命令都有明确 job type、参数 schema、权限等级、风险等级、是否可重试、是否可并发、是否需要二次确认。
-  完成情况：未完成。
+  完成情况：已完成 Job 类型注册表、参数 schema 和 UI 校验入口；白名单仅保留 `pipeline-run`、`pipeline-step`、`run-pre-market`、`run-after-close` 四个可执行 job type，其余长任务仅注册不直接进入 JobRunner。
   备注：不允许前端提交任意 job type 或任意 shell 字符串。
 
 ---
@@ -402,14 +403,14 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - [ ] `WEB-S3-001` `P0`
   目标：新增 UI API 路由骨架。
-  输入：`api/main.py`。
+  输入：`api/main.py`、`src/api/app.py`。
   输出：`api/routers/ui/` 或 `api/routers/ui.py`。
-  修改范围：`api/main.py`、`api/routers/ui/`。
+  修改范围：`src/api/app.py`、`api/main.py`、`api/routers/ui/`。
   前置依赖：`WEB-S1-002`。
   可并行：`WEB-S2-004`。
   验收标准：`/api/ui/system/status` 可返回系统状态。
   完成情况：未完成。
-  备注：优先挂载到 `api/main.py`。
+  备注：优先挂载到 `src/api/app.py`，`api/main.py` 作为唯一主入口。
 
 - [ ] `WEB-S3-002` `P0`
   目标：实现 Job API。
@@ -456,19 +457,19 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   备注：返回字段应包含 time/open/high/low/close/volume。
 
 - [ ] `WEB-S3-006` `P1`
-  目标：收敛两套 API 入口的 Web 使用方式。
-  输入：`api/main.py`、`src/api/main.py`、`docs/APIReference.md`。
-  输出：Web 默认 API 入口说明。
-  修改范围：`api/main.py`、`docs/APIReference.md`、`docs/web-plan.md`。
+  目标：将 API 入口最终收敛为单一入口，删除另一个入口，并确保文档和代码都只指向同一个主入口。
+  输入：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`。
+  输出：单一 API 入口说明、旧入口删除说明、迁移完成后的文档收口。
+  修改范围：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`、`docs/web-plan.md`、相关测试。
   前置依赖：`WEB-S3-001`。
   可并行：无。
-  验收标准：Web 只依赖一个主 API 入口；旧 API 不被破坏。
+  验收标准：仓库只保留一个对外 API 启动入口；`src/api/main.py` 已删除；所有文档、测试和部署说明都已切换到唯一主入口；旧入口不再作为运行时契约出现。
   完成情况：未完成。
-  备注：优先使用 `api/main.py` 作为 Web 主入口。
+  备注：以 `api/main.py` 作为唯一主入口，迁移期兼容层在任务完成时一并清理。
 
 - [ ] `WEB-S3-007` `P0`
   目标：制定并实现 API versioning 与兼容策略。
-  输入：`api/main.py`、`src/api/main.py`、`docs/APIReference.md`、Web UI API 设计。
+  输入：`api/main.py`、`docs/APIReference.md`、Web UI API 设计。
   输出：`/api/ui/v1` 或等价版本化入口、旧 API 兼容说明。
   修改范围：`api/main.py`、`api/routers/ui/`、`docs/APIReference.md`、相关测试。
   前置依赖：`WEB-S3-001`、`WEB-S3-006`。

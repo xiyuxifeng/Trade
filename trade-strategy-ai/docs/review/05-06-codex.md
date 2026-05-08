@@ -1,5 +1,10 @@
 # 2026-05-06 Codex Review
 
+> 历史快照说明：
+> 本文档记录的是 2026-05-06 的 review 结论，属于历史快照。
+> 当前权威 review 以 `docs/review/05-07-codex.md` 为准。
+> 如果本文档与 `docs/TaskList.md`、CLI 或当前实现冲突，优先以后者为准。
+
 ## 结论摘要
 
 当前项目**未达到** [需求.md](/Users/wanghui/Documents/Claude/trade-strategy-ai/docs/需求.md:1) 描述的最终目标，也**不能认为“所有 Stage 任务都已按验收标准完成”**。  

@@ -576,6 +576,12 @@ python -m cli.main backtest rule-pool-run --help
 - 新接手人员能通过文档索引识别当前权威文档。
 - 旧文档不会与当前 TaskList、CLI 或代码入口形成明显冲突。
 
+修复结果：
+
+- ✅ 已修复：新增 `docs/README.md`，明确当前权威文档顺序与 review 优先级。
+- ✅ 已修复：`docs/review/05-06-codex.md` 顶部补充历史快照说明，避免旧结论被误当成当前状态。
+- ✅ 已修复：历史 review 统一降级为参考资料，不再作为执行主入口。
+
 ### Step 8: 补充 Stage 11 最终实现总结
 
 目标：
@@ -593,6 +599,12 @@ python -m cli.main backtest rule-pool-run --help
 - 文档能让新用户独立理解并运行 Stage 11。
 - Stage 11 文档与 `docs/TaskList.md`、`docs/UserManual.md`、CLI help 输出一致。
 
+修复结果：
+
+- ✅ 已修复：`docs/TaskList.md` 新增 `Stage 11 最终实现总结`，串联文章抽取、规则池、回测、预测和盘前推荐主链路。
+- ✅ 已修复：总结中补充了当前限制、验收命令和主要产物路径，便于新接手人员直接验证。
+- ✅ 已修复：Stage 11 的能力边界与当前实现状态已收敛到任务清单，避免混入用户操作手册。
+
 ### Step 9: 补充 A 股复杂市场约束设计
 
 目标：
@@ -608,6 +620,12 @@ python -m cli.main backtest rule-pool-run --help
 
 - 文档不会让用户误以为系统已经覆盖所有 A 股微观交易细则。
 - Stage 8 的当前能力和后续增强项边界清晰。
+
+修复结果：
+
+- ✅ 已修复：`docs/TaskList.md` 的 Stage 8 新增“复杂市场边界说明”，明确已实现约束与后续增强项。
+- ✅ 已修复：集合竞价、停复牌、临停、退市整理、新股特殊涨跌幅、题材周期、盘口流动性被明确归类为后续增强，不再混入当前验收范围。
+- ✅ 已修复：Stage 8 当前能力与未来扩展边界已在任务清单中可见，避免误解为全量撮合仿真。
 
 ### Step 10: 全量回归与最终文档对齐
 
@@ -636,8 +654,14 @@ python -m pytest tests/e2e/test_full_flow.py \
 - `docs/TaskList.md` 对 Stage 6、Stage 11 的状态与实际测试结果一致。
 - `docs/review/05-07-codex.md` 中 P1/P2/P3 问题均已被修复、降级为已知限制，或转入明确的后续任务。
 
+修复结果：
+
+- ✅ 已修复：Step 10 指定的 9 个测试用例组已通过，最终回归结果为 `81 passed`。
+- ✅ 已修复：`tests/unit/market_universe/test_snapshot_service.py::test_list_snapshots` 改为使用 `tmp_path` 隔离，避免扫描仓库历史快照造成数量漂移。
+- ✅ 已修复：代码、测试与文档的当前状态已重新对齐，可作为本轮收口结论。
+
 ## 最终判断
 
 当前项目已经达到 `需求.md` 的主目标闭环：可以从交易员内容和交易数据出发，形成策略版本、盘前推荐、盘后评估、回测优化和规则池学习。
 
-当前 Stage 6 与 Stage 11 的规则池回测验证缺口已完成 Step 1-4 修复，并通过相关回归测试。剩余主要风险转为文档与入口一致性问题，包括 `UserManual.md` 与 CLI 参数不一致、API 双入口职责不清、Stage 11 总结文档仍需补充。
+当前 Stage 6 与 Stage 11 的规则池回测验证缺口已完成 Step 1-4 修复，并通过相关回归测试。Step 5-8 也已收口完成，当前剩余工作已转为后续增强项，不再是当前验收阻塞。

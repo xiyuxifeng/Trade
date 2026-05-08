@@ -108,11 +108,11 @@ class TestSnapshotService:
         assert loaded.metadata.get("provider") == "kaipan"
         assert loaded.metadata.get("version") == "1.0"
 
-    def test_list_snapshots(self):
+    def test_list_snapshots(self, tmp_path):
         """列出指定日期范围的快照。"""
         from src.market_universe.snapshot_service import SnapshotService
 
-        service = SnapshotService()
+        service = SnapshotService(base_dir=str(tmp_path))
 
         # 保存多个快照
         service.save(MarketUniverse(trade_date="2026-04-20", slot="17-30"))

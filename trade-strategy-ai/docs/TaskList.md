@@ -1655,6 +1655,28 @@
 
 **补充：** 当前约束实现与 `docs/superpowers/specs/2026-05-07-stage8-a-share-risk-control-design.md` 保持一致，后续新增交易品种时优先更新该设计文档，再同步代码与测试。
 
+### Stage 8 复杂市场边界说明（2026-05-07）
+
+当前 Stage 8 的目标是覆盖回测与盘后评分中最关键、最稳定的一组 A 股约束，而不是把所有撮合细则一次性做完。现阶段可以明确分成两类：
+
+**已实现 / 已进入统一口径的约束**
+
+- T+1 与停牌/无成交识别
+- 主板、创业板、科创板、ST、ETF、可转债的基础板块识别
+- 普通股票、ST、ETF、可转债的涨跌幅/约束默认值
+- 一字板、涨停、跌停在 MFE/MAE 与回测评分中的识别
+- 价格笼子与异常状态的风控记录
+
+**后续增强项（当前不作为 Stage 8 验收前提）**
+
+- 集合竞价、开盘瞬间流动性和封单强度
+- 停复牌、临停、退市整理、风险警示变更
+- 北交所更细的撮合与交易规则
+- 新股上市前若干日的特殊涨跌幅与交易限制
+- 盘口 Level2、逐笔成交、题材周期和短线连板生态
+
+**结论：** 当前代码已经满足日线级、盘前推荐、盘后复盘和回测验真的约束需求；如果未来要支持更细颗粒度的短线交易细则，应把它们作为独立增强项推进，而不是继续塞进 Stage 8 的基础验收范围。
+
 ---
 
 ### Stage 9. 工程日志与可追溯性（P1）
@@ -2093,6 +2115,39 @@ logger.error("reproducibility_check 失败: hash_a=%s, hash_b=%s", hash_a, hash_
 - [x] 高置信度规则（>=0.8）可进入盘前预测
 
 > 2026-05-07 修复：`_backtest_single_rule()` 已移除硬编码 60% 命中率模拟，改为解析 mapped_condition + 加载真实 OHLCV/指标 + 计算 T+1 收益 + 多指标置信度更新。分层提取已按 rule/record/mixed/concept/noise 五路独立分流。article_id 类型已统一为 UUID + ForeignKey。
+
+### Stage 11 最终实现总结（2026-05-07）
+
+Stage 11 已形成“文章→分类→分层提取→规则池→回测→预测→盘前推荐”的可运行闭环，当前可直接按以下方式验证：
+
+- 文章抽取自动完成分类、元数据提取、分层入库和自动审核。
+- `rule-pool` 支持人工审核、回测和置信度回写。
+- `backtest rule-pool-run` 可手动触发规则池回测，便于做 Stage 11 验收与回归。
+- `RulePoolPredictionService` 的高置信度结果会进入盘前推荐上下文，并影响 `TradeIdea.confidence`、`evidence_refs` 和 `rationale`。
+
+当前保留的限制：
+
+- 规则池预测更适合作为加分和解释信号，不是唯一决策来源。
+- 规则池回测依赖有效 OHLCV 数据和可映射条件，缺失时会退化为空样本。
+- 置信度更新仍依赖样本数、命中率和历史效果，不能把单次命中当作强结论。
+
+建议的验收命令：
+
+```bash
+python -m cli.main extract-articles --help
+python -m cli.main backtest rule-pool-run --help
+python -m pytest tests/unit/backtest/test_rule_pool_backtest.py -q
+```
+
+主要产物：
+
+- `data/processed/llm_extraction_errors.jsonl`
+- `data/processed/pipeline/llm_checkpoint.jsonl`
+- `rule_pool.backtest_result`、`rule_pool.validated_confidence`
+- `daily_report_YYYY-MM-DD.json`
+- `evidence_packs/` 下的归因产物
+
+> 2026-05-08 回归记录：Step 10 指定的 9 组测试已通过，最终结果 `81 passed`；其中 `test_snapshot_service.py::test_list_snapshots` 已改为使用 `tmp_path` 隔离历史快照目录，避免扫描仓库内已有样本影响断言。
 
 ---
 

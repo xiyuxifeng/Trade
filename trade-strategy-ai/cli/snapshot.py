@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date as Date
+from datetime import date as Date, timedelta
 from pathlib import Path
 
 import typer
@@ -51,9 +51,33 @@ def _discover_raw_dirs(raw_base: Path, slot_filter: str | None = None) -> list[t
     return sorted(combos, key=lambda x: (x[0], x[1]))
 
 
+def _expand_date_range(start_date: str, end_date: str) -> list[str]:
+    """将起止日期展开为包含首尾的 ISO 日期列表。"""
+    try:
+        start = Date.fromisoformat(start_date)
+    except ValueError as exc:
+        raise ValueError(f"无效开始日期: {start_date}，请使用 YYYY-MM-DD") from exc
+    try:
+        end = Date.fromisoformat(end_date)
+    except ValueError as exc:
+        raise ValueError(f"无效结束日期: {end_date}，请使用 YYYY-MM-DD") from exc
+
+    if start > end:
+        raise ValueError(f"开始日期不能晚于结束日期: {start_date} > {end_date}")
+
+    dates: list[str] = []
+    current = start
+    while current <= end:
+        dates.append(current.isoformat())
+        current += timedelta(days=1)
+    return dates
+
+
 @app.command("build")
 def snapshot_build(
     date: str | None = typer.Option(None, "--date", "-d", help="交易日期 YYYY-MM-DD（离线模式不指定则处理 raw 目录下所有日期）"),
+    start_date: str | None = typer.Option(None, "--start-date", help="批量处理起始交易日 YYYY-MM-DD（与 --end-date 配合使用）"),
+    end_date: str | None = typer.Option(None, "--end-date", help="批量处理结束交易日 YYYY-MM-DD（与 --start-date 配合使用）"),
     slot: str = typer.Option("17-30", "--slot", "-s", help="时段（盘后默认 17-30）"),
     snapshot_type: str = typer.Option("all", "--type", "-t",
                                       help="快照类型：all / hot_topics / topic_constituents / strong_symbols"),
@@ -65,6 +89,7 @@ def snapshot_build(
 
     示例：
       python -m cli.main snapshot build --date 2026-04-29
+      python -m cli.main snapshot build --start-date 2026-04-29 --end-date 2026-05-01
       python -m cli.main snapshot build --date 2026-04-29 --type hot_topics --force
       python -m cli.main snapshot build --date 2026-04-29 --offline
       python -m cli.main snapshot build --offline          # 离线模式处理所有已缓存的日期
@@ -76,8 +101,22 @@ def snapshot_build(
         handle_strong_symbols_snapshot,
     )
 
+    # 批量日期范围优先于单日与离线扫描
+    if start_date is not None or end_date is not None:
+        if not start_date or not end_date:
+            typer.secho("使用日期范围时，必须同时提供 --start-date 和 --end-date", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        if date is not None:
+            typer.secho("不能同时使用 --date 与 --start-date/--end-date", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        try:
+            date_values = _expand_date_range(start_date, end_date)
+        except ValueError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        date_slots = [(d, slot) for d in date_values]
     # 离线模式且未指定 date：扫描 raw 目录获取所有日期
-    if offline and date is None:
+    elif offline and date is None:
         raw_base = Path("data/kaipan/raw")
         date_slots = _discover_raw_dirs(raw_base)
         if not date_slots:

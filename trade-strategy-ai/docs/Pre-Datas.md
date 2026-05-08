@@ -65,6 +65,10 @@
         ```bash
         python -m cli.main snapshot build --date 2024-05-07
         ```
+    -   **在线批量处理日期区间**：按起止日期批量构建快照，包含首尾日期。
+        ```bash
+        python -m cli.main snapshot build --start-date 2024-05-07 --end-date 2024-05-09
+        ```
     -   **离线处理所有**：扫描 `raw` 目录中所有已缓存的日期数据，并批量构建快照。
         ```bash
         python -m cli.main snapshot build --offline

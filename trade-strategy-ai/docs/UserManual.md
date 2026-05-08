@@ -253,6 +253,12 @@ python -m cli.main snapshot build --date 2026-04-29 --type all
 python -m cli.main snapshot build --date 2026-04-29 --type hot_topics --force
 ```
 
+也可以批量构建一个日期区间：
+
+```bash
+python -m cli.main snapshot build --start-date 2026-04-29 --end-date 2026-05-01 --type all
+```
+
 说明：
 
 - 目前快照构建器会尝试使用 Kaipan provider；若 Kaipan 配置缺失/不可用，会跳过并打印 warning。
@@ -476,6 +482,7 @@ python -m cli.main <command> --help
 
 - `snapshot build`
 	- `--date`：交易日
+	- `--start-date` / `--end-date`：批量处理起止交易日，包含首尾
 	- `--slot`：时段（默认 `17-30`）
 	- `--type`：`all` / `hot_topics` / `topic_constituents` / `strong_symbols`
 	- `--force`：覆盖已有快照
@@ -657,6 +664,7 @@ python -m cli.main pipeline-run --config config/app.yaml --max-articles 10
 ```bash
 python -m cli.main ohlcv crawl --mode full --from 2026-01-01 --to 2026-04-30 --limit 50
 python -m cli.main snapshot build --date 2026-04-29 --type all
+python -m cli.main snapshot build --start-date 2026-04-29 --end-date 2026-05-01 --type all
 ```
 
 5）文章提取 → 规则入库（Stage 11 链路）：
@@ -782,6 +790,9 @@ python -m cli.main snapshot build --date 2026-04-22 --slot 17-30 --type all
 
 # 方式 B：直接构建快照（会在线拉取并保存）
 python -m cli.main snapshot build --date 2026-04-22 --slot 17-30 --type all
+
+# 批量构建一个日期区间
+python -m cli.main snapshot build --start-date 2026-04-22 --end-date 2026-04-24 --slot 17-30 --type all
 ```
 
 Kaipan 可选鉴权参数（如有）：

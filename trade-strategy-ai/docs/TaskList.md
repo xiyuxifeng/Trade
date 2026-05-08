@@ -1572,7 +1572,7 @@
   前置依赖：Stage 5、Stage 6 完成 + P0 阻塞项修复完成。
   可并行：`NTL-S7-005`、`NTL-S7-007`。
   验收标准：关键链路都能通过 CLI 触发。
-  完成情况：✅ snapshot 子命令（build）+ strategy 子命令（build + list）已注册，7 tests PASS。
+  完成情况：✅ snapshot 子命令（build）+ strategy 子命令（build + list）已注册；snapshot build 现支持 `--start-date/--end-date` 日期区间；7 tests PASS。
 
 - [x] `NTL-S7-007` `P2`
   目标：增加数据新鲜度、快照缺失、provider 失败告警。

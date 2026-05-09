@@ -1,4 +1,4 @@
-import { API_KEY_STORAGE_KEY } from './http';
+import { buildApiHeaders } from './http';
 import type {
   BacktestJobSubmission,
   BacktestResultResponse,
@@ -14,22 +14,11 @@ type BacktestResultsQuery = {
   limit?: number;
 };
 
-function buildHeaders(accept: string) {
-  const headers: Record<string, string> = {
-    Accept: accept,
-  };
-  if (typeof window !== 'undefined') {
-    const apiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (apiKey) {
-      headers['X-API-Key'] = apiKey;
-    }
-  }
-  return headers;
-}
-
 async function fetchRootJson<T>(path: string): Promise<T> {
+  const headers = buildApiHeaders();
+  headers.set('Accept', 'application/json');
   const response = await fetch(path, {
-    headers: buildHeaders('application/json'),
+    headers,
   });
   if (!response.ok) {
     throw new Error(response.statusText || 'Backtest request failed');
@@ -38,8 +27,10 @@ async function fetchRootJson<T>(path: string): Promise<T> {
 }
 
 async function fetchRootText(path: string): Promise<string> {
+  const headers = buildApiHeaders();
+  headers.set('Accept', 'text/markdown, text/plain;q=0.9, */*;q=0.8');
   const response = await fetch(path, {
-    headers: buildHeaders('text/markdown, text/plain;q=0.9, */*;q=0.8'),
+    headers,
   });
   if (!response.ok) {
     throw new Error(response.statusText || 'Backtest report load failed');

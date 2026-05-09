@@ -1,4 +1,4 @@
-import { API_KEY_STORAGE_KEY } from './http';
+import { buildApiHeaders } from './http';
 import type {
   AlertActionResponse,
   AlertHistoryQuery,
@@ -6,26 +6,15 @@ import type {
   AlertHistoryResponse,
 } from '@/types/alerts';
 
-function buildHeaders(accept: string, includeJsonContentType = false) {
-  const headers: Record<string, string> = {
-    Accept: accept,
-  };
-  if (includeJsonContentType) {
-    headers['Content-Type'] = 'application/json';
-  }
-  if (typeof window !== 'undefined') {
-    const apiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (apiKey) {
-      headers['X-API-Key'] = apiKey;
-    }
-  }
-  return headers;
-}
-
 async function fetchRootJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = buildApiHeaders(init?.headers);
+  headers.set('Accept', 'application/json');
+  if (init?.method === 'POST' || init?.method === 'PUT' || init?.method === 'PATCH') {
+    headers.set('Content-Type', 'application/json');
+  }
   const response = await fetch(path, {
     ...init,
-    headers: buildHeaders('application/json', init?.method === 'POST' || init?.method === 'PUT' || init?.method === 'PATCH'),
+    headers,
   });
   if (!response.ok) {
     throw new Error(response.statusText || 'Alert request failed');

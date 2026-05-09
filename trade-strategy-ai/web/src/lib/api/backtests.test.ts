@@ -31,15 +31,10 @@ describe('backtests api client', () => {
 
     await listBacktestResults({ skip: 0, limit: 10 });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/backtest_results/?skip=0&limit=10',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Accept: 'application/json',
-          'X-API-Key': 'demo-key',
-        }),
-      }),
-    );
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe('/backtest_results/?skip=0&limit=10');
+    expect((init?.headers as Headers).get('Accept')).toBe('application/json');
+    expect((init?.headers as Headers).get('X-API-Key')).toBe('demo-key');
   });
 
   it('loads a backtest result and markdown reports from the root API', async () => {

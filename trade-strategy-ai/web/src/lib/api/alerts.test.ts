@@ -23,15 +23,10 @@ describe('alerts api client', () => {
 
     await listAlertHistory({ status: 'pending', tag: 'snapshot', skip: 10, limit: 20 });
 
-    expect(fetch).toHaveBeenCalledWith(
-      '/alerts/history?status=pending&tag=snapshot&skip=10&limit=20',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Accept: 'application/json',
-          'X-API-Key': 'demo-key',
-        }),
-      }),
-    );
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/alerts/history?status=pending&tag=snapshot&skip=10&limit=20');
+    expect((init?.headers as Headers).get('Accept')).toBe('application/json');
+    expect((init?.headers as Headers).get('X-API-Key')).toBe('demo-key');
   });
 
   it('posts acknowledge, resolve and test alert requests', async () => {
@@ -78,4 +73,3 @@ describe('alerts api client', () => {
     );
   });
 });
-

@@ -1,4 +1,4 @@
-import { API_KEY_STORAGE_KEY, fetchJson, getApiBaseUrl } from './http';
+import { buildApiHeaders, fetchJson, getApiBaseUrl } from './http';
 import type {
   DailyReportDetail,
   EvaluationResultDetail,
@@ -39,14 +39,8 @@ export async function downloadEvaluationHtml(date: string) {
 }
 
 async function fetchReportHtml(kind: ReportKind, date: string) {
-  const headers = new Headers();
+  const headers = buildApiHeaders();
   headers.set('Accept', 'text/html');
-  if (typeof window !== 'undefined') {
-    const apiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (apiKey) {
-      headers.set('X-API-Key', apiKey);
-    }
-  }
 
   const response = await fetch(`${getApiBaseUrl()}/reports/${kind}/${date}/html`, {
     headers,

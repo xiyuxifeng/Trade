@@ -822,7 +822,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S7-001` `P0`
+- [x] `WEB-S7-001` `P0`
   目标：实现 Web API 生产级鉴权基线。
   输入：现有 API Key 机制。
   输出：UI API 鉴权与会话/API Key 保护。
@@ -830,7 +830,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-001`。
   可并行：`WEB-S7-002`。
   验收标准：UI API 可按配置启用 API Key 或登录会话；未授权请求被拒绝；鉴权失败有统一错误；本地开发关闭鉴权必须显式配置。
-  完成情况：未完成。
+  完成情况：已完成 `WEB-S7-001` 的 API Key 基线收口：`api/dependencies.py` 统一收紧为“关闭鉴权才匿名、开启鉴权必须命中 key”，`api_keys` 为空时不再匿名放行；前端 `web/src/lib/api/` 的请求头注入已统一到共享 helper；补齐后端和前端回归测试并通过 `pytest`、`typecheck` 和 `lint` 验证。
   备注：本地开发可配置关闭鉴权。
 
 - [ ] `WEB-S7-002` `P0`

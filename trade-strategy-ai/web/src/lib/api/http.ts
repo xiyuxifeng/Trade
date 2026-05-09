@@ -16,10 +16,8 @@ function getStoredApiKey() {
   return window.localStorage.getItem(API_KEY_STORAGE_KEY);
 }
 
-function buildHeaders(headers?: HeadersInit) {
+export function buildApiHeaders(headers?: HeadersInit) {
   const mergedHeaders = new Headers(headers);
-  mergedHeaders.set('Accept', 'application/json');
-
   const apiKey = getStoredApiKey();
   if (apiKey) {
     mergedHeaders.set('X-API-Key', apiKey);
@@ -55,9 +53,11 @@ async function readErrorPayload(response: Response): Promise<ApiErrorPayload | u
 }
 
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = buildApiHeaders(init?.headers);
+  headers.set('Accept', 'application/json');
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
-    headers: buildHeaders(init?.headers),
+    headers,
   });
 
   if (!response.ok) {

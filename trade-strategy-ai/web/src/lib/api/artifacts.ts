@@ -1,5 +1,5 @@
 import type { ArtifactsListResponse } from '@/types/artifacts';
-import { API_KEY_STORAGE_KEY, fetchJson, getApiBaseUrl } from './http';
+import { buildApiHeaders, fetchJson, getApiBaseUrl } from './http';
 
 type ArtifactsQuery = {
   kind?: string;
@@ -41,14 +41,8 @@ export function getArtifact(artifactId: string) {
 }
 
 export async function downloadArtifact(artifactId: string) {
-  const headers = new Headers();
+  const headers = buildApiHeaders();
   headers.set('Accept', '*/*');
-  if (typeof window !== 'undefined') {
-    const apiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (apiKey) {
-      headers.set('X-API-Key', apiKey);
-    }
-  }
 
   const response = await fetch(`${getApiBaseUrl()}/artifacts/${artifactId}/download`, {
     headers,

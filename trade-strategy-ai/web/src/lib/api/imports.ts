@@ -1,4 +1,4 @@
-import { API_KEY_STORAGE_KEY, fetchJson, getApiBaseUrl } from './http';
+import { fetchJson } from './http';
 import type { ImportTradeLogsRequest, ImportTradeLogsResponse, MigrateCrawlStateRequest, MigrateCrawlStateResponse } from '@/types/imports';
 
 export async function importTradeLogs(payload: ImportTradeLogsRequest) {
@@ -9,24 +9,10 @@ export async function importTradeLogs(payload: ImportTradeLogsRequest) {
     form.append('source', payload.source);
   }
 
-  const headers = new Headers();
-  headers.set('Accept', 'application/json');
-  if (typeof window !== 'undefined') {
-    const apiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (apiKey) {
-      headers.set('X-API-Key', apiKey);
-    }
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}/imports/trade-logs`, {
+  return fetchJson<ImportTradeLogsResponse>('/imports/trade-logs', {
     method: 'POST',
-    headers,
     body: form,
   });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'trade log import failed');
-  }
-  return (await response.json()) as ImportTradeLogsResponse;
 }
 
 export function migrateCrawlState(payload: MigrateCrawlStateRequest) {

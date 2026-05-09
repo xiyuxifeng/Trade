@@ -670,6 +670,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 实现用户最关心的数据查看能力：K 线、报表、快照、回测、告警。
 - 对 Stage 4 已经具备的任务中心与市场入口做增强升级，而不是重新实现一遍基础壳。
 - 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
+- `docs/superpowers/plans/2026-05-09-web-s6-001-job-center-enhancement.md` 中的追踪子项完成
 
 ### 阶段交付物
 

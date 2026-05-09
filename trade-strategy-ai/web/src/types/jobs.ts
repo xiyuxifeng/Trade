@@ -32,3 +32,19 @@ export type JobsListResponse = {
   limit: number;
   items: JobRecord[];
 };
+
+export type JobDetailResponse = {
+  job: JobRecord;
+  job_dir: string;
+  log_path: string;
+  params_path: string;
+  result_path: string;
+  artifacts_path: string;
+};
+
+export type JobLogsResponse = {
+  job_id: string;
+  log_path: string;
+  count: number;
+  items: string[];
+};

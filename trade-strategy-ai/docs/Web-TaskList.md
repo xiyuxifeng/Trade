@@ -576,14 +576,14 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成总览页接入系统状态、最近 Job 和最近产物，页面已具备 loading / empty / error 状态，并通过 `build`、`typecheck`、`lint` 验证。
   备注：总览页是 Web 首页，优先提供系统是否正常的第一视图。
 
-- [ ] `WEB-S4-006` `P1`
+- [x] `WEB-S4-006` `P1`
   目标：让任务中心、工作流、产物中心和市场数据页具备可用的首批功能。
   输入：路由骨架、API client、设计系统。
   输出：首批可操作的功能页面。
   修改范围：`web/src/pages/jobs/`、`web/src/pages/workflows/`、`web/src/pages/artifacts/`、`web/src/pages/market/`、`web/src/features/job-center/`、`web/src/features/workflow-center/`、`web/src/features/artifact-center/`、`web/src/features/market-center/`。
   前置依赖：`WEB-S4-003`、`WEB-S4-004`、`WEB-S4-005`。
   验收标准：可查看 Job 列表与详情、触发工作流、预览/下载产物、查询 symbol 与 OHLCV。
-  完成情况：未完成。
+  完成情况：已完成 Job 列表与详情页、工作流触发页、产物浏览/预览/下载页和市场 symbol/OHLCV 查询页，并通过 `build`、`typecheck`、`lint` 验证。
   备注：这组页面是 Stage 4 的主要功能入口，不应只停留在占位页。
 
 - [ ] `WEB-S4-007` `P1`

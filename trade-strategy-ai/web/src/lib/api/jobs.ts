@@ -1,4 +1,4 @@
-import type { JobsListResponse } from '@/types/jobs';
+import type { JobDetailResponse, JobLogsResponse, JobsListResponse } from '@/types/jobs';
 import { fetchJson } from './http';
 
 type JobsQuery = {
@@ -19,4 +19,22 @@ export function listJobs(query: JobsQuery = {}) {
   });
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return fetchJson<JobsListResponse>(`/jobs${suffix}`);
+}
+
+export function getJob(jobId: string) {
+  return fetchJson<JobDetailResponse>(`/jobs/${jobId}`);
+}
+
+export function getJobLogs(jobId: string) {
+  return fetchJson<JobLogsResponse>(`/jobs/${jobId}/logs`);
+}
+
+export function cancelJob(jobId: string, reason?: string) {
+  return fetchJson<JobDetailResponse>(`/jobs/${jobId}/cancel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason }),
+  });
 }

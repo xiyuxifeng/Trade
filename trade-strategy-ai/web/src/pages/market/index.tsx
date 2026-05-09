@@ -32,6 +32,88 @@ function formatNumber(value: number) {
   }).format(value);
 }
 
+function formatCompactDate(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value));
+}
+
+type CandlePoint = {
+  x: number;
+  highY: number;
+  lowY: number;
+  bodyY: number;
+  bodyHeight: number;
+  up: boolean;
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
+type CandleChart = {
+  width: number;
+  height: number;
+  minPrice: number;
+  maxPrice: number;
+  candles: CandlePoint[];
+};
+
+function buildCandleChart(rows: Array<{
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}>): CandleChart | null {
+  if (!rows.length) return null;
+
+  const width = 800;
+  const height = 320;
+  const padding = { top: 20, right: 20, bottom: 36, left: 56 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const minPrice = Math.min(...rows.map((row) => row.low));
+  const maxPrice = Math.max(...rows.map((row) => row.high));
+  const priceRange = maxPrice - minPrice || 1;
+  const step = plotWidth / rows.length;
+
+  const scaleY = (value: number) =>
+    padding.top + ((maxPrice - value) / priceRange) * plotHeight;
+
+  return {
+    width,
+    height,
+    minPrice,
+    maxPrice,
+    candles: rows.map((row, index) => {
+      const x = padding.left + step * index + step / 2;
+      const openY = scaleY(row.open);
+      const closeY = scaleY(row.close);
+      const highY = scaleY(row.high);
+      const lowY = scaleY(row.low);
+      const bodyY = Math.min(openY, closeY);
+      const bodyHeight = Math.max(1, Math.abs(closeY - openY));
+
+      return {
+        x,
+        highY,
+        lowY,
+        bodyY,
+        bodyHeight,
+        up: row.close >= row.open,
+        label: formatCompactDate(row.time),
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+      };
+    }),
+  };
+}
+
 function MarketSymbolButton({
   symbol,
   active,
@@ -105,6 +187,8 @@ export function MarketPage() {
       lastClose,
     };
   }, [ohlcvQuery.data, selectedSymbol, symbolsQuery.data]);
+
+  const chart = useMemo(() => buildCandleChart(ohlcvQuery.data?.items ?? []), [ohlcvQuery.data?.items]);
 
   const handleRunQuery = () => {
     if (!selectedSymbol) {
@@ -236,7 +320,7 @@ export function MarketPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Symbols</p>
               <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.symbolsCount}</p>
@@ -253,6 +337,12 @@ export function MarketPage() {
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Last close</p>
               <p className="mt-2 text-2xl font-semibold text-amber-300">
                 {summary.lastClose == null ? '—' : formatNumber(summary.lastClose)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Range</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">
+                {summary.low == null || summary.high == null ? '—' : `${formatNumber(summary.low)} - ${formatNumber(summary.high)}`}
               </p>
             </div>
           </div>
@@ -285,38 +375,126 @@ export function MarketPage() {
                   尚未查询到 OHLCV 数据。
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-800">
-                  <Table>
-                    <TableHeader className="bg-slate-950/80">
-                      <TableRow>
-                        <TableHead>Time</TableHead>
-                        <TableHead>Open</TableHead>
-                        <TableHead>High</TableHead>
-                        <TableHead>Low</TableHead>
-                        <TableHead>Close</TableHead>
-                        <TableHead>Volume</TableHead>
-                        <TableHead>Turnover</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ohlcvQuery.data.items.map((row) => {
-                        const up = row.close >= row.open;
-                        return (
-                          <TableRow key={row.time}>
-                            <TableCell>{formatDate(row.time)}</TableCell>
-                            <TableCell>{formatNumber(row.open)}</TableCell>
-                            <TableCell>{formatNumber(row.high)}</TableCell>
-                            <TableCell>{formatNumber(row.low)}</TableCell>
-                            <TableCell className={up ? 'text-emerald-300' : 'text-rose-300'}>
-                              {formatNumber(row.close)}
-                            </TableCell>
-                            <TableCell>{formatNumber(row.volume)}</TableCell>
-                            <TableCell>{row.turnover == null ? '—' : formatNumber(row.turnover)}</TableCell>
+                <div className="space-y-6">
+                  <section className="space-y-4">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-100">K线图</h3>
+                        <p className="text-sm text-slate-400">
+                          {ohlcvQuery.data.symbol} · {ohlcvQuery.data.count} rows
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge>{ohlcvQuery.data.start_date}</Badge>
+                        <Badge>{ohlcvQuery.data.end_date}</Badge>
+                      </div>
+                    </div>
+
+                    {chart ? (
+                      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-950 to-slate-900/70">
+                        <svg
+                          aria-label="K线图"
+                          className="h-[22rem] w-full"
+                          preserveAspectRatio="none"
+                          role="img"
+                          viewBox={`0 0 ${chart.width} ${chart.height}`}
+                        >
+                          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+                            const y = 20 + ratio * 264;
+                            return <line key={ratio} x1="56" x2={chart.width - 20} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.12)" strokeDasharray="4 6" />;
+                          })}
+                          {chart.candles.map((candle, index) => {
+                            const candleWidth = Math.max(4, (chart.width - 76) / chart.candles.length * 0.48);
+                            const selectedColor = candle.up ? 'rgba(74, 222, 128, 0.95)' : 'rgba(248, 113, 113, 0.95)';
+                            const fillColor = candle.up ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.72)';
+                            const showLabel = index === 0 || index === Math.floor(chart.candles.length / 2) || index === chart.candles.length - 1;
+
+                            return (
+                              <g key={candle.label}>
+                                <line
+                                  x1={candle.x}
+                                  x2={candle.x}
+                                  y1={candle.highY}
+                                  y2={candle.lowY}
+                                  stroke={selectedColor}
+                                  strokeWidth="2"
+                                />
+                                <rect
+                                  x={candle.x - candleWidth / 2}
+                                  y={candle.bodyY}
+                                  width={candleWidth}
+                                  height={candle.bodyHeight}
+                                  rx="3"
+                                  fill={fillColor}
+                                  stroke={selectedColor}
+                                  strokeWidth="1"
+                                />
+                                {showLabel ? (
+                                  <text
+                                    x={candle.x}
+                                    y={chart.height - 10}
+                                    fill="rgba(148, 163, 184, 0.92)"
+                                    fontSize="12"
+                                    textAnchor="middle"
+                                  >
+                                    {candle.label}
+                                  </text>
+                                ) : null}
+                              </g>
+                            );
+                          })}
+                          <text x="16" y="28" fill="rgba(148, 163, 184, 0.9)" fontSize="12">
+                            {formatNumber(chart.maxPrice)}
+                          </text>
+                          <text x="16" y="292" fill="rgba(148, 163, 184, 0.9)" fontSize="12">
+                            {formatNumber(chart.minPrice)}
+                          </text>
+                        </svg>
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-100">OHLCV 明细</h3>
+                        <p className="text-sm text-slate-400">用于逐日核对图表和成交量。</p>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-2xl border border-slate-800">
+                      <Table>
+                        <TableHeader className="bg-slate-950/80">
+                          <TableRow>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Open</TableHead>
+                            <TableHead>High</TableHead>
+                            <TableHead>Low</TableHead>
+                            <TableHead>Close</TableHead>
+                            <TableHead>Volume</TableHead>
+                            <TableHead>Turnover</TableHead>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {ohlcvQuery.data.items.map((row) => {
+                            const up = row.close >= row.open;
+                            return (
+                              <TableRow key={row.time}>
+                                <TableCell>{formatDate(row.time)}</TableCell>
+                                <TableCell>{formatNumber(row.open)}</TableCell>
+                                <TableCell>{formatNumber(row.high)}</TableCell>
+                                <TableCell>{formatNumber(row.low)}</TableCell>
+                                <TableCell className={up ? 'text-emerald-300' : 'text-rose-300'}>
+                                  {formatNumber(row.close)}
+                                </TableCell>
+                                <TableCell>{formatNumber(row.volume)}</TableCell>
+                                <TableCell>{row.turnover == null ? '—' : formatNumber(row.turnover)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </section>
                 </div>
               )}
             </CardContent>

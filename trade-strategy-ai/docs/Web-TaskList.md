@@ -693,7 +693,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 Jobs 页面增强，补齐 rerun 确认弹窗、产物引用卡片、跳转 Artifacts Center 的入口，并新增 `jobId` 过滤以串联 Jobs / Artifacts。
   备注：长任务轮询间隔应可控，避免过度请求。
 
-- [ ] `WEB-S6-002` `P1`
+- [x] `WEB-S6-002` `P1`
   目标：增强市场数据与个股 K 线页面。
   输入：Market UI API。
   输出：`web/src/features/market/`。
@@ -701,10 +701,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-005`、`WEB-S4-004`。
   可并行：`WEB-S6-001`。
   验收标准：在 Stage 4 首批市场页基础上，补齐 symbol 搜索、日期范围、K 线图和 OHLCV 表格。
-  完成情况：未完成。
-  备注：K 线图使用 TradingView Lightweight Charts。
+  完成情况：已在 `web/src/pages/market/index.tsx` 完成市场页增强，保留 symbol 搜索、日期范围和 OHLCV 表格，并新增自绘 SVG K 线图；对应测试已补齐并通过 `test`、`typecheck`、`lint` 验证。
+  备注：当前实现采用轻量 SVG 自绘方式实现 K 线图，未引入额外图表依赖。
 
-- [ ] `WEB-S6-003` `P1`
+- [x] `WEB-S6-003` `P1`
   目标：实现报表中心。
   输入：现有 reports API、Artifact API。
   输出：`web/src/features/reports/`。
@@ -712,8 +712,8 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-004`、`WEB-S4-004`。
   可并行：`WEB-S6-004`。
   验收标准：可查看盘前日报、盘后考核、HTML 报表和 JSON 详情。
-  完成情况：未完成。
-  备注：HTML 报表可用 iframe 或安全预览方式展示。
+  完成情况：已完成 `web/src/features/reports/report-center.tsx` 报表中心，实现盘前日报 / 盘后考核分类切换、报表列表、HTML 预览和 JSON 详情；新增 `web/src/lib/api/reports.ts` 与类型定义，补充测试并通过 `test`、`typecheck`、`lint`、`build` 验证。
+  备注：HTML 报表采用 iframe 安全预览，当前优先基于 reports API 完成首版浏览闭环。
 
 - [ ] `WEB-S6-004` `P1`
   目标：实现快照中心。

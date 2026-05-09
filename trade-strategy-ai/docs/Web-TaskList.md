@@ -533,7 +533,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：不要把前端文件散落到后端目录。
 
-- [ ] `WEB-S4-002` `P0`
+- [x] `WEB-S4-002` `P0`
   目标：接入 Tailwind CSS 和 shadcn/ui。
   输入：前端工程。
   输出：基础设计系统。
@@ -541,10 +541,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-001`。
   可并行：`WEB-S4-003`。
   验收标准：可使用按钮、表格、表单、弹窗、侧边栏、toast。
-  完成情况：未完成。
+  完成情况：已完成 Tailwind CSS、PostCSS、Autoprefixer、shadcn/components.json 基线接入，补齐 `button`、`card`、`badge`、`input`、`textarea`、`select`、`skeleton`、`tabs`、`dialog`、`drawer`、`toast` 和 `cn()` 工具，并通过 `build`、`typecheck`、`lint` 验证。
   备注：视觉方向采用数据密集型金融分析后台。
 
-- [ ] `WEB-S4-003` `P0`
+- [x] `WEB-S4-003` `P0`
   目标：实现前端路由和 API client。
   输入：UI API 设计。
   输出：路由结构和请求封装。
@@ -552,10 +552,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-001`、`WEB-S3-001`。
   可并行：`WEB-S4-002`。
   验收标准：前端能调用 `/api/ui/v1/system/status` 并显示结果。
-  完成情况：未完成。
+  完成情况：已完成 HTTP 层、系统状态类型、系统状态 API client、系统状态 hook 和 Overview 路由页，前端已可通过 `X-API-Key` 可选透传机制调用 `/api/ui/v1/system/status` 并展示系统状态、数据库状态、关键目录和告警信息，且通过 `build`、`typecheck`、`lint` 验证。
   备注：请求错误必须有统一展示。
 
-- [ ] `WEB-S4-004` `P1`
+- [x] `WEB-S4-004` `P1`
   目标：实现基础布局和导航。
   输入：页面模块设计。
   输出：Dashboard shell。
@@ -563,17 +563,17 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-002`、`WEB-S4-003`。
   可并行：无。
   验收标准：有侧边栏、顶部栏、主内容区和移动端基础适配。
-  完成情况：未完成。
+  完成情况：已接入 `DashboardLayout`、`Sidebar`、`Topbar`、`PageHeader`、`StatusStrip` 和 10 个主导航占位页，Router 已切换到嵌套路由结构，并通过 `build`、`typecheck`、`lint` 验证。
   备注：导航必须按用户任务组织，不按代码模块堆叠。
 
-- [ ] `WEB-S4-005` `P1`
+- [x] `WEB-S4-005` `P1`
   目标：让总览页接入系统状态、最近任务和最近产物。
   输入：Dashboard shell、UI BFF、Overview 页面设计。
   输出：可用的总览页。
   修改范围：`web/src/pages/overview/`、`web/src/features/system-status/`、`web/src/components/status/`。
   前置依赖：`WEB-S4-003`、`WEB-S4-004`。
   验收标准：总览页可展示系统状态、运行模式、数据库状态、配置路径、最近 Job 和最近产物，并具备 loading / empty / error 状态。
-  完成情况：未完成。
+  完成情况：已完成总览页接入系统状态、最近 Job 和最近产物，页面已具备 loading / empty / error 状态，并通过 `build`、`typecheck`、`lint` 验证。
   备注：总览页是 Web 首页，优先提供系统是否正常的第一视图。
 
 - [ ] `WEB-S4-006` `P1`
@@ -1023,6 +1023,8 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 健康检查与可观测性。
 - 备份恢复演练。
 - 发布和回滚文档。
+- 用户操作手册。
+- 运维管理手册。
 
 ### 任务清单
 
@@ -1081,9 +1083,50 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：本地单机使用可不强制 TLS，但内网/多人使用必须提供建议配置。
 
+- [ ] `WEB-S9-006` `P1`
+  目标：生成用户操作手册和运维管理手册。
+  输入：Web 前后端实现、Stage 8 验收结果、Stage 9 部署与运维方案。
+  输出：Web 用户操作手册和运维管理手册。
+  修改范围：`docs/WebUserManual.md`、`docs/WebOperationsManual.md`、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S4-007`、`WEB-S5-004`、`WEB-S6-008`、`WEB-S9-001`、`WEB-S9-002`、`WEB-S9-003`、`WEB-S9-004`。
+  可并行：无。
+  验收标准：手册明确前端启动、后端启动、常用操作路径、高风险操作、权限边界、健康检查、备份恢复、回滚流程和故障排查；内容与实际实现和命名保持一致。
+  完成情况：未完成。
+  备注：用户操作手册面向业务使用者，运维管理手册面向部署、监控、备份和恢复责任人。
+
 ---
 
-## 16. 执行顺序总览
+## 16. Stage 10：优化、性能与技术债收口（P2）
+
+### Stage 目标
+
+- 收口后续所有低风险优化、性能改进、代码重构和技术债处理。
+- 优先处理不影响主链路验收、但会影响长期可维护性、性能和扩展性的事项。
+- 所有后续出现的优化类需求统一进入本阶段，不再散落到其他 Stage。
+
+### 阶段交付物
+
+- 性能优化记录。
+- 缓存与索引策略。
+- 技术债清单与收敛记录。
+- 低风险重构和代码整洁度改进。
+
+### 任务清单
+
+- [ ] `WEB-S10-001` `P2`
+  目标：优化 `ArtifactService` 的扫描式索引。
+  输入：现有 `ArtifactService`、产物目录扫描逻辑、Artifact API。
+  输出：缓存或增量索引方案。
+  修改范围：`src/services/artifact_service.py`、相关测试、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S3-006`。
+  可并行：无。
+  验收标准：目录未变化时避免重复全量扫描；索引可刷新、可失效回退；现有查询、预览和下载接口行为保持一致。
+  完成情况：未完成。
+  备注：本 Stage 统一承接后续优化、性能调优和技术债清理，不再新增独立优化 Stage。
+
+---
+
+## 17. 执行顺序总览
 
 推荐执行顺序：
 
@@ -1098,12 +1141,14 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 9. `WEB-S7-001` 至 `WEB-S7-010`
 10. `WEB-S8-001` 至 `WEB-S8-007`
 11. `WEB-S9-001` 至 `WEB-S9-005`
+12. `WEB-S9-006`
+13. `WEB-S10-001` 起的优化与技术债任务
 
 设置项编辑与保存属于 Web 最小可用能力，`WEB-S7-005` 至 `WEB-S7-007` 应在 `WEB-S8-004` 之前完成。
 
 ---
 
-## 17. 最小可用版本定义
+## 18. 最小可用版本定义
 
 Web 后台最小可用版本必须完成：
 
@@ -1118,6 +1163,8 @@ Web 后台最小可用版本必须完成：
 - `WEB-S7-001` 至 `WEB-S7-009`
 - `WEB-S8-001` 至 `WEB-S8-006`
 - `WEB-S9-001` 至 `WEB-S9-004`
+- `WEB-S9-006` 不属于最小可用版本范围，但属于生产交付文档闭环
+- `WEB-S10-001` 不属于最小可用版本范围，留作后续优化和技术债收口
 
 达到最小可用版本后，用户应能：
 

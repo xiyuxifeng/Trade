@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -122,3 +123,69 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path) -> None:
     assert latest.payload["close"] == 10.5
     assert bars.payload["count"] == 1
     assert bars_df.payload["rows"] == 1
+
+
+def test_market_service_lists_symbols_and_ohlcv_from_session(tmp_path: Path) -> None:
+    """MarketService 应支持行情标的和 K 线查询。"""
+    from src.services.market_service import MarketService
+
+    class _FakeRow:
+        def __init__(self, symbol: str):
+            self.symbol = symbol
+
+    class _FakeBar:
+        def __init__(self, symbol: str, trade_date: date):
+            self.symbol = symbol
+            self.trade_date = trade_date
+            self.open = 1.0
+            self.high = 1.2
+            self.low = 0.9
+            self.close = 1.1
+            self.volume = 1000
+            self.turnover = None
+
+    class _FakeResult:
+        def __init__(self, *, rows=None, bars=None):
+            self._rows = rows or []
+            self._bars = bars or []
+
+        def all(self):
+            return self._bars if self._bars else self._rows
+
+        def scalars(self):
+            return self
+
+        def first(self):
+            return self._bars[0] if self._bars else None
+
+        def scalar(self):
+            return self._bars[0] if self._bars else None
+
+        def scalar_one_or_none(self):
+            return self._bars[0] if self._bars else None
+
+    class _FakeSession:
+        def __init__(self):
+            self.calls = []
+
+        async def execute(self, stmt):
+            sql = str(stmt)
+            self.calls.append(sql)
+            if "DISTINCT" in sql:
+                return _FakeResult(rows=[("000001.SZ",), ("600000.SH",)])
+            return _FakeResult(bars=[_FakeBar("000001.SZ", date(2026, 4, 1)), _FakeBar("000001.SZ", date(2026, 4, 2))])
+
+    fake_session = _FakeSession()
+
+    @asynccontextmanager
+    async def fake_session_factory():
+        yield fake_session
+
+    service = MarketService(session_factory=fake_session_factory)
+
+    symbols = asyncio.run(service.list_symbols())
+    ohlcv = asyncio.run(service.get_ohlcv("000001.SZ", date(2026, 4, 1), date(2026, 4, 30)))
+
+    assert symbols.payload["items"] == ["000001.SZ", "600000.SH"]
+    assert ohlcv.payload["count"] == 2
+    assert ohlcv.payload["items"][0]["time"] == "2026-04-01"

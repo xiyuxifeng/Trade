@@ -10,7 +10,8 @@ from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 from src.services.system_service import SystemService
 
-router = APIRouter(prefix="/api/ui/system", tags=["ui-system"])
+router = APIRouter(prefix="/api/ui/v1/system", tags=["ui-system"])
+legacy_router = APIRouter(prefix="/api/ui/system", tags=["ui-system-legacy"])
 
 
 def _config_path() -> Path:
@@ -21,6 +22,17 @@ def _config_path() -> Path:
 @router.get("/status")
 async def get_system_status(_: str = Depends(verify_api_key)) -> dict[str, object]:
     """返回系统、数据库和关键目录状态。"""
+    return await _build_system_status()
+
+
+@legacy_router.get("/status")
+async def get_legacy_system_status(_: str = Depends(verify_api_key)) -> dict[str, object]:
+    """兼容旧版系统状态入口。"""
+    return await _build_system_status()
+
+
+async def _build_system_status() -> dict[str, object]:
+    """构建系统状态响应体。"""
     config_path = _config_path()
     loaded = load_app_config(config_path)
     service = SystemService()

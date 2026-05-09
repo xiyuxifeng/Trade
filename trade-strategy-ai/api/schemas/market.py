@@ -4,10 +4,12 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MarketResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     symbol: str
     market: str
@@ -20,9 +22,6 @@ class MarketResponse(BaseModel):
     volume: Decimal
     turnover: Decimal
     source: str
-
-    class Config:
-        from_attributes = True
 
 
 class MarketFilter(BaseModel):

@@ -2,7 +2,7 @@
 
 > 说明：本文档以当前代码为准，统一整理单一 FastAPI app 的路由、功能、参数、鉴权和返回要点，方便后续按接口名快速查询。
 >
-> - 统一 app factory：`src/api/app.py`
+> - 统一 app factory：`api/app.py`
 > - 对外主入口：`api/main.py`
 > - Swagger 在线文档：启动主入口后访问 `/docs`
 
@@ -10,7 +10,7 @@
 
 ### 1.1 统一 app
 
-当前仓库只保留 `api/main.py` 作为对外 FastAPI 入口，所有路由都由 `src/api/app.py` 统一组装。
+当前仓库只保留 `api/main.py` 作为对外 FastAPI 入口，所有路由都由 `api/app.py` 统一组装。
 
 启动推荐：
 
@@ -50,7 +50,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 功能：
 
-- 返回服务基本信息和主要 endpoint 索引
+- 返回服务基本信息
 
 参数：
 
@@ -61,7 +61,6 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 - `service`
 - `version`
 - `docs`
-- `endpoints`
 
 ### 3.2 `GET /health`
 
@@ -287,6 +286,124 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 返回：
 
 - `application/json`
+
+## 4. UI BFF 路由
+
+### 4.1 `GET /api/ui/v1/system/status`
+
+功能：
+
+- 返回系统、数据库和关键目录状态
+
+兼容：
+
+- `GET /api/ui/system/status` 作为 legacy 别名保留
+
+返回要点：
+
+- `status`
+- `config_path`
+- `project_root`
+- `run_mode`
+- `database`
+- `directories`
+- `warnings`
+
+### 4.2 `GET /api/ui/v1/jobs/definitions`
+
+功能：
+
+- 返回 Job 白名单定义
+
+### 4.3 `GET /api/ui/v1/jobs/definitions/{job_type}`
+
+功能：
+
+- 返回单个 Job 定义
+
+### 4.4 `POST /api/ui/v1/jobs`
+
+功能：
+
+- 创建一个新的 Job
+
+### 4.5 `POST /api/ui/v1/jobs/validate`
+
+功能：
+
+- 校验 UI 提交的 Job 参数
+
+### 4.6 `GET /api/ui/v1/jobs`
+
+功能：
+
+- 列出 Job
+
+### 4.7 `GET /api/ui/v1/jobs/{job_id}`
+
+功能：
+
+- 返回单个 Job 详情
+
+### 4.8 `GET /api/ui/v1/jobs/{job_id}/logs`
+
+功能：
+
+- 返回 Job 日志行
+
+### 4.9 `POST /api/ui/v1/jobs/{job_id}/cancel`
+
+功能：
+
+- 请求取消 Job
+
+### 4.10 `GET /api/ui/v1/workflows`
+
+功能：
+
+- 列出 Workflow 定义
+
+### 4.11 `GET /api/ui/v1/workflows/{workflow_id}`
+
+功能：
+
+- 返回单个 Workflow 定义
+
+### 4.12 `POST /api/ui/v1/workflows/{workflow_id}/run`
+
+功能：
+
+- 运行 Workflow 并创建 Job
+
+### 4.13 `GET /api/ui/v1/artifacts`
+
+功能：
+
+- 列出主要产物并返回基础索引
+
+### 4.14 `GET /api/ui/v1/artifacts/{artifact_id}`
+
+功能：
+
+- 返回单个产物的预览信息
+
+### 4.15 `GET /api/ui/v1/artifacts/{artifact_id}/download`
+
+功能：
+
+- 下载单个产物文件
+
+### 4.16 `GET /api/ui/v1/market/symbols`
+
+功能：
+
+- 返回行情标的列表
+
+### 4.17 `GET /api/ui/v1/market/ohlcv`
+
+功能：
+
+- 按 symbol 和日期区间返回 K 线数据
 
 ### 3.15 `GET /snapshots/`
 
@@ -543,5 +660,5 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ## 4. 说明
 
 - `api/main.py` 是唯一对外运行入口，适合触发运行、查看产物、查看回测和告警。
-- 所有 API 路由都由 `src/api/app.py` 统一组装，不再区分两个运行入口。
+- 所有 API 路由都由 `api/app.py` 统一组装，不再区分两个运行入口。
 - 后续排查接口问题时，直接确认是否启动了 `api.main:app`。

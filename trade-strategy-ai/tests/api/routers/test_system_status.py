@@ -24,10 +24,18 @@ async def client() -> AsyncIterator[AsyncClient]:
 @pytest.mark.asyncio
 async def test_system_status_route_exists(client: AsyncClient) -> None:
     """系统状态路由应可返回统一状态结构。"""
-    response = await client.get("/api/ui/system/status")
+    response = await client.get("/api/ui/v1/system/status")
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
     assert "config_path" in payload
     assert "database" in payload
     assert "directories" in payload
+
+
+@pytest.mark.asyncio
+async def test_legacy_system_status_route_still_works(client: AsyncClient) -> None:
+    """旧系统状态路由应继续兼容。"""
+    response = await client.get("/api/ui/system/status")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

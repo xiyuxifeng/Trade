@@ -5,9 +5,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
+from sqlalchemy import select
+
 from src.common.config import load_app_config
 from src.db.session import get_session_factory
 from src.market_data.ohlcv_service import OHLCVService
+from src.models.ohlcv_bar import OHLCVBar
 from src.services.base import BaseService, ServiceResult
 
 
@@ -43,9 +46,11 @@ class MarketService(BaseService):
         *,
         ohlcv_service: OHLCVService | None = None,
         ohlcv_service_factory: Callable[..., OHLCVService] | None = None,
+        session_factory: Callable[..., Any] | None = None,
     ) -> None:
         self._ohlcv_service = ohlcv_service
         self._ohlcv_service_factory = ohlcv_service_factory
+        self._session_factory = session_factory
 
     def _create_ohlcv_service(self, config_path: str | Path) -> OHLCVService:
         """根据配置创建 OHLCVService。"""
@@ -63,6 +68,12 @@ class MarketService(BaseService):
             retry_backoff_seconds=akshare_cfg.retry_backoff_seconds,
             fallback_enabled=akshare_cfg.fallback_enabled,
         )
+
+    def _get_session_factory(self) -> Callable[..., Any]:
+        """返回用于行情查询的 session factory。"""
+        if self._session_factory is not None:
+            return self._session_factory
+        return get_session_factory
 
     async def crawl_ohlcv(
         self,
@@ -128,4 +139,61 @@ class MarketService(BaseService):
             status="ok",
             message="bars dataframe fetched",
             payload={"symbol": symbol, "rows": len(df), "dataframe": _to_plain(df.to_dict(orient="records"))},
+        )
+
+    async def list_symbols(self, *, q: str | None = None, limit: int = 200) -> ServiceResult:
+        """列出数据库中的行情标的。"""
+        session_factory = self._get_session_factory()
+        async with session_factory() as session:
+            stmt = select(OHLCVBar.symbol).distinct()
+            if q:
+                stmt = stmt.where(OHLCVBar.symbol.ilike(f"%{q}%"))
+            stmt = stmt.order_by(OHLCVBar.symbol.asc()).limit(limit)
+            result = await session.execute(stmt)
+            symbols = [row[0] for row in result.all()]
+
+        return ServiceResult(
+            status="ok",
+            message="symbols listed",
+            payload={"count": len(symbols), "items": symbols},
+        )
+
+    async def get_ohlcv(self, symbol: str, start_date: date, end_date: date) -> ServiceResult:
+        """按 symbol 和日期范围查询 K 线数据。"""
+        session_factory = self._get_session_factory()
+        async with session_factory() as session:
+            stmt = (
+                select(OHLCVBar)
+                .where(
+                    OHLCVBar.symbol == symbol,
+                    OHLCVBar.trade_date >= start_date,
+                    OHLCVBar.trade_date <= end_date,
+                )
+                .order_by(OHLCVBar.trade_date.asc())
+            )
+            result = await session.execute(stmt)
+            bars = list(result.scalars().all())
+
+        items = [
+            {
+                "time": bar.trade_date.isoformat(),
+                "open": float(bar.open),
+                "high": float(bar.high),
+                "low": float(bar.low),
+                "close": float(bar.close),
+                "volume": float(bar.volume),
+                "turnover": float(bar.turnover) if bar.turnover is not None else None,
+            }
+            for bar in bars
+        ]
+        return ServiceResult(
+            status="ok",
+            message="ohlcv fetched",
+            payload={
+                "symbol": symbol,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "count": len(items),
+                "items": items,
+            },
         )

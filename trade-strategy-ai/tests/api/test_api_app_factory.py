@@ -12,4 +12,8 @@ def test_create_app_registers_critical_routes() -> None:
     assert "/health" in paths
     assert "/run/pre_market" in paths
     assert "/reports/daily" in paths
+    assert "/api/ui/v1/system/status" in paths
     assert "/api/ui/v1/jobs/definitions" in paths
+    assert "/api/ui/v1/workflows" in paths
+    assert "/api/ui/v1/artifacts" in paths
+    assert "/api/ui/v1/market/ohlcv" in paths

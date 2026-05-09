@@ -759,3 +759,8 @@ class JobService(BaseService):
             message="ready jobs listed",
             payload={"count": len(items), "items": items, "limit": limit, "job_type": job_type},
         )
+
+
+def get_job_service() -> JobService:
+    """获取 JobService 实例，供 API 层依赖注入复用。"""
+    return JobService()

@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class ArticleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     source: str
     source_url: str
@@ -23,9 +25,6 @@ class ArticleResponse(BaseModel):
     like_count: int
     bookmark_count: int
     comment_count: int
-
-    class Config:
-        from_attributes = True
 
 
 class ArticleFilter(BaseModel):

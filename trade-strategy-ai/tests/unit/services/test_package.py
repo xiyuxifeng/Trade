@@ -7,6 +7,7 @@ def test_services_package_exposes_web_service_entrypoints() -> None:
 
     assert set(services.__all__) == {
         "BaseService",
+        "ArtifactService",
         "BacktestService",
         "DashboardService",
         "ServiceResult",
@@ -22,11 +23,13 @@ def test_services_package_exposes_web_service_entrypoints() -> None:
         "RulePoolService",
         "SetupService",
         "RunService",
+        "WorkflowService",
         "SnapshotService",
         "StrategyService",
         "SystemService",
     }
     assert issubclass(services.ConfigService, services.BaseService)
+    assert issubclass(services.ArtifactService, services.BaseService)
     assert issubclass(services.BacktestService, services.BaseService)
     assert issubclass(services.DashboardService, services.BaseService)
     assert issubclass(services.JobService, services.BaseService)

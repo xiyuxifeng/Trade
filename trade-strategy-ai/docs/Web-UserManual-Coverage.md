@@ -4,6 +4,18 @@
 >
 > 结论：`docs/UserManual.md` 中已识别的常用功能均已纳入 Web 化范围；其中长任务统一进入 Job Center，查询类能力走只读 API，配置/运维类能力走受控管理页。
 
+### 当前已实现的 UI BFF
+
+目前仓库里已经落地并可直接调用的 Web UI 入口是：
+
+- `/api/ui/v1/system/status`
+- `/api/ui/v1/jobs*`
+- `/api/ui/v1/workflows*`
+- `/api/ui/v1/artifacts*`
+- `/api/ui/v1/market*`
+
+其余覆盖矩阵条目仍属于后续阶段的目标设计，前端在 Stage 4 及之后接入时，应优先以以上已实现入口为准，避免把规划项误认为已经上线。
+
 ## 1. 约定
 
 - Web API 统一使用 `/api/ui/v1/*` 前缀。
@@ -12,9 +24,27 @@
 - 风险分级分为 `low / medium / high / critical`。
 - 下表是 Web 目标设计的覆盖矩阵，不表示当前所有实现已完成。
 
-## 2. 覆盖矩阵
+## 2. 当前已实现
 
-### 2.1 配置、数据库与初始化
+### 2.1 Stage 3 UI BFF
+
+| 能力 | 已实现入口 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| 系统状态 | `GET /api/ui/v1/system/status` | 已上线 | 返回配置路径、运行模式、数据库状态和关键目录状态；`/api/ui/system/status` 保留兼容别名。 |
+| Job Center | `GET/POST /api/ui/v1/jobs*` | 已上线 | 支持白名单定义、创建、列表、详情、日志、取消和参数校验。 |
+| Workflow 向导 | `GET/POST /api/ui/v1/workflows*` | 已上线 | 支持列表、详情、运行，并复用 Job 白名单校验。 |
+| Artifact 中心 | `GET /api/ui/v1/artifacts*` | 已上线 | 支持主要产物的统一查询、预览和下载。 |
+| 市场数据 | `GET /api/ui/v1/market*` | 已上线 | 支持 symbol 列表与按日期区间查询 OHLCV。 |
+
+### 2.2 当前实现约束
+
+- 已实现的 UI API 统一使用 `/api/ui/v1/*` 前缀。
+- `config/backups` 不纳入 Artifact 中心默认索引，配置备份由 Stage 7 Settings Center 负责。
+- `jobs`、`workflows`、`artifacts`、`market` 均依赖 `api/app.py` 挂载的版本化 router。
+
+## 3. 覆盖矩阵
+
+### 3.1 配置、数据库与初始化
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -27,7 +57,7 @@
 | `restore-data` | 运维 / 恢复中心 | `POST /api/ui/v1/ops/restores` | `BackupService` | `restore-data` Job | admin | critical | 恢复前二次确认，且默认要求 `force`。 |
 | `scheduler-start` | 运维 / 调度状态 | `POST /api/ui/v1/system/scheduler/start` | `SchedulerService` | 常驻进程 / 状态控制 | admin | medium | 能查看调度状态、启停配置和下一次触发时间。 |
 
-### 2.2 抓取与数据处理 Pipeline
+### 3.2 抓取与数据处理 Pipeline
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -40,7 +70,7 @@
 | `clusters-build` | 画像 / 聚类构建 | `POST /api/ui/v1/jobs` | `PersonaService` | `clusters-build` Job | operator / admin | medium | 可生成 clusters 文件并查看版本与路径。 |
 | `e2e-regression` | 验证 / 端到端回归 | `POST /api/ui/v1/jobs` | `RegressionService` | `e2e-regression` Job | admin | medium | 一键跑通主链路并输出回归报告。 |
 
-### 2.3 盘前、盘后与信号
+### 3.3 盘前、盘后与信号
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -50,7 +80,7 @@
 | `persona-init-sample` | 画像 / 示例数据 | `POST /api/ui/v1/persona/sample` | `PersonaService` | `persona-init-sample` Job | admin | low | 可生成示例 clusters 文件用于联调。 |
 | `market-state-build` | 市场状态 / 构建器 | `POST /api/ui/v1/market/state/build` | `PersonaService` | `market-state-build` Job | operator / admin | medium | 可生成 market state JSON 并查看来源。 |
 
-### 2.4 快照、策略与行情
+### 3.4 快照、策略与行情
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -59,7 +89,7 @@
 | `strategy list` | 策略版本 / 列表 | `GET /api/ui/v1/strategies` | `StrategyService` | 无 | viewer / operator / admin | low | 可按 trader、状态、日期过滤查看版本。 |
 | `ohlcv crawl` | 行情数据 / OHLCV 入库 | `POST /api/ui/v1/jobs` | `MarketService` | `ohlcv-crawl` Job | operator / admin | medium | 支持全量/增量、日期区间和限速提示。 |
 
-### 2.5 回测与优化
+### 3.5 回测与优化
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -72,7 +102,7 @@
 | `optimize advise` | 优化中心 / 建议 | `POST /api/ui/v1/optimize/advise` | `OptimizeService` | 无 | operator / admin | low | 可基于规则验真结果输出调整建议。 |
 | `optimize create-candidate` | 优化中心 / 候选版本 | `POST /api/ui/v1/optimize/candidate` | `OptimizeService` | `optimize-create-candidate` Job | operator / admin | medium | 可生成文件链路或 DB 链路的候选版本。 |
 
-### 2.6 规则池、调度与监控
+### 3.6 规则池、调度与监控
 
 | UserManual 功能 | Web 页面 / 入口 | UI API | Service | Job / 执行形态 | 权限 | 风险 | 验收要点 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -86,7 +116,7 @@
 | `KaipanScheduler run` | 运维 / Kaipan 一键运行 | `POST /api/ui/v1/kaipan/run` | `KaipanService` | `kaipan-run` Job | admin | medium | 可串联 fetch 与 normalize 并输出批次结果。 |
 | `dashboard --mode cli/html/both` | 监控中心 / Dashboard | `GET /api/ui/v1/dashboard` | `DashboardService` | 无 | viewer / operator / admin | low | 可查看阈值、趋势、告警与 HTML 产物。 |
 
-## 3. 未覆盖项与约束
+## 4. 未覆盖项与约束
 
 - 当前矩阵已覆盖 `docs/UserManual.md` 中识别到的常用命令与独立 CLI 功能。
 - 后续如果 `UserManual` 新增命令，需要同步补充这一矩阵，再进入 Web 任务清单。

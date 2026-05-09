@@ -4,10 +4,12 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class TradeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     source: str
     external_id: str | None
@@ -23,9 +25,6 @@ class TradeResponse(BaseModel):
     fee: Decimal
     strategy_tag: str | None
     rationale: str | None
-
-    class Config:
-        from_attributes = True
 
 
 class TradeFilter(BaseModel):

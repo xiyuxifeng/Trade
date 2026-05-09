@@ -6,6 +6,7 @@
 - 服务返回结构化结果
 """
 
+from src.services.artifact_service import ArtifactService
 from src.services.base import BaseService, ServiceResult
 from src.services.backtest_service import BacktestService
 from src.services.dashboard_service import DashboardService
@@ -21,6 +22,7 @@ from src.services.signal_service import SignalService
 from src.services.rule_pool_service import RulePoolService
 from src.services.setup_service import SetupService
 from src.services.run_service import RunService
+from src.services.workflow_service import WorkflowService
 from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
 from src.services.system_service import SystemService
@@ -28,6 +30,7 @@ from src.services.system_service import SystemService
 __all__ = [
     "BaseService",
     "ServiceResult",
+    "ArtifactService",
     "BacktestService",
     "DashboardService",
     "ConfigService",
@@ -35,6 +38,7 @@ __all__ = [
     "JobRunner",
     "SystemService",
     "RunService",
+    "WorkflowService",
     "PipelineService",
     "SnapshotService",
     "MarketService",

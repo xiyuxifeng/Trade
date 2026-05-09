@@ -290,7 +290,7 @@ FastAPI static files -> 托管 web/dist
 - `optimize_service.py`：封装 optimize filter/advise/create-candidate。
 - `rule_pool_service.py`：封装 rule-pool show/list/review/review-batch。
 - `api/routers/ui/jobs.py`：提供 Job 定义查询与提交参数校验接口，禁止前端提交任意 job type。
-- `artifact_service.py`：统一发现日报、考核、HTML、快照、回测、规则验真、backup 等产物。
+- `artifact_service.py`：统一发现日报、考核、HTML、快照、回测、规则验真、backup 等产物，不包含 `config/backups` 这类敏感配置备份，配置备份由 Stage 7 Settings Center 处理。
 - `scheduler_service.py`：封装调度状态、配置读取、启动提示和运行记录。
 
 ### 5.2 Job Center
@@ -389,7 +389,7 @@ GET  /api/ui/v1/market/symbols
 
 - `api/main.py`
 
-Web 管理后台以 `api/main.py` 作为唯一主入口，底层通过 `src/api/app.py` 统一构建 FastAPI app；仓库不再保留 `src/api/main.py` 这个运行入口。
+Web 管理后台以 `api/main.py` 作为唯一主入口，底层通过 `api/app.py` 统一构建 FastAPI app；仓库不再保留 `src/api/main.py` 这个运行入口。
 
 Web 前端只能依赖版本化 UI API，不直接依赖内部领域 API。
 

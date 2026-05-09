@@ -95,7 +95,7 @@ Web 管理后台完成后，必须达到以下状态：
 ### 4.1 已有基础
 
 - 项目已有 Typer CLI，入口在 `cli/main.py` 和多个 `cli/*.py` 子模块。
-- 项目已有 FastAPI，入口通过 `src/api/app.py` 收敛，`api/main.py` 作为唯一对外入口。
+- 项目已有 FastAPI，入口通过 `api/app.py` 收敛，`api/main.py` 作为唯一对外入口。
 - 已有部分管理 API：盘前/盘后、报表、快照、策略版本、ranking、回测结果、告警。
 - 已有部分查询 API：文章、交易、市场数据、报表。
 - 已有 OHLCV 数据模型，可支持 K 线数据查询。
@@ -401,18 +401,18 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [-] `WEB-S3-001` `P0`
+- [x] `WEB-S3-001` `P0`
   目标：新增 UI API 路由骨架。
-  输入：`api/main.py`、`src/api/app.py`。
+  输入：`api/main.py`、`api/app.py`。
   输出：`api/routers/ui/` 或 `api/routers/ui.py`。
-  修改范围：`src/api/app.py`、`api/main.py`、`api/routers/ui/`。
+  修改范围：`api/app.py`、`api/main.py`、`api/routers/ui/`。
   前置依赖：`WEB-S1-002`。
   可并行：`WEB-S2-004`。
-  验收标准：`/api/ui/system/status` 可返回系统状态。
-  完成情况：未完成。
-  备注：优先挂载到 `src/api/app.py`，`api/main.py` 作为唯一主入口。
+  验收标准：`/api/ui/v1/system/status` 可返回系统状态，旧版 `/api/ui/system/status` 保留兼容。
+  完成情况：已完成 `GET /api/ui/v1/system/status` 路由骨架，接入 `SystemService` 返回配置路径、运行模式、数据库状态和关键目录状态；同时保留 `/api/ui/system/status` 作为兼容别名，已补充系统状态单测并通过验证。
+  备注：优先挂载到 `api/app.py`，`api/main.py` 作为唯一主入口。
 
-- [ ] `WEB-S3-002` `P0`
+- [x] `WEB-S3-002` `P0`
   目标：实现 Job API。
   输入：JobService。
   输出：`/api/ui/jobs` 系列接口。
@@ -420,10 +420,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-002`。
   可并行：`WEB-S3-003`。
   验收标准：支持创建任务、列表、详情、日志、取消。
-  完成情况：未完成。
+  完成情况：已完成 Job API 骨架与主链路接口，支持创建任务、列表、详情、日志、取消，以及 `/validate` 白名单校验；已补充 UI 路由测试并通过验证。
   备注：创建任务只能使用白名单任务类型。
 
-- [ ] `WEB-S3-003` `P0`
+- [x] `WEB-S3-003` `P0`
   目标：实现 Workflow API。
   输入：`docs/UserManual.md`、WorkflowService。
   输出：`/api/ui/workflows` 系列接口。
@@ -431,43 +431,43 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-003`。
   可并行：`WEB-S3-002`。
   验收标准：能列出 UserManual 主流程步骤，并能为每一步创建 Job。
-  完成情况：未完成。
+  完成情况：已完成 Workflow API 骨架，支持工作流列表、详情和运行；工作流运行会复用 Job 白名单校验并创建对应 Job。已补充 workflow service、UI 路由和相关测试并通过验证。
   备注：每个步骤必须包含说明、参数 schema、前置条件和下一步建议。
 
-- [ ] `WEB-S3-004` `P1`
+- [x] `WEB-S3-004` `P1`
   目标：实现 Artifact API。
   输入：日报、考核、快照、回测、规则验真、backup 等产物目录。
-  输出：`ArtifactService` 和 `/api/ui/artifacts`。
+  输出：`ArtifactService` 和 `/api/ui/v1/artifacts`。
   修改范围：`src/services/artifact_service.py`、`api/routers/ui/artifacts.py`。
   前置依赖：`WEB-S2-004`。
   可并行：`WEB-S3-005`。
   验收标准：能统一查询、预览、下载主要产物。
-  完成情况：未完成。
+  完成情况：已完成 `ArtifactService` 与 `/api/ui/v1/artifacts`，支持主要产物的统一查询、预览和下载；产物索引覆盖 Job 目录、processed、backups、market_universe snapshots 和 kaipan 等常见输出，已补充 API 与服务层测试并通过验证。`config/backups` 这类敏感配置备份不纳入 Artifact 中心，交由 Stage 7 Settings Center 处理。
   备注：产物必须区分 JSON、HTML、Markdown、CSV、Parquet、tar.gz。
 
-- [ ] `WEB-S3-005` `P1`
+- [x] `WEB-S3-005` `P1`
   目标：实现 Market UI API。
   输入：OHLCV 数据模型和 MarketService。
-  输出：`/api/ui/market/ohlcv`、`/api/ui/market/symbols`。
+  输出：`/api/ui/v1/market/ohlcv`、`/api/ui/v1/market/symbols`。
   修改范围：`api/routers/ui/market.py`、相关测试。
   前置依赖：`WEB-S1-005`。
   可并行：`WEB-S3-004`。
   验收标准：能按 symbol 和日期范围返回 K 线数据。
-  完成情况：未完成。
+  完成情况：已完成 `/api/ui/v1/market/symbols` 和 `/api/ui/v1/market/ohlcv`，支持按标的和日期范围返回 K 线数据；已补充路由与服务层测试并通过验证。
   备注：返回字段应包含 time/open/high/low/close/volume。
 
 - [x] `WEB-S3-006` `P1`
   目标：将 API 入口最终收敛为单一入口，删除另一个入口，并确保文档和代码都只指向同一个主入口, 同时将`src/api/`下的代码和文件迁移到`api/`下, 保证项目结构清晰。
-  输入：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`。
+  输入：`api/main.py`、`api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`。
   输出：单一 API 入口说明、旧入口删除说明、迁移完成后的文档收口。
-  修改范围：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`、`docs/web-plan.md`、相关测试。
+  修改范围：`api/main.py`、`api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`、`docs/web-plan.md`、相关测试。
   前置依赖：`WEB-S3-001`。
   可并行：无。
   验收标准：仓库只保留一个对外 API 启动入口；`src/api/main.py` 已删除；`src/api/`下的代码和文件已迁移到`api/`下；所有文档、测试和部署说明都已切换到唯一主入口；旧入口不再作为运行时契约出现。
-  完成情况：未完成。
+  完成情况：已完成 `api/main.py` 作为唯一对外入口，`src/api/` 下的代码和文件已迁移到 `api/` 下，`src/api/main.py` 不再存在；已补充目录收敛测试并通过验证。
   备注：以 `api/main.py` 作为唯一主入口，迁移期兼容层在任务完成时一并清理。
 
-- [ ] `WEB-S3-007` `P0`
+- [x] `WEB-S3-007` `P0`
   目标：制定并实现 API versioning 与兼容策略。
   输入：`api/main.py`、`docs/APIReference.md`、Web UI API 设计。
   输出：`/api/ui/v1` 或等价版本化入口、旧 API 兼容说明。
@@ -475,7 +475,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-001`、`WEB-S3-006`。
   可并行：`WEB-S7-008`。
   验收标准：Web 仅依赖版本化 UI API；旧 API 路由不被破坏；新增/废弃 API 有兼容策略；OpenAPI 文档能区分管理接口、查询接口和 UI BFF 接口。
-  完成情况：未完成。
+  完成情况：已完成 UI API versioning 与兼容策略：`/api/ui/v1/system/status` 作为版本化主入口，`/api/ui/system/status` 作为兼容别名保留；`jobs`、`workflows`、`artifacts`、`market` 均统一进入 `/api/ui/v1/*`，并补充了 API 测试以验证新旧路径共存。
   备注：避免前端直接依赖内部领域 API，降低后续重构成本。
 
 ---
@@ -524,7 +524,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   修改范围：`web/src/routes/`、`web/src/lib/api/`。
   前置依赖：`WEB-S4-001`、`WEB-S3-001`。
   可并行：`WEB-S4-002`。
-  验收标准：前端能调用 `/api/ui/system/status` 并显示结果。
+  验收标准：前端能调用 `/api/ui/v1/system/status` 并显示结果。
   完成情况：未完成。
   备注：请求错误必须有统一展示。
 

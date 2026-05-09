@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from src.common.paths import resolve_project_path
+
 
 class KaipanNormalizer:
     """kaipan 数据标准化转换器。
@@ -20,8 +22,8 @@ class KaipanNormalizer:
     """
 
     def __init__(self, schema_dir: str | Path, snapshots_dir: str | Path) -> None:
-        self.schema_dir = Path(schema_dir)
-        self.snapshots_dir = Path(snapshots_dir)
+        self.schema_dir = resolve_project_path(schema_dir)
+        self.snapshots_dir = resolve_project_path(snapshots_dir)
 
     def _load_schema(self, dataset: str) -> dict[str, Any]:
         """加载指定 dataset 的 YAML schema。"""
@@ -187,7 +189,7 @@ class KaipanNormalizer:
             results[slot] = {}
             for dataset in ("hot_topics", "topic_constituents", "strong_symbols", "market_context"):
                 raw_file = (
-                    Path("data/kaipan/raw")
+                    resolve_project_path("data/kaipan/raw")
                     / dataset
                     / f"{trade_date}_{slot}"
                     / f"{dataset}.json"

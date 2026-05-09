@@ -21,6 +21,7 @@ from config.database import get_engine, run_async_with_cleanup
 from config.settings import get_settings
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.common.logger import configure_logging
+from src.common.paths import resolve_project_path
 from src.common.utils import ensure_dir
 from src.pipeline.dag import run_pipeline
 from src.pipeline.tasks.clean_task import run_clean_task, run_clean_from_db_task
@@ -309,9 +310,9 @@ def db_check(
 
 @app.command("db-migrate")
 def db_migrate(
-	config: Path | None = typer.Option(None, help="从配置文件读取 database.url（并同步到 DATABASE_URL）"),
-	project_root: Path = typer.Option(Path("."), help="trade-strategy-ai 项目根目录"),
-	revision: str = typer.Option("head", help="目标版本（默认 head）"),
+    config: Path | None = typer.Option(None, help="从配置文件读取 database.url（并同步到 DATABASE_URL）"),
+    project_root: Path = typer.Option(resolve_project_path("."), help="trade-strategy-ai 项目根目录"),
+    revision: str = typer.Option("head", help="目标版本（默认 head）"),
 ) -> None:
 	"""执行 Alembic 迁移（upgrade）。"""
 	if config is not None:
@@ -591,7 +592,7 @@ def extract_articles(
 @app.command("clusters-build")
 def clusters_build(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
-	dest: Path = typer.Option(Path("data/processed/persona/clusters.real.json"), help="输出 clusters 文件"),
+	dest: Path = typer.Option(resolve_project_path("data/processed/persona/clusters.real.json"), help="输出 clusters 文件"),
 	max_articles: int | None = typer.Option(None, help="最多使用多少篇已抽取文章"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:
@@ -665,7 +666,7 @@ def e2e_regression(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
 	max_articles: int | None = typer.Option(10, help="每个作者最多抓取文章数"),
 	extract_limit: int = typer.Option(10, help="抽取篇数上限"),
-	clusters_dest: Path = typer.Option(Path("data/processed/persona/clusters.real.json"), help="clusters 输出路径"),
+	clusters_dest: Path = typer.Option(resolve_project_path("data/processed/persona/clusters.real.json"), help="clusters 输出路径"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:
 	"""端到端回归：crawl → store_db → extract → build_clusters → run-pre-market(+HTML)。"""
@@ -903,7 +904,7 @@ def persona_init_sample(
 def market_state_build(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
 	as_of: str | None = typer.Option(None, help="日期 YYYY-MM-DD，默认今天"),
-	dest: Path = typer.Option(Path("data/processed/persona/market_state.json"), help="输出 MarketState JSON"),
+	dest: Path = typer.Option(resolve_project_path("data/processed/persona/market_state.json"), help="输出 MarketState JSON"),
 	from_akshare: bool = typer.Option(False, help="当未配置 benchmark_csv 时，尝试从 AkShare 拉取日线数据"),
 	cache_csv: bool = typer.Option(True, help="从 AkShare 拉取后是否缓存为 CSV（写入 benchmark_csv 或默认路径）"),
 	log_level: str = typer.Option("INFO", help="日志级别"),

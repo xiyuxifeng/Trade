@@ -29,6 +29,7 @@ from src.backtest.schemas import (
     RuleValidationResult,
 )
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 from src.rule_pool.models import RulePool
 from src.rule_pool.schemas import ReviewStatus, RuleBacktestResult
 
@@ -498,8 +499,8 @@ def _derive_indicators_from_bars(
 # A股交易日历（支持 akshare 加载、外部注入节假日、本地文件 fallback）
 # ---------------------------------------------------------------------------
 
-# 本地交易日历文件路径（默认）
-_DEFAULT_CALENDAR_FILE = "data/backtest/trading_calendar.json"
+# 本地交易日历文件路径（默认，锚定到项目根）
+_DEFAULT_CALENDAR_FILE = resolve_project_path("data/backtest/trading_calendar.json")
 
 
 class TradeCalendar:
@@ -548,7 +549,8 @@ class TradeCalendar:
         from pathlib import Path
         from datetime import date
 
-        path = Path(file_path) if file_path else Path(_DEFAULT_CALENDAR_FILE)
+        # 统一归一化为项目根目录下的绝对路径，避免默认值或测试 monkeypatch 传入字符串时出错。
+        path = resolve_project_path(file_path) if file_path is not None else resolve_project_path(_DEFAULT_CALENDAR_FILE)
 
         if path.exists():
             try:
@@ -625,7 +627,7 @@ class TradeCalendar:
         if cls._trade_dates is None:
             return
 
-        file_path = Path(path) if path else Path(_DEFAULT_CALENDAR_FILE)
+        file_path = resolve_project_path(path) if path is not None else resolve_project_path(_DEFAULT_CALENDAR_FILE)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # 按日期排序

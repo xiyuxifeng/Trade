@@ -362,7 +362,7 @@ python -m cli.main <command> --help
 
 - `db-migrate`
 	- `--config`：同上
-	- `--project-root`：项目根目录（默认 `.`）
+	- `--project-root`：项目根目录（默认 `trade-strategy-ai` 项目根目录）
 	- `--revision`：目标版本（默认 `head`）
 
 - `init-project`
@@ -1277,10 +1277,10 @@ python -m cli.main pipeline-run --config config/app.yaml --log-level DEBUG
 
 ### 9.2 目录与相对路径
 
-很多命令默认使用相对路径（例如 `config/app.yaml`、`data/...`）。建议：
+很多命令在参数展示里会写成相对路径（例如 `config/app.yaml`、`data/...`），但运行时默认会锚定到 `trade-strategy-ai` 项目根目录，而不是当前 shell 目录。建议：
 
-- 在 `trade-strategy-ai/` 项目根目录执行命令
-- 或者为 `--config` 提供绝对路径，并理解输出目录相对 base_dir 的解析规则
+- 在 `trade-strategy-ai/` 项目根目录执行命令，保持行为最直观
+- 需要显式指定路径时，优先使用绝对路径；如果传的是相对路径，请按项目根目录来理解
 
 ### 9.3 测试与冒烟验证
 

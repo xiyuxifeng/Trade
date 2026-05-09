@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from src.common.config import AppConfig
+from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
+from src.common.utils import read_json
 from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.evaluation.postmortem_service import PostmortemService
-from src.common.logger import get_logger
-from src.common.utils import read_json
 from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, TradeIdea
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
@@ -32,7 +33,7 @@ def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
     Returns:
         pack_id 字符串或 None
     """
-    pack_dir = Path(".") / config.storage.output_dir / "evidence_packs"
+    pack_dir = resolve_project_path(".") / config.storage.output_dir / "evidence_packs"
     if not pack_dir.exists():
         return None
 
@@ -62,7 +63,7 @@ def _find_evidence_pack_id(idea_id_str: str, config: AppConfig) -> str | None:
 
 def _evidence_pack_path(pack_id: str, config: AppConfig) -> Path:
     """获取 EvidencePack JSON 文件路径。"""
-    return Path(".") / config.storage.output_dir / "evidence_packs" / f"{pack_id}.json"
+    return resolve_project_path(".") / config.storage.output_dir / "evidence_packs" / f"{pack_id}.json"
 
 
 def _build_llm_notes_client(config: AppConfig):
@@ -299,7 +300,7 @@ def _daily_report_path(trade_date_str: str, config: AppConfig) -> Path:
 
     路径规则：{config.storage.output_dir}/daily_report_{trade_date}.json
     """
-    output_dir = Path(".") / config.storage.output_dir
+    output_dir = resolve_project_path(".") / config.storage.output_dir
     return output_dir / f"daily_report_{trade_date_str}.json"
 
 

@@ -21,6 +21,7 @@ from src.alignment.types import (
     ConfidenceScore,
 )
 from src.alignment.scoring import DetailedConfidenceScore
+from src.common.paths import resolve_project_path
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ from src.alignment.scoring import DetailedConfidenceScore
 # ---------------------------------------------------------------------------
 
 # 默认缓存目录
-DEFAULT_CACHE_DIR = Path("data/processed/alignment_cache")
+DEFAULT_CACHE_DIR = resolve_project_path("data/processed/alignment_cache")
 
 
 @dataclass
@@ -65,7 +66,7 @@ class AlignmentCache:
         Args:
             cache_dir: 缓存目录路径
         """
-        self.cache_dir = Path(cache_dir)
+        self.cache_dir = resolve_project_path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._index_file = self.cache_dir / "index.json"
         self._index: dict[str, CachedAlignmentResult] = {}

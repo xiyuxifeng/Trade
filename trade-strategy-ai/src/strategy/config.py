@@ -8,6 +8,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel
 
+from src.common.paths import resolve_project_path
+
 
 class FeatureEngineConfig(BaseModel):
     """特征引擎配置"""
@@ -40,7 +42,7 @@ def get_strategy_config() -> StrategyConfig:
 
     从 config/strategy.yaml 加载配置
     """
-    config_path = Path("config/strategy.yaml")
+    config_path = resolve_project_path("config/strategy.yaml")
     if config_path.exists():
         with open(config_path) as f:
             data = yaml.safe_load(f) or {}
@@ -51,7 +53,7 @@ def get_strategy_config() -> StrategyConfig:
 
 def load_strategy_config(config_path: str | Path) -> StrategyConfig:
     """从指定路径加载策略配置"""
-    path = Path(config_path)
+    path = resolve_project_path(config_path)
     if path.exists():
         with open(path) as f:
             data = yaml.safe_load(f) or {}

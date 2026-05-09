@@ -167,6 +167,38 @@ def test_job_log_and_artifact_binding(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_job_directory_materializes_files(tmp_path: Path) -> None:
+    """Job 目录应固定包含 params、result 和 artifacts 文件。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(
+        service.create_job(
+            job_type="pipeline-run",
+            params={"config_path": "config/app.yaml", "force": True},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    job_dir = Path(created.payload["job_dir"])
+
+    assert job_dir.exists()
+    assert Path(created.payload["log_path"]).exists()
+    assert Path(created.payload["params_path"]).exists()
+    assert Path(created.payload["artifacts_path"]).exists()
+
+    params_data = Path(created.payload["params_path"]).read_text(encoding="utf-8")
+    assert '"config_path": "config/app.yaml"' in params_data
+    assert '"force": true' in params_data
+
+    completed = asyncio.run(service.complete_job(job_id=job_id, result={"ok": True}))
+    result_path = Path(completed.payload["job_dir"]) / "result.json"
+    assert result_path.exists()
+    assert '"status": "success"' in result_path.read_text(encoding="utf-8")
+    assert '"ok": true' in result_path.read_text(encoding="utf-8")
+
+    asyncio.run(engine.dispose())
+
+
 def test_job_timeout_and_recovery(tmp_path: Path) -> None:
     """JobService 应支持超时标记与 stale 恢复。"""
     service, engine = _build_job_service(tmp_path)

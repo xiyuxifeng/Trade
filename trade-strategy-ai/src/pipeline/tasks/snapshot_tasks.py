@@ -12,6 +12,7 @@ from typing import Any
 
 from src.common.config import AppConfig
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 from src.market_universe.hot_topics_builder import HotTopicsBuilder
 from src.market_universe.constituents_resolver import ConstituentsResolver
 from src.market_universe.strong_symbols_selector import StrongSymbolsSelector
@@ -30,10 +31,9 @@ def _build_provider(config: AppConfig, *, offline: bool = False):
     if kaipan_cfg is None and not offline:
         return None
 
-    from pathlib import Path
     from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 
-    data_root = Path("data/kaipan")
+    data_root = resolve_project_path("data/kaipan")
     auth = KaipanAuth()
     try:
         return KaipanProvider(

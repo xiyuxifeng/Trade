@@ -6,6 +6,7 @@ from typing import Callable
 
 from src.common.akshare_tool import AkshareDailyRequest, AkshareMarketDataTool
 from src.common.config import load_app_config
+from src.common.paths import resolve_project_path
 from src.market_data.service import MarketDataCache
 from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.sample import build_sample_clusters_file
@@ -65,7 +66,7 @@ class PersonaService(BaseService):
 			if loaded.config.persona.clusters_path:
 				path = Path(loaded.config.persona.clusters_path)
 			else:
-				path = Path("data/processed/persona/clusters.sample.json")
+				path = resolve_project_path("data/processed/persona/clusters.sample.json")
 		full_path = Path(path)
 		if not full_path.is_absolute():
 			full_path = base_dir / full_path
@@ -88,7 +89,7 @@ class PersonaService(BaseService):
 		*,
 		config_path: str | Path,
 		as_of: str | date | None = None,
-		dest: str | Path = Path("data/processed/persona/market_state.json"),
+		dest: str | Path = resolve_project_path("data/processed/persona/market_state.json"),
 		from_akshare: bool = False,
 		cache_csv: bool = True,
 	) -> ServiceResult:
@@ -131,7 +132,7 @@ class PersonaService(BaseService):
 					csv_path = (
 						Path(cfg.persona.market_state_benchmark_csv)
 						if cfg.persona.market_state_benchmark_csv
-						else Path("data/processed/persona") / f"{bench_symbol}_daily.csv"
+						else resolve_project_path("data/processed/persona") / f"{bench_symbol}_daily.csv"
 					)
 					if not csv_path.is_absolute():
 						csv_path = base_dir / csv_path

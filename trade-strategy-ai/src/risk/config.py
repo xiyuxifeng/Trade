@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field
 
+from src.common.paths import resolve_project_path
 from src.risk.types import (
     PositionSizeType,
     StopLossMode,
@@ -77,7 +78,7 @@ def get_risk_config() -> RiskConfig:
 
     从 config/risk.yaml 加载配置
     """
-    config_path = Path("config/risk.yaml")
+    config_path = resolve_project_path("config/risk.yaml")
     if config_path.exists():
         with open(config_path) as f:
             data = yaml.safe_load(f) or {}
@@ -87,7 +88,7 @@ def get_risk_config() -> RiskConfig:
 
 def load_risk_config(config_path: str | Path) -> RiskConfig:
     """从指定路径加载风控配置"""
-    path = Path(config_path)
+    path = resolve_project_path(config_path)
     if path.exists():
         with open(path) as f:
             data = yaml.safe_load(f) or {}

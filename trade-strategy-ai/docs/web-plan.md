@@ -326,8 +326,17 @@ cancel_requested_at
 
 ```text
 data/jobs/{job_id}/job.log
+data/jobs/{job_id}/params.json
 data/jobs/{job_id}/result.json
+data/jobs/{job_id}/artifacts.json
 ```
+
+目录约定：
+
+- `job.log`：按行追加的运行日志
+- `params.json`：创建 Job 时的参数快照
+- `result.json`：Job 成功、失败或取消后的最终结果摘要
+- `artifacts.json`：Job 绑定的产物引用列表
 
 Worker 协议要求：
 - `JobRunner` 只能领取白名单 `job_type`

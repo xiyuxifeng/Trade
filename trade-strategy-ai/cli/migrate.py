@@ -6,6 +6,8 @@ import typer
 from alembic import command
 from alembic.config import Config
 
+from src.common.paths import resolve_project_path
+
 
 app = typer.Typer(add_completion=False)
 
@@ -20,17 +22,17 @@ def _alembic_config(project_root: Path) -> Config:
 
 @app.command("upgrade")
 def upgrade(
-	revision: str = typer.Argument("head", help="目标版本（默认 head）"),
-	project_root: Path = typer.Option(Path("."), help="项目根目录（默认当前目录）"),
+    revision: str = typer.Argument("head", help="目标版本（默认 head）"),
+    project_root: Path = typer.Option(resolve_project_path("."), help="项目根目录（默认 trade-strategy-ai 根目录）"),
 ) -> None:
-	cfg = _alembic_config(project_root.resolve())
-	command.upgrade(cfg, revision)
+    cfg = _alembic_config(project_root.resolve())
+    command.upgrade(cfg, revision)
 
 
 @app.command("downgrade")
 def downgrade(
-	revision: str = typer.Argument("-1", help="回退版本（默认 -1）"),
-	project_root: Path = typer.Option(Path("."), help="项目根目录（默认当前目录）"),
+    revision: str = typer.Argument("-1", help="回退版本（默认 -1）"),
+    project_root: Path = typer.Option(resolve_project_path("."), help="项目根目录（默认 trade-strategy-ai 根目录）"),
 ) -> None:
-	cfg = _alembic_config(project_root.resolve())
-	command.downgrade(cfg, revision)
+    cfg = _alembic_config(project_root.resolve())
+    command.downgrade(cfg, revision)

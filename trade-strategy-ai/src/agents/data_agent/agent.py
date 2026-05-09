@@ -7,6 +7,7 @@ from src.agents.data_agent.skills import fetch_topic_constituents
 from src.agents.data_agent.skills import fetch_strong_symbols
 from src.agents.data_agent.skills import fetch_ohlcv
 from src.common.config import AppConfig
+from src.common.paths import resolve_project_path
 from src.schemas.contracts import DataRequest, DataResponse, DataResponseStatus
 
 
@@ -68,10 +69,9 @@ class DataAgent(BaseAgent):
 		if kaipan_cfg is None:
 			return None
 
-		from pathlib import Path
 		from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 
-		data_root = Path("data/kaipan")
+		data_root = resolve_project_path("data/kaipan")
 		auth = KaipanAuth()
 		try:
 			return KaipanProvider(

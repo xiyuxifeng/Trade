@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from src.common.paths import resolve_project_path
 from src.alignment import (
     AlignmentReport,
     BehaviorFitScore,
@@ -110,7 +111,7 @@ class AlignmentStorage:
         Args:
             storage_dir: 存储目录
         """
-        self.storage_dir = Path(storage_dir)
+        self.storage_dir = resolve_project_path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, result: AlignmentResult) -> Path:

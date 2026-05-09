@@ -77,6 +77,8 @@ python -m cli.main db-check --config config/app.yaml
 python -m cli.main db-migrate --config config/app.yaml
 ```
 
+说明：仓库里涉及的 `config/...`、`data/...`、`logs/...` 相对路径，运行时默认按 `trade-strategy-ai` 项目根目录解析，不依赖当前 shell 所在目录。
+
 ## 数据 Pipeline（一键链路）
 
 从真实站点抓取 → 清洗 → 校验 → 入库：

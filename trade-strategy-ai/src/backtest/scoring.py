@@ -49,12 +49,12 @@ def score_backtest_trade(
         包含 mfe/mae/return_pct/exit_triggered/exit_date/halted_dates/eval_date 的字典
     """
     logger.debug(
-        "评分输入: symbol=%s, entry_price=%.2f, entry_date=%s, target=%.2f, stop_loss=%.2f",
+        "评分输入: symbol=%s, entry_price=%.2f, entry_date=%s, target=%s, stop_loss=%s",
         symbol,
         entry_price,
         entry_date,
-        target_price,
-        stop_loss_price,
+        f"{target_price:.2f}" if target_price is not None else "None",
+        f"{stop_loss_price:.2f}" if stop_loss_price is not None else "None",
     )
     resolved_constraint = _resolve_constraint(constraint, symbol)
     price_cage_up_pct, price_cage_down_pct = _get_price_cage_pct(resolved_constraint.board_type)

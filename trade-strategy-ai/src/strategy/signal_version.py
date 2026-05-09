@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 from src.strategy.types import Signal, SignalContext, SignalWithContext
 
 logger = get_logger(__name__)
@@ -63,7 +64,7 @@ class SignalVersioning:
             retention_days: 原始 JSON 保留天数，默认 10 天
                              超过此天数的目录会被 archive_old_signals() 压缩
         """
-        self._storage_path = storage_path or Path("data/signals")
+        self._storage_path = resolve_project_path(storage_path or "data/signals")
         self._versions: dict[str, SignalWithContext] = {}
         self._retention_days = retention_days
         self._archive_dir = self._storage_path / "archive"

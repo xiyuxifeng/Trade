@@ -10,6 +10,7 @@ from typing import Any, Callable, Awaitable
 
 from src.common.config import AppConfig
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 
 _logger = get_logger(__name__)
 
@@ -170,7 +171,7 @@ MAX_RETRIES = 3
 MAX_RETRY_COUNT = 3   # 超过此值移入 dead_tasks
 FAILED_TTL_DAYS = 7   # 超过此天数的失败记录清理
 
-DEAD_TASKS_PATH = Path("data/processed/pipeline/dead_tasks.jsonl")
+DEAD_TASKS_PATH = resolve_project_path("data/processed/pipeline/dead_tasks.jsonl")
 
 
 async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -> tuple[bool, bool]:
@@ -203,8 +204,8 @@ async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -
     return False, False
 
 
-PENDING_PATH = Path("data/processed/pipeline/pending_tasks.jsonl")
-FAILED_PATH = Path("data/processed/pipeline/failed_tasks.jsonl")
+PENDING_PATH = resolve_project_path("data/processed/pipeline/pending_tasks.jsonl")
+FAILED_PATH = resolve_project_path("data/processed/pipeline/failed_tasks.jsonl")
 
 
 def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "v1") -> dict[str, TaskHandler]:
@@ -221,7 +222,7 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
 
         await extract_and_store_metadata(
             config=config,
-            base_dir=Path("."),
+            base_dir=resolve_project_path("."),
             force=force,
             version=version,
         )
@@ -229,7 +230,7 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
     async def handle_article_metadata_extracted(details: dict[str, Any]) -> None:
         from src.persona.cluster_builder import build_clusters_from_db
 
-        dest = Path("data/processed/persona/clusters.real.json")
+        dest = resolve_project_path("data/processed/persona/clusters.real.json")
         await build_clusters_from_db(config=config, dest=dest)
 
     # 候选池快照 handlers（NTL-S2-020 ~ NTL-S2-022）

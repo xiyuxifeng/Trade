@@ -351,7 +351,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 `JobRunner`，支持 `run-pre-market`、`run-after-close`、`pipeline-run` 白名单执行；执行结果会写入 `data/jobs/{job_id}/result.json` 并绑定产物；补充了受控执行、pending 轮询和 stale 恢复可重试信息的单测并通过验证。
   备注：生产交付不得只依赖 FastAPI 进程内 background task；如暂不引入外部队列，必须实现数据库轮询 Worker、心跳和锁。
 
-- [ ] `WEB-S2-004` `P1`
+- [x] `WEB-S2-004` `P1`
   目标：统一任务日志与产物目录。
   输入：JobService、ArtifactService 设计。
   输出：`data/jobs/{job_id}/` 目录规范。
@@ -359,7 +359,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-002`。
   可并行：`WEB-S3-001`。
   验收标准：每个 Job 可查看日志、参数快照、结果 JSON 和产物引用。
-  完成情况：未完成。
+  完成情况：已完成 `JobService` 目录规范收口，统一落盘 `job.log`、`params.json`、`result.json` 和 `artifacts.json`，并在创建、完成、失败、取消和绑定产物时同步更新；补充了目录落盘单测并通过验证。
   备注：日志中不得输出敏感配置。
 
 - [x] `WEB-S2-005` `P0`

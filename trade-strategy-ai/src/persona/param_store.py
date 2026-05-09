@@ -19,6 +19,8 @@ from src.persona.param_types import (
     ValidationResult,
     validate_param,
 )
+from src.common.paths import resolve_project_path
+from src.common.paths import resolve_project_path
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +125,7 @@ class ParameterStore:
     提供统一的参数存储、版本控制、动态更新和约束验证机制。
 
     用法：
-        store = ParameterStore("data/params")
+        store = ParameterStore(resolve_project_path("data/params"))
 
         # 注册参数
         store.register("risk.max_position_pct", default=0.1, param_type=ParamType.FLOAT,
@@ -157,11 +159,10 @@ class ParameterStore:
         """
         self._params: dict[str, ParameterDef] = {}
         self._snapshots: list[ParameterSnapshot] = []
-        self._storage_path = Path(storage_path) if storage_path else None
+        self._storage_path = resolve_project_path(storage_path) if storage_path is not None else None
         self._max_snapshots = max_snapshots
 
-        if self._storage_path:
-            self._load()
+        self._load()
 
     # ---- Internal ----
 

@@ -59,6 +59,13 @@ async def _create_sqlite_schema(engine) -> None:
                 raw_llm_output JSON NOT NULL DEFAULT '{}',
                 sentiment_score NUMERIC,
                 confidence_score NUMERIC,
+                provider TEXT,
+                model TEXT,
+                article_type TEXT,
+                extraction_version TEXT,
+                standalone_rule_ids JSON,
+                derived_rule_ids JSON,
+                trade_sample_ids JSON,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -66,23 +73,16 @@ async def _create_sqlite_schema(engine) -> None:
         )
         await conn.exec_driver_sql(
             """
-            CREATE TABLE market_data (
+            CREATE TABLE ohlcv_bars (
                 id TEXT PRIMARY KEY,
-                source TEXT NOT NULL,
                 symbol TEXT NOT NULL,
-                market TEXT NOT NULL,
-                timeframe TEXT NOT NULL,
-                traded_at TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
                 open NUMERIC NOT NULL,
                 high NUMERIC NOT NULL,
                 low NUMERIC NOT NULL,
                 close NUMERIC NOT NULL,
                 volume NUMERIC NOT NULL,
-                turnover NUMERIC NOT NULL,
-                adj_factor NUMERIC,
-                is_adjusted INTEGER NOT NULL DEFAULT 0,
-                indicators JSON NOT NULL DEFAULT '{}',
-                raw_payload JSON NOT NULL DEFAULT '{}',
+                turnover NUMERIC,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -143,7 +143,7 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
         session.add(
             ArticleMetadata(
                 article_id=article.id,
-                schema_version="v1",
+                version="v1",
                 processed_at=datetime.now(UTC),
                 extracted_concepts=[{"name": "trend"}],
                 trading_symbols=["000001.SZ"],
@@ -218,7 +218,7 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert restored.processed_restored is True
     assert restored.row_counts["blog_articles"] == 1
     assert restored.row_counts["article_metadata"] == 1
-    assert restored.row_counts["market_data"] == 1
+    assert restored.row_counts["ohlcv_bars"] == 1
     assert restored.row_counts["trade_logs"] == 1
 
     async with engine.connect() as conn:

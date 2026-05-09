@@ -78,7 +78,7 @@ class TestSnapshotTasks:
                 # 用 mock provider 注入
                 import src.pipeline.tasks.snapshot_tasks as st
                 original = st._build_provider
-                st._build_provider = lambda cfg: _MockHotTopicsProvider()
+                st._build_provider = lambda cfg, offline=False: _MockHotTopicsProvider()
 
                 try:
                     await handle_hot_topics_snapshot(

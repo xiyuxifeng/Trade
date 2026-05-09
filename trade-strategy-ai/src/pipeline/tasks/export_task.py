@@ -10,12 +10,13 @@ import duckdb
 from sqlalchemy import select
 
 from src.common.utils import ensure_dir
+from src.common.paths import resolve_project_path
 from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 
 
-DUCKDB_DIR = Path("data/processed/duckdb")
+DUCKDB_DIR = resolve_project_path("data/processed/duckdb")
 DUCKDB_PATH = DUCKDB_DIR / "trade_strategy_ai.duckdb"
 
 ARTICLES_COLUMNS = [
@@ -207,7 +208,7 @@ async def run_export_task(
 
     start = time.monotonic()
     stats = ExportStats()
-    dest = Path(duckdb_path) if duckdb_path else DUCKDB_PATH
+    dest = resolve_project_path(duckdb_path) if duckdb_path else DUCKDB_PATH
 
     with _duckdb_conn(dest) as conn:
         _ensure_tables(conn)

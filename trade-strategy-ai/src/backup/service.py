@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -65,6 +65,8 @@ def _coerce_table_value(column, value: Any) -> Any:
 
     if python_type is UUID:
         return UUID(str(value))
+    if python_type is date:
+        return date.fromisoformat(str(value))
     if python_type is datetime:
         return _parse_datetime(value)
     if python_type is Decimal:

@@ -13,6 +13,7 @@ from pathlib import Path
 import typer
 
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 
 app = typer.Typer(add_completion=False, help="快照相关命令")
 
@@ -117,7 +118,7 @@ def snapshot_build(
         date_slots = [(d, slot) for d in date_values]
     # 离线模式且未指定 date：扫描 raw 目录获取所有日期
     elif offline and date is None:
-        raw_base = Path("data/kaipan/raw")
+        raw_base = resolve_project_path("data/kaipan/raw")
         date_slots = _discover_raw_dirs(raw_base)
         if not date_slots:
             typer.secho("离线模式: data/kaipan/raw/ 下未找到任何 raw 数据目录", fg=typer.colors.YELLOW)

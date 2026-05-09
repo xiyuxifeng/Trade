@@ -85,6 +85,7 @@ class TestHandlePostmortemAnalysis:
         mock_store = MagicMock()
         # list_filtered 返回空列表 → 走 append 分支（fallback）
         mock_store.list_filtered = AsyncMock(return_value=[])
+        mock_store.append = AsyncMock()
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
@@ -143,6 +144,7 @@ class TestHandlePostmortemAnalysis:
         mock_store.list_filtered = AsyncMock(return_value=[existing_failure])
         # update 方法（async）
         mock_store.update = AsyncMock(return_value=True)
+        mock_store.append = AsyncMock()
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"

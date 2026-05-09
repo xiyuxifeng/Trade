@@ -71,6 +71,7 @@ line-length = 100
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--import-mode=importlib"
 markers = [
     "smoke: lightweight regression gate for the end-to-end orchestration path",
     "integration: integration tests requiring real data or network (may fail in CI)",

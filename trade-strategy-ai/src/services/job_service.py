@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -48,7 +49,7 @@ class JobService(BaseService):
         self,
         *,
         session_scope_factory: Callable[[], Any] | None = None,
-        job_base_dir: str | Path = Path("data/jobs"),
+        job_base_dir: str | Path = resolve_project_path("data/jobs"),
     ) -> None:
         self._session_scope_factory = session_scope_factory
         self._job_base_dir = resolve_project_path(job_base_dir)
@@ -70,6 +71,48 @@ class JobService(BaseService):
     def _log_path(self, job_id: UUID) -> Path:
         """返回 job 的日志文件路径。"""
         return self._job_dir(job_id) / "job.log"
+
+    def _params_path(self, job_id: UUID) -> Path:
+        """返回 job 的参数快照文件路径。"""
+        return self._job_dir(job_id) / "params.json"
+
+    def _result_path(self, job_id: UUID) -> Path:
+        """返回 job 的结果文件路径。"""
+        return self._job_dir(job_id) / "result.json"
+
+    def _artifacts_path(self, job_id: UUID) -> Path:
+        """返回 job 的产物引用文件路径。"""
+        return self._job_dir(job_id) / "artifacts.json"
+
+    def _write_json_file(self, path: Path, payload: Any) -> None:
+        """把结构化 payload 写入 JSON 文件。"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(_to_plain(payload), ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _materialize_job_dir(
+        self,
+        *,
+        job: Job,
+        result_payload: dict[str, Any] | None = None,
+    ) -> None:
+        """把 Job 的文件目录统一落盘。
+
+        目录约定：
+        - job.log: 任务日志
+        - params.json: 创建时的参数快照
+        - result.json: 最终执行结果或错误摘要
+        - artifacts.json: 产物引用列表
+        """
+        job_dir = self._job_dir(job.id)
+        job_dir.mkdir(parents=True, exist_ok=True)
+        log_path = self._log_path(job.id)
+        if not log_path.exists():
+            log_path.write_text("", encoding="utf-8")
+
+        self._write_json_file(self._params_path(job.id), job.params or {})
+        self._write_json_file(self._artifacts_path(job.id), job.artifacts or [])
+        if result_payload is not None:
+            self._write_json_file(self._result_path(job.id), result_payload)
 
     def _serialize_job(self, job: Job) -> dict[str, Any]:
         """把 Job ORM 对象转成前端可用结构。"""
@@ -132,6 +175,7 @@ class JobService(BaseService):
                 result = await session.execute(stmt)
                 existing = result.scalar_one_or_none()
                 if existing is not None:
+                    self._materialize_job_dir(job=existing)
                     return ServiceResult(
                         status="ok",
                         message="job already exists",
@@ -139,6 +183,9 @@ class JobService(BaseService):
                             "created": False,
                             "job_dir": str(self._job_dir(existing.id)),
                             "log_path": str(self._log_path(existing.id)),
+                            "params_path": str(self._params_path(existing.id)),
+                            "result_path": str(self._result_path(existing.id)),
+                            "artifacts_path": str(self._artifacts_path(existing.id)),
                             "job": self._serialize_job(existing),
                         },
                     )
@@ -177,19 +224,18 @@ class JobService(BaseService):
             await self._persist(session, job)
             await session.flush()
 
-        job_dir = self._job_dir(job_id)
-        job_dir.mkdir(parents=True, exist_ok=True)
-        log_path = self._log_path(job_id)
-        if not log_path.exists():
-            log_path.write_text("", encoding="utf-8")
+        self._materialize_job_dir(job=job)
 
         return ServiceResult(
             status="ok",
             message="job created",
             payload={
                 "created": True,
-                "job_dir": str(job_dir),
-                "log_path": str(log_path),
+                "job_dir": str(self._job_dir(job_id)),
+                "log_path": str(self._log_path(job_id)),
+                "params_path": str(self._params_path(job_id)),
+                "result_path": str(self._result_path(job_id)),
+                "artifacts_path": str(self._artifacts_path(job_id)),
                 "job": self._serialize_job(job),
             },
         )
@@ -214,6 +260,9 @@ class JobService(BaseService):
             payload={
                 "job_dir": str(self._job_dir(job.id)),
                 "log_path": str(self._log_path(job.id)),
+                "params_path": str(self._params_path(job.id)),
+                "result_path": str(self._result_path(job.id)),
+                "artifacts_path": str(self._artifacts_path(job.id)),
                 "job": self._serialize_job(job),
             },
         )
@@ -351,6 +400,9 @@ class JobService(BaseService):
             payload={
                 "job_dir": str(self._job_dir(job.id)),
                 "log_path": str(self._log_path(job.id)),
+                "params_path": str(self._params_path(job.id)),
+                "result_path": str(self._result_path(job.id)),
+                "artifacts_path": str(self._artifacts_path(job.id)),
                 "job": self._serialize_job(job),
             },
         )
@@ -386,7 +438,26 @@ class JobService(BaseService):
             job.cancel_requested_at = job.cancel_requested_at or None
             await self._persist(session, job)
 
-        return ServiceResult(status="ok", message="job completed", payload={"job": self._serialize_job(job)})
+        self._materialize_job_dir(
+            job=job,
+            result_payload={
+                "status": job.status,
+                "result": _to_plain(job.result or {}),
+                "error": _to_plain(job.error),
+            },
+        )
+        return ServiceResult(
+            status="ok",
+            message="job completed",
+            payload={
+                "job_dir": str(self._job_dir(job.id)),
+                "log_path": str(self._log_path(job.id)),
+                "params_path": str(self._params_path(job.id)),
+                "result_path": str(self._result_path(job.id)),
+                "artifacts_path": str(self._artifacts_path(job.id)),
+                "job": self._serialize_job(job),
+            },
+        )
 
     async def fail_job(
         self,
@@ -416,7 +487,26 @@ class JobService(BaseService):
                 job.scheduled_at = None
             await self._persist(session, job)
 
-        return ServiceResult(status="ok", message="job failed", payload={"job": self._serialize_job(job)})
+        self._materialize_job_dir(
+            job=job,
+            result_payload={
+                "status": job.status,
+                "result": _to_plain(job.result or {}),
+                "error": _to_plain(job.error),
+            },
+        )
+        return ServiceResult(
+            status="ok",
+            message="job failed",
+            payload={
+                "job_dir": str(self._job_dir(job.id)),
+                "log_path": str(self._log_path(job.id)),
+                "params_path": str(self._params_path(job.id)),
+                "result_path": str(self._result_path(job.id)),
+                "artifacts_path": str(self._artifacts_path(job.id)),
+                "job": self._serialize_job(job),
+            },
+        )
 
     async def cancel_job(
         self,
@@ -450,7 +540,26 @@ class JobService(BaseService):
                 job.finished_at = now
             await self._persist(session, job)
 
-        return ServiceResult(status="ok", message="job cancelled", payload={"job": self._serialize_job(job)})
+        self._materialize_job_dir(
+            job=job,
+            result_payload={
+                "status": job.status,
+                "result": _to_plain(job.result or {}),
+                "error": _to_plain(job.error),
+            },
+        )
+        return ServiceResult(
+            status="ok",
+            message="job cancelled",
+            payload={
+                "job_dir": str(self._job_dir(job.id)),
+                "log_path": str(self._log_path(job.id)),
+                "params_path": str(self._params_path(job.id)),
+                "result_path": str(self._result_path(job.id)),
+                "artifacts_path": str(self._artifacts_path(job.id)),
+                "job": self._serialize_job(job),
+            },
+        )
 
     async def append_log(self, *, job_id: str | UUID, line: str) -> ServiceResult:
         """追加 Job 日志。"""
@@ -534,7 +643,11 @@ class JobService(BaseService):
         return ServiceResult(
             status="ok",
             message="job artifact bound",
-            payload={"job": self._serialize_job(job), "artifact": artifact},
+            payload={
+                "job": self._serialize_job(job),
+                "artifact": artifact,
+                "artifacts_path": str(self._artifacts_path(job.id)),
+            },
         )
 
     async def mark_timed_out(

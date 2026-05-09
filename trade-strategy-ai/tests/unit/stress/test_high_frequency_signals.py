@@ -38,9 +38,9 @@ from src.alerting.models import AlertEvent, AlertLevel
 # ========== SignalVersioning 压力测试 ==========
 
 
-def test_signal_versioning_high_volume():
+def test_signal_versioning_high_volume(tmp_path):
     """测试大量信号快速记录（1000条）"""
-    versioning = SignalVersioning()
+    versioning = SignalVersioning(storage_path=tmp_path)
 
     signals = []
     for i in range(1000):
@@ -71,9 +71,9 @@ def test_signal_versioning_high_volume():
     assert len(versioning._versions) == 1000
 
 
-def test_signal_versioning_get_by_id():
+def test_signal_versioning_get_by_id(tmp_path):
     """测试随机读取已存储的信号"""
-    versioning = SignalVersioning()
+    versioning = SignalVersioning(storage_path=tmp_path)
 
     # 记录100个信号
     for i in range(100):
@@ -102,9 +102,9 @@ def test_signal_versioning_get_by_id():
         assert result.signal.signal_id == f"get-{idx:03d}"
 
 
-def test_signal_versioning_list_filtering():
+def test_signal_versioning_list_filtering(tmp_path):
     """测试大量信号的过滤和排序"""
-    versioning = SignalVersioning()
+    versioning = SignalVersioning(storage_path=tmp_path)
 
     # 记录500个信号，跨5个标的
     for i in range(500):

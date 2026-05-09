@@ -113,6 +113,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.evaluation.ranking_repository import RankingRepository
 from src.models.ranking_entry import RankingEntryRecord
+from src.common.paths import resolve_project_path
 
 
 class RankingService:
@@ -128,7 +129,7 @@ class RankingService:
     def __init__(self, session: AsyncSession, output_dir: Path | None = None):
         self.session = session
         self._repo = RankingRepository(session)
-        self._output_dir = output_dir or Path(".")
+        self._output_dir = resolve_project_path(output_dir) if output_dir is not None else resolve_project_path(".")
 
     def _entry_from_postmortem_and_pack(
         self,

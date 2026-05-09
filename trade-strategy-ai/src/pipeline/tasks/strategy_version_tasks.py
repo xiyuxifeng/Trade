@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from src.common.config import AppConfig
 from src.common.logger import get_logger
+from src.common.paths import resolve_project_path
 from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
@@ -59,7 +60,7 @@ async def handle_build_trader_strategy_version(
         return
 
     # 加载 trader profile
-    profiles_path = default_profiles_path(base_dir=Path("."), config=config)
+    profiles_path = default_profiles_path(base_dir=resolve_project_path("."), config=config)
     if not profiles_path.exists():
         logger.warning(
             "策略版本构建跳过: Trader profiles文件不存在, path=%s",

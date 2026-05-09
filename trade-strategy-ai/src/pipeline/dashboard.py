@@ -8,6 +8,7 @@ import click
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 from src.common.config import AppConfig, load_app_config
+from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory as async_session_factory
 from src.alerting.models import AlertLevel
 from src.pipeline.dashboard_models import DashboardReport
@@ -22,7 +23,7 @@ def load_config() -> AppConfig:
 
 
 async def build_report(settings: AppConfig) -> DashboardReport:
-    report_dir = Path("data/processed/pipeline/anomaly")
+    report_dir = resolve_project_path("data/processed/pipeline/anomaly")
     dashboard_cfg = getattr(settings, "dashboard", None) or {}
 
     freshness_threshold = dashboard_cfg.get("freshness_threshold_hours", 24.0)

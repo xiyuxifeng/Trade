@@ -139,36 +139,11 @@ class TestSnapshotLoaderWithMockedService:
 
     @pytest.mark.asyncio
     async def test_load_market_context_loads_bars_from_snapshot_service(self):
-        """当 snapshot_service 返回 bars 时，loader 应填充 bars_by_symbol"""
+        """快照加载器只从 snapshot_service 读取 market_universe。"""
         from src.backtest.snapshot_loader import SnapshotLoader
 
         mock_service = AsyncMock()
-        # snapshot_service.load 返回 bars 数据（包含 symbol 字段）
-        mock_service.load.side_effect = [
-            None,  # market_universe slot
-            [  # ohlcv_1d slot
-                {
-                    "symbol": "000001.SZ",
-                    "date": "2026-04-01",
-                    "open": 10.0,
-                    "high": 10.5,
-                    "low": 9.8,
-                    "close": 10.2,
-                    "volume": 1000000,
-                },
-                {
-                    "symbol": "000001.SZ",
-                    "date": "2026-04-02",
-                    "open": 10.2,
-                    "high": 10.8,
-                    "low": 10.1,
-                    "close": 10.5,
-                    "volume": 1100000,
-                },
-            ],
-            {"000001.SZ": {"rsi": 60.0}},  # indicators slot
-            {"000001.SZ": "2026-03-20"},  # listing_dates slot
-        ]
+        mock_service.load.return_value = None
 
         loader = SnapshotLoader(snapshot_service=mock_service)
         result = await loader.load_market_context(
@@ -176,19 +151,11 @@ class TestSnapshotLoaderWithMockedService:
             symbols=["000001.SZ"],
         )
 
-        # snapshot_service.load 应被调用四次：market_universe、ohlcv_1d、indicators 和 listing_dates
-        assert mock_service.load.call_count == 4
-        # 第二次调用应该是 ohlcv_1d slot
-        calls = mock_service.load.call_args_list
-        assert calls[1][1]["slot"] == "ohlcv_1d"
-        # 第三次调用应该是 indicators slot
-        assert calls[2][1]["slot"] == "indicators"
-        # 第四次调用应该是 listing_dates slot
-        assert calls[3][1]["slot"] == "listing_dates"
-        # bars_by_symbol 应被正确填充（按 symbol 归类）
-        bars = result.get("bars_by_symbol", {})
-        assert "000001.SZ" in bars
-        assert len(bars["000001.SZ"]) == 2
+        # 现在只读取 market_universe，ohlcv / indicators 由 DB 侧加载
+        mock_service.load.assert_awaited_once_with("2026-04-01", slot="market_universe")
+        assert result["market_universe"] is None
+        assert result["bars_by_symbol"] == {}
+        assert result["indicators_by_symbol"] == {}
 
 
 class TestSnapshotLoaderNoRealTime:

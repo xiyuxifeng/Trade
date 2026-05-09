@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
+import { formatLocalDateInputOffset } from '@/lib/date';
 import { listWorkflows, runWorkflow } from '@/lib/api/workflows';
 import type { WorkflowDefinition } from '@/types/workflows';
 import { PageHeader } from '@/components/layout/page-header';
@@ -25,13 +26,13 @@ function prettyJson(value: unknown) {
 const DEFAULT_PARAMS: Record<string, Record<string, unknown>> = {
   'run-pre-market': {
     config_path: 'config/app.yaml',
-    as_of_date: new Date().toISOString().slice(0, 10),
+    as_of_date: formatLocalDateInputOffset(0),
     force: false,
     export_html: true,
   },
   'run-after-close': {
     config_path: 'config/app.yaml',
-    as_of_date: new Date().toISOString().slice(0, 10),
+    as_of_date: formatLocalDateInputOffset(0),
     force: false,
     export_html: true,
   },

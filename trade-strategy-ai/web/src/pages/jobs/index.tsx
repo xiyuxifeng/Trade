@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
 import { cancelJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
@@ -27,6 +28,10 @@ function statusVariant(status: string) {
   if (status === 'failed' || status === 'cancelled') return 'destructive';
   if (status === 'running') return 'info';
   return 'warning';
+}
+
+function canCancelJob(status: string, cancelRequested: boolean) {
+  return (status === 'pending' || status === 'running') && !cancelRequested;
 }
 
 function formatTimestamp(value: string | null) {
@@ -162,42 +167,39 @@ export function JobsPage() {
               </div>
             ) : (
               <div className="overflow-hidden rounded-2xl border border-slate-800">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="bg-slate-950/80 text-xs uppercase tracking-[0.16em] text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Job</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Created by</th>
-                      <th className="px-4 py-3">Created</th>
-                      <th className="px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader className="bg-slate-950/80">
+                    <TableRow>
+                      <TableHead>Job</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created by</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {jobsQuery.data.items.map((job) => (
-                      <tr
-                        className="border-t border-slate-800/80 hover:bg-slate-900/70"
-                        key={job.id}
-                      >
-                        <td className="px-4 py-3">
+                      <TableRow key={job.id}>
+                        <TableCell>
                           <div className="space-y-1">
                             <p className="font-medium text-slate-100">{job.job_type}</p>
-                            <p className="text-xs text-slate-500 break-all">{job.id}</p>
+                            <p className="break-all text-xs text-slate-500">{job.id}</p>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">{job.created_by}</td>
-                        <td className="px-4 py-3 text-slate-300">{formatTimestamp(job.created_at)}</td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell>{job.created_by}</TableCell>
+                        <TableCell>{formatTimestamp(job.created_at)}</TableCell>
+                        <TableCell>
                           <Button variant="outline" size="sm" onClick={() => setSelectedJobId(job.id)}>
                             Details
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
@@ -293,7 +295,7 @@ export function JobsPage() {
             <Button
               variant="destructive"
               onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending || !detail || detail.status === 'success'}
+              disabled={cancelMutation.isPending || !detail || !canCancelJob(detail.status, detail.cancel_requested)}
             >
               {cancelMutation.isPending ? 'Cancelling' : 'Cancel job'}
             </Button>

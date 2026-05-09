@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApiError } from '@/lib/api/http';
+import { formatLocalDateInputOffset } from '@/lib/date';
 import { getOhlcv, listSymbols } from '@/lib/api/market';
 import { PageHeader } from '@/components/layout/page-header';
 
@@ -28,12 +30,6 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     maximumFractionDigits: 4,
   }).format(value);
-}
-
-function formatDateInputOffset(days: number) {
-  const value = new Date();
-  value.setDate(value.getDate() + days);
-  return value.toISOString().slice(0, 10);
 }
 
 function MarketSymbolButton({
@@ -66,8 +62,8 @@ function MarketSymbolButton({
 export function MarketPage() {
   const [searchText, setSearchText] = useState('');
   const [selectedSymbol, setSelectedSymbol] = useState('');
-  const [startDate, setStartDate] = useState(formatDateInputOffset(-30));
-  const [endDate, setEndDate] = useState(formatDateInputOffset(0));
+  const [startDate, setStartDate] = useState(formatLocalDateInputOffset(-30));
+  const [endDate, setEndDate] = useState(formatLocalDateInputOffset(0));
   const [submittedQuery, setSubmittedQuery] = useState<{
     symbol: string;
     startDate: string;
@@ -290,39 +286,37 @@ export function MarketPage() {
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-slate-800">
-                  <table className="w-full border-collapse text-left text-sm">
-                    <thead className="bg-slate-950/80 text-xs uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Time</th>
-                        <th className="px-4 py-3">Open</th>
-                        <th className="px-4 py-3">High</th>
-                        <th className="px-4 py-3">Low</th>
-                        <th className="px-4 py-3">Close</th>
-                        <th className="px-4 py-3">Volume</th>
-                        <th className="px-4 py-3">Turnover</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table>
+                    <TableHeader className="bg-slate-950/80">
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Open</TableHead>
+                        <TableHead>High</TableHead>
+                        <TableHead>Low</TableHead>
+                        <TableHead>Close</TableHead>
+                        <TableHead>Volume</TableHead>
+                        <TableHead>Turnover</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {ohlcvQuery.data.items.map((row) => {
                         const up = row.close >= row.open;
                         return (
-                          <tr className="border-t border-slate-800/80 hover:bg-slate-900/70" key={row.time}>
-                            <td className="px-4 py-3 text-slate-300">{formatDate(row.time)}</td>
-                            <td className="px-4 py-3 text-slate-300">{formatNumber(row.open)}</td>
-                            <td className="px-4 py-3 text-slate-300">{formatNumber(row.high)}</td>
-                            <td className="px-4 py-3 text-slate-300">{formatNumber(row.low)}</td>
-                            <td className={up ? 'px-4 py-3 text-emerald-300' : 'px-4 py-3 text-rose-300'}>
+                          <TableRow key={row.time}>
+                            <TableCell>{formatDate(row.time)}</TableCell>
+                            <TableCell>{formatNumber(row.open)}</TableCell>
+                            <TableCell>{formatNumber(row.high)}</TableCell>
+                            <TableCell>{formatNumber(row.low)}</TableCell>
+                            <TableCell className={up ? 'text-emerald-300' : 'text-rose-300'}>
                               {formatNumber(row.close)}
-                            </td>
-                            <td className="px-4 py-3 text-slate-300">{formatNumber(row.volume)}</td>
-                            <td className="px-4 py-3 text-slate-300">
-                              {row.turnover == null ? '—' : formatNumber(row.turnover)}
-                            </td>
-                          </tr>
+                            </TableCell>
+                            <TableCell>{formatNumber(row.volume)}</TableCell>
+                            <TableCell>{row.turnover == null ? '—' : formatNumber(row.turnover)}</TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>

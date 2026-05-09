@@ -492,6 +492,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 设计文档：[2026-05-09-web-stage4-frontend-design.md](/Users/wanghui/Documents/Claude/trade-strategy-ai/docs/superpowers/specs/2026-05-09-web-stage4-frontend-design.md)
 - 稳定执行文档：[2026-05-09-web-stage4-frontend-baseline.md](/Users/wanghui/Documents/Claude/trade-strategy-ai/docs/superpowers/plans/2026-05-09-web-stage4-frontend-baseline.md)
 - UI 基线：任务中心式控制台，优先覆盖总览、任务中心、工作流、产物中心和市场数据。
+- 当前状态：`WEB-S4-001` 至 `WEB-S4-007` 已全部完成，以下顺序保留为阶段执行追溯。
 - 推荐完成顺序：
   1. `WEB-S4-001` 初始化前端工程。
   2. `WEB-S4-002` 接入 Tailwind CSS 和 shadcn/ui。
@@ -522,7 +523,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S4-001` `P0`
+- [x] `WEB-S4-001` `P0`
   目标：初始化前端工程。
   输入：技术栈决策。
   输出：`web/`。
@@ -530,7 +531,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S0-001`。
   可并行：`WEB-S3-001`。
   验收标准：React + TypeScript + Vite 可启动、可构建。
-  完成情况：未完成。
+  完成情况：已完成 `web/` 前端工程初始化，建立 React + TypeScript + Vite 基线，包含 `dev`、`build`、`lint`、`typecheck` 脚本、应用入口、路由、Query Provider 和全局样式，并通过构建验证。
   备注：不要把前端文件散落到后端目录。
 
 - [x] `WEB-S4-002` `P0`
@@ -605,6 +606,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - 把 `docs/UserManual.md` 的操作流程转为可点击、可校验、可追踪的 Web 向导。
 - 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
+- 当前状态：Stage 5 尚未开始，下一步从 `WEB-S5-001` 起步。
 
 ### 阶段交付物
 

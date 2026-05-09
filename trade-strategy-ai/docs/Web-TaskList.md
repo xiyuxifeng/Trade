@@ -586,7 +586,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 Job 列表与详情页、工作流触发页、产物浏览/预览/下载页和市场 symbol/OHLCV 查询页，并通过 `build`、`typecheck`、`lint` 验证。
   备注：这组页面是 Stage 4 的主要功能入口，不应只停留在占位页。
 
-- [ ] `WEB-S4-007` `P1`
+- [x] `WEB-S4-007` `P1`
   目标：完成验证、文档和入口对齐。
   输入：Stage 4 前端实现。
   输出：可执行的启动说明、验证命令和 Stage 4 文档入口。
@@ -594,7 +594,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-005`、`WEB-S4-006`。
   可并行：无。
   验收标准：`lint`、`typecheck`、`build` 可执行，`docs/Web-TaskList.md` 能直接指向设计文档和实施计划，前端启动路径写入文档。
-  完成情况：未完成。
+  完成情况：已完成 `web/README.md`，写明 `web/` 的启动方式、验证命令、页面入口和当前支持的 UI BFF 接口；`docs/Web-TaskList.md` 已直接链接 Stage 4 设计文档和实施计划，并与实际 `web/` 结构保持一致。
   备注：文档要与实际 `web/` 结构保持一致。
 
 ---

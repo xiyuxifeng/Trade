@@ -672,6 +672,11 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 - `docs/superpowers/plans/2026-05-09-web-s6-001-job-center-enhancement.md` 中的追踪子项完成
 
+### 当前状态
+
+- `WEB-S6-001` 至 `WEB-S6-010` 已全部完成并完成复核，Stage 6 的页面、共享预览层、下载边界和任务追踪均已收口。
+- 相关验证已通过，包含前端测试、类型检查、lint 和回测/报表/产物相关定向检查。
+
 ### 阶段交付物
 
 - 市场数据页。
@@ -679,6 +684,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 快照中心。
 - 回测中心。
 - 告警中心。
+- 上述阶段交付物均已落地并与任务状态对齐。
 
 ### 任务清单
 
@@ -770,7 +776,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 `web/src/features/imports/`、`web/src/features/signals/`、`web/src/features/persona/`、`web/src/features/kaipan/`、`web/src/features/data-health/` 的前后端工作台、API 封装、类型定义、页面入口、路由与测试；后端新增对应 UI BFF 路由并补齐 `python-multipart` 依赖，最终通过 `pytest`、`pnpm test`、`pnpm typecheck`、`pnpm lint` 验证。
   备注：文件上传和导入操作必须限制文件类型、大小和存储目录，并记录审计。
 
-- [ ] `WEB-S6-009` `P1`
+- [x] `WEB-S6-009` `P1`
   目标：实现报表和 HTML 产物安全预览。
   输入：Artifact API、报表中心、HTML/Markdown 产物。
   输出：安全预览组件和策略。
@@ -778,7 +784,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-004`、`WEB-S6-003`。
   可并行：无。
   验收标准：HTML 预览使用 sandbox 或服务端安全响应头；禁止执行不可信脚本；Markdown 渲染经过安全过滤；下载接口限制在允许的产物目录内。
-  完成情况：未完成。
+  完成情况：已完成。已新增共享安全预览层 `web/src/components/artifacts/artifact-preview.tsx`，`reports` 和 `artifacts` 页面统一复用该组件；HTML 预览使用 `iframe sandbox`，Markdown 预览使用受限解析器避免原始 HTML 执行；后端 `src/services/artifact_service.py` 与 `api/routers/ui/artifacts.py` 已加入允许目录校验；相关前端与后端测试已通过 `pytest`、`pnpm test`、`pnpm typecheck`、`pnpm lint` 验证。
   备注：LLM 或外部数据生成的 HTML/Markdown 不能按可信内容处理。
 
 - [x] `WEB-S6-010` `P2`
@@ -791,6 +797,8 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   验收标准：`WEB-S6-001` 的实施追踪计划已创建并链接到主清单，`daily-sessions` 和 `daily-report` 已同步，后续实现和验证可以直接按计划继续推进。
   完成情况：已创建 `WEB-S6-001` 追踪计划，并把相关状态同步到 `daily-sessions` 和 `daily-report`。
   备注：仅记录当前 Jobs 增强的子任务，不扩展到其他 Stage。
+
+- 阶段收口：Stage 6 任务已全部完成，后续如继续 Web Stage 6 相关工作，请直接进入新的阶段任务或新的专项计划。
 
 ---
 

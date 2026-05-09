@@ -62,6 +62,45 @@ class _FakeArtifactService:
             }
         )
 
+    def is_download_path_allowed(self, path: Path) -> bool:
+        return path.resolve().is_relative_to(self.artifact_path.parent.resolve())
+
+
+@dataclass
+class _UnsafeArtifactService:
+    artifact_path: Path
+
+    async def list_artifacts(self, **_: Any) -> Any:
+        return _result(
+            {
+                "count": 1,
+                "total": 1,
+                "items": [],
+            }
+        )
+
+    async def get_artifact(self, artifact_id: str) -> Any:
+        return _result(
+            {
+                "artifact_id": artifact_id,
+                "name": "escape.html",
+                "path": str(self.artifact_path),
+                "kind": "html",
+                "source": "processed",
+                "exists": True,
+                "size_bytes": 1,
+                "modified_at": "2026-05-09T00:00:00+00:00",
+                "previewable": True,
+                "job_id": None,
+                "metadata": {},
+                "preview": "<html><body>escape</body></html>",
+                "download_name": "escape.html",
+            }
+        )
+
+    def is_download_path_allowed(self, path: Path) -> bool:
+        return False
+
 
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     from types import SimpleNamespace
@@ -101,3 +140,18 @@ async def test_list_get_and_download_artifacts(client: AsyncClient) -> None:
     assert downloaded.status_code == 200
     assert downloaded.text.startswith("<html>")
 
+
+@pytest.mark.asyncio
+async def test_download_artifact_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:
+    """Artifact 下载接口应拒绝允许目录之外的路径。"""
+    fake_service = _UnsafeArtifactService(artifact_path=tmp_path / "escape.html")
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_artifact_service] = lambda: fake_service
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/api/ui/v1/artifacts/artifact-escape/download")
+            assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()

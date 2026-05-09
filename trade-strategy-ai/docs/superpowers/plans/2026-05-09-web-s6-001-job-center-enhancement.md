@@ -23,11 +23,13 @@
 
 ## 追踪子项
 
-- [ ] 补充 Job 创建 API，支持从 Jobs 页面触发重跑。
-- [ ] 在 Job 详情抽屉里把 `artifacts` 渲染成可读引用。
-- [ ] 给 Job 产物提供跳转到 Artifacts Center 的入口。
-- [ ] 如需要，补充 `jobId` 过滤能力，让产物中心能直接定位某个 Job 的产物。
-- [ ] 运行前端验证命令，确认改动不破坏现有 Jobs / Artifacts 页面。
+- [x] 补充 Job 创建 API，支持从 Jobs 页面触发重跑。
+- [x] 在 Job 详情抽屉里把 `artifacts` 渲染成可读引用。
+- [x] 给 Job 产物提供跳转到 Artifacts Center 的入口。
+- [x] 如需要，补充 `jobId` 过滤能力，让产物中心能直接定位某个 Job 的产物。
+- [x] 运行前端验证命令，确认改动不破坏现有 Jobs / Artifacts 页面。
+
+完成情况：上述追踪子项已全部完成并通过验证，相关实现已落到 Jobs 页面、Artifacts 页面、Jobs API 和对应测试中。
 
 ## 验收标准
 

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
+import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { ApiError } from '@/lib/api/http';
 import {
   downloadDailyReportHtml,
@@ -43,18 +44,6 @@ function sortReportsDesc(reports: ReportSummaryItem[]) {
 
 function kindLabel(kind: ReportKind) {
   return kind === 'daily' ? '盘前日报' : '盘后考核';
-}
-
-function PreviewFrame({ html }: { html: string }) {
-  return (
-    <iframe
-      aria-label="HTML 预览"
-      className="min-h-[30rem] w-full rounded-2xl border border-slate-800 bg-white"
-      sandbox="allow-same-origin"
-      srcDoc={html}
-      title="HTML 预览"
-    />
-  );
 }
 
 function ReportListItem({
@@ -487,7 +476,7 @@ export function ReportCenter() {
                         {getErrorMessage(htmlQuery.error)}
                       </div>
                     ) : (
-                      <PreviewFrame html={previewHtml} />
+                      <ArtifactPreview content={previewHtml} kind="html" title="HTML 预览" />
                     )}
                   </TabsContent>
 

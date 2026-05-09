@@ -185,16 +185,20 @@ describe('BacktestsPage', () => {
     });
 
     await user.click(screen.getByRole('button', { name: 'Report' }));
-    expect(await screen.findByText('# Backtest Report')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Backtest Report' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Validation' }));
-    expect(await screen.findByText('# Rule Validation Report')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Rule Validation Report' })).toBeInTheDocument();
 
     expect(screen.getByText('Summary')).toBeInTheDocument();
     expect(screen.getByText('Records')).toBeInTheDocument();
     expect(screen.getByText('Report')).toBeInTheDocument();
     expect(screen.getByText('Validation')).toBeInTheDocument();
     expect(screen.getByText('JSON')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: '下载原文' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '原文' })).toBeInTheDocument();
   });
 
   it('shows an actionable empty state when the filter window has no results', async () => {

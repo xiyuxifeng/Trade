@@ -50,3 +50,5 @@ def test_artifact_service_discovers_and_previews_files(tmp_path: Path) -> None:
     assert detail.status == "ok"
     assert "preview" in detail.payload
     assert '"status": "ok"' in detail.payload["preview"]
+    assert service.is_download_path_allowed(job_dir / "result.json") is True
+    assert service.is_download_path_allowed(tmp_path / "outside.json") is False

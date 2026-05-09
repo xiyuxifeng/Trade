@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
+import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { ApiError } from '@/lib/api/http';
 import { createJob } from '@/lib/api/jobs';
 import {
@@ -240,6 +241,8 @@ export function BacktestsCenter() {
   const [submittedJobType, setSubmittedJobType] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [reportViewMode, setReportViewMode] = useState<'preview' | 'raw'>('preview');
+  const [validationViewMode, setValidationViewMode] = useState<'preview' | 'raw'>('preview');
 
   function resetFilters() {
     setTraderId('');
@@ -279,6 +282,11 @@ export function BacktestsCenter() {
       setSelectedResultId(results[0].result_id);
     }
   }, [results, selectedResultId]);
+
+  useEffect(() => {
+    setReportViewMode('preview');
+    setValidationViewMode('preview');
+  }, [selectedResultId]);
 
   const selectedResult = useMemo(
     () => results.find((item) => item.result_id === selectedResultId) ?? null,
@@ -350,6 +358,18 @@ export function BacktestsCenter() {
   }, [detailQuery.data?.item.summary, resultsQuery.data?.total]);
 
   const detail = detailQuery.data?.item ?? null;
+  const reportText = reportQuery.data ?? '';
+  const validationText = validationQuery.data ?? '';
+
+  function downloadTextFile(filename: string, content: string) {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="page-stack">
@@ -630,9 +650,35 @@ export function BacktestsCenter() {
                       {getErrorMessage(reportQuery.error)}
                     </div>
                   ) : (
-                    <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
-                      {reportQuery.data ?? '暂无回测报告。'}
-                    </pre>
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Tabs
+                          aria-label="回测报告视图切换"
+                          className="w-auto"
+                          value={reportViewMode}
+                          onValueChange={(value) => setReportViewMode(value as 'preview' | 'raw')}
+                        >
+                          <TabsList>
+                            <TabsTrigger value="preview">预览</TabsTrigger>
+                            <TabsTrigger value="raw">原文</TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                        <Button
+                          variant="outline"
+                          onClick={() => downloadTextFile(`${selectedResult?.result_id ?? 'backtest'}-report.md`, reportText)}
+                          disabled={!reportText}
+                        >
+                          下载原文
+                        </Button>
+                      </div>
+                      {reportViewMode === 'preview' ? (
+                        <ArtifactPreview kind="markdown" content={reportText} title="回测报告" />
+                      ) : (
+                        <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
+                          {reportText || '暂无回测报告。'}
+                        </pre>
+                      )}
+                    </div>
                   )}
                 </TabsContent>
 
@@ -644,9 +690,35 @@ export function BacktestsCenter() {
                       {getErrorMessage(validationQuery.error)}
                     </div>
                   ) : (
-                    <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
-                      {validationQuery.data ?? '暂无规则验真报告。'}
-                    </pre>
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Tabs
+                          aria-label="规则验真报告视图切换"
+                          className="w-auto"
+                          value={validationViewMode}
+                          onValueChange={(value) => setValidationViewMode(value as 'preview' | 'raw')}
+                        >
+                          <TabsList>
+                            <TabsTrigger value="preview">预览</TabsTrigger>
+                            <TabsTrigger value="raw">原文</TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                        <Button
+                          variant="outline"
+                          onClick={() => downloadTextFile(`${selectedResult?.result_id ?? 'backtest'}-validation.md`, validationText)}
+                          disabled={!validationText}
+                        >
+                          下载原文
+                        </Button>
+                      </div>
+                      {validationViewMode === 'preview' ? (
+                        <ArtifactPreview kind="markdown" content={validationText} title="规则验真报告" />
+                      ) : (
+                        <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
+                          {validationText || '暂无规则验真报告。'}
+                        </pre>
+                      )}
+                    </div>
                   )}
                 </TabsContent>
 

@@ -8,6 +8,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { ApiError } from '@/lib/api/http';
 import { downloadArtifact, getArtifact, listArtifacts } from '@/lib/api/artifacts';
 import type { ArtifactRecord, ArtifactsListResponse } from '@/types/artifacts';
@@ -165,6 +166,7 @@ export function ArtifactsPage() {
                 <option value="csv">csv</option>
                 <option value="text">text</option>
                 <option value="parquet">parquet</option>
+                <option value="tar.gz">tar.gz</option>
                 <option value="zip">zip</option>
                 </Select>
             </div>
@@ -264,13 +266,17 @@ export function ArtifactsPage() {
 
               <div className="grid gap-3">
                 <p className="text-sm font-medium text-slate-200">Preview</p>
-                <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
-                  {detailQuery.isLoading
-                    ? 'Loading preview...'
-                    : detailQuery.error
-                      ? getErrorMessage(detailQuery.error)
-                      : selectedArtifact.preview || 'No preview available.'}
-                </pre>
+                {detailQuery.isLoading ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-400">
+                    Loading preview...
+                  </div>
+                ) : detailQuery.error ? (
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                    {getErrorMessage(detailQuery.error)}
+                  </div>
+                ) : (
+                  <ArtifactPreview kind={selectedArtifact.kind} content={selectedArtifact.preview ?? ''} />
+                )}
               </div>
 
               <div className="grid gap-3">

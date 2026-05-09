@@ -1,0 +1,24 @@
+export type SignalListParams = {
+  symbol?: string;
+  since?: string;
+  limit?: number;
+};
+
+export type SignalItem = {
+  signal_id: string;
+  symbol: string;
+  side: string;
+  confidence: number;
+  timestamp: string;
+  trader_id: string | null;
+  strategy_version_id: string | null;
+  context: Record<string, unknown> | unknown[] | string | null;
+  context_summary: string;
+};
+
+export type SignalListResponse = {
+  config_path: string;
+  base_dir: string;
+  count: number;
+  signals: SignalItem[];
+};

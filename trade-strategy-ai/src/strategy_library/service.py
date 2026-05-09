@@ -211,6 +211,7 @@ class StrategyLibraryService:
         parent_version_id: str,
         adjustments: list[StrategyAdjustment],
         recommendations: list[StrategyRecommendation],
+        notes: str | None = None,
     ) -> StrategyVersion:
         """基于正式版本创建候选优化版本（S7-003）。
 
@@ -232,7 +233,7 @@ class StrategyLibraryService:
             创建的候选版本
         """
         # 生成调整说明
-        notes = self._format_adjustment_notes(adjustments)
+        notes = notes if notes is not None else self._format_adjustment_notes(adjustments)
 
         # 使用 builder 创建候选版本
         candidate = self._builder.build_candidate(

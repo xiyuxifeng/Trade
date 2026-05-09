@@ -1,0 +1,231 @@
+import dayjs from 'dayjs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { screen, waitFor } from '@testing-library/react';
+import { BacktestsPage } from './index';
+import { renderWithRouter } from '@/test/test-utils';
+import { createJob } from '@/lib/api/jobs';
+import {
+  downloadBacktestReport,
+  downloadBacktestValidationReport,
+  getBacktestResult,
+  listBacktestResults,
+} from '@/lib/api/backtests';
+
+vi.mock('@/lib/api/jobs', () => ({
+  createJob: vi.fn(),
+}));
+
+vi.mock('@/lib/api/backtests', () => ({
+  downloadBacktestReport: vi.fn(),
+  downloadBacktestValidationReport: vi.fn(),
+  buildBacktestRunParams: vi.fn((submission) => ({
+    trader_id: submission.traderId,
+    date_from: submission.dateFrom,
+    date_to: submission.dateTo,
+    strategy_version_id: submission.strategyVersionId || undefined,
+    mode: submission.mode,
+    config_path: submission.configPath,
+  })),
+  buildBacktestValidateRulesParams: vi.fn((submission) => ({
+    trader_id: submission.traderId,
+    date_from: submission.dateFrom,
+    date_to: submission.dateTo,
+    config_path: submission.configPath,
+  })),
+  buildBacktestReproducibilityParams: vi.fn((submission) => ({
+    trader_id: submission.traderId,
+    date_from: submission.dateFrom,
+    date_to: submission.dateTo,
+    strategy_version_id: submission.strategyVersionId || undefined,
+    mode: submission.mode,
+    config_path: submission.configPath,
+  })),
+  getBacktestResult: vi.fn(),
+  listBacktestResults: vi.fn(),
+}));
+
+const mockedCreateJob = vi.mocked(createJob);
+const mockedDownloadBacktestReport = vi.mocked(downloadBacktestReport);
+const mockedDownloadBacktestValidationReport = vi.mocked(downloadBacktestValidationReport);
+const mockedGetBacktestResult = vi.mocked(getBacktestResult);
+const mockedListBacktestResults = vi.mocked(listBacktestResults);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('BacktestsPage', () => {
+  it('submits backtest jobs and renders the selected result details', async () => {
+    const user = userEvent.setup();
+    const today = dayjs().format('YYYY-MM-DD');
+    const thirtyDaysAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
+
+    mockedListBacktestResults.mockResolvedValue({
+      status: 'success',
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          result_id: 'result-1',
+          trader_id: 'trader_a',
+          date_from: '2026-05-01',
+          date_to: '2026-05-05',
+          summary: {
+            total_days: 5,
+            total_trades: 3,
+            valid_trades: 2,
+            skipped_trades: 1,
+            win_rate: 0.67,
+            avg_return_pct: 0.12,
+          },
+        },
+      ],
+    });
+    mockedGetBacktestResult.mockResolvedValue({
+      status: 'success',
+      item: {
+        request_trader_id: 'trader_a',
+        request_date_from: '2026-05-01',
+        request_date_to: '2026-05-05',
+        result_version: '1.0',
+        summary: {
+          total_days: 5,
+          total_trades: 3,
+          valid_trades: 2,
+          skipped_trades: 1,
+          win_rate: 0.67,
+          avg_return_pct: 0.12,
+        },
+        records: [
+          {
+            trade_date: '2026-05-01',
+            trader_id: 'trader_a',
+            strategy_version_id: 'sv-1',
+            symbol: '000001.SZ',
+            status: 'closed',
+            entry_price: 10,
+            exit_price: 11,
+            entry_date: '2026-05-01',
+            exit_date: '2026-05-02',
+            return_pct: 0.1,
+            mfe: 0.12,
+            mae: -0.02,
+            volume: 100,
+            is_valid_lot_size: true,
+            skip_reason: null,
+            evidence_refs: ['e-1'],
+          },
+        ],
+      },
+    });
+    mockedDownloadBacktestReport.mockResolvedValue('# Backtest Report');
+    mockedDownloadBacktestValidationReport.mockResolvedValue('# Rule Validation Report');
+    mockedCreateJob.mockResolvedValue({
+      created: true,
+      job: { id: 'job-1', job_type: 'backtest-run' },
+      job_dir: '/tmp/job-1',
+      log_path: '/tmp/job-1/job.log',
+      params_path: '/tmp/job-1/params.json',
+      result_path: '/tmp/job-1/result.json',
+      artifacts_path: '/tmp/job-1/artifacts.json',
+    } as Awaited<ReturnType<typeof createJob>>);
+
+    renderWithRouter([{ path: '/backtests', element: <BacktestsPage /> }], ['/backtests']);
+
+    await waitFor(() => {
+      expect(mockedListBacktestResults).toHaveBeenCalled();
+    });
+
+    expect(await screen.findByText('Backtests Center')).toBeInTheDocument();
+    expect(await screen.findByText('result-1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset filters' })).toBeInTheDocument();
+    expect(await screen.findByText('Valid trades')).toBeInTheDocument();
+    expect(await screen.findByText('Skipped trades')).toBeInTheDocument();
+
+    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+
+    await user.click(screen.getByRole('button', { name: '7d' }));
+    expect(screen.getByLabelText('Date from')).toHaveValue(dayjs(today).subtract(7, 'day').format('YYYY-MM-DD'));
+    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+
+    await user.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+
+    await user.type(screen.getByLabelText('Trader ID'), 'trader_a');
+
+    await user.click(screen.getByRole('button', { name: 'Run backtest' }));
+    await waitFor(() => {
+      expect(mockedCreateJob).toHaveBeenCalledWith(
+        expect.objectContaining({ job_type: 'backtest-run' }),
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Validate rules' }));
+    await waitFor(() => {
+      expect(mockedCreateJob).toHaveBeenCalledWith(
+        expect.objectContaining({ job_type: 'backtest-validate-rules' }),
+      );
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reproducibility check' }));
+    await waitFor(() => {
+      expect(mockedCreateJob).toHaveBeenCalledWith(
+        expect.objectContaining({ job_type: 'backtest-reproducibility-check' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockedDownloadBacktestReport).toHaveBeenCalled();
+      expect(mockedDownloadBacktestValidationReport).toHaveBeenCalled();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Report' }));
+    expect(await screen.findByText('# Backtest Report')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Validation' }));
+    expect(await screen.findByText('# Rule Validation Report')).toBeInTheDocument();
+
+    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Records')).toBeInTheDocument();
+    expect(screen.getByText('Report')).toBeInTheDocument();
+    expect(screen.getByText('Validation')).toBeInTheDocument();
+    expect(screen.getByText('JSON')).toBeInTheDocument();
+  });
+
+  it('shows an actionable empty state when the filter window has no results', async () => {
+    const user = userEvent.setup();
+    const today = dayjs().format('YYYY-MM-DD');
+    const thirtyDaysAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
+
+    mockedListBacktestResults.mockResolvedValue({
+      status: 'success',
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 50,
+      items: [],
+    });
+
+    renderWithRouter([{ path: '/backtests', element: <BacktestsPage /> }], ['/backtests']);
+
+    await waitFor(() => {
+      expect(mockedListBacktestResults).toHaveBeenCalled();
+    });
+
+    expect(await screen.findByText('当前筛选范围内暂无回测结果。')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Reset filters' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Last 30d' })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Trader ID'), 'trader_b');
+    await user.click(screen.getAllByRole('button', { name: 'Reset filters' })[1]);
+
+    expect(screen.getByLabelText('Trader ID')).toHaveValue('');
+    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+  });
+});

@@ -11,10 +11,16 @@ from pydantic import BaseModel, Field
 from api.dependencies import verify_api_key
 from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
+from api.routers.ui import imports_router as ui_imports_router
 from api.routers.ui import jobs_router as ui_jobs_router
+from api.routers.ui import data_health_router as ui_data_health_router
+from api.routers.ui import kaipan_router as ui_kaipan_router
 from api.routers.ui import legacy_system_router as ui_legacy_system_router
 from api.routers.ui import market_router as ui_market_router
+from api.routers.ui import persona_router as ui_persona_router
 from api.routers.ui import snapshots_router as ui_snapshots_router
+from api.routers.ui import signals_router as ui_signals_router
+from api.routers.ui import strategy_studio_router as ui_strategy_studio_router
 from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
@@ -136,6 +142,12 @@ def create_app() -> FastAPI:
     app.include_router(ui_artifacts_router)
     app.include_router(ui_market_router)
     app.include_router(ui_snapshots_router)
+    app.include_router(ui_strategy_studio_router)
+    app.include_router(ui_signals_router)
+    app.include_router(ui_persona_router)
+    app.include_router(ui_imports_router)
+    app.include_router(ui_kaipan_router)
+    app.include_router(ui_data_health_router)
     app.include_router(articles_router)
     app.include_router(trades_router)
     app.include_router(market_router)

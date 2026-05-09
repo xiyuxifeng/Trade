@@ -726,7 +726,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 `web/src/features/snapshots/snapshot-center.tsx` 快照中心，支持日期范围筛选、快照列表、详情查看、hot topics / topic constituents / strong symbols 结构化展示，以及通过 Job 提交 `snapshot-build` 构建任务；新增 `api/routers/ui/snapshots.py`、`web/src/lib/api/snapshots.ts`、`web/src/types/snapshots.ts`、页面路由与导航入口，并补充测试且通过 `test`、`typecheck`、`lint`、`build` 验证。
   备注：快照构建必须走 Job，页面只负责发起构建与查看结果。
 
-- [ ] `WEB-S6-005` `P0`
+- [x] `WEB-S6-005` `P0`
   目标：实现回测中心。
   输入：BacktestOperationService、backtest_results API。
   输出：`web/src/features/backtest/`。
@@ -734,10 +734,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-007`、`WEB-S3-004`、`WEB-S4-004`。
   可并行：`WEB-S6-006`。
   验收标准：可运行回测、查看结果列表、详情、报告、规则验真和关键指标图表。
-  完成情况：未完成。
+  完成情况：已完成 `web/src/features/backtests/backtests-center.tsx` 回测中心，支持结果浏览、结果详情、Markdown 报告、规则验真、Job 发起回测 / 验真 / 复现检查、筛选体验、空状态与摘要卡；新增 `web/src/lib/api/backtests.ts`、`web/src/types/backtests.ts`、页面路由与导航入口，并补充测试且通过 `test`、`typecheck`、`diff --check` 验证。
   备注：回测运行必须走 Job。
 
-- [ ] `WEB-S6-006` `P0`
+- [x] `WEB-S6-006` `P0`
   目标：实现告警中心。
   输入：现有 alerts API。
   输出：`web/src/features/alerts/`。
@@ -745,21 +745,21 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-004`。
   可并行：`WEB-S6-005`。
   验收标准：可查看告警历史、过滤、确认、解决、发送测试告警。
-  完成情况：未完成。
+  完成情况：已完成 `web/src/features/alerts/alerts-center.tsx` 告警中心，支持历史查询、状态/级别/标签/日期过滤、确认、解决、测试告警二次确认，以及详情 / JSON 预览；新增 `web/src/lib/api/alerts.ts`、`web/src/types/alerts.ts`、页面路由与导航入口，并补充测试且通过 `test`、`typecheck`、`diff --check` 验证。
   备注：发送测试告警必须二次确认。
 
-- [ ] `WEB-S6-007` `P0`
-  目标：实现策略版本、优化和规则池页面。
-  输入：StrategyOperationService、OptimizeService、RulePoolService。
-  输出：`web/src/features/strategy/`、`web/src/features/optimize/`、`web/src/features/rule-pool/`。
-  修改范围：相关前端 feature 目录。
+- [x] `WEB-S6-007` `P0`
+  目标：实现 `Strategy Studio` 工作台，统一承接策略版本、优化和规则池操作。
+  输入：StrategyLibraryService、OptimizeService、RulePoolService、[WEB-S6-007 design](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/superpowers/specs/2026-05-09-web-s6-007-strategy-studio-design.md)。
+  输出：`api/routers/ui/strategy_studio.py`、`web/src/features/strategy-studio/`、`web/src/lib/api/strategyStudio.ts`、`web/src/types/strategyStudio.ts`。
+  修改范围：策略工作台前后端契约、页面与测试。
   前置依赖：`WEB-S1-006`、`WEB-S1-008`、`WEB-S4-004`。
   可并行：无。
-  验收标准：可构建/查看策略版本，运行优化，查看和审核规则池。
-  完成情况：未完成。
+  验收标准：可构建/查看策略版本，生成候选版本，查看和审核规则池。
+  完成情况：已完成 `api/routers/ui/strategy_studio.py` 策略工作台 UI BFF，新增策略版本列表/详情、候选版本生成、规则池列表/详情、单条审核、批量审核接口；新增 `web/src/features/strategy-studio/strategy-studio.tsx`、`web/src/lib/api/strategyStudio.ts`、`web/src/types/strategyStudio.ts`、页面入口、路由与导航入口，并补充测试且通过 `test`、`typecheck`、`lint`、`build`、`diff --check` 验证。
   备注：批量规则审核必须二次确认。
 
-- [ ] `WEB-S6-008` `P0`
+- [x] `WEB-S6-008` `P0`
   目标：实现数据导入、信号、Persona、MarketState、Kaipan 和数据监控页面。
   输入：`WEB-S1-009`、`WEB-S0-003` 覆盖矩阵。
   输出：补充功能页面。
@@ -767,7 +767,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-009`、`WEB-S2-006`、`WEB-S4-004`。
   可并行：`WEB-S6-005`、`WEB-S6-006`。
   验收标准：Web 支持交易记录导入、crawl state 迁移、信号列表、persona 样例生成、market-state 构建、Kaipan fetch/normalize/status/run、数据监控 Dashboard 生成与查看。
-  完成情况：未完成。
+  完成情况：已完成 `web/src/features/imports/`、`web/src/features/signals/`、`web/src/features/persona/`、`web/src/features/kaipan/`、`web/src/features/data-health/` 的前后端工作台、API 封装、类型定义、页面入口、路由与测试；后端新增对应 UI BFF 路由并补齐 `python-multipart` 依赖，最终通过 `pytest`、`pnpm test`、`pnpm typecheck`、`pnpm lint` 验证。
   备注：文件上传和导入操作必须限制文件类型、大小和存储目录，并记录审计。
 
 - [ ] `WEB-S6-009` `P1`
@@ -1150,6 +1150,17 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：推荐演进顺序为 `iframe` 安全预览 -> 独立预览路由 + 净化 -> 结构化渲染，避免一次性重构报表生成链路。
 
+- [ ] `WEB-S10-003` `P2`
+  目标：承接策略优化扩展任务，补齐候选版本编辑、删除/归档和自动发布设置项的长期演进入口。
+  输入：`WEB-S6-007` 的 Strategy Studio、StrategyLibraryService、OptimizeService、[WEB-S6-007 design](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/superpowers/specs/2026-05-09-web-s6-007-strategy-studio-design.md)。
+  输出：候选版本编辑、版本删除/归档、自动发布设置项的设计与实现入口。
+  修改范围：`api/routers/ui/strategy_studio.py`、`web/src/features/strategy-studio/`、`web/src/lib/api/strategyStudio.ts`、`web/src/types/strategyStudio.ts`、相关测试、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S6-007`、`WEB-S7-003`。
+  可并行：无。
+  验收标准：能够在不影响正式版本稳定性的前提下，编辑候选版本、对版本执行归档/删除策略，并通过设置项控制候选版本是否允许自动发布。
+  完成情况：未完成。
+  备注：默认不启用自动发布，必须保留人工确认和审计记录。
+
 ---
 
 ## 17. 执行顺序总览
@@ -1170,6 +1181,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 12. `WEB-S9-006`
 13. `WEB-S10-001` 起的优化与技术债任务
 14. `WEB-S10-002` 报表 HTML 预览升级任务
+15. `WEB-S10-003` 策略优化扩展任务
 
 设置项编辑与保存属于 Web 最小可用能力，`WEB-S7-005` 至 `WEB-S7-007` 应在 `WEB-S8-004` 之前完成。
 
@@ -1192,6 +1204,7 @@ Web 后台最小可用版本必须完成：
 - `WEB-S9-001` 至 `WEB-S9-004`
 - `WEB-S9-006` 不属于最小可用版本范围，但属于生产交付文档闭环
 - `WEB-S10-001` 不属于最小可用版本范围，留作后续优化和技术债收口
+- `WEB-S10-003` 不属于最小可用版本范围，留作后续策略优化扩展
 
 达到最小可用版本后，用户应能：
 

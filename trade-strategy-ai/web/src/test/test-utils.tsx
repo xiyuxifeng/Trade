@@ -16,12 +16,14 @@ export function renderWithRouter(routes: RouteDefinition[], initialEntries: stri
       },
     },
   });
-  const router = createMemoryRouter(routes, { initialEntries });
+  const router = createMemoryRouter(routes, {
+    initialEntries,
+  });
 
   return {
     ...render(
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </QueryClientProvider>,
     ),
     router,

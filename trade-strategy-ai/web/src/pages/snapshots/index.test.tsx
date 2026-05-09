@@ -155,9 +155,9 @@ describe('SnapshotsPage', () => {
       timeout_seconds: null,
     });
 
-    await user.click(screen.getAllByText('2026-05-09 17-30')[0]);
-    expect(await screen.findByText('hot_topics')).toBeInTheDocument();
-    expect(await screen.findByText('topic_constituents')).toBeInTheDocument();
-    expect(await screen.findByText('strong_symbols')).toBeInTheDocument();
+    await user.click(screen.getByTestId('snapshot-row-2026-05-09_17-30'));
+    expect(await screen.findByTestId('snapshot-detail-trade-date')).toHaveTextContent('2026-05-09');
+    expect(await screen.findByTestId('snapshot-detail-slot')).toHaveTextContent('17-30');
+    expect(await screen.findByTestId('snapshot-detail-json')).toHaveTextContent('"strong_symbols"');
   });
 });

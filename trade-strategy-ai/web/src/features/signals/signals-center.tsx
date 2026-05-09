@@ -55,9 +55,14 @@ function SignalDetails({ signal }: { signal: SignalItem | null }) {
           <SummaryCard title="Trader" value={signal.trader_id ?? 'n/a'} />
           <SummaryCard title="Strategy" value={signal.strategy_version_id ?? 'n/a'} />
         </div>
-        <p className="mt-4 text-sm text-slate-400">{signal.context_summary}</p>
+        <p className="mt-4 text-sm text-slate-400" data-testid="signal-context-summary">
+          {signal.context_summary}
+        </p>
       </div>
-      <pre className="max-h-[20rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+      <pre
+        className="max-h-[20rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+        data-testid="signal-json-preview"
+      >
         {JSON.stringify(signal, null, 2)}
       </pre>
     </div>

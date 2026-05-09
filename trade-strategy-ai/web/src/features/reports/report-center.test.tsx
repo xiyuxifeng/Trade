@@ -95,12 +95,8 @@ describe('ReportCenter', () => {
     expect(htmlFrame).toHaveAttribute('srcdoc', '<h1>日报 HTML</h1>');
 
     await user.click(screen.getByRole('button', { name: 'JSON 详情' }));
-    expect(
-      screen.getByText(
-        (_, element) => element?.tagName.toLowerCase() === 'pre' && element.textContent?.includes('"strategy_version_ids"') === true,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('11111111-1111-1111-1111-111111111111')).toBeInTheDocument();
+    expect(await screen.findByTestId('report-detail-json')).toHaveTextContent('"strategy_version_ids"');
+    expect(screen.getByTestId('daily-report-id')).toHaveTextContent('11111111-1111-1111-1111-111111111111');
   });
 
   it('switches to post-close evaluation reports', async () => {

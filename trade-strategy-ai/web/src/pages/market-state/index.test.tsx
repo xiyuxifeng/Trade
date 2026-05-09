@@ -39,5 +39,6 @@ describe('MarketStatePage', () => {
     expect(
       await screen.findByText('/tmp/project/data/processed/persona/market_state.json', { selector: 'p' }),
     ).toBeInTheDocument();
+    expect(await screen.findByTestId('market-state-json')).toHaveTextContent('market_state_path');
   });
 });

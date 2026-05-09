@@ -38,10 +38,17 @@ function ReportPanel({ report }: { report: DashboardReportResponse | null }) {
         <Badge variant="info">exit {report.exit_code}</Badge>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <SummaryCard title="HTML path" value={report.html_path ?? 'n/a'} accent="text-sky-300" />
+        <SummaryCard
+          title="HTML path"
+          value={report.html_path ?? 'n/a'}
+          accent="text-sky-300"
+        />
         <SummaryCard title="Report keys" value={Object.keys(report.report).length} accent="text-emerald-300" />
       </div>
-      <pre className="max-h-[24rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+      <pre
+        className="max-h-[24rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+        data-testid="data-health-json"
+      >
         {JSON.stringify(report, null, 2)}
       </pre>
     </div>

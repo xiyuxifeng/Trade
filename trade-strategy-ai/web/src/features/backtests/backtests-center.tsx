@@ -206,7 +206,7 @@ type BacktestSummaryShape = {
 function DetailSummary({ detail }: { detail: BacktestResultItem }) {
   const summary = detail.summary;
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="backtest-detail-summary">
       <SummaryCard title="Total days" value={summary ? formatNumber(summary.total_days) : 'n/a'} accent="text-sky-300" />
       <SummaryCard title="Total trades" value={summary ? formatNumber(summary.total_trades) : 'n/a'} />
       <SummaryCard title="Valid trades" value={summary ? formatNumber(summary.valid_trades) : 'n/a'} accent="text-emerald-300" />
@@ -674,7 +674,10 @@ export function BacktestsCenter() {
                       {reportViewMode === 'preview' ? (
                         <ArtifactPreview kind="markdown" content={reportText} title="回测报告" />
                       ) : (
-                        <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
+                        <pre
+                          className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200"
+                          data-testid="backtest-report-raw"
+                        >
                           {reportText || '暂无回测报告。'}
                         </pre>
                       )}
@@ -714,7 +717,10 @@ export function BacktestsCenter() {
                       {validationViewMode === 'preview' ? (
                         <ArtifactPreview kind="markdown" content={validationText} title="规则验真报告" />
                       ) : (
-                        <pre className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
+                        <pre
+                          className="max-h-[40rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200"
+                          data-testid="backtest-validation-raw"
+                        >
                           {validationText || '暂无规则验真报告。'}
                         </pre>
                       )}
@@ -723,7 +729,10 @@ export function BacktestsCenter() {
                 </TabsContent>
 
                 <TabsContent value="json">
-                  <pre className="max-h-[40rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                  <pre
+                    className="max-h-[40rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+                    data-testid="backtest-detail-json"
+                  >
                     {JSON.stringify(detail, null, 2)}
                   </pre>
                 </TabsContent>

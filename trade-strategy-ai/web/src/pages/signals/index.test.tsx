@@ -43,6 +43,7 @@ describe('SignalsPage', () => {
     });
     expect(await screen.findByText('signal-1', { selector: 'td' })).toBeInTheDocument();
     expect(await screen.findByText('trend=up', { selector: 'td' })).toBeInTheDocument();
-    expect(await screen.findByText('trend=up', { selector: 'p' })).toBeInTheDocument();
+    expect(await screen.findByTestId('signal-context-summary')).toHaveTextContent('trend=up');
+    expect(await screen.findByTestId('signal-json-preview')).toHaveTextContent('signal-1');
   });
 });

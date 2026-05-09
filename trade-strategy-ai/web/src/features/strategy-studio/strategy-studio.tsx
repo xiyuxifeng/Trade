@@ -163,7 +163,10 @@ function RuleRow({
 
 function VersionJsonPanel({ detail }: { detail: StrategyVersionDetailItem }) {
   return (
-    <pre className="max-h-[30rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
+    <pre
+      className="max-h-[30rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
+      data-testid="strategy-version-json"
+    >
       {JSON.stringify(detail, null, 2)}
     </pre>
   );
@@ -171,7 +174,10 @@ function VersionJsonPanel({ detail }: { detail: StrategyVersionDetailItem }) {
 
 function RuleJsonPanel({ detail }: { detail: RuleDetailItem }) {
   return (
-    <pre className="max-h-[26rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
+    <pre
+      className="max-h-[26rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
+      data-testid="strategy-rule-json"
+    >
       {JSON.stringify(detail, null, 2)}
     </pre>
   );
@@ -648,7 +654,7 @@ export function StrategyStudio() {
                       placeholder="Enter candidate notes or leave blank to use the service default."
                     />
                   </label>
-                  <div className="rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 text-xs text-slate-400">
+                  <div className="rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 text-xs text-slate-400" data-testid="strategy-candidate-preview">
                     <p>Adjustments preview: {candidateAdjustments.length}</p>
                     <p className="mt-1">Recommendations preview: {selectedVersion.recommendations.length}</p>
                     <p className="mt-1">Parent version: {selectedVersion.version_id}</p>
@@ -672,7 +678,7 @@ export function StrategyStudio() {
                     </Button>
                   </div>
                   {selectedRule ? (
-                    <p className="text-sm text-slate-300">
+                    <p className="text-sm text-slate-300" data-testid="strategy-rule-advice">
                       Using rule <span className="font-medium text-slate-100">{selectedRule.rule_id}</span> with
                       {` `}hit rate {formatPercent(selectedRule.backtest_samples > 0 ? selectedRule.backtest_hits / selectedRule.backtest_samples : null)}.
                     </p>
@@ -804,7 +810,7 @@ export function StrategyStudio() {
                   <TabsContent value="detail" className="space-y-4">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
                       <h5 className="text-sm font-semibold text-slate-100">Mapped condition</h5>
-                      <p className="mt-2 text-sm text-slate-300">
+                      <p className="mt-2 text-sm text-slate-300" data-testid="strategy-rule-mapped-condition">
                         {(selectedRule.extraction_layer['mapped_condition'] as Record<string, unknown> | null | undefined)
                           ? JSON.stringify(selectedRule.extraction_layer['mapped_condition'])
                           : 'No mapped condition'}

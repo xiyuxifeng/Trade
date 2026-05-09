@@ -67,6 +67,7 @@ function SnapshotRow({
 }) {
   return (
     <button
+      data-testid={`snapshot-row-${snapshot.snapshot_id}`}
       className={`w-full rounded-2xl border p-4 text-left transition-colors ${
         active
           ? 'border-sky-500/40 bg-sky-500/10 text-sky-100'
@@ -109,8 +110,12 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SnapshotSummaryCard title="Trade date" value={detail.trade_date} accent="text-sky-300" />
-        <SnapshotSummaryCard title="Slot" value={detail.slot} accent="text-sky-300" />
+        <div data-testid="snapshot-detail-trade-date">
+          <SnapshotSummaryCard title="Trade date" value={detail.trade_date} accent="text-sky-300" />
+        </div>
+        <div data-testid="snapshot-detail-slot">
+          <SnapshotSummaryCard title="Slot" value={detail.slot} accent="text-sky-300" />
+        </div>
         <SnapshotSummaryCard title="Hot topics" value={hotTopics.length} />
         <SnapshotSummaryCard title="Strong symbols" value={strongSymbols.length} />
       </div>
@@ -174,7 +179,10 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
         </SectionCard>
 
         <SectionCard title="Raw JSON">
-          <pre className="max-h-[30rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
+          <pre
+            className="max-h-[30rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
+            data-testid="snapshot-detail-json"
+          >
             {JSON.stringify(detail, null, 2)}
           </pre>
         </SectionCard>
@@ -430,7 +438,10 @@ export function SnapshotsPage() {
                   <SnapshotDetailView detail={detailQuery.data.item} />
                 </TabsContent>
                 <TabsContent value="json">
-                  <pre className="max-h-[40rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                  <pre
+                    className="max-h-[40rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+                    data-testid="snapshot-json"
+                  >
                     {JSON.stringify(detailQuery.data.item, null, 2)}
                   </pre>
                 </TabsContent>

@@ -98,11 +98,18 @@ export function MarketStateCenter() {
                 <Badge variant="success">{result.snapshot_path ?? result.market_state_path}</Badge>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
-                <SummaryCard title="Snapshot" value={result.snapshot_path ?? result.market_state_path} accent="text-sky-300" />
+                <SummaryCard
+                  title="Snapshot"
+                  value={result.snapshot_path ?? result.market_state_path}
+                  accent="text-sky-300"
+                />
                 <SummaryCard title="Source" value={result.source} accent="text-emerald-300" />
                 <SummaryCard title="Mode" value={fromAkshare ? 'AkShare' : 'Cache / CSV'} accent="text-amber-300" />
               </div>
-              <pre className="max-h-[22rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+              <pre
+                className="max-h-[22rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+                data-testid="market-state-json"
+              >
                 {JSON.stringify(result, null, 2)}
               </pre>
             </div>

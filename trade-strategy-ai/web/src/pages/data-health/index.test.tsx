@@ -26,5 +26,6 @@ describe('DataHealthPage', () => {
     expect(
       await screen.findByText('/tmp/project/data/processed/dashboard/dashboard.html', { selector: 'p' }),
     ).toBeInTheDocument();
+    expect(await screen.findByTestId('data-health-json')).toHaveTextContent('dashboard.html');
   });
 });

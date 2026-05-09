@@ -81,7 +81,7 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="daily-report-id">
           <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Report ID</p>
           <p className="mt-2 break-all text-sm text-slate-100">{report.report_id}</p>
         </div>
@@ -139,7 +139,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="evaluation-result-id">
           <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Result ID</p>
           <p className="mt-2 break-all text-sm text-slate-100">{result.result_id}</p>
         </div>
@@ -207,7 +207,10 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
           <h4 className="text-sm font-semibold text-slate-100">Ranking features</h4>
-          <pre className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
+          <pre
+            className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
+            data-testid="daily-report-ranking-json"
+          >
             {JSON.stringify(result.ranking_features, null, 2)}
           </pre>
         </div>
@@ -481,7 +484,10 @@ export function ReportCenter() {
                   </TabsContent>
 
                   <TabsContent value="json">
-                    <pre className="max-h-[36rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                    <pre
+                      className="max-h-[36rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200"
+                      data-testid="report-detail-json"
+                    >
                       {JSON.stringify(detail, null, 2)}
                     </pre>
                   </TabsContent>

@@ -12,7 +12,7 @@ type AppProvidersProps = {
 export function AppProviders({ router }: AppProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <RouterProvider router={router} future={{ v7_startTransition: true }} />
       <Toaster />
     </QueryClientProvider>
   );

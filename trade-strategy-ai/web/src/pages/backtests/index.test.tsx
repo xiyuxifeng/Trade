@@ -190,12 +190,23 @@ describe('BacktestsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Validation' }));
     expect(await screen.findByRole('heading', { name: 'Rule Validation Report' })).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: 'Summary' }));
+    expect(await screen.findByTestId('backtest-detail-summary')).toHaveTextContent('Total days');
+    await user.click(screen.getByRole('button', { name: 'JSON' }));
+    expect(await screen.findByTestId('backtest-detail-json')).toHaveTextContent('"result_version"');
+
     expect(screen.getByText('Summary')).toBeInTheDocument();
     expect(screen.getByText('Records')).toBeInTheDocument();
     expect(screen.getByText('Report')).toBeInTheDocument();
     expect(screen.getByText('Validation')).toBeInTheDocument();
     expect(screen.getByText('JSON')).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: 'Report' }));
+    expect(screen.getByRole('button', { name: '下载原文' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '原文' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Validation' }));
     expect(screen.getByRole('button', { name: '下载原文' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '原文' })).toBeInTheDocument();

@@ -12,8 +12,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import verify_api_key
-from src.api.schemas import ArticleResponse
+from api.dependencies import verify_api_key
+from api.schemas import ArticleResponse
 from src.common.config import load_app_config
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle

@@ -8,9 +8,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from src.api.dependencies import verify_api_key
-from src.api.schemas.common import PaginatedResponse, paginated_response
-from src.api.schemas.report import (
+from api.dependencies import verify_api_key
+from api.schemas.common import PaginatedResponse, paginated_response
+from api.schemas.report import (
     DailyReportResponse,
     DailyReportSummary,
     EvaluationResultResponse,

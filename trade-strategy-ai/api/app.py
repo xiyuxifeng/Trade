@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from api.dependencies import verify_api_key
 from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import jobs_router as ui_jobs_router
-from src.api.dependencies import verify_api_key
-from src.api.routes import articles_router, market_router, trades_router
+from api.routers.ui.system import router as ui_system_router
+from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
 from src.health.routes import health_router
 
@@ -124,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(rankings.router)
     app.include_router(backtest_results.router)
     app.include_router(alerts.router)
+    app.include_router(ui_system_router)
     app.include_router(ui_jobs_router)
     app.include_router(articles_router)
     app.include_router(trades_router)

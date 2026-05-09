@@ -8,7 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
-from src.api.dependencies import verify_api_key
+from api.dependencies import verify_api_key
 
 
 @pytest.fixture
@@ -49,4 +49,3 @@ async def test_validate_job_submission_enforces_whitelist(client: AsyncClient) -
     )
     assert response.status_code == 400
     assert "not runnable" in response.json()["detail"]
-

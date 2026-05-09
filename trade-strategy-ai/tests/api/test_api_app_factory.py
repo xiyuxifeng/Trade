@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.api.app import create_app
+from api.app import create_app
 
 
 def test_create_app_registers_critical_routes() -> None:

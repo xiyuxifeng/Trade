@@ -10,8 +10,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import verify_api_key
-from src.api.schemas import TradeResponse
+from api.dependencies import verify_api_key
+from api.schemas import TradeResponse
 from src.db.session import get_session_factory as async_session_factory
 from src.models.trade_log import TradeLog
 

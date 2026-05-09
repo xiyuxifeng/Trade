@@ -401,7 +401,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S3-001` `P0`
+- [-] `WEB-S3-001` `P0`
   目标：新增 UI API 路由骨架。
   输入：`api/main.py`、`src/api/app.py`。
   输出：`api/routers/ui/` 或 `api/routers/ui.py`。
@@ -456,7 +456,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：返回字段应包含 time/open/high/low/close/volume。
 
-- [ ] `WEB-S3-006` `P1`
+- [x] `WEB-S3-006` `P1`
   目标：将 API 入口最终收敛为单一入口，删除另一个入口，并确保文档和代码都只指向同一个主入口, 同时将`src/api/`下的代码和文件迁移到`api/`下, 保证项目结构清晰。
   输入：`api/main.py`、`src/api/main.py`、`src/api/app.py`、`docs/APIReference.md`、`docs/UserManual.md`。
   输出：单一 API 入口说明、旧入口删除说明、迁移完成后的文档收口。

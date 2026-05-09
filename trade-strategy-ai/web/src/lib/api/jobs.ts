@@ -1,4 +1,4 @@
-import type { JobDetailResponse, JobLogsResponse, JobsListResponse } from '@/types/jobs';
+import type { JobDetailResponse, JobLogsResponse, JobSubmissionRequest, JobsListResponse } from '@/types/jobs';
 import { fetchJson } from './http';
 
 type JobsQuery = {
@@ -37,4 +37,17 @@ export function cancelJob(jobId: string, reason?: string) {
     },
     body: JSON.stringify({ reason }),
   });
+}
+
+export function createJob(request: JobSubmissionRequest) {
+  return fetchJson<{ created: boolean; job: JobDetailResponse['job']; job_dir: string; log_path: string; params_path: string; result_path: string; artifacts_path: string }>(
+    '/jobs',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  );
 }

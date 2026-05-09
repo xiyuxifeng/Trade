@@ -42,7 +42,7 @@
 1. 目标已经实现。
 2. 输出物已经落地到明确路径。
 3. 验收标准已经满足。
-4. 相关测试、样例验证或手工验证已经完成。
+4. 相关测试、样例验证或手工验证已经完成，并且结果可追溯。
 5. 文档或配置更新已补齐。
 
 ### 2.4 任务字段说明
@@ -681,7 +681,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S6-001` `P1`
+  - [x] `WEB-S6-001` `P1`
   目标：增强 Job 任务中心页面。
   输入：Job API。
   输出：`web/src/features/jobs/`。
@@ -689,7 +689,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-002`、`WEB-S4-004`。
   可并行：`WEB-S6-002`。
   验收标准：在 Stage 4 首批页面基础上，补齐任务列表过滤、详情抽屉、日志浏览、产物关联和重跑入口。
-  完成情况：未完成。
+  完成情况：已完成 Jobs 页面增强，补齐 rerun 确认弹窗、产物引用卡片、跳转 Artifacts Center 的入口，并新增 `jobId` 过滤以串联 Jobs / Artifacts。
   备注：长任务轮询间隔应可控，避免过度请求。
 
 - [ ] `WEB-S6-002` `P1`
@@ -779,6 +779,17 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   验收标准：HTML 预览使用 sandbox 或服务端安全响应头；禁止执行不可信脚本；Markdown 渲染经过安全过滤；下载接口限制在允许的产物目录内。
   完成情况：未完成。
   备注：LLM 或外部数据生成的 HTML/Markdown 不能按可信内容处理。
+
+- [x] `WEB-S6-010` `P2`
+  目标：建立 `WEB-S6-001` 的实施追踪与回归验收清单。
+  输入：`WEB-S6-001`、现有 Jobs 页面、Stage 6 任务清单。
+  输出：`docs/superpowers/plans/2026-05-09-web-s6-001-job-center-enhancement.md`。
+  修改范围：`docs/superpowers/plans/2026-05-09-web-s6-001-job-center-enhancement.md`、`daily-sessions/2026-05-09.md`、`daily-report/2026-05-09.md`。
+  前置依赖：`WEB-S6-001`。
+  可并行：无。
+  验收标准：`WEB-S6-001` 的实施追踪计划已创建并链接到主清单，`daily-sessions` 和 `daily-report` 已同步，后续实现和验证可以直接按计划继续推进。
+  完成情况：已创建 `WEB-S6-001` 追踪计划，并把相关状态同步到 `daily-sessions` 和 `daily-report`。
+  备注：仅记录当前 Jobs 增强的子任务，不扩展到其他 Stage。
 
 ---
 
@@ -993,9 +1004,9 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   修改范围：`tests/e2e/`、`web/` 测试目录、`docs/Web-TaskList.md`。
   前置依赖：`WEB-S8-001`、`WEB-S8-002`、`WEB-S8-003`、`WEB-S8-004`。
   可并行：无。
-  验收标准：覆盖完整主链路、任务失败恢复、服务重启后 Job 状态恢复、权限拒绝、高风险确认失败、配置保存回滚、Artifact 安全预览、K 线空数据/大数据、告警测试二次确认。
+  验收标准：覆盖 Jobs、Workflows、Artifacts、Settings、Auth/Permission 五条主链路，以及任务失败恢复、服务重启后 Job 状态恢复、权限拒绝、高风险确认失败、配置保存回滚、Artifact 安全预览、K 线空数据/大数据、告警测试二次确认。
   完成情况：未完成。
-  备注：端到端测试应优先使用 mock/snapshot 数据，避免依赖真实外网。
+  备注：端到端测试应优先使用 mock/snapshot 数据，避免依赖真实外网。追踪计划：`docs/superpowers/plans/2026-05-09-web-s8-006-e2e-acceptance-plan.md`。
 
 - [ ] `WEB-S8-007` `P1`
   目标：建立前后端契约测试。
@@ -1139,7 +1150,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 5. `WEB-S3-001` 至 `WEB-S3-007`
 6. `WEB-S4-001` 至 `WEB-S4-004`
 7. `WEB-S5-001` 至 `WEB-S5-004`
-8. `WEB-S6-001` 至 `WEB-S6-009`
+8. `WEB-S6-001` 至 `WEB-S6-010`
 9. `WEB-S7-001` 至 `WEB-S7-010`
 10. `WEB-S8-001` 至 `WEB-S8-007`
 11. `WEB-S9-001` 至 `WEB-S9-005`

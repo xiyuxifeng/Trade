@@ -5,7 +5,7 @@ export type JobRecord = {
   params: Record<string, unknown>;
   result: unknown;
   error: unknown;
-  artifacts: unknown[];
+  artifacts: JobArtifactRef[];
   created_by: string;
   idempotency_key: string | null;
   retry_count: number;
@@ -23,6 +23,12 @@ export type JobRecord = {
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type JobArtifactRef = {
+  kind: string;
+  path: string;
+  metadata: Record<string, unknown>;
 };
 
 export type JobsListResponse = {
@@ -47,4 +53,14 @@ export type JobLogsResponse = {
   log_path: string;
   count: number;
   items: string[];
+};
+
+export type JobSubmissionRequest = {
+  job_type: string;
+  params?: Record<string, unknown>;
+  created_by?: string;
+  idempotency_key?: string | null;
+  max_retries?: number;
+  retry_backoff_seconds?: number;
+  timeout_seconds?: number | null;
 };

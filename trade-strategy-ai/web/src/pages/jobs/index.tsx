@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
-import { cancelJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
-import type { JobDetailResponse, JobsListResponse } from '@/types/jobs';
+import { cancelJob, createJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
+import type { JobArtifactRef, JobDetailResponse, JobsListResponse } from '@/types/jobs';
 import { PageHeader } from '@/components/layout/page-header';
 
 function getErrorMessage(error: unknown) {
@@ -52,14 +60,44 @@ function Field({ label, value }: { label: string; value: string | number | null 
   );
 }
 
+function ArtifactCard({
+  artifact,
+  onOpenArtifacts,
+}: {
+  artifact: JobArtifactRef;
+  onOpenArtifacts: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-slate-100">{artifact.kind}</p>
+          <p className="mt-1 break-all text-xs text-slate-500">{artifact.path}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onOpenArtifacts}>
+          Open in Artifacts
+        </Button>
+      </div>
+      <div className="mt-3">
+        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Metadata</p>
+        <pre className="mt-2 max-h-40 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
+          {JSON.stringify(artifact.metadata, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 export function JobsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const jobIdFromQuery = searchParams.get('jobId');
   const [status, setStatus] = useState('');
   const [jobType, setJobType] = useState('');
   const [createdBy, setCreatedBy] = useState('');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(() => jobIdFromQuery);
+  const [rerunOpen, setRerunOpen] = useState(false);
 
   useEffect(() => {
     setSelectedJobId(jobIdFromQuery);
@@ -89,6 +127,9 @@ export function JobsPage() {
     enabled: Boolean(selectedJobId),
   });
 
+  const detail = selectedJobQuery.data?.job ?? null;
+  const logs = jobLogsQuery.data?.items ?? [];
+
   const cancelMutation = useMutation({
     mutationFn: () => cancelJob(selectedJobId as string, 'web console request'),
     onSuccess: async () => {
@@ -98,8 +139,34 @@ export function JobsPage() {
     },
   });
 
-  const detail = selectedJobQuery.data?.job ?? null;
-  const logs = jobLogsQuery.data?.items ?? [];
+  const rerunMutation = useMutation({
+    mutationFn: async () => {
+      if (!detail) {
+        throw new Error('No job selected');
+      }
+      return createJob({
+        job_type: detail.job_type,
+        params: detail.params as Record<string, unknown>,
+        created_by: 'web',
+        max_retries: detail.max_retries,
+        retry_backoff_seconds: detail.retry_backoff_seconds,
+        timeout_seconds: detail.timeout_seconds,
+      });
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['recent-jobs'] });
+      setRerunOpen(false);
+      if (data.job?.id) {
+        setSelectedJobId(data.job.id);
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set('jobId', data.job.id);
+          return next;
+        });
+      }
+    },
+  });
 
   const summary = useMemo(() => {
     const total = jobsQuery.data?.total ?? 0;
@@ -113,7 +180,7 @@ export function JobsPage() {
       <PageHeader
         kicker="Jobs"
         title="Task Center"
-        description="View recent jobs, inspect details, review logs, and cancel running work."
+        description="View recent jobs, inspect details, review logs, rerun work, and follow artifact references."
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
@@ -309,9 +376,15 @@ export function JobsPage() {
                     No artifacts attached.
                   </div>
                 ) : (
-                  <pre className="max-h-40 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
-                    {JSON.stringify(detail.artifacts, null, 2)}
-                  </pre>
+                  <div className="grid gap-3">
+                    {detail.artifacts.map((artifact, index) => (
+                      <ArtifactCard
+                        artifact={artifact}
+                        key={`${artifact.kind}-${artifact.path}-${index}`}
+                        onOpenArtifacts={() => navigate(`/artifacts?jobId=${encodeURIComponent(detail.id)}`)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -320,6 +393,9 @@ export function JobsPage() {
           <DrawerFooter>
             <Button variant="outline" onClick={() => setSelectedJobId(null)}>
               Close
+            </Button>
+            <Button variant="secondary" onClick={() => setRerunOpen(true)} disabled={!detail || rerunMutation.isPending}>
+              {rerunMutation.isPending ? 'Rerunning' : 'Rerun job'}
             </Button>
             <Button
               variant="destructive"
@@ -331,6 +407,58 @@ export function JobsPage() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      <Dialog
+        open={rerunOpen}
+        onOpenChange={(open) => {
+          setRerunOpen(open);
+          if (!open) {
+            rerunMutation.reset();
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Confirm rerun</DialogTitle>
+            <DialogDescription>
+              This will create a new job with the same job type and parameter snapshot as the selected job.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Job type" value={detail?.job_type} />
+              <Field label="Created by" value={detail?.created_by} />
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Parameters</p>
+              <pre className="mt-3 max-h-64 overflow-auto text-xs text-slate-200">
+                {JSON.stringify(detail?.params ?? {}, null, 2)}
+              </pre>
+            </div>
+            {rerunMutation.error ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                {getErrorMessage(rerunMutation.error)}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRerunOpen(false);
+                rerunMutation.reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => rerunMutation.mutate()} disabled={!detail || rerunMutation.isPending}>
+              {rerunMutation.isPending ? 'Submitting' : 'Confirm rerun'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

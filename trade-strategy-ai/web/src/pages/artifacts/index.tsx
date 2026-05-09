@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,14 +70,17 @@ export function ArtifactsPage() {
   const [kind, setKind] = useState('');
   const [source, setSource] = useState('');
   const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const jobId = searchParams.get('jobId') ?? '';
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   const artifactsQuery = useQuery<ArtifactsListResponse, ApiError>({
-    queryKey: ['artifacts', { kind, source, query }],
+    queryKey: ['artifacts', { kind, source, query, jobId }],
     queryFn: () =>
       listArtifacts({
         kind: kind || undefined,
         source: source || undefined,
+        job_id: jobId || undefined,
         q: query || undefined,
         limit: 50,
       }),
@@ -133,9 +137,25 @@ export function ArtifactsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <Input placeholder="Search text" value={query} onChange={(event) => setQuery(event.target.value)} />
               <Input placeholder="Filter by source" value={source} onChange={(event) => setSource(event.target.value)} />
+              <Input
+                placeholder="Filter by job id"
+                value={jobId}
+                onChange={(event) =>
+                  setSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    const value = event.target.value.trim();
+                    if (value) {
+                      next.set('jobId', value);
+                    } else {
+                      next.delete('jobId');
+                    }
+                    return next;
+                  })
+                }
+              />
               <Select value={kind} onChange={(event) => setKind(event.target.value)}>
                 <option value="">All kinds</option>
                 <option value="html">html</option>
@@ -146,7 +166,7 @@ export function ArtifactsPage() {
                 <option value="text">text</option>
                 <option value="parquet">parquet</option>
                 <option value="zip">zip</option>
-              </Select>
+                </Select>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">

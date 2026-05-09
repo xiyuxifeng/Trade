@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,10 +54,16 @@ function Field({ label, value }: { label: string; value: string | number | null 
 
 export function JobsPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const jobIdFromQuery = searchParams.get('jobId');
   const [status, setStatus] = useState('');
   const [jobType, setJobType] = useState('');
   const [createdBy, setCreatedBy] = useState('');
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(() => jobIdFromQuery);
+
+  useEffect(() => {
+    setSelectedJobId(jobIdFromQuery);
+  }, [jobIdFromQuery]);
 
   const jobsQuery = useQuery<JobsListResponse, ApiError>({
     queryKey: ['jobs', { status, jobType, createdBy }],
@@ -192,7 +199,18 @@ export function JobsPage() {
                         <TableCell>{job.created_by}</TableCell>
                         <TableCell>{formatTimestamp(job.created_at)}</TableCell>
                         <TableCell>
-                          <Button variant="outline" size="sm" onClick={() => setSelectedJobId(job.id)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedJobId(job.id);
+                              setSearchParams((current) => {
+                                const next = new URLSearchParams(current);
+                                next.set('jobId', job.id);
+                                return next;
+                              });
+                            }}
+                          >
                             Details
                           </Button>
                         </TableCell>
@@ -220,7 +238,18 @@ export function JobsPage() {
         </Card>
       </section>
 
-      <Drawer open={Boolean(selectedJobId)} onOpenChange={(open) => !open && setSelectedJobId(null)}>
+      <Drawer
+        open={Boolean(selectedJobId)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setSelectedJobId(null);
+          setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.delete('jobId');
+            return next;
+          });
+        }}
+      >
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Job details</DrawerTitle>

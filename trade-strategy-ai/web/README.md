@@ -26,6 +26,7 @@ corepack pnpm typecheck
 - `/` - 总览
 - `/jobs` - 任务中心
 - `/workflows` - 工作流
+- `/workflows/:workflowId` - 工作流深链接，直接打开指定向导
 - `/artifacts` - 产物中心
 - `/market` - 市场数据
 - `/strategies` - 策略版本
@@ -43,6 +44,11 @@ corepack pnpm typecheck
 - `/api/ui/v1/workflows*`
 - `/api/ui/v1/artifacts*`
 - `/api/ui/v1/market*`
+
+## 页面联动
+
+- 工作流提交成功后，会跳转到 `/jobs?jobId=<id>`。
+- Jobs 页面会根据 `jobId` 自动打开任务详情抽屉，便于直接查看参数、日志和产物。
 
 ## API Key
 

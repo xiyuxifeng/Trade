@@ -606,7 +606,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - 把 `docs/UserManual.md` 的操作流程转为可点击、可校验、可追踪的 Web 向导。
 - 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
-- 当前状态：Stage 5 尚未开始，下一步从 `WEB-S5-001` 起步。
+- 当前状态：Stage 5 已完成 `WEB-S5-001` / `WEB-S5-002` / `WEB-S5-003` / `WEB-S5-004`，下一步进入 Stage 6。
 
 ### 阶段交付物
 
@@ -617,7 +617,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S5-001` `P0`
+- [x] `WEB-S5-001` `P0`
   目标：定义 UserManual Workflow 数据结构。
   输入：`docs/UserManual.md`。
   输出：Workflow definitions。
@@ -625,10 +625,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-003`。
   可并行：无。
   验收标准：覆盖安装检查、配置、数据库、pipeline、盘前盘后、快照、OHLCV、策略、回测、优化、规则池、调度、报表。
-  完成情况：未完成。
+  完成情况：已完成，Workflow 数据结构已补齐 step 级 `param_schema`，并从 Job 白名单派生默认 workflow definitions。
   备注：每个 workflow step 必须有参数 schema。
 
-- [ ] `WEB-S5-002` `P0`
+- [x] `WEB-S5-002` `P0`
   目标：实现操作向导页面。
   输入：Workflow API。
   输出：`web/src/features/workflows/`。
@@ -636,10 +636,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-004`、`WEB-S5-001`。
   可并行：`WEB-S5-003`。
   验收标准：用户能看到完整流程、当前步骤说明、前置条件和运行入口。
-  完成情况：未完成。
+  完成情况：已完成，工作流页已改造成分步向导视图，支持流程总览、步骤详情、预设运行入口和 `/workflows/:workflowId` 深链接。
   备注：不要让用户手写 CLI 命令。
 
-- [ ] `WEB-S5-003` `P0`
+- [x] `WEB-S5-003` `P0`
   目标：实现参数表单与高风险确认。
   输入：Workflow step schema。
   输出：动态表单和确认弹窗。
@@ -647,10 +647,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-002`、`WEB-S5-001`。
   可并行：`WEB-S5-002`。
   验收标准：日期、trader、limit、force、export_html、mode 等参数可填写；高风险操作必须二次确认。
-  完成情况：未完成。
+  完成情况：已完成，工作流运行页已支持基于 schema 的动态表单、字段默认值、类型校验和高风险确认弹窗。
   备注：确认弹窗必须展示参数摘要和影响说明。
 
-- [ ] `WEB-S5-004` `P0`
+- [x] `WEB-S5-004` `P0`
   目标：操作向导接入 Job Center。
   输入：Job API、Workflow 页面。
   输出：运行后创建 Job 并跳转任务详情。
@@ -658,7 +658,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-002`、`WEB-S5-002`。
   可并行：无。
   验收标准：从向导运行任一任务后可在 Job Center 查看状态、日志和产物。
-  完成情况：未完成。
+  完成情况：已完成，工作流表单提交成功后会跳转到 `/jobs?jobId=<id>`，Jobs 页面会自动打开对应任务详情抽屉并展示日志、参数和产物。
   备注：失败时必须展示可读错误和下一步建议。
 
 ---

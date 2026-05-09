@@ -41,7 +41,32 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
 
     assert service.service_name == "workflow"
     assert listed.status == "ok"
-    assert any(item["workflow_id"] == "pre-market" for item in listed.payload["items"])
+    workflow_ids = {item["workflow_id"] for item in listed.payload["items"]}
+    assert {
+        "install-config",
+        "database",
+        "pipeline",
+        "pre-market",
+        "after-close",
+        "snapshot",
+        "ohlcv",
+        "strategy",
+        "backtest",
+        "optimize",
+        "rule-pool",
+        "scheduler",
+        "report",
+    } <= workflow_ids
+
+    pre_market = next(item for item in listed.payload["items"] if item["workflow_id"] == "pre-market")
+    step = pre_market["steps"][0]
+    assert "param_schema" in step
+    assert step["param_schema"]["description"] == "盘前执行参数"
+    assert step["param_schema"]["fields"]["as_of_date"]["type"] == "date"
+    assert step["param_schema"]["fields"]["export_html"]["default"] is False
+
+    install = next(item for item in listed.payload["items"] if item["workflow_id"] == "install-config")
+    assert install["steps"][0]["param_schema"]["fields"]["config_path"]["required"] is True
 
 
 def test_workflow_service_runs_workflow_through_job_service() -> None:

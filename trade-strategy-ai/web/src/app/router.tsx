@@ -40,6 +40,10 @@ export const appRouter = createBrowserRouter([
         element: <WorkflowsPage />,
       },
       {
+        path: 'workflows/:workflowId',
+        element: <WorkflowsPage />,
+      },
+      {
         path: 'artifacts',
         element: <ArtifactsPage />,
       },

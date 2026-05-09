@@ -7,6 +7,7 @@ import { MarketPage } from '@/pages/market';
 import { OpsPage } from '@/pages/ops';
 import { OverviewPage } from '@/pages/overview';
 import { ReportsPage } from '@/pages/reports';
+import { SnapshotsPage } from '@/pages/snapshots';
 import { SettingsPage } from '@/pages/settings';
 import { StrategiesPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
@@ -50,6 +51,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'market',
         element: <MarketPage />,
+      },
+      {
+        path: 'snapshots',
+        element: <SnapshotsPage />,
       },
       {
         path: 'strategies',

@@ -715,7 +715,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 `web/src/features/reports/report-center.tsx` 报表中心，实现盘前日报 / 盘后考核分类切换、报表列表、HTML 预览和 JSON 详情；新增 `web/src/lib/api/reports.ts` 与类型定义，补充测试并通过 `test`、`typecheck`、`lint`、`build` 验证。
   备注：HTML 报表采用 iframe 安全预览，当前优先基于 reports API 完成首版浏览闭环。
 
-- [ ] `WEB-S6-004` `P1`
+- [x] `WEB-S6-004` `P1`
   目标：实现快照中心。
   输入：快照 API。
   输出：`web/src/features/snapshots/`。
@@ -723,8 +723,8 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-005`、`WEB-S4-004`。
   可并行：`WEB-S6-003`。
   验收标准：可构建快照、查询快照、查看 hot topics、topic constituents、strong symbols。
-  完成情况：未完成。
-  备注：快照构建必须走 Job。
+  完成情况：已完成 `web/src/features/snapshots/snapshot-center.tsx` 快照中心，支持日期范围筛选、快照列表、详情查看、hot topics / topic constituents / strong symbols 结构化展示，以及通过 Job 提交 `snapshot-build` 构建任务；新增 `api/routers/ui/snapshots.py`、`web/src/lib/api/snapshots.ts`、`web/src/types/snapshots.ts`、页面路由与导航入口，并补充测试且通过 `test`、`typecheck`、`lint`、`build` 验证。
+  备注：快照构建必须走 Job，页面只负责发起构建与查看结果。
 
 - [ ] `WEB-S6-005` `P0`
   目标：实现回测中心。
@@ -1124,6 +1124,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 缓存与索引策略。
 - 技术债清单与收敛记录。
 - 低风险重构和代码整洁度改进。
+- 报表 HTML 预览的长期升级路线：`iframe` 安全预览 -> 独立预览路由 + 服务端净化 -> 结构化渲染。
 
 ### 任务清单
 
@@ -1137,6 +1138,17 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   验收标准：目录未变化时避免重复全量扫描；索引可刷新、可失效回退；现有查询、预览和下载接口行为保持一致。
   完成情况：未完成。
   备注：本 Stage 统一承接后续优化、性能调优和技术债清理，不再新增独立优化 Stage。
+
+- [ ] `WEB-S10-002` `P2`
+  目标：将报表 HTML 预览从 `iframe` 安全预览逐步升级为更适合长期维护的预览体系。
+  输入：当前 `reports` API、HTML 预览页面、报表详情结构。
+  输出：独立预览路由、服务端 HTML 净化方案、结构化报表渲染数据契约。
+  修改范围：`web/src/features/reports/`、`web/src/pages/reports/`、`web/src/lib/api/reports.ts`、`web/src/types/reports.ts`、相关测试、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S6-003`。
+  可并行：无。
+  验收标准：短期仍可使用 `iframe` 完成首版浏览闭环；中期可切换到独立预览路由并保持样式隔离与安全净化；长期可直接基于结构化数据渲染报表正文，同时保留 HTML 导出兼容层。
+  完成情况：未完成。
+  备注：推荐演进顺序为 `iframe` 安全预览 -> 独立预览路由 + 净化 -> 结构化渲染，避免一次性重构报表生成链路。
 
 ---
 
@@ -1157,6 +1169,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 11. `WEB-S9-001` 至 `WEB-S9-005`
 12. `WEB-S9-006`
 13. `WEB-S10-001` 起的优化与技术债任务
+14. `WEB-S10-002` 报表 HTML 预览升级任务
 
 设置项编辑与保存属于 Web 最小可用能力，`WEB-S7-005` 至 `WEB-S7-007` 应在 `WEB-S8-004` 之前完成。
 

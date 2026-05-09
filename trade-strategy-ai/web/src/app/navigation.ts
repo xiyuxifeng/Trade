@@ -10,6 +10,7 @@ export const mainNavigation: NavItem[] = [
   { label: 'Workflows', path: '/workflows', description: 'UserManual guided flows' },
   { label: 'Artifacts', path: '/artifacts', description: 'Logs, downloads, and outputs' },
   { label: 'Market', path: '/market', description: 'Symbols and OHLCV lookup' },
+  { label: 'Snapshots', path: '/snapshots', description: 'Market universe snapshots' },
   { label: 'Strategies', path: '/strategies', description: 'Strategy version library' },
   { label: 'Backtests', path: '/backtests', description: 'Backtest results and analysis' },
   { label: 'Reports', path: '/reports', description: 'Pre/post market reports' },

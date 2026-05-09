@@ -487,6 +487,33 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 建立 React Web 前端工程。
 - 实现基础布局、路由、API client 和设计系统。
 
+### Stage 4 实施方案
+
+- 设计文档：[2026-05-09-web-stage4-frontend-design.md](/Users/wanghui/Documents/Claude/trade-strategy-ai/docs/superpowers/specs/2026-05-09-web-stage4-frontend-design.md)
+- 稳定执行文档：[2026-05-09-web-stage4-frontend-baseline.md](/Users/wanghui/Documents/Claude/trade-strategy-ai/docs/superpowers/plans/2026-05-09-web-stage4-frontend-baseline.md)
+- UI 基线：任务中心式控制台，优先覆盖总览、任务中心、工作流、产物中心和市场数据。
+- 推荐完成顺序：
+  1. `WEB-S4-001` 初始化前端工程。
+  2. `WEB-S4-002` 接入 Tailwind CSS 和 shadcn/ui。
+  3. `WEB-S4-003` 实现前端路由和 API client。
+  4. `WEB-S4-004` 实现基础布局和完整导航骨架，先挂全量主导航占位路由。
+  5. `WEB-S4-005` 让总览页接入系统状态、最近任务和最近产物。
+  6. `WEB-S4-006` 让任务中心、工作流、产物中心和市场数据页具备可用的首批功能。
+  7. `WEB-S4-007` 完成验证、文档和入口对齐。
+
+### Stage 4 占位入口到后续任务的映射
+
+| Stage 4 占位入口 | 后续主要承接 Stage | 关键任务编号 |
+| --- | --- | --- |
+| `策略版本` | Stage 6 | `WEB-S6-007` |
+| `回测中心` | Stage 6 | `WEB-S6-005`、`WEB-S6-009` |
+| `盘前工作台` | Stage 5 / Stage 6 | `WEB-S5-001` ~ `WEB-S5-004`、`WEB-S6-003` |
+| `盘后评估` | Stage 5 / Stage 6 | `WEB-S5-001`、`WEB-S6-003`、`WEB-S6-009` |
+| `系统设置` | Stage 7 | `WEB-S7-005` ~ `WEB-S7-009` |
+| `运维中心` | Stage 7 / Stage 9 | `WEB-S7-004`、`WEB-S9-003`、`WEB-S9-004` |
+
+> 说明：Stage 4 只要求这些入口先稳定出现在导航中，后续是否做成完整页面由对应 Stage 的任务清单负责推进。
+
 ### 阶段交付物
 
 - `web/` 前端工程。
@@ -539,6 +566,37 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：未完成。
   备注：导航必须按用户任务组织，不按代码模块堆叠。
 
+- [ ] `WEB-S4-005` `P1`
+  目标：让总览页接入系统状态、最近任务和最近产物。
+  输入：Dashboard shell、UI BFF、Overview 页面设计。
+  输出：可用的总览页。
+  修改范围：`web/src/pages/overview/`、`web/src/features/system-status/`、`web/src/components/status/`。
+  前置依赖：`WEB-S4-003`、`WEB-S4-004`。
+  验收标准：总览页可展示系统状态、运行模式、数据库状态、配置路径、最近 Job 和最近产物，并具备 loading / empty / error 状态。
+  完成情况：未完成。
+  备注：总览页是 Web 首页，优先提供系统是否正常的第一视图。
+
+- [ ] `WEB-S4-006` `P1`
+  目标：让任务中心、工作流、产物中心和市场数据页具备可用的首批功能。
+  输入：路由骨架、API client、设计系统。
+  输出：首批可操作的功能页面。
+  修改范围：`web/src/pages/jobs/`、`web/src/pages/workflows/`、`web/src/pages/artifacts/`、`web/src/pages/market/`、`web/src/features/job-center/`、`web/src/features/workflow-center/`、`web/src/features/artifact-center/`、`web/src/features/market-center/`。
+  前置依赖：`WEB-S4-003`、`WEB-S4-004`、`WEB-S4-005`。
+  验收标准：可查看 Job 列表与详情、触发工作流、预览/下载产物、查询 symbol 与 OHLCV。
+  完成情况：未完成。
+  备注：这组页面是 Stage 4 的主要功能入口，不应只停留在占位页。
+
+- [ ] `WEB-S4-007` `P1`
+  目标：完成验证、文档和入口对齐。
+  输入：Stage 4 前端实现。
+  输出：可执行的启动说明、验证命令和 Stage 4 文档入口。
+  修改范围：`web/package.json`、`web/README.md`、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S4-005`、`WEB-S4-006`。
+  可并行：无。
+  验收标准：`lint`、`typecheck`、`build` 可执行，`docs/Web-TaskList.md` 能直接指向设计文档和实施计划，前端启动路径写入文档。
+  完成情况：未完成。
+  备注：文档要与实际 `web/` 结构保持一致。
+
 ---
 
 ## 11. Stage 5：UserManual 操作向导（P0）
@@ -546,6 +604,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 ### Stage 目标
 
 - 把 `docs/UserManual.md` 的操作流程转为可点击、可校验、可追踪的 Web 向导。
+- 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 
 ### 阶段交付物
 
@@ -607,6 +666,8 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 ### Stage 目标
 
 - 实现用户最关心的数据查看能力：K 线、报表、快照、回测、告警。
+- 对 Stage 4 已经具备的任务中心与市场入口做增强升级，而不是重新实现一遍基础壳。
+- 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 
 ### 阶段交付物
 
@@ -619,24 +680,24 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 ### 任务清单
 
 - [ ] `WEB-S6-001` `P1`
-  目标：实现 Job 任务中心页面。
+  目标：增强 Job 任务中心页面。
   输入：Job API。
   输出：`web/src/features/jobs/`。
   修改范围：`web/src/features/jobs/`、`web/src/routes/`。
   前置依赖：`WEB-S3-002`、`WEB-S4-004`。
   可并行：`WEB-S6-002`。
-  验收标准：支持任务列表、过滤、详情、日志、产物、重跑入口。
+  验收标准：在 Stage 4 首批页面基础上，补齐任务列表过滤、详情抽屉、日志浏览、产物关联和重跑入口。
   完成情况：未完成。
   备注：长任务轮询间隔应可控，避免过度请求。
 
 - [ ] `WEB-S6-002` `P1`
-  目标：实现市场数据与个股 K 线页面。
+  目标：增强市场数据与个股 K 线页面。
   输入：Market UI API。
   输出：`web/src/features/market/`。
   修改范围：`web/src/features/market/`、`web/src/routes/`。
   前置依赖：`WEB-S3-005`、`WEB-S4-004`。
   可并行：`WEB-S6-001`。
-  验收标准：可搜索 symbol，选择日期范围，展示 K 线和 OHLCV 表格。
+  验收标准：在 Stage 4 首批市场页基础上，补齐 symbol 搜索、日期范围、K 线图和 OHLCV 表格。
   完成情况：未完成。
   备注：K 线图使用 TradingView Lightweight Charts。
 
@@ -726,6 +787,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 - 保护敏感信息。
 - 降低误操作风险。
 - 为本地/内网使用提供最小权限控制。
+- 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 
 ### 阶段交付物
 
@@ -856,6 +918,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - 确保 Web 后台可用、稳定、可维护。
 - 确保文档和真实功能一致。
+- 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 
 ### 阶段交付物
 
@@ -951,6 +1014,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - 让 Web 管理后台具备生产交付能力，而不是只停留在本地 Demo。
 - 明确部署、健康检查、日志、监控、备份恢复、发布和回滚流程。
+- 本阶段应优先按 Stage 4 占位入口映射表理解任务边界，不要仅按页面名称判断实现范围。
 
 ### 阶段交付物
 

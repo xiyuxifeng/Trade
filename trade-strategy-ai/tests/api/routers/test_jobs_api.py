@@ -10,9 +10,11 @@ from types import SimpleNamespace
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
 from api.routers.ui.jobs import get_job_service
+
+_job_service_spy: _FakeJobService | None = None
 
 
 @dataclass
@@ -112,10 +114,19 @@ def _service_result(payload: dict[str, Any], *, status: str = "ok", message: str
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
+    global _job_service_spy
     fake_service = _FakeJobService()
+    _job_service_spy = fake_service
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="Operator",
+            authenticated=True,
+            source="api_key",
+            api_key="operator-key",
+        )
         app.dependency_overrides[get_job_service] = lambda: fake_service
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -137,6 +148,9 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     )
     assert created.status_code == 200
     job_id = created.json()["job"]["id"]
+    assert _job_service_spy is not None
+    assert _job_service_spy.create_calls[0]["audit_source"]["channel"] == "ui"
+    assert _job_service_spy.create_calls[0]["audit_source"]["path"] == "/api/ui/v1/jobs"
 
     listed = await client.get("/api/ui/v1/jobs")
     assert listed.status_code == 200
@@ -153,3 +167,59 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     cancelled = await client.post(f"/api/ui/v1/jobs/{job_id}/cancel", json={"reason": "stop now"})
     assert cancelled.status_code == 200
     assert cancelled.json()["job"]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_high_risk_job_requires_confirmation(client: AsyncClient) -> None:
+    """高风险 Job 未确认时不应创建，确认后才可创建。"""
+    rejected = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "init-project",
+            "params": {"config_path": "config/app.yaml"},
+            "created_by": "web",
+        },
+    )
+    assert rejected.status_code == 400
+    assert "confirmation required" in rejected.json()["detail"]
+
+    approved = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "init-project",
+            "params": {"config_path": "config/app.yaml"},
+            "created_by": "web",
+            "confirmed": True,
+        },
+    )
+    assert approved.status_code == 200
+    assert approved.json()["job"]["job_type"] == "init-project"
+
+
+@pytest.mark.asyncio
+async def test_viewer_cannot_create_jobs(client: AsyncClient) -> None:
+    """viewer 不能创建 Job。"""
+    previous = app.dependency_overrides.get(get_current_principal)
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="viewer",
+        api_key_label="Viewer",
+        authenticated=True,
+        source="api_key",
+        api_key="viewer-key",
+    )
+    try:
+        response = await client.post(
+            "/api/ui/v1/jobs",
+            json={
+                "job_type": "pipeline-run",
+                "params": {"config_path": "config/app.yaml"},
+                "created_by": "web",
+            },
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "insufficient permissions"
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_current_principal, None)
+        else:
+            app.dependency_overrides[get_current_principal] = previous

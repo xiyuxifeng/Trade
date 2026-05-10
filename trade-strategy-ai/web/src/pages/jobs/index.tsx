@@ -17,9 +17,10 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { cancelJob, createJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
-import type { JobArtifactRef, JobDetailResponse, JobsListResponse } from '@/types/jobs';
+import type { JobArtifactRef, JobAuditEvent, JobDetailResponse, JobsListResponse } from '@/types/jobs';
 import { PageHeader } from '@/components/layout/page-header';
 
 function getErrorMessage(error: unknown) {
@@ -88,9 +89,30 @@ function ArtifactCard({
   );
 }
 
+function AuditEventCard({ event }: { event: JobAuditEvent }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-slate-100">
+            {event.actor} · {event.operation}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">{event.source}</p>
+        </div>
+        <p className="text-xs text-slate-500">{formatTimestamp(event.event_at)}</p>
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <Field label="Params summary" value={JSON.stringify(event.params_summary)} />
+        <Field label="Payload" value={JSON.stringify(event.payload)} />
+      </div>
+    </div>
+  );
+}
+
 export function JobsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { canAccess, principal } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const jobIdFromQuery = searchParams.get('jobId');
   const [status, setStatus] = useState('');
@@ -98,6 +120,7 @@ export function JobsPage() {
   const [createdBy, setCreatedBy] = useState('');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(() => jobIdFromQuery);
   const [rerunOpen, setRerunOpen] = useState(false);
+  const canOperateJobs = canAccess('operator');
 
   useEffect(() => {
     setSelectedJobId(jobIdFromQuery);
@@ -301,6 +324,11 @@ export function JobsPage() {
               <li>Cancel is available from the drawer for in-flight jobs.</li>
               <li>Filters are intentionally simple to keep the first operational pass fast.</li>
             </ul>
+            {!canOperateJobs ? (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                当前身份为 {principal.role}，只能查看任务详情，重新执行和取消任务需要 operator 权限。
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </section>
@@ -357,6 +385,24 @@ export function JobsPage() {
               </div>
 
               <div className="grid gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-slate-200">Audit trail</p>
+                  <p className="text-xs text-slate-500">{detail.audit_events.length} events</p>
+                </div>
+                {!detail.audit_events.length ? (
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                    No audit events yet.
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {detail.audit_events.map((event) => (
+                      <AuditEventCard event={event} key={event.id} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-3">
                 <p className="text-sm font-medium text-slate-200">Logs</p>
                 <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
                   {jobLogsQuery.isLoading
@@ -394,13 +440,18 @@ export function JobsPage() {
             <Button variant="outline" onClick={() => setSelectedJobId(null)}>
               Close
             </Button>
-            <Button variant="secondary" onClick={() => setRerunOpen(true)} disabled={!detail || rerunMutation.isPending}>
+            <Button variant="secondary" onClick={() => setRerunOpen(true)} disabled={!detail || rerunMutation.isPending || !canOperateJobs}>
               {rerunMutation.isPending ? 'Rerunning' : 'Rerun job'}
             </Button>
             <Button
               variant="destructive"
               onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending || !detail || !canCancelJob(detail.status, detail.cancel_requested)}
+              disabled={
+                cancelMutation.isPending ||
+                !detail ||
+                !canCancelJob(detail.status, detail.cancel_requested) ||
+                !canOperateJobs
+              }
             >
               {cancelMutation.isPending ? 'Cancelling' : 'Cancel job'}
             </Button>
@@ -453,7 +504,7 @@ export function JobsPage() {
             >
               Cancel
             </Button>
-            <Button onClick={() => rerunMutation.mutate()} disabled={!detail || rerunMutation.isPending}>
+            <Button onClick={() => rerunMutation.mutate()} disabled={!detail || rerunMutation.isPending || !canOperateJobs}>
               {rerunMutation.isPending ? 'Submitting' : 'Confirm rerun'}
             </Button>
           </DialogFooter>

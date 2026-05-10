@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models.job import Job
+from src.models.job_audit_event import JobAuditEvent
 from src.common.paths import project_root
 
 
@@ -20,6 +21,7 @@ def _build_job_service(tmp_path: Path):
     async def _init_schema() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Job.__table__.create)
+            await conn.run_sync(JobAuditEvent.__table__.create)
 
     asyncio.run(_init_schema())
 
@@ -68,6 +70,9 @@ def test_create_get_list_job(tmp_path: Path) -> None:
     assert created.payload["created"] is True
     assert created.payload["job"]["created_by"] == "web"
     assert loaded.payload["job"]["job_type"] == "backtest-run"
+    assert loaded.payload["job"]["audit_events"][0]["operation"] == "create"
+    assert loaded.payload["job"]["audit_events"][0]["actor"] == "web"
+    assert loaded.payload["job"]["audit_events"][0]["params_summary"]["trader_id"] == "trader_a"
     assert listed.payload["count"] == 1
     assert listed.payload["items"][0]["id"] == job_id
 
@@ -119,6 +124,7 @@ def test_job_state_transitions_and_cancel(tmp_path: Path) -> None:
     assert cancelled.payload["job"]["cancel_requested"] is True
     assert cancelled.payload["job"]["cancel_requested_at"] is not None
     assert cancelled.payload["job"]["created_by"] == "web"
+    assert len(cancelled.payload["job"]["audit_events"]) >= 2
 
     asyncio.run(engine.dispose())
 

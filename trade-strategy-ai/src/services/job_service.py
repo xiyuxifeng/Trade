@@ -8,7 +8,10 @@ from typing import Any, Callable
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.orm import selectinload
 
+from src.services.config_service import ConfigService
+from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
 from src.services.base import BaseService, ServiceResult
 from src.common.paths import resolve_project_path
@@ -38,6 +41,16 @@ def _parse_job_id(job_id: str | UUID) -> UUID:
     if isinstance(job_id, UUID):
         return job_id
     return UUID(str(job_id))
+
+
+def _sanitize_audit_data(value: Any) -> Any:
+    """把审计 payload 变成可安全展示的结构化数据。"""
+    plain = _to_plain(value)
+    if isinstance(plain, dict):
+        return ConfigService().mask_config(plain)
+    if isinstance(plain, list):
+        return [_sanitize_audit_data(item) for item in plain]
+    return plain
 
 
 class JobService(BaseService):
@@ -89,6 +102,21 @@ class JobService(BaseService):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(_to_plain(payload), ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _serialize_audit_event(self, event: JobAuditEvent) -> dict[str, Any]:
+        """把 Job 审计记录转成 API 可用结构。"""
+        return {
+            "id": str(event.id),
+            "job_id": str(event.job_id),
+            "operation": event.operation,
+            "actor": event.actor,
+            "source": event.source,
+            "params_summary": _sanitize_audit_data(event.params_summary),
+            "payload": _sanitize_audit_data(event.payload),
+            "event_at": _to_plain(event.event_at),
+            "created_at": _to_plain(event.created_at),
+            "updated_at": _to_plain(event.updated_at),
+        }
+
     def _materialize_job_dir(
         self,
         *,
@@ -139,6 +167,7 @@ class JobService(BaseService):
             "scheduled_at": _to_plain(job.scheduled_at),
             "started_at": _to_plain(job.started_at),
             "finished_at": _to_plain(job.finished_at),
+            "audit_events": [self._serialize_audit_event(event) for event in getattr(job, "audit_events", [])],
             "created_at": _to_plain(job.created_at),
             "updated_at": _to_plain(job.updated_at),
         }
@@ -146,9 +175,39 @@ class JobService(BaseService):
     async def _load_job(self, session: Any, job_id: str | UUID) -> Job | None:
         """从数据库加载 Job。"""
         job_uuid = _parse_job_id(job_id)
-        stmt = select(Job).where(Job.id == job_uuid)
+        stmt = select(Job).options(selectinload(Job.audit_events)).where(Job.id == job_uuid)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def _record_job_audit(
+        self,
+        *,
+        session: Any,
+        job: Job,
+        operation: str,
+        actor: str | None,
+        audit_source: dict[str, Any] | None,
+        params_summary: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
+        event_at: datetime | None = None,
+    ) -> JobAuditEvent:
+        """写入一条 Job 操作审计。"""
+        source = audit_source or {}
+        event = JobAuditEvent(
+            job_id=job.id,
+            operation=operation,
+            actor=actor or job.created_by or "system",
+            source=str(source.get("channel") or "system"),
+            params_summary=_sanitize_audit_data(params_summary or {}),
+            payload=_sanitize_audit_data({"request_context": source, "details": payload or {}}),
+            event_at=event_at or datetime.now(UTC),
+        )
+        session.add(event)
+        audit_events = job.__dict__.setdefault("audit_events", [])
+        if event not in audit_events:
+            audit_events.append(event)
+        await session.flush()
+        return event
 
     async def _persist(self, session: Any, job: Job) -> None:
         """刷新并写回数据库。"""
@@ -166,12 +225,13 @@ class JobService(BaseService):
         retry_backoff_seconds: int = 0,
         timeout_seconds: int | None = None,
         scheduled_at: datetime | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """创建新的 Job 记录。"""
         session_scope = self._ensure_session_factory()
         if idempotency_key:
             async with session_scope() as session:
-                stmt = select(Job).where(Job.idempotency_key == idempotency_key)
+                stmt = select(Job).options(selectinload(Job.audit_events)).where(Job.idempotency_key == idempotency_key)
                 result = await session.execute(stmt)
                 existing = result.scalar_one_or_none()
                 if existing is not None:
@@ -222,6 +282,23 @@ class JobService(BaseService):
         async with session_scope() as session:
             session.add(job)
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="create",
+                actor=created_by,
+                audit_source=audit_source,
+                params_summary=params or {},
+                payload={
+                    "job_type": job_type,
+                    "idempotency_key": idempotency_key,
+                    "max_retries": max_retries,
+                    "retry_backoff_seconds": retry_backoff_seconds,
+                    "timeout_seconds": timeout_seconds,
+                    "scheduled_at": _to_plain(scheduled_at),
+                },
+                event_at=now,
+            )
             await session.flush()
 
         self._materialize_job_dir(job=job)
@@ -296,6 +373,7 @@ class JobService(BaseService):
             total = int((await session.execute(count_stmt)).scalar() or 0)
 
             stmt = select(Job)
+            stmt = stmt.options(selectinload(Job.audit_events))
             if conditions:
                 stmt = stmt.where(*conditions)
             stmt = stmt.order_by(Job.created_at.desc(), Job.id.desc()).offset(skip).limit(limit)
@@ -321,9 +399,15 @@ class JobService(BaseService):
         job_id: str | UUID,
         worker_id: str,
         lock_token: str,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把 Job 置为 running 并记录 worker 锁信息。"""
-        return await self.claim_job(job_id=job_id, worker_id=worker_id, lock_token=lock_token)
+        return await self.claim_job(
+            job_id=job_id,
+            worker_id=worker_id,
+            lock_token=lock_token,
+            audit_source=audit_source,
+        )
 
     async def claim_job(
         self,
@@ -331,6 +415,7 @@ class JobService(BaseService):
         job_id: str | UUID,
         worker_id: str,
         lock_token: str,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """原子领取一个可执行 Job。"""
         session_scope = self._ensure_session_factory()
@@ -393,6 +478,16 @@ class JobService(BaseService):
             job = await self._load_job(session, job_uuid)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="start",
+                actor=worker_id,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"worker_id": worker_id, "lock_token": lock_token},
+                event_at=now,
+            )
 
         return ServiceResult(
             status="ok",
@@ -412,6 +507,7 @@ class JobService(BaseService):
         *,
         job_id: str | UUID,
         result: dict[str, Any] | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把 Job 标记为 success。"""
         session_scope = self._ensure_session_factory()
@@ -429,14 +525,26 @@ class JobService(BaseService):
             if job.cancel_requested:
                 job.status = JobStatus.cancelled.value
                 job.error = {"type": "cancelled", "message": "cancel requested"}
+                operation = "cancel"
             else:
                 job.status = JobStatus.success.value
                 job.result = result or {}
                 job.error = None
+                operation = "complete"
             job.finished_at = now
             job.cancel_requested = False
             job.cancel_requested_at = job.cancel_requested_at or None
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation=operation,
+                actor=job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"result": result or {}, "status": job.status},
+                event_at=now,
+            )
 
         self._materialize_job_dir(
             job=job,
@@ -465,6 +573,7 @@ class JobService(BaseService):
         job_id: str | UUID,
         error: dict[str, Any] | str,
         increment_retry: bool = True,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把 Job 标记为 failed。"""
         session_scope = self._ensure_session_factory()
@@ -486,6 +595,16 @@ class JobService(BaseService):
             else:
                 job.scheduled_at = None
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="fail",
+                actor=job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"error": error, "increment_retry": increment_retry, "retry_count": job.retry_count},
+                event_at=now,
+            )
 
         self._materialize_job_dir(
             job=job,
@@ -513,6 +632,7 @@ class JobService(BaseService):
         *,
         job_id: str | UUID,
         reason: str | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """请求取消 Job，并在未完成时直接标记为 cancelled。"""
         session_scope = self._ensure_session_factory()
@@ -539,6 +659,16 @@ class JobService(BaseService):
                 job.error = {"message": reason or "cancel requested", "type": "cancelled"}
                 job.finished_at = now
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="cancel",
+                actor=job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"reason": reason, "status": job.status},
+                event_at=now,
+            )
 
         self._materialize_job_dir(
             job=job,
@@ -585,6 +715,7 @@ class JobService(BaseService):
         job_id: str | UUID,
         worker_id: str | None = None,
         lock_token: str | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """刷新运行中 Job 的心跳时间。"""
         session_scope = self._ensure_session_factory()
@@ -613,6 +744,16 @@ class JobService(BaseService):
                 )
             job.heartbeat_at = now
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="heartbeat",
+                actor=worker_id or job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"worker_id": worker_id, "lock_token": lock_token},
+                event_at=now,
+            )
 
         return ServiceResult(status="ok", message="job heartbeat updated", payload={"job": self._serialize_job(job)})
 
@@ -623,6 +764,7 @@ class JobService(BaseService):
         kind: str,
         path: str | Path,
         metadata: dict[str, Any] | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """给 Job 绑定一个产物引用。"""
         session_scope = self._ensure_session_factory()
@@ -639,6 +781,16 @@ class JobService(BaseService):
             artifacts.append(artifact)
             job.artifacts = artifacts
             await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="bind_artifact",
+                actor=job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"artifact": artifact},
+                event_at=datetime.now(UTC),
+            )
 
         return ServiceResult(
             status="ok",
@@ -655,12 +807,14 @@ class JobService(BaseService):
         *,
         job_id: str | UUID,
         reason: str | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把 Job 标记为超时失败。"""
         return await self.fail_job(
             job_id=job_id,
             error={"type": "timeout", "message": reason or "job timed out"},
             increment_retry=True,
+            audit_source=audit_source,
         )
 
     async def recover_stale_jobs(

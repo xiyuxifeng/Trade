@@ -21,6 +21,7 @@ from src.models import (  # noqa: F401
     market_data,
     ranking_entry,
     job,
+    job_audit_event,
     raw_article,
     signal,
     stock_info,

@@ -1,7 +1,10 @@
+import type { PrincipalRole } from '@/types/auth';
+
 export type NavItem = {
   label: string;
   path: string;
   description: string;
+  minRole?: PrincipalRole;
 };
 
 export const mainNavigation: NavItem[] = [
@@ -23,5 +26,5 @@ export const mainNavigation: NavItem[] = [
   { label: 'Alerts', path: '/alerts', description: 'Alert history and acknowledgements' },
   { label: 'Reports', path: '/reports', description: 'Pre/post market reports' },
   { label: 'Settings', path: '/settings', description: 'Configuration and secrets' },
-  { label: 'Ops', path: '/ops', description: 'Deployment and recovery tooling' },
+  { label: 'Ops', path: '/ops', description: 'Deployment and recovery tooling', minRole: 'admin' },
 ];

@@ -18,6 +18,10 @@ database:
 llm:
   api_key: llm-key
   token: llm-token
+api:
+  auth:
+    api_keys:
+      - web-key-1
 crawl:
   auth:
     tgb.cn:
@@ -36,8 +40,10 @@ crawl:
 
     assert loaded.config.database.url == "postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai"
     assert masked["database"]["password"] == "***"
+    assert masked["database"]["url"] == "postgresql+asyncpg://trade:***@localhost:5432/trade_strategy_ai"
     assert masked["llm"]["api_key"] == "***"
     assert masked["llm"]["token"] == "***"
+    assert masked["api"]["auth"]["api_keys"] == ["***"]
     assert masked["crawl"]["auth"]["tgb.cn"]["cookie"] == "***"
     assert masked["crawl"]["auth"]["tgb.cn"]["secret"] == "***"
     assert masked["crawl"]["auth"]["tgb.cn"]["nested"]["api_key"] == "***"

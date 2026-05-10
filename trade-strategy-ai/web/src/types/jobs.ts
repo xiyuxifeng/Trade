@@ -21,6 +21,20 @@ export type JobRecord = {
   scheduled_at: string | null;
   started_at: string | null;
   finished_at: string | null;
+  audit_events: JobAuditEvent[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type JobAuditEvent = {
+  id: string;
+  job_id: string;
+  operation: string;
+  actor: string;
+  source: string;
+  params_summary: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  event_at: string;
   created_at: string;
   updated_at: string;
 };

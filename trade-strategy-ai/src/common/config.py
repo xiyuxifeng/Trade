@@ -131,9 +131,17 @@ class DatabaseConfig(BaseModel):
     pool_recycle: int = 1800
 
 
+class ApiKeyAccessConfig(BaseModel):
+    """API Key 的角色与展示信息。"""
+
+    key: str
+    role: str = "admin"
+    label: str | None = None
+
+
 class ApiAuthConfig(BaseModel):
     enabled: bool = False
-    api_keys: list[str] = Field(default_factory=list)
+    api_keys: list[str | ApiKeyAccessConfig] = Field(default_factory=list)
 
 
 class ApiConfig(BaseModel):

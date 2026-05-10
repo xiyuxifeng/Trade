@@ -255,6 +255,17 @@ body {
   background: rgba(56, 189, 248, 0.12);
 }
 
+.sidebar-link-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.sidebar-link-disabled:hover {
+  transform: none;
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.35);
+}
+
 .sidebar-link-label {
   font-weight: 600;
 }

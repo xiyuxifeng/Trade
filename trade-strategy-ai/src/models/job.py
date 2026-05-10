@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, DateTime, Index, Integer, String, Uuid, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
@@ -67,3 +67,10 @@ class Job(TimestampMixin, Base):
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    audit_events = relationship(
+        "JobAuditEvent",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="JobAuditEvent.created_at",
+    )

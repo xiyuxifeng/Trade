@@ -38,6 +38,20 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [{ kind: 'report', path: 'data/jobs/job-1/result.json', metadata: { source: 'job' } }],
+      audit_events: [
+        {
+          id: 'audit-1',
+          job_id: 'job-1',
+          operation: 'create',
+          actor: 'web',
+          source: 'ui',
+          params_summary: { date: '2026-05-09' },
+          payload: { request_context: { channel: 'ui' } },
+          event_at: '2026-05-09T08:00:00Z',
+          created_at: '2026-05-09T08:00:00Z',
+          updated_at: '2026-05-09T08:00:00Z',
+        },
+      ],
       created_by: 'web',
       idempotency_key: null,
       retry_count: 0,
@@ -96,6 +110,8 @@ describe('JobsPage', () => {
 
     expect(await screen.findByText('Job details')).toBeInTheDocument();
     expect(await screen.findByText('report')).toBeInTheDocument();
+    expect(await screen.findByText('Audit trail')).toBeInTheDocument();
+    expect(await screen.findByText('web · create')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Open in Artifacts' }));
     expect(await screen.findByText('Artifact center')).toBeInTheDocument();
@@ -111,6 +127,7 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [],
+      audit_events: [],
       created_by: 'web',
       idempotency_key: null,
       retry_count: 0,
@@ -137,6 +154,7 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [],
+      audit_events: [],
       created_by: 'web',
       idempotency_key: null,
       retry_count: 0,
@@ -203,5 +221,75 @@ describe('JobsPage', () => {
         timeout_seconds: null,
       });
     });
+  });
+
+  it('disables rerun and cancel actions for viewer principals', async () => {
+    const job1 = {
+      id: 'job-1',
+      job_type: 'run-pre-market',
+      status: 'success',
+      params: { date: '2026-05-09' },
+      result: null,
+      error: null,
+      artifacts: [],
+      audit_events: [],
+      created_by: 'web',
+      idempotency_key: null,
+      retry_count: 0,
+      max_retries: 3,
+      retry_backoff_seconds: 0,
+      timeout_seconds: null,
+      cancel_requested: false,
+      cancel_requested_at: null,
+      worker_id: null,
+      lock_token: null,
+      lock_acquired_at: null,
+      heartbeat_at: null,
+      scheduled_at: null,
+      started_at: '2026-05-09T08:00:00Z',
+      finished_at: '2026-05-09T08:05:00Z',
+      created_at: '2026-05-09T08:00:00Z',
+      updated_at: '2026-05-09T08:05:00Z',
+    };
+
+    mockedListJobs.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [job1],
+    });
+    mockedGetJob.mockResolvedValue({
+      job: job1,
+      job_dir: '/tmp/job-1',
+      log_path: '/tmp/job-1/job.log',
+      params_path: '/tmp/job-1/params.json',
+      result_path: '/tmp/job-1/result.json',
+      artifacts_path: '/tmp/job-1/artifacts.json',
+    });
+    mockedGetJobLogs.mockResolvedValue({
+      job_id: 'job-1',
+      log_path: '/tmp/job-1/job.log',
+      count: 1,
+      items: ['job started'],
+    });
+
+    renderWithRouter(
+      [{ path: '/jobs', element: <JobsPage /> }],
+      ['/jobs?jobId=job-1'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Local Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByText('Job details')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rerun job' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeDisabled();
+    expect(screen.getByText(/需要 operator 权限/)).toBeInTheDocument();
   });
 });

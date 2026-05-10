@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import verify_api_key
 from api.main import app
+import api.routers.ui.imports as imports_module
 from api.routers.ui.imports import get_setup_service
 from src.services.base import ServiceResult
 
@@ -111,6 +112,63 @@ async def test_import_trade_logs_rejects_unsupported_extension(client: AsyncClie
             files={"file": ("sample.txt", fh, "text/plain")},
         )
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_import_trade_logs_rejects_invalid_content_type(client: AsyncClient, tmp_path) -> None:
+    """路由应拒绝与扩展名不匹配的 MIME 类型。"""
+    sample = tmp_path / "sample.csv"
+    sample.write_text("noop", encoding="utf-8")
+    with sample.open("rb") as fh:
+        response = await client.post(
+            "/api/ui/v1/imports/trade-logs",
+            data={"dry_run": "true"},
+            files={"file": ("sample.csv", fh, "application/json")},
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_import_trade_logs_rejects_path_like_filename(client: AsyncClient, tmp_path) -> None:
+    """路由应拒绝带路径段的上传文件名。"""
+    sample = tmp_path / "sample.csv"
+    sample.write_text("noop", encoding="utf-8")
+    with sample.open("rb") as fh:
+        response = await client.post(
+            "/api/ui/v1/imports/trade-logs",
+            data={"dry_run": "true"},
+            files={"file": ("../sample.csv", fh, "text/csv")},
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_import_trade_logs_rejects_backslash_path_like_filename(client: AsyncClient, tmp_path) -> None:
+    """路由应拒绝带反斜杠路径段的上传文件名。"""
+    sample = tmp_path / "sample.csv"
+    sample.write_text("noop", encoding="utf-8")
+    with sample.open("rb") as fh:
+        response = await client.post(
+            "/api/ui/v1/imports/trade-logs",
+            data={"dry_run": "true"},
+            files={"file": ("..\\sample.csv", fh, "text/csv")},
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_import_trade_logs_rejects_oversized_file(client: AsyncClient, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """路由应拒绝超出大小上限的上传文件。"""
+    monkeypatch.setattr(imports_module, "_MAX_UPLOAD_BYTES", 8)
+    sample = tmp_path / "sample.csv"
+    sample.write_text("123456789", encoding="utf-8")
+    with sample.open("rb") as fh:
+        response = await client.post(
+            "/api/ui/v1/imports/trade-logs",
+            data={"dry_run": "true"},
+            files={"file": ("sample.csv", fh, "text/csv")},
+        )
+    assert response.status_code == 413
 
 
 @pytest.mark.asyncio

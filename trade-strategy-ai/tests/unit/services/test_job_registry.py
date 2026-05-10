@@ -63,6 +63,15 @@ def test_validate_job_submission_enforces_schema() -> None:
     not_runnable = validate_job_submission(job_type="seed-data", params={"config_path": "config/app.yaml"}, created_by="web")
     assert not_runnable.status == "error"
 
+    confirmed = validate_job_submission(
+        job_type="init-project",
+        params={"config_path": "config/app.yaml"},
+        created_by="web",
+        confirmed=True,
+    )
+    assert confirmed.status == "ok"
+    assert confirmed.payload["params"]["config_path"] == "config/app.yaml"
+
     ok = validate_job_submission(
         job_type="run-pre-market",
         params={"config_path": "config/app.yaml", "force": True, "export_html": False},

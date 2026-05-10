@@ -1,11 +1,5 @@
-import { PlaceholderPage } from '@/components/layout/placeholder-page';
+import { SettingsCenter } from '@/features/settings/settings-center';
 
 export function SettingsPage() {
-  return (
-    <PlaceholderPage
-      description="System settings, secrets, and configuration management."
-      note="Configuration editing is planned after the security and workflow stages."
-      title="Settings"
-    />
-  );
+  return <SettingsCenter />;
 }

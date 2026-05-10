@@ -880,6 +880,7 @@ def validate_job_submission(
     job_type: str,
     params: dict[str, Any] | None,
     created_by: str | None = None,
+    confirmed: bool = False,
 ) -> ServiceResult:
     """校验提交到 Job Center 的任务参数。"""
     definition = get_job_definition(job_type)
@@ -890,11 +891,38 @@ def validate_job_submission(
             payload={"job_type": job_type, "known_job_types": [item.job_type for item in JOB_DEFINITIONS]},
         )
 
+    requires_confirmation = definition.requires_confirmation or definition.risk in {JobRisk.high, JobRisk.critical}
+
     if not definition.runnable:
+        if requires_confirmation and not confirmed:
+            return ServiceResult(
+                status="error",
+                message="confirmation required for high-risk job",
+                payload={
+                    "job_type": job_type,
+                    "definition": definition.summary(),
+                    "created_by": created_by,
+                    "requires_confirmation": True,
+                },
+            )
+
+        if not requires_confirmation:
+            return ServiceResult(
+                status="error",
+                message=f"job type is registered but not runnable yet: {job_type}",
+                payload={"job_type": job_type, "definition": definition.summary(), "created_by": created_by},
+            )
+
+    if requires_confirmation and not confirmed and definition.runnable:
         return ServiceResult(
             status="error",
-            message=f"job type is registered but not runnable yet: {job_type}",
-            payload={"job_type": job_type, "definition": definition.summary(), "created_by": created_by},
+            message="confirmation required for high-risk job",
+            payload={
+                "job_type": job_type,
+                "definition": definition.summary(),
+                "created_by": created_by,
+                "requires_confirmation": True,
+            },
         )
 
     try:

@@ -1,6 +1,8 @@
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.models.data_audit_event import DataAuditEvent
+from src.models.job import Job
+from src.models.job_audit_event import JobAuditEvent
 from src.models.ohlcv_bar import OHLCVBar
 from src.models.trade_log import TradeLog
 
@@ -33,3 +35,16 @@ def test_data_audit_event_table_metadata() -> None:
     indexes = {index.name for index in DataAuditEvent.__table__.indexes}
     assert "ix_data_audit_events_created_at" in indexes
     assert "ix_data_audit_events_event_type_created_at" in indexes
+
+
+def test_job_audit_event_table_metadata() -> None:
+    indexes = {index.name for index in JobAuditEvent.__table__.indexes}
+    constraint_names = {constraint.name for constraint in JobAuditEvent.__table__.constraints}
+    assert "ix_job_audit_events_job_id_created_at" in indexes
+    assert "ix_job_audit_events_operation_created_at" in indexes
+    assert "fk_job_audit_events_job_id_jobs" in constraint_names
+
+
+def test_job_model_exposes_audit_relationship() -> None:
+    relationship_names = {relation.key for relation in Job.__mapper__.relationships}
+    assert "audit_events" in relationship_names

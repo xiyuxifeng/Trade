@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { runWorkflow } from '@/lib/api/workflows';
 import type { WorkflowDefinition, WorkflowParamField, WorkflowRunResponse } from '@/types/workflows';
@@ -111,6 +112,7 @@ export function WorkflowParameterForm({
   onSubmitted?: (jobId: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const { canAccess } = useAuth();
   const schema = getWorkflowRunSchema(workflow);
   const [values, setValues] = useState<WorkflowFieldValues>(() => buildWorkflowDefaultValues(schema));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -119,6 +121,7 @@ export function WorkflowParameterForm({
   const [submittedSummary, setSubmittedSummary] = useState<WorkflowRunResponse | null>(null);
 
   const riskSummary = useMemo(() => summarizeWorkflowRisk(workflow), [workflow]);
+  const canRunWorkflow = canAccess('operator');
 
   useEffect(() => {
     setValues(buildWorkflowDefaultValues(schema));
@@ -129,10 +132,11 @@ export function WorkflowParameterForm({
   }, [schema, workflow.workflow_id]);
 
   const runMutation = useMutation({
-    mutationFn: async (params: Record<string, unknown>) => {
+    mutationFn: async (request: { params: Record<string, unknown>; confirmed: boolean }) => {
       return runWorkflow(workflow.workflow_id, {
-        params,
+        params: request.params,
         created_by: 'web',
+        confirmed: request.confirmed,
       });
     },
     onSuccess: async (data) => {
@@ -153,6 +157,11 @@ export function WorkflowParameterForm({
   const fields = Object.entries(schema?.fields ?? {});
 
   const submit = () => {
+    if (!canRunWorkflow) {
+      setErrorMessage('当前身份需要 operator 权限才能提交工作流。');
+      return;
+    }
+
     const validation = validateWorkflowValues(schema, values);
     if (validation.errors.length) {
       setErrorMessage(validation.errors.join('；'));
@@ -167,7 +176,7 @@ export function WorkflowParameterForm({
       return;
     }
 
-    runMutation.mutate(validation.params);
+    runMutation.mutate({ params: validation.params, confirmed: false });
   };
 
   return (
@@ -222,7 +231,7 @@ export function WorkflowParameterForm({
         ) : null}
 
         <div className="flex flex-wrap gap-3">
-          <Button onClick={submit} disabled={runMutation.isPending || !schema}>
+          <Button onClick={submit} disabled={runMutation.isPending || !schema || !canRunWorkflow}>
             {runMutation.isPending ? '提交中' : riskSummary.requiresConfirmation ? '继续并确认' : '提交运行'}
           </Button>
           <Button
@@ -235,6 +244,11 @@ export function WorkflowParameterForm({
             重置默认值
           </Button>
         </div>
+        {!canRunWorkflow ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+            当前身份仅可查看参数，提交运行需要 operator 权限。
+          </div>
+        ) : null}
       </CardContent>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -271,7 +285,10 @@ export function WorkflowParameterForm({
             <DialogClose className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800">
               取消
             </DialogClose>
-            <Button onClick={() => runMutation.mutate(previewParams)} disabled={runMutation.isPending}>
+            <Button
+              onClick={() => runMutation.mutate({ params: previewParams, confirmed: true })}
+              disabled={runMutation.isPending || !canRunWorkflow}
+            >
               {runMutation.isPending ? '提交中' : '确认提交'}
             </Button>
           </DialogFooter>

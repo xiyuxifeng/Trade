@@ -58,6 +58,14 @@ class WorkflowDefinition:
             ],
         }
 
+    def requires_confirmation(self) -> bool:
+        """判断当前工作流是否需要二次确认。"""
+        if self.job_type:
+            job_definition = get_job_definition(self.job_type)
+            if job_definition is not None and (job_definition.requires_confirmation or job_definition.risk.value in {"high", "critical"}):
+                return True
+        return any(step.requires_confirmation or step.risk in {"high", "critical"} for step in self.steps)
+
 
 def _workflow(
     workflow_id: str,
@@ -303,16 +311,30 @@ class WorkflowService(BaseService):
         params: dict[str, Any] | None = None,
         created_by: str | None = None,
         idempotency_key: str | None = None,
+        confirmed: bool = False,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """将工作流运行映射到对应 Job。"""
         workflow = _WORKFLOW_MAP.get(workflow_id)
         if workflow is None:
             return ServiceResult(status="partial", message="workflow not found", payload={"workflow_id": workflow_id})
 
+        if workflow.requires_confirmation() and not confirmed:
+            return ServiceResult(
+                status="error",
+                message="confirmation required for high-risk workflow",
+                payload={
+                    "workflow_id": workflow_id,
+                    "workflow": workflow.summary(),
+                    "requires_confirmation": True,
+                },
+            )
+
         validation = validate_job_submission(
             job_type=workflow.job_type,
             params=params,
             created_by=created_by,
+            confirmed=confirmed,
         )
         if validation.status != "ok":
             return ServiceResult(status="error", message=validation.message or "invalid workflow params", payload=validation.payload)
@@ -322,6 +344,7 @@ class WorkflowService(BaseService):
             params=validation.payload["params"],
             created_by=created_by,
             idempotency_key=idempotency_key,
+            audit_source=audit_source,
         )
         if created.status != "ok":
             return created

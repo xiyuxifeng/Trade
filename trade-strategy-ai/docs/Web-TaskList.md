@@ -833,7 +833,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成 `WEB-S7-001` 的 API Key 基线收口：`api/dependencies.py` 统一收紧为“关闭鉴权才匿名、开启鉴权必须命中 key”，`api_keys` 为空时不再匿名放行；前端 `web/src/lib/api/` 的请求头注入已统一到共享 helper；补齐后端和前端回归测试并通过 `pytest`、`typecheck` 和 `lint` 验证。
   备注：本地开发可配置关闭鉴权。
 
-- [ ] `WEB-S7-002` `P0`
+- [x] `WEB-S7-002` `P0`
   目标：实现配置脱敏和敏感字段保护。
   输入：ConfigService。
   输出：脱敏规则和测试。
@@ -841,10 +841,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-002`。
   可并行：`WEB-S7-001`。
   验收标准：cookie、token、api_key、password、secret、DATABASE_URL 密码不明文返回。
-  完成情况：未完成。
+  完成情况：已完成。`src/services/config_service.py` 已补齐递归脱敏规则，覆盖 `password`、`token`、`secret`、`api_key`、`api_keys`、`cookie`，并对 `url` 字段中的明文密码进行红action；相关单测已补充并通过。
   备注：日志中也不得输出敏感信息。
 
-- [ ] `WEB-S7-003` `P0`
+- [x] `WEB-S7-003` `P0`
   目标：实现高风险操作确认协议。
   输入：WorkflowService、Job API。
   输出：后端确认字段校验和前端确认弹窗。
@@ -852,10 +852,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S5-003`。
   可并行：无。
   验收标准：未提供确认字段时，高风险任务不能创建。
-  完成情况：未完成。
+  完成情况：已完成。`WorkflowService`、`Job API` 与前端工作流表单已统一接入 `confirmed` 字段；高风险 workflow/job 未确认时返回统一错误，确认后可正常创建 Job；相关后端与前端测试已补齐并通过。
   备注：不能只做前端确认，后端也必须校验。
 
-- [ ] `WEB-S7-004` `P0`
+- [x] `WEB-S7-004` `P0`
   目标：实现操作审计。
   输入：Job Center、用户来源信息。
   输出：审计记录。
@@ -863,10 +863,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-002`、`WEB-S7-001`。
   可并行：无。
   验收标准：记录谁在什么时候发起了什么操作，参数摘要是什么。
-  完成情况：未完成。
+  完成情况：已完成。新增 `JobAuditEvent` 审计表与 `Job.audit_events` 关系；`JobService` 在创建、启动、完成、失败、取消、心跳和产物绑定等关键操作时写入结构化审计记录，并对参数摘要与 payload 做脱敏；UI 路由已将请求来源信息透传到服务层；Job 详情页已展示审计轨迹；后端与前端定向回归测试已通过。
   备注：审计参数同样必须脱敏。
 
-- [ ] `WEB-S7-005` `P0`
+- [x] `WEB-S7-005` `P0`
   目标：实现设置项读取、编辑校验、保存、备份和恢复 service。
   输入：`config/app.yaml`、`src/common/config.py`、`config/settings.py`、ConfigService。
   输出：`ConfigEditService`。
@@ -874,10 +874,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-002`、`WEB-S7-002`。
   可并行：`WEB-S7-006`。
   验收标准：支持读取当前配置、生成可编辑配置 schema、校验配置草稿、保存到 `config/app.yaml`、保存前写入 `config/backups/app.YYYYMMDD-HHMMSS.yaml`、从备份恢复；保存失败不能覆盖原配置。
-  完成情况：未完成。
+  完成情况：已完成。新增 `ConfigEditService`，支持脱敏读取、schema 生成、草稿校验、保存前备份、备份列表与恢复；保存和恢复都要求显式确认；未修改的敏感字段会按当前脱敏快照回填后再由服务端保留原值，避免把 `***` 写回配置；相关单测已补齐并通过。
   备注：敏感项只允许保存为空值或环境变量引用，例如 `"${DASHSCOPE_API_KEY}"`，不得把明文密钥写入 YAML。
 
-- [ ] `WEB-S7-006` `P0`
+- [x] `WEB-S7-006` `P0`
   目标：实现设置项 API。
   输入：`ConfigEditService`。
   输出：`/api/ui/settings` 系列接口。
@@ -885,10 +885,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S7-005`。
   可并行：`WEB-S7-007`。
   验收标准：支持获取脱敏配置、获取编辑 schema、校验配置草稿、保存配置、列出备份、恢复备份；保存和恢复必须要求二次确认字段。
-  完成情况：未完成。
+  完成情况：已完成。`/api/ui/v1/settings` 路由已接入应用，支持读取、校验、保存、备份列表与恢复；请求均复用 `ConfigEditService`，保存和恢复通过 `confirmed` 字段强制校验；路由层会限制配置路径必须位于项目根目录内，恢复备份必须位于备份目录内。
   备注：API 返回的 diff 必须脱敏，不能包含密钥明文。
 
-- [ ] `WEB-S7-007` `P0`
+- [x] `WEB-S7-007` `P0`
   目标：实现 Web 设置中心页面。
   输入：Settings API、配置字段分组。
   输出：`web/src/features/settings/`。
@@ -896,10 +896,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-004`、`WEB-S7-006`。
   可并行：无。
   验收标准：用户可以在 Web 中编辑基础设置、数据库、API、调度、数据源、爬虫、LLM、Persona、Kaipan、告警等主要设置项；保存前显示校验结果和 diff；保存成功显示备份路径；恢复备份必须二次确认。
-  完成情况：未完成。
+  完成情况：已完成。新增 `SettingsCenter` 页面，接入 Settings API，可按配置路径查看脱敏配置与 schema、编辑单项设置、预览校验 diff、确认保存并展示备份路径、列出备份并二次确认恢复；前端页面测试、类型检查和 lint 已通过。
   备注：敏感字段输入框必须提示推荐使用环境变量引用，不回显已保存密钥。
 
-- [ ] `WEB-S7-008` `P0`
+- [x] `WEB-S7-008` `P0`
   目标：实现角色权限模型。
   输入：Web 功能清单、Job 类型注册表、Settings API。
   输出：`viewer / operator / admin` 最小角色模型。
@@ -907,10 +907,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S7-001`、`WEB-S2-006`。
   可并行：`WEB-S3-007`。
   验收标准：viewer 只能查看；operator 可运行非破坏性任务；admin 可执行配置保存、数据库迁移、恢复、批量审核、告警测试、调度启动等高风险操作；后端强制校验权限，不能只依赖前端隐藏按钮。
-  完成情况：未完成。
+  完成情况：已完成。`api/dependencies.py` 已支持结构化 API Key、`viewer / operator / admin` 角色解析与最小权限校验；非法角色会降级为 `viewer`，不会被静默提升到 `admin`；`/api/ui/v1/auth/me` 已返回公开身份信息；Jobs / Workflows / Settings 路由已按角色收紧写操作；前端已接入 principal 上下文并对侧边栏、工作流提交、任务重跑/取消、配置保存/恢复做了禁用和提示；默认配置模板已分配 `viewer / operator / admin` 三把本地 API Key；配置保存/恢复后会清理鉴权缓存以便权限变更立即生效；相关后端与前端测试、typecheck 和 lint 已通过。
   备注：权限等级必须写入 `WEB-S0-003` 覆盖矩阵。
 
-- [ ] `WEB-S7-009` `P0`
+- [x] `WEB-S7-009` `P0`
   目标：补齐配置编辑的生产级并发与回滚保护。
   输入：`ConfigEditService`、Settings API、配置文件路径。
   输出：配置编辑锁、原子写入、保存后验证和恢复演练。
@@ -918,10 +918,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S7-005`、`WEB-S7-006`。
   可并行：`WEB-S7-008`。
   验收标准：同一时间只允许一个配置保存事务；写入采用临时文件+原子替换；保存后自动重新加载并校验配置；失败自动保留原配置；恢复备份后记录审计并提示需要重启或重载的服务。
-  完成情况：未完成。
+  完成情况：已完成。`ConfigEditService` 已补齐配置编辑锁、临时文件原子替换、保存/恢复后的自动重载校验和失败回滚；同一配置同时只能有一个保存事务；保存和恢复成功后会返回 `reload_required`、`reload_targets` 与重载提示；Settings API 会把锁冲突映射为 409；前端 Settings 中心已补充重载提示文案；相关服务层与路由测试已通过。
   备注：必须明确哪些配置支持热加载，哪些配置需要重启 API/Worker。
 
-- [ ] `WEB-S7-010` `P1`
+- [x] `WEB-S7-010` `P1`
   目标：实现文件上传与导入安全策略。
   输入：交易记录导入、备份恢复、Artifact 下载需求。
   输出：上传/下载安全限制。
@@ -929,7 +929,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S6-008`、`WEB-S7-008`。
   可并行：无。
   验收标准：上传文件限制后缀、MIME、大小和保存目录；路径必须规范化并禁止目录穿越；导入前支持 dry-run；下载只能访问白名单产物目录。
-  完成情况：未完成。
+  完成情况：已完成。上传路由已补齐文件名规范化校验、MIME 白名单、大小上限和临时文件落盘，导入前支持 dry-run；Artifact 下载路径也已增加白名单目录内的文件检查，禁止目录穿越和非文件路径；相关路由测试与前端/后端静态检查已通过。
   备注：`import-trade-logs` 支持多种文件格式，Web 必须显式限制输入边界。
 
 ---

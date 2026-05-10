@@ -63,6 +63,7 @@ export type WorkflowRunRequest = {
   params: Record<string, unknown>;
   created_by?: string;
   idempotency_key?: string;
+  confirmed?: boolean;
 };
 
 export type WorkflowRunResponse = {

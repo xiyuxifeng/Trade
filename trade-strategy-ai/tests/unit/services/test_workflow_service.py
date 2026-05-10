@@ -87,3 +87,45 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
     assert result.payload["workflow"]["workflow_id"] == "pre-market"
     assert result.payload["job"]["job_type"] == "run-pre-market"
     assert fake_job_service.calls[0]["job_type"] == "run-pre-market"
+
+
+def test_workflow_service_rejects_unconfirmed_high_risk_workflow() -> None:
+    """高风险工作流未确认时不应创建 Job。"""
+    from src.services import WorkflowService
+
+    fake_job_service = _FakeJobService(calls=[])
+    service = WorkflowService(job_service=fake_job_service)
+    result = __import__("asyncio").run(
+        service.run_workflow(
+            workflow_id="install-config",
+            params={"config_path": "config/app.yaml"},
+            created_by="web",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "confirmation required for high-risk workflow"
+    assert result.payload["workflow_id"] == "install-config"
+    assert result.payload["requires_confirmation"] is True
+    assert fake_job_service.calls == []
+
+
+def test_workflow_service_allows_confirmed_high_risk_workflow() -> None:
+    """高风险工作流确认后应允许创建 Job。"""
+    from src.services import WorkflowService
+
+    fake_job_service = _FakeJobService(calls=[])
+    service = WorkflowService(job_service=fake_job_service)
+    result = __import__("asyncio").run(
+        service.run_workflow(
+            workflow_id="install-config",
+            params={"config_path": "config/app.yaml"},
+            created_by="web",
+            confirmed=True,
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.payload["workflow"]["workflow_id"] == "install-config"
+    assert result.payload["job"]["job_type"] == "init-project"
+    assert fake_job_service.calls[0]["job_type"] == "init-project"

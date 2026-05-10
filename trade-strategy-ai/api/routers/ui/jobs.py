@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.services.job_registry import get_job_definition, list_job_definitions, validate_job_submission
 from src.services.job_service import JobService, get_job_service
 
@@ -24,12 +24,27 @@ class JobSubmissionRequest(BaseModel):
     max_retries: int = 3
     retry_backoff_seconds: int = 0
     timeout_seconds: int | None = None
+    confirmed: bool = False
 
 
 class JobCancelRequest(BaseModel):
     """Job 取消请求体。"""
 
     reason: str | None = None
+
+
+def _audit_source_from_request(request: Request) -> dict[str, Any]:
+    """提取请求来源，写入 Job 审计记录。"""
+    client_host = request.client.host if request.client is not None else None
+    forwarded_for = request.headers.get("x-forwarded-for")
+    return {
+        "channel": "ui",
+        "path": request.url.path,
+        "method": request.method,
+        "client_host": client_host,
+        "user_agent": request.headers.get("user-agent"),
+        "forwarded_for": forwarded_for,
+    }
 
 @router.get("/definitions")
 async def list_definitions(_: str = Depends(verify_api_key)) -> list[dict[str, Any]]:
@@ -49,14 +64,16 @@ async def get_definition(job_type: str, _: str = Depends(verify_api_key)) -> dic
 @router.post("")
 async def create_job(
     request: JobSubmissionRequest,
+    http_request: Request,
     job_service: JobService = Depends(get_job_service),
-    _: str = Depends(verify_api_key),
+    _role_principal: CurrentPrincipal = Depends(require_role("operator")),
 ) -> dict[str, Any]:
     """创建一个新的 Job。"""
     validation = validate_job_submission(
         job_type=request.job_type,
         params=request.params,
         created_by=request.created_by,
+        confirmed=request.confirmed,
     )
     if validation.status != "ok":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=validation.message or "invalid job submission")
@@ -69,6 +86,7 @@ async def create_job(
         max_retries=request.max_retries,
         retry_backoff_seconds=request.retry_backoff_seconds,
         timeout_seconds=request.timeout_seconds,
+        audit_source=_audit_source_from_request(http_request),
     )
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "job creation failed")
@@ -141,11 +159,12 @@ async def get_job_logs(
 async def cancel_job(
     job_id: str,
     request: JobCancelRequest,
+    http_request: Request,
     job_service: JobService = Depends(get_job_service),
-    _: str = Depends(verify_api_key),
+    _role_principal: CurrentPrincipal = Depends(require_role("operator")),
 ) -> dict[str, Any]:
     """请求取消 Job。"""
-    result = await job_service.cancel_job(job_id=job_id, reason=request.reason)
+    result = await job_service.cancel_job(job_id=job_id, reason=request.reason, audit_source=_audit_source_from_request(http_request))
     if result.status == "partial":
         raise HTTPException(status_code=404, detail=result.message or "job not found")
     if result.status != "ok":

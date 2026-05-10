@@ -125,5 +125,8 @@ def test_init_config_template_exposes_required_top_level_sections() -> None:
     assert sorted(template["data"].keys()) == ["market_data_cache_dir", "mock_prices", "providers"]
     assert sorted(template["crawl"].keys()) == ["auth", "sources", "throttling"]
     assert sorted(template["api"].keys()) == ["auth", "host", "port", "timeout_seconds"]
+    assert template["api"]["auth"]["api_keys"][0]["key"] == "trade-strategy-ai-local-viewer"
+    assert template["api"]["auth"]["api_keys"][0]["role"] == "viewer"
+    assert template["api"]["auth"]["api_keys"][-1]["role"] == "admin"
     assert "token" in template["kaipan"]
     assert "user_id" in template["kaipan"]

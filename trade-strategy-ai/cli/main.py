@@ -179,7 +179,15 @@ api:
 	auth:
 		enabled: true
 		api_keys:
-			[]
+			- key: trade-strategy-ai-local-viewer
+			  role: viewer
+			  label: Local Viewer
+			- key: trade-strategy-ai-local-operator
+			  role: operator
+			  label: Local Operator
+			- key: trade-strategy-ai-local-admin
+			  role: admin
+			  label: Local Admin
 
 # Kaipan 开盘啦私有接口配置
 kaipan:

@@ -223,6 +223,8 @@ class ArtifactService(BaseService):
     def is_download_path_allowed(self, path: str | Path) -> bool:
         """判断下载路径是否位于允许的产物根目录内。"""
         candidate = Path(path).resolve()
+        if not candidate.is_file():
+            return False
         for _, root in self._candidate_roots():
             if self._is_within_root(candidate, root):
                 return True

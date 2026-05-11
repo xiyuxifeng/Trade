@@ -903,7 +903,13 @@ class JobService(BaseService):
             conditions.append(Job.job_type == job_type)
 
         async with session_scope() as session:
-            stmt = select(Job).where(*conditions).order_by(Job.created_at.asc(), Job.id.asc()).limit(limit)
+            stmt = (
+                select(Job)
+                .options(selectinload(Job.audit_events))
+                .where(*conditions)
+                .order_by(Job.created_at.asc(), Job.id.asc())
+                .limit(limit)
+            )
             result = await session.execute(stmt)
             rows = list(result.scalars().all())
 

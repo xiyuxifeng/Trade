@@ -1,4 +1,4 @@
-import { buildApiHeaders, fetchJson, getApiBaseUrl } from './http';
+import { buildApiHeaders } from './http';
 import type {
   DailyReportDetail,
   EvaluationResultDetail,
@@ -11,11 +11,11 @@ export function listDailyReports(skip = 0, limit = 50) {
     skip: String(skip),
     limit: String(limit),
   });
-  return fetchJson<ReportListResponse>(`/reports/daily?${params.toString()}`);
+  return fetchRootJson<ReportListResponse>(`/reports/daily?${params.toString()}`);
 }
 
 export function getDailyReport(date: string) {
-  return fetchJson<DailyReportDetail>(`/reports/daily/${date}`);
+  return fetchRootJson<DailyReportDetail>(`/reports/daily/${date}`);
 }
 
 export async function downloadDailyReportHtml(date: string) {
@@ -27,11 +27,11 @@ export function listEvaluationReports(skip = 0, limit = 50) {
     skip: String(skip),
     limit: String(limit),
   });
-  return fetchJson<ReportListResponse>(`/reports/evaluation?${params.toString()}`);
+  return fetchRootJson<ReportListResponse>(`/reports/evaluation?${params.toString()}`);
 }
 
 export function getEvaluationReport(date: string) {
-  return fetchJson<EvaluationResultDetail>(`/reports/evaluation/${date}`);
+  return fetchRootJson<EvaluationResultDetail>(`/reports/evaluation/${date}`);
 }
 
 export async function downloadEvaluationHtml(date: string) {
@@ -42,11 +42,25 @@ async function fetchReportHtml(kind: ReportKind, date: string) {
   const headers = buildApiHeaders();
   headers.set('Accept', 'text/html');
 
-  const response = await fetch(`${getApiBaseUrl()}/reports/${kind}/${date}/html`, {
+  const response = await fetch(`/reports/${kind}/${date}/html`, {
     headers,
   });
   if (!response.ok) {
     throw new Error(response.statusText || 'Report HTML load failed');
   }
   return response.text();
+}
+
+async function fetchRootJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = buildApiHeaders(init?.headers);
+  headers.set('Accept', 'application/json');
+
+  const response = await fetch(path, {
+    ...init,
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error(response.statusText || 'Report request failed');
+  }
+  return (await response.json()) as T;
 }

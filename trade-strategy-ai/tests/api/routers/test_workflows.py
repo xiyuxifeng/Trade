@@ -31,6 +31,19 @@ class _FakeWorkflowService:
 
     async def run_workflow(self, **kwargs: Any) -> Any:
         self.run_calls.append(kwargs)
+        if kwargs["workflow_id"] == "init-project" and not kwargs.get("confirmed"):
+            return _result(
+                {
+                    "workflow_id": kwargs["workflow_id"],
+                    "workflow": {
+                        "workflow_id": "init-project",
+                        "job_type": "init-project",
+                    },
+                    "requires_confirmation": True,
+                },
+                status="error",
+                message="confirmation required for high-risk workflow",
+            )
         return _result(
             {
                 "workflow": {"workflow_id": kwargs["workflow_id"], "job_type": "run-pre-market"},
@@ -115,3 +128,21 @@ async def test_viewer_cannot_run_workflow(client: AsyncClient) -> None:
             app.dependency_overrides.pop(get_current_principal, None)
         else:
             app.dependency_overrides[get_current_principal] = previous
+
+
+@pytest.mark.asyncio
+async def test_high_risk_workflow_requires_confirmation(client: AsyncClient) -> None:
+    """高风险 Workflow 未确认时应被拒绝，确认后才可运行。"""
+    rejected = await client.post(
+        "/api/ui/v1/workflows/init-project/run",
+        json={"params": {"config_path": "config/app.yaml"}, "created_by": "web", "confirmed": False},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"] == "confirmation required for high-risk workflow"
+
+    approved = await client.post(
+        "/api/ui/v1/workflows/init-project/run",
+        json={"params": {"config_path": "config/app.yaml"}, "created_by": "web", "confirmed": True},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["workflow"]["workflow_id"] == "init-project"

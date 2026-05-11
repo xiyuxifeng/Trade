@@ -90,3 +90,30 @@ data:
     assert dir_result.payload["base_dir"] == str(tmp_path)
     assert dir_result.payload["directories"]["data"]["exists"] is True
     assert dir_result.payload["directories"]["logs"]["exists"] is True
+
+
+def test_system_service_reports_missing_directories_as_partial(tmp_path: Path) -> None:
+    """关键目录缺失时系统服务应返回 partial 并列出缺失项。"""
+    from src.services.system_service import SystemService
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+storage:
+  output_dir: data/processed/phase0
+data:
+  market_data_cache_dir: data/processed/market_data
+  market_universe_snapshot_dir: data/market_universe/snapshots
+        """,
+        encoding="utf-8",
+    )
+    (tmp_path / "data").mkdir()
+
+    service = SystemService()
+    dir_result = service.check_key_directories(config_path)
+
+    assert dir_result.status == "partial"
+    assert "logs" in dir_result.warnings
+    assert dir_result.payload["directories"]["data"]["exists"] is True
+    assert dir_result.payload["directories"]["logs"]["exists"] is False

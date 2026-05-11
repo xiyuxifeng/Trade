@@ -141,3 +141,29 @@ async def test_ui_write_route_allows_valid_key(client: AsyncClient, monkeypatch:
     payload = response.json()
     assert payload["migrated"] == 2
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [
+        ("/api/ui/v1/system/status", "get"),
+        ("/api/ui/v1/workflows", "get"),
+        ("/api/ui/v1/jobs/definitions", "get"),
+        ("/api/ui/v1/artifacts", "get"),
+        ("/api/ui/v1/market/symbols", "get"),
+    ],
+)
+async def test_ui_routes_reject_missing_api_key_for_core_endpoints(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    method: str,
+) -> None:
+    """核心 UI API 在鉴权开启且未提供 key 时应统一拒绝访问。"""
+    monkeypatch.setattr(
+        "api.dependencies._get_api_config",
+        lambda: {"auth": {"enabled": True, "api_keys": []}},
+    )
+
+    response = await getattr(client, method)(path)
+    assert response.status_code == 403

@@ -11,6 +11,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models.job import Job
+from src.models.job_audit_event import JobAuditEvent
 
 
 def _build_job_runner(tmp_path: Path, handlers: dict[str, Any] | None = None):
@@ -22,6 +23,7 @@ def _build_job_runner(tmp_path: Path, handlers: dict[str, Any] | None = None):
     async def _init_schema() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(Job.__table__.create)
+            await conn.run_sync(JobAuditEvent.__table__.create)
 
     asyncio.run(_init_schema())
 

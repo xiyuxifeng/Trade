@@ -12,6 +12,7 @@ def test_services_package_exposes_web_service_entrypoints() -> None:
         "DashboardService",
         "ServiceResult",
         "ConfigService",
+        "ConfigEditService",
         "JobService",
         "JobRunner",
         "MarketService",

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 
 @dataclass
 class _FakeMarketUniverse:
@@ -125,6 +127,44 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path) -> None:
     assert bars_df.payload["rows"] == 1
 
 
+def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_path: Path) -> None:
+    """增量抓取应把调用方传入的起止日期原样传给底层服务。"""
+    from src.services.market_service import MarketService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    class _FakeOhlcv:
+        def __init__(self) -> None:
+            self.crawl_calls: list[tuple[tuple[str, ...], date | None, date | None]] = []
+
+        async def crawl_bars(self, symbols, start_date=None, end_date=None):
+            self.crawl_calls.append((tuple(symbols), start_date, end_date))
+            return {"000001.SZ": 2}
+
+        async def get_latest_close(self, symbol: str):
+            return 10.5
+
+    fake_ohlcv = _FakeOhlcv()
+    service = MarketService(ohlcv_service=fake_ohlcv)
+
+    result = asyncio.run(
+        service.crawl_ohlcv(
+            config_path=config_path,
+            mode="incremental",
+            symbols=["000001.SZ"],
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 28),
+        )
+    )
+
+    assert result.status == "ok"
+    assert fake_ohlcv.crawl_calls == [
+        (("000001.SZ",), date(2026, 4, 1), date(2026, 4, 28))
+    ]
+
+
 def test_market_service_lists_symbols_and_ohlcv_from_session(tmp_path: Path) -> None:
     """MarketService 应支持行情标的和 K 线查询。"""
     from src.services.market_service import MarketService
@@ -189,3 +229,74 @@ def test_market_service_lists_symbols_and_ohlcv_from_session(tmp_path: Path) -> 
     assert symbols.payload["items"] == ["000001.SZ", "600000.SH"]
     assert ohlcv.payload["count"] == 2
     assert ohlcv.payload["items"][0]["time"] == "2026-04-01"
+
+
+def test_market_service_rejects_invalid_mode_and_missing_symbols(tmp_path: Path) -> None:
+    """MarketService 应拒绝非法模式和缺失 symbols 的调用。"""
+    from src.services.market_service import MarketService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    class _FakeOhlcv:
+        async def crawl_bars(self, symbols, start_date=None, end_date=None):
+            return {"000001.SZ": 2}
+
+    service = MarketService(ohlcv_service=_FakeOhlcv())
+
+    with pytest.raises(ValueError, match="mode must be full or incremental"):
+        asyncio.run(
+            service.crawl_ohlcv(
+                config_path=config_path,
+                mode="unsupported",
+                symbols=["000001.SZ"],
+            )
+        )
+
+    with pytest.raises(ValueError, match="symbols must be provided"):
+        asyncio.run(
+            service.crawl_ohlcv(
+                config_path=config_path,
+                mode="full",
+                symbols=None,
+            )
+        )
+
+
+def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:
+    """快照构建中部分处理器失败时应返回 partial 并保留错误信息。"""
+    from src.services.snapshot_service import SnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    async def fake_hot_topics(details, *, config):
+        return None
+
+    async def fake_constituents(details, *, config):
+        raise RuntimeError("constituents failed")
+
+    async def fake_strong(details, *, config):
+        return None
+
+    service = SnapshotService(
+        hot_topics_handler=fake_hot_topics,
+        topic_constituents_handler=fake_constituents,
+        strong_symbols_handler=fake_strong,
+    )
+
+    result = asyncio.run(
+        service.build_snapshot(
+            config_path=config_path,
+            date="2026-04-23",
+            snapshot_type="all",
+        )
+    )
+
+    assert result.status == "partial"
+    assert result.payload["failure_count"] == 1
+    assert result.payload["success_count"] == 2
+    assert result.warnings == ["constituents failed"]
+    assert any(item["status"] == "error" for item in result.payload["results"])

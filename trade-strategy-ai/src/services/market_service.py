@@ -96,7 +96,7 @@ class MarketService(BaseService):
         if mode == "full":
             results = await service.crawl_bars(symbols=symbols[:limit], start_date=start_date, end_date=end_date)
         elif mode == "incremental":
-            results = await service.crawl_bars(symbols=symbols[:limit], start_date=end_date, end_date=end_date)
+            results = await service.crawl_bars(symbols=symbols[:limit], start_date=start_date, end_date=end_date)
         else:
             raise ValueError("mode must be full or incremental")
 

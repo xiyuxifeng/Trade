@@ -1,0 +1,71 @@
+"""UI OpenAPI 契约测试。"""
+
+from __future__ import annotations
+
+from api.main import app
+
+
+def test_ui_openapi_exposes_critical_contract_paths() -> None:
+    """UI 层关键路由必须稳定暴露。"""
+    paths = app.openapi()["paths"]
+    components = app.openapi()["components"]["schemas"]
+
+    expected_methods = {
+        "/api/ui/v1/system/status": {"get"},
+        "/api/ui/v1/auth/me": {"get"},
+        "/api/ui/v1/jobs": {"get", "post"},
+        "/api/ui/v1/jobs/{job_id}": {"get"},
+        "/api/ui/v1/jobs/{job_id}/logs": {"get"},
+        "/api/ui/v1/jobs/{job_id}/cancel": {"post"},
+        "/api/ui/v1/workflows": {"get"},
+        "/api/ui/v1/workflows/{workflow_id}": {"get"},
+        "/api/ui/v1/workflows/{workflow_id}/run": {"post"},
+        "/api/ui/v1/artifacts": {"get"},
+        "/api/ui/v1/artifacts/{artifact_id}": {"get"},
+        "/api/ui/v1/artifacts/{artifact_id}/download": {"get"},
+        "/reports/daily": {"get"},
+        "/reports/daily/{date_str}": {"get"},
+        "/reports/daily/{date_str}/html": {"get"},
+        "/reports/evaluation": {"get"},
+        "/reports/evaluation/{date_str}": {"get"},
+        "/reports/evaluation/{date_str}/html": {"get"},
+        "/api/ui/v1/settings/config": {"get"},
+        "/api/ui/v1/settings/schema": {"get"},
+        "/api/ui/v1/settings/validate": {"post"},
+        "/api/ui/v1/settings/save": {"post"},
+        "/api/ui/v1/settings/backups": {"get"},
+        "/api/ui/v1/settings/restore": {"post"},
+        "/api/ui/v1/market/symbols": {"get"},
+        "/api/ui/v1/market/ohlcv": {"get"},
+    }
+
+    for path, methods in expected_methods.items():
+        assert path in paths, path
+        assert set(paths[path]) == methods
+
+    expected_request_refs = {
+        ("/api/ui/v1/jobs", "post"): "#/components/schemas/JobSubmissionRequest",
+        ("/api/ui/v1/jobs/{job_id}/cancel", "post"): "#/components/schemas/JobCancelRequest",
+        ("/api/ui/v1/workflows/{workflow_id}/run", "post"): "#/components/schemas/WorkflowRunRequest",
+        ("/api/ui/v1/settings/validate", "post"): "#/components/schemas/SettingsDraftRequest",
+        ("/api/ui/v1/settings/save", "post"): "#/components/schemas/SettingsSaveRequest",
+        ("/api/ui/v1/settings/restore", "post"): "#/components/schemas/SettingsRestoreRequest",
+    }
+
+    for (path, method), schema_ref in expected_request_refs.items():
+        assert paths[path][method]["requestBody"]["content"]["application/json"]["schema"]["$ref"] == schema_ref
+
+    expected_response_refs = {
+        ("/reports/daily", "get"): "#/components/schemas/DailyReportListResponse",
+        ("/reports/daily/{date_str}", "get"): "#/components/schemas/DailyReportResponse",
+        ("/reports/evaluation", "get"): "#/components/schemas/EvaluationListResponse",
+        ("/reports/evaluation/{date_str}", "get"): "#/components/schemas/EvaluationResponse",
+    }
+
+    for (path, method), schema_ref in expected_response_refs.items():
+        assert paths[path][method]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == schema_ref
+
+    assert set(components["SettingsSaveRequest"]["properties"]) >= {"config_path", "draft", "confirmed"}
+    assert components["SettingsSaveRequest"]["properties"]["confirmed"]["default"] is False
+    assert set(components["WorkflowRunRequest"]["properties"]) >= {"params", "created_by", "idempotency_key", "confirmed"}
+    assert components["WorkflowRunRequest"]["properties"]["confirmed"]["default"] is False

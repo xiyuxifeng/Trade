@@ -7,10 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
 
@@ -65,6 +66,7 @@ def _find_result_file(result_id: str) -> Path | None:
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_backtest_results(
+    _key: str = Depends(verify_api_key),
     trader_id: str | None = Query(default=None),
     date_from: str | None = Query(default=None, description="开始日期 YYYY-MM-DD"),
     date_to: str | None = Query(default=None, description="结束日期 YYYY-MM-DD"),
@@ -111,7 +113,7 @@ async def list_backtest_results(
 
 
 @router.get("/{result_id}", response_model=BacktestResultDetail)
-async def get_backtest_result(result_id: str) -> BacktestResultDetail:
+async def get_backtest_result(result_id: str, _key: str = Depends(verify_api_key)) -> BacktestResultDetail:
     """获取回测结果详情。"""
     result_file = _find_result_file(result_id)
     if result_file is None:
@@ -126,7 +128,7 @@ async def get_backtest_result(result_id: str) -> BacktestResultDetail:
 
 
 @router.get("/{result_id}/report")
-async def download_backtest_report(result_id: str) -> FileResponse:
+async def download_backtest_report(result_id: str, _key: str = Depends(verify_api_key)) -> FileResponse:
     """下载回测报告（Markdown）。"""
     report_file = None
     for results_dir in _get_backtest_results_dirs():
@@ -145,7 +147,7 @@ async def download_backtest_report(result_id: str) -> FileResponse:
 
 
 @router.get("/{result_id}/validate_rules")
-async def download_validate_rules(result_id: str) -> FileResponse:
+async def download_validate_rules(result_id: str, _key: str = Depends(verify_api_key)) -> FileResponse:
     """下载规则验真报告（Markdown）。"""
     validate_file = None
     for results_dir in _get_backtest_results_dirs():

@@ -375,6 +375,12 @@ python -m cli.main <command> --help
 	- `--config`：配置文件路径
 	- `--log-level`：日志级别（默认 `INFO`）
 
+- `seed-admin`
+	- 说明：创建或更新默认管理员用户（用于 Web 登录认证）
+	- `--username`：管理员用户名（默认 `admin`）
+	- `--password`：管理员密码（默认 `wanghui`）
+	- `--log-level`：日志级别（默认 `INFO`）
+
 - `backup-data`
 	- 说明：备份数据库表与（可选）处理产物到一个目录
 	- `--dest`：备份目录（可选）

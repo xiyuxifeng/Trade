@@ -8,10 +8,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.common.logger import get_logger
 
 router = APIRouter(prefix="/strategy_versions", tags=["strategy_versions"])
@@ -46,6 +47,7 @@ def _parse_date(date_str: str | None) -> date | None:
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_strategy_versions(
+    _key: str = Depends(verify_api_key),
     trader_id: str | None = Query(default=None, description="交易员 ID"),
     status_filter: str | None = Query(default=None, alias="status", description="版本状态"),
     date_from: str | None = Query(default=None, description="开始日期 YYYY-MM-DD"),
@@ -102,7 +104,7 @@ async def list_strategy_versions(
 
 
 @router.get("/{version_id}", response_model=StrategyVersionDetail)
-async def get_strategy_version(version_id: str) -> StrategyVersionDetail:
+async def get_strategy_version(version_id: str, _key: str = Depends(verify_api_key)) -> StrategyVersionDetail:
     """获取策略版本详情（包含 rules_snapshot）。"""
     from sqlalchemy import select
     from src.models.trader_strategy_version import TraderStrategyVersion
@@ -132,7 +134,7 @@ async def get_strategy_version(version_id: str) -> StrategyVersionDetail:
 
 
 @router.get("/{version_id}/download")
-async def download_strategy_version(version_id: str) -> FileResponse:
+async def download_strategy_version(version_id: str, _key: str = Depends(verify_api_key)) -> FileResponse:
     """下载策略版本 JSON 文件。"""
     from sqlalchemy import select
     from src.models.trader_strategy_version import TraderStrategyVersion

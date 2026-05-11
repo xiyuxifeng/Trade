@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.logger import get_logger
 from src.common.utils import read_json
@@ -122,6 +123,7 @@ async def list_daily_reports(
     skip: int = Query(default=0, ge=0, description="跳过的数量"),
     limit: int = Query(default=50, ge=1, le=100, description="返回数量限制"),
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> DailyReportListResponse:
     """列出所有可用的日报（分页）。"""
     output_dir = mgr.output_dir
@@ -168,6 +170,7 @@ async def list_daily_reports(
 async def get_daily_report(
     date_str: str,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> DailyReportResponse:
     """获取指定日期的日报详情。"""
     as_of_date = _parse_date(date_str)
@@ -200,6 +203,7 @@ async def get_daily_report(
 async def download_daily_report_html(
     date_str: str,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> FileResponse:
     """下载指定日期的日报 HTML 文件。"""
     as_of_date = _parse_date(date_str)
@@ -227,6 +231,7 @@ async def list_evaluation_reports(
     skip: int = Query(default=0, ge=0, description="跳过的数量"),
     limit: int = Query(default=50, ge=1, le=100, description="返回数量限制"),
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> EvaluationListResponse:
     """列出所有可用的考核报告（分页）。"""
     output_dir = mgr.output_dir
@@ -272,6 +277,7 @@ async def list_evaluation_reports(
 async def get_evaluation_report(
     date_str: str,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> EvaluationResponse:
     """获取指定日期的考核报告详情。"""
     as_of_date = _parse_date(date_str)
@@ -304,6 +310,7 @@ async def get_evaluation_report(
 async def download_evaluation_html(
     date_str: str,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> FileResponse:
     """下载指定日期的考核报告 HTML 文件。"""
     as_of_date = _parse_date(date_str)

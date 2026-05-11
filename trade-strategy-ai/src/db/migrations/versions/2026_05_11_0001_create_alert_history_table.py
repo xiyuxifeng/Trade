@@ -7,8 +7,8 @@ import sqlalchemy.dialects.postgresql as pg
 import uuid
 
 # revision identifiers, used by Alembic.
-revision = '2026_05_11_0001_create_alert_history_table'
-down_revision = None
+revision = '2026_05_11_0001'
+down_revision = '2026_05_10_0002'
 branch_labels = None
 depends_on = None
 

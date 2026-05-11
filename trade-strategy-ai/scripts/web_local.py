@@ -145,6 +145,18 @@ def migrate() -> None:
     _run_command((sys.executable, "-m", "cli.main", "db-migrate", "--config", "config/app.yaml"), cwd=PROJECT_ROOT)
 
 
+@app.command("seed-admin")
+def seed_admin(
+    username: str = typer.Option("admin", help="管理员用户名"),
+    password: str = typer.Option("wanghui", help="管理员密码"),
+) -> None:
+    """创建或更新默认管理员用户。"""
+    _run_command(
+        (sys.executable, "-m", "cli.main", "seed-admin", "--username", username, "--password", password, "--log-level", "INFO"),
+        cwd=PROJECT_ROOT,
+    )
+
+
 @app.command("start-api")
 def start_api(
     web_dist: Path = typer.Option(DEFAULT_WEB_DIST, help="前端构建产物目录"),

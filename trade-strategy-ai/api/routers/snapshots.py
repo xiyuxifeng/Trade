@@ -7,10 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.market_universe.snapshot_service import SnapshotService
 from src.common.logger import get_logger
 
@@ -39,6 +40,7 @@ def _get_snapshot_service() -> SnapshotService:
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_snapshots(
+    _key: str = Depends(verify_api_key),
     snapshot_type: str | None = Query(default=None, alias="type", description="快照类型"),
     date: str | None = Query(default=None, description="交易日期 YYYY-MM-DD"),
     skip: int = Query(default=0, ge=0),
@@ -110,7 +112,7 @@ def _guess_type(mu) -> str:
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotDetail)
-async def get_snapshot(snapshot_id: str) -> SnapshotDetail:
+async def get_snapshot(snapshot_id: str, _key: str = Depends(verify_api_key)) -> SnapshotDetail:
     """获取快照详情。"""
     parts = snapshot_id.rsplit("_", 1)
     if len(parts) != 2:
@@ -128,7 +130,7 @@ async def get_snapshot(snapshot_id: str) -> SnapshotDetail:
 
 
 @router.get("/{snapshot_id}/download")
-async def download_snapshot(snapshot_id: str) -> FileResponse:
+async def download_snapshot(snapshot_id: str, _key: str = Depends(verify_api_key)) -> FileResponse:
     """下载快照 JSON 文件。"""
     parts = snapshot_id.rsplit("_", 1)
     if len(parts) != 2:

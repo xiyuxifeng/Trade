@@ -7,10 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.common.logger import get_logger
 
 router = APIRouter(prefix="/rankings", tags=["rankings"])
@@ -33,6 +34,7 @@ class RankingDetail(BaseModel):
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_rankings(
+    _key: str = Depends(verify_api_key),
     trader_id: str | None = Query(default=None),
     date_from: str | None = Query(default=None, description="开始日期 YYYY-MM-DD"),
     date_to: str | None = Query(default=None, description="结束日期 YYYY-MM-DD"),
@@ -91,7 +93,7 @@ async def list_rankings(
 
 
 @router.get("/{entry_id}", response_model=RankingDetail)
-async def get_ranking(entry_id: str) -> RankingDetail:
+async def get_ranking(entry_id: str, _key: str = Depends(verify_api_key)) -> RankingDetail:
     """获取 ranking 条目详情。"""
     from sqlalchemy import select
     from src.models.ranking_entry import RankingEntryRecord
@@ -122,7 +124,7 @@ async def get_ranking(entry_id: str) -> RankingDetail:
 
 
 @router.get("/{entry_id}/download")
-async def download_ranking(entry_id: str) -> FileResponse:
+async def download_ranking(entry_id: str, _key: str = Depends(verify_api_key)) -> FileResponse:
     """下载 ranking 条目 JSON 文件。"""
     from sqlalchemy import select
     from src.models.ranking_entry import RankingEntryRecord

@@ -18,6 +18,7 @@ from src.models.job_audit_event import JobAuditEvent
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.models.trader_memory import TraderMemory
 from src.models.trade_log import TradeLog
+from src.models.user import User, UserSession
 
 __all__ = [
     "OHLCVBar",
@@ -40,4 +41,6 @@ __all__ = [
     "TraderStrategyVersion",
     "TraderMemory",
     "TradeLog",
+    "User",
+    "UserSession",
 ]

@@ -19,6 +19,8 @@ import { KaipanPage } from '@/pages/kaipan';
 import { StrategyStudioPage } from '@/pages/strategy-studio';
 import { StrategiesPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
+import { LoginPage } from '@/pages/login';
+import { UsersPage } from '@/pages/users';
 
 function NotFoundPage() {
   return (
@@ -33,6 +35,10 @@ function NotFoundPage() {
 }
 
 export const appRouter = createBrowserRouter([
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
   {
     element: <DashboardLayout />,
     children: [
@@ -111,6 +117,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
+      },
+      {
+        path: 'users',
+        element: <UsersPage />,
       },
       {
         path: 'ops',

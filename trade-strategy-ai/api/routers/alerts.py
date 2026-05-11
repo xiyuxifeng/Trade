@@ -8,9 +8,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
+from api.dependencies import verify_api_key
 from src.common.logger import get_logger
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -76,6 +77,7 @@ def _row_to_item(row) -> AlertHistoryItem:
 
 @router.get("/history", response_model=PaginatedAlertHistory)
 async def list_alert_history(
+    _key: str = Depends(verify_api_key),
     status: str | None = Query(default=None, description="状态过滤"),
     level: str | None = Query(default=None, description="级别过滤"),
     tag: str | None = Query(default=None, description="标签过滤"),
@@ -114,7 +116,7 @@ async def list_alert_history(
 
 
 @router.get("/history/{record_id}", response_model=AlertHistoryItem)
-async def get_alert_history(record_id: str) -> AlertHistoryItem:
+async def get_alert_history(record_id: str, _key: str = Depends(verify_api_key)) -> AlertHistoryItem:
     """获取单条告警详情。"""
     from src.db.session import session_scope
     from src.alerting.db import AlertHistoryRepository
@@ -136,6 +138,7 @@ async def get_alert_history(record_id: str) -> AlertHistoryItem:
 async def acknowledge_alert(
     record_id: str,
     body: AlertAcknowledgeRequest | None = None,
+    _key: str = Depends(verify_api_key),
 ) -> dict:
     """确认告警。"""
     from src.db.session import session_scope
@@ -165,6 +168,7 @@ async def acknowledge_alert(
 async def resolve_alert(
     record_id: str,
     body: AlertResolveRequest | None = None,
+    _key: str = Depends(verify_api_key),
 ) -> dict:
     """解决告警。"""
     from src.db.session import session_scope
@@ -191,7 +195,7 @@ async def resolve_alert(
 
 
 @router.post("/test")
-async def send_test_alert() -> dict:
+async def send_test_alert(_key: str = Depends(verify_api_key)) -> dict:
     """发送测试告警（验证 Webhook 配置）。"""
     from src.common.config import load_app_config
     from src.alerting.manager import AlertManager

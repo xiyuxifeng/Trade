@@ -1,5 +1,7 @@
-import { Menu } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/features/auth/auth-context';
 
 type TopbarProps = {
   title: string;
@@ -8,6 +10,14 @@ type TopbarProps = {
 };
 
 export function Topbar({ title, description, onMenuClick }: TopbarProps) {
+  const { principal, isAuthenticated, handleLogout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogoutClick = () => {
+    handleLogout();
+    navigate('/login');
+  };
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -21,7 +31,14 @@ export function Topbar({ title, description, onMenuClick }: TopbarProps) {
         </div>
       </div>
 
-      <p className="topbar-description">{description}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <p className="topbar-description">{description}</p>
+        {isAuthenticated && (
+          <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="登出">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </header>
   );
 }

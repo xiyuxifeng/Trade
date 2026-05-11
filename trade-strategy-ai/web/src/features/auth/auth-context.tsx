@@ -1,13 +1,17 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { createContext, useContext, useMemo, useCallback, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCurrentPrincipal } from '@/lib/api/auth';
+import { setAuthToken } from '@/lib/api/http';
 import type { CurrentPrincipal, PrincipalRole } from '@/types/auth';
 
 type AuthContextValue = {
   principal: CurrentPrincipal;
   isLoading: boolean;
   isFetching: boolean;
+  isAuthenticated: boolean;
   canAccess: (minRole: PrincipalRole) => boolean;
+  refresh: () => void;
+  handleLogout: () => void;
 };
 
 const ROLE_ORDER: Record<PrincipalRole, number> = {
@@ -41,6 +45,8 @@ export function AuthProvider({
   children: ReactNode;
   initialPrincipal?: CurrentPrincipal | null;
 }) {
+  const queryClient = useQueryClient();
+
   const principalQuery = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: getCurrentPrincipal,
@@ -52,14 +58,27 @@ export function AuthProvider({
 
   const principal = principalQuery.data ?? anonymousPrincipal;
 
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+  }, [queryClient]);
+
+  const handleLogout = useCallback(() => {
+    setAuthToken(null);
+    queryClient.setQueryData(['auth', 'me'], anonymousPrincipal);
+    queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+  }, [queryClient]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       principal,
       isLoading: principalQuery.isLoading,
       isFetching: principalQuery.isFetching,
+      isAuthenticated: principal.authenticated && principal.source !== 'anonymous',
       canAccess: (minRole: PrincipalRole) => canAccessRole(principal.role, minRole),
+      refresh,
+      handleLogout,
     }),
-    [principal, principalQuery.isFetching, principalQuery.isLoading],
+    [principal, principalQuery.isFetching, principalQuery.isLoading, refresh, handleLogout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

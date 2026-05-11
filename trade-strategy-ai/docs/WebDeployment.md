@@ -246,11 +246,12 @@ Job 相关产物建议按 Job ID 或业务日期归档，确保：
 1. 配好 `DATABASE_URL`、`CONFIG_PATH`、`X-API-Key` 相关注入
 2. 启动 PostgreSQL
 3. 执行数据库迁移
-4. 构建 Web 前端
-5. 启动 FastAPI API
-6. 启动 Job Worker
-7. 部署或托管 Web 静态资源
-8. 检查健康状态与日志
+4. 创建默认管理员用户（`seed-admin`）
+5. 构建 Web 前端
+6. 启动 FastAPI API
+7. 启动 Job Worker
+8. 部署或托管 Web 静态资源
+9. 检查健康状态与日志
 
 生产启动流程必须避免以下做法：
 
@@ -273,6 +274,9 @@ docker compose up -d db
 # 执行数据库迁移
 docker compose run --rm api python -m cli.main db-migrate --config config/app.yaml
 
+# 创建默认管理员用户
+docker compose run --rm api python -m cli.main seed-admin --username admin --password wanghui
+
 # 启动应用、工作进程和 Web 服务
 docker compose up -d api worker web
 ```
@@ -281,6 +285,7 @@ docker compose up -d api worker web
 
 ```bash
 python -m cli.main db-migrate --config config/app.yaml
+python -m cli.main seed-admin --username admin --password wanghui
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 python -m cli.main job-worker-start --config config/app.yaml
 corepack pnpm build
@@ -299,6 +304,7 @@ corepack pnpm build
 ```bash
 python -m scripts.web_local build
 python -m scripts.web_local migrate
+python -m scripts.web_local seed-admin
 python -m scripts.web_local start
 ```
 
@@ -307,6 +313,7 @@ python -m scripts.web_local start
 ```bash
 python -m scripts.web_local build
 python -m scripts.web_local migrate
+python -m scripts.web_local seed-admin
 python -m scripts.web_local start-api
 python -m scripts.web_local start-worker
 ```
@@ -314,6 +321,8 @@ python -m scripts.web_local start-worker
 本机模式的约定：
 
 - `build` 在 `web/` 下执行 `corepack pnpm build`
+- `migrate` 执行数据库迁移
+- `seed-admin` 创建默认管理员用户（admin/wanghui）
 - `start-api` 和 `start` 会要求 `web/dist/index.html` 已存在
 - API 在 `WEB_STATIC_DIR=web/dist` 时直接托管前端静态页面
 - 浏览器访问 `http://localhost:8000` 即可同时使用 Web 页面和 `/api/ui/v1/*`

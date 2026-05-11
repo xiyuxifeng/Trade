@@ -143,7 +143,7 @@ class MarketService(BaseService):
 
     async def list_symbols(self, *, q: str | None = None, limit: int = 200) -> ServiceResult:
         """列出数据库中的行情标的。"""
-        session_factory = self._get_session_factory()
+        session_factory = self._get_session_factory()()
         async with session_factory.begin() as session:
             stmt = select(OHLCVBar.symbol).distinct()
             if q:
@@ -160,7 +160,7 @@ class MarketService(BaseService):
 
     async def get_ohlcv(self, symbol: str, start_date: date, end_date: date) -> ServiceResult:
         """按 symbol 和日期范围查询 K 线数据。"""
-        session_factory = self._get_session_factory()
+        session_factory = self._get_session_factory()()
         async with session_factory.begin() as session:
             stmt = (
                 select(OHLCVBar)

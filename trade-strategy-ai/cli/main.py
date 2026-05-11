@@ -1066,6 +1066,47 @@ def migrate_crawl_state(
 	typer.echo(f"迁移完成: {result.payload['migrated']} 个源已迁移, {result.payload['skipped']} 个跳过")
 
 
+@app.command("seed-admin")
+def seed_admin(
+    username: str = typer.Option("admin", help="管理员用户名"),
+    password: str = typer.Option("wanghui", help="管理员密码"),
+    log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+    """在数据库中创建或更新默认管理员用户。"""
+    configure_logging(log_level)
+    from sqlalchemy import select
+    from src.models.user import User
+    from src.auth import hash_password
+    from src.db.session import session_scope as db_session_scope
+
+    db_session_scope = db_session_scope  # 消除未使用变量警告
+
+    async def _run():
+        async with session_scope() as session:
+            result = await session.execute(
+                select(User).where(User.username == username)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                user.password_hash = hash_password(password)
+                user.is_active = True
+                user.role = "admin"
+                typer.echo(f"管理员用户 '{username}' 已更新密码")
+            else:
+                user = User(
+                    username=username,
+                    password_hash=hash_password(password),
+                    role="admin",
+                    display_name="系统管理员",
+                    is_active=True,
+                )
+                session.add(user)
+                typer.echo(f"管理员用户 '{username}' 已创建")
+            await session.flush()
+
+    run_async_with_cleanup(_run())
+
+
 # rule-pool 命令组：规则池查询与审核（NTL-S11-009）
 from src.rule_pool.repository import RulePoolRepository
 from src.db.session import session_scope

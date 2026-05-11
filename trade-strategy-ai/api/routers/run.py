@@ -13,6 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from api.dependencies import verify_api_key
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
@@ -129,6 +130,7 @@ class RunAfterCloseResponse(BaseModel):
 async def run_pre_market(
     request: RunPreMarketRequest | None = None,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> RunPreMarketResponse:
     """触发盘前日报生成。
 
@@ -191,6 +193,7 @@ async def run_pre_market(
 async def run_after_close(
     request: RunAfterCloseRequest | None = None,
     mgr: ManagerAgent = Depends(get_manager_agent),
+    _key: str = Depends(verify_api_key),
 ) -> RunAfterCloseResponse:
     """触发盘后考核生成。
 
@@ -240,6 +243,6 @@ async def run_after_close(
 
 
 @router.get("/health")
-async def run_health() -> dict:
+async def run_health(_key: str = Depends(verify_api_key)) -> dict:
     """健康检查端点。"""
     return {"status": "ok", "service": "run"}

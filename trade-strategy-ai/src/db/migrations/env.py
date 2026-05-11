@@ -29,6 +29,7 @@ from src.models import (  # noqa: F401
     topic_constituents_snapshot,
     trader_strategy_version,
     trade_log,
+    user,
 )
 
 config = context.config

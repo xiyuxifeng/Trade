@@ -26,5 +26,6 @@ export const mainNavigation: NavItem[] = [
   { label: '告警', path: '/alerts', description: '告警历史与确认' },
   { label: '报告', path: '/reports', description: '盘前/盘后报告中心' },
   { label: '设置', path: '/settings', description: '应用配置与密钥管理' },
+  { label: '用户管理', path: '/users', description: '用户、角色与权限管理', minRole: 'admin' },
   { label: '运维', path: '/ops', description: '部署与恢复工具', minRole: 'admin' },
 ];

@@ -264,8 +264,16 @@ Job 相关产物建议按 Job ID 或业务日期归档，确保：
 如果使用 Docker Compose，推荐的最小生产启动流程是：
 
 ```bash
+# 构建所有服务的 Docker 镜像
+docker compose build
+
+# 启动数据库服务
 docker compose up -d db
+
+# 执行数据库迁移
 docker compose run --rm api python -m cli.main db-migrate --config config/app.yaml
+
+# 启动应用、工作进程和 Web 服务
 docker compose up -d api worker web
 ```
 

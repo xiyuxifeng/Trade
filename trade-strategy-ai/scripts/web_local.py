@@ -52,6 +52,66 @@ def _worker_command() -> tuple[str, ...]:
     return (sys.executable, "-m", "cli.main", "job-worker-start", "--config", "config/app.yaml")
 
 
+def _get_pid_dir() -> Path:
+    """获取并确保 PID 文件目录存在。"""
+    pid_dir = PROJECT_ROOT / ".pids"
+    pid_dir.mkdir(exist_ok=True)
+    return pid_dir
+
+
+def _write_pid_file(name: str, pid: int) -> None:
+    """写入 PID 文件。"""
+    pid_dir = _get_pid_dir()
+    (pid_dir / f"{name}.pid").write_text(str(pid))
+
+
+def _read_pid_file(name: str) -> int | None:
+    """读取 PID 文件。"""
+    pid_file = _get_pid_dir() / f"{name}.pid"
+    if pid_file.exists():
+        try:
+            return int(pid_file.read_text())
+        except (ValueError, FileNotFoundError):
+            return None
+    return None
+
+
+def _remove_pid_file(name: str) -> None:
+    """删除 PID 文件。"""
+    pid_file = _get_pid_dir() / f"{name}.pid"
+    if pid_file.exists():
+        pid_file.unlink()
+
+
+def _terminate_process(pid: int) -> None:
+    """终止指定 PID 的进程。"""
+    if pid is None:
+        return
+
+    try:
+        import psutil
+    except ImportError:
+        # Fallback for when psutil is not installed
+        try:
+            os.kill(pid, 15)  # SIGTERM
+            typer.echo(f"向进程 {pid} 发送终止信号 (os.kill)...")
+        except ProcessLookupError:
+            typer.echo(f"进程 {pid} 不存在。", err=True)
+        return
+
+    try:
+        proc = psutil.Process(pid)
+        proc.terminate()
+        typer.echo(f"向进程 {pid} 发送终止信号...")
+        try:
+            proc.wait(timeout=10)
+        except psutil.TimeoutExpired:
+            proc.kill()
+            typer.echo(f"进程 {pid} 未在10秒内终止，强制杀死。", err=True)
+    except psutil.NoSuchProcess:
+        typer.echo(f"进程 {pid} 不存在。", err=True)
+
+
 @app.command("build")
 def build() -> None:
     """构建前端生产产物。"""
@@ -87,6 +147,10 @@ def start(
     static_dir = _require_web_dist(web_dist)
     api_proc = _spawn_command(_api_command(), cwd=PROJECT_ROOT, env=_api_env(web_dist=static_dir))
     worker_proc = _spawn_command(_worker_command(), cwd=PROJECT_ROOT)
+
+    _write_pid_file("api", api_proc.pid)
+    _write_pid_file("worker", worker_proc.pid)
+
     processes = [api_proc, worker_proc]
 
     try:
@@ -102,6 +166,8 @@ def start(
                             proc.wait(timeout=10)
                         except subprocess.TimeoutExpired:
                             proc.kill()
+                _remove_pid_file("api")
+                _remove_pid_file("worker")
                 raise SystemExit(exited.returncode or 1)
             time.sleep(1.0)
     except KeyboardInterrupt:
@@ -113,7 +179,30 @@ def start(
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        _remove_pid_file("api")
+        _remove_pid_file("worker")
         raise SystemExit(130)
+
+
+@app.command("stop")
+def stop() -> None:
+    """停止由 start 命令启动的 API 和 Worker 进程。"""
+    typer.echo("正在停止服务...")
+    api_pid = _read_pid_file("api")
+    worker_pid = _read_pid_file("worker")
+
+    if api_pid is None and worker_pid is None:
+        typer.echo("没有找到正在运行的服务 (PID 文件不存在)。")
+        return
+
+    if api_pid:
+        _terminate_process(api_pid)
+        _remove_pid_file("api")
+    if worker_pid:
+        _terminate_process(worker_pid)
+        _remove_pid_file("worker")
+
+    typer.echo("服务已停止。")
 
 
 def main() -> None:

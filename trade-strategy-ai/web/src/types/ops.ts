@@ -7,6 +7,7 @@ export type RecoveryBackupItem = {
   row_counts: Record<string, number>;
   include_processed: boolean;
   processed_copied: boolean;
+  artifacts_copied?: boolean;
 };
 
 export type RecoveryBackupsResponse = {
@@ -27,6 +28,7 @@ export type RecoveryBackupResponse = {
   row_counts: Record<string, number>;
   include_processed: boolean;
   processed_copied: boolean;
+  artifacts_copied?: boolean;
   backup_item?: RecoveryBackupItem | null;
 };
 
@@ -42,5 +44,6 @@ export type RecoveryRestoreResponse = {
   row_counts: Record<string, number>;
   include_processed: boolean;
   processed_restored: boolean;
+  artifacts_restored?: boolean;
   backup_item?: RecoveryBackupItem | null;
 };

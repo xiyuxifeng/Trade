@@ -64,6 +64,8 @@ class _FakeOpsRecoveryService:
         include_processed: bool = True,
         confirmed: bool = False,
     ) -> Any:
+        if not backup_path.startswith("/project/data/backups/"):
+            raise ValueError("backup path must stay within backup root")
         self.calls.append(
             {
                 "method": "restore_backup",
@@ -159,3 +161,14 @@ async def test_operator_cannot_access_ops_recovery(client: AsyncClient) -> None:
             app.dependency_overrides.pop(get_current_principal, None)
         else:
             app.dependency_overrides[get_current_principal] = previous
+
+
+@pytest.mark.asyncio
+async def test_ops_api_rejects_backup_paths_outside_root(client: AsyncClient) -> None:
+    """Ops 恢复入口不应接受备份根目录之外的路径。"""
+    response = await client.post(
+        "/api/ui/v1/ops/restore",
+        json={"backup_path": "/tmp/outside", "include_processed": True, "confirmed": True},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "backup path must stay within backup root"

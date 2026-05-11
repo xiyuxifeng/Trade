@@ -134,4 +134,19 @@ describe('OpsPage', () => {
     expect(screen.getByRole('button', { name: 'Create backup' })).toBeDisabled();
     expect(await screen.findByText('仅 admin 可执行项目级备份与恢复。')).toBeInTheDocument();
   });
+
+  it('shows backup loading errors in the recovery center', async () => {
+    mockedListRecoveryBackups.mockRejectedValue(new Error('backup service unavailable'));
+
+    renderWithRouter([{ path: '/ops', element: <OpsPage /> }], ['/ops'], {
+      initialPrincipal: {
+        role: 'admin',
+        api_key_label: 'Local Admin',
+        authenticated: true,
+        source: 'api_key',
+      },
+    });
+
+    expect(await screen.findByText('backup service unavailable')).toBeInTheDocument();
+  });
 });

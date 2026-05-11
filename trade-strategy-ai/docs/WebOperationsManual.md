@@ -107,6 +107,7 @@
 - 数据库表数据
 - Job 元数据
 - 审计记录
+- `data/artifacts` 下的关键产物
 - `data/processed`，如果启用 `include_processed`
 
 ### 5.2 创建备份

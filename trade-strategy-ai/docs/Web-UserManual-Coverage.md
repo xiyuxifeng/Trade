@@ -53,8 +53,8 @@
 | `db-migrate` | 系统维护 / 数据库迁移 | `POST /api/ui/v1/system/db/migrate` | `SystemService` | `db-migrate` Job | admin | high | 执行前有摘要与确认，执行后可查看迁移结果。 |
 | `init-project` | 初始化向导 | `POST /api/ui/v1/setup/init-project` | `SetupService` | `init-project` Job | admin | high | 可完成迁移与本地 seed，并给出完成状态。 |
 | `seed-data` | 初始化向导 / 数据种子 | `POST /api/ui/v1/setup/seed-data` | `SetupService` | `seed-data` Job | admin | medium | 可导入样例数据并显示导入清单。 |
-| `backup-data` | 运维 / 备份中心 | `POST /api/ui/v1/ops/backup` | `BackupService` | `backup-data` Job | admin | high | 备份目录、表范围和产物路径可追踪。 |
-| `restore-data` | 运维 / 恢复中心 | `POST /api/ui/v1/ops/restore` | `BackupService` | `restore-data` Job | admin | critical | 恢复前二次确认，且默认要求 `force`。 |
+| `backup-data` | 运维 / 备份中心 | `POST /api/ui/v1/ops/backup` | `OpsRecoveryService` | 页面直调 | admin | high | 备份目录、表范围、产物路径和审计记录可追踪。 |
+| `restore-data` | 运维 / 恢复中心 | `POST /api/ui/v1/ops/restore` | `OpsRecoveryService` | 页面直调 | admin | critical | 恢复前二次确认，且默认要求 `confirmed`。 |
 | `scheduler-start` | 运维 / 调度状态 | `POST /api/ui/v1/system/scheduler/start` | `SchedulerService` | 常驻进程 / 状态控制 | admin | medium | 能查看调度状态、启停配置和下一次触发时间。 |
 
 ### 3.2 抓取与数据处理 Pipeline

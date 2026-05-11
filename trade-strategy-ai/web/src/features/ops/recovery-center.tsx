@@ -67,6 +67,7 @@ function BackupPackageCard({
         <p>
           processed：{item.include_processed ? '包含' : '未包含'}，状态：{item.processed_copied ? '已复制' : '未复制'}
         </p>
+        <p>artifacts：{item.artifacts_copied ? '已复制' : '未复制'}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -125,6 +126,9 @@ export function RecoveryCenter() {
       setBackupConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['ops-recovery-backups'] });
     },
+    onError: (error) => {
+      setStatusMessage(getErrorMessage(error));
+    },
   });
 
   const restoreMutation = useMutation({
@@ -143,6 +147,9 @@ export function RecoveryCenter() {
       setRestoreTarget(null);
       setRestoreToken('');
       await queryClient.invalidateQueries({ queryKey: ['ops-recovery-backups'] });
+    },
+    onError: (error) => {
+      setStatusMessage(getErrorMessage(error));
     },
   });
 

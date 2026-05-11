@@ -322,6 +322,7 @@ Web 侧的恢复能力分成两层，不能混用：
 
 - `manifest.json`
 - `db/*.json`
+- `artifacts/`
 - `processed/`，如果启用 `include_processed`
 
 恢复流程必须遵守以下约束：

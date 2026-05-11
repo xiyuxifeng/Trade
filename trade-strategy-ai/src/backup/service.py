@@ -88,6 +88,7 @@ class BackupStats:
     tables: list[str] = field(default_factory=list)
     row_counts: dict[str, int] = field(default_factory=dict)
     processed_copied: bool = False
+    artifacts_copied: bool = False
 
 
 @dataclass(slots=True)
@@ -98,12 +99,19 @@ class RestoreStats:
     tables: list[str] = field(default_factory=list)
     row_counts: dict[str, int] = field(default_factory=dict)
     processed_restored: bool = False
+    artifacts_restored: bool = False
 
 
 def _processed_dir(base_dir: Path) -> Path:
     """Return the canonical processed-data directory."""
 
     return base_dir / "data" / "processed"
+
+
+def _artifacts_dir(base_dir: Path) -> Path:
+    """Return the canonical artifacts directory."""
+
+    return base_dir / "data" / "artifacts"
 
 
 def _backup_manifest_path(backup_dir: Path) -> Path:
@@ -166,6 +174,15 @@ async def backup_project_state(
             shutil.copytree(src_processed, dst_processed)
             processed_copied = True
 
+    artifacts_copied = False
+    src_artifacts = _artifacts_dir(base_dir)
+    if src_artifacts.exists():
+        dst_artifacts = target_dir / "artifacts"
+        if dst_artifacts.exists():
+            shutil.rmtree(dst_artifacts)
+        shutil.copytree(src_artifacts, dst_artifacts)
+        artifacts_copied = True
+
     manifest = {
         "schema_version": "v1",
         "created_at": datetime.now(UTC).isoformat(),
@@ -173,6 +190,7 @@ async def backup_project_state(
         "row_counts": row_counts,
         "include_processed": include_processed,
         "processed_copied": processed_copied,
+        "artifacts_copied": artifacts_copied,
     }
     write_json(_backup_manifest_path(target_dir), manifest)
     await audit.record(
@@ -189,6 +207,7 @@ async def backup_project_state(
         tables=table_names,
         row_counts=row_counts,
         processed_copied=processed_copied,
+        artifacts_copied=artifacts_copied,
     )
 
 
@@ -253,6 +272,15 @@ async def restore_project_state(
             shutil.copytree(src_processed, dst_processed)
             processed_restored = True
 
+    artifacts_restored = False
+    src_artifacts = backup_dir / "artifacts"
+    dst_artifacts = _artifacts_dir(base_dir)
+    if src_artifacts.exists():
+        if dst_artifacts.exists():
+            shutil.rmtree(dst_artifacts)
+        shutil.copytree(src_artifacts, dst_artifacts)
+        artifacts_restored = True
+
     await audit.record(
         event_type="restore_project_state",
         actor="cli.restore_data",
@@ -273,4 +301,5 @@ async def restore_project_state(
         tables=table_names,
         row_counts=row_counts,
         processed_restored=processed_restored,
+        artifacts_restored=artifacts_restored,
     )

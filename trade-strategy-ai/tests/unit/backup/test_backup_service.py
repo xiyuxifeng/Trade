@@ -189,6 +189,9 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     processed_dir = tmp_path / "data" / "processed" / "phase0"
     processed_dir.mkdir(parents=True, exist_ok=True)
     (processed_dir / "sample.txt").write_text("hello", encoding="utf-8")
+    artifacts_dir = tmp_path / "data" / "artifacts" / "run-1"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (artifacts_dir / "report.json").write_text("{\"status\": \"ok\"}", encoding="utf-8")
 
     backup_dir = tmp_path / "backup"
     backup_stats = await backup_project_state(
@@ -201,6 +204,7 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert (backup_dir / "manifest.json").exists()
     assert (backup_dir / "db" / "blog_articles.json").exists()
     assert (backup_dir / "processed" / "phase0" / "sample.txt").exists()
+    assert (backup_dir / "artifacts" / "run-1" / "report.json").exists()
     audit_record.assert_awaited_once()
     assert audit_record.call_args.kwargs["event_type"] == "backup_project_state"
 
@@ -232,5 +236,6 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert market_count == 1
     assert trade_count == 1
     assert (processed_dir / "sample.txt").read_text(encoding="utf-8") == "hello"
+    assert (artifacts_dir / "report.json").read_text(encoding="utf-8") == "{\"status\": \"ok\"}"
     assert audit_record.await_count == 2
     assert audit_record.call_args.kwargs["event_type"] == "restore_project_state"

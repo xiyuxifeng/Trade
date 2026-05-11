@@ -34,6 +34,11 @@ def _raise_service_error(result: Any, *, default_message: str) -> None:
     raise HTTPException(status_code=400, detail=detail)
 
 
+def _handle_value_error(exc: ValueError) -> None:
+    """把路径越界等参数错误映射为 400。"""
+    raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("/backups", dependencies=[Depends(verify_api_key)])
 async def list_backups(service: OpsRecoveryService = Depends(get_ops_recovery_service)) -> dict[str, Any]:
     """列出项目级备份包。"""
@@ -50,7 +55,10 @@ async def create_backup(
     _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """创建项目级备份。"""
-    result = await service.create_backup(include_processed=request.include_processed, backup_dir=request.backup_dir)
+    try:
+        result = await service.create_backup(include_processed=request.include_processed, backup_dir=request.backup_dir)
+    except ValueError as exc:
+        _handle_value_error(exc)
     if result.status != "ok":
         _raise_service_error(result, default_message="backup creation failed")
     return result.payload
@@ -63,11 +71,14 @@ async def restore_backup(
     _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """恢复项目级备份。"""
-    result = await service.restore_backup(
-        backup_path=request.backup_path,
-        include_processed=request.include_processed,
-        confirmed=request.confirmed,
-    )
+    try:
+        result = await service.restore_backup(
+            backup_path=request.backup_path,
+            include_processed=request.include_processed,
+            confirmed=request.confirmed,
+        )
+    except ValueError as exc:
+        _handle_value_error(exc)
     if result.status != "ok":
         _raise_service_error(result, default_message="restore failed")
     return result.payload

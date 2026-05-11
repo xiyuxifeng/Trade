@@ -20,7 +20,7 @@ export const mainNavigation: NavItem[] = [
   { label: 'Market State', path: '/market-state', description: 'Market state snapshot builder' },
   { label: 'Imports', path: '/imports', description: 'Trade logs and crawl state migration' },
   { label: 'Kaipan', path: '/kaipan', description: 'Kaipan fetch, normalize, and run controls' },
-  { label: 'Data Health', path: '/data-health', description: 'Dashboard report and HTML artifact' },
+  { label: 'Data Health', path: '/data-health', description: 'Operational dashboard and HTML report artifact' },
   { label: 'Strategies', path: '/strategies', description: 'Strategy version library' },
   { label: 'Backtests', path: '/backtests', description: 'Backtest results and analysis' },
   { label: 'Alerts', path: '/alerts', description: 'Alert history and acknowledgements' },

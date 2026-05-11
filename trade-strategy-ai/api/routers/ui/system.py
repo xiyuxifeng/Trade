@@ -14,6 +14,11 @@ router = APIRouter(prefix="/api/ui/v1/system", tags=["ui-system"])
 legacy_router = APIRouter(prefix="/api/ui/system", tags=["ui-system-legacy"])
 
 
+def get_system_service() -> SystemService:
+    """构建系统服务。"""
+    return SystemService()
+
+
 def _config_path() -> Path:
     """返回当前 API 使用的配置文件路径。"""
     return resolve_project_path(os.environ.get("CONFIG_PATH", "config/app.yaml"))
@@ -23,6 +28,16 @@ def _config_path() -> Path:
 async def get_system_status(_: str = Depends(verify_api_key)) -> dict[str, object]:
     """返回系统、数据库和关键目录状态。"""
     return await _build_system_status()
+
+
+@router.get("/dashboard")
+async def get_system_dashboard(
+    service: SystemService = Depends(get_system_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, object]:
+    """返回运维 Dashboard 摘要。"""
+    result = await service.build_dashboard_summary(config_path=_config_path())
+    return result.payload
 
 
 @legacy_router.get("/status")

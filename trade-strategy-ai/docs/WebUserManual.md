@@ -19,7 +19,7 @@
 1. 启动数据库。
 2. 启动 API。
 3. 启动 Web。
-4. 打开 `Overview`、`Jobs`、`Workflows`、`Reports`、`Settings`。
+4. 打开 `Overview`、`Jobs`、`Workflows`、`Reports`、`Settings`、`Ops`。
 
 ---
 
@@ -168,6 +168,19 @@ corepack pnpm install
 
 如果你要修改 Cookie、密钥、数据库连接串，优先通过设置页或环境变量，不要直接手改不透明的配置文件。
 
+### 5.6 看运维恢复中心
+
+进入 `Ops` 页面，重点确认：
+
+- 是否能列出项目级备份包
+- 是否能创建新的项目快照
+- 恢复前是否强制要求 admin 和显式确认
+- 恢复后是否能看到审计与回滚提示
+
+这里处理的是数据库、Job 元数据和 `data/processed` 目录，不是 `config/app.yaml` 的配置恢复。
+
+如果你需要恢复配置文件本身，还是回到 `Settings` 页面。
+
 ---
 
 ## 6. 高风险操作
@@ -255,4 +268,3 @@ curl http://localhost:8000/health
 8. `Ops`
 
 如果你只想先验证主流程，至少完成前 5 项。
-

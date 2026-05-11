@@ -35,6 +35,9 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/settings/save": {"post"},
         "/api/ui/v1/settings/backups": {"get"},
         "/api/ui/v1/settings/restore": {"post"},
+        "/api/ui/v1/ops/backups": {"get"},
+        "/api/ui/v1/ops/backup": {"post"},
+        "/api/ui/v1/ops/restore": {"post"},
         "/api/ui/v1/market/symbols": {"get"},
         "/api/ui/v1/market/ohlcv": {"get"},
     }
@@ -50,6 +53,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         ("/api/ui/v1/settings/validate", "post"): "#/components/schemas/SettingsDraftRequest",
         ("/api/ui/v1/settings/save", "post"): "#/components/schemas/SettingsSaveRequest",
         ("/api/ui/v1/settings/restore", "post"): "#/components/schemas/SettingsRestoreRequest",
+        ("/api/ui/v1/ops/backup", "post"): "#/components/schemas/OpsBackupRequest",
+        ("/api/ui/v1/ops/restore", "post"): "#/components/schemas/OpsRestoreRequest",
     }
 
     for (path, method), schema_ref in expected_request_refs.items():
@@ -69,3 +74,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
     assert components["SettingsSaveRequest"]["properties"]["confirmed"]["default"] is False
     assert set(components["WorkflowRunRequest"]["properties"]) >= {"params", "created_by", "idempotency_key", "confirmed"}
     assert components["WorkflowRunRequest"]["properties"]["confirmed"]["default"] is False
+    assert set(components["OpsBackupRequest"]["properties"]) >= {"include_processed"}
+    assert components["OpsBackupRequest"]["properties"]["include_processed"]["default"] is True
+    assert set(components["OpsRestoreRequest"]["properties"]) >= {"backup_path", "confirmed", "include_processed"}
+    assert components["OpsRestoreRequest"]["properties"]["confirmed"]["default"] is False

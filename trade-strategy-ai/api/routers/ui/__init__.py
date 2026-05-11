@@ -10,6 +10,7 @@ from .signals import router as signals_router
 from .market import router as market_router
 from .snapshots import router as snapshots_router
 from .settings import router as settings_router
+from .ops import router as ops_router
 from .strategy_studio import router as strategy_studio_router
 from .system import legacy_router as legacy_system_router
 from .system import router as system_router
@@ -26,6 +27,7 @@ __all__ = [
     "market_router",
     "persona_router",
     "settings_router",
+    "ops_router",
     "snapshots_router",
     "signals_router",
     "strategy_studio_router",

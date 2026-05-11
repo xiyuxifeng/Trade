@@ -21,14 +21,24 @@ import {
   saveSettings,
   validateSettingsDraft,
 } from './settings';
+import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup } from './ops';
 import { listSymbols, getOhlcv } from './market';
 
 describe('UI API client contract', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    window.localStorage.clear();
-    window.localStorage.setItem(API_KEY_STORAGE_KEY, 'demo-key');
+    const storage = new Map<string, string>();
+    const localStorage = {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => storage.delete(key),
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    };
+    vi.stubGlobal('window', { localStorage } as never);
+    localStorage.setItem(API_KEY_STORAGE_KEY, 'demo-key');
   });
 
   it('keeps the critical UI API paths, methods, and auth headers stable', async () => {
@@ -66,6 +76,13 @@ describe('UI API client contract', () => {
     await restoreSettingsBackup({
       config_path: 'config/app.yaml',
       backup_path: 'data/backups/app.yaml',
+      confirmed: true,
+    } as never);
+    await listRecoveryBackups();
+    await createRecoveryBackup({ include_processed: true } as never);
+    await restoreRecoveryBackup({
+      backup_path: 'data/backups/app.yaml',
+      include_processed: true,
       confirmed: true,
     } as never);
     await listSymbols('000001', 50);
@@ -118,6 +135,13 @@ describe('UI API client contract', () => {
     expectJsonBody('/api/ui/v1/settings/restore', 'POST', {
       config_path: 'config/app.yaml',
       backup_path: 'data/backups/app.yaml',
+      confirmed: true,
+    });
+    expect(findCall('/api/ui/v1/ops/backups')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { include_processed: true });
+    expectJsonBody('/api/ui/v1/ops/restore', 'POST', {
+      backup_path: 'data/backups/app.yaml',
+      include_processed: true,
       confirmed: true,
     });
     expect(findCall('/api/ui/v1/market/symbols?q=000001&limit=50')).toBeTruthy();

@@ -1102,7 +1102,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-005`、`WEB-S3-007`、`WEB-S4-001`。
   可并行：`WEB-S9-002`。
   验收标准：明确 API、静态前端、Worker、数据库、文件产物目录、日志目录、配置和密钥注入方式；明确单机本地部署与内网部署两种模式。
-  完成情况：已完成。
+  完成情况：已完成。已新增 `docs/WebDeployment.md`，明确生产部署拓扑、单机本地部署与内网部署两种模式、API/Web/Worker/PostgreSQL 的职责边界，以及配置/密钥、目录、日志和产物约定；同时在 `docs/web-plan.md` 补充了部署基线引用。
   备注：如果暂不引入 Redis/外部队列，必须说明数据库轮询 Worker 的运行方式和限制。
 
 - [x] `WEB-S9-002` `P0`
@@ -1113,7 +1113,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-001`、`WEB-S2-005`。
   可并行：`WEB-S9-001`。
   验收标准：一条文档化流程可完成依赖安装、前端构建、数据库迁移、API 启动、Worker 启动和健康检查；生产启动不使用 `--reload`。
-  完成情况：已完成。
+  完成情况：已完成。已新增后端 `Dockerfile`、前端 `web/Dockerfile` 与 `web/nginx.conf`，补齐 `job-worker-start` 长驻 Worker 入口，并同步更新 `docker-compose.yml`、`README.md`、`web/README.md` 和 `docs/WebDeployment.md`，使构建、迁移、启动和健康检查流程可文档化执行。
   备注：不得把本地开发命令当作生产部署方案。
 
 - [x] `WEB-S9-003` `P0`
@@ -1124,10 +1124,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S3-001`、`WEB-S2-005`。
   可并行：`WEB-S9-004`。
   验收标准：健康检查覆盖 API、数据库、Job Worker 心跳、产物目录读写、配置加载；Dashboard 展示最近失败任务、任务耗时、数据新鲜度、告警摘要；日志可按 request/job 关联追踪。
-  完成情况：已完成。
+  完成情况：已完成。已新增 `/api/ui/v1/system/dashboard` 运维摘要接口与 `web/src/features/data-health/operational-dashboard-center.tsx` 运维 Dashboard 组件，`/data-health` 页面同时展示失败任务、任务耗时、新鲜度、告警和追踪线索；同时保留 `/api/ui/v1/system/status` 作为机器可读健康检查，并补齐后端与前端回归测试。
   备注：至少提供机器可读 JSON 健康检查，便于反向代理或监控系统探测。
 
-- [ ] `WEB-S9-004` `P0`
+- [x] `WEB-S9-004` `P0`
   目标：实现备份恢复和回滚演练。
   输入：backup/restore service、配置备份、数据库迁移、Job/Artifact 存储。
   输出：备份恢复演练文档和验证任务。
@@ -1135,7 +1135,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S1-009`、`WEB-S7-009`。
   可并行：`WEB-S9-003`。
   验收标准：可备份数据库、配置、关键产物和 Job 元数据；可在测试环境恢复；恢复操作有二次确认和审计；发布失败时有明确回滚步骤。
-  完成情况：未完成。
+  完成情况：已完成。已新增 `web/src/features/ops/recovery-center.tsx` 运维恢复中心与 `api/routers/ui/ops.py` 项目级恢复 API，支持列出项目快照、创建备份、二次确认恢复和 admin 权限控制；同时补齐了 `tests/api/routers/ui/test_ui_ops.py`、`tests/unit/services/test_ops_service.py`、`web/src/pages/ops/index.test.tsx`、`web/src/lib/api/ops.test.ts` 等回归测试，并在 `docs/WebDeployment.md`、`docs/WebUserManual.md`、`docs/Web-UserManual-Coverage.md` 中同步回滚演练和接口说明。
   备注：恢复是破坏性操作，必须要求 admin 权限。
 
 - [ ] `WEB-S9-005` `P1`

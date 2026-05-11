@@ -283,3 +283,37 @@ python -m scripts.web_local start-worker
 - API 在 `WEB_STATIC_DIR=web/dist` 时直接托管前端静态页面
 - 浏览器访问 `http://localhost:8000` 即可同时使用 Web 页面和 `/api/ui/v1/*`
 - 这个路径只面向单机验证，不替代 Docker/Compose 的默认生产流程
+
+## 12. 备份、恢复与回滚演练
+
+Web 侧的恢复能力分成两层，不能混用：
+
+1. `Settings` 页面负责 `config/app.yaml` 及其它受管配置文件的备份与恢复。
+2. `Ops` 页面负责项目级快照的创建和恢复，包括数据库表、Job 元数据和 `data/processed` 目录。
+
+项目级快照入口对应 `backup-data` / `restore-data`，会写入 `data/backups/<timestamp>/`。快照包里至少应包含：
+
+- `manifest.json`
+- `db/*.json`
+- `processed/`，如果启用 `include_processed`
+
+恢复流程必须遵守以下约束：
+
+- 恢复操作仅允许 `admin`
+- 恢复前必须显式确认
+- 恢复动作需要写入审计记录
+- 恢复失败后，应该保留当前状态不被静默覆盖
+
+推荐的回滚演练步骤：
+
+1. 先在 `Ops` 页面创建一份新的项目备份。
+2. 在测试环境执行一次恢复，确认数据库、Job 列表和产物目录都能回到可用状态。
+3. 如果发布后出现异常，先恢复上一份已验证快照，再检查 `system status`、`data-health` 和 `jobs` 页面。
+4. 如果问题来自配置项而不是数据本身，再回到 `Settings` 页面恢复受管配置备份。
+
+恢复排障时，建议优先核对：
+
+- `data/backups/` 下是否有最新 manifest
+- `jobs` 是否还能正常领取任务
+- `data-health` 是否恢复到可接受状态
+- `Settings` 里的敏感配置是否仍然脱敏显示

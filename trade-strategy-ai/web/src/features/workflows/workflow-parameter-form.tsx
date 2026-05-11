@@ -94,7 +94,7 @@ function FieldEditor({
         ) : (
           <Input
             onChange={(event) => onChange(event.target.value)}
-            placeholder={field.type === 'date' ? 'YYYY-MM-DD' : ''}
+            placeholder={field.type === 'date' ? 'YYYY-MM-DD (例如: 2024-01-01)' : ''}
             type={field.type === 'integer' || field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
             value={String(value ?? '')}
           />

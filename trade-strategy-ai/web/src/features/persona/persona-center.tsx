@@ -36,12 +36,12 @@ export function PersonaCenter() {
     <section className="dashboard-grid">
       <Card className="xl:col-span-5">
         <CardHeader>
-          <CardTitle>Generate sample clusters</CardTitle>
+          <CardTitle>生成样例聚类</CardTitle>
           <CardDescription>生成可运行的 Persona 样例聚类文件，便于验证聚类和 MarketState 的输入链路。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            {mutation.isPending ? 'Generating...' : 'Generate sample clusters'}
+            {mutation.isPending ? '正在生成...' : '生成样例聚类'}
           </Button>
           {mutation.isError ? (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-6 text-sm text-red-200">
@@ -50,8 +50,8 @@ export function PersonaCenter() {
           ) : null}
           {result ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <SummaryCard title="Traders" value={result.trader_count} accent="text-sky-300" />
-              <SummaryCard title="Clusters" value={result.clusters_count} accent="text-emerald-300" />
+              <SummaryCard title="交易者数量" value={result.trader_count} accent="text-sky-300" />
+              <SummaryCard title="聚类数量" value={result.clusters_count} accent="text-emerald-300" />
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-500">
@@ -63,18 +63,18 @@ export function PersonaCenter() {
 
       <Card className="xl:col-span-7">
         <CardHeader>
-          <CardTitle>Sample output</CardTitle>
+          <CardTitle>样例输出</CardTitle>
           <CardDescription>展示生成文件路径与聚类结果快照。</CardDescription>
         </CardHeader>
         <CardContent>
           {result ? (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="success">{result.trader_count} traders</Badge>
-                <Badge variant="info">{result.clusters_count} clusters</Badge>
+                <Badge variant="success">{result.trader_count} 名交易者</Badge>
+                <Badge variant="info">{result.clusters_count} 个聚类</Badge>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">clusters_path</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">聚类文件路径 (clusters_path)</p>
                 <p className="mt-2 break-all text-sm text-slate-100">{result.clusters_path}</p>
               </div>
               <pre className="max-h-[22rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">

@@ -82,26 +82,26 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="daily-report-id">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Report ID</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">报告 ID (Report ID)</p>
           <p className="mt-2 break-all text-sm text-slate-100">{report.report_id}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Generated</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">生成时间</p>
           <p className="mt-2 text-sm text-slate-100">{formatTimestamp(report.generated_at)}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Ideas</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">交易想法 (Ideas)</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{report.ideas.length}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Strategy versions</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">策路版本</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{report.strategy_version_ids.length}</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Highlights</h4>
+          <h4 className="text-sm font-semibold text-slate-100">核心亮点 (Highlights)</h4>
           {report.highlights.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {report.highlights.map((item) => (
@@ -111,12 +111,12 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-slate-400">暂无 highlights。</p>
+            <p className="mt-3 text-sm text-slate-400">暂无核心亮点。</p>
           )}
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Risks</h4>
+          <h4 className="text-sm font-semibold text-slate-100">风险提示 (Risks)</h4>
           {report.risks.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {report.risks.map((item) => (
@@ -140,26 +140,26 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="evaluation-result-id">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Result ID</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">结果 ID (Result ID)</p>
           <p className="mt-2 break-all text-sm text-slate-100">{result.result_id}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Generated</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">生成时间</p>
           <p className="mt-2 text-sm text-slate-100">{formatTimestamp(result.generated_at)}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Evaluations</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">评估项</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{result.evaluations.length}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Evidence packs</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">证据包 (Evidence)</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{result.evidence_pack_refs.length}</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Summary</h4>
+          <h4 className="text-sm font-semibold text-slate-100">总结 (Summary)</h4>
           {result.summary.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {result.summary.map((item) => (
@@ -174,7 +174,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Failure categories</h4>
+          <h4 className="text-sm font-semibold text-slate-100">失败分类</h4>
           {result.failure_categories.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {result.failure_categories.map((item) => (
@@ -191,7 +191,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Postmortem</h4>
+          <h4 className="text-sm font-semibold text-slate-100">复盘说明 (Postmortem)</h4>
           {result.postmortem_notes.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {result.postmortem_notes.map((item) => (
@@ -206,7 +206,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">Ranking features</h4>
+          <h4 className="text-sm font-semibold text-slate-100">评分特征 (Ranking)</h4>
           <pre
             className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
             data-testid="daily-report-ranking-json"
@@ -296,9 +296,9 @@ export function ReportCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Reports"
-        title="Reports center"
-        description="Browse pre-market reports and post-close evaluation records with HTML and JSON views."
+        kicker="报告"
+        title="报告中心"
+        description="浏览盘前报告和收盘后的评估记录，支持 HTML 和 JSON 视图。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
@@ -306,8 +306,8 @@ export function ReportCenter() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Report categories</CardTitle>
-                <CardDescription>Switch between pre-market and post-close records.</CardDescription>
+                <CardTitle>报告类别</CardTitle>
+                <CardDescription>在盘前和收盘记录之间切换。</CardDescription>
               </div>
               <Button
                 variant="outline"
@@ -337,7 +337,7 @@ export function ReportCenter() {
                 type="button"
               >
                 <p className="text-sm font-medium">{kindLabel('daily')}</p>
-                <p className="mt-1 text-xs text-slate-400">{dailyReportsQuery.data?.count ?? 0} items</p>
+                <p className="mt-1 text-xs text-slate-400">{dailyReportsQuery.data?.count ?? 0} 个项目</p>
               </button>
               <button
                 className={`rounded-2xl border p-4 text-left transition-colors ${
@@ -353,21 +353,21 @@ export function ReportCenter() {
                 type="button"
               >
                 <p className="text-sm font-medium">{kindLabel('evaluation')}</p>
-                <p className="mt-1 text-xs text-slate-400">{evaluationReportsQuery.data?.count ?? 0} items</p>
+                <p className="mt-1 text-xs text-slate-400">{evaluationReportsQuery.data?.count ?? 0} 个项目</p>
               </button>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">总计</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.total}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Selected</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已选日期</p>
                 <p className="mt-2 text-sm font-semibold text-sky-300">{summary.selectedDate}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Preview</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">预览就绪</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.htmlReady}</p>
               </div>
             </div>

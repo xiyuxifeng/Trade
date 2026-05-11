@@ -181,10 +181,10 @@ function ResultRow({
         <div className="space-y-1">
           <p className="font-medium">{item.result_id}</p>
           <p className="text-xs text-slate-500">
-            {item.trader_id ?? 'unknown trader'} · {item.date_from ?? 'n/a'} ~ {item.date_to ?? 'n/a'}
+            {item.trader_id ?? '未知交易员'} · {item.date_from ?? 'n/a'} ~ {item.date_to ?? 'n/a'}
           </p>
         </div>
-        <Badge variant={active ? 'info' : 'default'}>{totalTrades !== null ? `${totalTrades} trades` : 'backtest'}</Badge>
+        <Badge variant={active ? 'info' : 'default'}>{totalTrades !== null ? `${totalTrades} 笔交易` : '回测'}</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
         {winRate !== null ? <span className="rounded-full border border-slate-800/80 px-2 py-1">胜率 {formatPct(winRate)}</span> : null}
@@ -207,14 +207,14 @@ function DetailSummary({ detail }: { detail: BacktestResultItem }) {
   const summary = detail.summary;
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="backtest-detail-summary">
-      <SummaryCard title="Total days" value={summary ? formatNumber(summary.total_days) : 'n/a'} accent="text-sky-300" />
-      <SummaryCard title="Total trades" value={summary ? formatNumber(summary.total_trades) : 'n/a'} />
-      <SummaryCard title="Valid trades" value={summary ? formatNumber(summary.valid_trades) : 'n/a'} accent="text-emerald-300" />
-      <SummaryCard title="Skipped trades" value={summary ? formatNumber(summary.skipped_trades) : 'n/a'} />
-      <SummaryCard title="Win rate" value={summary ? formatPct(summary.win_rate) : 'n/a'} accent="text-emerald-300" />
-      <SummaryCard title="Avg return" value={summary ? formatPct(summary.avg_return_pct) : 'n/a'} />
+      <SummaryCard title="总天数" value={summary ? formatNumber(summary.total_days) : 'n/a'} accent="text-sky-300" />
+      <SummaryCard title="总交易数" value={summary ? formatNumber(summary.total_trades) : 'n/a'} />
+      <SummaryCard title="有效交易" value={summary ? formatNumber(summary.valid_trades) : 'n/a'} accent="text-emerald-300" />
+      <SummaryCard title="跳过交易" value={summary ? formatNumber(summary.skipped_trades) : 'n/a'} />
+      <SummaryCard title="胜率" value={summary ? formatPct(summary.win_rate) : 'n/a'} accent="text-emerald-300" />
+      <SummaryCard title="平均收益" value={summary ? formatPct(summary.avg_return_pct) : 'n/a'} />
       <SummaryCard
-        title="Valid ratio"
+        title="有效占比"
         value={summary && summary.total_trades ? formatPct(summary.valid_trades / summary.total_trades) : 'n/a'}
         accent="text-sky-300"
       />
@@ -374,10 +374,10 @@ export function BacktestsCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Backtests"
-        title="Backtests Center"
-        description="Browse stored backtest results, submit backtest-related jobs, and inspect reports, rule validation, and reproducibility checks."
-        actionLabel="Open Jobs"
+        kicker="回测"
+        title="回测中心"
+        description="浏览存储的回测结果，提交回测相关任务，并检查报告、规则验证和复现性检查。"
+        actionLabel="打开任务"
         onAction={() => navigate('/jobs')}
       />
 
@@ -387,8 +387,8 @@ export function BacktestsCenter() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>Job submissions</CardTitle>
-                  <CardDescription>Submit backtest, rule validation, and reproducibility jobs from the same control surface.</CardDescription>
+                  <CardTitle>任务提交</CardTitle>
+                  <CardDescription>从同一控制界面提交回测、规则验证和复现性任务。</CardDescription>
                 </div>
                 <Button variant="outline" onClick={() => resultsQuery.refetch()} disabled={resultsQuery.isFetching}>
                   {resultsQuery.isFetching ? '刷新中' : '刷新'}
@@ -398,72 +398,72 @@ export function BacktestsCenter() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Trader ID</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
                   <Input value={traderId} onChange={(event) => setTraderId(event.target.value)} placeholder="trader_a" />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Strategy version</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本</span>
                   <Input value={strategyVersionId} onChange={(event) => setStrategyVersionId(event.target.value)} placeholder="sv-1" />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Date from</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">开始日期</span>
                   <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Date to</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">结束日期</span>
                   <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Mode</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">模式</span>
                   <Select value={mode} onChange={(event) => setMode(event.target.value as BacktestJobSubmission['mode'])}>
-                    <option value="full">full</option>
-                    <option value="replay">replay</option>
-                    <option value="rule_validation">rule_validation</option>
+                    <option value="full">全量 (full)</option>
+                    <option value="replay">重放 (replay)</option>
+                    <option value="rule_validation">规则验真 (rule_validation)</option>
                   </Select>
                 </label>
                 <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Config path</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">配置路径</span>
                   <Input value={configPath} onChange={(event) => setConfigPath(event.target.value)} />
                 </label>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Quick range</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">快捷范围</span>
                 <Button size="sm" variant="outline" onClick={() => applyQuickRange(7)}>
-                  7d
+                  7天
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => applyQuickRange(30)}>
-                  30d
+                  30天
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => applyQuickRange(90)}>
-                  90d
+                  90天
                 </Button>
                 <Button size="sm" variant="ghost" onClick={resetFilters}>
-                  Reset filters
+                  重置筛选
                 </Button>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
                 <Button onClick={() => submitJob('backtest-run')} disabled={isSubmitting}>
-                  Run backtest
+                  运行回测
                 </Button>
                 <Button variant="outline" onClick={() => submitJob('backtest-validate-rules')} disabled={isSubmitting}>
-                  Validate rules
+                  验证规则
                 </Button>
                 <Button variant="secondary" onClick={() => submitJob('backtest-reproducibility-check')} disabled={isSubmitting}>
-                  Reproducibility check
+                  复现性检查
                 </Button>
               </div>
 
               <div className="grid gap-3 md:grid-cols-3">
-                <SummaryCard title="Result count" value={summary.total} accent="text-sky-300" />
-                <SummaryCard title="Selected trades" value={summary.selectedTrades} />
-                <SummaryCard title="Selected win rate" value={summary.selectedWinRate !== null ? formatPct(summary.selectedWinRate) : 'n/a'} accent="text-emerald-300" />
+                <SummaryCard title="结果总数" value={summary.total} accent="text-sky-300" />
+                <SummaryCard title="选中交易数" value={summary.selectedTrades} />
+                <SummaryCard title="选中胜率" value={summary.selectedWinRate !== null ? formatPct(summary.selectedWinRate) : 'n/a'} accent="text-emerald-300" />
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Skip</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">跳过 (Skip)</span>
                   <Input
                     type="number"
                     min={0}
@@ -472,7 +472,7 @@ export function BacktestsCenter() {
                   />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Limit</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">限制 (Limit)</span>
                   <Input
                     type="number"
                     min={1}
@@ -491,10 +491,10 @@ export function BacktestsCenter() {
 
               {submittedJobId ? (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                  {submittedJobType} submitted: {submittedJobId}
+                  任务 {submittedJobType} 已提交: {submittedJobId}
                   <div className="mt-3">
                     <Button size="sm" variant="outline" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(submittedJobId)}`)}>
-                      View in Jobs
+                      在任务中心查看
                     </Button>
                   </div>
                 </div>
@@ -506,15 +506,15 @@ export function BacktestsCenter() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>Results</CardTitle>
-                  <CardDescription>Filtered by trader and date range.</CardDescription>
+                  <CardTitle>结果列表</CardTitle>
+                  <CardDescription>按交易员和日期范围筛选。</CardDescription>
                 </div>
                 <div className="text-right text-xs text-slate-500">
-                  <p>{resultsQuery.data ? `${resultsQuery.data.total} total / ${results.length} shown` : '等待结果加载'}</p>
+                  <p>{resultsQuery.data ? `总计 ${resultsQuery.data.total} / 显示 ${results.length}` : '等待结果加载'}</p>
                   {traderId || dateFrom !== defaultStart || dateTo !== today || skip !== 0 || limit !== 50 ? (
-                    <p className="mt-1 max-w-sm">{[traderId ? `Trader: ${traderId}` : null, `Date: ${dateFrom} ~ ${dateTo}`, skip ? `Skip: ${skip}` : null, limit !== 50 ? `Limit: ${limit}` : null].filter(Boolean).join(' · ')}</p>
+                    <p className="mt-1 max-w-sm">{[traderId ? `交易员: ${traderId}` : null, `日期: ${dateFrom} ~ ${dateTo}`, skip ? `跳过: ${skip}` : null, limit !== 50 ? `限制: ${limit}` : null].filter(Boolean).join(' · ')}</p>
                   ) : (
-                    <p className="mt-1">No active filters.</p>
+                    <p className="mt-1">无活跃筛选。</p>
                   )}
                 </div>
               </div>
@@ -533,13 +533,13 @@ export function BacktestsCenter() {
               ) : !results.length ? (
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 text-sm text-slate-400">
                   <p className="text-base font-medium text-slate-200">当前筛选范围内暂无回测结果。</p>
-                  <p className="mt-2">你可以放宽日期范围、切换 trader，或者直接重置筛选条件后重新查询。</p>
+                  <p className="mt-2">你可以放宽日期范围、切换交易员，或者直接重置筛选条件后重新查询。</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button size="sm" onClick={resetFilters}>
-                      Reset filters
+                      重置筛选
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => applyQuickRange(30)}>
-                      Last 30d
+                      最近 30 天
                     </Button>
                   </div>
                 </div>
@@ -561,9 +561,9 @@ export function BacktestsCenter() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Result workspace</CardTitle>
+                <CardTitle>结果工作区</CardTitle>
                 <CardDescription>
-                  {selectedResult ? `${selectedResult.result_id} · ${selectedResult.trader_id ?? 'unknown trader'}` : 'Select a result to inspect details.'}
+                  {selectedResult ? `${selectedResult.result_id} · ${selectedResult.trader_id ?? '未知交易员'}` : '选择一个结果以查看详情。'}
                 </CardDescription>
               </div>
               {selectedResult ? (
@@ -576,7 +576,7 @@ export function BacktestsCenter() {
           <CardContent>
             {!selectedResult ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                No backtest result selected yet.
+                尚未选择任何回测结果。
               </div>
             ) : detailQuery.isLoading ? (
               <div className="space-y-3">
@@ -590,19 +590,19 @@ export function BacktestsCenter() {
             ) : detail ? (
               <Tabs defaultValue="summary" className="w-full">
                 <TabsList className="flex flex-wrap">
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
-                  <TabsTrigger value="records">Records</TabsTrigger>
-                  <TabsTrigger value="report">Report</TabsTrigger>
-                  <TabsTrigger value="validation">Validation</TabsTrigger>
+                  <TabsTrigger value="summary">摘要</TabsTrigger>
+                  <TabsTrigger value="records">记录</TabsTrigger>
+                  <TabsTrigger value="report">报告</TabsTrigger>
+                  <TabsTrigger value="validation">验真</TabsTrigger>
                   <TabsTrigger value="json">JSON</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="summary" className="space-y-4">
                   <div className="grid gap-3 md:grid-cols-3">
-                    <SummaryCard title="Selected days" value={formatNumber(summary.selectedTotalDays)} accent="text-sky-300" />
-                    <SummaryCard title="Selected trades" value={formatNumber(summary.selectedTrades)} />
+                    <SummaryCard title="选中天数" value={formatNumber(summary.selectedTotalDays)} accent="text-sky-300" />
+                    <SummaryCard title="选中交易数" value={formatNumber(summary.selectedTrades)} />
                     <SummaryCard
-                      title="Valid / skipped"
+                      title="有效 / 跳过"
                       value={`${formatNumber(summary.selectedValidTrades)} / ${formatNumber(summary.selectedSkippedTrades)}`}
                       accent="text-emerald-300"
                     />
@@ -617,11 +617,11 @@ export function BacktestsCenter() {
                       <table className="min-w-full divide-y divide-slate-800 text-sm">
                         <thead className="bg-slate-950/80 text-left text-slate-400">
                           <tr>
-                            <th className="px-4 py-3">Date</th>
-                            <th className="px-4 py-3">Symbol</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Return</th>
-                            <th className="px-4 py-3">Evidence</th>
+                            <th className="px-4 py-3">日期</th>
+                            <th className="px-4 py-3">代码</th>
+                            <th className="px-4 py-3">状态</th>
+                            <th className="px-4 py-3">收益</th>
+                            <th className="px-4 py-3">凭据</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800 bg-slate-950/50">

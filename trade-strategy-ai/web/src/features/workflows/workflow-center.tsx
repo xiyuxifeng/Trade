@@ -25,6 +25,21 @@ function workflowRiskVariant(risk: string) {
   return 'success';
 }
 
+function getRiskLabel(risk: string) {
+  const mapping: Record<string, string> = {
+    critical: '严重',
+    high: '高风险',
+    medium: '中风险',
+    low: '低风险',
+    info: '信息',
+    success: '成功',
+    warning: '警示',
+    default: '默认',
+    destructive: '危险'
+  };
+  return mapping[risk] || risk;
+}
+
 function jobRiskVariant(risk: string) {
   if (risk === 'critical') return 'destructive';
   if (risk === 'high') return 'warning';
@@ -56,7 +71,7 @@ function WorkflowCatalogCard({
               <CardDescription className="mt-1 line-clamp-2">{workflow.description}</CardDescription>
             </div>
             <Badge variant={workflowRiskVariant(workflow.job_definition?.risk ?? 'medium')}>
-              {workflow.job_type}
+              {getRiskLabel(workflow.job_type)}
             </Badge>
           </div>
         </CardHeader>
@@ -100,7 +115,7 @@ function WorkflowStepCard({
               <CardTitle className="text-base">{step.title}</CardTitle>
               <CardDescription>{step.description}</CardDescription>
             </div>
-            <Badge variant={jobRiskVariant(step.risk)}>{step.risk}</Badge>
+            <Badge variant={jobRiskVariant(step.risk)}>{getRiskLabel(step.risk)}</Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-300">
@@ -187,9 +202,9 @@ export function WorkflowCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Workflows"
-        title="Guided operations"
-        description="Map UserManual flows into a guided console, with deep links, step inspection, and a prefilled run form."
+        kicker="工作流"
+        title="引导式操作"
+        description="将操作手册流程映射为引导式控制台，提供深度链接、步骤检查和预填运行表单。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.4fr)]">
@@ -197,8 +212,8 @@ export function WorkflowCenter() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Workflow catalog</CardTitle>
-                <CardDescription>Pick a guided flow to inspect its steps and run entry.</CardDescription>
+                <CardTitle>工作流目录</CardTitle>
+                <CardDescription>选择一个引导式流程以查看其步骤及运行入口。</CardDescription>
               </div>
               <Button variant="outline" onClick={() => workflowsQuery.refetch()} disabled={workflowsQuery.isFetching}>
                 {workflowsQuery.isFetching ? '刷新中' : '刷新'}
@@ -243,9 +258,9 @@ export function WorkflowCenter() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>{selectedWorkflow?.title ?? 'Workflow detail'}</CardTitle>
+                  <CardTitle>{selectedWorkflow?.title ?? '工作流详情'}</CardTitle>
                   <CardDescription>
-                    {selectedWorkflow?.description ?? 'Select a workflow to inspect its guide.'}
+                    {selectedWorkflow?.description ?? '请选择一个工作流以查看其引导内容。'}
                   </CardDescription>
                 </div>
                 {selectedWorkflow ? <Badge variant="info">{selectedWorkflow.job_type}</Badge> : null}
@@ -286,20 +301,20 @@ export function WorkflowCenter() {
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
                         <Card>
                           <CardHeader>
-                            <CardTitle>Workflow summary</CardTitle>
-                            <CardDescription>Use this page to inspect the main path before execution.</CardDescription>
+                            <CardTitle>工作流摘要</CardTitle>
+                            <CardDescription>在执行前通过此页面检查主要路径。</CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-4 text-sm text-slate-300">
                             <div className="grid gap-3 md:grid-cols-2">
                               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Job definition</p>
+                                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">任务定义</p>
                                 <p className="mt-2 font-medium text-slate-100">{selectedWorkflow.job_definition?.title}</p>
                                 <p className="mt-1 text-sm text-slate-400">{selectedWorkflow.job_definition?.description}</p>
                               </div>
                               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Risk</p>
+                                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">风险等级</p>
                                 <Badge variant={jobRiskVariant(selectedWorkflow.job_definition?.risk ?? 'medium')} className="mt-2">
-                                  {selectedWorkflow.job_definition?.risk}
+                                  {getRiskLabel(selectedWorkflow.job_definition?.risk ?? 'medium')}
                                 </Badge>
                                 <p className="mt-2 text-sm text-slate-400">
                                   {selectedWorkflow.job_definition?.requires_confirmation
@@ -323,11 +338,11 @@ export function WorkflowCenter() {
                                 >
                                   <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Step {index + 1}</p>
+                                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">步骤 {index + 1}</p>
                                       <p className="mt-1 font-medium text-slate-100">{step.title}</p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                      <Badge variant={jobRiskVariant(step.risk)}>{step.risk}</Badge>
+                                      <Badge variant={jobRiskVariant(step.risk)}>{getRiskLabel(step.risk)}</Badge>
                                       {step.requires_confirmation ? (
                                         <Badge variant="warning">需确认</Badge>
                                       ) : (
@@ -344,16 +359,16 @@ export function WorkflowCenter() {
 
                         <Card>
                           <CardHeader>
-                            <CardTitle>Run readiness</CardTitle>
-                            <CardDescription>Prepared payload preview for the selected workflow.</CardDescription>
+                            <CardTitle>就绪检查</CardTitle>
+                            <CardDescription>为所选工作流准备的负载预览。</CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-4">
                             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
                               <p className="font-medium text-slate-100">运行前检查</p>
                               <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-400">
                                 <li>确认已连接正确的配置路径与项目根目录。</li>
-                                <li>确认该 workflow 的主步骤与当前任务目标一致。</li>
-                                <li>预设参数用于快速进入执行入口，详细表单已经在本页提供。</li>
+                                <li>确认该工作流的主步骤与当前任务目标一致。</li>
+                                <li>预设参数用于快速进入执行入口，详细表单在本页提供。</li>
                               </ul>
                             </div>
                           </CardContent>
@@ -382,17 +397,17 @@ export function WorkflowCenter() {
                                   <CardTitle>{selectedStep.title}</CardTitle>
                                   <CardDescription>{selectedStep.description}</CardDescription>
                                 </div>
-                                <Badge variant={jobRiskVariant(selectedStep.risk)}>{selectedStep.risk}</Badge>
+                                <Badge variant={jobRiskVariant(selectedStep.risk)}>{getRiskLabel(selectedStep.risk)}</Badge>
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
                               <div className="grid gap-3 md:grid-cols-2">
                                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Job type</p>
+                                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">任务类型</p>
                                   <p className="mt-2 text-sm font-medium text-slate-100">{selectedStep.required_job_type}</p>
                                 </div>
                                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Confirmation</p>
+                                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">确认机制</p>
                                   <p className="mt-2 text-sm font-medium text-slate-100">
                                     {selectedStep.requires_confirmation ? '需要二次确认' : '无需额外确认'}
                                   </p>
@@ -400,7 +415,7 @@ export function WorkflowCenter() {
                               </div>
 
                               <div>
-                                <p className="mb-3 text-sm font-medium text-slate-200">参数 schema</p>
+                                <p className="mb-3 text-sm font-medium text-slate-200">参数结构 (Schema)</p>
                                 <ParamFieldList step={selectedStep} />
                               </div>
                             </CardContent>
@@ -418,8 +433,8 @@ export function WorkflowCenter() {
 
                         <Card>
                           <CardHeader>
-                            <CardTitle>Execution notes</CardTitle>
-                            <CardDescription>Checklist for a guided run.</CardDescription>
+                            <CardTitle>执行注意事项</CardTitle>
+                            <CardDescription>引导式运行清单。</CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-3 text-sm text-slate-300">
                             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
@@ -431,8 +446,8 @@ export function WorkflowCenter() {
                               <p className="mt-1 text-slate-400">{getWorkflowPrimaryStep(selectedWorkflow)?.title ?? '未定义'}</p>
                             </div>
                             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                              <p className="font-medium text-slate-100">下一阶段</p>
-                              <p className="mt-1 text-slate-400">`WEB-S5-004` 会把这里与 Job Center 的详情跳转串起来。</p>
+                              <p className="font-medium text-slate-100">后续阶段</p>
+                              <p className="mt-1 text-slate-400">`WEB-S5-004` 会将此处与任务中心 (Job Center) 的详情跳转进行关联。</p>
                             </div>
                           </CardContent>
                         </Card>

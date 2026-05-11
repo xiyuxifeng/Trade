@@ -135,7 +135,7 @@ function MarketSymbolButton({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="font-medium">{symbol}</p>
-        {active ? <Badge variant="info">Selected</Badge> : null}
+        {active ? <Badge variant="info">已选择</Badge> : null}
       </div>
     </button>
   );
@@ -211,9 +211,9 @@ export function MarketPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Market"
-        title="Market data center"
-        description="Search symbols, pick a target, and inspect OHLCV history from the UI BFF."
+        kicker="行情"
+        title="市场数据中心"
+        description="搜索标的，选择目标，并从 UI BFF 检查 OHLCV 历史记录。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(280px,0.7fr)_minmax(0,1.3fr)]">
@@ -221,8 +221,8 @@ export function MarketPage() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Symbol browser</CardTitle>
-                <CardDescription>Find and pick a symbol before querying history.</CardDescription>
+                <CardTitle>标的浏览器</CardTitle>
+                <CardDescription>在查询历史记录前，找到并选择一个标的。</CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={() => symbolsQuery.refetch()} disabled={symbolsQuery.isFetching}>
                 {symbolsQuery.isFetching ? '刷新中' : '刷新'}
@@ -231,7 +231,7 @@ export function MarketPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
-              placeholder="Search symbol"
+              placeholder="搜索标的 (symbol)"
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
@@ -248,7 +248,7 @@ export function MarketPage() {
               </div>
             ) : !symbolsQuery.data?.items.length ? (
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                暂无匹配 symbol。
+                暂无匹配标的。
               </div>
             ) : (
               <div className="space-y-2">
@@ -268,17 +268,17 @@ export function MarketPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>OHLCV query</CardTitle>
-              <CardDescription>Select a symbol, set a date range, then run the query.</CardDescription>
+              <CardTitle>OHLCV 查询</CardTitle>
+              <CardDescription>选择一个标的，设置日期范围，然后运行查询。</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Selected symbol</p>
-                  <p className="mt-1 text-sm text-slate-100">{selectedSymbol || '请选择左侧 symbol'}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">当前选择标的</p>
+                  <p className="mt-1 text-sm text-slate-100">{selectedSymbol || '请选择左侧标的'}</p>
                 </div>
                 <Select value={selectedSymbol} onChange={(event) => setSelectedSymbol(event.target.value)}>
-                  <option value="">Select</option>
+                  <option value="">选择</option>
                   {symbolsQuery.data?.items.map((symbol) => (
                     <option key={symbol} value={symbol}>
                       {symbol}
@@ -322,25 +322,25 @@ export function MarketPage() {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Symbols</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">标的总数</p>
               <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.symbolsCount}</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Selected</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已选择</p>
               <p className="mt-2 break-all text-xl font-semibold text-sky-300">{summary.selectedSymbol}</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Rows</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">数据行数</p>
               <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.rowCount}</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Last close</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最新收盘价</p>
               <p className="mt-2 text-2xl font-semibold text-amber-300">
                 {summary.lastClose == null ? '—' : formatNumber(summary.lastClose)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Range</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">价格范围</p>
               <p className="mt-2 text-xl font-semibold text-slate-100">
                 {summary.low == null || summary.high == null ? '—' : `${formatNumber(summary.low)} - ${formatNumber(summary.high)}`}
               </p>
@@ -351,9 +351,9 @@ export function MarketPage() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>OHLCV history</CardTitle>
+                  <CardTitle>OHLCV 历史</CardTitle>
                   <CardDescription>
-                    {ohlcvQuery.data ? `${ohlcvQuery.data.symbol} · ${ohlcvQuery.data.count} rows` : 'Query results will appear here.'}
+                    {ohlcvQuery.data ? `${ohlcvQuery.data.symbol} · ${ohlcvQuery.data.count} 行数据` : '查询结果将显示在这里。'}
                   </CardDescription>
                 </div>
                 {ohlcvQuery.data ? <Badge variant="info">{ohlcvQuery.data.start_date} ~ {ohlcvQuery.data.end_date}</Badge> : null}
@@ -465,13 +465,13 @@ export function MarketPage() {
                       <Table>
                         <TableHeader className="bg-slate-950/80">
                           <TableRow>
-                            <TableHead>Time</TableHead>
-                            <TableHead>Open</TableHead>
-                            <TableHead>High</TableHead>
-                            <TableHead>Low</TableHead>
-                            <TableHead>Close</TableHead>
-                            <TableHead>Volume</TableHead>
-                            <TableHead>Turnover</TableHead>
+                            <TableHead>时间</TableHead>
+                            <TableHead>开盘价</TableHead>
+                            <TableHead>最高价</TableHead>
+                            <TableHead>最低价</TableHead>
+                            <TableHead>收盘价</TableHead>
+                            <TableHead>成交量</TableHead>
+                            <TableHead>成交额</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>

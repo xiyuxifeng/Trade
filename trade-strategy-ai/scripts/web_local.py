@@ -186,21 +186,44 @@ def start(
 
 @app.command("stop")
 def stop() -> None:
-    """停止由 start 命令启动的 API 和 Worker 进程。"""
+    """停止由 start 命令启动的 API 和 Worker 进程，并尝试清理任何残留的僵尸进程。"""
     typer.echo("正在停止服务...")
+    pids_to_stop = set()
+
+    # 1. 从 PID 文件读取
     api_pid = _read_pid_file("api")
     worker_pid = _read_pid_file("worker")
+    if api_pid:
+        pids_to_stop.add(api_pid)
+    if worker_pid:
+        pids_to_stop.add(worker_pid)
 
-    if api_pid is None and worker_pid is None:
-        typer.echo("没有找到正在运行的服务 (PID 文件不存在)。")
+    # 2. 扫描系统进程作为备用方案
+    try:
+        import psutil
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            if proc.info["cmdline"]:
+                cmdline = " ".join(proc.info["cmdline"])
+                # 查找 API server
+                if "uvicorn" in cmdline and "api.main:app" in cmdline:
+                    pids_to_stop.add(proc.pid)
+                # 查找 worker
+                if "cli.main" in cmdline and "job-worker-start" in cmdline:
+                    pids_to_stop.add(proc.pid)
+    except (ImportError, psutil.Error):
+        typer.echo("警告: `psutil` 未安装或扫描进程失败，将仅依赖 PID 文件。", err=True)
+
+
+    if not pids_to_stop:
+        typer.echo("没有找到正在运行的服务 (PID 文件不存在且未扫描到相关进程)。")
         return
 
-    if api_pid:
-        _terminate_process(api_pid)
-        _remove_pid_file("api")
-    if worker_pid:
-        _terminate_process(worker_pid)
-        _remove_pid_file("worker")
+    for pid in pids_to_stop:
+        _terminate_process(pid)
+
+    # 3. 清理 PID 文件
+    _remove_pid_file("api")
+    _remove_pid_file("worker")
 
     typer.echo("服务已停止。")
 

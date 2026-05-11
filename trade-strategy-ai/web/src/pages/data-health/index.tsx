@@ -5,9 +5,9 @@ export function DataHealthPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Data Ops"
-        title="Operational Dashboard"
-        description="Live failures, runtime, freshness, and report artifacts."
+        kicker="数据运维"
+        title="运维仪表盘"
+        description="实时故障、运行时间、数据新鲜度和报告产物。"
       />
       <OperationalDashboardCenter />
       <DataHealthCenter />

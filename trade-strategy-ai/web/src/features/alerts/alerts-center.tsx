@@ -250,10 +250,10 @@ export function AlertsCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Alerts"
-        title="Alerts Center"
-        description="Review alert history, acknowledge or resolve incidents, and send a test alert after confirming webhook wiring."
-        actionLabel="Send test alert"
+        kicker="告警"
+        title="告警中心"
+        description="审阅告警历史，确认或解决事件，并在确认 Webhook 配置后发送测试告警。"
+        actionLabel="发送测试告警"
         onAction={() => setTestDialogOpen(true)}
       />
 
@@ -263,8 +263,8 @@ export function AlertsCenter() {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>Alert history</CardTitle>
-                  <CardDescription>Filter by status, level, tag, and date range.</CardDescription>
+                  <CardTitle>告警历史</CardTitle>
+                  <CardDescription>按状态、级别、标签和日期范围过滤。</CardDescription>
                 </div>
                 <Button variant="outline" onClick={() => historyQuery.refetch()} disabled={historyQuery.isFetching}>
                   {historyQuery.isFetching ? '刷新中' : '刷新'}
@@ -274,63 +274,63 @@ export function AlertsCenter() {
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">状态</span>
                   <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-                    <option value="">All statuses</option>
-                    <option value="pending">pending</option>
-                    <option value="sent">sent</option>
-                    <option value="acknowledged">acknowledged</option>
-                    <option value="resolved">resolved</option>
+                    <option value="">所有状态</option>
+                    <option value="pending">待处理</option>
+                    <option value="sent">已发送</option>
+                    <option value="acknowledged">已确认</option>
+                    <option value="resolved">已解决</option>
                   </Select>
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Level</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">级别</span>
                   <Select value={level} onChange={(event) => setLevel(event.target.value)}>
-                    <option value="">All levels</option>
-                    <option value="CRITICAL">CRITICAL</option>
-                    <option value="WARNING">WARNING</option>
-                    <option value="INFO">INFO</option>
+                    <option value="">所有级别</option>
+                    <option value="CRITICAL">紧急 (CRITICAL)</option>
+                    <option value="WARNING">警告 (WARNING)</option>
+                    <option value="INFO">信息 (INFO)</option>
                   </Select>
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Tag</span>
-                  <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="snapshot" />
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">标签</span>
+                  <Input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="例如：snapshot" />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Date from</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">开始日期</span>
                   <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Date to</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">结束日期</span>
                   <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Skip</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">跳过 (Skip)</span>
                   <Input type="number" min={0} value={skip} onChange={(event) => setSkip(Number(event.target.value) || 0)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Limit</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">分页限制 (Limit)</span>
                   <Input type="number" min={1} max={100} value={limit} onChange={(event) => setLimit(Math.max(1, Number(event.target.value) || 50))} />
                 </label>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Quick actions</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">快捷操作</span>
                 <Button size="sm" variant="ghost" onClick={resetFilters}>
-                  Reset filters
+                  重置过滤器
                 </Button>
               </div>
 
               <div className="grid gap-3 md:grid-cols-4">
-                <SummaryCard title="Total" value={summary.total} accent="text-sky-300" />
-                <SummaryCard title="Pending" value={summary.pending} accent="text-amber-300" />
-                <SummaryCard title="Acknowledged" value={summary.acknowledged} accent="text-emerald-300" />
-                <SummaryCard title="Resolved" value={summary.resolved} accent="text-sky-300" />
+                <SummaryCard title="总计" value={summary.total} accent="text-sky-300" />
+                <SummaryCard title="待处理" value={summary.pending} accent="text-amber-300" />
+                <SummaryCard title="已确认" value={summary.acknowledged} accent="text-emerald-300" />
+                <SummaryCard title="已解决" value={summary.resolved} accent="text-sky-300" />
               </div>
 
               <div className="text-xs text-slate-500">
-                {historyQuery.data ? `${historyQuery.data.total} total / ${alerts.length} shown` : '等待告警数据加载'}
-                {activeFilters.length ? <p className="mt-1 max-w-sm">{activeFilters.join(' · ')}</p> : <p className="mt-1">No active filters.</p>}
+                {historyQuery.data ? `总计 ${historyQuery.data.total} / 当前显示 ${alerts.length}` : '等待告警数据加载'}
+                {activeFilters.length ? <p className="mt-1 max-w-sm">{activeFilters.join(' · ')}</p> : <p className="mt-1">暂无启用的过滤器。</p>}
               </div>
 
               {historyQuery.isLoading ? (
@@ -349,7 +349,7 @@ export function AlertsCenter() {
                   <p className="mt-2">可以放宽日期范围、切换状态或级别，然后重新查询。</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button size="sm" onClick={resetFilters}>
-                      Reset filters
+                      重置过滤器
                     </Button>
                   </div>
                 </div>
@@ -385,9 +385,9 @@ export function AlertsCenter() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Alert details</CardTitle>
+                <CardTitle>告警详情</CardTitle>
                 <CardDescription>
-                  {selectedAlert ? `${selectedAlert.title} · ${selectedAlert.alert_id}` : 'Select an alert to inspect details.'}
+                  {selectedAlert ? `${selectedAlert.title} · ${selectedAlert.alert_id}` : '选择一个告警以查看详情。'}
                 </CardDescription>
               </div>
               {selectedAlert ? (
@@ -401,7 +401,7 @@ export function AlertsCenter() {
           <CardContent>
             {!selectedAlert ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                No alert selected yet.
+                尚未选择任何告警。
               </div>
             ) : detailQuery.isLoading ? (
               <div className="space-y-3">
@@ -415,7 +415,7 @@ export function AlertsCenter() {
             ) : selectedDetail ? (
               <Tabs defaultValue="summary" className="w-full">
                 <TabsList className="flex flex-wrap">
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
+                  <TabsTrigger value="summary">摘要</TabsTrigger>
                   <TabsTrigger value="json">JSON</TabsTrigger>
                 </TabsList>
 
@@ -423,15 +423,15 @@ export function AlertsCenter() {
                   <AlertDetailSummary alert={selectedDetail} />
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <SummaryCard title="Created at" value={formatTimestamp(selectedDetail.created_at)} accent="text-sky-300" />
-                    <SummaryCard title="Sent at" value={formatTimestamp(selectedDetail.sent_at)} />
-                    <SummaryCard title="Aggregation key" value={selectedDetail.aggregation_key ?? 'n/a'} accent="text-emerald-300" />
+                    <SummaryCard title="创建时间" value={formatTimestamp(selectedDetail.created_at)} accent="text-sky-300" />
+                    <SummaryCard title="发送时间" value={formatTimestamp(selectedDetail.sent_at)} />
+                    <SummaryCard title="聚合键 (Aggregation key)" value={selectedDetail.aggregation_key ?? '无'} accent="text-emerald-300" />
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Message</h4>
-                      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">{selectedDetail.message ?? 'No message available.'}</p>
+                      <h4 className="text-sm font-semibold text-slate-100">详情信息</h4>
+                      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">{selectedDetail.message ?? '无可用信息。'}</p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         {selectedDetail.tags.map((item) => (
                           <Badge key={item} variant="default">
@@ -442,40 +442,40 @@ export function AlertsCenter() {
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Actions</h4>
+                      <h4 className="text-sm font-semibold text-slate-100">操作</h4>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button onClick={() => acknowledgeMutation.mutate()} disabled={acknowledgeMutation.isPending || resolveMutation.isPending}>
-                          Acknowledge
+                          确认 (Acknowledge)
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => resolveMutation.mutate()}
                           disabled={acknowledgeMutation.isPending || resolveMutation.isPending}
                         >
-                          Resolve
+                          解决 (Resolve)
                         </Button>
                       </div>
-                      <p className="mt-3 text-xs text-slate-500">Actions update the record in the history table immediately after success.</p>
+                      <p className="mt-3 text-xs text-slate-500">操作成功后将立即更新历史记录表中的状态。</p>
                     </div>
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Timeline</h4>
+                      <h4 className="text-sm font-semibold text-slate-100">时间线</h4>
                       <dl className="mt-3 space-y-2 text-sm text-slate-300">
                         <div className="flex items-center justify-between gap-3">
-                          <dt className="text-slate-500">Acknowledged</dt>
+                          <dt className="text-slate-500">已确认于</dt>
                           <dd>{formatTimestamp(selectedDetail.acknowledged_at)}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <dt className="text-slate-500">Resolved</dt>
+                          <dt className="text-slate-500">已解决于</dt>
                           <dd>{formatTimestamp(selectedDetail.resolved_at)}</dd>
                         </div>
                       </dl>
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Metadata</h4>
+                      <h4 className="text-sm font-semibold text-slate-100">元数据</h4>
                       <pre className="mt-3 max-h-60 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
                         {JSON.stringify(selectedDetail.alert_metadata, null, 2)}
                       </pre>
@@ -497,17 +497,17 @@ export function AlertsCenter() {
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send test alert?</DialogTitle>
+            <DialogTitle>发送测试告警？</DialogTitle>
             <DialogDescription>
-              This will send a webhook test message so you can verify the alerting configuration before using it in production.
+              这将发一条 Webhook 测试消息，以便在正式环境使用前验证告警配置是否正确。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTestDialogOpen(false)}>
-              Cancel
+              取消
             </Button>
             <Button onClick={() => testAlertMutation.mutate()} disabled={testAlertMutation.isPending}>
-              {testAlertMutation.isPending ? 'Sending…' : 'Send test alert'}
+              {testAlertMutation.isPending ? '正在发送…' : '发送测试告警'}
             </Button>
           </DialogFooter>
         </DialogContent>

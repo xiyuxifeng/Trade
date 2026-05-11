@@ -390,9 +390,9 @@ export function SettingsCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Settings"
-        title="Configuration Studio"
-        description="Inspect the masked runtime configuration, edit targeted sections, preview diffs, and manage backups with explicit confirmation."
+        kicker="系统设置"
+        title="配置中心"
+        description="查看受掩码保护的运行时配置，编辑目标部分，预览差异结构，并管理系统备份。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
@@ -400,8 +400,8 @@ export function SettingsCenter() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Configuration path</CardTitle>
-                <CardDescription>Load the project config you want to inspect or edit.</CardDescription>
+                <CardTitle>配置文件路径</CardTitle>
+                <CardDescription>加载您想要检查或编辑的项目配置（YAML）。</CardDescription>
                 {!canEditSettings ? (
                   <p className="mt-2 text-sm text-amber-100">当前身份为 {principal.role}，仅可查看和预览配置。</p>
                 ) : null}
@@ -427,27 +427,27 @@ export function SettingsCenter() {
                   setConfigPath(configPathInput.trim() || 'config/app.yaml');
                 }}
               >
-                Load
+                加载
               </Button>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Sections</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">配置分段 (Sections)</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{sections.length}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Dirty</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已修改 (Dirty)</p>
                 <p className="mt-2 text-2xl font-semibold text-amber-300">{dirtyCount}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Backups</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">备份数 (Backups)</p>
                 <p className="mt-2 text-2xl font-semibold text-emerald-300">{backupCount}</p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Section navigator</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">分段导航 (Section Navigator)</p>
               <div className="mt-3 grid gap-2">
                 {sections.map((section) => (
                   <button

@@ -34,10 +34,28 @@ function getErrorMessage(error: unknown) {
 }
 
 function statusVariant(status: string) {
+  const mapping: Record<string, string> = {
+    pending: '等待中',
+    running: '运行中',
+    success: '成功',
+    failed: '失败',
+    cancelled: '已取消',
+  };
   if (status === 'success') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'destructive';
   if (status === 'running') return 'info';
   return 'warning';
+}
+
+function getStatusLabel(status: string) {
+  const mapping: Record<string, string> = {
+    pending: '等待中',
+    running: '运行中',
+    success: '成功',
+    failed: '失败',
+    cancelled: '已取消',
+  };
+  return mapping[status] || status;
 }
 
 function canCancelJob(status: string, cancelRequested: boolean) {
@@ -76,11 +94,11 @@ function ArtifactCard({
           <p className="mt-1 break-all text-xs text-slate-500">{artifact.path}</p>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenArtifacts}>
-          Open in Artifacts
+          在产物中心查看
         </Button>
       </div>
       <div className="mt-3">
-        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Metadata</p>
+        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">元数据 (Metadata)</p>
         <pre className="mt-2 max-h-40 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
           {JSON.stringify(artifact.metadata, null, 2)}
         </pre>
@@ -102,8 +120,8 @@ function AuditEventCard({ event }: { event: JobAuditEvent }) {
         <p className="text-xs text-slate-500">{formatTimestamp(event.event_at)}</p>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Field label="Params summary" value={JSON.stringify(event.params_summary)} />
-        <Field label="Payload" value={JSON.stringify(event.payload)} />
+        <Field label="参数摘要" value={JSON.stringify(event.params_summary)} />
+        <Field label="负载详情" value={JSON.stringify(event.payload)} />
       </div>
     </div>
   );
@@ -201,9 +219,9 @@ export function JobsPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Jobs"
-        title="Task Center"
-        description="View recent jobs, inspect details, review logs, rerun work, and follow artifact references."
+        kicker="任务"
+        title="任务中心"
+        description="查看最近的任务，检查详情，审阅日志，重新运行任务，并追踪产物引用。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
@@ -211,8 +229,8 @@ export function JobsPage() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Recent jobs</CardTitle>
-                <CardDescription>Sortable by status, job type and creator.</CardDescription>
+                <CardTitle>最近任务</CardTitle>
+                <CardDescription>按状态、任务类型和创建者排序。</CardDescription>
               </div>
               <Button variant="outline" onClick={() => jobsQuery.refetch()} disabled={jobsQuery.isFetching}>
                 {jobsQuery.isFetching ? '刷新中' : '刷新'}
@@ -221,29 +239,29 @@ export function JobsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
-              <Input placeholder="Filter by creator" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} />
-              <Input placeholder="Filter by job type" value={jobType} onChange={(event) => setJobType(event.target.value)} />
+              <Input placeholder="按创建者过滤" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} />
+              <Input placeholder="按任务类型过滤" value={jobType} onChange={(event) => setJobType(event.target.value)} />
               <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-                <option value="">All statuses</option>
-                <option value="pending">pending</option>
-                <option value="running">running</option>
-                <option value="success">success</option>
-                <option value="failed">failed</option>
-                <option value="cancelled">cancelled</option>
+                <option value="">所有状态</option>
+                <option value="pending">等待中</option>
+                <option value="running">运行中</option>
+                <option value="success">成功</option>
+                <option value="failed">失败</option>
+                <option value="cancelled">已取消</option>
               </Select>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">总计</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.total}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Running</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">运行中</p>
                 <p className="mt-2 text-2xl font-semibold text-sky-300">{summary.running}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Failed</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">失败</p>
                 <p className="mt-2 text-2xl font-semibold text-rose-300">{summary.failed}</p>
               </div>
             </div>
@@ -267,11 +285,11 @@ export function JobsPage() {
                 <Table>
                   <TableHeader className="bg-slate-950/80">
                     <TableRow>
-                      <TableHead>Job</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created by</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>任务</TableHead>
+                      <TableHead>状态</TableHead>
+                      <TableHead>创建者</TableHead>
+                      <TableHead>创建时间</TableHead>
+                      <TableHead>操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -284,7 +302,7 @@ export function JobsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
+                          <Badge variant={statusVariant(job.status)}>{getStatusLabel(job.status)}</Badge>
                         </TableCell>
                         <TableCell>{job.created_by}</TableCell>
                         <TableCell>{formatTimestamp(job.created_at)}</TableCell>
@@ -301,7 +319,7 @@ export function JobsPage() {
                               });
                             }}
                           >
-                            Details
+                            详情
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -315,14 +333,14 @@ export function JobsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Operational notes</CardTitle>
-            <CardDescription>What the task center surfaces immediately.</CardDescription>
+            <CardTitle>操作说明</CardTitle>
+            <CardDescription>任务中心立即展示的内容。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
             <ul className="list-disc space-y-2 pl-5 text-slate-400">
-              <li>Open any job for params, logs, result metadata and artifact references.</li>
-              <li>Cancel is available from the drawer for in-flight jobs.</li>
-              <li>Filters are intentionally simple to keep the first operational pass fast.</li>
+              <li>打开任何任务以查看参数、日志、结果元数据和产物引用。</li>
+              <li>对于正在运行的任务，可以从详情页取消执行。</li>
+              <li>过滤器设计简单，以确保第一波操作能够快速完成。</li>
             </ul>
             {!canOperateJobs ? (
               <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
@@ -347,9 +365,9 @@ export function JobsPage() {
       >
         <DrawerContent>
           <DrawerHeader>
-            <DrawerTitle>Job details</DrawerTitle>
+            <DrawerTitle>任务详情</DrawerTitle>
             <DrawerDescription>
-              {selectedJobId ? `Inspecting ${selectedJobId}` : 'No job selected'}
+              {selectedJobId ? `正在检查 ${selectedJobId}` : '未选择任务'}
             </DrawerDescription>
           </DrawerHeader>
 
@@ -365,20 +383,20 @@ export function JobsPage() {
                   <p className="text-lg font-semibold text-slate-100">{detail.job_type}</p>
                   <p className="text-xs text-slate-500 break-all">{detail.id}</p>
                 </div>
-                <Badge variant={statusVariant(detail.status)}>{detail.status}</Badge>
+                <Badge variant={statusVariant(detail.status)}>{getStatusLabel(detail.status)}</Badge>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Created by" value={detail.created_by} />
-                <Field label="Worker" value={detail.worker_id} />
-                <Field label="Started" value={formatTimestamp(detail.started_at)} />
-                <Field label="Finished" value={formatTimestamp(detail.finished_at)} />
-                <Field label="Job dir" value={selectedJobQuery.data?.job_dir} />
-                <Field label="Result path" value={selectedJobQuery.data?.result_path} />
+                <Field label="创建者" value={detail.created_by} />
+                <Field label="执行器" value={detail.worker_id} />
+                <Field label="开始时间" value={formatTimestamp(detail.started_at)} />
+                <Field label="完成时间" value={formatTimestamp(detail.finished_at)} />
+                <Field label="任务目录" value={selectedJobQuery.data?.job_dir} />
+                <Field label="结果路径" value={selectedJobQuery.data?.result_path} />
               </div>
 
               <div className="grid gap-3">
-                <p className="text-sm font-medium text-slate-200">Parameters</p>
+                <p className="text-sm font-medium text-slate-200">参数</p>
                 <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
                   {JSON.stringify(detail.params, null, 2)}
                 </pre>
@@ -386,12 +404,12 @@ export function JobsPage() {
 
               <div className="grid gap-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-slate-200">Audit trail</p>
-                  <p className="text-xs text-slate-500">{detail.audit_events.length} events</p>
+                  <p className="text-sm font-medium text-slate-200">审计追踪</p>
+                  <p className="text-xs text-slate-500">{detail.audit_events.length} 个事件</p>
                 </div>
                 {!detail.audit_events.length ? (
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                    No audit events yet.
+                    尚无审计事件。
                   </div>
                 ) : (
                   <div className="grid gap-3">
@@ -403,23 +421,23 @@ export function JobsPage() {
               </div>
 
               <div className="grid gap-3">
-                <p className="text-sm font-medium text-slate-200">Logs</p>
+                <p className="text-sm font-medium text-slate-200">日志</p>
                 <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
                   {jobLogsQuery.isLoading
-                    ? 'Loading logs...'
+                    ? '正在加载日志...'
                     : jobLogsQuery.error
                       ? getErrorMessage(jobLogsQuery.error)
                       : logs.length
                         ? logs.join('\n')
-                        : 'No logs yet.'}
+                        : '尚无日志。'}
                 </pre>
               </div>
 
               <div className="grid gap-3">
-                <p className="text-sm font-medium text-slate-200">Artifacts</p>
+                <p className="text-sm font-medium text-slate-200">产物</p>
                 {!detail.artifacts.length ? (
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                    No artifacts attached.
+                    该任务未产生任何产物。
                   </div>
                 ) : (
                   <div className="grid gap-3">
@@ -438,10 +456,10 @@ export function JobsPage() {
 
           <DrawerFooter>
             <Button variant="outline" onClick={() => setSelectedJobId(null)}>
-              Close
+              关闭
             </Button>
             <Button variant="secondary" onClick={() => setRerunOpen(true)} disabled={!detail || rerunMutation.isPending || !canOperateJobs}>
-              {rerunMutation.isPending ? 'Rerunning' : 'Rerun job'}
+              {rerunMutation.isPending ? '重新运行中' : '重新运行任务'}
             </Button>
             <Button
               variant="destructive"
@@ -453,7 +471,7 @@ export function JobsPage() {
                 !canOperateJobs
               }
             >
-              {cancelMutation.isPending ? 'Cancelling' : 'Cancel job'}
+              {cancelMutation.isPending ? '取消中' : '取消任务'}
             </Button>
           </DrawerFooter>
         </DrawerContent>
@@ -470,19 +488,19 @@ export function JobsPage() {
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Confirm rerun</DialogTitle>
+            <DialogTitle>确认重新运行</DialogTitle>
             <DialogDescription>
-              This will create a new job with the same job type and parameter snapshot as the selected job.
+              这将使用与所选任务相同的任务类型和参数快照创建一个新任务。
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Job type" value={detail?.job_type} />
-              <Field label="Created by" value={detail?.created_by} />
+              <Field label="任务类型" value={detail?.job_type} />
+              <Field label="创建者" value={detail?.created_by} />
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Parameters</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">参数</p>
               <pre className="mt-3 max-h-64 overflow-auto text-xs text-slate-200">
                 {JSON.stringify(detail?.params ?? {}, null, 2)}
               </pre>
@@ -502,10 +520,10 @@ export function JobsPage() {
                 rerunMutation.reset();
               }}
             >
-              Cancel
+              取消
             </Button>
             <Button onClick={() => rerunMutation.mutate()} disabled={!detail || rerunMutation.isPending || !canOperateJobs}>
-              {rerunMutation.isPending ? 'Submitting' : 'Confirm rerun'}
+              {rerunMutation.isPending ? '提交中' : '确认重新运行'}
             </Button>
           </DialogFooter>
         </DialogContent>

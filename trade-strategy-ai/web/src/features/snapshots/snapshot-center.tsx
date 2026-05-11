@@ -111,17 +111,17 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-testid="snapshot-detail-trade-date">
-          <SnapshotSummaryCard title="Trade date" value={detail.trade_date} accent="text-sky-300" />
+          <SnapshotSummaryCard title="交易日期" value={detail.trade_date} accent="text-sky-300" />
         </div>
         <div data-testid="snapshot-detail-slot">
-          <SnapshotSummaryCard title="Slot" value={detail.slot} accent="text-sky-300" />
+          <SnapshotSummaryCard title="时间插槽" value={detail.slot} accent="text-sky-300" />
         </div>
-        <SnapshotSummaryCard title="Hot topics" value={hotTopics.length} />
-        <SnapshotSummaryCard title="Strong symbols" value={strongSymbols.length} />
+        <SnapshotSummaryCard title="热题材数量" value={hotTopics.length} />
+        <SnapshotSummaryCard title="强势标的数量" value={strongSymbols.length} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Hot topics">
+        <SectionCard title="热题材清单">
           {hotTopics.length ? (
             <ul className="space-y-2 text-sm text-slate-300">
               {hotTopics.map((item) => (
@@ -131,7 +131,7 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
                     <span className="text-xs text-slate-500">{item.kind}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    score {item.score ?? 'n/a'} · increase {item.increase_pct ?? 'n/a'}%
+                    评分 {item.score ?? 'n/a'} · 涨幅 {item.increase_pct ?? 'n/a'}%
                   </p>
                 </li>
               ))}
@@ -141,7 +141,7 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
           )}
         </SectionCard>
 
-        <SectionCard title="Topic constituents">
+        <SectionCard title="题材成分股">
           {constituents.length ? (
             <ul className="space-y-2 text-sm text-slate-300">
               {constituents.map((item) => (
@@ -160,7 +160,7 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Strong symbols">
+        <SectionCard title="强势标的清单">
           {strongSymbols.length ? (
             <ul className="space-y-2 text-sm text-slate-300">
               {strongSymbols.map((item) => (
@@ -169,7 +169,7 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
                     <span>{item.name ?? item.symbol ?? 'unknown'}</span>
                     <span className="text-xs text-slate-500">{item.kind}</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">strength {item.strength_score ?? 'n/a'}</p>
+                  <p className="mt-1 text-xs text-slate-500">强度分 {item.strength_score ?? 'n/a'}</p>
                 </li>
               ))}
             </ul>
@@ -178,7 +178,7 @@ function SnapshotDetailView({ detail }: { detail: SnapshotDetail }) {
           )}
         </SectionCard>
 
-        <SectionCard title="Raw JSON">
+        <SectionCard title="原始数据 (JSON)">
           <pre
             className="max-h-[30rem] overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
             data-testid="snapshot-detail-json"
@@ -311,24 +311,24 @@ export function SnapshotsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-2 text-sm text-slate-300">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Start date</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">开始日期</span>
                 <Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">End date</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">结束日期</span>
                 <Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Slot</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">时间插槽</span>
                 <Input value={slot} onChange={(event) => setSlot(event.target.value)} placeholder="17-30" />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Snapshot type</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">快照类型</span>
                 <Select value={snapshotType} onChange={(event) => setSnapshotType(event.target.value as SnapshotType | 'all')}>
-                  <option value="all">all</option>
-                  <option value="hot_topics">hot_topics</option>
-                  <option value="topic_constituents">topic_constituents</option>
-                  <option value="strong_symbols">strong_symbols</option>
+                  <option value="all">全部</option>
+                  <option value="hot_topics">热题材</option>
+                  <option value="topic_constituents">题材成分股</option>
+                  <option value="strong_symbols">强势标的</option>
                 </Select>
               </label>
             </div>
@@ -336,18 +336,18 @@ export function SnapshotsPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
                 <input checked={force} onChange={(event) => setForce(event.target.checked)} type="checkbox" />
-                Force rebuild
+                强制重新构建 (Force rebuild)
               </label>
               <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
                 <input checked={offline} onChange={(event) => setOffline(event.target.checked)} type="checkbox" />
-                Offline mode
+                离线模式 (Offline mode)
               </label>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <SnapshotSummaryCard title="Total" value={summary.total} />
-              <SnapshotSummaryCard title="Selected hot topics" value={summary.hotTopics} accent="text-sky-300" />
-              <SnapshotSummaryCard title="Selected strong symbols" value={summary.strongSymbols} accent="text-amber-300" />
+              <SnapshotSummaryCard title="总计" value={summary.total} />
+              <SnapshotSummaryCard title="已选热题材" value={summary.hotTopics} accent="text-sky-300" />
+              <SnapshotSummaryCard title="已选强势标的" value={summary.strongSymbols} accent="text-amber-300" />
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -356,7 +356,7 @@ export function SnapshotsPage() {
               </Button>
               {submittedJobId ? (
                 <Button variant="outline" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(submittedJobId)}`)}>
-                  View Job
+                  查看任务
                 </Button>
               ) : null}
             </div>
@@ -369,7 +369,7 @@ export function SnapshotsPage() {
 
             {submittedJobId ? (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-                Snapshot job submitted: {submittedJobId}
+                快照任务已提交：{submittedJobId}
               </div>
             ) : null}
 
@@ -431,8 +431,8 @@ export function SnapshotsPage() {
             ) : detailQuery.data?.item ? (
               <Tabs defaultValue="summary" className="w-full">
                 <TabsList>
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
-                  <TabsTrigger value="json">JSON</TabsTrigger>
+                  <TabsTrigger value="summary">概要视图</TabsTrigger>
+                  <TabsTrigger value="json">JSON 源码</TabsTrigger>
                 </TabsList>
                 <TabsContent value="summary">
                   <SnapshotDetailView detail={detailQuery.data.item} />

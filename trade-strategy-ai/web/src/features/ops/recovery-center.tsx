@@ -79,9 +79,9 @@ function BackupPackageCard({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">rows: {Object.values(item.row_counts).reduce((sum, value) => sum + value, 0)}</p>
+        <p className="text-xs text-slate-500">行数: {Object.values(item.row_counts).reduce((sum, value) => sum + value, 0)}</p>
         <Button variant="destructive" size="sm" onClick={onRestore} disabled={disabled}>
-          Restore
+          恢复 (Restore)
         </Button>
       </div>
     </div>
@@ -158,8 +158,8 @@ export function RecoveryCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Ops"
-        title="Recovery Center"
+        kicker="运维"
+        title="恢复中心 (Recovery Center)"
         description="项目级备份、恢复和回滚演练入口。"
       />
 
@@ -186,7 +186,7 @@ export function RecoveryCenter() {
       <div className="grid gap-4 lg:grid-cols-[1.1fr_1.4fr]">
         <Card className="border-slate-800 bg-slate-950/70">
           <CardHeader>
-            <CardTitle>Project backup</CardTitle>
+            <CardTitle>项目备份</CardTitle>
             <CardDescription>创建数据库、Job 元数据和 processed 目录的项目级快照。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -199,25 +199,25 @@ export function RecoveryCenter() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-medium text-slate-100">Include processed data</span>
+                <span className="block font-medium text-slate-100">包含处理后的数据 (Include processed data)</span>
                 <span className="block text-xs text-slate-400">同时备份 `data/processed` 目录，便于完整回滚。</span>
               </span>
             </label>
 
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-              备份操作会记录审计事件，并为恢复提供可追踪的 manifest。
+              备份操作会记录审计事件，并为恢复提供可追踪的清单 (manifest)。
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Button disabled={!canManageRecovery || createMutation.isPending} onClick={() => setBackupConfirmOpen(true)}>
-                Create backup
+                开始项目备份
               </Button>
               <Button
                 variant="outline"
                 disabled={backupsQuery.isFetching}
                 onClick={() => backupsQuery.refetch()}
               >
-                {backupsQuery.isFetching ? 'Refreshing' : 'Refresh list'}
+                {backupsQuery.isFetching ? '刷新中' : '刷新列表'}
               </Button>
             </div>
 
@@ -229,7 +229,7 @@ export function RecoveryCenter() {
 
         <Card className="border-slate-800 bg-slate-950/70">
           <CardHeader>
-            <CardTitle>Rollback drill</CardTitle>
+            <CardTitle>回滚演练</CardTitle>
             <CardDescription>发布失败时按这个顺序恢复：先找回最近快照，再复核健康检查。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
@@ -239,7 +239,7 @@ export function RecoveryCenter() {
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <p className="font-medium text-slate-100">2. 在测试环境恢复</p>
-              <p className="mt-1 text-slate-400">恢复前必须显式确认，恢复后检查 Dashboard 与 Jobs 状态。</p>
+              <p className="mt-1 text-slate-400">恢复前必须显式确认，恢复后检查仪表盘 (Dashboard) 与任务 (Jobs) 状态。</p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
               <p className="font-medium text-slate-100">3. 生产发布失败时回滚</p>
@@ -251,7 +251,7 @@ export function RecoveryCenter() {
 
       <Card className="border-slate-800 bg-slate-950/70">
         <CardHeader>
-          <CardTitle>Backup packages</CardTitle>
+          <CardTitle>备份包列表</CardTitle>
           <CardDescription>选择任意项目快照执行恢复，恢复操作仅对 admin 开放。</CardDescription>
         </CardHeader>
         <CardContent>
@@ -306,7 +306,7 @@ export function RecoveryCenter() {
       <Dialog open={Boolean(restoreTarget)} onOpenChange={(open) => !open && setRestoreTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm project restore</DialogTitle>
+            <DialogTitle>确认项目恢复</DialogTitle>
             <DialogDescription>恢复会覆盖数据库和 processed 目录。请输入 RESTORE 继续。</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -315,26 +315,26 @@ export function RecoveryCenter() {
               <p className="mt-1 break-all text-xs text-rose-100/80">{restoreTarget?.path}</p>
             </div>
             <label className="block text-sm text-slate-300">
-              <span className="mb-2 block">Restore confirmation</span>
+              <span className="mb-2 block">恢复确认 (Restore confirmation)</span>
               <Input
                 autoComplete="off"
                 disabled={restoreMutation.isPending || !canManageRecovery}
                 onChange={(event) => setRestoreToken(event.target.value)}
-                placeholder="Type RESTORE"
+                placeholder="键入 RESTORE"
                 value={restoreToken}
               />
             </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRestoreTarget(null)} disabled={restoreMutation.isPending}>
-              Cancel
+              取消
             </Button>
             <Button
               variant="destructive"
               disabled={restoreMutation.isPending || !canManageRecovery || !restoreReady}
               onClick={() => restoreMutation.mutate()}
             >
-              {restoreMutation.isPending ? 'Restoring' : 'Confirm restore'}
+              {restoreMutation.isPending ? '正在恢复' : '确认恢复'}
             </Button>
           </DialogFooter>
         </DialogContent>

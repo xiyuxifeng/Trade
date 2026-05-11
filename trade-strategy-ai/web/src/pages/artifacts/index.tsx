@@ -56,10 +56,10 @@ function ArtifactCard({
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-300">
           <div className="grid gap-2 md:grid-cols-2">
-            <div>Source: {artifact.source}</div>
-            <div>Size: {formatBytes(artifact.size_bytes)}</div>
-            <div>Modified: {formatTimestamp(artifact.modified_at)}</div>
-            <div>Job: {artifact.job_id || 'none'}</div>
+            <div>来源: {artifact.source}</div>
+            <div>大小: {formatBytes(artifact.size_bytes)}</div>
+            <div>修改时间: {formatTimestamp(artifact.modified_at)}</div>
+            <div>关联任务: {artifact.job_id || '无'}</div>
           </div>
         </CardContent>
       </Card>
@@ -119,9 +119,9 @@ export function ArtifactsPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Artifacts"
-        title="Artifact center"
-        description="Inspect generated outputs, open previews, and download files from the UI BFF."
+        kicker="产物"
+        title="产物中心"
+        description="检查生成的输出，查看预览并下载文件。"
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
@@ -129,8 +129,8 @@ export function ArtifactsPage() {
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Recent artifacts</CardTitle>
-                <CardDescription>Filter by source, kind, or text query.</CardDescription>
+                <CardTitle>最近产物</CardTitle>
+                <CardDescription>按来源、种类或文本查询进行过滤。</CardDescription>
               </div>
               <Button variant="outline" onClick={() => artifactsQuery.refetch()} disabled={artifactsQuery.isFetching}>
                 {artifactsQuery.isFetching ? '刷新中' : '刷新'}
@@ -139,10 +139,10 @@ export function ArtifactsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-4">
-              <Input placeholder="Search text" value={query} onChange={(event) => setQuery(event.target.value)} />
-              <Input placeholder="Filter by source" value={source} onChange={(event) => setSource(event.target.value)} />
+              <Input placeholder="搜索文本" value={query} onChange={(event) => setQuery(event.target.value)} />
+              <Input placeholder="按来源过滤" value={source} onChange={(event) => setSource(event.target.value)} />
               <Input
-                placeholder="Filter by job id"
+                placeholder="按任务 ID 过滤"
                 value={jobId}
                 onChange={(event) =>
                   setSearchParams((current) => {
@@ -158,7 +158,7 @@ export function ArtifactsPage() {
                 }
               />
               <Select value={kind} onChange={(event) => setKind(event.target.value)}>
-                <option value="">All kinds</option>
+                <option value="">所有类型</option>
                 <option value="html">html</option>
                 <option value="json">json</option>
                 <option value="yaml">yaml</option>
@@ -173,15 +173,15 @@ export function ArtifactsPage() {
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">总计</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-100">{summary.total}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Previewable</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">可预览</p>
                 <p className="mt-2 text-2xl font-semibold text-sky-300">{summary.previewable}</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">HTML</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">HTML 报告</p>
                 <p className="mt-2 text-2xl font-semibold text-amber-300">{summary.htmlCount}</p>
               </div>
             </div>
@@ -216,14 +216,14 @@ export function ArtifactsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Usage notes</CardTitle>
-            <CardDescription>Preview and download use the same authenticated UI BFF.</CardDescription>
+            <CardTitle>使用说明</CardTitle>
+            <CardDescription>预览和下载通过经过身份验证的 UI BFF 进行。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
             <ul className="list-disc space-y-2 pl-5 text-slate-400">
-              <li>Open any previewable artifact to inspect its rendered preview.</li>
-              <li>Download happens via authenticated fetch, not a bare public URL.</li>
-              <li>Artifact records are filtered by the same search terms used in the UI BFF.</li>
+              <li>打开任何可预览的产物以查看其渲染预览。</li>
+              <li>通过经过身份验证的 fetch 进行下载，而不是直接使用公开 URL。</li>
+              <li>产物记录通过 UI BFF 使用的相同搜索词进行过滤。</li>
             </ul>
           </CardContent>
         </Card>
@@ -232,9 +232,9 @@ export function ArtifactsPage() {
       <Drawer open={Boolean(selectedArtifactId)} onOpenChange={(open) => !open && setSelectedArtifactId(null)}>
         <DrawerContent>
           <DrawerHeader>
-            <DrawerTitle>Artifact details</DrawerTitle>
+            <DrawerTitle>产物详情</DrawerTitle>
             <DrawerDescription>
-              {selectedArtifact ? selectedArtifact.name : 'No artifact selected'}
+              {selectedArtifact ? selectedArtifact.name : '未选择产物'}
             </DrawerDescription>
           </DrawerHeader>
 
@@ -247,28 +247,28 @@ export function ArtifactsPage() {
             <div className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Path</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">路径</p>
                   <p className="mt-1 break-all text-sm text-slate-100">{selectedArtifact.path}</p>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Source</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">来源</p>
                   <p className="mt-1 text-sm text-slate-100">{selectedArtifact.source}</p>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Size</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">大小</p>
                   <p className="mt-1 text-sm text-slate-100">{formatBytes(selectedArtifact.size_bytes)}</p>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Modified</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">修改时间</p>
                   <p className="mt-1 text-sm text-slate-100">{formatTimestamp(selectedArtifact.modified_at)}</p>
                 </div>
               </div>
 
               <div className="grid gap-3">
-                <p className="text-sm font-medium text-slate-200">Preview</p>
+                <p className="text-sm font-medium text-slate-200">预览</p>
                 {detailQuery.isLoading ? (
                   <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-400">
-                    Loading preview...
+                    预览加载中...
                   </div>
                 ) : detailQuery.error ? (
                   <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -280,7 +280,7 @@ export function ArtifactsPage() {
               </div>
 
               <div className="grid gap-3">
-                <p className="text-sm font-medium text-slate-200">Metadata</p>
+                <p className="text-sm font-medium text-slate-200">元数据</p>
                 <pre className="max-h-52 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
                   {JSON.stringify(selectedArtifact.metadata, null, 2)}
                 </pre>
@@ -290,13 +290,13 @@ export function ArtifactsPage() {
 
           <DrawerFooter>
             <Button variant="outline" onClick={() => setSelectedArtifactId(null)}>
-              Close
+              关闭
             </Button>
             <Button
               onClick={() => downloadMutation.mutate()}
               disabled={downloadMutation.isPending || !selectedArtifact}
             >
-              {downloadMutation.isPending ? 'Downloading' : 'Download'}
+              {downloadMutation.isPending ? '下载中' : '下载'}
             </Button>
           </DrawerFooter>
         </DrawerContent>

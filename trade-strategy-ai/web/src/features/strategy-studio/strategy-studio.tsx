@@ -63,7 +63,17 @@ function StatusBadge({ value }: { value: string }) {
         : value === 'candidate'
           ? 'info'
           : 'default';
-  return <Badge variant={variant}>{value}</Badge>;
+
+  const labelMap: Record<string, string> = {
+    released: '已发布',
+    approved: '已批准',
+    draft: '草稿',
+    pending: '待定',
+    candidate: '候选',
+    rejected: '已拒绝',
+  };
+
+  return <Badge variant={variant}>{labelMap[value] || value}</Badge>;
 }
 
 function MetricCard({ title, value, accent = 'text-slate-100' }: { title: string; value: string | number; accent?: string }) {
@@ -110,12 +120,14 @@ function VersionRow({
         </div>
         <div className="flex flex-col items-end gap-2">
           <StatusBadge value={item.status} />
-          <Badge variant={item.version_type === 'candidate' ? 'info' : 'default'}>{item.version_type}</Badge>
+          <Badge variant={item.version_type === 'candidate' ? 'info' : 'default'}>
+            {item.version_type === 'candidate' ? '候选' : item.version_type}
+          </Badge>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-        <span className="rounded-full border border-slate-800/80 px-2 py-1">recommendations {item.recommendations_count}</span>
-        <span className="rounded-full border border-slate-800/80 px-2 py-1">rules snapshot {item.has_rules_snapshot ? 'yes' : 'no'}</span>
+        <span className="rounded-full border border-slate-800/80 px-2 py-1">推荐数 {item.recommendations_count}</span>
+        <span className="rounded-full border border-slate-800/80 px-2 py-1">规则快照 {item.has_rules_snapshot ? '有' : '无'}</span>
       </div>
     </button>
   );
@@ -130,6 +142,16 @@ function RuleRow({
   active: boolean;
   onSelect: () => void;
 }) {
+  const reviewStatusMap: Record<string, string> = {
+    approved: '已批准',
+    rejected: '已拒绝',
+    pending: '待定',
+  };
+  const mappingStatusMap: Record<string, string> = {
+    mapped: '已映射',
+    unmapped: '未映射',
+  };
+
   return (
     <button
       type="button"
@@ -147,15 +169,17 @@ function RuleRow({
         </div>
         <div className="flex flex-col items-end gap-2">
           <Badge variant={item.review_status === 'approved' ? 'success' : item.review_status === 'rejected' ? 'destructive' : 'warning'}>
-            {item.review_status}
+            {reviewStatusMap[item.review_status] || item.review_status}
           </Badge>
-          <Badge variant={item.mapping_status === 'mapped' ? 'info' : 'default'}>{item.mapping_status}</Badge>
+          <Badge variant={item.mapping_status === 'mapped' ? 'info' : 'default'}>
+            {mappingStatusMap[item.mapping_status] || item.mapping_status}
+          </Badge>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-        <span className="rounded-full border border-slate-800/80 px-2 py-1">confidence {formatNumber(item.validated_confidence ?? item.initial_confidence, 3)}</span>
-        <span className="rounded-full border border-slate-800/80 px-2 py-1">hits {item.backtest_hits}</span>
-        <span className="rounded-full border border-slate-800/80 px-2 py-1">samples {item.backtest_samples}</span>
+        <span className="rounded-full border border-slate-800/80 px-2 py-1">置信度 {formatNumber(item.validated_confidence ?? item.initial_confidence, 3)}</span>
+        <span className="rounded-full border border-slate-800/80 px-2 py-1">回测命中 {item.backtest_hits}</span>
+        <span className="rounded-full border border-slate-800/80 px-2 py-1">样本数 {item.backtest_samples}</span>
       </div>
     </button>
   );
@@ -433,10 +457,10 @@ export function StrategyStudio() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Strategy Studio"
-        title="Strategy Studio"
-        description="Browse strategy versions, generate candidate versions, and review the rule pool in one dense workspace."
-        actionLabel="Refresh all"
+        kicker="策略工作室"
+        title="策略工作室"
+        description="在一站式工作区中浏览策略版本、生成候选版本并审核规则池。"
+        actionLabel="全部刷新"
         onAction={() => {
           void refreshAll();
         }}
@@ -451,61 +475,61 @@ export function StrategyStudio() {
       )}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Versions" value={summary.totalVersions} accent="text-sky-300" />
-        <MetricCard title="Candidate" value={summary.candidateVersions} />
-        <MetricCard title="Rules" value={summary.totalRules} />
-        <MetricCard title="Approved / Pending" value={`${summary.approvedRules} / ${summary.pendingRules}`} accent="text-emerald-300" />
+        <MetricCard title="版本总数" value={summary.totalVersions} accent="text-sky-300" />
+        <MetricCard title="候选版本" value={summary.candidateVersions} />
+        <MetricCard title="规则总数" value={summary.totalRules} />
+        <MetricCard title="已批准 / 待处理" value={`${summary.approvedRules} / ${summary.pendingRules}`} accent="text-emerald-300" />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)_400px]">
         <Card>
           <CardHeader>
-            <CardTitle>Strategy Versions</CardTitle>
-            <CardDescription>Filter by trader, date, version status, and version type.</CardDescription>
+            <CardTitle>策略版本</CardTitle>
+            <CardDescription>按交易员、日期、版本状态和版本类型过滤。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3">
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Trader ID</span>
+                <span>交易员 ID</span>
                 <Input aria-label="Trader ID" value={traderId} onChange={(event) => setTraderId(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Strategy date</span>
+                <span>策略日期</span>
                 <Input aria-label="Strategy date" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Status</span>
+                <span>状态</span>
                 <Select aria-label="Version status" value={versionStatus} onChange={(event) => setVersionStatus(event.target.value)}>
-                  <option value="">All</option>
-                  <option value="draft">draft</option>
-                  <option value="released">released</option>
-                  <option value="archived">archived</option>
+                  <option value="">全部</option>
+                  <option value="draft">草稿</option>
+                  <option value="released">已发布</option>
+                  <option value="archived">已存档</option>
                 </Select>
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Version type</span>
+                <span>版本类型</span>
                 <Select aria-label="Version type" value={versionType} onChange={(event) => setVersionType(event.target.value)}>
-                  <option value="">All</option>
-                  <option value="manual">manual</option>
-                  <option value="candidate">candidate</option>
+                  <option value="">全部</option>
+                  <option value="manual">手动</option>
+                  <option value="candidate">候选</option>
                 </Select>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span>Skip</span>
+                  <span>跳过 (Skip)</span>
                   <Input aria-label="Version skip" type="number" min={0} value={versionSkip} onChange={(event) => setVersionSkip(Number(event.target.value || 0))} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span>Limit</span>
+                  <span>限制 (Limit)</span>
                   <Input aria-label="Version limit" type="number" min={1} max={100} value={versionLimit} onChange={(event) => setVersionLimit(Number(event.target.value || 0))} />
                 </label>
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setVersionSkip(0)}>
-                  Reset page
+                  重置页码
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => void versionsQuery.refetch()}>
-                  Reload
+                  重新加载
                 </Button>
               </div>
             </div>
@@ -534,8 +558,8 @@ export function StrategyStudio() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Selected Version and Optimization</CardTitle>
-            <CardDescription>Inspect the selected version, preview the candidate payload, and generate a candidate version.</CardDescription>
+            <CardTitle>所选版本与优化</CardTitle>
+            <CardDescription>检查所选版本，预览候选负载，并生成候选版本。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {!selectedVersion ? (
@@ -543,59 +567,61 @@ export function StrategyStudio() {
             ) : (
               <>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <MetricCard title="Version" value={selectedVersion.version_id} accent="text-sky-300" />
-                  <MetricCard title="Status" value={selectedVersion.status} />
-                  <MetricCard title="Recommendations" value={selectedVersion.recommendations.length} />
-                  <MetricCard title="Rules snapshot" value={selectedVersion.rules_snapshot.length} />
+                  <MetricCard title="版本" value={selectedVersion.version_id} accent="text-sky-300" />
+                  <MetricCard title="状态" value={selectedVersion.status} />
+                  <MetricCard title="优化建议" value={selectedVersion.recommendations.length} />
+                  <MetricCard title="规则快照" value={selectedVersion.rules_snapshot.length} />
                 </div>
 
                 <Tabs defaultValue="summary">
                   <TabsList>
-                    <TabsTrigger value="summary">Summary</TabsTrigger>
-                    <TabsTrigger value="rules">Rules</TabsTrigger>
+                    <TabsTrigger value="summary">摘要</TabsTrigger>
+                    <TabsTrigger value="rules">规则</TabsTrigger>
                     <TabsTrigger value="json">JSON</TabsTrigger>
                   </TabsList>
                   <TabsContent value="summary" className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                        <h4 className="text-sm font-semibold text-slate-100">Version metadata</h4>
+                        <h4 className="text-sm font-semibold text-slate-100">版本元数据</h4>
                         <dl className="mt-3 space-y-2 text-sm text-slate-300">
-                          <div className="flex items-center justify-between gap-3"><dt>Trader</dt><dd>{selectedVersion.trader_id}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Date</dt><dd>{selectedVersion.strategy_date}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Status</dt><dd>{selectedVersion.status}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Type</dt><dd>{selectedVersion.version_type}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Parent</dt><dd>{selectedVersion.parent_version_id ?? 'n/a'}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Released at</dt><dd>{formatDate(selectedVersion.released_at)}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>交易员</dt><dd>{selectedVersion.trader_id}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>日期</dt><dd>{selectedVersion.strategy_date}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>状态</dt><dd>{selectedVersion.status}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>类型</dt><dd>{selectedVersion.version_type}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>父版本</dt><dd>{selectedVersion.parent_version_id ?? '无'}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>发布于</dt><dd>{formatDate(selectedVersion.released_at)}</dd></div>
                         </dl>
                       </div>
                       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                        <h4 className="text-sm font-semibold text-slate-100">Source and evidence</h4>
+                        <h4 className="text-sm font-semibold text-slate-100">来源与证据</h4>
                         <dl className="mt-3 space-y-2 text-sm text-slate-300">
-                          <div className="flex items-center justify-between gap-3"><dt>Source articles</dt><dd>{selectedVersion.source_article_ids.length}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Evidence refs</dt><dd>{selectedVersion.evidence_refs.length}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Rules snapshot</dt><dd>{selectedVersion.rules_snapshot.length}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>Has snapshot</dt><dd>{selectedVersion.rules_snapshot.length > 0 ? 'yes' : 'no'}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>来源文章</dt><dd>{selectedVersion.source_article_ids.length}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>证据引用</dt><dd>{selectedVersion.evidence_refs.length}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>规则快照</dt><dd>{selectedVersion.rules_snapshot.length}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>是否有快照</dt><dd>{selectedVersion.rules_snapshot.length > 0 ? '是' : '否'}</dd></div>
                         </dl>
                       </div>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Notes</h4>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{selectedVersion.notes ?? 'n/a'}</p>
+                      <h4 className="text-sm font-semibold text-slate-100">备注</h4>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{selectedVersion.notes ?? '无'}</p>
                     </div>
                   </TabsContent>
                   <TabsContent value="rules" className="space-y-4">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Recommendations</h4>
+                      <h4 className="text-sm font-semibold text-slate-100">推荐建议</h4>
                       {selectedVersion.recommendations.length ? (
                         <div className="mt-3 space-y-2">
                           {selectedVersion.recommendations.map((item) => (
                             <div key={`${item.symbol}-${item.decision}`} className="rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2 text-sm text-slate-300">
                               <div className="flex items-center justify-between gap-3">
                                 <span>{item.symbol}</span>
-                                <Badge variant={item.decision === 'buy' ? 'success' : item.decision === 'sell' ? 'destructive' : 'default'}>{item.decision}</Badge>
+                                <Badge variant={item.decision === 'buy' ? 'success' : item.decision === 'sell' ? 'destructive' : 'default'}>
+                                  {item.decision === 'buy' ? '买入' : item.decision === 'sell' ? '卖出' : item.decision}
+                                </Badge>
                               </div>
                               <p className="mt-1 text-xs text-slate-500">
-                                confidence {formatPercent(item.confidence)} · entry {formatNumber(item.entry_price)} · target {formatNumber(item.target_price)} · stop {formatNumber(item.stop_loss_price)}
+                                置信度 {formatPercent(item.confidence)} · 买入价 {formatNumber(item.entry_price)} · 目标价 {formatNumber(item.target_price)} · 止损价 {formatNumber(item.stop_loss_price)}
                               </p>
                               {item.rationale ? <p className="mt-2 text-xs text-slate-400">{item.rationale}</p> : null}
                             </div>
@@ -607,16 +633,16 @@ export function StrategyStudio() {
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h4 className="text-sm font-semibold text-slate-100">Rules snapshot</h4>
+                      <h4 className="text-sm font-semibold text-slate-100">规则快照</h4>
                       {selectedVersion.rules_snapshot.length ? (
                         <div className="mt-3 space-y-2">
                           {selectedVersion.rules_snapshot.map((item, index) => (
                             <div key={`${String(item.rule_id ?? index)}`} className="rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2 text-sm text-slate-300">
                               <div className="flex items-center justify-between gap-3">
                                 <span>{String(item.rule_id ?? `rule-${index + 1}`)}</span>
-                                <span className="text-xs text-slate-500">{String(item.condition ?? item.rule_text ?? 'n/a')}</span>
+                                <span className="text-xs text-slate-500">{String(item.condition ?? item.rule_text ?? '无')}</span>
                               </div>
-                              <p className="mt-1 text-xs text-slate-500">{String(item.action ?? 'n/a')}</p>
+                              <p className="mt-1 text-xs text-slate-500">{String(item.action ?? '无')}</p>
                             </div>
                           ))}
                         </div>
@@ -633,8 +659,8 @@ export function StrategyStudio() {
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-100">Candidate generation</h4>
-                      <p className="text-sm text-slate-500">Use the selected version snapshot as the candidate baseline.</p>
+                      <h4 className="text-sm font-semibold text-slate-100">候选版本生成</h4>
+                      <p className="text-sm text-slate-500">使用所选版本快照作为候选基准。</p>
                     </div>
                     <Button
                       onClick={() => {
@@ -642,30 +668,30 @@ export function StrategyStudio() {
                       }}
                       disabled={candidateMutation.isPending}
                     >
-                      {candidateMutation.isPending ? 'Generating...' : 'Generate candidate'}
+                      {candidateMutation.isPending ? '正在生成...' : '生成候选版本'}
                     </Button>
                   </div>
                   <label className="space-y-2 text-sm text-slate-300">
-                    <span>Candidate notes</span>
+                    <span>候选备注</span>
                     <Textarea
                       aria-label="Candidate notes"
                       value={candidateNotes}
                       onChange={(event) => setCandidateNotes(event.target.value)}
-                      placeholder="Enter candidate notes or leave blank to use the service default."
+                      placeholder="输入候选版本备注，或留空以使用服务默认值。"
                     />
                   </label>
                   <div className="rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 text-xs text-slate-400" data-testid="strategy-candidate-preview">
-                    <p>Adjustments preview: {candidateAdjustments.length}</p>
-                    <p className="mt-1">Recommendations preview: {selectedVersion.recommendations.length}</p>
-                    <p className="mt-1">Parent version: {selectedVersion.version_id}</p>
+                    <p>调整预览: {candidateAdjustments.length}</p>
+                    <p className="mt-1">推荐预览: {selectedVersion.recommendations.length}</p>
+                    <p className="mt-1">父版本: {selectedVersion.version_id}</p>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-100">Validation advice</h4>
-                      <p className="text-sm text-slate-500">Generate optimization advice from the selected rule detail.</p>
+                      <h4 className="text-sm font-semibold text-slate-100">优化建议</h4>
+                      <p className="text-sm text-slate-500">从所选规则详情中生成优化建议。</p>
                     </div>
                     <Button
                       variant="secondary"
@@ -674,16 +700,16 @@ export function StrategyStudio() {
                       }}
                       disabled={adviseMutation.isPending}
                     >
-                      {adviseMutation.isPending ? 'Analyzing...' : 'Run advice'}
+                      {adviseMutation.isPending ? '正在分析...' : '运行优化建议'}
                     </Button>
                   </div>
                   {selectedRule ? (
                     <p className="text-sm text-slate-300" data-testid="strategy-rule-advice">
-                      Using rule <span className="font-medium text-slate-100">{selectedRule.rule_id}</span> with
-                      {` `}hit rate {formatPercent(selectedRule.backtest_samples > 0 ? selectedRule.backtest_hits / selectedRule.backtest_samples : null)}.
+                      正在针对规则 <span className="font-medium text-slate-100">{selectedRule.rule_id}</span> 生成建议，
+                      命中率 {formatPercent(selectedRule.backtest_samples > 0 ? selectedRule.backtest_hits / selectedRule.backtest_samples : null)}。
                     </p>
                   ) : (
-                    <p className="text-sm text-slate-400">Select a rule on the right to build advice.</p>
+                    <p className="text-sm text-slate-400">在右侧选择一条规则以生成优化建议。</p>
                   )}
                 </div>
               </>
@@ -693,41 +719,41 @@ export function StrategyStudio() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Rule Pool</CardTitle>
-            <CardDescription>Filter, inspect, and review rules from the same workspace.</CardDescription>
+            <CardTitle>规则池</CardTitle>
+            <CardDescription>在同一工作区中过滤、检查并审核规则。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3">
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Review status</span>
+                <span>审核状态</span>
                 <Select aria-label="Rule status" value={ruleStatus} onChange={(event) => setRuleStatus(event.target.value)}>
-                  <option value="">All</option>
-                  <option value="pending">pending</option>
-                  <option value="approved">approved</option>
-                  <option value="rejected">rejected</option>
+                  <option value="">全部</option>
+                  <option value="pending">待定 (pending)</option>
+                  <option value="approved">已批准 (approved)</option>
+                  <option value="rejected">已拒绝 (rejected)</option>
                 </Select>
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Rule type</span>
-                <Input aria-label="Rule type" value={ruleType} onChange={(event) => setRuleType(event.target.value)} placeholder="breakout" />
+                <span>规则类型</span>
+                <Input aria-label="Rule type" value={ruleType} onChange={(event) => setRuleType(event.target.value)} placeholder="如 breakout" />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Mapping status</span>
+                <span>映射状态</span>
                 <Select aria-label="Mapping status" value={mappingStatus} onChange={(event) => setMappingStatus(event.target.value)}>
-                  <option value="">All</option>
-                  <option value="unmapped">unmapped</option>
-                  <option value="pending">pending</option>
-                  <option value="mapped">mapped</option>
-                  <option value="unmappable">unmappable</option>
+                  <option value="">全部</option>
+                  <option value="unmapped">未映射</option>
+                  <option value="pending">待定</option>
+                  <option value="mapped">已映射</option>
+                  <option value="unmappable">无法映射</option>
                 </Select>
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Source type</span>
-                <Input aria-label="Source type" value={sourceType} onChange={(event) => setSourceType(event.target.value)} placeholder="standalone" />
+                <span>来源类型</span>
+                <Input aria-label="Source type" value={sourceType} onChange={(event) => setSourceType(event.target.value)} placeholder="如 standalone" />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>Instrument focus</span>
-                <Input aria-label="Instrument focus" value={instrumentFocus} onChange={(event) => setInstrumentFocus(event.target.value)} placeholder="stock" />
+                <span>关注标的</span>
+                <Input aria-label="Instrument focus" value={instrumentFocus} onChange={(event) => setInstrumentFocus(event.target.value)} placeholder="如 stock" />
               </label>
               <div className="flex items-center gap-2 text-sm text-slate-300">
                 <input
@@ -736,24 +762,24 @@ export function StrategyStudio() {
                   checked={skipNoMapped}
                   onChange={(event) => setSkipNoMapped(event.target.checked)}
                 />
-                <label htmlFor="skipNoMapped">Skip rules without mapped condition</label>
+                <label htmlFor="skipNoMapped">跳过未映射条件的规则</label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span>Skip</span>
+                  <span>跳过 (Skip)</span>
                   <Input aria-label="Rule skip" type="number" min={0} value={ruleSkip} onChange={(event) => setRuleSkip(Number(event.target.value || 0))} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span>Limit</span>
+                  <span>限制 (Limit)</span>
                   <Input aria-label="Rule limit" type="number" min={1} max={100} value={ruleLimit} onChange={(event) => setRuleLimit(Number(event.target.value || 0))} />
                 </label>
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setRuleSkip(0)}>
-                  Reset page
+                  重置页码
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => void rulesQuery.refetch()}>
-                  Reload
+                  重新加载
                 </Button>
               </div>
             </div>
@@ -784,42 +810,44 @@ export function StrategyStudio() {
               <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-slate-100">Selected rule</h4>
+                    <h4 className="text-sm font-semibold text-slate-100">所选规则</h4>
                     <p className="text-sm text-slate-500">{selectedRule.rule_id}</p>
                   </div>
                   <div className="flex gap-2">
                     <StatusBadge value={selectedRule.review_status} />
-                    <Badge variant={selectedRule.mapping_status === 'mapped' ? 'info' : 'default'}>{selectedRule.mapping_status}</Badge>
+                    <Badge variant={selectedRule.mapping_status === 'mapped' ? 'info' : 'default'}>
+                      {selectedRule.mapping_status === 'mapped' ? '已映射' : selectedRule.mapping_status}
+                    </Badge>
                   </div>
                 </div>
 
                 <dl className="grid gap-2 text-sm text-slate-300">
-                  <div className="flex items-center justify-between gap-3"><dt>Source</dt><dd>{selectedRule.source_type}</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt>Type</dt><dd>{selectedRule.rule_type}</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt>Focus</dt><dd>{selectedRule.instrument_focus}</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt>Confidence</dt><dd>{formatNumber(selectedRule.validated_confidence ?? selectedRule.initial_confidence, 3)}</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt>Backtest hits</dt><dd>{selectedRule.backtest_hits} / {selectedRule.backtest_samples}</dd></div>
-                  <div className="flex items-center justify-between gap-3"><dt>Created</dt><dd>{formatDate(selectedRule.created_at)}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>来源</dt><dd>{selectedRule.source_type}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>类型</dt><dd>{selectedRule.rule_type}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>关注标的</dt><dd>{selectedRule.instrument_focus}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>置信度</dt><dd>{formatNumber(selectedRule.validated_confidence ?? selectedRule.initial_confidence, 3)}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>回测命中</dt><dd>{selectedRule.backtest_hits} / {selectedRule.backtest_samples}</dd></div>
+                  <div className="flex items-center justify-between gap-3"><dt>创建时间</dt><dd>{formatDate(selectedRule.created_at)}</dd></div>
                 </dl>
 
                 <Tabs defaultValue="detail">
                   <TabsList>
-                    <TabsTrigger value="detail">Detail</TabsTrigger>
+                    <TabsTrigger value="detail">详情</TabsTrigger>
                     <TabsTrigger value="json">JSON</TabsTrigger>
                   </TabsList>
                   <TabsContent value="detail" className="space-y-4">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                      <h5 className="text-sm font-semibold text-slate-100">Mapped condition</h5>
+                      <h5 className="text-sm font-semibold text-slate-100">映射条件</h5>
                       <p className="mt-2 text-sm text-slate-300" data-testid="strategy-rule-mapped-condition">
                         {(selectedRule.extraction_layer['mapped_condition'] as Record<string, unknown> | null | undefined)
                           ? JSON.stringify(selectedRule.extraction_layer['mapped_condition'])
-                          : 'No mapped condition'}
+                          : '无映射条件'}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                      <h5 className="text-sm font-semibold text-slate-100">Backtest result</h5>
+                      <h5 className="text-sm font-semibold text-slate-100">回测结果</h5>
                       <p className="mt-2 text-sm text-slate-300">
-                        Hits {selectedRule.backtest_hits}, misses {selectedRule.backtest_misses}, samples {selectedRule.backtest_samples}.
+                        命中 {selectedRule.backtest_hits}, 未命中 {selectedRule.backtest_misses}, 总样本 {selectedRule.backtest_samples}。
                       </p>
                     </div>
                   </TabsContent>
@@ -829,17 +857,17 @@ export function StrategyStudio() {
                 </Tabs>
 
                 <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4">
-                  <h5 className="text-sm font-semibold text-slate-100">Single review</h5>
+                  <h5 className="text-sm font-semibold text-slate-100">单条审核</h5>
                   <div className="grid gap-3">
                     <Select aria-label="Review decision" value={reviewDecision} onChange={(event) => setReviewDecision(event.target.value as 'approve' | 'reject' | 'pending')}>
-                      <option value="approve">approve</option>
-                      <option value="reject">reject</option>
-                      <option value="pending">pending</option>
+                      <option value="approve">批准 (approve)</option>
+                      <option value="reject">拒绝 (reject)</option>
+                      <option value="pending">待定 (pending)</option>
                     </Select>
                     <Input aria-label="Reviewed by" value={reviewedBy} onChange={(event) => setReviewedBy(event.target.value)} />
                     <label className="flex items-center gap-2 text-sm text-slate-300">
                       <input type="checkbox" checked={reviewForce} onChange={(event) => setReviewForce(event.target.checked)} />
-                      Force overwrite
+                      强制重写
                     </label>
                     <Button
                       onClick={() => {
@@ -847,29 +875,29 @@ export function StrategyStudio() {
                       }}
                       disabled={reviewRuleMutation.isPending}
                     >
-                      {reviewRuleMutation.isPending ? 'Submitting...' : 'Submit review'}
+                      {reviewRuleMutation.isPending ? '正在提交...' : '提交审核'}
                     </Button>
                   </div>
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/50 p-4">
-                  <h5 className="text-sm font-semibold text-slate-100">Batch review</h5>
+                  <h5 className="text-sm font-semibold text-slate-100">批量审核</h5>
                   <div className="grid gap-3">
                     <Select aria-label="Batch decision" value={batchDecision} onChange={(event) => setBatchDecision(event.target.value as 'approve' | 'reject' | 'pending')}>
-                      <option value="approve">approve</option>
-                      <option value="reject">reject</option>
-                      <option value="pending">pending</option>
+                      <option value="approve">全部批准 (approve)</option>
+                      <option value="reject">全部拒绝 (reject)</option>
+                      <option value="pending">全部设为待定 (pending)</option>
                     </Select>
                     <Select aria-label="Batch status" value={batchStatus} onChange={(event) => setBatchStatus(event.target.value as 'pending' | 'approved' | 'rejected')}>
-                      <option value="pending">pending</option>
-                      <option value="approved">approved</option>
-                      <option value="rejected">rejected</option>
+                      <option value="pending">针对：待定 (pending)</option>
+                      <option value="approved">针对：已批准 (approved)</option>
+                      <option value="rejected">针对：已拒绝 (rejected)</option>
                     </Select>
                     <Input aria-label="Batch limit" type="number" min={1} max={100} value={batchLimit} onChange={(event) => setBatchLimit(Number(event.target.value || 0))} />
                     <Input aria-label="Batch reviewed by" value={batchReviewedBy} onChange={(event) => setBatchReviewedBy(event.target.value)} />
                     <label className="flex items-center gap-2 text-sm text-slate-300">
                       <input type="checkbox" checked={batchForce} onChange={(event) => setBatchForce(event.target.checked)} />
-                      Force overwrite
+                      强制重写
                     </label>
                     <Button
                       variant="secondary"
@@ -878,7 +906,7 @@ export function StrategyStudio() {
                       }}
                       disabled={reviewBatchMutation.isPending}
                     >
-                      {reviewBatchMutation.isPending ? 'Submitting...' : 'Batch review'}
+                      {reviewBatchMutation.isPending ? '正在批量处理...' : '运行批量审核'}
                     </Button>
                   </div>
                 </div>

@@ -131,7 +131,17 @@ class DataSourceFreshnessChecker:
         """计算新鲜度（小时）。"""
         if last_updated is None:
             return None
-        return (datetime.now(UTC) - last_updated).total_seconds() / 3600
+
+        # 如果 last_updated 只是 date 对象，则转换为 datetime
+        if not isinstance(last_updated, datetime):
+            last_updated = datetime.combine(last_updated, datetime.min.time(), tzinfo=UTC)
+
+        # 确保两个操作数都有时区信息
+        now_utc = datetime.now(UTC)
+        if last_updated.tzinfo is None:
+            last_updated = last_updated.replace(tzinfo=UTC)
+
+        return (now_utc - last_updated).total_seconds() / 3600
 
 
 class TradeStatsCollector:

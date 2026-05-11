@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -93,10 +94,25 @@ def _terminate_process(pid: int) -> None:
     except ImportError:
         # Fallback for when psutil is not installed
         try:
-            os.kill(pid, 15)  # SIGTERM
+            os.kill(pid, signal.SIGTERM)
             typer.echo(f"向进程 {pid} 发送终止信号 (os.kill)...")
         except ProcessLookupError:
             typer.echo(f"进程 {pid} 不存在。", err=True)
+            return
+
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.5)
+
+        try:
+            os.kill(pid, signal.SIGKILL)
+            typer.echo(f"进程 {pid} 未在5秒内终止，强制杀死。", err=True)
+        except ProcessLookupError:
+            return
         return
 
     try:
@@ -104,10 +120,15 @@ def _terminate_process(pid: int) -> None:
         proc.terminate()
         typer.echo(f"向进程 {pid} 发送终止信号...")
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=5)
+            return
         except psutil.TimeoutExpired:
             proc.kill()
-            typer.echo(f"进程 {pid} 未在10秒内终止，强制杀死。", err=True)
+            typer.echo(f"进程 {pid} 未在5秒内终止，强制杀死。", err=True)
+            try:
+                proc.wait(timeout=5)
+            except psutil.TimeoutExpired:
+                typer.echo(f"进程 {pid} 强制杀死后仍未退出。", err=True)
     except psutil.NoSuchProcess:
         typer.echo(f"进程 {pid} 不存在。", err=True)
 
@@ -210,8 +231,11 @@ def stop() -> None:
                 # 查找 worker
                 if "cli.main" in cmdline and "job-worker-start" in cmdline:
                     pids_to_stop.add(proc.pid)
-    except (ImportError, psutil.Error):
-        typer.echo("警告: `psutil` 未安装或扫描进程失败，将仅依赖 PID 文件。", err=True)
+    except ImportError:
+        typer.echo("警告: `psutil` 未安装，将仅依赖 PID 文件。", err=True)
+    except Exception as e:
+        # psutil.Error or other unexpected errors
+        typer.echo(f"警告: 扫描系统进程时出错: {e}，将仅依赖 PID 文件。", err=True)
 
 
     if not pids_to_stop:

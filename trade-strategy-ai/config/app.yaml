@@ -167,7 +167,7 @@ api:
   port: 8000
   timeout_seconds: 300  # 5分钟，0 表示不限制
   auth:
-    enabled: true
+    enabled: false
     api_keys:
       []
 

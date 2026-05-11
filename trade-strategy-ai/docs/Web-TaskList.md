@@ -1138,7 +1138,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   完成情况：已完成。已新增 `web/src/features/ops/recovery-center.tsx` 运维恢复中心与 `api/routers/ui/ops.py` 项目级恢复 API，支持列出项目快照、创建备份、二次确认恢复和 admin 权限控制；同时补齐了 `tests/api/routers/ui/test_ui_ops.py`、`tests/unit/services/test_ops_service.py`、`web/src/pages/ops/index.test.tsx`、`web/src/lib/api/ops.test.ts` 等回归测试，并在 `docs/WebDeployment.md`、`docs/WebUserManual.md`、`docs/Web-UserManual-Coverage.md` 中同步回滚演练和接口说明。
   备注：恢复是破坏性操作，必须要求 admin 权限。
 
-- [ ] `WEB-S9-005` `P1`
+- [x] `WEB-S9-005` `P1`
   目标：补齐 TLS、反向代理和静态资源缓存建议。
   输入：生产部署拓扑、前端构建产物。
   输出：反向代理和缓存配置建议。
@@ -1146,10 +1146,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S9-001`、`WEB-S9-002`。
   可并行：无。
   验收标准：文档说明 Nginx/Caddy 或等价反向代理、HTTPS 终止、API 路径转发、静态资源缓存、上传大小限制和超时设置。
-  完成情况：未完成。
+  完成情况：已完成。已在 `docs/WebDeployment.md` 中补充内网部署的 TLS 终止、`Nginx/Caddy` 反向代理职责、`/api/` 转发、静态资源长缓存与 `index.html` 禁止长缓存、上传大小限制和超时配置建议，和现有本机/Docker 部署说明保持一致。
   备注：本地单机使用可不强制 TLS，但内网/多人使用必须提供建议配置。
 
-- [ ] `WEB-S9-006` `P1`
+- [x] `WEB-S9-006` `P1`
   目标：生成用户操作手册和运维管理手册。
   输入：Web 前后端实现、Stage 8 验收结果、Stage 9 部署与运维方案。
   输出：Web 用户操作手册和运维管理手册。
@@ -1157,7 +1157,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-007`、`WEB-S5-004`、`WEB-S6-008`、`WEB-S9-001`、`WEB-S9-002`、`WEB-S9-003`、`WEB-S9-004`。
   可并行：无。
   验收标准：手册明确前端启动、后端启动、常用操作路径、高风险操作、权限边界、健康检查、备份恢复、回滚流程和故障排查；内容与实际实现和命名保持一致。
-  完成情况：未完成。
+  完成情况：已完成。已更新 `docs/WebUserManual.md` 补充 `Ops` 运维恢复中心入口和高风险操作说明，新增 `docs/WebOperationsManual.md` 覆盖部署前提、健康检查、配置恢复、项目级备份/恢复、回滚演练、监控与常见故障；同时在 `docs/UserManual.md` 增加了 Web 运维手册入口指引，并把覆盖矩阵中的恢复接口与当前实现路径对齐。
   备注：用户操作手册面向业务使用者，运维管理手册面向部署、监控、备份和恢复责任人。
 
 - [x] `WEB-S9-007` `P1`

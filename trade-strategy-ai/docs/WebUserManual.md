@@ -13,6 +13,7 @@
 - 任务状态与产物：Job Center、报表、快照、策略版本、告警、市场数据
 - 主手册：[`docs/UserManual.md`](UserManual.md)
 - 覆盖矩阵：[`docs/Web-UserManual-Coverage.md`](Web-UserManual-Coverage.md)
+- 运维手册：[`docs/WebOperationsManual.md`](WebOperationsManual.md)
 
 如果你只想先跑通最小闭环，建议顺序是：
 

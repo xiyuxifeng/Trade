@@ -723,6 +723,8 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 Web 管理后台的使用说明见 [WebUserManual.md](WebUserManual.md)。如果你要从浏览器完成主流程、查看产物或操作高风险任务，优先按那份文档执行。
 
+如果你负责部署、监控、备份或恢复，再看 [WebOperationsManual.md](WebOperationsManual.md)。
+
 ### 3.3 启动调度（两套调度器）
 
 #### 3.3.1 盘前/盘后调度器（APScheduler，来自 `cli.main scheduler-start`）

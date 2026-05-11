@@ -1094,7 +1094,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 ### 任务清单
 
-- [ ] `WEB-S9-001` `P0`
+- [x] `WEB-S9-001` `P0`
   目标：制定生产部署拓扑。
   输入：FastAPI、Web 前端、PostgreSQL、Redis/队列候选、Job Worker。
   输出：生产部署说明。
@@ -1102,10 +1102,10 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S2-005`、`WEB-S3-007`、`WEB-S4-001`。
   可并行：`WEB-S9-002`。
   验收标准：明确 API、静态前端、Worker、数据库、文件产物目录、日志目录、配置和密钥注入方式；明确单机本地部署与内网部署两种模式。
-  完成情况：未完成。
+  完成情况：已完成。
   备注：如果暂不引入 Redis/外部队列，必须说明数据库轮询 Worker 的运行方式和限制。
 
-- [ ] `WEB-S9-002` `P0`
+- [x] `WEB-S9-002` `P0`
   目标：实现生产构建和启动脚本。
   输入：后端 API、前端工程、Job Worker。
   输出：构建和启动命令。
@@ -1113,7 +1113,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   前置依赖：`WEB-S4-001`、`WEB-S2-005`。
   可并行：`WEB-S9-001`。
   验收标准：一条文档化流程可完成依赖安装、前端构建、数据库迁移、API 启动、Worker 启动和健康检查；生产启动不使用 `--reload`。
-  完成情况：未完成。
+  完成情况：已完成。
   备注：不得把本地开发命令当作生产部署方案。
 
 - [ ] `WEB-S9-003` `P0`
@@ -1159,6 +1159,17 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   验收标准：手册明确前端启动、后端启动、常用操作路径、高风险操作、权限边界、健康检查、备份恢复、回滚流程和故障排查；内容与实际实现和命名保持一致。
   完成情况：未完成。
   备注：用户操作手册面向业务使用者，运维管理手册面向部署、监控、备份和恢复责任人。
+
+- [x] `WEB-S9-007` `P1`
+  目标：实现非 Docker 的本机构建与启动脚本。
+  输入：Python、Node、PostgreSQL、本机前端构建产物目录。
+  输出：本机 launcher、API 静态托管入口和本机部署说明。
+  修改范围：`scripts/web_local.py`、`api/app.py`、`README.md`、`web/README.md`、`docs/WebDeployment.md`、`docs/Web-TaskList.md`。
+  前置依赖：`WEB-S9-001`、`WEB-S9-002`。
+  可并行：无。
+  验收标准：可通过 `python -m scripts.web_local build`、`python -m scripts.web_local migrate`、`python -m scripts.web_local start` 完成单机本机闭环；API 在 `WEB_STATIC_DIR` 存在时可直接托管 `web/dist`；相关测试、文档和任务状态保持一致。
+  完成情况：已完成。
+  备注：本机部署仅面向单机验证，不替代 Docker/Compose 生产路径。
 
 ---
 
@@ -1240,12 +1251,11 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 8. `WEB-S6-001` 至 `WEB-S6-010`
 9. `WEB-S7-001` 至 `WEB-S7-010`
 10. `WEB-S8-001` 至 `WEB-S8-011`
-11. `WEB-S9-001` 至 `WEB-S9-005`
-12. `WEB-S9-006`
-13. `WEB-S10-001` 起的优化与技术债任务
-14. `WEB-S10-002` 报表 HTML 预览升级任务
-15. `WEB-S10-003` 策略优化扩展任务
-16. `WEB-S10-004` 真实浏览器端到端验收恢复任务
+11. `WEB-S9-001` 至 `WEB-S9-007`
+12. `WEB-S10-001` 起的优化与技术债任务
+13. `WEB-S10-002` 报表 HTML 预览升级任务
+14. `WEB-S10-003` 策略优化扩展任务
+15. `WEB-S10-004` 真实浏览器端到端验收恢复任务
 
 设置项编辑与保存属于 Web 最小可用能力，`WEB-S7-005` 至 `WEB-S7-007` 应在 `WEB-S8-004` 之前完成。
 

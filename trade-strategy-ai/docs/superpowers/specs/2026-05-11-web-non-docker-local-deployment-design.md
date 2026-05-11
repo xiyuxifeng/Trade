@@ -122,6 +122,12 @@ launcher 需要做的基础校验：
 - FastAPI 文档
 - `/api/ui/v1/*`
 
+`build` 和 `migrate` 的执行都默认从仓库根目录出发，但实际命令需要切换到正确的工作目录：
+
+- 前端构建在 `web/` 下执行
+- 数据库迁移和 API / Worker 启动在仓库根目录执行
+- launcher 需要显式设置 cwd，不能依赖用户当前 shell 所在目录
+
 ### 4.3 启动顺序
 
 本机推荐顺序：
@@ -166,7 +172,7 @@ launcher 需要做的基础校验：
 - `python -m scripts.web_local migrate` 可以执行数据库迁移。
 - `python -m scripts.web_local start-api` 可以启动 API，并在配置本机静态托管时直接提供前端页面。
 - `python -m scripts.web_local start-worker` 可以启动 Job Worker。
-- `python -m scripts.web_local start` 可以在单机上同时拉起 API 和 Worker。
+- `python -m scripts.web_local start` 可以在单机上同时拉起 API 和 Worker，并持续监控子进程。
 - 本机模式下，浏览器访问 `http://localhost:8000` 可以看到 Web 页面。
 - 本机模式下，前端调用 `/api/ui/v1/*` 不需要 Docker，也不依赖独立反向代理。
 - Docker/Compose 方案保持可用，且不受本任务影响。
@@ -176,5 +182,6 @@ launcher 需要做的基础校验：
 
 - 这是一个单机本机部署增强，不是整体架构重写。
 - 优先复用 `cli.main` 中已有的数据库迁移、Worker 和构建逻辑。
+- `start` 需要作为真正的父进程存在，负责拉起并监控 API / Worker 子进程，任一子进程退出都应让父进程带着错误码退出。
 - 如果静态托管实现过于复杂，先保证 `start-api` + `start-worker` 闭环，再补 SPA 回退。
 - 不要把本机模式写成与 Docker 并行的第二套生产标准，本文只定义“本机可验收”路径。

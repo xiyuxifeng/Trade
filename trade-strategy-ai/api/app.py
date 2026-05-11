@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from api.dependencies import verify_api_key
@@ -28,6 +31,23 @@ from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
 from src.health.routes import health_router
+
+
+def _resolve_local_web_static_dir() -> Path | None:
+    """解析本机静态资源目录。"""
+    raw = os.getenv("WEB_STATIC_DIR")
+    if not raw:
+        return None
+    candidate = resolve_project_path(raw)
+    index_path = candidate / "index.html"
+    if index_path.exists():
+        return candidate
+    return None
+
+
+def _is_reserved_local_path(path: str) -> bool:
+    """判断路径是否属于 API / docs 等保留入口。"""
+    return path in {"docs", "openapi.json", "redoc", "health"} or path.startswith("api/")
 
 
 @asynccontextmanager
@@ -115,6 +135,9 @@ def _register_legacy_trigger_routes(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     """构建并返回统一的 FastAPI 应用。"""
+    local_web_static_dir = _resolve_local_web_static_dir()
+    local_web_index = local_web_static_dir / "index.html" if local_web_static_dir else None
+
     app = FastAPI(
         title="Trade Strategy AI API",
         description="交易策略 AI 系统的 HTTP 接口层",
@@ -162,6 +185,8 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         """API 根路径。"""
+        if local_web_index is not None:
+            return FileResponse(local_web_index)
         return {
             "service": "trade-strategy-ai",
             "version": "0.1.0",
@@ -172,6 +197,26 @@ def create_app() -> FastAPI:
     async def health():
         """全局健康检查。"""
         return {"status": "ok"}
+
+    if local_web_static_dir is not None:
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def web_spa_fallback(path: str):
+            """本机静态页面回退入口。"""
+            if _is_reserved_local_path(path):
+                raise HTTPException(status_code=404, detail="not found")
+
+            candidate = (local_web_static_dir / path).resolve()
+            try:
+                candidate.relative_to(local_web_static_dir.resolve())
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail="not found") from exc
+
+            if candidate.exists() and candidate.is_file():
+                return FileResponse(candidate)
+            if Path(path).suffix:
+                raise HTTPException(status_code=404, detail="not found")
+            return FileResponse(local_web_index)
 
     return app
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 import os
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,7 @@ from src.backup.service import backup_project_state, restore_project_state
 from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
 from src.services.persona_service import PersonaService
 from src.services.signal_service import SignalService
+from src.services.job_runner import JobRunner
 from scripts.init_db import init_db
 from scripts.seed_data import seed_project_data
 
@@ -994,6 +995,58 @@ def scheduler_start(
 	)
 	typer.echo(f"Output dir: {mgr.output_dir}")
 	scheduler.start()
+
+
+@app.command("job-worker-start")
+def job_worker_start(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	limit: int = typer.Option(10, help="单轮最多领取的 Job 数量"),
+	interval_seconds: float = typer.Option(5.0, help="每轮轮询间隔（秒）"),
+	stale_after_minutes: int = typer.Option(15, help="启动时回收 stale running Job 的阈值（分钟）"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""Start the long-running database-backed Job Worker.
+
+	Worker 会持续轮询数据库中的 pending Job，并按 Job type 限制并发执行。
+	"""
+
+	configure_logging(log_level)
+	loaded = load_app_config(config)
+	apply_database_config_to_env(loaded.config)
+	runner = JobRunner()
+	worker_sleep = max(0.1, float(interval_seconds))
+
+	typer.echo(
+		"Job worker started: "
+		f"config={loaded.config_path} limit={limit} interval_seconds={worker_sleep} "
+		f"stale_after_minutes={stale_after_minutes}"
+	)
+
+	async def _run() -> None:
+		stale_delta = timedelta(minutes=max(1, stale_after_minutes))
+		while True:
+			recovered = await runner.recover_stale_jobs(stale_before=datetime.now(UTC) - stale_delta)
+			if recovered.status == "ok" and int(recovered.payload.get("count", 0)) > 0:
+				typer.echo(
+					"Recovered stale jobs: "
+					f"{recovered.payload.get('job_ids', [])}"
+				)
+
+			result = await runner.run_worker_once(limit=limit)
+			if result.status == "error":
+				typer.echo(result.message or "job worker run failed")
+			elif int(result.payload.get("count", 0)) > 0:
+				typer.echo(
+					"Processed jobs: "
+					f"{result.payload.get('count', 0)} "
+					f"{[item['job_id'] for item in result.payload.get('items', [])]}"
+				)
+			await asyncio.sleep(worker_sleep)
+
+	try:
+		run_async_with_cleanup(_run())
+	except KeyboardInterrupt:
+		typer.echo("Job worker stopped")
 
 
 @app.command("migrate-crawl-state")

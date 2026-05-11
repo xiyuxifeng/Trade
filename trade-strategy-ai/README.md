@@ -77,6 +77,46 @@ python -m cli.main db-check --config config/app.yaml
 python -m cli.main db-migrate --config config/app.yaml
 ```
 
+## Docker / Compose 生产启动
+
+部署拓扑和目录约定见 [docs/WebDeployment.md](docs/WebDeployment.md)。
+
+```bash
+docker compose up -d db
+docker compose run --rm api python -m cli.main db-migrate --config config/app.yaml
+docker compose up -d api worker web
+```
+
+常用检查：
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:3000/
+```
+
+如果需要手动启动 worker：
+
+```bash
+python -m cli.main job-worker-start --config config/app.yaml
+```
+
+## 本机非 Docker 启动
+
+如果只做单机验证，可以直接用本机 launcher：
+
+```bash
+python -m scripts.web_local build
+python -m scripts.web_local migrate
+python -m scripts.web_local start
+```
+
+需要分别启动时：
+
+```bash
+python -m scripts.web_local start-api
+python -m scripts.web_local start-worker
+```
+
 说明：仓库里涉及的 `config/...`、`data/...`、`logs/...` 相对路径，运行时默认按 `trade-strategy-ai` 项目根目录解析，不依赖当前 shell 所在目录。
 
 ## 数据 Pipeline（一键链路）

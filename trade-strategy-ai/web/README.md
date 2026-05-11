@@ -11,6 +11,33 @@ corepack pnpm dev
 
 默认开发服务器会启动在 Vite 的本地地址，前端通过 `/api/ui/v1` 访问 UI BFF。
 
+## 生产构建与托管
+
+前端生产产物由 `pnpm build` 生成，默认输出到 `dist/`。
+
+```bash
+corepack pnpm build
+```
+
+仓库同时提供了 `web/Dockerfile` 和 `web/nginx.conf`：
+
+- `web/Dockerfile` 负责构建 `dist/` 并用 Nginx 托管静态资源
+- `web/nginx.conf` 负责把 `/api/` 反向代理到 API 服务，保证前端仍然可以使用同源的 `/api/ui/v1/*`
+
+如果采用本机非 Docker 方案，可以先运行：
+
+```bash
+corepack pnpm build
+```
+
+然后在仓库根目录启动：
+
+```bash
+python -m scripts.web_local start
+```
+
+此时 API 会托管 `web/dist`，浏览器直接访问 `http://localhost:8000` 即可。
+
 ## 可用脚本
 
 ```bash

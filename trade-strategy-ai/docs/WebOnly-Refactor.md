@@ -3,7 +3,8 @@
 > 目标：把当前项目从“CLI + Web 双入口”收敛为“Web/API/Worker 为正式入口，CLI 仅作为开发调试薄包装”。
 >
 > 核心原则：CLI 不拥有业务逻辑；Web 不拥有业务逻辑；Job 不拥有业务逻辑；Workflow 只编排；Step 执行业务；Domain Module 提供能力；DB / Artifact / Snapshot 保存结果。
-
+>
+> 
 ---
 
 ## 0. 总目标

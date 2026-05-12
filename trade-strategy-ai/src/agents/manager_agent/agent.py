@@ -221,9 +221,8 @@ class ManagerAgent:
                 return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
             else:
                 self.logger.warning(
-                    "insufficient DB bars for market state, fallback to CSV cache",
-                    symbol=bench_symbol,
-                    bars_count=len(df) if df is not None else 0,
+                        "insufficient DB bars for market state benchmark symbol, count: %s, fallback to CSV cache",
+                        len(df) if df is not None else 0,
                 )
         except Exception as exc:  # noqa: BLE001
             self.logger.warning("failed to build MarketState from DB, fallback to CSV", error=str(exc))

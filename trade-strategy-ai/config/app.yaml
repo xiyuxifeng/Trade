@@ -120,7 +120,7 @@ llm:
   # 大模型提供商（预留）：openai/anthropic/...
   provider: "qwen"
   # 模型名（例如 gpt-4.1 / claude-3-... 等；取决于 provider）
-  model: ["qwen-plus-0112"]
+  model: ["qwen3-8b"] #["qwen-plus-0112"]
   # 第三方大模型 API Base URL（可选）。例如 OpenAI 兼容接口可配置为 https://api.openai.com/v1
   url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   # 大模型 API Key（建议通过环境变量 DASHSCOPE_API_KEY 注入；此处仅占位）
@@ -194,7 +194,7 @@ kaipan:
   trading_calendar:
     source: akshare
   # 简单反爬与重试策略
-  min_request_interval_seconds: 3.0
+  min_request_interval_seconds: 1.0
   max_retries: 3
   retry_backoff_seconds: [1.0, 2.0, 4.0]
   retry_status_codes: [403, 429, 500, 502, 503, 504]

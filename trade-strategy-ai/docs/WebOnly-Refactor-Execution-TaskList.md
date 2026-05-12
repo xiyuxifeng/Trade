@@ -2,7 +2,7 @@
 
 > 本文件是 `trade-strategy-ai` Web-only 重构的可执行追踪清单。  
 >  
-> 目标不是替代 `WebOnly-Refactor-TaskList2.md` 总纲，而是把重构拆成可实施、可验收、可并行、可回滚的小任务。  
+> 目标不是替代 `WebOnly-Refactor.md` 总纲，而是把重构拆成可实施、可验收、可并行、可回滚的小任务。  
 >  
 > 当前只细化 Stage 0 ~ Stage 2 的 P0 任务；Stage 3 及之后先保留占位，等 `article_pipeline` 样板跑通后再继续细化。
 
@@ -99,7 +99,7 @@ Stage 9：文档收敛
 
 - `docs/UserManual.md`  
 - `docs/Web-UserManual-Coverage.md`  
-- `docs/WebOnly-Refactor-TaskList2.md`  
+- `docs/WebOnly-Refactor.md`  
 - `cli/main.py`  
 - `cli/*.py`  
 - `src/services/*`  
@@ -214,7 +214,7 @@ docs/WebOnly-Migration-Matrix.md
 
 输入：
 
-- `docs/WebOnly-Refactor-TaskList2.md`  
+- `docs/WebOnly-Refactor.md`  
 - 当前 `Web-TaskList.md` 中的 Web 不执行 shell、Service Layer、Job Center 原则
 
 输出：

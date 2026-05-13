@@ -32,12 +32,12 @@
 ### 2. 规则与策略提取
 
 -   **目标**: 从文章中提取交易规则，并存入规则池（Rule Pool）进行管理。
--   **CLI命令**: `extract-articles`
--   **说明**: 此命令利用LLM或启发式方法分析文章，识别并抽取出结构化的交易规则。
+-   **CLI命令**: `pipeline-step process`（已整合原 `extract-articles` 功能）
+-   **说明**: 此命令通过 pipeline 的 process 步骤，利用 LLM 或启发式方法分析文章，识别并抽取出结构化的交易规则。
 -   **常用示例**:
     -   从数据库中抽取最新的文章：
         ```bash
-        python -m cli.main extract-articles --limit 50
+        python -m cli.main pipeline-step process --config config/app.yaml --new-version v1
         ```
 
 ### 3. OHLCV 行情数据

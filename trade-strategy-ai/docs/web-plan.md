@@ -100,7 +100,6 @@ Web 后台不是简单菜单集合，而是把 `docs/UserManual.md` 产品化。
 - `pipeline-run`
 - `pipeline-step`
 - `crawl`
-- `extract-articles`
 - `clusters-build`
 - `e2e-regression`
 - `snapshot build`
@@ -513,7 +512,6 @@ Web 前端只能依赖版本化 UI API，不直接依赖内部领域 API。
 - `crawl`
 - `pipeline-run`
 - `pipeline-step`
-- `extract-articles`
 - `clusters-build`
 - `e2e-regression`
 

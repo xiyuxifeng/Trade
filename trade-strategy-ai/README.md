@@ -127,10 +127,10 @@ python -m scripts.web_local start-worker
 python -m cli.main pipeline-run --config config/app.yaml
 ```
 
-LLM 抽取 v0（未配置 LLM 时会 fallback 并记录 raw_llm_output）：
+LLM 抽取 v0（文章抽取已整合到 pipeline-step process 中，未配置 LLM 时会 fallback 并记录 raw_llm_output）：
 
 ```bash
-python -m cli.main extract-articles --config config/app.yaml --limit 10
+python -m cli.main pipeline-step process --config config/app.yaml --new-version v1
 ```
 
 从真实抽取数据生成 StyleClusters：

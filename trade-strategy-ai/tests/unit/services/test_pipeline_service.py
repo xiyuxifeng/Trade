@@ -98,8 +98,8 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     assert step_call["from_step"] == "store"
 
 
-def test_pipeline_service_runs_extract_and_clusters(tmp_path: Path) -> None:
-    """PipelineService 应能封装抽取与聚类构建。"""
+def test_pipeline_service_runs_clusters_build(tmp_path: Path) -> None:
+    """PipelineService 应能封装聚类构建（extract-articles 已合并到 pipeline-step process）。"""
     from src.services.pipeline_service import PipelineService
 
     config_path = tmp_path / "config" / "app.yaml"
@@ -107,17 +107,6 @@ def test_pipeline_service_runs_extract_and_clusters(tmp_path: Path) -> None:
     config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
 
     calls: dict[str, object] = {}
-
-    @dataclass
-    class _FakeExtractStats:
-        scanned: int = 8
-        extracted: int = 3
-        skipped: int = 2
-        failed: int = 1
-
-    async def fake_extract(**kwargs):
-        calls["extract"] = kwargs
-        return _FakeExtractStats()
 
     async def fake_build_clusters(**kwargs):
         calls["clusters"] = kwargs
@@ -130,18 +119,9 @@ def test_pipeline_service_runs_extract_and_clusters(tmp_path: Path) -> None:
         return (Path("/tmp/clusters.json"), _FakeClustersStats())
 
     service = PipelineService(
-        extract_metadata_runner=fake_extract,
         build_clusters_runner=fake_build_clusters,
     )
 
-    extract_result = asyncio.run(
-        service.extract_articles(
-            config_path=config_path,
-            limit=20,
-            force=True,
-            version="v2",
-        )
-    )
     clusters_result = asyncio.run(
         service.build_clusters(
             config_path=config_path,
@@ -150,9 +130,6 @@ def test_pipeline_service_runs_extract_and_clusters(tmp_path: Path) -> None:
         )
     )
 
-    assert extract_result.payload["stats"]["extracted"] == 3
-    assert calls["extract"]["force"] is True
-    assert calls["extract"]["version"] == "v2"
     assert clusters_result.payload["dest"] == "/tmp/clusters.json"
     assert calls["clusters"]["dest"] == tmp_path / "clusters.json"
     assert clusters_result.payload["stats"]["clusters_built"] == 2

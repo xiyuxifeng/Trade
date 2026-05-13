@@ -26,7 +26,6 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
         "pipeline-run",
         "pipeline-step",
         "migrate-crawl-state",
-        "extract-articles",
         "clusters-build",
         "e2e-regression",
         "run-pre-market",

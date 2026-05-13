@@ -183,7 +183,7 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
   可并行：无。
   验收标准：逐条列出 UserManual 中每个命令/功能对应的 Web 页面、API、Service、Job 类型、权限级别、风险等级和验收用例；未覆盖项必须标记为阻塞，不能进入最终验收。
   完成情况：已完成 `docs/Web-UserManual-Coverage.md`，覆盖配置、数据库、Pipeline、盘前盘后、快照、策略、行情、回测、优化、规则池、KaipanScheduler 和 Dashboard。
-  备注：必须覆盖 `init-config`、`db-check`、`db-migrate`、`init-project`、`seed-data`、`backup-data`、`restore-data`、`scheduler-start`、`crawl`、`import-trade-logs`、`pipeline-run`、`pipeline-step`、`migrate-crawl-state`、`extract-articles`、`clusters-build`、`e2e-regression`、`run-pre-market`、`run-after-close`、`list-signals`、`persona-init-sample`、`market-state-build`、`snapshot build`、`strategy build/list`、`ohlcv crawl`、`backtest`、`optimize`、`rule-pool`、KaipanScheduler、数据监控 Dashboard。
+  备注：必须覆盖 `init-config`、`db-check`、`db-migrate`、`init-project`、`seed-data`、`backup-data`、`restore-data`、`scheduler-start`、`crawl`、`import-trade-logs`、`pipeline-run`、`pipeline-step`、`migrate-crawl-state`、`clusters-build`、`e2e-regression`、`run-pre-market`、`run-after-close`、`list-signals`、`persona-init-sample`、`market-state-build`、`snapshot build`、`strategy build/list`、`ohlcv crawl`、`backtest`、`optimize`、`rule-pool`、KaipanScheduler、数据监控 Dashboard。
 
 ---
 
@@ -237,13 +237,13 @@ CLI 逻辑服务化 -> 生产级 Job Center -> UI API -> Web 前端 -> UserManua
 
 - [x] `WEB-S1-004` `P0`
   目标：抽取 pipeline service。
-  输入：`cli/main.py` 中 `crawl`、`pipeline-run`、`pipeline-step`、`extract-articles`、`clusters-build`、`e2e-regression`。
+  输入：`cli/main.py` 中 `crawl`、`pipeline-run`、`pipeline-step`、`clusters-build`、`e2e-regression`。
   输出：`PipelineService`。
   修改范围：`src/services/pipeline_service.py`、`cli/main.py`、相关测试。
   前置依赖：`WEB-S1-001`。
   可并行：`WEB-S1-005`、`WEB-S1-006`。
   验收标准：UserManual 中数据处理相关操作均可通过 service 调用；CLI 行为保持一致。
-  完成情况：已完成 `PipelineService`，覆盖 crawl、pipeline-run、pipeline-step、extract-articles、clusters-build 和 e2e-regression 的共享业务封装，并补充了单测。
+  完成情况：已完成 `PipelineService`，覆盖 crawl、pipeline-run、pipeline-step、clusters-build 和 e2e-regression 的共享业务封装，并补充了单测。`extract-articles` 已整合到 `pipeline-step process` 中。
   备注：长任务执行本身由 Job Center 调度，service 只负责业务执行。
 
 - [x] `WEB-S1-005` `P0`

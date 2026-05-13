@@ -131,35 +131,6 @@ class PipelineService(BaseService):
             new_version=new_version,
         )
 
-    async def extract_articles(
-        self,
-        *,
-        config_path: str | Path,
-        limit: int = 20,
-        force: bool = False,
-        version: str = "v1",
-    ) -> ServiceResult:
-        """执行文章抽取。"""
-        loaded = load_app_config(config_path)
-        apply_database_config_to_env(loaded.config)
-        base_dir = _project_base_dir(loaded.config_path)
-        stats = await self._extract_metadata_runner(
-            config=loaded.config,
-            base_dir=base_dir,
-            force=force,
-            version=version,
-            total_limit=limit,
-        )
-        return ServiceResult(
-            status="ok",
-            message="extract completed",
-            payload={
-                "config_path": str(loaded.config_path),
-                "base_dir": str(base_dir),
-                "stats": _to_plain(stats),
-            },
-        )
-
     async def build_clusters(
         self,
         *,

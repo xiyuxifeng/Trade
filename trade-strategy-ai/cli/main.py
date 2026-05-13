@@ -580,24 +580,6 @@ def pipeline_step(
 	typer.echo(f"步骤 {step} 执行完成")
 
 
-@app.command("extract-articles")
-def extract_articles(
-	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
-	limit: int = typer.Option(20, help="最多抽取多少篇（processed_at 为空的）"),
-	log_level: str = typer.Option("INFO", help="日志级别"),
-) -> None:
-	"""LLM 抽取 v0：articles → ArticleMetadata.strategy_rules/preconditions。"""
-	configure_logging(log_level)
-	loaded = load_app_config(config)
-	apply_database_config_to_env(loaded.config)
-	base_dir = _project_base_dir(loaded.config_path)
-
-	stats = run_async_with_cleanup(extract_and_store_metadata(config=loaded.config, base_dir=base_dir, total_limit=limit))
-	typer.echo(
-		f"Extract done scanned={stats.scanned} extracted={stats.extracted} skipped={stats.skipped} failed={stats.failed}"
-	)
-
-
 @app.command("clusters-build")
 def clusters_build(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),

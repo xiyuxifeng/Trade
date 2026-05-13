@@ -435,11 +435,11 @@ python -m cli.main <command> --help
 	- `--config`：配置文件路径
 	- `--log-level`：日志级别（默认 `INFO`）
 
-- `extract-articles`
-	- `--config`：配置文件路径
-	- `--limit`：最多抽取多少篇（默认 20）
-	- `--log-level`：日志级别（默认 `INFO`）
-	- 说明：当前命令不支持 `--force`、`--version`；未配置 LLM 时会使用启发式降级抽取，并写入 `article_metadata.raw_llm_output.mode=fallback_heuristic`
+- `pipeline-step process`
+	- 通过 `pipeline-step process` 执行文章抽取与入库（已整合原 `extract-articles` 命令的功能）
+	- 依赖 `store` 步骤产出的 `pending_tasks.jsonl`
+	- 支持 `--new-version` 版本化处理
+	- 通用参数：`--config`、`--max-articles`、`--force`、`--use-db`、`--new-version`、`--log-level`
 
 - `clusters-build`
 	- `--config`：配置文件路径
@@ -673,10 +673,10 @@ python -m cli.main snapshot build --date 2026-04-29 --type all
 python -m cli.main snapshot build --start-date 2026-04-29 --end-date 2026-05-01 --type all
 ```
 
-5）文章提取 → 规则入库（Stage 11 链路）：
+5）文章提取 → 规则入库（Stage 11 链路，通过 pipeline-step process 完成）：
 
 ```bash
-python -m cli.main extract-articles --config config/app.yaml --limit 50
+python -m cli.main pipeline-step process --config config/app.yaml --new-version v1
 ```
 
 6）生成盘前/盘后：
@@ -954,7 +954,7 @@ CLI 大多数命令还会把 INFO 级别打印到控制台。
 
 ### 6.2.1 规则池相关数据（数据库表）
 
-`extract-articles` 命令执行后，结果写入以下数据库表（详见 `docs/bak/db-struct.md`）：
+`pipeline-step process` 命令执行后，结果写入以下数据库表（详见 `docs/bak/db-struct.md`）：
 
 | 表 | 内容 |
 |---|---|
@@ -1026,7 +1026,7 @@ data/kaipan/
 #### Step 1: 文章提取（自动分类 + 提取 + 入库 + 审核）
 
 ```bash
-python -m cli.main extract-articles --config config/app.yaml --limit 50
+python -m cli.main pipeline-step process --config config/app.yaml --new-version v1
 ```
 
 这一条命令内部自动完成：
@@ -1218,11 +1218,11 @@ python -m cli.main db-check --config config/app.yaml
 - Cookie 失效或未注入：更新 Cookie，并确保 `crawl.auth.tgb.cn.cookie` 读取到了它（推荐 YAML 写 `"${TGB_COOKIE}"`）。
 - 被限流：调大 `crawl.throttling.min_interval_seconds/max_interval_seconds`，并观察退避策略是否生效。
 
-### 8.3 `extract-articles` 提示 prompts 缺失
+### 8.3 `pipeline-step process` 提示 prompts 缺失
 
 现象：`prompts dir not found`。
 
-处理：确保项目根目录下存在 `prompts/`（仓库已包含），并从项目根目录运行命令（或确保 `--config` 在正确的相对路径）。
+处理：确保项目根目录下存在 `prompts/`（仓库已包含），并从项目根目录运行命令（或确保 `--config` 在正确的相对路径）。文章抽取已整合到 `pipeline-step process` 中，通过 `--new-version` 参数控制抽取版本。
 
 ### 8.4 盘后评估缺少盘前日报
 

@@ -64,9 +64,8 @@
 | `crawl` | 数据管道 / 抓取任务 | `POST /api/ui/v1/jobs` | `PipelineService` | `crawl` Job | operator / admin | medium | 支持参数预览、任务排队和日志查看。 |
 | `import-trade-logs` | 数据导入 / 交易记录 | `POST /api/ui/v1/jobs` | `SetupService` | `import-trade-logs` Job | operator / admin | medium | 支持文件上传、格式校验和 dry-run。 |
 | `pipeline-run` | 数据管道 / 一键执行 | `POST /api/ui/v1/jobs` | `PipelineService` | `pipeline-run` Job | operator / admin | medium | 可展示各步骤状态、失败步骤和重跑入口。 |
-| `pipeline-step` | 数据管道 / 单步执行 | `POST /api/ui/v1/jobs` | `PipelineService` | `pipeline-step` Job | operator / admin | medium | 可按 step 逐步执行并显示前置依赖。 |
+| `pipeline-step` | 数据管道 / 单步执行 | `POST /api/ui/v1/jobs` | `PipelineService` | `pipeline-step` Job | operator / admin | medium | 可按 step 逐步执行并显示前置依赖。`process` 步骤已整合原 `extract-articles` 的文章抽取功能。 |
 | `migrate-crawl-state` | 数据迁移 / 爬虫状态 | `POST /api/ui/v1/jobs` | `SetupService` | `migrate-crawl-state` Job | admin | medium | 能把本地 state 迁移到数据库并输出迁移摘要。 |
-| `extract-articles` | 内容抽取 / 文章抽取 | `POST /api/ui/v1/jobs` | `PipelineService` | `extract-articles` Job | operator / admin | medium | 可控制抽取数量，显示 LLM / fallback 结果。 |
 | `clusters-build` | 画像 / 聚类构建 | `POST /api/ui/v1/jobs` | `PersonaService` | `clusters-build` Job | operator / admin | medium | 可生成 clusters 文件并查看版本与路径。 |
 | `e2e-regression` | 验证 / 端到端回归 | `POST /api/ui/v1/jobs` | `RegressionService` | `e2e-regression` Job | admin | medium | 一键跑通主链路并输出回归报告。 |
 

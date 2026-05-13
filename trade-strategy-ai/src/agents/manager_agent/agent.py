@@ -62,6 +62,7 @@ from src.market_data.ohlcv_service import OHLCVService
 from src.db.session import get_session_factory
 from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
+from src.pipeline.completion import run_incremental_data_completion
 from src.evaluation.evaluation_context_service import EvaluationContextService
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy.signal_version import SignalVersioning
@@ -765,6 +766,11 @@ class ManagerAgent:
         if evaluation_path.exists() and not force:
             payload = read_json(evaluation_path)
             return EvaluationResult.model_validate(payload)
+
+        # 盘后自动补全增量数据（行情、快照等），确保评估/归因/优化链路数据完整
+        self.logger.info("开始盘后增量数据自动补全...")
+        await run_incremental_data_completion(config=self.config, as_of_date=as_of_date, force=force)
+        self.logger.info("盘后增量数据补全完成。")
 
         report_path = self._daily_report_path(as_of_date)
         if not report_path.exists():

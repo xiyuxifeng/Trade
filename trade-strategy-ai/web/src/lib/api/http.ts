@@ -3,7 +3,6 @@ import type { ApiErrorPayload } from '@/types/system';
 const DEFAULT_API_BASE_URL = '/api/ui/v1';
 const API_KEY_STORAGE_KEY = 'trade-strategy-ai.apiKey';
 const AUTH_TOKEN_STORAGE_KEY = 'trade-strategy-ai.authToken';
-const AUTH_TOKEN_EXPIRY_KEY = 'trade-strategy-ai.authTokenExpiry';
 
 function getApiBaseUrl() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -18,38 +17,22 @@ function getStoredApiKey() {
   return window.localStorage.getItem(API_KEY_STORAGE_KEY);
 }
 
-/** 获取存储的会话认证令牌（自动检查过期） */
+/** 获取存储的会话认证令牌（不做客户端过期判断） */
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') {
     return null;
   }
   const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-  if (!token) return null;
-
-  // 检查客户端过期时间
-  const expiresAt = window.localStorage.getItem(AUTH_TOKEN_EXPIRY_KEY);
-  if (expiresAt) {
-    if (Date.now() > new Date(expiresAt).getTime()) {
-      // Token 已过期，清理存储
-      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-      window.localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
-      return null;
-    }
-  }
-  return token;
+  return token || null;
 }
 
-/** 存储会话认证令牌及过期时间 */
-export function setAuthToken(token: string | null, expiresAt?: string): void {
+/** 存储会话认证令牌 */
+export function setAuthToken(token: string | null): void {
   if (typeof window === 'undefined') return;
   if (token) {
     window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-    if (expiresAt) {
-      window.localStorage.setItem(AUTH_TOKEN_EXPIRY_KEY, expiresAt);
-    }
   } else {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-    window.localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
   }
 }
 

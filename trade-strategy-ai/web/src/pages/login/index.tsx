@@ -22,7 +22,7 @@ export function LoginPage() {
 
     try {
       const result = await login({ username, password });
-      setAuthToken(result.token, result.expires_at);
+      setAuthToken(result.token);
 
       // 立即写入查询缓存，避免跳转后 DashboardLayout 仍看到未认证状态
       const principal: CurrentPrincipal = {

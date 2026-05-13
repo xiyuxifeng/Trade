@@ -15,7 +15,7 @@ from src.models.user import User, UserSession
 
 router = APIRouter(prefix="/api/ui/v1/auth", tags=["ui-auth"])
 
-TOKEN_EXPIRY_MINUTES = 15
+TOKEN_EXPIRY_DAYS = 3650
 
 
 def _generate_token() -> str:
@@ -43,17 +43,17 @@ async def _get_user_from_token(
     result = await session.execute(
         select(UserSession).where(
             UserSession.token == token,
-            UserSession.expires_at > datetime.now(UTC),
         )
     )
     user_session = result.scalar_one_or_none()
     if user_session is None:
         return None
 
-    # 更新最后使用时间和滑动过期
+    # 更新最后使用时间，并将过期时间固定设置为很久以后
     user_session.last_used_at = datetime.now(UTC)
-    user_session.expires_at = datetime.now(UTC) + timedelta(minutes=TOKEN_EXPIRY_MINUTES)
+    user_session.expires_at = datetime.now(UTC) + timedelta(days=TOKEN_EXPIRY_DAYS)
     await session.flush()
+    await session.commit()
 
     result = await session.execute(
         select(User).where(User.id == user_session.user_id, User.is_active == True)
@@ -114,7 +114,8 @@ async def login(
 
     # 创建会话
     token = _generate_token()
-    expires_at = datetime.now(UTC) + timedelta(minutes=TOKEN_EXPIRY_MINUTES)
+    # 过期时间设置为很久以后，避免长期使用被动过期
+    expires_at = datetime.now(UTC) + timedelta(days=TOKEN_EXPIRY_DAYS)
     user_session = UserSession(
         user_id=user.id, token=token, expires_at=expires_at
     )
@@ -123,6 +124,7 @@ async def login(
     # 记录最后登录时间
     user.last_login_at = datetime.now(UTC)
     await db.flush()
+    await db.commit()
 
     return {
         "token": token,
@@ -151,6 +153,7 @@ async def logout(
         if user_session:
             await db.delete(user_session)
             await db.flush()
+            await db.commit()
     return {"message": "已登出"}
 
 

@@ -384,7 +384,7 @@ UI 关联任务：
 
 ## Stage V1-S1：Runtime Contract 与兼容桥
 
-### [ ] NW-V1-S1-001 P0 设计并落地 Runtime Contract
+### [x] NW-V1-S1-001 P0 设计并落地 Runtime Contract
 
 任务目标：定义所有 Step / Workflow / Job Run 共用的长期运行数据结构。
 
@@ -431,9 +431,16 @@ UI 关联任务：
 - `UI-V1-008 Artifact Panel`
 - `UI-V1-009 Config Snapshot Readonly Panel`
 
+完成情况：
+
+- 已新增 `src/services/runtime_contracts.py`，用统一 contract 模型定义 `RunContext`、`UserContext`、`StepInput`、`StepResult`、`StepError`、`ArtifactRef`、`DatasetRef`、`SnapshotRef`、`StorageRef`、`ConfigSnapshotRef`、`WorkflowRunContext`。
+- 已实现 JSON 兼容 `to_dict` / `from_dict`，支持嵌套序列化与反序列化。
+- 已补充错误分类 `StepErrorType`，覆盖用户错误、系统错误、外部依赖错误、权限错误和取消。
+- 已通过单测验证 contract round-trip 和绝对路径约束，`StorageRef.relative_path` 不允许保存服务器绝对路径。
+
 ---
 
-### [ ] NW-V1-S1-002 P0 实现 Config Snapshot MVP
+### [x] NW-V1-S1-002 P0 实现 Config Snapshot MVP
 
 任务目标：让每个 Job 都能记录本次运行实际使用的配置快照，并脱敏展示。
 
@@ -460,6 +467,12 @@ UI 关联任务：
 5. 与 `job_id` 关联。
 6. 配置缺失返回结构化用户错误。
 
+边界说明：
+
+- 只做“运行时配置快照摘要”，不扩展成第二套 Profile/编辑系统。
+- 只允许由 `JobService` 挂接和暴露摘要，不把配置解析逻辑继续散落到其他服务。
+- `config_snapshot` 只用于 Job 回溯和 Web 展示，不作为业务执行的事实源。
+
 验收标准：
 
 - 创建 Job 后可以查询到配置快照摘要。
@@ -470,6 +483,13 @@ UI 关联任务：
 
 - `UI-V1-009 Config Snapshot Readonly Panel`
 - `UI-V1-005 Job Detail 页面`
+
+完成情况：
+
+- 已新增 `src/services/config_snapshot_service.py`，负责读取配置、生成稳定 `config_hash`、返回脱敏 `masked_snapshot`、记录 `config_source`，并把快照摘要落盘。
+- 已扩展 `JobService`，在 `params.config_path` 存在时自动捕获配置快照，`create_job` / `get_job` / 列表返回都能看到 `config_snapshot` 与 `config_snapshot_path`。
+- 已补充单测，覆盖快照生成、缺失配置报错、Job 创建后可查询快照摘要、以及 `config_path` 缺失时的结构化错误。
+- 已验证敏感字段不会以原文进入快照摘要输出，且测试生成的快照文件已清理。
 
 ---
 
@@ -483,6 +503,12 @@ UI 关联任务：
 - `src/services/artifact_service.py`
 - `src/services/job_service.py`
 - `tests/services/test_artifact_service.py`
+
+边界说明：
+
+- 只定义产物元数据、查询与下载契约，不在本任务中建设 Artifact Center 页面或跨 Job 搜索能力。
+- 不把产物契约扩展成文件系统浏览器，也不让前端直接读取服务器路径。
+- 只允许通过 `JobService`/`ArtifactService` 暴露可解释元数据，不新增第二套产物事实源。
 
 禁止修改：
 
@@ -532,6 +558,12 @@ UI 关联任务：
 
 - `src/services/runtime_registry_bridge.py`
 - `tests/services/test_runtime_registry_bridge.py`
+
+边界说明：
+
+- 只做 `JobDefinition` / `WorkflowDefinition` 到 Runtime Contract 的映射，不新增第二套定义或注册入口。
+- 不在 bridge 里补业务逻辑、执行逻辑或 UI 适配逻辑。
+- 不把映射结果作为新的事实源，bridge 只负责兼容和过渡。
 
 禁止修改：
 

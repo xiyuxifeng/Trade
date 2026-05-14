@@ -388,6 +388,12 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - `web/src/api/jobs.ts`
 - `web/src/types/job.ts`
 
+边界说明：
+
+- 只消费后端返回的 Job / Step / Artifact / Config Snapshot 结果，不在页面内补业务判断。
+- 不自己解析文件系统路径，不从 `params` 或 `result` 里推断后端未暴露的事实。
+- 产物、日志、快照都必须来自 API contract，页面只负责展示与轻量交互。
+
 禁止修改：
 
 - 不在前端推断 Job 成败。
@@ -569,6 +575,12 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - `web/src/api/artifacts.ts`
 - `web/src/types/artifact.ts`
 
+边界说明：
+
+- 只渲染后端给出的 artifact 元数据，不在组件内发现、拼接或推断 artifact。
+- 不直接读取文件系统，不拼服务器绝对路径，不自己生成下载地址。
+- 预览与下载都必须走 API 返回的安全入口，不扩展成跨 Job 搜索或资源管理中心。
+
 禁止修改：
 
 - 不展示服务器绝对路径。
@@ -617,6 +629,12 @@ Artifact 类型至少支持：
 - `web/src/components/profiles/ConfigSnapshotPanel.*`
 - `web/src/api/profiles.ts`
 - `web/src/types/profile.ts`
+
+边界说明：
+
+- 只展示 Job 关联的脱敏配置快照，不把快照当成可编辑 Profile。
+- 不从 localStorage 或前端缓存还原配置原文，不反向推断未暴露字段。
+- 页面只负责“看快照”和“定位问题”，不负责快照生成或配置修复。
 
 禁止修改：
 

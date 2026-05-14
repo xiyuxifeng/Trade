@@ -177,10 +177,14 @@ def test_job_directory_materializes_files(tmp_path: Path) -> None:
     """Job 目录应固定包含 params、result 和 artifacts 文件。"""
     service, engine = _build_job_service(tmp_path)
 
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
     created = asyncio.run(
         service.create_job(
             job_type="pipeline-run",
-            params={"config_path": "config/app.yaml", "force": True},
+            params={"config_path": str(config_path), "force": True},
             created_by="web",
         )
     )
@@ -193,7 +197,7 @@ def test_job_directory_materializes_files(tmp_path: Path) -> None:
     assert Path(created.payload["artifacts_path"]).exists()
 
     params_data = Path(created.payload["params_path"]).read_text(encoding="utf-8")
-    assert '"config_path": "config/app.yaml"' in params_data
+    assert f'"config_path": "{config_path}"' in params_data
     assert '"force": true' in params_data
 
     completed = asyncio.run(service.complete_job(job_id=job_id, result={"ok": True}))
@@ -201,6 +205,60 @@ def test_job_directory_materializes_files(tmp_path: Path) -> None:
     assert result_path.exists()
     assert '"status": "success"' in result_path.read_text(encoding="utf-8")
     assert '"ok": true' in result_path.read_text(encoding="utf-8")
+
+    asyncio.run(engine.dispose())
+
+
+def test_job_service_records_config_snapshot_when_config_path_present(tmp_path: Path) -> None:
+    """JobService 在存在 config_path 时应记录脱敏配置快照。"""
+    service, engine = _build_job_service(tmp_path)
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        """
+database:
+  url: postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
+llm:
+  api_key: secret-key
+""",
+        encoding="utf-8",
+    )
+
+    created = asyncio.run(
+        service.create_job(
+            job_type="pipeline-run",
+            params={"config_path": str(config_path)},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    loaded = asyncio.run(service.get_job(job_id))
+
+    assert created.status == "ok"
+    assert created.payload["job"]["config_snapshot"]["config_source"] == str(config_path.resolve())
+    assert created.payload["job"]["config_snapshot"]["masked_snapshot"]["llm"]["api_key"] == "***"
+    assert loaded.payload["job"]["config_snapshot"]["config_hash"] == created.payload["job"]["config_snapshot"]["config_hash"]
+    assert Path(created.payload["job"]["config_snapshot_path"]).exists()
+
+    asyncio.run(engine.dispose())
+
+
+def test_job_service_rejects_missing_config_file_for_snapshot_jobs(tmp_path: Path) -> None:
+    """config_path 缺失时应返回结构化错误，而不是创建不完整 Job。"""
+    service, engine = _build_job_service(tmp_path)
+
+    missing_config = tmp_path / "config" / "missing.yaml"
+    result = asyncio.run(
+        service.create_job(
+            job_type="pipeline-run",
+            params={"config_path": str(missing_config)},
+            created_by="web",
+        )
+    )
+
+    assert result.status == "error"
+    assert result.message == "config file missing"
 
     asyncio.run(engine.dispose())
 

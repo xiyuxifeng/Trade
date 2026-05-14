@@ -11,7 +11,9 @@ import yaml
 
 from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
+from src.services.artifact_contracts import ArtifactCatalogItem, ArtifactDetail
 from src.services.base import BaseService, ServiceResult
+from src.services.runtime_contracts import StorageRef
 
 
 _TEXT_EXTENSIONS = {
@@ -38,7 +40,8 @@ class ArtifactRecord:
 
     artifact_id: str
     name: str
-    path: str
+    title: str
+    _path: Path = field(repr=False)
     kind: str
     source: str
     exists: bool
@@ -46,23 +49,37 @@ class ArtifactRecord:
     modified_at: str | None
     previewable: bool
     job_id: str | None = None
+    workflow_id: str | None = None
+    step_id: str | None = None
+    safe_download_url: str | None = None
+    download_token: str | None = None
+    download_name: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    storage_ref: StorageRef | None = None
 
     def to_payload(self, *, preview: str | None = None) -> dict[str, Any]:
         """转成前端可直接消费的结构。"""
-        payload = {
-            "artifact_id": self.artifact_id,
-            "name": self.name,
-            "path": self.path,
-            "kind": self.kind,
-            "source": self.source,
-            "exists": self.exists,
-            "size_bytes": self.size_bytes,
-            "modified_at": self.modified_at,
-            "previewable": self.previewable,
-            "job_id": self.job_id,
-            "metadata": self.metadata,
-        }
+        catalog_item = ArtifactCatalogItem(
+            artifact_id=self.artifact_id,
+            name=self.name,
+            title=self.title,
+            kind=self.kind,
+            source=self.source,
+            exists=self.exists,
+            size_bytes=self.size_bytes,
+            modified_at=self.modified_at,
+            previewable=self.previewable,
+            job_id=self.job_id,
+            workflow_id=self.workflow_id,
+            step_id=self.step_id,
+            safe_download_url=self.safe_download_url,
+            download_token=self.download_token,
+            download_name=self.download_name,
+            metadata=self.metadata,
+            storage_ref=self.storage_ref,
+            preview=preview,
+        )
+        payload = catalog_item.model_dump(mode="json")
         if preview is not None:
             payload["preview"] = preview
         return payload
@@ -170,6 +187,10 @@ class ArtifactService(BaseService):
         digest = hashlib.sha256(f"{source}|{kind}|{path.resolve()}".encode("utf-8")).hexdigest()
         return digest[:16]
 
+    def _safe_download_url(self, artifact_id: str) -> str:
+        """返回对外安全下载地址。"""
+        return f"/api/ui/v1/artifacts/{artifact_id}/download"
+
     def _is_within_root(self, path: Path, root: Path) -> bool:
         """判断路径是否位于允许的索引根目录下。"""
         try:
@@ -206,10 +227,17 @@ class ArtifactService(BaseService):
 
         stat = path.stat()
         kind = self._classify_kind(path)
+        relative_path = None
+        try:
+            relative_path = path.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            relative_path = None
+        artifact_id = self._artifact_id(source=source, path=path, kind=kind)
         return ArtifactRecord(
-            artifact_id=self._artifact_id(source=source, path=path, kind=kind),
+            artifact_id=artifact_id,
             name=path.name,
-            path=str(path.resolve()),
+            title=path.name,
+            _path=path.resolve(),
             kind=kind,
             source=source,
             exists=True,
@@ -217,7 +245,15 @@ class ArtifactService(BaseService):
             modified_at=self._format_modified_at(path),
             previewable=kind in {"json", "yaml", "html", "markdown", "csv", "text"},
             job_id=self._parse_job_id(path, root),
+            safe_download_url=self._safe_download_url(artifact_id),
+            download_name=path.name,
             metadata=metadata or {},
+            storage_ref=StorageRef(
+                source="file",
+                logical_id=relative_path or artifact_id,
+                relative_path=relative_path,
+                metadata={"root": root.name, "source": source},
+            ),
         )
 
     def is_download_path_allowed(self, path: str | Path) -> bool:
@@ -241,7 +277,7 @@ class ArtifactService(BaseService):
                 record = self._build_record(source=source, root=root, path=path)
                 if record is None:
                     continue
-                key = (record.source, record.path)
+                key = (record.source, str(record._path))
                 if key in seen:
                     continue
                 seen.add(key)
@@ -250,7 +286,7 @@ class ArtifactService(BaseService):
                     break
             if len(records) >= self._max_items:
                 break
-        records.sort(key=lambda item: (item.modified_at or "", item.path), reverse=True)
+        records.sort(key=lambda item: (item.modified_at or "", str(item._path)), reverse=True)
         return records
 
     def _preview_path(self, path: Path, kind: str) -> str | None:
@@ -277,6 +313,13 @@ class ArtifactService(BaseService):
 
         return None
 
+    def resolve_download_path(self, artifact_id: str) -> Path | None:
+        """解析 artifact 对应的内部下载路径。"""
+        for record in self._scan_files():
+            if record.artifact_id == artifact_id:
+                return record._path
+        return None
+
     async def list_artifacts(
         self,
         *,
@@ -297,7 +340,7 @@ class ArtifactService(BaseService):
             records = [item for item in records if item.job_id == job_id]
         if q:
             q_lower = q.lower()
-            records = [item for item in records if q_lower in item.name.lower() or q_lower in item.path.lower()]
+            records = [item for item in records if q_lower in item.name.lower() or q_lower in str(item._path).lower()]
 
         total = len(records)
         items = [record.to_payload() for record in records[skip : skip + limit]]
@@ -318,13 +361,29 @@ class ArtifactService(BaseService):
         for record in self._scan_files():
             if record.artifact_id != artifact_id:
                 continue
-            preview = self._preview_path(Path(record.path), record.kind) if record.previewable else None
+            preview = self._preview_path(record._path, record.kind) if record.previewable else None
+            detail = ArtifactDetail(**record.to_payload(preview=preview))
             return ServiceResult(
                 status="ok",
                 message="artifact loaded",
                 payload={
-                    **record.to_payload(preview=preview),
-                    "download_name": Path(record.path).name,
+                    **detail.model_dump(mode="json"),
+                    "artifact_ref": {
+                        "artifact_id": record.artifact_id,
+                        "job_id": record.job_id,
+                        "workflow_id": record.workflow_id,
+                        "step_id": record.step_id,
+                        "kind": record.kind,
+                        "title": record.title,
+                        "summary": record.metadata.get("summary"),
+                        "safe_download_url": record.safe_download_url,
+                        "download_token": record.download_token,
+                        "size_bytes": record.size_bytes,
+                        "created_at": record.modified_at,
+                        "visibility": record.metadata.get("visibility", "internal"),
+                        "metadata": record.metadata,
+                        "storage_ref": record.storage_ref.model_dump(mode="json") if record.storage_ref else None,
+                    },
                 },
             )
 

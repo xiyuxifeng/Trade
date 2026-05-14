@@ -161,6 +161,10 @@ def test_job_log_and_artifact_binding(tmp_path: Path) -> None:
             job_id=job_id,
             kind="html",
             path=tmp_path / "a.html",
+            workflow_id="workflow-1",
+            step_id="step-1",
+            title="dashboard report",
+            summary="rendered from dashboard",
             metadata={"source": "dashboard"},
         )
     )
@@ -168,7 +172,12 @@ def test_job_log_and_artifact_binding(tmp_path: Path) -> None:
     assert "job.log" in logged.payload["log_path"]
     assert Path(logged.payload["log_path"]).exists()
     assert bound.payload["artifact"]["kind"] == "html"
+    assert bound.payload["artifact"]["step_id"] == "step-1"
+    assert "path" not in bound.payload["artifact"]
+    assert bound.payload["artifact"]["safe_download_url"].endswith(f"/artifacts/{bound.payload['artifact']['artifact_id']}/download")
     assert bound.payload["job"]["artifacts"][0]["metadata"]["source"] == "dashboard"
+    assert bound.payload["job"]["artifacts"][0]["title"] == "dashboard report"
+    assert "path" not in bound.payload["job"]["artifacts"][0]
 
     asyncio.run(engine.dispose())
 

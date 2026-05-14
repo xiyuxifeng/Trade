@@ -23,7 +23,24 @@
 执行任何主任务前，必须检查该任务的 **UI 关联任务**。
 执行任何 UI 任务前，必须检查对应的 **主任务依赖**。
 
-### 0.2 为什么 UI 不能单独执行
+### 0.2 单一入口与退役原则
+
+本项目的路由、API、契约和页面入口必须遵循统一原则：
+
+1. **单一 canonical。**
+   - 对外只保留一套正式入口、一套正式契约、一套正式导航。
+   - 新功能、新文档、新验收只引用 canonical，不再新增并行正式入口。
+2. **显式兼容层。**
+   - 旧入口只能作为兼容层、适配层或过渡壳存在。
+   - 兼容层必须集中管理，不能散落到多个模块中。
+3. **明确退役计划。**
+   - 每个兼容入口都必须标记允许存在阶段和退役阶段。
+   - 到达退役阶段后，必须从正式导航、正式文档和默认跳转中移除。
+4. **禁止入口膨胀。**
+   - 不允许 canonical 和 legacy 并行承载新功能。
+   - 不允许把兼容层当成第二个正式入口继续演进。
+
+### 0.3 为什么 UI 不能单独执行
 
 UI 如果最后单独执行，会导致：
 
@@ -35,7 +52,7 @@ UI 如果最后单独执行，会导致：
 
 因此，UI 任务必须作为每个版本的验收条件之一。
 
-### 0.3 执行规则
+### 0.4 执行规则
 
 ```text
 执行 V1 主任务时，必须同步执行 UI-V1。
@@ -59,7 +76,7 @@ UI 如果最后单独执行，会导致：
 - UI 任务：UI-V3-001
 ```
 
-### 0.4 任务状态规则
+### 0.5 任务状态规则
 
 - `[ ]` 未开始
 - `[-]` 进行中
@@ -67,11 +84,11 @@ UI 如果最后单独执行，会导致：
 - `[!]` 阻塞
 - `[~]` 已拆出到未来优化，不阻塞第一版交付
 
-### 0.5 优先级规则
+### 0.6 优先级规则
 
 - `P0` > `P1` > `P2`...
 
-### 0.6 完成规则
+### 0.7 完成规则
 
 任务只能在同时满足以下条件后标记为 `[x]`：
 
@@ -493,7 +510,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V1-S1-003 P0 实现 Artifact Contract 与 ArtifactService MVP
+### [x] NW-V1-S1-003 P0 实现 Artifact Contract 与 ArtifactService MVP
 
 任务目标：建立统一产物元数据，支撑 Web 解释和下载产物。
 
@@ -548,11 +565,20 @@ UI 关联任务：
 - `UI-V1-005 Job Detail 页面`
 - `UI-V2-007 Artifact Center`
 
+完成情况：
+
+- 已新增 `src/services/artifact_contracts.py`，把产物目录项和产物详情收敛为统一契约，包含 `artifact_id`、`title`、`safe_download_url`、`storage_ref` 等解释性元数据。
+- 已收紧 `ArtifactService`，列表与详情对外不再暴露服务器绝对路径，下载入口改为通过 `artifact_id` 内部解析文件路径。
+- 已将 `JobService.bind_artifact` 升级为单一契约形状，支持 `workflow_id`、`step_id`、`title`、`summary`，并避免对外输出裸路径。
+- 已补充单测与路由测试，确认列表、详情、下载与 Job 绑定都通过同一契约链路运行，且 `git diff --check` / 相关 pytest 均通过。
+
 ---
 
-### [ ] NW-V1-S1-004 P0 建立 Job/Workflow Runtime Bridge
+### [x] NW-V1-S1-004 P0 建立 Job/Workflow Runtime Bridge
 
 任务目标：把现有 `JobDefinition` / `WorkflowDefinition` 桥接到 Runtime Contract，避免重复事实源。
+
+终态要求：最终只保留一套 Runtime Contract 形状作为正式对外解释层，现有 Registry 只能作为兼容读源和迁移过渡层存在，不能形成双轨实现。
 
 允许修改：
 
@@ -562,6 +588,7 @@ UI 关联任务：
 边界说明：
 
 - 只做 `JobDefinition` / `WorkflowDefinition` 到 Runtime Contract 的映射，不新增第二套定义或注册入口。
+- bridge 必须是单向读取层，只允许从现有 Registry 读取并映射到 canonical contract。
 - 不在 bridge 里补业务逻辑、执行逻辑或 UI 适配逻辑。
 - 不把映射结果作为新的事实源，bridge 只负责兼容和过渡。
 
@@ -571,25 +598,42 @@ UI 关联任务：
 - 不新增 WebJobDefinition。
 - 不长期复制 WorkflowDefinition。
 - 不删除现有 Registry。
+- 不允许 bridge 和旧 Registry 长期并行演进成双轨。
 
-实现要求：
+必须一次到位：
 
 1. 将 JobDefinition 映射为 Job Contract。
 2. 将 WorkflowDefinition 映射为 Workflow Contract。
 3. 保留 permission、risk、param_schema、runnable、requires_confirmation。
 4. 明确不可映射字段并写入审计文档。
 5. 新增 Job / Workflow 仍只有一个登记入口。
+6. bridge 输出必须足够稳定，后续 UI / Job / Workflow 只能依赖 canonical contract，不再依赖原始 registry 结构。
+
+允许作为过渡：
+
+1. 保留现有 `JobDefinition` / `WorkflowDefinition` 的原始实现。
+2. 保留 Registry 的读取接口，作为兼容读源。
+3. 允许 bridge 暂时保留少量 legacy 字段到 `metadata`，但不得形成第二套正式字段体系。
 
 验收标准：
 
 - 所有现有 Job 类型可通过 bridge 读取。
 - 所有现有 Workflow 可通过 bridge 读取。
 - 测试覆盖字段映射。
+- 验收时必须确认没有新增第二套事实源，也没有出现第二个正式注册入口。
 
 UI 关联任务：
 
 - `UI-V1-007 Schema-driven Workflow Run Form`
 - `UI-V1-006 Step Timeline Component`
+
+完成情况：
+
+- 已新增 `src/services/runtime_registry_bridge.py`，把现有 `JobDefinition` / `WorkflowDefinition` 归一化为 canonical contract 输出，top-level 不再暴露 `service_name` / `handler_name` / `job_definition` 这类 registry 私有结构。
+- 已明确 bridge 只做单向读取与映射，现有 Registry 仍作为兼容读源保留，不新增第二套正式入口，也不把映射结果升级为新事实源。
+- 已补充 `tests/unit/services/test_runtime_registry_bridge.py`，覆盖 Job / Workflow 两条映射链路，并验证 canonical 字段与 metadata 兼容字段的边界。
+- 已通过 `python -m pytest tests/unit/services/test_job_registry.py tests/unit/services/test_workflow_service.py tests/unit/services/test_runtime_registry_bridge.py -q`，`11 passed`。
+- 已通过 `git diff --check`。
 
 ---
 
@@ -1428,6 +1472,8 @@ UI 关联任务：
 
 任务目标：在 V2 正式工作台收口阶段冻结 legacy 路由，避免旧入口继续扩张导致维护复杂度失控。
 
+收口要求：同时检查是否在 V1/V2 期间引入了新的正式入口或新的事实源；如果发现双轨或分叉，必须先回收，不允许带病进入下一阶段。
+
 允许修改：
 
 - `docs/New-Web-UI-Routing.md`
@@ -1447,6 +1493,8 @@ UI 关联任务：
 2. legacy 路由仅保留历史链接和过渡壳。
 3. 文档明确每个 legacy 入口的退役阶段。
 4. 兼容层不得再承载新业务。
+5. 审计 current canonical / legacy 入口数量，确认没有新增第二套正式入口。
+6. 审计 current fact source 数量，确认没有新增第二套 Job / Workflow / Artifact 事实源。
 
 验收标准：
 
@@ -1454,6 +1502,7 @@ UI 关联任务：
 - legacy 入口不再出现在正式导航中。
 - 路由文档、导航文档和验收文档一致。
 - 兼容层退出条件清晰可查。
+- 若审计发现新增正式入口或事实源，必须先补收口，不得继续扩张。
 
 UI 关联任务：
 
@@ -1871,6 +1920,7 @@ UI 关联任务：
 - 失败、空数据、权限不足、外部依赖失败场景均有处理。
 - 无正式业务能力只能通过 CLI 使用。
 - 无长期双 Job/Workflow/Profile/Artifact 事实源。
+- 发布检查必须确认没有新增第二套正式入口，也没有在 V1/V2/V3 期间出现双轨实现。
 
 UI 关联任务：
 

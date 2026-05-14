@@ -42,6 +42,8 @@ def test_artifact_service_discovers_and_previews_files(tmp_path: Path) -> None:
     assert listed.status == "ok"
     assert by_name["result.json"]["job_id"] == job_id
     assert by_name["result.json"]["kind"] == "json"
+    assert "path" not in by_name["result.json"]
+    assert by_name["result.json"]["safe_download_url"].endswith(f"/artifacts/{by_name['result.json']['artifact_id']}/download")
     assert by_name["daily_report.html"]["previewable"] is True
     assert by_name["backup.tar.gz"]["kind"] == "tar.gz"
     assert "app.yaml" not in by_name
@@ -50,5 +52,11 @@ def test_artifact_service_discovers_and_previews_files(tmp_path: Path) -> None:
     assert detail.status == "ok"
     assert "preview" in detail.payload
     assert '"status": "ok"' in detail.payload["preview"]
+    assert "path" not in detail.payload
+    assert detail.payload["safe_download_url"].endswith(f"/artifacts/{by_name['result.json']['artifact_id']}/download")
+    assert detail.payload["artifact_ref"]["artifact_id"] == by_name["result.json"]["artifact_id"]
     assert service.is_download_path_allowed(job_dir / "result.json") is True
     assert service.is_download_path_allowed(tmp_path / "outside.json") is False
+
+    download_path = service.resolve_download_path(by_name["result.json"]["artifact_id"])
+    assert download_path == job_dir / "result.json"

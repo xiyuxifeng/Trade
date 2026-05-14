@@ -64,7 +64,9 @@ async def download_artifact(
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "artifact load failed")
 
-    path = Path(result.payload["path"])
+    path = artifact_service.resolve_download_path(artifact_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="artifact file not found")
     if not artifact_service.is_download_path_allowed(path):
         raise HTTPException(status_code=404, detail="artifact file not found")
     if not path.exists():

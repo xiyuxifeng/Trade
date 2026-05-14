@@ -27,7 +27,7 @@ class _FakeArtifactService:
                     {
                         "artifact_id": "artifact-1",
                         "name": self.artifact_path.name,
-                        "path": str(self.artifact_path),
+                        "title": self.artifact_path.name,
                         "kind": "html",
                         "source": "processed",
                         "exists": True,
@@ -35,6 +35,8 @@ class _FakeArtifactService:
                         "modified_at": "2026-05-09T00:00:00+00:00",
                         "previewable": True,
                         "job_id": None,
+                        "safe_download_url": "/api/ui/v1/artifacts/artifact-1/download",
+                        "download_name": self.artifact_path.name,
                         "metadata": {},
                     }
                 ],
@@ -48,7 +50,7 @@ class _FakeArtifactService:
             {
                 "artifact_id": "artifact-1",
                 "name": self.artifact_path.name,
-                "path": str(self.artifact_path),
+                "title": self.artifact_path.name,
                 "kind": "html",
                 "source": "processed",
                 "exists": True,
@@ -56,14 +58,20 @@ class _FakeArtifactService:
                 "modified_at": "2026-05-09T00:00:00+00:00",
                 "previewable": True,
                 "job_id": None,
+                "safe_download_url": "/api/ui/v1/artifacts/artifact-1/download",
+                "download_name": self.artifact_path.name,
                 "metadata": {},
                 "preview": "<html><body>artifact</body></html>",
-                "download_name": self.artifact_path.name,
             }
         )
 
     def is_download_path_allowed(self, path: Path) -> bool:
         return path.resolve().is_relative_to(self.artifact_path.parent.resolve())
+
+    def resolve_download_path(self, artifact_id: str) -> Path | None:
+        if artifact_id == "artifact-1":
+            return self.artifact_path
+        return None
 
 
 @dataclass
@@ -84,7 +92,7 @@ class _UnsafeArtifactService:
             {
                 "artifact_id": artifact_id,
                 "name": "escape.html",
-                "path": str(self.artifact_path),
+                "title": "escape.html",
                 "kind": "html",
                 "source": "processed",
                 "exists": True,
@@ -92,14 +100,18 @@ class _UnsafeArtifactService:
                 "modified_at": "2026-05-09T00:00:00+00:00",
                 "previewable": True,
                 "job_id": None,
+                "safe_download_url": "/api/ui/v1/artifacts/artifact-escape/download",
+                "download_name": "escape.html",
                 "metadata": {},
                 "preview": "<html><body>escape</body></html>",
-                "download_name": "escape.html",
             }
         )
 
     def is_download_path_allowed(self, path: Path) -> bool:
         return False
+
+    def resolve_download_path(self, artifact_id: str) -> Path | None:
+        return self.artifact_path
 
 
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,7 @@ from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
 from src.services.base import BaseService, ServiceResult
 from src.common.paths import resolve_project_path
+from src.services.runtime_contracts import ArtifactRef, StorageRef
 
 
 def _to_plain(value: Any) -> Any:
@@ -109,6 +111,52 @@ class JobService(BaseService):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(_to_plain(payload), ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _artifact_safe_download_url(self, artifact_id: str) -> str:
+        """返回统一的 artifact 下载地址。"""
+        return f"/api/ui/v1/artifacts/{artifact_id}/download"
+
+    def _serialize_artifact(self, artifact: Any) -> dict[str, Any]:
+        """把 job.artifacts 中的单条记录规范化为单一契约。"""
+        plain = _to_plain(artifact)
+        if not isinstance(plain, dict):
+            return {"metadata": {}, "kind": "unknown", "title": "unknown"}
+
+        artifact_id = plain.get("artifact_id")
+        if not artifact_id:
+            raw_path = str(plain.get("path") or plain.get("download_name") or plain.get("title") or plain.get("kind") or "artifact")
+            artifact_id = hashlib.sha256(raw_path.encode("utf-8")).hexdigest()[:16]
+
+        storage_ref_data = plain.get("storage_ref")
+        if isinstance(storage_ref_data, dict):
+            storage_ref = storage_ref_data
+        else:
+            raw_path = plain.get("path")
+            storage_ref = None
+            if raw_path:
+                path = Path(str(raw_path))
+                storage_ref = StorageRef(
+                    source="file",
+                    logical_id=artifact_id,
+                    relative_path=path.name if path.name else None,
+                ).model_dump(mode="json")
+
+        artifact_ref = ArtifactRef(
+            artifact_id=str(artifact_id),
+            job_id=str(plain.get("job_id") or "unknown"),
+            workflow_id=plain.get("workflow_id"),
+            step_id=plain.get("step_id"),
+            kind=str(plain.get("kind") or "unknown"),
+            title=str(plain.get("title") or plain.get("name") or plain.get("kind") or "artifact"),
+            summary=plain.get("summary"),
+            safe_download_url=plain.get("safe_download_url") or self._artifact_safe_download_url(str(artifact_id)),
+            download_token=plain.get("download_token"),
+            size_bytes=plain.get("size_bytes"),
+            visibility=plain.get("visibility") or "internal",
+            metadata=plain.get("metadata") or {},
+            storage_ref=StorageRef.model_validate(storage_ref) if storage_ref is not None else None,
+        )
+        return artifact_ref.model_dump(mode="json")
+
     def _serialize_audit_event(self, event: JobAuditEvent) -> dict[str, Any]:
         """把 Job 审计记录转成 API 可用结构。"""
         return {
@@ -162,6 +210,7 @@ class JobService(BaseService):
     def _serialize_job(self, job: Job) -> dict[str, Any]:
         """把 Job ORM 对象转成前端可用结构。"""
         config_snapshot = self._load_config_snapshot(job.id)
+        artifacts = [self._serialize_artifact(artifact) for artifact in (job.artifacts or [])]
         return {
             "id": str(job.id),
             "job_type": job.job_type,
@@ -169,7 +218,7 @@ class JobService(BaseService):
             "params": _to_plain(job.params),
             "result": _to_plain(job.result),
             "error": _to_plain(job.error),
-            "artifacts": _to_plain(job.artifacts),
+            "artifacts": artifacts,
             "created_by": job.created_by,
             "idempotency_key": job.idempotency_key,
             "retry_count": job.retry_count,
@@ -805,6 +854,10 @@ class JobService(BaseService):
         job_id: str | UUID,
         kind: str,
         path: str | Path,
+        workflow_id: str | None = None,
+        step_id: str | None = None,
+        title: str | None = None,
+        summary: str | None = None,
         metadata: dict[str, Any] | None = None,
         audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
@@ -815,11 +868,31 @@ class JobService(BaseService):
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
             artifacts = list(job.artifacts or [])
-            artifact = {
-                "kind": kind,
-                "path": str(Path(path)),
-                "metadata": metadata or {},
-            }
+            artifact_path = Path(path)
+            artifact_id = hashlib.sha256(f"{job.id}|{kind}|{artifact_path.resolve()}".encode("utf-8")).hexdigest()[:16]
+            relative_path = None
+            try:
+                relative_path = artifact_path.resolve().relative_to(self._job_dir(job.id).resolve()).as_posix()
+            except ValueError:
+                relative_path = artifact_path.name
+            artifact = ArtifactRef(
+                artifact_id=artifact_id,
+                job_id=str(job.id),
+                workflow_id=workflow_id,
+                step_id=step_id,
+                kind=kind,
+                title=title or artifact_path.name,
+                summary=summary or (metadata or {}).get("summary"),
+                safe_download_url=self._artifact_safe_download_url(artifact_id),
+                size_bytes=artifact_path.stat().st_size if artifact_path.exists() else None,
+                metadata=metadata or {},
+                storage_ref=StorageRef(
+                    source="file",
+                    logical_id=artifact_id,
+                    relative_path=relative_path,
+                    metadata={"job_id": str(job.id)},
+                ),
+            ).model_dump(mode="json")
             artifacts.append(artifact)
             job.artifacts = artifacts
             await self._persist(session, job)

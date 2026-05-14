@@ -87,7 +87,9 @@
       "Bash(alembic revision:*)",
       "Bash(alembic:*)",
       "Bash(grep -E \"\\\\.\\(md\\)$\")",
-      "Bash(PYTHONPATH=src python -m alembic -c src/db/migrations/alembic.ini current)"
+      "Bash(PYTHONPATH=src python -m alembic -c src/db/migrations/alembic.ini current)",
+      "Bash(rtk ls:*)",
+      "Bash(rtk git:*)"
     ]
   }
 }

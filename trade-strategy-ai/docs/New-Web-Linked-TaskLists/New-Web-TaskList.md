@@ -182,7 +182,7 @@ ArtifactService / ConfigSnapshotService / DB
 
 ---
 
-### 4.1 新增市场数据与 Regime-aware Rule 需求编排
+## 5. 新增市场数据与 Regime-aware Rule 需求编排
 
 本节用于承接新增用户需求，避免后续 AI 实现时把市场数据扩展、数据库化和分市场状态回测做成临时补丁。
 

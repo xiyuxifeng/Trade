@@ -102,8 +102,8 @@
 ## 📝 任务执行规则与约束
 
 1. 开始`ACTIVE_TASK_LIST`中的任务之前，需要先理解以下约定和准则：
-   - `New-Web-UI-TaskList.md`中的 `## 0. 执行关系`、`## 1. AI UI Implementation Rules`, `## 2. UI 架构目标`
-   - `New-Web-Linked-TaskLists`中的 `## 0. 执行方式总则`、`## 1. 项目阶段定位`, `## 2. AI Implementation Rules`, `## 3. 目标架构`, `## 4. 版本路线与 UI 绑定`
+   - `docs/New-Web-Linked-TaskLists/New-Web-UI-TaskList.md`中的 `## 0. 执行关系`、`## 1. AI UI Implementation Rules`, `## 2. UI 架构目标`
+   - `docs/New-Web-Linked-TaskLists/New-Web-Linked-TaskLists.md`中的 `## 0. 执行方式总则`、`## 1. 项目阶段定位`, `## 2. AI Implementation Rules`, `## 3. 目标架构`, `## 4. 版本路线与 UI 绑定`
 2. 任务完成后需要Review一遍，确保实现符合需求和验收标准，当任务有Task文档追踪的时候需要更新任务的完成情况。
 
 ---

@@ -80,6 +80,9 @@ web/src/
     pipelines.ts
     artifacts.ts
     profiles.ts
+    market.ts
+    backtest.ts
+    rules.ts
     admin.ts
   types/
     job.ts
@@ -87,6 +90,9 @@ web/src/
     pipeline.ts
     artifact.ts
     profile.ts
+    market.ts
+    backtest.ts
+    rule.ts
     api.ts
   layouts/
     AppLayout.tsx
@@ -1078,6 +1084,124 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
+### [ ] UI-V2-010 P0 Market Snapshot Browser
+
+任务目标：让用户在 Web 中查询、查看和理解 Market Snapshot，而不是依赖本地文件。
+
+主任务关联：
+
+- `NW-V2-S2-003 扩展 Market Snapshot 数据覆盖`
+- `NW-V2-S2-004 Market Data DB Storage`
+- `NW-V2-S2-005 Market Snapshot Query API`
+- `NW-V2-S2-006 Market Regime Feature Build`
+
+允许修改：
+
+- `web/src/pages/market/MarketSnapshotBrowserPage.*`
+- `web/src/components/market/*`
+- `web/src/api/market.ts`
+- `web/src/types/market.ts`
+- `web/src/routes/*`
+
+禁止修改：
+
+- 不直接读取文件路径。
+- 不直接调用 provider。
+- 不在前端计算 Market Snapshot。
+- 不展示 provider secret 或私有凭据。
+- 不伪造 snapshot 数据完成页面。
+
+页面能力：
+
+1. 按 `trade_date` / `market` / `quality_status` 查询 snapshot。
+2. 展示 snapshot list：
+   - snapshot_id
+   - trade_date
+   - market
+   - data_version
+   - quality_status
+   - created_at
+3. 展示 snapshot detail：
+   - sections
+   - record_count
+   - provider
+   - missing_reason
+   - quality_status
+4. 支持查看 data quality report。
+5. 支持跳转来源 Job Detail。
+6. 支持跳转 Artifact Center。
+7. 支持查看 regime features，如果 API 已提供。
+
+状态要求：
+
+- loading
+- empty
+- partial snapshot
+- data missing
+- permission denied
+- API unavailable
+- invalid query
+
+验收标准：
+
+- 用户可以通过 Web 查询指定日期的 Market Snapshot。
+- 用户可以看到每个 section 的数据质量和缺失原因。
+- 页面不暴露服务器绝对路径。
+- Snapshot 缺失时有明确错误说明。
+- 可以从 Snapshot 跳转到来源 Job / Artifact。
+
+---
+
+### [ ] UI-V2-011 P0 Market Dataset Viewer
+
+任务目标：让用户查看 DB 中的市场数据集摘要和样本，支撑外部系统接入前的人工验证。
+
+主任务关联：
+
+- `NW-V2-S2-004 Market Data DB Storage`
+- `NW-V2-S2-005 Market Snapshot Query API`
+
+允许修改：
+
+- `web/src/pages/market/MarketDatasetViewerPage.*`
+- `web/src/components/market/*`
+- `web/src/api/market.ts`
+- `web/src/types/market.ts`
+
+禁止修改：
+
+- 不直接读取本地文件。
+- 不在前端拼接 SQL。
+- 不一次性加载超大数据集。
+- 不绕过 API pagination。
+
+页面能力：
+
+1. 按 dataset_id / trade_date / symbol / section 查询。
+2. 展示 dataset metadata。
+3. 展示分页 sample rows。
+4. 展示 data quality summary。
+5. 支持跳转 snapshot detail。
+6. 支持下载导出 artifact，如果后端支持。
+
+状态要求：
+
+- loading
+- empty
+- pagination loading
+- permission denied
+- dataset missing
+- API unavailable
+
+验收标准：
+
+- 用户可以通过 Web 查看 DB 中的市场数据摘要。
+- 大数据集不会一次性全量加载。
+- 数据集能回溯到 snapshot_id。
+- 页面不暴露服务器绝对路径。
+
+---
+
 # UI-V3：完整交付 UI
 
 ## UI-V3 目标
@@ -1352,25 +1476,123 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-## 3. UI 与主任务映射表
+### [ ] UI-V3-010 P0 Market Regime Viewer
 
-| UI Task | 主 Task |
-| --- | --- |
-| UI-V1-001 | NW-V1-S0-001, NW-V1-S0-003 |
-| UI-V1-002 | NW-V1-S3-003 |
-| UI-V1-004 | NW-V1-S2-002 |
-| UI-V1-005 | NW-V1-S1-002, NW-V1-S1-003, NW-V1-S2-002 |
-| UI-V1-007 | NW-V1-S1-004, NW-V1-S3-003 |
-| UI-V1-010 | NW-V1-S3-001, NW-V1-S3-002, NW-V1-S3-003 |
-| UI-V2-002 | NW-V2-S1-001, NW-V2-S1-002 |
-| UI-V2-005 | NW-V2-S2-001, NW-V2-S2-002 |
-| UI-V2-006 | NW-V2-S3-001, NW-V2-S3-002 |
-| UI-V3-001 | NW-V3-S1-001 |
-| UI-V3-002 | NW-V3-S1-002 |
-| UI-V3-004 | NW-V3-S2-002 |
-| UI-V3-007 | NW-V3-S2-001 |
-| UI-V3-008 | NW-V3-S3-001 |
-| UI-V3-009 | NW-V3-S3-001 |
+任务目标：展示指定交易日或 snapshot 的 Market Regime，让用户理解系统如何判断当前市场状态。
+
+主任务关联：
+
+- `NW-V3-SX-001 Market Regime Definition`
+
+允许修改：
+
+- `web/src/pages/market/MarketRegimeViewerPage.*`
+- `web/src/components/market/*`
+- `web/src/api/market.ts`
+- `web/src/types/market.ts`
+
+禁止修改：
+
+- 不在前端计算 regime。
+- 不隐藏 low confidence / missing features。
+- 不把 regime 展示成不可解释的单一标签。
+
+验收标准：
+
+- 用户可以看到 regime labels、features、confidence。
+- 用户可以看到每个 label 的证据来源。
+- 数据不足时显示 missing_reason。
+
+---
+
+### [ ] UI-V3-011 P0 Regime Backtest Report
+
+任务目标：展示 rule / strategy 在不同 market regime 下的回测表现，避免只看整体指标。
+
+主任务关联：
+
+- `NW-V3-SX-002 Regime-aware Backtest`
+
+允许修改：
+
+- `web/src/pages/backtest/RegimeBacktestReportPage.*`
+- `web/src/components/backtest/*`
+- `web/src/api/backtest.ts`
+- `web/src/types/backtest.ts`
+
+禁止修改：
+
+- 不在前端计算回测指标。
+- 不隐藏 sample_count / confidence。
+- 不把低样本结论展示为强结论。
+
+验收标准：
+
+- 用户可以同时看到 overall metrics 和 per-regime metrics。
+- 用户可以看到某 rule 在不同 regime 下的表现差异。
+- 低样本 regime 有明确标记。
+- 可以跳转来源 Backtest Job / Artifact。
+
+---
+
+### [ ] UI-V3-012 P0 Rule Applicability Viewer
+
+任务目标：展示每条 rule 的适用市场环境、禁用市场环境和证据来源。
+
+主任务关联：
+
+- `NW-V3-SX-003 Rule Applicability Profile`
+
+允许修改：
+
+- `web/src/pages/rule-pool/RuleApplicabilityPage.*`
+- `web/src/components/rules/*`
+- `web/src/api/rules.ts`
+- `web/src/types/rule.ts`
+
+禁止修改：
+
+- 不在前端修改 rule 原始定义。
+- 不隐藏 blocked_regimes。
+- 不允许无审计地激活低置信度 profile。
+
+验收标准：
+
+- 用户可以看到 applicable_regimes / blocked_regimes / neutral_regimes。
+- 用户可以看到 source_backtest_id。
+- 用户可以看到 profile version 和 review status。
+- 低置信度或样本不足有明确提示。
+
+---
+
+### [ ] UI-V3-013 P0 Regime-aware Rule Selection View
+
+任务目标：展示盘前策略运行时为什么选择或跳过某些 rule。
+
+主任务关联：
+
+- `NW-V3-SX-004 Regime-aware Rule Selection`
+- `UI-V2-006 Strategy Workspace`
+
+允许修改：
+
+- `web/src/pages/strategy/RegimeRuleSelectionPage.*`
+- `web/src/components/strategy/*`
+- `web/src/api/rules.ts`
+- `web/src/api/market.ts`
+
+禁止修改：
+
+- 不在前端选择 rule。
+- 不隐藏 blocked rule。
+- 不允许无审计 override。
+
+验收标准：
+
+- 用户可以看到 selected_rules / skipped_rules / blocked_rules。
+- 每条 rule 都有 selection_reason。
+- override 有 operator / reason / timestamp / risk level。
+- 可以回溯到 market_regime 和 applicability profile version。
 
 ---
 

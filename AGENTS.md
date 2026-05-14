@@ -35,7 +35,7 @@
 
 ## ⭐️ 全局变量约定
 
-- `ACTIVE_TASK_LIST`: `docs/WebOnly-Refactor-Execution-TaskList.md`。这个变量应该在会话开始时或切换任务时设置，以确保所有对 `TaskList` 的更新都指向正确的文件。
+- `ACTIVE_TASK_LIST`: `docs/New-Web-Linked-TaskLists/*`。这个变量应该在会话开始时或切换任务时设置，以确保所有对 `TaskList` 的更新都指向正确的文件。
 
 ---
 

@@ -144,6 +144,43 @@ ArtifactService / ConfigSnapshotService / DB
 
 ---
 
+### 4.1 新增市场数据与 Regime-aware Rule 需求编排
+
+本节用于承接新增用户需求，避免后续 AI 实现时把市场数据扩展、数据库化和分市场状态回测做成临时补丁。
+
+新增需求：
+
+1. 当前生成的 Market Snapshot 市场数据太少，需要扩展 snapshot 数据覆盖。
+2. 当前市场数据主要写入文件，需要引入数据库作为主查询源，后续 Web 端可查询，也便于接入其他系统。
+3. 市场状态会变化，不同时期适用的 rule 可能不同；如果只做整体回测，可能把特定时期表现优秀的 rule 错误淘汰，需要支持 Regime-aware Backtest 和 Rule Applicability Profile。
+
+编排原则：
+
+```text
+V1：
+- 不实现完整 Market Data DB。
+- 不实现 Regime-aware Backtest。
+- 但 Runtime Contract / Artifact Contract 必须预留 DatasetRef / SnapshotRef / StorageRef。
+- 后续任何 API/UI 都不得依赖服务器绝对文件路径作为长期事实源。
+
+V2：
+- 在 Market Data 纵向切片中正式扩展 Market Snapshot 数据覆盖。
+- 在 Market Data 纵向切片中引入数据库主存储。
+- 提供 Market Snapshot Query API。
+- 为 V3 生成 market_regime_features，但不在 V2 里完成 rule 优化闭环。
+
+V3：
+- 在 Backtest / Rule Pool / Optimization 阶段实现市场状态定义、分市场状态回测、rule 适用性画像和按当前市场状态选择 rule。
+```
+
+执行约束：
+
+- 新增市场数据能力必须通过 Step / Workflow / PipelineSpec / Artifact / Profile / UI 统一体系进入项目。
+- 文件可以保留为导出、调试、归档或备份，但不能继续作为 Web 查询和策略/回测的唯一事实源。
+- Strategy / Backtest 后续必须通过 `snapshot_id` / `dataset_id` 引用市场数据。
+- Regime-aware rule 相关任务不得提前塞入 V1；V2 只准备数据，V3 才做回测和 rule selection。
+
+
 # V1：产品化运行底座 + article_pipeline 完整闭环
 
 ## V1 交付目标
@@ -328,6 +365,9 @@ Contract 必须包含：
 - `StepResult`
 - `StepError`
 - `ArtifactRef`
+- `DatasetRef`
+- `SnapshotRef`
+- `StorageRef`
 - `ConfigSnapshotRef`
 - `WorkflowRunContext`
 
@@ -336,6 +376,9 @@ Contract 必须包含：
 - 支持序列化/反序列化。
 - StepError 能区分用户错误、系统错误、外部依赖错误、权限错误、取消。
 - ArtifactRef 不暴露服务器绝对路径。
+- DatasetRef / SnapshotRef 只暴露 logical id，不暴露服务器绝对路径。
+- StorageRef 能表达 file/db/external 三类来源，但业务层不得直接依赖具体存储实现。
+- Runtime Contract 支持未来 market snapshot 从文件迁移到数据库时不改变 Web UI contract。
 - 测试覆盖必填字段、可选字段、错误类型。
 
 UI 关联任务：
@@ -418,12 +461,17 @@ Artifact Metadata 必须包含：
 - created_at
 - visibility
 - metadata
+- dataset_ref，可选
+- snapshot_ref，可选
+- storage_ref，可选
 
 验收标准：
 
 - Job Detail 可以按 Step 展示产物。
 - 缺失产物返回结构化错误。
 - 产物下载不暴露服务器路径。
+- snapshot / dataset / market-data 类型 artifact 可以通过 snapshot_id / dataset_id 回溯到对应数据集。
+- 文件导出只能作为 artifact download，不作为 Web 查询的唯一数据源。
 
 UI 关联任务：
 
@@ -902,6 +950,309 @@ UI 关联任务：
 
 ---
 
+### [ ] NW-V2-S2-003 P0 扩展 Market Snapshot 数据覆盖
+
+任务目标：扩展当前 `snapshot-build` 的市场数据覆盖范围，解决 Market Snapshot 数据过少的问题，并为盘前策略、盘后归因、回测和 Regime-aware Rule Selection 提供统一市场上下文。
+
+当前相关文件：
+
+- `src/pipelines/*market*`
+- `src/services/*market*`
+- `src/services/*provider*`
+- `src/services/artifact_service.py`
+- `src/services/job_service.py`
+- `api/routers/ui/*`
+- 现有 `snapshot-build` / `market-state-build` 相关实现
+
+允许修改：
+
+- `src/pipelines/market_data_pipeline_spec.py`
+- `src/services/market_snapshot_service.py`
+- `src/services/market_data_service.py`
+- `src/services/provider/*`
+- `tests/services/test_market_snapshot_service.py`
+- `tests/pipelines/test_market_data_pipeline_spec.py`
+- `docs/New-Web-Market-Snapshot-Schema.md`
+
+禁止修改：
+
+- 不在 Web Router 中直接调用 provider。
+- 不让 Web UI 直接读取本地市场数据文件。
+- 不把 provider 私有字段直接暴露给 UI。
+- 不把 `snapshot-build` 写成只服务某一个策略的临时逻辑。
+- 不在本任务中实现完整回测或 rule 选择逻辑。
+
+实现要求：
+
+1. 定义 MarketSnapshot schema，至少包含：
+   - `snapshot_id`
+   - `trade_date`
+   - `market`
+   - `data_version`
+   - `provider_sources`
+   - `created_at`
+   - `data_quality`
+   - `sections`
+2. Snapshot sections 至少预留并按可用 provider 逐步实现：
+   - `indices`：指数数据
+   - `sectors`：板块/行业数据
+   - `ohlcv`：个股日线数据
+   - `topics`：热点/题材
+   - `topic_constituents`：题材成分股
+   - `auction`：竞价数据
+   - `limit_up_down`：涨停/跌停数据
+   - `dragon_tiger`：龙虎榜
+   - `liquidity`：成交额/量能
+   - `breadth`：市场广度
+   - `sentiment`：情绪指标
+   - `strong_symbols`：强势股候选池
+   - `event_data`：盘后解释需要的事件型数据
+3. 每个 section 必须记录：
+   - provider
+   - source_time
+   - record_count
+   - missing_reason
+   - quality_status
+4. `snapshot-build` 成功后必须输出：
+   - `snapshot_id`
+   - snapshot summary artifact
+   - data quality report artifact
+5. `market_data PipelineSpec` 必须声明 `snapshot-build` 的输入、输出 artifact 和 UI Task ID。
+6. 缺少某类市场数据时，不得直接失败整个 `snapshot-build`，除非该 section 被标记为 required。
+7. 失败原因必须结构化，区分：
+   - provider unavailable
+   - config missing
+   - data empty
+   - data invalid
+   - partial snapshot
+   - system error
+
+验收标准：
+
+- 可以为指定 `trade_date` 生成 Market Snapshot。
+- Snapshot 至少包含 indices / ohlcv / topics，或明确标记缺失原因。
+- 每个 section 有 record_count 和 quality_status。
+- Job Detail 能看到 snapshot summary artifact。
+- Snapshot artifact 不暴露服务器绝对路径。
+- 缺失数据有结构化错误或 warning。
+- 后续 Strategy Run / Backtest 可以通过 `snapshot_id` 引用该 snapshot。
+
+UI 关联任务：
+
+- `UI-V2-005 Market Data Workspace`
+- `UI-V2-010 Market Snapshot Browser`
+- `UI-V2-007 Artifact Center`
+
+---
+
+### [ ] NW-V2-S2-004 P0 Market Data DB Storage
+
+任务目标：把市场数据从“文件为主的事实源”迁移为“数据库为主的查询源”，文件只保留为导出、调试、归档或备份产物，支撑 Web 查询和外部系统接入。
+
+当前相关文件：
+
+- `src/services/market_data_service.py`
+- `src/services/market_snapshot_service.py`
+- `src/services/artifact_service.py`
+- `src/db/*`
+- migration 相关目录
+- 当前 market data 文件读写逻辑
+
+允许修改：
+
+- `src/models/market_data.py`
+- `src/repositories/market_data_repository.py`
+- `src/repositories/market_snapshot_repository.py`
+- `src/services/market_data_storage_service.py`
+- migration 文件
+- tests
+- `docs/New-Web-Market-Data-Storage.md`
+
+禁止修改：
+
+- 不一次性删除现有文件导出能力。
+- 不让业务代码直接拼 SQL。
+- 不让 Web UI 查询本地文件路径。
+- 不把 provider 原始响应不清洗直接落为主表事实源。
+- 不破坏现有 CLI dev/debug 读取旧文件的兼容入口。
+
+实现要求：
+
+1. 建立 Market Data DB 存储模型，至少支持：
+   - `market_snapshots`
+   - `market_snapshot_sections`
+   - `market_snapshot_items`
+   - `market_datasets`
+   - `market_data_quality_reports`
+2. 根据现有数据库方案选择实现方式；如果项目尚未统一 ORM，需要在本任务中先记录采用方案，不得引入第二套 DB 访问事实源。
+3. 建立 Repository 层：
+   - `MarketSnapshotRepository`
+   - `MarketDatasetRepository`
+   - `MarketDataQualityRepository`
+4. 写入路径：
+   - provider fetch
+   - normalize
+   - build snapshot
+   - save DB
+   - generate artifact metadata
+5. 查询路径：
+   - by `snapshot_id`
+   - by `trade_date`
+   - by `symbol`
+   - by `section`
+   - by `dataset_id`
+6. Artifact 中只能保存 `snapshot_id` / `dataset_id` / `storage_ref`，不得保存 UI 可见的服务器绝对路径。
+7. 旧文件读写能力保留为兼容层，并在文档中写清退出条件。
+8. 支持最小 migration / seed / rollback 说明。
+
+验收标准：
+
+- `snapshot-build` 可以把 market snapshot 写入 DB。
+- 可以通过 repository 按 `trade_date` 查询 snapshot。
+- 可以通过 repository 按 `snapshot_id` 查询 sections 和 items。
+- Artifact Center 可以通过 artifact metadata 回溯到 snapshot_id。
+- 文件导出仍可作为 artifact download 使用。
+- Web/API 不依赖服务器绝对路径。
+- 测试覆盖 DB 写入、查询、空数据、重复写入、质量报告。
+
+UI 关联任务：
+
+- `UI-V2-010 Market Snapshot Browser`
+- `UI-V2-011 Market Dataset Viewer`
+- `UI-V2-007 Artifact Center`
+
+---
+
+### [ ] NW-V2-S2-005 P0 Market Snapshot Query API
+
+任务目标：提供稳定 API 给 Web UI 和外部系统查询 Market Snapshot / Dataset，避免直接读取文件或绕过 Application Service。
+
+当前相关文件：
+
+- `api/routers/ui/*`
+- `src/services/market_snapshot_service.py`
+- `src/repositories/market_snapshot_repository.py`
+- API schema 文件
+- tests
+
+允许修改：
+
+- `api/routers/ui/market.py`
+- `api/schemas/market.py`
+- `src/services/market_snapshot_query_service.py`
+- tests
+- `docs/New-Web-Market-Snapshot-API.md`
+
+禁止修改：
+
+- 不让 API 直接调用 provider。
+- 不让 API 返回服务器绝对路径。
+- 不在 API Router 中拼接复杂业务查询。
+- 不绕过权限和 Profile/Config 校验。
+- 不返回 secret 或 provider 私有凭据。
+
+API 至少包括：
+
+```text
+GET /api/ui/v1/market/snapshots
+GET /api/ui/v1/market/snapshots/{snapshot_id}
+GET /api/ui/v1/market/snapshots/{snapshot_id}/sections
+GET /api/ui/v1/market/snapshots/{snapshot_id}/sections/{section}
+GET /api/ui/v1/market/datasets
+GET /api/ui/v1/market/datasets/{dataset_id}
+GET /api/ui/v1/market/snapshots/{snapshot_id}/quality
+```
+
+查询能力：
+
+- `trade_date`
+- `market`
+- `section`
+- `symbol`
+- `topic`
+- `quality_status`
+- pagination
+- limit / offset 或 cursor
+
+验收标准：
+
+- Web 可以查询 snapshot 列表。
+- Web 可以查看 snapshot detail。
+- Web 可以查看每个 section 的 record_count / quality_status。
+- 无数据、部分数据、权限不足、snapshot 不存在都有结构化错误。
+- API response 不暴露服务器绝对路径。
+- API 文档更新。
+- 测试覆盖查询、空数据、权限不足、无效参数。
+
+UI 关联任务：
+
+- `UI-V2-010 Market Snapshot Browser`
+- `UI-V2-011 Market Dataset Viewer`
+- `UI-V2-005 Market Data Workspace`
+
+---
+
+### [ ] NW-V2-S2-006 P1 Market Regime Feature Build
+
+任务目标：在 V2 阶段只生成市场状态特征，不做 rule 优化，为 V3 的 Regime-aware Backtest 和 Rule Applicability Profile 准备数据。
+
+当前相关文件：
+
+- `src/services/market_snapshot_service.py`
+- `src/services/market_data_service.py`
+- `src/pipelines/market_data_pipeline_spec.py`
+- `src/services/artifact_service.py`
+- tests
+
+允许修改：
+
+- `src/services/market_regime_feature_service.py`
+- `src/models/market_regime.py`
+- `tests/services/test_market_regime_feature_service.py`
+- `docs/New-Web-Market-Regime-Features.md`
+
+禁止修改：
+
+- 不在本任务中决定某个 rule 是否启用。
+- 不在本任务中做完整 backtest。
+- 不把 regime 直接写死成不可扩展枚举。
+- 不让特征计算依赖 Web UI。
+
+实现要求：
+
+1. 基于 Market Snapshot 生成 `market_regime_features`。
+2. 特征至少预留：
+   - trend
+   - sentiment
+   - liquidity
+   - volatility
+   - breadth
+   - theme_strength
+   - limit_up_count
+   - limit_down_count
+   - turnover_level
+3. 每个特征记录：
+   - value
+   - source section
+   - confidence
+   - missing_reason
+4. 输出 regime feature artifact。
+5. 保存到 DB，后续可按 `trade_date` / `snapshot_id` 查询。
+
+验收标准：
+
+- 可以对指定 `snapshot_id` 生成 regime features。
+- 缺失输入数据时返回 partial features 和 missing_reason。
+- regime features 可被 API 或 repository 查询。
+- V3 Backtest 可以通过 `snapshot_id` 读取这些 features。
+
+UI 关联任务：
+
+- `UI-V2-010 Market Snapshot Browser`
+- `UI-V2-007 Artifact Center`
+
+---
+
 ## Stage V2-S3：Strategy Run 纵向切片
 
 ### [ ] NW-V2-S3-001 P0 定义 strategy PipelineSpec
@@ -1111,6 +1462,271 @@ UI 关联任务：
 
 ---
 
+---
+
+## Stage V3-S3A：Regime-aware Backtest 与 Rule 适用性优化
+
+> 本 Stage 放置在 V3 的 Backtest / Rule Pool 相关任务之后、Strategy / Final Acceptance 之前。它不替代原有 V3 任务，只新增“市场状态变化导致 rule 适用性不同”的实现闭环。
+
+### [ ] NW-V3-SX-001 P0 Market Regime Definition
+
+任务目标：定义可解释、可版本化、可回测的 Market Regime，用于把不同市场阶段下的 rule 表现分开评估。
+
+当前相关文件：
+
+- `src/models/market_regime.py`
+- `src/services/market_regime_feature_service.py`
+- `src/services/market_snapshot_service.py`
+- `src/backtest/*`
+- tests
+
+允许修改：
+
+- `src/services/market_regime_service.py`
+- `src/models/market_regime.py`
+- `tests/services/test_market_regime_service.py`
+- `docs/New-Web-Market-Regime-Definition.md`
+
+禁止修改：
+
+- 不用不可解释的黑盒标签作为唯一输出。
+- 不把 regime 判断写死在 Web UI。
+- 不让 Strategy 直接绕过 Market Snapshot 读取文件。
+- 不在本任务中实现 rule 选择。
+
+实现要求：
+
+1. 定义 MarketRegime schema：
+   - `regime_id`
+   - `trade_date`
+   - `snapshot_id`
+   - `regime_version`
+   - `labels`
+   - `features`
+   - `confidence`
+   - `created_at`
+2. 支持基础标签：
+   - `strong_bull`
+   - `weak_bull`
+   - `range`
+   - `weak_bear`
+   - `panic`
+   - `theme_hot`
+   - `low_liquidity`
+3. 支持多标签组合，而不是单一枚举。
+4. 每个标签必须能回溯到特征来源。
+5. Regime 规则需要版本化，避免历史回测不可复现。
+
+验收标准：
+
+- 可以基于指定 `snapshot_id` 生成 Market Regime。
+- Regime 输出可解释，能看到使用了哪些 features。
+- Regime definition 有版本。
+- Backtest 可以读取指定版本的 regime。
+- 测试覆盖强势、弱势、震荡、数据缺失场景。
+
+UI 关联任务：
+
+- `UI-V3-010 Market Regime Viewer`
+- `UI-V3-001 Backtest Center`
+
+---
+
+### [ ] NW-V3-SX-002 P0 Regime-aware Backtest
+
+任务目标：在回测中按 Market Regime 分组统计 rule 表现，避免整体回测把特定市场环境下有效的 rule 错误淘汰。
+
+当前相关文件：
+
+- `src/backtest/*`
+- `src/services/market_regime_service.py`
+- `src/services/rule_pool_service.py`
+- `src/services/artifact_service.py`
+- tests
+
+允许修改：
+
+- `src/backtest/regime_backtest.py`
+- `src/services/regime_backtest_service.py`
+- `src/models/backtest_result.py`
+- `tests/backtest/test_regime_backtest.py`
+- `docs/New-Web-Regime-Aware-Backtest.md`
+
+禁止修改：
+
+- 不删除原有整体回测。
+- 不只输出全局 win_rate / return。
+- 不用未来数据判断历史 regime。
+- 不在前端计算回测指标。
+- 不把样本数很少的 regime 结论当成高置信度。
+
+实现要求：
+
+1. 回测结果必须同时包含：
+   - overall metrics
+   - per-regime metrics
+   - per-rule per-regime metrics
+2. per-regime metrics 至少包含：
+   - sample_count
+   - win_rate
+   - avg_return
+   - max_drawdown
+   - profit_factor，可选
+   - confidence
+3. 支持按以下维度切分：
+   - regime label
+   - trade_date range
+   - trader_id
+   - rule_id
+   - strategy_version
+4. 输出 Regime Backtest Report artifact。
+5. 样本数不足时必须标记 low confidence。
+6. Backtest 运行必须引用固定的 snapshot_id / dataset_id / regime_version，保证可复现。
+
+验收标准：
+
+- 同一 rule 可以看到整体表现和不同 regime 下的表现。
+- 样本数不足的 regime 不参与自动淘汰。
+- Report 可以解释“为什么某 rule 只适合某些市场状态”。
+- Job Detail / Artifact Center 可以查看 Regime Backtest Report。
+- 测试覆盖整体表现差但某 regime 表现好的 rule。
+
+UI 关联任务：
+
+- `UI-V3-011 Regime Backtest Report`
+- `UI-V3-001 Backtest Center`
+- `UI-V3-002 Rule Pool`
+
+---
+
+### [ ] NW-V3-SX-003 P0 Rule Applicability Profile
+
+任务目标：为每条 rule 生成适用市场环境画像，让系统能保留“特定阶段有效”的 rule，而不是只按整体评分淘汰。
+
+当前相关文件：
+
+- `src/services/rule_pool_service.py`
+- `src/services/regime_backtest_service.py`
+- `src/models/rule.py`
+- `src/models/backtest_result.py`
+- tests
+
+允许修改：
+
+- `src/services/rule_applicability_service.py`
+- `src/models/rule_applicability.py`
+- `tests/services/test_rule_applicability_service.py`
+- `docs/New-Web-Rule-Applicability-Profile.md`
+
+禁止修改：
+
+- 不覆盖原始 rule 定义。
+- 不把 applicability 写死为人工标签。
+- 不忽略 low confidence / low sample_count。
+- 不在本任务中直接生成盘前建议。
+
+实现要求：
+
+1. RuleApplicabilityProfile 至少包含：
+   - `rule_id`
+   - `profile_version`
+   - `applicable_regimes`
+   - `blocked_regimes`
+   - `neutral_regimes`
+   - `min_sample_count`
+   - `confidence`
+   - `best_market_conditions`
+   - `worst_market_conditions`
+   - `source_backtest_id`
+2. 支持从 Regime-aware Backtest 结果生成。
+3. 支持人工 review 状态：
+   - draft
+   - reviewed
+   - active
+   - archived
+4. 支持版本化，历史策略版本引用旧 profile 时必须可复现。
+5. 输出 rule applicability artifact。
+
+验收标准：
+
+- 可以为指定 rule 生成 applicability profile。
+- 整体表现一般但特定 regime 表现好的 rule 不会被直接淘汰。
+- blocked_regimes 有明确证据来源。
+- Profile 修改不影响历史 backtest result。
+- Rule Pool UI 可以查看适用/禁用市场环境。
+
+UI 关联任务：
+
+- `UI-V3-012Rule Applicability Viewer`
+- `UI-V3-002 Rule Pool`
+
+---
+
+### [ ] NW-V3-SX-004 P0 Regime-aware Rule Selection
+
+任务目标：盘前策略生成时结合当前 Market Regime 选择适用 rule，避免在不合适市场环境下启用错误规则。
+
+当前相关文件：
+
+- `src/services/strategy_service.py`
+- `src/services/rule_pool_service.py`
+- `src/services/rule_applicability_service.py`
+- `src/services/market_regime_service.py`
+- `src/pipelines/*strategy*`
+- tests
+
+允许修改：
+
+- `src/services/regime_rule_selection_service.py`
+- `src/pipelines/strategy_pipeline_spec.py`
+- `tests/services/test_regime_rule_selection_service.py`
+- `docs/New-Web-Regime-Aware-Rule-Selection.md`
+
+禁止修改：
+
+- 不让 LLM 自行忽略 rule applicability。
+- 不在前端选择 rule。
+- 不把 blocked_regimes 的 rule 加入候选，除非用户显式 override 且有审计记录。
+- 不删除原有策略版本机制。
+
+实现要求：
+
+1. 盘前 Strategy Run 读取：
+   - current snapshot
+   - current market regime
+   - trader profile
+   - strategy version
+   - rule applicability profiles
+2. Rule selection 输出：
+   - selected_rules
+   - skipped_rules
+   - blocked_rules
+   - selection_reason
+   - evidence
+3. blocked rule 必须记录原因。
+4. override 必须记录：
+   - operator
+   - reason
+   - timestamp
+   - risk level
+5. 输出 selection artifact，供盘前建议和盘后归因使用。
+
+验收标准：
+
+- 不同 market regime 下，同一 trader 可以选择不同 rule set。
+- blocked regime 的 rule 默认不会进入 selected_rules。
+- selection artifact 可以解释每条 rule 为什么被选择或跳过。
+- 盘后归因能回溯当时使用的 regime 和 rule applicability version。
+- 测试覆盖 strong_bull / weak_bear / theme_hot 至少三类场景。
+
+UI 关联任务：
+
+- `UI-V3-013 Regime-aware Rule Selection View`
+- `UI-V2-006 Strategy Workspace`
+- `UI-V3-002 Rule Pool`
+
+---
+
 ## Stage V3-S3：最终发布验收
 
 ### [ ] NW-V3-S3-001 P0 全量 E2E 与发布检查
@@ -1138,8 +1754,8 @@ UI 关联任务：
 
 UI 关联任务：
 
-- `UI-V3-008 Final UX Review`
-- `UI-V3-009 User Manual Coverage Verification`
+- `UI-V3-012Final UX Review`
+- `UI-V3-013 User Manual Coverage Verification`
 
 ---
 
@@ -1172,9 +1788,9 @@ UI 关联任务：
 | NW-V2-S4-002 | UI-V2 全部正式工作台 |
 | NW-V3-S1-001 | UI-V3-001 |
 | NW-V3-S1-002 | UI-V3-002, UI-V3-003 |
-| NW-V3-S2-001 | UI-V3-007 |
-| NW-V3-S2-002 | UI-V3-004, UI-V3-005, UI-V3-006 |
-| NW-V3-S3-001 | UI-V3-008, UI-V3-009 |
+| NW-V3-S2-001 | UI-V3-011 |
+| NW-V3-S2-002 | UI-V3-004, UI-V3-005, UI-V3-010 |
+| NW-V3-S3-001 | UI-V3-016, UI-V3-013 |
 
 ---
 
@@ -1206,3 +1822,5 @@ UI 关联任务：
 4. 旧 Workflow UI Definition 可通过 bridge 使用，但新增 workflow 必须有 Runtime Contract。
 5. 临时 Web UI 可在 V2/V3 重做，但不能破坏 API / Runtime Contract。
 6. 兼容层删除前必须有迁移矩阵、UI 页面映射和 E2E 覆盖。
+
+---

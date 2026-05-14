@@ -1,7 +1,7 @@
 # New-Web-TaskList
 
-> `trade-strategy-ai` Demo → 可交付版本的 Web/API/Worker First 主 TaskList。  
-> 本文档是最终版主任务清单，负责定义 V1/V2/V3 的交付目标、后端/运行时/业务切片任务，以及与 `New-Web-UI-TaskList.md` 的强绑定执行关系。  
+> `trade-strategy-ai` Demo → 可交付版本的 Web/API/Worker First 主 TaskList。
+> 本文档是最终版主任务清单，负责定义 V1/V2/V3 的交付目标、后端/运行时/业务切片任务，以及与 `New-Web-UI-TaskList.md` 的强绑定执行关系。
 >
 > **重要：UI TaskList 不是独立执行文档。UI 任务必须作为 V1/V2/V3 各阶段的前端子任务，与主任务并行推进。**
 
@@ -20,7 +20,7 @@
    - UI 专项 TaskList。
    - 覆盖 Web 路由、Layout、API Client、页面、组件、状态、交互、前端验收。
 
-执行任何主任务前，必须检查该任务的 **UI 关联任务**。  
+执行任何主任务前，必须检查该任务的 **UI 关联任务**。
 执行任何 UI 任务前，必须检查对应的 **主任务依赖**。
 
 ### 0.2 为什么 UI 不能单独执行
@@ -58,6 +58,27 @@ UI 如果最后单独执行，会导致：
 - 主任务：NW-V3-S1-001
 - UI 任务：UI-V3-001
 ```
+
+### 0.4 任务状态规则
+
+- `[ ]` 未开始
+- `[-]` 进行中
+- `[x]` 已完成
+- `[!]` 阻塞
+- `[~]` 已拆出到未来优化，不阻塞第一版交付
+
+### 0.5 优先级规则
+
+- `P0` > `P1` > `P2`...
+
+### 0.6 完成规则
+
+任务只能在同时满足以下条件后标记为 `[x]`：
+
+1. 达到验收标准。
+2. UI 关联任务已经处理或标记。
+3. 输出文档已经生成，相关文档已经更新。
+4. 相关代码和文档已经提交，并通过代码审查。
 
 ---
 
@@ -217,7 +238,7 @@ V1 不强制交付：
 
 ## Stage V1-S0：现状冻结与交付边界
 
-### [ ] NW-V1-S0-001 P0 当前实现审计
+### [x] NW-V1-S0-001 P0 当前实现审计
 
 任务目标：确认当前 Demo 中哪些能力可复用、哪些是临时实现、哪些存在重复事实源。
 
@@ -228,10 +249,9 @@ V1 不强制交付：
 - `src/services/job_service.py`
 - `api/routers/ui/jobs.py`
 - `web/src/`
-- `docs/WebOnly-Refactor-New-TaskList.md`
-- `docs/WebUserManual.md`
+- `docs/bak/WebUserManual.md`
 
-允许修改：
+输出：
 
 - `docs/New-Web-Current-State-Audit.md`
 
@@ -260,9 +280,16 @@ UI 关联任务：
 - `UI-V1-001 Web UI 临时策略与路由规划`
 - `UI-V1-003 基础 Layout 与导航`
 
+完成情况：
+
+- 已完成。
+- 已输出审计文档：[docs/New-Web-Current-State-Audit.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-Current-State-Audit.md)
+- 审计结论已用于后续任务分解，当前不再补充业务代码。
+- 关联 UI 任务中，`UI-V1-003` 已完成，`UI-V1-001` 仍待处理。
+
 ---
 
-### [ ] NW-V1-S0-002 P0 建立迁移矩阵
+### [-] NW-V1-S0-002 P0 建立迁移矩阵
 
 任务目标：建立旧 CLI、旧脚本、现有 Web/API/Job 到新 Web/API/Worker 架构的完整映射。
 
@@ -305,9 +332,17 @@ UI 关联任务：
 - `UI-V1-004 Job List 页面`
 - `UI-V1-005 Job Detail 页面`
 
+完成情况：
+
+- 已完成迁移矩阵。
+- 已输出迁移矩阵文档：[docs/New-Web-Migration-Matrix.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-Migration-Matrix.md)
+- 已覆盖现有 JobDefinition、WorkflowDefinition、CLI 入口和现有 UI Job / Workflow 事实源。
+- 已补齐并复核 `cli/migrate.py` 的 `upgrade/downgrade` 映射口径。
+- 关联 UI 任务中，`UI-V1-001`、`UI-V1-004`、`UI-V1-005` 仍未完成，尚不适合提为完成状态。
+
 ---
 
-### [ ] NW-V1-S0-003 P0 定义 V1 验收清单
+### [x] NW-V1-S0-003 P0 定义 V1 验收清单
 
 任务目标：定义 V1 可交付版本的验收口径。
 
@@ -336,6 +371,14 @@ UI 关联任务：
 UI 关联任务：
 
 - `UI-V1-011 Web UI 基础测试和验收`
+
+完成情况：
+
+- 已完成 V1 验收清单定义。
+- 已输出验收文档：[docs/New-Web-V1-Acceptance.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-V1-Acceptance.md)
+- 已明确 V1 仅覆盖 article_pipeline、Job Center、Step Timeline、Artifact、Config Snapshot、权限、失败/重试/取消/空数据、人工验收路径和 E2E 命令。
+- 已将各验收项映射到主 Task ID 与 UI Task ID，且未把 V2/V3 能力列为 V1 阻断项。
+- 关联 UI 任务 `UI-V1-011` 仍作为后续测试与人工验收任务保留，当前不强制转完成状态。
 
 ---
 
@@ -1349,6 +1392,51 @@ UI 关联任务：
 
 ---
 
+### [ ] NW-V2-S4-003 P0 路由兼容层收口与旧入口退役
+
+任务目标：在 V2 正式工作台收口阶段冻结 legacy 路由，避免旧入口继续扩张导致维护复杂度失控。
+
+允许修改：
+
+- `docs/New-Web-UI-Routing.md`
+- `web/src/app/router.tsx`
+- `web/src/app/navigation.ts`
+- `web/src/routes/*`
+
+禁止修改：
+
+- 不再新增 legacy 功能入口。
+- 不把旧入口当作正式导航展示。
+- 不允许 canonical 与 legacy 分叉演进。
+
+实现要求：
+
+1. 所有正式导航只指向 canonical 路由。
+2. legacy 路由仅保留历史链接和过渡壳。
+3. 文档明确每个 legacy 入口的退役阶段。
+4. 兼容层不得再承载新业务。
+
+验收标准：
+
+- V2 页面只对外展示 canonical 路由。
+- legacy 入口不再出现在正式导航中。
+- 路由文档、导航文档和验收文档一致。
+- 兼容层退出条件清晰可查。
+
+UI 关联任务：
+
+- `UI-V2-001 正式 Web 信息架构`
+- `UI-V2-004 Dashboard 首页`
+- `UI-V2-008 Web UI 错误恢复体验`
+- `UI-V1-001 Web UI 临时策略与路由规划`
+
+完成情况：
+
+- 计划项，尚未执行。
+- 用于确保 V2 收口时不会继续膨胀 legacy 入口。
+
+---
+
 # V3：完整交付版本
 
 ## V3 交付目标
@@ -1759,6 +1847,52 @@ UI 关联任务：
 
 ---
 
+### [ ] NW-V3-S3-002 P0 路由兼容层最终退役
+
+任务目标：在最终发布验收阶段删除所有 legacy 路由别名与临时壳，只保留 canonical 路由。
+
+允许修改：
+
+- `docs/New-Web-UI-Routing.md`
+- `docs/New-Web-Final-Acceptance.md`
+- `docs/New-Web-Deployment-Guide.md`
+- `docs/New-Web-UserManual.md`
+- `web/src/app/router.tsx`
+- `web/src/app/navigation.ts`
+
+禁止修改：
+
+- 不再保留 `/legacy/*` 临时壳。
+- 不再保留 legacy 路由别名。
+- 不允许新增任何非 canonical 入口。
+
+实现要求：
+
+1. 删除所有 legacy 映射。
+2. 导航、文档、E2E 只使用 canonical 路由。
+3. 验证旧入口不再可被正式用户路径引用。
+4. 只保留最终需要的页面和路线。
+
+验收标准：
+
+- 旧入口已经从正式文档和导航中清除。
+- 兼容层不再作为长期事实源存在。
+- 最终验收文档与实际路由完全一致。
+- 维护者只需要理解一套 canonical 路由。
+
+UI 关联任务：
+
+- `UI-V3-012Final UX Review`
+- `UI-V3-013 User Manual Coverage Verification`
+- `UI-V2-001 正式 Web 信息架构`
+
+完成情况：
+
+- 计划项，尚未执行。
+- 用于 V3 发布前完成最终路由收口。
+
+---
+
 ## 5. 主任务与 UI 任务映射表
 
 | 主任务 | 必须同步检查的 UI 任务 |
@@ -1786,11 +1920,13 @@ UI 关联任务：
 | NW-V2-S3-002 | UI-V2-006, UI-V2-007, UI-V2-008 |
 | NW-V2-S4-001 | UI-V2-001, UI-V2-004, UI-V2-008, UI-V2-009 |
 | NW-V2-S4-002 | UI-V2 全部正式工作台 |
+| NW-V2-S4-003 | UI-V2-001, UI-V2-004, UI-V2-008, UI-V1-001 |
 | NW-V3-S1-001 | UI-V3-001 |
 | NW-V3-S1-002 | UI-V3-002, UI-V3-003 |
 | NW-V3-S2-001 | UI-V3-011 |
 | NW-V3-S2-002 | UI-V3-004, UI-V3-005, UI-V3-010 |
 | NW-V3-S3-001 | UI-V3-016, UI-V3-013 |
+| NW-V3-S3-002 | UI-V3-012, UI-V3-013, UI-V2-001 |
 
 ---
 
@@ -1822,5 +1958,6 @@ UI 关联任务：
 4. 旧 Workflow UI Definition 可通过 bridge 使用，但新增 workflow 必须有 Runtime Contract。
 5. 临时 Web UI 可在 V2/V3 重做，但不能破坏 API / Runtime Contract。
 6. 兼容层删除前必须有迁移矩阵、UI 页面映射和 E2E 覆盖。
+7. 路由兼容层必须在 `docs/New-Web-UI-Routing.md` 中标明 canonical、legacy 和退役阶段，V2 收口、V3 删除。
 
 ---

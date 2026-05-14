@@ -142,9 +142,9 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-001 P0 Web UI 临时策略与路由规划
+### [x] UI-V1-001 P0 Web UI 临时策略与路由规划
 
-任务目标：明确 V1 UI 是临时验收入口，同时规划不会阻碍 V2/V3 的正式路由。
+任务目标：明确 V1 UI 是临时验收入口，同时建立单一 canonical 路由、显式 legacy 兼容层和明确退役计划，不阻碍 V2/V3 的正式路由。
 
 当前相关文件：
 
@@ -152,6 +152,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - `api/routers/ui/jobs.py`
 - `src/services/job_registry.py`
 - `src/services/workflow_service.py`
+- `docs/New-Web-UI-Routing.md`
 
 允许修改：
 
@@ -177,8 +178,9 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
    - `/artifacts`
    - `/settings`
 2. 未实现页面必须显示明确 placeholder。
-3. 现有临时页面可以挂到 `/legacy/*`。
-4. 路由文档说明 V2/V3 如何扩展。
+3. `legacy` 入口只允许作为兼容层存在，不得与 canonical 路由并行扩张。
+4. 路由文档必须说明每个 legacy 入口的 canonical 映射和退役阶段。
+5. 现有临时页面可以挂到 `/legacy/*`，但必须在文档里标记退出条件。
 
 状态要求：
 
@@ -196,6 +198,15 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 - `NW-V1-S0-001`
 - `NW-V1-S0-003`
+
+完成情况：
+
+- 已建立单一 canonical 路由和显式 legacy 兼容层。
+- 已输出路由文档：[docs/New-Web-UI-Routing.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-UI-Routing.md)
+- 已补齐 `/dashboard`、`/jobs/:jobId`、`/workflows/:workflowId/run`、`/articles`、`/legacy/*` 的路由与占位页。
+- 已把 `/`、`/overview`、`/workflows/:workflowId` 作为 legacy 入口收口到 canonical 路由。
+- 已补充路由解析测试：[web/src/app/route-registry.test.ts](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/app/route-registry.test.ts)
+- 兼容层退役计划已同步写入 V2/V3 任务阶段。
 
 ---
 
@@ -255,7 +266,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-003 P0 基础 Layout 与导航
+### [x] UI-V1-003 P0 基础 Layout 与导航
 
 任务目标：建立统一页面框架，为后续业务工作台提供稳定入口。
 
@@ -300,6 +311,12 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 主任务关联：
 
 - `NW-V1-S0-003`
+
+完成情况：
+
+- 已完成统一页面框架与基础导航。
+- 当前实现已包含 Sidebar、Header、Content、当前页面高亮和权限入口控制。
+- 未生成单独文档，当前以代码实现为准。
 
 ---
 

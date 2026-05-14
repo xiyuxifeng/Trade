@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -162,6 +162,7 @@ function ParamFieldList({ step }: { step: WorkflowStep }) {
 
 export function WorkflowCenter() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams<{ workflowId?: string }>();
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
@@ -181,10 +182,16 @@ export function WorkflowCenter() {
 
   useEffect(() => {
     if (!workflows.length || !selectedWorkflow) return;
-    if (!params.workflowId || params.workflowId !== selectedWorkflow.workflow_id) {
-      navigate(`/workflows/${selectedWorkflow.workflow_id}`, { replace: true });
+    const canonicalPath = `/workflows/${selectedWorkflow.workflow_id}/run`;
+    const legacyPath = `/workflows/${selectedWorkflow.workflow_id}`;
+    if (params.workflowId && params.workflowId !== selectedWorkflow.workflow_id) {
+      navigate(canonicalPath, { replace: true });
+      return;
     }
-  }, [navigate, params.workflowId, selectedWorkflow, workflows.length]);
+    if (location.pathname === legacyPath) {
+      navigate(canonicalPath, { replace: true });
+    }
+  }, [location.pathname, navigate, params.workflowId, selectedWorkflow, workflows.length]);
 
   useEffect(() => {
     if (!selectedWorkflow) return;
@@ -238,15 +245,15 @@ export function WorkflowCenter() {
             ) : (
               <div className="grid gap-4">
                 {workflows.map((workflow) => (
-                  <WorkflowCatalogCard
-                    active={workflow.workflow_id === selectedWorkflow?.workflow_id}
-                    key={workflow.workflow_id}
-                    onSelect={() => {
-                      setSelectedStepId(workflow.steps[0]?.step_id ?? null);
-                      navigate(`/workflows/${workflow.workflow_id}`);
-                    }}
-                    workflow={workflow}
-                  />
+                    <WorkflowCatalogCard
+                      active={workflow.workflow_id === selectedWorkflow?.workflow_id}
+                      key={workflow.workflow_id}
+                      onSelect={() => {
+                        setSelectedStepId(workflow.steps[0]?.step_id ?? null);
+                        navigate(`/workflows/${workflow.workflow_id}/run`);
+                      }}
+                      workflow={workflow}
+                    />
                 ))}
               </div>
             )}
@@ -427,7 +434,7 @@ export function WorkflowCenter() {
                     <TabsContent value="run">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
                         <WorkflowParameterForm
-                          onSubmitted={(jobId) => navigate(`/jobs?jobId=${encodeURIComponent(jobId)}`)}
+                          onSubmitted={(jobId) => navigate(`/jobs/${encodeURIComponent(jobId)}`)}
                           workflow={selectedWorkflow}
                         />
 

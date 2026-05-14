@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,13 +34,6 @@ function getErrorMessage(error: unknown) {
 }
 
 function statusVariant(status: string) {
-  const mapping: Record<string, string> = {
-    pending: '等待中',
-    running: '运行中',
-    success: '成功',
-    failed: '失败',
-    cancelled: '已取消',
-  };
   if (status === 'success') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'destructive';
   if (status === 'running') return 'info';
@@ -130,19 +123,21 @@ function AuditEventCard({ event }: { event: JobAuditEvent }) {
 export function JobsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const params = useParams<{ jobId?: string }>();
   const { canAccess, principal } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const jobIdFromQuery = searchParams.get('jobId');
+  const jobIdFromRoute = params.jobId?.trim();
+  const jobIdFromQuery = searchParams.get('jobId')?.trim();
   const [status, setStatus] = useState('');
   const [jobType, setJobType] = useState('');
   const [createdBy, setCreatedBy] = useState('');
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(() => jobIdFromQuery);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(() => jobIdFromRoute ?? jobIdFromQuery ?? null);
   const [rerunOpen, setRerunOpen] = useState(false);
   const canOperateJobs = canAccess('operator');
 
   useEffect(() => {
-    setSelectedJobId(jobIdFromQuery);
-  }, [jobIdFromQuery]);
+    setSelectedJobId(jobIdFromRoute ?? jobIdFromQuery ?? null);
+  }, [jobIdFromQuery, jobIdFromRoute]);
 
   const jobsQuery = useQuery<JobsListResponse, ApiError>({
     queryKey: ['jobs', { status, jobType, createdBy }],
@@ -200,11 +195,7 @@ export function JobsPage() {
       setRerunOpen(false);
       if (data.job?.id) {
         setSelectedJobId(data.job.id);
-        setSearchParams((current) => {
-          const next = new URLSearchParams(current);
-          next.set('jobId', data.job.id);
-          return next;
-        });
+        navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
       }
     },
   });
@@ -312,11 +303,7 @@ export function JobsPage() {
                             size="sm"
                             onClick={() => {
                               setSelectedJobId(job.id);
-                              setSearchParams((current) => {
-                                const next = new URLSearchParams(current);
-                                next.set('jobId', job.id);
-                                return next;
-                              });
+                              navigate(`/jobs/${encodeURIComponent(job.id)}`);
                             }}
                           >
                             详情
@@ -356,6 +343,10 @@ export function JobsPage() {
         onOpenChange={(open) => {
           if (open) return;
           setSelectedJobId(null);
+          if (jobIdFromRoute) {
+            navigate('/jobs', { replace: true });
+            return;
+          }
           setSearchParams((current) => {
             const next = new URLSearchParams(current);
             next.delete('jobId');

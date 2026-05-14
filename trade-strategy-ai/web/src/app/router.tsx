@@ -3,12 +3,13 @@ import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { BacktestsPage } from '@/pages/backtests';
 import { AlertsPage } from '@/pages/alerts';
+import { ArticlesPage } from '@/pages/articles';
+import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { MarketPage } from '@/pages/market';
 import { MarketStatePage } from '@/pages/market-state';
 import { PersonaPage } from '@/pages/persona';
 import { OpsPage } from '@/pages/ops';
-import { OverviewPage } from '@/pages/overview';
 import { DataHealthPage } from '@/pages/data-health';
 import { ImportsPage } from '@/pages/imports';
 import { ReportsPage } from '@/pages/reports';
@@ -18,9 +19,21 @@ import { SignalsPage } from '@/pages/signals';
 import { KaipanPage } from '@/pages/kaipan';
 import { StrategyStudioPage } from '@/pages/strategy-studio';
 import { StrategiesPage } from '@/pages/strategies';
+import { LegacyCompatibilityPage } from '@/pages/legacy';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
 import { UsersPage } from '@/pages/users';
+import { Navigate, useParams } from 'react-router-dom';
+
+function DashboardRedirect() {
+  return <Navigate to="/dashboard" replace />;
+}
+
+function WorkflowLegacyRedirect() {
+  const params = useParams<{ workflowId?: string }>();
+  const workflowId = params.workflowId?.trim();
+  return workflowId ? <Navigate to={`/workflows/${workflowId}/run`} replace /> : <Navigate to="/workflows" replace />;
+}
 
 function NotFoundPage() {
   return (
@@ -44,10 +57,22 @@ export const appRouter = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: <OverviewPage />,
+        element: <DashboardRedirect />,
+      },
+      {
+        path: 'overview',
+        element: <DashboardRedirect />,
+      },
+      {
+        path: 'dashboard',
+        element: <DashboardPage />,
       },
       {
         path: 'jobs',
+        element: <JobsPage />,
+      },
+      {
+        path: 'jobs/:jobId',
         element: <JobsPage />,
       },
       {
@@ -56,7 +81,15 @@ export const appRouter = createBrowserRouter([
       },
       {
         path: 'workflows/:workflowId',
+        element: <WorkflowLegacyRedirect />,
+      },
+      {
+        path: 'workflows/:workflowId/run',
         element: <WorkflowsPage />,
+      },
+      {
+        path: 'articles',
+        element: <ArticlesPage />,
       },
       {
         path: 'artifacts',
@@ -125,6 +158,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'ops',
         element: <OpsPage />,
+      },
+      {
+        path: 'legacy/*',
+        element: <LegacyCompatibilityPage />,
       },
       {
         path: '*',

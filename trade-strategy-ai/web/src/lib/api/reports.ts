@@ -1,4 +1,4 @@
-import { buildApiHeaders } from './http';
+import { fetchRootJson, fetchRootText } from './http';
 import type {
   DailyReportDetail,
   EvaluationResultDetail,
@@ -39,28 +39,5 @@ export async function downloadEvaluationHtml(date: string) {
 }
 
 async function fetchReportHtml(kind: ReportKind, date: string) {
-  const headers = buildApiHeaders();
-  headers.set('Accept', 'text/html');
-
-  const response = await fetch(`/reports/${kind}/${date}/html`, {
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Report HTML load failed');
-  }
-  return response.text();
-}
-
-async function fetchRootJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = buildApiHeaders(init?.headers);
-  headers.set('Accept', 'application/json');
-
-  const response = await fetch(path, {
-    ...init,
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Report request failed');
-  }
-  return (await response.json()) as T;
+  return fetchRootText(`/reports/${kind}/${date}/html`);
 }

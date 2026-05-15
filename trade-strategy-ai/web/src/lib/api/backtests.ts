@@ -1,4 +1,4 @@
-import { buildApiHeaders } from './http';
+import { fetchRootJson, fetchRootText } from './http';
 import type {
   BacktestJobSubmission,
   BacktestResultResponse,
@@ -13,30 +13,6 @@ type BacktestResultsQuery = {
   skip?: number;
   limit?: number;
 };
-
-async function fetchRootJson<T>(path: string): Promise<T> {
-  const headers = buildApiHeaders();
-  headers.set('Accept', 'application/json');
-  const response = await fetch(path, {
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Backtest request failed');
-  }
-  return (await response.json()) as T;
-}
-
-async function fetchRootText(path: string): Promise<string> {
-  const headers = buildApiHeaders();
-  headers.set('Accept', 'text/markdown, text/plain;q=0.9, */*;q=0.8');
-  const response = await fetch(path, {
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Backtest report load failed');
-  }
-  return response.text();
-}
 
 export function listBacktestResults(query: BacktestResultsQuery = {}) {
   const params = new URLSearchParams();

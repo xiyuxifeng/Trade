@@ -1,26 +1,10 @@
-import { buildApiHeaders } from './http';
+import { fetchRootJson } from './http';
 import type {
   AlertActionResponse,
   AlertHistoryQuery,
   AlertHistoryItem,
   AlertHistoryResponse,
 } from '@/types/alerts';
-
-async function fetchRootJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = buildApiHeaders(init?.headers);
-  headers.set('Accept', 'application/json');
-  if (init?.method === 'POST' || init?.method === 'PUT' || init?.method === 'PATCH') {
-    headers.set('Content-Type', 'application/json');
-  }
-  const response = await fetch(path, {
-    ...init,
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Alert request failed');
-  }
-  return (await response.json()) as T;
-}
 
 export function listAlertHistory(query: AlertHistoryQuery = {}) {
   const params = new URLSearchParams();

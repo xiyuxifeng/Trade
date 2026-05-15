@@ -1,5 +1,5 @@
 import type { ArtifactsListResponse } from '@/types/artifacts';
-import { buildApiHeaders, fetchJson, getApiBaseUrl } from './http';
+import { fetchBlob, fetchJson } from './http';
 
 type ArtifactsQuery = {
   kind?: string;
@@ -41,14 +41,5 @@ export function getArtifact(artifactId: string) {
 }
 
 export async function downloadArtifact(artifactId: string) {
-  const headers = buildApiHeaders();
-  headers.set('Accept', '*/*');
-
-  const response = await fetch(`${getApiBaseUrl()}/artifacts/${artifactId}/download`, {
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Download failed');
-  }
-  return response.blob();
+  return fetchBlob(`/artifacts/${artifactId}/download`);
 }

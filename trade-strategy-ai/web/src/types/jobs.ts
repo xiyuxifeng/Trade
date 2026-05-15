@@ -3,8 +3,8 @@ export type JobRecord = {
   job_type: string;
   status: string;
   params: Record<string, unknown>;
-  result: unknown;
-  error: unknown;
+  result: Record<string, unknown> | null;
+  error: JobError | string | null;
   artifacts: JobArtifactRef[];
   created_by: string;
   idempotency_key: string | null;
@@ -24,6 +24,8 @@ export type JobRecord = {
   audit_events: JobAuditEvent[];
   created_at: string;
   updated_at: string;
+  config_snapshot_path: string | null;
+  config_snapshot: JobConfigSnapshot | null;
 };
 
 export type JobAuditEvent = {
@@ -40,9 +42,47 @@ export type JobAuditEvent = {
 };
 
 export type JobArtifactRef = {
+  artifact_id: string;
+  job_id: string;
+  workflow_id: string | null;
+  step_id: string | null;
   kind: string;
-  path: string;
+  title: string;
+  summary: string | null;
+  safe_download_url: string | null;
+  download_token: string | null;
+  size_bytes: number | null;
+  created_at: string;
+  visibility: 'public' | 'internal' | 'private';
   metadata: Record<string, unknown>;
+  storage_ref: {
+    source: 'file' | 'db' | 'external';
+    logical_id: string;
+    relative_path: string | null;
+    uri: string | null;
+    metadata: Record<string, unknown>;
+  } | null;
+};
+
+export type JobConfigSnapshot = {
+  config_snapshot_id: string;
+  job_id: string | null;
+  config_path: string;
+  config_source: string;
+  config_hash: string;
+  masked_snapshot: Record<string, unknown>;
+  captured_at: string;
+  snapshot_path: string;
+};
+
+export type JobError = {
+  type?: string;
+  message?: string;
+  detail?: string | Record<string, unknown> | null;
+  request_id?: string | null;
+  code?: string | null;
+  retryable?: boolean | null;
+  metadata?: Record<string, unknown>;
 };
 
 export type JobsListResponse = {

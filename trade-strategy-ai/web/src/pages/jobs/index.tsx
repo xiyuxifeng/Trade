@@ -84,9 +84,13 @@ function ArtifactCard({
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-medium text-slate-100">{artifact.kind}</p>
-          <p className="mt-1 break-all text-xs text-slate-500">{artifact.path}</p>
+        <div className="min-w-0">
+          <p className="font-medium text-slate-100">{artifact.title}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {artifact.kind}
+            {artifact.step_id ? ` · step ${artifact.step_id}` : ''}
+          </p>
+          <p className="mt-2 text-sm text-slate-300">{artifact.summary ?? '暂无摘要。'}</p>
         </div>
         <Button variant="outline" size="sm" onClick={onOpenArtifacts}>
           在产物中心查看
@@ -97,6 +101,9 @@ function ArtifactCard({
         <pre className="mt-2 max-h-40 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
           {JSON.stringify(artifact.metadata, null, 2)}
         </pre>
+      </div>
+      <div className="mt-3 text-xs text-slate-500">
+        {artifact.safe_download_url ? '包含安全下载入口。' : '暂无下载入口。'}
       </div>
     </div>
   );
@@ -114,6 +121,37 @@ function stringifyError(error: unknown) {
     return JSON.stringify(payload, null, 2);
   }
   return '任务失败';
+}
+
+function maskAbsolutePath(value: string | null | undefined) {
+  if (!value) {
+    return '未记录';
+  }
+  if (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) {
+    return '[已隐藏路径]';
+  }
+  return value;
+}
+
+function sanitizeForDisplay(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return maskAbsolutePath(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForDisplay(item));
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return Object.fromEntries(entries.map(([key, item]) => [key, sanitizeForDisplay(item)]));
+  }
+  return value;
+}
+
+function stringifyJson(value: unknown) {
+  if (value === null || value === undefined) {
+    return '未记录';
+  }
+  return JSON.stringify(sanitizeForDisplay(value), null, 2);
 }
 
 function buildTimelineItems(detail: NonNullable<JobDetailResponse['job']>): StepTimelineItem[] {
@@ -417,14 +455,14 @@ export function JobsPage() {
                 <Field label="执行器" value={detail.worker_id} />
                 <Field label="开始时间" value={formatTimestamp(detail.started_at)} />
                 <Field label="完成时间" value={formatTimestamp(detail.finished_at)} />
-                <Field label="任务目录" value={selectedJobQuery.data?.job_dir} />
-                <Field label="结果路径" value={selectedJobQuery.data?.result_path} />
+                <Field label="配置快照 ID" value={detail.config_snapshot?.config_snapshot_id} />
+                <Field label="配置哈希" value={detail.config_snapshot?.config_hash} />
               </div>
 
               <div className="grid gap-3">
                 <p className="text-sm font-medium text-slate-200">参数</p>
                 <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
-                  {JSON.stringify(detail.params, null, 2)}
+                  {stringifyJson(detail.params)}
                 </pre>
               </div>
 
@@ -450,6 +488,24 @@ export function JobsPage() {
               </div>
 
               <div className="grid gap-3">
+                <p className="text-sm font-medium text-slate-200">配置快照</p>
+                {!detail.config_snapshot ? (
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">该任务未关联配置快照。</div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Field label="来源" value={maskAbsolutePath(detail.config_snapshot.config_source)} />
+                      <Field label="时间" value={formatTimestamp(detail.config_snapshot.captured_at)} />
+                      <Field label="快照路径" value={detail.config_snapshot.snapshot_path ? '已生成' : '未记录'} />
+                    </div>
+                    <pre className="max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                      {stringifyJson(detail.config_snapshot.masked_snapshot)}
+                    </pre>
+                  </>
+                )}
+              </div>
+
+              <div className="grid gap-3">
                 <p className="text-sm font-medium text-slate-200">产物</p>
                 {!detail.artifacts.length ? (
                   <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
@@ -460,7 +516,7 @@ export function JobsPage() {
                     {detail.artifacts.map((artifact, index) => (
                       <ArtifactCard
                         artifact={artifact}
-                        key={`${artifact.kind}-${artifact.path}-${index}`}
+                        key={`${artifact.artifact_id}-${index}`}
                         onOpenArtifacts={() => navigate(`/artifacts?jobId=${encodeURIComponent(detail.id)}`)}
                       />
                     ))}

@@ -394,7 +394,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-005 P0 Job Detail 页面
+### [x] UI-V1-005 P0 Job Detail 页面
 
 任务目标：让用户理解一个 Job 的输入、执行过程、结果、失败原因和产物。
 
@@ -482,6 +482,13 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - `NW-V1-S1-003`
 - `NW-V1-S2-002`
 - `NW-V1-S3-002`
+
+完成情况：
+
+- 新增 [web/src/pages/jobs/JobDetailPage.tsx](/Users/wanghui/Documents/Claude/trade-strategy-ai/web/src/pages/jobs/JobDetailPage.tsx)，作为独立 Job Detail 页面。
+- Job Detail 直接消费后端 `Job / Step / Artifact / Config Snapshot` 契约，不展示服务器绝对路径。
+- 详情页覆盖参数快照、步骤时间线、日志、错误、产物与配置快照，并支持重试/取消/刷新。
+- 旧的 Jobs 列表页仍保留临时抽屉入口，但 canonical 详情入口已切换为 `/jobs/:jobId`。
 
 ---
 

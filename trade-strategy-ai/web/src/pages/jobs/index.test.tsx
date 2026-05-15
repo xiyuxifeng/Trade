@@ -37,7 +37,35 @@ describe('JobsPage', () => {
       params: { date: '2026-05-09' },
       result: null,
       error: null,
-      artifacts: [{ kind: 'report', path: 'data/jobs/job-1/result.json', metadata: { source: 'job' } }],
+      artifacts: [
+        {
+          artifact_id: 'artifact-1',
+          job_id: 'job-1',
+          workflow_id: null,
+          step_id: null,
+          kind: 'report',
+          title: '抓取报告',
+          summary: '任务执行结果摘要',
+          safe_download_url: '/api/ui/v1/artifacts/artifact-1/download',
+          download_token: null,
+          size_bytes: 128,
+          created_at: '2026-05-09T08:05:00Z',
+          visibility: 'internal',
+          metadata: { source: 'job' },
+          storage_ref: null,
+        },
+      ],
+      config_snapshot: {
+        config_snapshot_id: 'snapshot-1',
+        job_id: 'job-1',
+        config_path: 'config/app.yaml',
+        config_source: '/Users/example/project/config/app.yaml',
+        config_hash: 'hash-1',
+        masked_snapshot: { app: { api_key: '***' } },
+        captured_at: '2026-05-09T07:55:00Z',
+        snapshot_path: '/tmp/job-1/config_snapshot.json',
+      },
+      config_snapshot_path: '/tmp/job-1/config_snapshot.json',
       audit_events: [
         {
           id: 'audit-1',
@@ -109,7 +137,7 @@ describe('JobsPage', () => {
     );
 
     expect(await screen.findByText('任务详情')).toBeInTheDocument();
-    expect(await screen.findByText('report')).toBeInTheDocument();
+    expect(await screen.findByText('抓取报告')).toBeInTheDocument();
     expect(await screen.findByText('步骤时间线')).toBeInTheDocument();
     expect(await screen.findByText('web · create')).toBeInTheDocument();
 
@@ -127,6 +155,8 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [],
+      config_snapshot: null,
+      config_snapshot_path: null,
       audit_events: [],
       created_by: 'web',
       idempotency_key: null,
@@ -154,6 +184,8 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [],
+      config_snapshot: null,
+      config_snapshot_path: null,
       audit_events: [],
       created_by: 'web',
       idempotency_key: null,
@@ -205,7 +237,13 @@ describe('JobsPage', () => {
       artifacts_path: '/tmp/job-2/artifacts.json',
     });
 
-    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?jobId=job-1']);
+    renderWithRouter(
+      [
+        { path: '/jobs', element: <JobsPage /> },
+        { path: '/jobs/:jobId', element: <div>job detail page</div> },
+      ],
+      ['/jobs?jobId=job-1'],
+    );
 
     expect(await screen.findByText('任务详情')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '重新运行任务' }));
@@ -232,6 +270,8 @@ describe('JobsPage', () => {
       result: null,
       error: null,
       artifacts: [],
+      config_snapshot: null,
+      config_snapshot_path: null,
       audit_events: [],
       created_by: 'web',
       idempotency_key: null,

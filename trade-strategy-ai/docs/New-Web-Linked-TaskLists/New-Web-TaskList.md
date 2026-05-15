@@ -639,7 +639,7 @@ UI 关联任务：
 
 ## Stage V1-S2：Job/Workflow/Step 执行底座
 
-### [ ] NW-V1-S2-001 P0 实现 Step Registry
+### [x] NW-V1-S2-001 P0 实现 Step Registry
 
 任务目标：建立统一 Step 登记入口，让业务动作可独立运行、可被 Workflow 编排、可测试。
 
@@ -676,6 +676,12 @@ UI 关联任务：
 
 - `UI-V1-006 Step Timeline Component`
 - `UI-V1-007 Schema-driven Workflow Run Form`
+
+完成说明：
+
+- 新增 `src/services/step_registry.py`，以 `name + version` 作为稳定键实现显式注册表。
+- 新增 `tests/services/test_step_registry.py`，覆盖注册、查询、重复注册、未注册和输入校验。
+- 保持 registry 为进程内 canonical 定义入口，不引入动态插件系统或自动发现机制。
 
 ---
 

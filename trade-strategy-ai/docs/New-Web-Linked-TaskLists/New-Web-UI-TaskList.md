@@ -685,7 +685,7 @@ Artifact 类型至少支持：
 
 ---
 
-### [ ] UI-V1-009 P0 Config Snapshot Readonly Panel
+### [x] UI-V1-009 P0 Config Snapshot Readonly Panel
 
 任务目标：展示 Job 使用的脱敏配置快照，支撑复盘和问题定位。
 
@@ -730,6 +730,14 @@ Artifact 类型至少支持：
 - Job Detail 能展示脱敏配置。
 - Secret 字段显示为 masked。
 - 无 snapshot 时有明确提示。
+
+完成情况：
+
+- 已新增 [`web/src/components/profiles/ConfigSnapshotPanel.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/profiles/ConfigSnapshotPanel.tsx) 作为 Job Detail 内的只读配置快照面板，统一展示 `config_source`、`config_hash`、`profile_id`、`snapshot_created_at`、`validation_status`、masked sections 以及缺失/无效字段。
+- 已将 Job Detail 中的脱敏配置块收口到 [`web/src/pages/jobs/JobDetailPage.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/pages/jobs/JobDetailPage.tsx)，不新增独立配置快照页面或导航入口。
+- 已补充 [`web/src/components/profiles/config-snapshot-panel.test.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/profiles/config-snapshot-panel.test.tsx) 回归测试，覆盖 loading、no snapshot、invalid config、permission denied 以及脱敏内容展示。
+- 已扩展 [`web/src/types/jobs.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/types/jobs.ts) 中的 `JobConfigSnapshot`，为后续如果后端补充 `profile_id` / `validation_status` / `masked_sections` / `missing_fields` / `invalid_fields` 时提供向前兼容的只读展示边界。
+- 已通过 `ConfigSnapshotPanel` 与 `JobDetailPage` 相关回归，确认 Job Detail 继续作为单一 Job 解释面，不引入新的正式入口。
 
 主任务关联：
 

@@ -73,6 +73,11 @@ export type JobConfigSnapshot = {
   masked_snapshot: Record<string, unknown>;
   captured_at: string;
   snapshot_path: string;
+  profile_id?: string | null;
+  validation_status?: string | null;
+  masked_sections?: string[] | null;
+  missing_fields?: string[] | null;
+  invalid_fields?: string[] | null;
 };
 
 export type JobError = {

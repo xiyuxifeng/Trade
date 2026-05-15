@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArtifactPanel } from '@/components/artifacts/artifact-panel';
 import { formatTimestamp, maskAbsolutePath, stringifyJson } from '@/components/artifacts/artifact-utils';
+import { ConfigSnapshotPanel } from '@/components/profiles/ConfigSnapshotPanel';
 import { PageHeader } from '@/components/layout/page-header';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
@@ -382,18 +383,7 @@ export function JobDetailPage() {
                 <Field label="快照哈希" value={configSnapshot?.config_hash} />
                 <Field label="快照来源" value={maskAbsolutePath(configSnapshot?.config_source)} />
               </div>
-              {configSnapshot ? (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">脱敏配置快照</p>
-                  <pre className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
-                    {stringifyJson(configSnapshot.masked_snapshot)}
-                  </pre>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                  该任务没有配置快照。
-                </div>
-              )}
+              <ConfigSnapshotPanel snapshot={configSnapshot} />
             </div>
           </SectionCard>
 

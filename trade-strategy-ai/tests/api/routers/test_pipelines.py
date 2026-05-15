@@ -13,48 +13,51 @@ from api.main import app
 
 
 @dataclass
-class _FakeWorkflowService:
-    """Pipeline API 测试用的 WorkflowService 替身。"""
+class _FakePipelineApplicationService:
+    """Pipeline API 测试用的 PipelineApplicationService 替身。"""
 
     run_calls: list[dict[str, Any]] = field(default_factory=list)
 
-    async def get_workflow(self, workflow_id: str) -> Any:
-        assert workflow_id == "pipeline"
+    async def list_pipelines(self) -> Any:
         return _result(
             {
-                "workflow": {
-                    "workflow_id": "pipeline",
-                    "title": "数据 Pipeline",
-                    "description": "串联抓取、清洗、抽取、聚类与回归验证。",
-                    "job_type": "pipeline-run",
-                    "permissions": "operator",
-                    "job_definition": {
+                "count": 1,
+                "items": [
+                    {
+                        "pipeline_id": "article_pipeline",
+                        "workflow_id": "article_pipeline",
                         "job_type": "pipeline-run",
-                        "risk": "medium",
-                        "requires_confirmation": False,
-                        "params_schema": {
-                            "description": "Pipeline 参数",
-                            "allow_additional_fields": False,
-                            "fields": {
-                                "config_path": {
-                                    "type": "path",
-                                    "description": "配置文件路径",
-                                    "required": True,
-                                    "enum": [],
-                                }
-                            },
-                        },
+                        "title": "article_pipeline",
+                        "description": "通过 Workflow/Job 体系运行文章处理主链路。",
+                    }
+                ],
+            }
+        )
+
+    async def get_pipeline(self, pipeline_id: str) -> Any:
+        assert pipeline_id == "article_pipeline"
+        return _result(
+            {
+                "pipeline": {
+                    "pipeline_id": "article_pipeline",
+                    "workflow_id": "article_pipeline",
+                    "job_type": "pipeline-run",
+                    "title": "article_pipeline",
+                    "description": "通过 Workflow/Job 体系运行文章处理主链路。",
+                    "workflow": {
+                        "workflow_id": "article_pipeline",
+                        "job_type": "pipeline-run",
                     },
-                    "steps": [],
                 }
             }
         )
 
-    async def run_workflow(self, **kwargs: Any) -> Any:
+    async def run_pipeline(self, **kwargs: Any) -> Any:
         self.run_calls.append(kwargs)
         return _result(
             {
-                "workflow": {"workflow_id": "pipeline", "job_type": "pipeline-run"},
+                "pipeline": {"pipeline_id": "article_pipeline", "workflow_id": "article_pipeline"},
+                "workflow": {"workflow_id": "article_pipeline", "job_type": "pipeline-run"},
                 "job": {"id": "job-article-1", "job_type": "pipeline-run", "status": "pending"},
             }
         )
@@ -70,9 +73,9 @@ def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok")
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
-    from api.routers.ui.pipelines import get_pipeline_workflow_service
+    from api.routers.ui.pipelines import get_pipeline_application_service
 
-    fake_service = _FakeWorkflowService()
+    fake_service = _FakePipelineApplicationService()
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: "test-key"
@@ -83,7 +86,7 @@ async def client() -> AsyncIterator[AsyncClient]:
             source="api_key",
             api_key="operator-key",
         )
-        app.dependency_overrides[get_pipeline_workflow_service] = lambda: fake_service
+        app.dependency_overrides[get_pipeline_application_service] = lambda: fake_service
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             ac.fake_service = fake_service  # type: ignore[attr-defined]
@@ -98,7 +101,7 @@ async def test_article_pipeline_list_detail_and_run(client: AsyncClient) -> None
     listed = await client.get("/api/ui/v1/pipelines")
     assert listed.status_code == 200
     assert listed.json()["items"][0]["pipeline_id"] == "article_pipeline"
-    assert listed.json()["items"][0]["workflow_id"] == "pipeline"
+    assert listed.json()["items"][0]["workflow_id"] == "article_pipeline"
 
     detail = await client.get("/api/ui/v1/pipelines/article_pipeline")
     assert detail.status_code == 200
@@ -111,7 +114,7 @@ async def test_article_pipeline_list_detail_and_run(client: AsyncClient) -> None
     )
     assert run.status_code == 200
     assert run.json()["job"]["id"] == "job-article-1"
-    assert client.fake_service.run_calls[0]["workflow_id"] == "pipeline"  # type: ignore[attr-defined]
+    assert client.fake_service.run_calls[0]["pipeline_id"] == "article_pipeline"  # type: ignore[attr-defined]
     assert client.fake_service.run_calls[0]["audit_source"]["path"] == "/api/ui/v1/pipelines/article_pipeline/run"  # type: ignore[attr-defined]
 
 

@@ -18,6 +18,7 @@ from src.services.job_runner import JobRunner
 from src.services.kaipan_service import KaipanService
 from src.services.market_service import MarketService
 from src.services.optimize_service import OptimizeService
+from src.services.pipeline_application_service import PipelineApplicationService
 from src.services.persona_service import PersonaService
 from src.services.pipeline_service import PipelineService
 from src.services.signal_service import SignalService
@@ -54,6 +55,7 @@ __all__ = [
     "SignalService",
     "KaipanService",
     "OptimizeService",
+    "PipelineApplicationService",
     "RulePoolService",
     "SetupService",
     "StepTimelineService",

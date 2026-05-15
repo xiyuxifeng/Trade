@@ -827,7 +827,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V1-S3-002 P0 接入现有 crawl / pipeline-run / pipeline-step
+### [x] NW-V1-S3-002 P0 接入现有 crawl / pipeline-run / pipeline-step
 
 任务目标：复用现有文章处理能力，不重写业务逻辑。
 
@@ -870,7 +870,7 @@ UI 关联任务：
 
 ---
 
-### [-] NW-V1-S3-003 P0 article_pipeline API
+### [x] NW-V1-S3-003 P0 article_pipeline API
 
 任务目标：提供稳定 API 给 Web UI 触发和查询 article_pipeline。
 
@@ -911,12 +911,11 @@ UI 关联任务：
 
 完成情况：
 
-- 已新增 `api/routers/ui/pipelines.py`，暴露 `GET /api/ui/v1/pipelines`、`GET /api/ui/v1/pipelines/article_pipeline`、`POST /api/ui/v1/pipelines/article_pipeline/run`。
-- `article_pipeline` 当前 canonical 映射到 `WorkflowService` 的 `pipeline` workflow，通过 Workflow / Job 体系创建 `pipeline-run` Job，API Router 不直接执行 pipeline/provider。
-- 已补齐 `GET /api/ui/v1/jobs/{job_id}/timeline` 与 `GET /api/ui/v1/jobs/{job_id}/artifacts`，供 Job Detail / UI-V1 状态展示使用；timeline 当前读取 Job audit events，正式 Step Timeline 仍依赖 `NW-V1-S2-002`。
-- 已更新 `docs/APIReference.md` 和 OpenAPI contract 测试，覆盖新增 pipelines / timeline / artifacts 路由。
-- 已补充 API 测试覆盖 article_pipeline 列表、详情、运行、未知 pipeline 结构化错误、viewer 权限不足。
-- 关联 UI 任务中，`UI-V1-007`、`UI-V1-010` 已完成；当前不标记 `[x]`：`UI-V1-002` 尚未完成验收，`NW-V1-S2-002` 正式 Step Timeline 也尚未落地。
+- 已新增 [`src/services/pipeline_application_service.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/services/pipeline_application_service.py)，作为 `article_pipeline` 的专用应用服务，直接消费 `article_pipeline_spec` 并把执行委托给 `WorkflowRunner`。
+- `article_pipeline` 现在是 `/api/ui/v1/pipelines` 的唯一 canonical 入口，路由不再依赖 `WorkflowService` 的 legacy `pipeline` workflow。
+- `JobService`、`WorkflowRunner`、`JobRunner` 继续负责 config snapshot、Job 生命周期、Step Timeline、Artifact 绑定和现有 pipeline 能力。
+- 已补充 [`tests/unit/services/test_pipeline_application_service.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/unit/services/test_pipeline_application_service.py) 与 [`tests/api/routers/test_pipelines.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/api/routers/test_pipelines.py)，覆盖列表、详情、运行和 unknown pipeline 边界。
+- 已通过 pipeline application service、pipeline router、workflow service、workflow router、OpenAPI contract 与 article pipeline spec 回归，确认 canonical 入口与兼容层边界未回退。
 
 ---
 

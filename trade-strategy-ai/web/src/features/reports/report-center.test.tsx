@@ -83,7 +83,7 @@ describe('ReportCenter', () => {
 
     renderWithRouter([{ path: '/reports', element: <ReportCenter /> }], ['/reports']);
 
-    expect(await screen.findByRole('heading', { name: 'Reports center' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '报告中心' })).toBeInTheDocument();
     await waitFor(() => {
       expect(mockedListDailyReports).toHaveBeenCalledWith(0, 50);
     });

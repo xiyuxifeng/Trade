@@ -921,7 +921,7 @@ UI 关联任务：
 
 ## Stage V1-S4：V1 产品化收口
 
-### [ ] NW-V1-S4-001 P0 V1 E2E 回归
+### [x] NW-V1-S4-001 P0 V1 E2E 回归
 
 任务目标：提供可重复的 V1 回归验证。
 
@@ -940,6 +940,15 @@ UI 关联任务：
 UI 关联任务：
 
 - `UI-V1-011 Web UI 基础测试和验收`
+
+完成情况：
+
+- 新增 `tests/e2e/e2e_runner.py` 作为共享 E2E 编排层，统一封装 `web-acceptance` 与 `cli.main e2e-regression` 的调用。
+- 新增 `tests/e2e/test_article_pipeline_v1.py`，将 V1 回归收束为“CLI smoke gate + Web acceptance”的薄编排；其中真实 CLI 回归默认需要显式启用 `RUN_V1_E2E=1`，避免把产品交付路径重新绑定到 CLI。
+- `web/src/e2e/web-acceptance.test.tsx` 已对齐当前 UI 文案、Job Detail 路由、Workflow submit 后跳转、Artifact / Report / Settings 文案。
+- 补齐了 `reports` 相关单测文案，使 `报告中心` 与实际页面一致。
+- 运行 `pytest tests/e2e/test_e2e_runner.py tests/e2e/test_web_acceptance.py tests/e2e/test_article_pipeline_v1.py -q` 通过，`test_article_pipeline_v1` 默认以 skip 方式保留真实 CLI gate，避免在没有本地 PostgreSQL 的环境里误判失败。
+- 新增 `docs/New-Web-V1-E2E.md` 记录本地验收、失败定位和 CLI smoke 的显式启用方式。
 
 ---
 

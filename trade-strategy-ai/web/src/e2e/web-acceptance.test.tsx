@@ -7,6 +7,7 @@ import { AuthProvider } from '@/features/auth/auth-context';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { OverviewPage } from '@/pages/overview';
 import { JobsPage } from '@/pages/jobs';
+import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { WorkflowsPage } from '@/pages/workflows';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { ReportsPage } from '@/pages/reports';
@@ -379,7 +380,7 @@ beforeEach(() => {
   mockedGetSystemStatus.mockResolvedValue(systemStatus);
   mockedListJobs.mockResolvedValue({ count: 2, total: 2, skip: 0, limit: 50, items: [job1, job2] });
   mockedGetJob.mockImplementation(async (jobId: string) => {
-    const selected = jobId === 'job-2' ? job2 : jobId === 'job-3' ? rerunJob : job1;
+    const selected = jobId === 'job-2' ? job2 : jobId === 'job-3' ? rerunJob : jobId === 'job-4' ? { ...rerunJob, id: 'job-4' } : job1;
     return {
       job: selected,
       job_dir: `/tmp/${jobId}`,
@@ -509,8 +510,10 @@ function renderWebApp(initialPrincipal: CurrentPrincipal) {
         children: [
           { index: true, element: <OverviewPage /> },
           { path: 'jobs', element: <JobsPage /> },
+          { path: 'jobs/:jobId', element: <JobDetailPage /> },
           { path: 'workflows', element: <WorkflowsPage /> },
           { path: 'workflows/:workflowId', element: <WorkflowsPage /> },
+          { path: 'workflows/:workflowId/run', element: <WorkflowsPage /> },
           { path: 'artifacts', element: <ArtifactsPage /> },
           { path: 'reports', element: <ReportsPage /> },
           { path: 'settings', element: <SettingsPage /> },
@@ -535,38 +538,37 @@ describe('WEB-S8-006 acceptance', () => {
     const user = userEvent.setup();
     renderWebApp(adminPrincipal);
 
-    expect(await screen.findByRole('heading', { name: 'Operations at a glance' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '运维概览' })).toBeInTheDocument();
     expect(screen.getByText('系统状态')).toBeInTheDocument();
     expect(screen.getByText('最近任务')).toBeInTheDocument();
     expect(screen.getByText('最近产物')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('link', { name: /^Jobs/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Task Center' })).toBeInTheDocument();
-    await user.click(screen.getAllByRole('button', { name: 'Details' })[0]);
-    expect(await screen.findByRole('heading', { name: 'Job details' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Rerun job' }));
-    expect(await screen.findByRole('heading', { name: 'Confirm rerun' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Confirm rerun' }));
+    await user.click(screen.getAllByRole('link', { name: /^任务/ })[0]);
+    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: '查看详情' })[0]);
+    expect(await screen.findByRole('heading', { name: '任务详情' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重新运行任务' }));
     expect(await screen.findByText('job-3')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('link', { name: /^Workflows/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Guided operations' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^工作流/ })[0]);
+    expect(await screen.findByRole('heading', { name: '引导式操作' })).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: '运行入口' })[0]);
     await user.click(screen.getByRole('button', { name: '继续并确认' }));
     expect(await screen.findByRole('heading', { name: '确认高风险操作' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '确认提交' }));
-    expect(await screen.findByText('工作流已提交到 Job Center。')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '任务详情' })).toBeInTheDocument();
+    expect(await screen.findByText('job-4')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('link', { name: /^Artifacts/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Artifact center' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^产物/ })[0]);
+    expect(await screen.findByRole('heading', { name: '产物中心' })).toBeInTheDocument();
     await user.click(screen.getByText('daily_report.html'));
-    expect(await screen.findByRole('heading', { name: 'Artifact details' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '产物详情' })).toBeInTheDocument();
     expect(screen.getByTitle('HTML 预览')).toHaveAttribute('srcdoc', '<html><body><h1>Daily report preview</h1></body></html>');
-    await user.click(screen.getByRole('button', { name: 'Download' }));
+    await user.click(screen.getByRole('button', { name: '下载' }));
     expect(mockedDownloadArtifact).toHaveBeenCalledWith('artifact-1');
 
-    await user.click(screen.getAllByRole('link', { name: /^Reports/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Reports center' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^报告/ })[0]);
+    expect(await screen.findByRole('heading', { name: '报告中心' })).toBeInTheDocument();
     expect(screen.getAllByText('盘前日报')[0]).toBeInTheDocument();
     expect(screen.getByTitle('HTML 预览')).toHaveAttribute('srcdoc', '<html><body><h1>日报 HTML</h1></body></html>');
     await user.click(screen.getAllByRole('button', { name: /盘后考核/ })[0]);
@@ -574,8 +576,8 @@ describe('WEB-S8-006 acceptance', () => {
     await user.click(screen.getAllByRole('button', { name: 'JSON 详情' })[0]);
     expect(screen.getByTestId('evaluation-result-id')).toHaveTextContent('22222222-2222-2222-2222-222222222222');
 
-    await user.click(screen.getAllByRole('link', { name: /^Settings/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Configuration Studio' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^设置/ })[0]);
+    expect(await screen.findByRole('heading', { name: '配置中心' })).toBeInTheDocument();
     const timezoneInput = screen.getByLabelText('Timezone');
     await user.clear(timezoneInput);
     await user.type(timezoneInput, 'Asia/Tokyo');
@@ -596,24 +598,24 @@ describe('WEB-S8-006 acceptance', () => {
     const user = userEvent.setup();
     renderWebApp(viewerPrincipal);
 
-    expect(await screen.findByRole('heading', { name: 'Operations at a glance' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /^Ops/ })[0]).toHaveAttribute('aria-disabled', 'true');
+    expect(await screen.findByRole('heading', { name: '运维概览' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^运维/ })[0]).toHaveAttribute('aria-disabled', 'true');
 
-    await user.click(screen.getAllByRole('link', { name: /^Jobs/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Task Center' })).toBeInTheDocument();
-    await user.click(screen.getAllByRole('button', { name: 'Details' })[0]);
-    expect(await screen.findByRole('heading', { name: 'Job details' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Rerun job' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeDisabled();
+    await user.click(screen.getAllByRole('link', { name: /^任务/ })[0]);
+    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: '查看详情' })[0]);
+    expect(await screen.findByRole('heading', { name: '任务详情' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新运行任务' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '取消任务' })).toBeDisabled();
 
-    await user.click(screen.getAllByRole('link', { name: /^Workflows/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Guided operations' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^工作流/ })[0]);
+    expect(await screen.findByRole('heading', { name: '引导式操作' })).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: '运行入口' })[0]);
     expect(screen.getByRole('button', { name: '继续并确认' })).toBeDisabled();
     expect(screen.getByText('当前身份仅可查看参数，提交运行需要 operator 权限。')).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole('link', { name: /^Settings/ })[0]);
-    expect(await screen.findByRole('heading', { name: 'Configuration Studio' })).toBeInTheDocument();
+    await user.click(screen.getAllByRole('link', { name: /^设置/ })[0]);
+    expect(await screen.findByRole('heading', { name: '配置中心' })).toBeInTheDocument();
     expect(screen.getByText('当前身份为 viewer，仅可查看和预览配置。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存配置' })).toBeDisabled();
   });

@@ -47,15 +47,6 @@ trade-strategy-ai/docs/agent-rules/
 | 完成任务输出 | `docs/agent-rules/delivery-output.md` |
 
 ---
-docs/agent-rules/task-workflow.md## 8. 任务执行规则与约束
-
- 1. UI-V1-002
-  2. UI-V1-004
-  3. UI-V1-008
-  4. UI-V1-009
-  5. UI-V1-011
-  6. NW-V1-S4-001
-  7. NW-V1-S4-002
 
 ## 2. 默认语言
 

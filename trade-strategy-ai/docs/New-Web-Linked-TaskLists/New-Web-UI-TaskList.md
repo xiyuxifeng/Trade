@@ -621,7 +621,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-008 P0 Artifact Panel
+### [x] UI-V1-008 P0 Artifact Panel
 
 任务目标：统一展示 Job / Step 产物，让用户知道结果是什么、怎么下载、如何解释。
 
@@ -669,6 +669,15 @@ Artifact 类型至少支持：
 - 缺失产物不导致页面崩溃。
 - 下载不暴露服务器路径。
 - 用户能理解 artifact 含义。
+
+完成情况：
+
+- 已新增 [`web/src/components/artifacts/artifact-panel.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/artifacts/artifact-panel.tsx) 作为 Job Detail 内的产物展示入口，负责空态、展开/收起和分组总览。
+- 已新增 [`web/src/components/artifacts/artifact-list.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/artifacts/artifact-list.tsx) 与 [`web/src/components/artifacts/artifact-card.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/artifacts/artifact-card.tsx)，按 `step_id` 分组展示产物，并提供标题、类型、摘要、时间、大小、可见性和下载动作。
+- 已新增 [`web/src/components/artifacts/artifact-utils.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/artifacts/artifact-utils.ts) 统一处理时间、大小、脱敏和 JSON 预览 payload，避免在页面内重复实现。
+- 已将 [`web/src/pages/jobs/JobDetailPage.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/pages/jobs/JobDetailPage.tsx) 的产物渲染切换为 `ArtifactPanel`，Job Detail 现在通过单一入口展示产物解释面。
+- 已补充 [`web/src/components/artifacts/artifact-panel.test.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/artifacts/artifact-panel.test.tsx) 回归测试，覆盖分组、JSON 预览脱敏、下载链接和空态。
+- 已通过 `ArtifactPanel` 与 `JobDetailPage` 相关回归，确认 Job Detail 能稳定展示产物且不暴露服务器绝对路径。
 
 主任务关联：
 

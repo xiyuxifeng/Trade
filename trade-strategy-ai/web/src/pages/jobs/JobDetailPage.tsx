@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -6,12 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ArtifactPanel } from '@/components/artifacts/artifact-panel';
+import { formatTimestamp, maskAbsolutePath, stringifyJson } from '@/components/artifacts/artifact-utils';
 import { PageHeader } from '@/components/layout/page-header';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
-import type { JobArtifactRef, JobError, JobRecord, JobDetailResponse } from '@/types/jobs';
+import type { JobError, JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
 
 function getErrorMessage(error: unknown) {
@@ -40,65 +42,6 @@ function getStatusLabel(status: string) {
     cancelled: '已取消',
   };
   return mapping[status] || status;
-}
-
-function formatTimestamp(value: string | null | undefined) {
-  if (!value) {
-    return '未记录';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
-function formatBytes(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return '未记录';
-  }
-  if (!Number.isFinite(value)) {
-    return '未记录';
-  }
-  if (value < 1024) {
-    return `${Math.max(0, Math.round(value))} B`;
-  }
-  const kib = value / 1024;
-  if (kib < 1024) {
-    return `${kib.toFixed(1)} KiB`;
-  }
-  return `${(kib / 1024).toFixed(1)} MiB`;
-}
-
-function maskAbsolutePath(value: string | null | undefined) {
-  if (!value) {
-    return '未记录';
-  }
-  if (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) {
-    return '[已隐藏路径]';
-  }
-  return value;
-}
-
-function sanitizeForDisplay(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return maskAbsolutePath(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitizeForDisplay(item));
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    return Object.fromEntries(entries.map(([key, item]) => [key, sanitizeForDisplay(item)]));
-  }
-  return value;
-}
-
-function stringifyJson(value: unknown) {
-  if (value === null || value === undefined) {
-    return '未记录';
-  }
-  const sanitized = sanitizeForDisplay(value);
-  return JSON.stringify(sanitized, null, 2);
 }
 
 function getRetrySuggestion(error: JobError | string | null) {
@@ -220,80 +163,6 @@ function ErrorBlock({ error }: { error: JobError | string | null }) {
           {technicalDetail}
         </pre>
       </details>
-    </div>
-  );
-}
-
-function ArtifactCard({
-  artifact,
-  expanded,
-  onToggleExpanded,
-}: {
-  artifact: JobArtifactRef;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-medium text-slate-100">{artifact.title}</p>
-          <p className="mt-1 text-xs text-slate-500">
-            {artifact.kind}
-            {artifact.step_id ? ` · step ${artifact.step_id}` : ''}
-            {artifact.workflow_id ? ` · workflow ${artifact.workflow_id}` : ''}
-          </p>
-          <p className="mt-2 text-sm text-slate-300">{artifact.summary ?? '暂无摘要。'}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onToggleExpanded}>
-            {expanded ? '收起预览' : '预览'}
-          </Button>
-          {artifact.safe_download_url ? (
-            <a
-              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 bg-transparent px-3 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-800"
-              href={artifact.safe_download_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              下载
-            </a>
-          ) : (
-            <button
-              type="button"
-              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 bg-transparent px-3 text-xs font-medium text-slate-100 opacity-50"
-              disabled
-            >
-              下载
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        <Field label="创建时间" value={formatTimestamp(artifact.created_at)} />
-        <Field label="大小" value={formatBytes(artifact.size_bytes)} />
-        <Field label="可见性" value={artifact.visibility} />
-      </div>
-
-      {expanded ? (
-        <div className="mt-3 grid gap-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">元数据</p>
-            <pre className="mt-2 max-h-56 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
-              {stringifyJson(artifact.metadata)}
-            </pre>
-          </div>
-          {artifact.storage_ref ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">存储引用</p>
-              <pre className="mt-2 max-h-56 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
-                {stringifyJson(artifact.storage_ref)}
-              </pre>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -569,42 +438,10 @@ export function JobDetailPage() {
           </SectionCard>
 
           <SectionCard title="产物" description="只展示后端返回的产物引用，不推断文件系统路径。">
-            {!detail.artifacts.length ? (
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                该任务未产生任何产物。
-              </div>
-            ) : (
-              <ArtifactList artifacts={detail.artifacts} />
-            )}
+            <ArtifactPanel artifacts={detail.artifacts} />
           </SectionCard>
         </div>
       </section>
     </main>
-  );
-}
-
-function ArtifactList({ artifacts }: { artifacts: JobArtifactRef[] }) {
-  const [expandedIds, setExpandedIds] = useState<string[]>([]);
-
-  return (
-    <div className="space-y-3">
-      {artifacts.map((artifact) => {
-        const expanded = expandedIds.includes(artifact.artifact_id);
-        return (
-          <ArtifactCard
-            key={artifact.artifact_id}
-            artifact={artifact}
-            expanded={expanded}
-            onToggleExpanded={() =>
-              setExpandedIds((current) =>
-                current.includes(artifact.artifact_id)
-                  ? current.filter((id) => id !== artifact.artifact_id)
-                  : [...current, artifact.artifact_id],
-              )
-            }
-          />
-        );
-      })}
-    </div>
   );
 }

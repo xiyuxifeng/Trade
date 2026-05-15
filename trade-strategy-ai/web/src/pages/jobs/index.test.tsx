@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { screen, waitFor } from '@testing-library/react';
-import { JobsPage } from './index';
-import { ArtifactsPage } from '@/pages/artifacts';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api/http';
+import { listJobs } from '@/lib/api/jobs';
 import { renderWithRouter } from '@/test/test-utils';
-import { createJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
-import { listArtifacts } from '@/lib/api/artifacts';
+import { JobsPage } from './index';
+import type { JobRecord } from '@/types/jobs';
 
 vi.mock('@/lib/api/jobs', () => ({
   cancelJob: vi.fn(),
@@ -15,321 +15,179 @@ vi.mock('@/lib/api/jobs', () => ({
   listJobs: vi.fn(),
 }));
 
-vi.mock('@/lib/api/artifacts', () => ({
-  downloadArtifact: vi.fn(),
-  getArtifact: vi.fn(),
-  listArtifacts: vi.fn(),
-}));
-
 const mockedListJobs = vi.mocked(listJobs);
-const mockedGetJob = vi.mocked(getJob);
-const mockedGetJobLogs = vi.mocked(getJobLogs);
-const mockedCreateJob = vi.mocked(createJob);
-const mockedListArtifacts = vi.mocked(listArtifacts);
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+  window.localStorage.clear();
+});
+
+function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
+  return {
+    id: 'job-1',
+    job_type: 'pipeline-run',
+    status: 'success',
+    params: { config_path: 'config/app.yaml' },
+    result: null,
+    error: null,
+    artifacts: [],
+    created_by: 'web',
+    idempotency_key: null,
+    retry_count: 0,
+    max_retries: 3,
+    retry_backoff_seconds: 0,
+    timeout_seconds: null,
+    cancel_requested: false,
+    cancel_requested_at: null,
+    worker_id: 'worker-1',
+    lock_token: null,
+    lock_acquired_at: null,
+    heartbeat_at: null,
+    scheduled_at: null,
+    started_at: '2026-05-09T08:00:00Z',
+    finished_at: '2026-05-09T08:05:00Z',
+    audit_events: [],
+    created_at: '2026-05-09T08:00:00Z',
+    updated_at: '2026-05-09T08:05:00Z',
+    config_snapshot_path: null,
+    config_snapshot: null,
+    ...overrides,
+  };
+}
+
+function makeListResponse(items: JobRecord[], overrides: Partial<{ count: number; total: number; skip: number; limit: number }> = {}) {
+  const total = overrides.total ?? items.length;
+  return {
+    count: overrides.count ?? items.length,
+    total,
+    skip: overrides.skip ?? 0,
+    limit: overrides.limit ?? 20,
+    items,
+  };
+}
 
 describe('JobsPage', () => {
-  it('navigates to artifacts from an artifact reference', async () => {
-    const user = userEvent.setup();
-    const job1 = {
-      id: 'job-1',
-      job_type: 'run-pre-market',
-      status: 'success',
-      params: { date: '2026-05-09' },
-      result: null,
-      error: null,
-      artifacts: [
-        {
-          artifact_id: 'artifact-1',
-          job_id: 'job-1',
-          workflow_id: null,
-          step_id: null,
-          kind: 'report',
-          title: '抓取报告',
-          summary: '任务执行结果摘要',
-          safe_download_url: '/api/ui/v1/artifacts/artifact-1/download',
-          download_token: null,
-          size_bytes: 128,
-          created_at: '2026-05-09T08:05:00Z',
-          visibility: 'internal',
-          metadata: { source: 'job' },
-          storage_ref: null,
-        },
-      ],
-      config_snapshot: {
-        config_snapshot_id: 'snapshot-1',
-        job_id: 'job-1',
-        config_path: 'config/app.yaml',
-        config_source: '/Users/example/project/config/app.yaml',
-        config_hash: 'hash-1',
-        masked_snapshot: { app: { api_key: '***' } },
-        captured_at: '2026-05-09T07:55:00Z',
-        snapshot_path: '/tmp/job-1/config_snapshot.json',
-      },
-      config_snapshot_path: '/tmp/job-1/config_snapshot.json',
-      audit_events: [
-        {
-          id: 'audit-1',
-          job_id: 'job-1',
-          operation: 'create',
-          actor: 'web',
-          source: 'ui',
-          params_summary: { date: '2026-05-09' },
-          payload: { request_context: { channel: 'ui' } },
-          event_at: '2026-05-09T08:00:00Z',
-          created_at: '2026-05-09T08:00:00Z',
-          updated_at: '2026-05-09T08:00:00Z',
-        },
-      ],
-      created_by: 'web',
-      idempotency_key: null,
-      retry_count: 0,
-      max_retries: 3,
-      retry_backoff_seconds: 0,
-      timeout_seconds: null,
-      cancel_requested: false,
-      cancel_requested_at: null,
-      worker_id: null,
-      lock_token: null,
-      lock_acquired_at: null,
-      heartbeat_at: null,
-      scheduled_at: null,
-      started_at: '2026-05-09T08:00:00Z',
-      finished_at: '2026-05-09T08:05:00Z',
-      created_at: '2026-05-09T08:00:00Z',
-      updated_at: '2026-05-09T08:05:00Z',
-    };
-
-    mockedListJobs.mockResolvedValue({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 50,
-      items: [job1],
-    });
-    mockedGetJob.mockResolvedValue({
-      job: job1,
-      job_dir: '/tmp/job-1',
-      log_path: '/tmp/job-1/job.log',
-      params_path: '/tmp/job-1/params.json',
-      result_path: '/tmp/job-1/result.json',
-      artifacts_path: '/tmp/job-1/artifacts.json',
-    });
-    mockedGetJobLogs.mockResolvedValue({
-      job_id: 'job-1',
-      log_path: '/tmp/job-1/job.log',
-      count: 1,
-      items: ['job started'],
-    });
-    mockedListArtifacts.mockResolvedValue({
-      count: 0,
-      total: 0,
-      skip: 0,
-      limit: 50,
-      items: [],
-    });
-
-    renderWithRouter(
-      [
-        { path: '/jobs', element: <JobsPage /> },
-        { path: '/artifacts', element: <ArtifactsPage /> },
-      ],
-      ['/jobs?jobId=job-1'],
+  it('shows a loading state before the first response arrives', async () => {
+    let resolveJobs: ((value: ReturnType<typeof makeListResponse>) => void) | null = null;
+    mockedListJobs.mockReturnValue(
+      new Promise((resolve) => {
+        resolveJobs = resolve;
+      }) as Promise<ReturnType<typeof makeListResponse>>,
     );
 
-    expect(await screen.findByText('任务详情')).toBeInTheDocument();
-    expect(await screen.findByText('抓取报告')).toBeInTheDocument();
-    expect(await screen.findByText('步骤时间线')).toBeInTheDocument();
-    expect(await screen.findByText('web · create')).toBeInTheDocument();
+    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs']);
 
-    await user.click(screen.getByRole('button', { name: '在产物中心查看' }));
-    expect(await screen.findByText('产物中心')).toBeInTheDocument();
+    expect(screen.getByText('最近任务')).toBeInTheDocument();
+    expect(document.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+
+    resolveJobs?.(makeListResponse([makeJob()]));
+    expect(await screen.findByText('job-1')).toBeInTheDocument();
   });
 
-  it('reruns the selected job with the current parameter snapshot', async () => {
+  it('renders jobs, applies filters and navigates to the detail page', async () => {
     const user = userEvent.setup();
-    const job1 = {
-      id: 'job-1',
-      job_type: 'run-pre-market',
-      status: 'success',
-      params: { date: '2026-05-09' },
-      result: null,
-      error: null,
-      artifacts: [],
-      config_snapshot: null,
-      config_snapshot_path: null,
-      audit_events: [],
-      created_by: 'web',
-      idempotency_key: null,
-      retry_count: 0,
-      max_retries: 3,
-      retry_backoff_seconds: 0,
-      timeout_seconds: null,
-      cancel_requested: false,
-      cancel_requested_at: null,
-      worker_id: null,
-      lock_token: null,
-      lock_acquired_at: null,
-      heartbeat_at: null,
-      scheduled_at: null,
-      started_at: '2026-05-09T08:00:00Z',
-      finished_at: '2026-05-09T08:05:00Z',
-      created_at: '2026-05-09T08:00:00Z',
-      updated_at: '2026-05-09T08:05:00Z',
-    };
-    const job2 = {
-      id: 'job-2',
-      job_type: 'run-pre-market',
-      status: 'pending',
-      params: { date: '2026-05-09' },
-      result: null,
-      error: null,
-      artifacts: [],
-      config_snapshot: null,
-      config_snapshot_path: null,
-      audit_events: [],
-      created_by: 'web',
-      idempotency_key: null,
-      retry_count: 0,
-      max_retries: 3,
-      retry_backoff_seconds: 0,
-      timeout_seconds: null,
-      cancel_requested: false,
-      cancel_requested_at: null,
-      worker_id: null,
-      lock_token: null,
-      lock_acquired_at: null,
-      heartbeat_at: null,
-      scheduled_at: null,
-      started_at: null,
-      finished_at: null,
-      created_at: '2026-05-09T09:00:00Z',
-      updated_at: '2026-05-09T09:00:00Z',
-    };
+    const firstPage = makeListResponse(
+      [
+        makeJob({
+          id: 'job-1',
+          job_type: 'pipeline-run',
+          status: 'success',
+          created_by: 'alice',
+        }),
+      ],
+      { count: 1, total: 1, skip: 0, limit: 20 },
+    );
+    const filteredPage = makeListResponse(
+      [
+        makeJob({
+          id: 'job-2',
+          job_type: 'article-pipeline',
+          status: 'failed',
+          created_by: 'bob',
+          started_at: '2026-05-10T08:00:00Z',
+          finished_at: '2026-05-10T08:05:00Z',
+        }),
+      ],
+      { count: 1, total: 1, skip: 0, limit: 20 },
+    );
 
-    mockedListJobs.mockResolvedValue({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 50,
-      items: [job1],
-    });
-    mockedGetJob.mockImplementation(async (jobId: string) => ({
-      job: jobId === 'job-2' ? job2 : job1,
-      job_dir: jobId === 'job-2' ? '/tmp/job-2' : '/tmp/job-1',
-      log_path: jobId === 'job-2' ? '/tmp/job-2/job.log' : '/tmp/job-1/job.log',
-      params_path: jobId === 'job-2' ? '/tmp/job-2/params.json' : '/tmp/job-1/params.json',
-      result_path: jobId === 'job-2' ? '/tmp/job-2/result.json' : '/tmp/job-1/result.json',
-      artifacts_path: jobId === 'job-2' ? '/tmp/job-2/artifacts.json' : '/tmp/job-1/artifacts.json',
-    }));
-    mockedGetJobLogs.mockResolvedValue({
-      job_id: 'job-1',
-      log_path: '/tmp/job-1/job.log',
-      count: 1,
-      items: ['job started'],
-    });
-    mockedCreateJob.mockResolvedValue({
-      created: true,
-      job: job2,
-      job_dir: '/tmp/job-2',
-      log_path: '/tmp/job-2/job.log',
-      params_path: '/tmp/job-2/params.json',
-      result_path: '/tmp/job-2/result.json',
-      artifacts_path: '/tmp/job-2/artifacts.json',
-    });
+    mockedListJobs.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(filteredPage);
 
     renderWithRouter(
       [
         { path: '/jobs', element: <JobsPage /> },
         { path: '/jobs/:jobId', element: <div>job detail page</div> },
       ],
-      ['/jobs?jobId=job-1'],
+      ['/jobs'],
     );
 
-    expect(await screen.findByText('任务详情')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '重新运行任务' }));
-    await user.click(screen.getByRole('button', { name: '确认重新运行' }));
+    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    expect(await screen.findByText('job-1')).toBeInTheDocument();
+    expect(screen.getByText('pipeline-run')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox'), 'failed');
+    await waitFor(() => {
+      expect(mockedListJobs).toHaveBeenLastCalledWith({
+        status: 'failed',
+        job_type: undefined,
+        created_by: undefined,
+        skip: 0,
+        limit: 20,
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: '查看详情' }));
+    expect(await screen.findByText('job detail page')).toBeInTheDocument();
+  });
+
+  it('paginates the job list', async () => {
+    const user = userEvent.setup();
+    mockedListJobs.mockResolvedValue(
+      makeListResponse([makeJob({ id: 'job-1' })], { count: 20, total: 25, skip: 0, limit: 20 }),
+    );
+
+    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs']);
+
+    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '下一页' }));
 
     await waitFor(() => {
-      expect(mockedCreateJob).toHaveBeenCalledWith({
-        job_type: 'run-pre-market',
-        params: { date: '2026-05-09' },
-        created_by: 'web',
-        max_retries: 3,
-        retry_backoff_seconds: 0,
-        timeout_seconds: null,
+      expect(mockedListJobs).toHaveBeenLastCalledWith({
+        status: undefined,
+        job_type: undefined,
+        created_by: undefined,
+        skip: 20,
+        limit: 20,
       });
     });
   });
 
-  it('disables rerun and cancel actions for viewer principals', async () => {
-    const job1 = {
-      id: 'job-1',
-      job_type: 'run-pre-market',
-      status: 'success',
-      params: { date: '2026-05-09' },
-      result: null,
-      error: null,
-      artifacts: [],
-      config_snapshot: null,
-      config_snapshot_path: null,
-      audit_events: [],
-      created_by: 'web',
-      idempotency_key: null,
-      retry_count: 0,
-      max_retries: 3,
-      retry_backoff_seconds: 0,
-      timeout_seconds: null,
-      cancel_requested: false,
-      cancel_requested_at: null,
-      worker_id: null,
-      lock_token: null,
-      lock_acquired_at: null,
-      heartbeat_at: null,
-      scheduled_at: null,
-      started_at: '2026-05-09T08:00:00Z',
-      finished_at: '2026-05-09T08:05:00Z',
-      created_at: '2026-05-09T08:00:00Z',
-      updated_at: '2026-05-09T08:05:00Z',
-    };
+  it('shows empty state', async () => {
+    mockedListJobs.mockResolvedValueOnce(makeListResponse([], { count: 0, total: 0, skip: 0, limit: 20 }));
+    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs']);
+    expect(await screen.findByText('暂无符合条件的任务。')).toBeInTheDocument();
+  });
 
-    mockedListJobs.mockResolvedValue({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 50,
-      items: [job1],
-    });
-    mockedGetJob.mockResolvedValue({
-      job: job1,
-      job_dir: '/tmp/job-1',
-      log_path: '/tmp/job-1/job.log',
-      params_path: '/tmp/job-1/params.json',
-      result_path: '/tmp/job-1/result.json',
-      artifacts_path: '/tmp/job-1/artifacts.json',
-    });
-    mockedGetJobLogs.mockResolvedValue({
-      job_id: 'job-1',
-      log_path: '/tmp/job-1/job.log',
-      count: 1,
-      items: ['job started'],
-    });
+  it('shows error state', async () => {
+    mockedListJobs.mockRejectedValueOnce(new ApiError(500, 'server exploded'));
+    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?refresh=1']);
+    expect(await screen.findAllByText('server exploded')).toHaveLength(2);
+  });
 
+  it('shows permission denied state', async () => {
     renderWithRouter(
       [{ path: '/jobs', element: <JobsPage /> }],
-      ['/jobs?jobId=job-1'],
+      ['/jobs'],
       {
         initialPrincipal: {
-          role: 'viewer',
-          api_key_label: 'Local Viewer',
-          authenticated: true,
-          source: 'api_key',
+          role: 'anonymous',
+          api_key_label: null,
+          authenticated: false,
+          source: 'anonymous',
         },
       },
     );
-
-    expect(await screen.findByText('任务详情')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '重新运行任务' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '取消任务' })).toBeDisabled();
-    expect(screen.getByText(/需要 operator 权限/)).toBeInTheDocument();
+    expect(await screen.findByText('没有权限访问任务列表')).toBeInTheDocument();
   });
 });

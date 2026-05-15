@@ -227,7 +227,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [-] UI-V1-002 P0 建立统一 API Client
+### [x] UI-V1-002 P0 建立统一 API Client
 
 任务目标：所有 Web 页面通过统一 API Client 调用后端，避免请求逻辑散落。
 
@@ -276,6 +276,14 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - 页面中不新增裸 fetch。
 - Job API 调用经统一 client。
 - 错误能统一展示。
+
+完成情况：
+
+- 已在 [`web/src/lib/api/http.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/http.ts) 建立统一请求底座，提供 `fetchJson`、`fetchText`、`fetchBlob`、`fetchRootJson`、`fetchRootText`、`fetchRootBlob`。
+- 已统一 API key / auth token 头注入，并让 `ApiError` 透出 `status`、`message`、`detail`、`requestId`。
+- 已将 [`web/src/lib/api/alerts.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/alerts.ts)、[`web/src/lib/api/backtests.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/backtests.ts)、[`web/src/lib/api/reports.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/reports.ts)、[`web/src/lib/api/artifacts.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/artifacts.ts) 切换到统一 client，去掉了这些模块里的裸 fetch。
+- 已补充 [`web/src/lib/api/http.test.ts`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/lib/api/http.test.ts) 回归测试，覆盖 root API、文本/Blob 请求和统一错误映射。
+- 已通过 `vitest run src/lib/api/*.test.ts` 回归，确认基础请求层和既有 API 调用没有回退。
 
 主任务关联：
 
@@ -337,7 +345,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-004 P0 Job List 页面
+### [x] UI-V1-004 P0 Job List 页面
 
 任务目标：让用户查看任务列表、状态和基本筛选。
 
@@ -386,6 +394,14 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - 点击进入 Job Detail。
 - API 错误可见。
 - 空列表有友好提示。
+
+完成情况：
+
+- 已新增 [`web/src/pages/jobs/JobListPage.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/pages/jobs/JobListPage.tsx) 作为独立 Job List 页面，统一承载任务列表、筛选、分页和跳转逻辑。
+- 已新增 [`web/src/components/jobs/JobTable.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/components/jobs/JobTable.tsx) 作为列表表格组件，展示 `job_id`、`job_type`、`status`、`created_by`、`created_at`、`started_at`、`finished_at`、`retry_count` 和 `actions`。
+- 已将 [`web/src/pages/jobs/index.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/pages/jobs/index.tsx) 收敛为列表页入口，`/jobs` 现在只承担 Job List 的 canonical 展示职责。
+- 已补充 [`web/src/pages/jobs/index.test.tsx`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/src/pages/jobs/index.test.tsx) 回归测试，覆盖 loading、empty、error、permission denied、filters、pagination 和跳转详情。
+- 已通过 Jobs 页面相关回归验证，确认列表页与 Job Detail 的入口衔接正常。
 
 主任务关联：
 

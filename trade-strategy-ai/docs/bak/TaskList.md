@@ -2250,9 +2250,8 @@ Stage 11 的任务实现已基本完成，`05-06-codex.md` 待修复 6 项全部
 
 cli backup, web backup 是否备份了所有的必要数据
 
-
-根据两份TaskList，结合 New-Web-Current-State-Audit， New-Web-Migration-Matrix，New-Web-UI-Routing，New-Web-V1-Acceptance，对v1的任务进行Review：
-1. 所有任务都必须是完成状态，对于未完成的任务给出原因
+再次Review V1的所有任务：要求根据两份TaskList，结合 New-Web-Current-State-Audit， New-Web-Migration-Matrix，New-Web-UI-Routing，New-Web-V1-Acceptance，分别检查
+1. 所有任务都必须是完成状态，要求代码真实完成，不能只是任务标记完成
 2. 每个任务都必须满足任务的实现要求和验收标准
 3. 必须符合New-Web-TaskList## 0. 执行方式总则，## 2. AI Implementation Rules
 4. 必须符合New-Web-UI-TaskList## 0. 执行关系，## 1. AI UI Implementation Rules

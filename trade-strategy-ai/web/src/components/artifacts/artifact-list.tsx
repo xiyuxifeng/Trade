@@ -51,20 +51,20 @@ export function ArtifactList({
 
   return (
     <div className="space-y-4">
-      {groups.map((group) => (
-        <section className="space-y-3" key={group.key}>
+      {groups.map((group, groupIndex) => (
+        <section className="space-y-3" key={`${group.key}-${groupIndex}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium text-slate-100">{group.title}</p>
             <p className="text-xs text-slate-500">{group.items.length} 个产物</p>
           </div>
           <div className="space-y-3">
-            {group.items.map((artifact) => {
+            {group.items.map((artifact, artifactIndex) => {
               const expanded = expandedIds.includes(artifact.artifact_id);
               return (
                 <ArtifactCard
                   artifact={artifact}
                   expanded={expanded}
-                  key={artifact.artifact_id}
+                  key={`${group.key}-${artifact.artifact_id}-${artifactIndex}`}
                   onDownload={() => onDownloadArtifact(artifact)}
                   downloadPending={downloadingArtifactId === artifact.artifact_id}
                   downloadError={downloadErrors[artifact.artifact_id] ?? null}

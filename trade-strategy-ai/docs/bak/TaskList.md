@@ -2249,3 +2249,14 @@ Stage 11 的任务实现已基本完成，`05-06-codex.md` 待修复 6 项全部
 7. 测试用例是否全绿
 
 cli backup, web backup 是否备份了所有的必要数据
+
+
+根据两份TaskList，结合 New-Web-Current-State-Audit， New-Web-Migration-Matrix，New-Web-UI-Routing，New-Web-V1-Acceptance，对v1的任务进行Review：
+1. 所有任务都必须是完成状态，对于未完成的任务给出原因
+2. 每个任务都必须满足任务的实现要求和验收标准
+3. 必须符合New-Web-TaskList## 0. 执行方式总则，## 2. AI Implementation Rules
+4. 必须符合New-Web-UI-TaskList## 0. 执行关系，## 1. AI UI Implementation Rules
+5. 必须满足### 0.4 单一入口与退役原则
+6. 任务没有错漏和bug, 任务之间可以正常联通没有断层
+7. UI和任务都达到V1的交付目标
+8. 新增UI风格是否一致

@@ -306,7 +306,7 @@ UI 关联任务：
 
 ---
 
-### [-] NW-V1-S0-002 P0 建立迁移矩阵
+### [x] NW-V1-S0-002 P0 建立迁移矩阵
 
 任务目标：建立旧 CLI、旧脚本、现有 Web/API/Job 到新 Web/API/Worker 架构的完整映射。
 
@@ -355,7 +355,7 @@ UI 关联任务：
 - 已输出迁移矩阵文档：[docs/New-Web-Migration-Matrix.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-Migration-Matrix.md)
 - 已覆盖现有 JobDefinition、WorkflowDefinition、CLI 入口和现有 UI Job / Workflow 事实源。
 - 已补齐并复核 `cli/migrate.py` 的 `upgrade/downgrade` 映射口径。
-- 关联 UI 任务中，`UI-V1-001`、`UI-V1-004`、`UI-V1-005` 仍未完成，尚不适合提为完成状态。
+- 关联 UI 任务中，`UI-V1-001`、`UI-V1-004`、`UI-V1-005` 现已完成，迁移矩阵的 UI 侧约束已被后续任务补齐。
 
 ---
 
@@ -952,7 +952,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V1-S4-002 P0 V1 用户文档与验收说明
+### [x] NW-V1-S4-002 P0 V1 用户文档与验收说明
 
 任务目标：让真实用户知道如何通过 Web 完成 article_pipeline。
 
@@ -971,6 +971,13 @@ UI 关联任务：
 UI 关联任务：
 
 - `UI-V1-001` ～ `UI-V1-011`
+
+完成情况：
+
+- 新增 [docs/New-Web-V1-UserManual.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-V1-UserManual.md)，以真实用户视角说明如何通过 Web 完成 `article_pipeline`，并明确任务详情、产物、报告和配置快照的查看路径。
+- 新增 [docs/New-Web-V1-Release-Checklist.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-V1-Release-Checklist.md)，以内部发布清单形式收口 V1 自动化检查、手工验收、页面名称一致性和发布判定。
+- 文档中的页面名、按钮名和主路径已对齐当前 UI：`任务`、`任务详情`、`引导式操作`、`产物中心`、`报告中心`、`配置中心`。
+- 文档明确 V1 的范围边界与 V2/V3 留白，避免把独立 Artifact Center、正式 Profile 工作台和更复杂的 workflow 管理误写成 V1 前置条件。
 
 ---
 

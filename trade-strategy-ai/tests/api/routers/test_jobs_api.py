@@ -94,6 +94,58 @@ class _FakeJobService:
             }
         )
 
+    async def get_job_timeline(self, job_id: str) -> Any:
+        job = self.jobs.get(job_id)
+        if job is None:
+            return _service_result({"job_id": job_id}, status="partial", message="job not found")
+
+        items: list[dict[str, Any]] = []
+        for index, event in enumerate(job.get("audit_events") or [], start=1):
+            operation = event.get("operation") or "unknown"
+            status = "success"
+            if operation in {"start", "heartbeat"} and job.get("status") == "running":
+                status = "running"
+            elif operation == "fail":
+                status = "failed"
+            elif operation == "cancel" or job.get("status") == "cancelled":
+                status = "cancelled"
+            items.append(
+                {
+                    "step_id": "job.heartbeat.%s" % index if operation == "heartbeat" else f"job.{operation}",
+                    "step_name": operation,
+                    "title": {
+                        "create": "Job 创建",
+                        "start": "Job 启动",
+                        "heartbeat": "Job 心跳",
+                        "complete": "Job 完成",
+                        "fail": "Job 失败",
+                        "cancel": "Job 取消",
+                        "bind_artifact": "产物绑定",
+                    }.get(operation, f"Job {operation}"),
+                    "status": status,
+                    "started_at": event.get("event_at"),
+                    "finished_at": None if status == "running" else event.get("event_at"),
+                    "duration_ms": None if status == "running" else 0,
+                    "error": None,
+                    "artifact_refs": [],
+                    "order": index,
+                    "operation": operation,
+                    "actor": event.get("actor"),
+                    "source": event.get("source", "system"),
+                    "metadata": {},
+                }
+            )
+
+        return _service_result(
+            {
+                "job_id": job_id,
+                "job_status": job.get("status"),
+                "count": len(items),
+                "items": items,
+                "metadata": {},
+            }
+        )
+
     async def cancel_job(self, **kwargs: Any) -> Any:
         self.cancel_calls.append(kwargs)
         job_id = kwargs["job_id"]
@@ -183,6 +235,30 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     cancelled = await client.post(f"/api/ui/v1/jobs/{job_id}/cancel", json={"reason": "stop now"})
     assert cancelled.status_code == 200
     assert cancelled.json()["job"]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_job_timeline_returns_structured_contract(client: AsyncClient) -> None:
+    """Job Timeline 应返回结构化执行过程，而不是 raw audit event。"""
+    created = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "pipeline-run",
+            "params": {"config_path": "config/app.yaml"},
+            "created_by": "web",
+        },
+    )
+    assert created.status_code == 200
+    job_id = created.json()["job"]["id"]
+
+    timeline = await client.get(f"/api/ui/v1/jobs/{job_id}/timeline")
+    assert timeline.status_code == 200
+    payload = timeline.json()
+    assert payload["count"] >= 1
+    assert payload["items"][0]["title"] == "Job 创建"
+    assert payload["items"][0]["status"] == "success"
+    assert payload["items"][0]["step_name"] == "create"
+    assert payload["items"][0]["step_id"] == "job.create"
 
 
 @pytest.mark.asyncio

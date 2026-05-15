@@ -6,6 +6,7 @@ from typing import Any
 from src.services.base import BaseService, ServiceResult
 from src.services.job_registry import get_job_definition, validate_job_submission
 from src.services.job_service import JobService
+from src.services.workflow_runner import WorkflowRunner
 
 
 @dataclass(frozen=True)
@@ -282,8 +283,14 @@ class WorkflowService(BaseService):
 
     service_name = "workflow"
 
-    def __init__(self, *, job_service: JobService | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        job_service: JobService | None = None,
+        workflow_runner: WorkflowRunner | None = None,
+    ) -> None:
         self._job_service = job_service or JobService()
+        self._workflow_runner = workflow_runner or WorkflowRunner(job_service=self._job_service)
 
     async def list_workflows(self) -> ServiceResult:
         """列出默认工作流定义。"""
@@ -338,31 +345,18 @@ class WorkflowService(BaseService):
         if validation.status != "ok":
             return ServiceResult(status="error", message=validation.message or "invalid workflow params", payload=validation.payload)
 
-        created = await self._job_service.create_job(
-            job_type=workflow.job_type,
+        return await self._workflow_runner.run_workflow(
+            workflow=workflow,
             params=validation.payload["params"],
             created_by=created_by,
             idempotency_key=idempotency_key,
             audit_source=audit_source,
         )
-        if created.status != "ok":
-            return created
-
-        return ServiceResult(
-            status="ok",
-            message="workflow started",
-            payload={
-                "workflow": workflow.summary(),
-                "job": created.payload["job"],
-                "job_dir": created.payload.get("job_dir"),
-                "log_path": created.payload.get("log_path"),
-                "params_path": created.payload.get("params_path"),
-                "result_path": created.payload.get("result_path"),
-                "artifacts_path": created.payload.get("artifacts_path"),
-            },
-        )
 
 
-def make_workflow_service(job_service: JobService | None = None) -> WorkflowService:
+def make_workflow_service(
+    job_service: JobService | None = None,
+    workflow_runner: WorkflowRunner | None = None,
+) -> WorkflowService:
     """构造 WorkflowService 实例，供 API 层依赖注入复用。"""
-    return WorkflowService(job_service=job_service)
+    return WorkflowService(job_service=job_service, workflow_runner=workflow_runner)

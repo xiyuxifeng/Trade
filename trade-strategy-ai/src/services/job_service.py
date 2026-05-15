@@ -18,6 +18,7 @@ from src.models.job import Job, JobStatus
 from src.services.base import BaseService, ServiceResult
 from src.common.paths import resolve_project_path
 from src.services.runtime_contracts import ArtifactRef, StorageRef
+from src.services.step_timeline_service import StepTimelineService
 
 
 def _to_plain(value: Any) -> Any:
@@ -67,10 +68,12 @@ class JobService(BaseService):
         session_scope_factory: Callable[[], Any] | None = None,
         job_base_dir: str | Path = resolve_project_path("data/jobs"),
         config_snapshot_service: ConfigSnapshotService | None = None,
+        step_timeline_service: StepTimelineService | None = None,
     ) -> None:
         self._session_scope_factory = session_scope_factory
         self._job_base_dir = resolve_project_path(job_base_dir)
         self._config_snapshot_service = config_snapshot_service or ConfigSnapshotService()
+        self._step_timeline_service = step_timeline_service or StepTimelineService()
 
     def _ensure_session_factory(self) -> Callable[[], Any]:
         """确保存在数据库 session_scope 工厂。"""
@@ -426,6 +429,18 @@ class JobService(BaseService):
                 "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
                 "job": self._serialize_job(job),
             },
+        )
+
+    async def get_job_timeline(self, job_id: str | UUID) -> ServiceResult:
+        """按 job_id 查询结构化 Step Timeline。"""
+        job_result = await self.get_job(job_id)
+        if job_result.status != "ok":
+            return job_result
+        timeline = self._step_timeline_service.build_job_timeline(job=job_result.payload["job"])
+        return ServiceResult(
+            status="ok",
+            message="job timeline loaded",
+            payload=timeline.to_payload(),
         )
 
     async def list_jobs(

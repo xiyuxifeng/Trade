@@ -23,7 +23,9 @@ from src.services.pipeline_service import PipelineService
 from src.services.signal_service import SignalService
 from src.services.rule_pool_service import RulePoolService
 from src.services.setup_service import SetupService
+from src.services.step_timeline_service import StepTimelineService
 from src.services.run_service import RunService
+from src.services.workflow_runner import WorkflowRunner
 from src.services.workflow_service import WorkflowService
 from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
@@ -42,6 +44,7 @@ __all__ = [
     "JobRunner",
     "SystemService",
     "RunService",
+    "WorkflowRunner",
     "WorkflowService",
     "PipelineService",
     "SnapshotService",
@@ -53,4 +56,5 @@ __all__ = [
     "OptimizeService",
     "RulePoolService",
     "SetupService",
+    "StepTimelineService",
 ]

@@ -162,15 +162,13 @@ async def get_job_timeline(
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     """返回 Job 时间线事件。"""
-    result = await job_service.get_job(job_id)
+    result = await job_service.get_job_timeline(job_id)
     if result.status == "partial":
         raise HTTPException(status_code=404, detail="job not found")
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "job load failed")
 
-    job = result.payload["job"]
-    items = job.get("audit_events") or []
-    return {"job_id": job_id, "count": len(items), "items": items}
+    return result.payload
 
 
 @router.get("/{job_id}/artifacts")

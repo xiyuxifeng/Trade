@@ -685,7 +685,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V1-S2-002 P0 实现 Step Timeline
+### [x] NW-V1-S2-002 P0 实现 Step Timeline
 
 任务目标：让用户能看到 Workflow/Job 的执行过程，而不只是 pending/running/success/failed。
 
@@ -727,9 +727,16 @@ UI 关联任务：
 - `UI-V1-006 Step Timeline Component`
 - `UI-V1-005 Job Detail 页面`
 
+完成情况：
+
+- 新增 `src/models/step_timeline.py`，定义 Job Timeline contract 与 step item 结构。
+- 新增 `src/services/step_timeline_service.py`，把 Job audit events 归一化为结构化 Step Timeline。
+- `JobService` 新增 `get_job_timeline`，`/api/ui/v1/jobs/{job_id}/timeline` 现在返回结构化 contract。
+- 补齐 unit / API / models / OpenAPI 回归并通过验证，确认成功、失败、取消与运行中场景可见。
+
 ---
 
-### [ ] NW-V1-S2-003 P0 实现 Workflow Runner MVP
+### [x] NW-V1-S2-003 P0 实现 Workflow Runner MVP
 
 任务目标：让 Workflow 从 UI 展示定义升级为可执行编排，但 V1 只要求支持 article_pipeline 需要的最小能力。
 
@@ -737,7 +744,7 @@ UI 关联任务：
 
 - `src/services/workflow_runner.py`
 - `src/services/workflow_service.py`
-- `tests/services/test_workflow_runner.py`
+- `tests/unit/services/test_workflow_runner.py`
 
 禁止修改：
 
@@ -765,6 +772,13 @@ UI 关联任务：
 - `UI-V1-007 Schema-driven Workflow Run Form`
 - `UI-V1-010 Article Pipeline Page`
 - `UI-V1-005 Job Detail 页面`
+
+完成情况：
+
+- 已新增 [`src/services/workflow_runner.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/services/workflow_runner.py)，以薄编排器方式顺序执行 Workflow steps，并复用 `JobRunner` 处理单个 Job。
+- 已调整 [`src/services/workflow_service.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/services/workflow_service.py)，保留 Workflow 定义与参数校验，运行入口改为委托 `WorkflowRunner`。
+- 已补齐 [`tests/unit/services/test_workflow_runner.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/unit/services/test_workflow_runner.py) 与 [`tests/unit/services/test_workflow_service.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/unit/services/test_workflow_service.py)，覆盖顺序执行、失败停止和服务层委托。
+- 已通过 [`tests/api/routers/test_workflows.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/api/routers/test_workflows.py)、[`tests/api/routers/test_pipelines.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/api/test_ui_openapi_contract.py) 与 article pipeline spec 回归，确认 UI/API contract 未回退。
 
 ---
 
@@ -1261,6 +1275,70 @@ UI 关联任务：
 - `UI-V2-010 Market Snapshot Browser`
 - `UI-V2-011 Market Dataset Viewer`
 - `UI-V2-007 Artifact Center`
+
+---
+
+### [ ] NW-V2-S2-004-2 P0 Workflow Run DB Storage
+
+任务目标：把 Workflow 的运行实例从“服务层返回结果”升级为“数据库级事实源”，支持运行追踪、恢复、审计和历史查询。该子任务只作为后续收口，不在当前 V2-S2 第一版里强制落地。
+
+建议表结构：
+
+- `workflow_runs`
+  - `id`
+  - `workflow_id`
+  - `workflow_title`
+  - `workflow_version`
+  - `status`
+  - `trigger_source`
+  - `created_by`
+  - `confirmed`
+  - `idempotency_key`
+  - `started_at`
+  - `finished_at`
+  - `duration_ms`
+  - `input_params_json`
+  - `output_summary_json`
+  - `error_json`
+  - `metadata_json`
+  - `created_at`
+  - `updated_at`
+- `workflow_run_steps`
+  - `id`
+  - `workflow_run_id`
+  - `step_id`
+  - `step_name`
+  - `step_order`
+  - `job_id`
+  - `job_type`
+  - `status`
+  - `started_at`
+  - `finished_at`
+  - `duration_ms`
+  - `input_json`
+  - `output_json`
+  - `error_json`
+  - `artifact_refs_json`
+  - `metadata_json`
+  - `created_at`
+  - `updated_at`
+
+字段要求：
+
+- `workflow_runs` 作为一次 workflow 运行的主记录，必须可按 `workflow_id`、`status`、`created_by`、`created_at` 查询。
+- `workflow_run_steps` 作为 step 级明细，必须保留 step 顺序、对应 Job、输入、输出、错误和产物引用。
+- `input_params_json` 和 `output_summary_json` 只保存 JSON 兼容结构，不保存服务器绝对路径。
+- `error_json` 必须结构化，至少保留 `type`、`message`、`detail`、`metadata`。
+- `artifact_refs_json` 只能保存可回溯的逻辑引用，不暴露本地文件系统绝对路径。
+
+验收标准：
+
+- 可以按 `workflow_id` 和时间范围查询 workflow runs。
+- 可以按 `workflow_run_id` 拉取完整 step 明细。
+- workflow 中断后可以保留失败现场，便于恢复或人工审计。
+- UI 不需要再依赖 job audit events 拼装 workflow 历史。
+- 与现有 `Step Timeline` contract 能互相映射，但不重复造两套 UI 语义。
+- 新增持久化表、Repository、Service 和测试后，不破坏现有 `WorkflowRunner` 的运行链路。
 
 ---
 

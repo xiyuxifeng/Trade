@@ -81,16 +81,19 @@ function parseJsonField(name: string, value: string, kind: 'array' | 'object') {
 
 export function validateWorkflowValues(schema: WorkflowParamSchema | null, values: WorkflowFieldValues) {
   if (!schema) {
-    return { params: {}, errors: [] as string[] };
+    return { params: {}, errors: [] as string[], fieldErrors: {} as Record<string, string> };
   }
 
   const params: Record<string, unknown> = {};
   const errors: string[] = [];
+  const fieldErrors: Record<string, string> = {};
 
   for (const [name, field] of Object.entries(schema.fields)) {
     const raw = values[name];
     if (field.required && (raw === '' || raw === undefined || raw === null)) {
-      errors.push(`${name} 为必填项`);
+      const message = `${name} 为必填项`;
+      errors.push(message);
+      fieldErrors[name] = message;
       continue;
     }
 
@@ -142,11 +145,13 @@ export function validateWorkflowValues(schema: WorkflowParamSchema | null, value
 
       params[name] = raw;
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : `${name} 格式无效`);
+      const message = error instanceof Error ? error.message : `${name} 格式无效`;
+      errors.push(message);
+      fieldErrors[name] = message;
     }
   }
 
-  return { params, errors };
+  return { params, errors, fieldErrors };
 }
 
 export function summarizeWorkflowRisk(workflow: WorkflowDefinition) {

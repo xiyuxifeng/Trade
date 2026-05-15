@@ -17,10 +17,12 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { cancelJob, createJob, getJob, getJobLogs, listJobs } from '@/lib/api/jobs';
-import type { JobArtifactRef, JobAuditEvent, JobDetailResponse, JobsListResponse } from '@/types/jobs';
+import type { JobArtifactRef, JobDetailResponse, JobsListResponse } from '@/types/jobs';
+import type { StepTimelineItem } from '@/types/job';
 import { PageHeader } from '@/components/layout/page-header';
 
 function getErrorMessage(error: unknown) {
@@ -100,24 +102,57 @@ function ArtifactCard({
   );
 }
 
-function AuditEventCard({ event }: { event: JobAuditEvent }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-medium text-slate-100">
-            {event.actor} · {event.operation}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">{event.source}</p>
-        </div>
-        <p className="text-xs text-slate-500">{formatTimestamp(event.event_at)}</p>
-      </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <Field label="参数摘要" value={JSON.stringify(event.params_summary)} />
-        <Field label="负载详情" value={JSON.stringify(event.payload)} />
-      </div>
-    </div>
-  );
+function stringifyError(error: unknown) {
+  if (typeof error === 'string') {
+    return error.trim() || '任务失败';
+  }
+  if (error && typeof error === 'object') {
+    const payload = error as Record<string, unknown>;
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message;
+    }
+    return JSON.stringify(payload, null, 2);
+  }
+  return '任务失败';
+}
+
+function buildTimelineItems(detail: NonNullable<JobDetailResponse['job']>): StepTimelineItem[] {
+  const timelineItems: StepTimelineItem[] = detail.audit_events.map((event, index) => ({
+    id: event.id,
+    stepName: event.operation,
+    title: `${event.actor} · ${event.operation}`,
+    status: 'success',
+    startedAt: event.event_at,
+    finishedAt: event.event_at,
+    durationMs: null,
+    details: {
+      source: event.source,
+      params_summary: event.params_summary,
+      payload: event.payload,
+    },
+    metadata: {
+      actor: event.actor,
+      source: event.source,
+    },
+    order: index,
+  }));
+
+  if (detail.error) {
+    timelineItems.push({
+      id: `${detail.id}-error`,
+      stepName: 'job-error',
+      title: '任务错误',
+      status: detail.status === 'cancelled' ? 'cancelled' : 'failed',
+      startedAt: detail.finished_at ?? detail.updated_at,
+      finishedAt: detail.finished_at ?? detail.updated_at,
+      durationMs: null,
+      errorSummary: stringifyError(detail.error),
+      details: detail.error as Record<string, unknown> | string,
+      order: timelineItems.length,
+    });
+  }
+
+  return timelineItems;
 }
 
 export function JobsPage() {
@@ -395,20 +430,10 @@ export function JobsPage() {
 
               <div className="grid gap-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-slate-200">审计追踪</p>
+                  <p className="text-sm font-medium text-slate-200">步骤时间线</p>
                   <p className="text-xs text-slate-500">{detail.audit_events.length} 个事件</p>
                 </div>
-                {!detail.audit_events.length ? (
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                    尚无审计事件。
-                  </div>
-                ) : (
-                  <div className="grid gap-3">
-                    {detail.audit_events.map((event) => (
-                      <AuditEventCard event={event} key={event.id} />
-                    ))}
-                  </div>
-                )}
+                <StepTimeline items={buildTimelineItems(detail)} />
               </div>
 
               <div className="grid gap-3">

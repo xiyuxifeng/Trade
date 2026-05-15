@@ -764,7 +764,7 @@ UI 关联任务：
 
 ## Stage V1-S3：article_pipeline 纵向切片
 
-### [ ] NW-V1-S3-001 P0 定义 article_pipeline PipelineSpec
+### [x] NW-V1-S3-001 P0 定义 article_pipeline PipelineSpec
 
 任务目标：把文章处理链路定义为第一条可交付业务切片。
 
@@ -797,6 +797,13 @@ UI 关联任务：
 
 - `UI-V1-010 Article Pipeline Page`
 - `UI-V1-007 Schema-driven Workflow Run Form`
+
+完成情况：
+
+- 已新增单一 canonical 文件 [src/pipelines/article_pipeline_spec.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/src/pipelines/article_pipeline_spec.py)，以 frozen dataclass 定义 `article_pipeline` 的稳定核心字段与扩展位。
+- 已明确 `pipeline_id`、`workflow_id`、`required_profile_sections`、`input_schema`、`output_artifacts`、`job_types`、`steps`、`user_visible_success_criteria`、`ui_page`、`ui_task_ids`，并保留 `extensions` 作为后续 `NW-V1-S3-002/003` 的显式扩展槽位。
+- 已通过 [src/services/runtime_registry_bridge.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/src/services/runtime_registry_bridge.py) 暴露 `list_pipeline_contracts()` / `get_pipeline_contract()`，让 catalog 层读取同一份规范。
+- 已补充 [tests/pipelines/test_article_pipeline_spec.py](/Users/wanghui/Documents/Claude/trade-strategy-ai/tests/pipelines/test_article_pipeline_spec.py) 与 bridge 单测；`pytest tests/pipelines/test_article_pipeline_spec.py tests/unit/services/test_runtime_registry_bridge.py -v` 通过。
 
 ---
 
@@ -843,7 +850,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V1-S3-003 P0 article_pipeline API
+### [-] NW-V1-S3-003 P0 article_pipeline API
 
 任务目标：提供稳定 API 给 Web UI 触发和查询 article_pipeline。
 
@@ -881,6 +888,15 @@ UI 关联任务：
 - `UI-V1-002 建立统一 API Client`
 - `UI-V1-010 Article Pipeline Page`
 - `UI-V1-007 Schema-driven Workflow Run Form`
+
+完成情况：
+
+- 已新增 `api/routers/ui/pipelines.py`，暴露 `GET /api/ui/v1/pipelines`、`GET /api/ui/v1/pipelines/article_pipeline`、`POST /api/ui/v1/pipelines/article_pipeline/run`。
+- `article_pipeline` 当前 canonical 映射到 `WorkflowService` 的 `pipeline` workflow，通过 Workflow / Job 体系创建 `pipeline-run` Job，API Router 不直接执行 pipeline/provider。
+- 已补齐 `GET /api/ui/v1/jobs/{job_id}/timeline` 与 `GET /api/ui/v1/jobs/{job_id}/artifacts`，供 Job Detail / UI-V1 状态展示使用；timeline 当前读取 Job audit events，正式 Step Timeline 仍依赖 `NW-V1-S2-002`。
+- 已更新 `docs/APIReference.md` 和 OpenAPI contract 测试，覆盖新增 pipelines / timeline / artifacts 路由。
+- 已补充 API 测试覆盖 article_pipeline 列表、详情、运行、未知 pipeline 结构化错误、viewer 权限不足。
+- 关联 UI 任务中，`UI-V1-007`、`UI-V1-010` 已完成；当前不标记 `[x]`：`UI-V1-002` 尚未完成验收，`NW-V1-S2-002` 正式 Step Timeline 也尚未落地。
 
 ---
 

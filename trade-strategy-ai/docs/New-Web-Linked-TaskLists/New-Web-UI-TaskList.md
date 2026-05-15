@@ -485,7 +485,7 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 ---
 
-### [ ] UI-V1-006 P0 Step Timeline Component
+### [x] UI-V1-006 P0 Step Timeline Component
 
 任务目标：提供通用 Step Timeline 组件供 Job Detail 和业务页面复用。
 
@@ -514,13 +514,19 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 - 空 timeline 有 fallback。
 - failed step 显示错误摘要。
 
+完成情况：
+
+- 新增 `web/src/components/jobs/StepTimeline.tsx` 作为纯展示组件。
+- 新增 `web/src/types/job.ts` 作为稳定的 timeline 类型边界。
+- Job Detail 已改为复用该组件，后续只需补数据适配，不需要改组件架构。
+
 主任务关联：
 
 - `NW-V1-S2-002`
 
 ---
 
-### [ ] UI-V1-007 P0 Schema-driven Workflow Run Form
+### [x] UI-V1-007 P0 Schema-driven Workflow Run Form
 
 任务目标：根据后端 JobDefinition / WorkflowDefinition / PipelineSpec 动态渲染运行表单，避免前后端 schema 分叉。
 
@@ -579,6 +585,16 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 
 - `NW-V1-S1-004`
 - `NW-V1-S3-003`
+
+完成情况：
+
+- 已基于后端 `WorkflowDefinition.job_definition.params_schema` / step `param_schema` 渲染运行表单，不在前端手写各 `job_type` 完整 schema。
+- 已覆盖 `string` / `integer` / `number` / `boolean` / `date` / `path` / `object` / `array` 的输入、解析和基础校验。
+- 已显示字段 `description`、`required`、`default`，并在 required、JSON、number/date 等 validation 失败时把错误挂到对应字段。
+- 已支持后端结构化错误 `detail.fields` 回填字段级错误；无法映射时保留全局 submit error。
+- 已保留高风险二次确认弹窗，提交成功后通过 `onSubmitted(jobId)` 跳转 Job Detail。
+- 已覆盖 permission denied、validation failed、submit failed、confirmation required、success redirect 测试。
+- 已验证 `pipeline-run` 可通过 `/workflows/:workflowId/run` 表单创建 Job；后续 `UI-V1-010` 会使用 `NW-V1-S3-003` 的 article_pipeline 专用入口补业务页闭环。
 
 ---
 
@@ -689,7 +705,7 @@ Artifact 类型至少支持：
 
 ---
 
-### [ ] UI-V1-010 P0 Article Pipeline Page
+### [x] UI-V1-010 P0 Article Pipeline Page
 
 任务目标：提供 V1 核心业务入口，让用户通过 Web 完成 article_pipeline 验收。
 
@@ -697,7 +713,7 @@ Artifact 类型至少支持：
 
 - `web/src/pages/articles/ArticlePipelinePage.*`
 - `web/src/components/articles/*`
-- `web/src/api/pipelines.ts`
+- `web/src/lib/api/pipelines.ts`
 - `web/src/types/pipeline.ts`
 
 禁止修改：
@@ -738,6 +754,13 @@ Artifact 类型至少支持：
 - `NW-V1-S3-001`
 - `NW-V1-S3-002`
 - `NW-V1-S3-003`
+
+完成情况：
+
+- 已新增 `web/src/pages/articles/ArticlePipelinePage.tsx`，通过 `getArticlePipeline` 读取 article_pipeline 说明和参数 schema，通过 `listJobs({ job_type: 'pipeline-run', limit: 5 })` 展示最近记录，并通过 `runArticlePipeline` 提交运行。
+- 表单支持 `config_path` / `Profile` 占位切换，包含本地必填校验与后端结构化字段错误映射；提交成功后跳转到 Job Detail。
+- 页面覆盖 API unavailable、validation error、running、success、failed、empty history 状态，并提供失败定位提示。
+- 已补充页面测试与 API contract 测试；相关验证通过。
 
 ---
 

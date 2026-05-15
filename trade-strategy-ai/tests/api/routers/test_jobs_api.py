@@ -52,6 +52,14 @@ class _FakeJobService:
             "finished_at": None,
             "created_at": "2026-05-09T00:00:00",
             "updated_at": "2026-05-09T00:00:00",
+            "audit_events": [
+                {
+                    "operation": "create",
+                    "actor": kwargs.get("created_by") or "system",
+                    "event_at": "2026-05-09T00:00:00",
+                    "payload": {"job_type": kwargs["job_type"]},
+                }
+            ],
         }
         self.jobs[job_id] = job
         self.create_calls.append(kwargs)
@@ -163,6 +171,14 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     logs = await client.get(f"/api/ui/v1/jobs/{job_id}/logs")
     assert logs.status_code == 200
     assert logs.json()["items"] == []
+
+    timeline = await client.get(f"/api/ui/v1/jobs/{job_id}/timeline")
+    assert timeline.status_code == 200
+    assert timeline.json()["items"][0]["operation"] == "create"
+
+    artifacts = await client.get(f"/api/ui/v1/jobs/{job_id}/artifacts")
+    assert artifacts.status_code == 200
+    assert artifacts.json() == {"job_id": job_id, "count": 0, "items": []}
 
     cancelled = await client.post(f"/api/ui/v1/jobs/{job_id}/cancel", json={"reason": "stop now"})
     assert cancelled.status_code == 200

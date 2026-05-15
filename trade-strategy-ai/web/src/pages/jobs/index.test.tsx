@@ -108,13 +108,13 @@ describe('JobsPage', () => {
       ['/jobs?jobId=job-1'],
     );
 
-    expect(await screen.findByText('Job details')).toBeInTheDocument();
+    expect(await screen.findByText('任务详情')).toBeInTheDocument();
     expect(await screen.findByText('report')).toBeInTheDocument();
-    expect(await screen.findByText('Audit trail')).toBeInTheDocument();
+    expect(await screen.findByText('步骤时间线')).toBeInTheDocument();
     expect(await screen.findByText('web · create')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Open in Artifacts' }));
-    expect(await screen.findByText('Artifact center')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '在产物中心查看' }));
+    expect(await screen.findByText('产物中心')).toBeInTheDocument();
   });
 
   it('reruns the selected job with the current parameter snapshot', async () => {
@@ -207,9 +207,9 @@ describe('JobsPage', () => {
 
     renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?jobId=job-1']);
 
-    expect(await screen.findByText('Job details')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Rerun job' }));
-    await user.click(screen.getByRole('button', { name: 'Confirm rerun' }));
+    expect(await screen.findByText('任务详情')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重新运行任务' }));
+    await user.click(screen.getByRole('button', { name: '确认重新运行' }));
 
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith({
@@ -287,9 +287,9 @@ describe('JobsPage', () => {
       },
     );
 
-    expect(await screen.findByText('Job details')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Rerun job' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeDisabled();
+    expect(await screen.findByText('任务详情')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新运行任务' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '取消任务' })).toBeDisabled();
     expect(screen.getByText(/需要 operator 权限/)).toBeInTheDocument();
   });
 });

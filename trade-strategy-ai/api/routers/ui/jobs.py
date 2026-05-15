@@ -155,6 +155,42 @@ async def get_job_logs(
     return {"job_id": job_id, "log_path": str(log_path), "count": len(items), "items": items}
 
 
+@router.get("/{job_id}/timeline")
+async def get_job_timeline(
+    job_id: str,
+    job_service: JobService = Depends(get_job_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """返回 Job 时间线事件。"""
+    result = await job_service.get_job(job_id)
+    if result.status == "partial":
+        raise HTTPException(status_code=404, detail="job not found")
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "job load failed")
+
+    job = result.payload["job"]
+    items = job.get("audit_events") or []
+    return {"job_id": job_id, "count": len(items), "items": items}
+
+
+@router.get("/{job_id}/artifacts")
+async def get_job_artifacts(
+    job_id: str,
+    job_service: JobService = Depends(get_job_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """返回 Job 绑定的产物引用。"""
+    result = await job_service.get_job(job_id)
+    if result.status == "partial":
+        raise HTTPException(status_code=404, detail="job not found")
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "job load failed")
+
+    job = result.payload["job"]
+    items = job.get("artifacts") or []
+    return {"job_id": job_id, "count": len(items), "items": items}
+
+
 @router.post("/{job_id}/cancel")
 async def cancel_job(
     job_id: str,

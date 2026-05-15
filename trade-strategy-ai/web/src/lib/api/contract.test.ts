@@ -4,6 +4,7 @@ import { getCurrentPrincipal } from './auth';
 import { getSystemStatus } from './system';
 import { createJob, getJob, getJobLogs, cancelJob, listJobs } from './jobs';
 import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
+import { getArticlePipeline, runArticlePipeline } from './pipelines';
 import { listArtifacts, getArtifact, downloadArtifact } from './artifacts';
 import {
   downloadDailyReportHtml,
@@ -59,6 +60,12 @@ describe('UI API client contract', () => {
     await listWorkflows();
     await getWorkflow('install-config');
     await runWorkflow('install-config', { confirmed: true } as never);
+    await getArticlePipeline();
+    await runArticlePipeline({
+      params: { config_path: 'config/articles.yaml' },
+      created_by: 'web',
+      confirmed: false,
+    } as never);
     await listArtifacts({ skip: 0, limit: 10 });
     await getArtifact('artifact-1');
     await downloadArtifact('artifact-1');
@@ -118,6 +125,12 @@ describe('UI API client contract', () => {
     expect(findCall('/api/ui/v1/workflows')).toBeTruthy();
     expect(findCall('/api/ui/v1/workflows/install-config')).toBeTruthy();
     expectJsonBody('/api/ui/v1/workflows/install-config/run', 'POST', { confirmed: true });
+    expect(findCall('/api/ui/v1/pipelines/article_pipeline')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
+      params: { config_path: 'config/articles.yaml' },
+      created_by: 'web',
+      confirmed: false,
+    });
     expect(findCall('/api/ui/v1/artifacts?skip=0&limit=10')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1/download')).toBeTruthy();

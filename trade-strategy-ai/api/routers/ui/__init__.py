@@ -6,6 +6,7 @@ from .imports import router as imports_router
 from .kaipan import router as kaipan_router
 from .data_health import router as data_health_router
 from .persona import router as persona_router
+from .pipelines import router as pipelines_router
 from .signals import router as signals_router
 from .market import router as market_router
 from .snapshots import router as snapshots_router
@@ -26,6 +27,7 @@ __all__ = [
     "legacy_system_router",
     "market_router",
     "persona_router",
+    "pipelines_router",
     "settings_router",
     "ops_router",
     "snapshots_router",

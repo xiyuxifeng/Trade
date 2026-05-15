@@ -82,11 +82,11 @@ describe('WorkflowsPage', () => {
       ['/workflows'],
     );
 
-    expect(await screen.findByText('Workflow catalog')).toBeInTheDocument();
-    expect(await screen.findByText('Workflow summary')).toBeInTheDocument();
+    expect(await screen.findByText('工作流目录')).toBeInTheDocument();
+    expect(await screen.findByText('工作流摘要')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/workflows/install-config');
+      expect(router.state.location.pathname).toBe('/workflows');
     });
   });
 });

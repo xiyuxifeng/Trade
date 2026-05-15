@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.pipelines.article_pipeline_spec import ARTICLE_PIPELINE_SPECS, PipelineSpec
 from src.services.job_registry import JOB_DEFINITIONS, JobDefinition
 from src.services.workflow_service import DEFAULT_WORKFLOWS, WorkflowDefinition, WorkflowStep
 
@@ -81,4 +82,22 @@ def get_workflow_contract(workflow_id: str) -> dict[str, Any] | None:
     for definition in DEFAULT_WORKFLOWS:
         if definition.workflow_id == workflow_id:
             return _workflow_contract(definition)
+    return None
+
+
+def _pipeline_contract(definition: PipelineSpec) -> dict[str, Any]:
+    """把 PipelineSpec 归一化成 canonical contract。"""
+    return definition.summary()
+
+
+def list_pipeline_contracts() -> list[dict[str, Any]]:
+    """列出所有 Pipeline canonical contract。"""
+    return [_pipeline_contract(definition) for definition in ARTICLE_PIPELINE_SPECS]
+
+
+def get_pipeline_contract(pipeline_id: str) -> dict[str, Any] | None:
+    """按 pipeline_id 获取 Pipeline canonical contract。"""
+    for definition in ARTICLE_PIPELINE_SPECS:
+        if definition.pipeline_id == pipeline_id:
+            return _pipeline_contract(definition)
     return None

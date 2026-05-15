@@ -37,17 +37,34 @@ function getErrorMessage(error: unknown) {
   return '工作流运行失败';
 }
 
+function getApiFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiError)) return {};
+
+  const detail = error.payload?.detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return {};
+
+  const fields = (detail as { fields?: unknown }).fields;
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return {};
+
+  return Object.fromEntries(
+    Object.entries(fields).map(([name, value]) => [name, typeof value === 'string' ? value : JSON.stringify(value)]),
+  );
+}
+
 function FieldEditor({
   name,
   field,
   value,
+  error,
   onChange,
 }: {
   name: string;
   field: WorkflowParamField;
   value: string | boolean | undefined;
+  error?: string;
   onChange: (nextValue: string | boolean) => void;
 }) {
+  const errorId = `workflow-field-${name}-error`;
   const label = (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -68,6 +85,8 @@ function FieldEditor({
         {field.type === 'boolean' ? (
           <label className="flex items-center gap-3 text-sm text-slate-200">
             <input
+              aria-describedby={error ? errorId : undefined}
+              aria-invalid={error ? 'true' : undefined}
               checked={Boolean(value)}
               className="h-4 w-4 rounded border-slate-700 bg-slate-950"
               onChange={(event) => onChange(event.target.checked)}
@@ -76,7 +95,12 @@ function FieldEditor({
             <span>{field.default ? '默认开启' : '默认关闭'}</span>
           </label>
         ) : field.enum.length ? (
-          <Select value={String(value ?? '')} onChange={(event) => onChange(event.target.value)}>
+          <Select
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? 'true' : undefined}
+            value={String(value ?? '')}
+            onChange={(event) => onChange(event.target.value)}
+          >
             <option value="">{field.required ? '请选择' : '保持默认'}</option>
             {field.enum.map((option) => (
               <option key={option} value={option}>
@@ -86,6 +110,8 @@ function FieldEditor({
           </Select>
         ) : field.type === 'array' || field.type === 'object' ? (
           <Textarea
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? 'true' : undefined}
             className="min-h-28 font-mono text-xs"
             onChange={(event) => onChange(event.target.value)}
             placeholder={field.type === 'array' ? '[]' : '{}'}
@@ -93,6 +119,8 @@ function FieldEditor({
           />
         ) : (
           <Input
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? 'true' : undefined}
             onChange={(event) => onChange(event.target.value)}
             placeholder={field.type === 'date' ? 'YYYY-MM-DD (例如: 2024-01-01)' : ''}
             type={field.type === 'integer' || field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
@@ -100,6 +128,11 @@ function FieldEditor({
           />
         )}
       </div>
+      {error ? (
+        <p className="mt-2 text-sm text-rose-300" id={errorId}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -116,6 +149,7 @@ export function WorkflowParameterForm({
   const schema = getWorkflowRunSchema(workflow);
   const [values, setValues] = useState<WorkflowFieldValues>(() => buildWorkflowDefaultValues(schema));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewParams, setPreviewParams] = useState<Record<string, unknown>>({});
   const [submittedSummary, setSubmittedSummary] = useState<WorkflowRunResponse | null>(null);
@@ -126,6 +160,7 @@ export function WorkflowParameterForm({
   useEffect(() => {
     setValues(buildWorkflowDefaultValues(schema));
     setErrorMessage(null);
+    setFieldErrors({});
     setConfirmOpen(false);
     setPreviewParams({});
     setSubmittedSummary(null);
@@ -141,6 +176,7 @@ export function WorkflowParameterForm({
     },
     onSuccess: async (data) => {
       setErrorMessage(null);
+      setFieldErrors({});
       setSubmittedSummary(data);
       setConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -150,6 +186,7 @@ export function WorkflowParameterForm({
     },
     onError: (error: unknown) => {
       setSubmittedSummary(null);
+      setFieldErrors(getApiFieldErrors(error));
       setErrorMessage(getErrorMessage(error));
     },
   });
@@ -165,11 +202,13 @@ export function WorkflowParameterForm({
     const validation = validateWorkflowValues(schema, values);
     if (validation.errors.length) {
       setErrorMessage(validation.errors.join('；'));
+      setFieldErrors(validation.fieldErrors);
       return;
     }
 
     setPreviewParams(validation.params);
     setErrorMessage(null);
+    setFieldErrors({});
 
     if (riskSummary.requiresConfirmation) {
       setConfirmOpen(true);
@@ -203,8 +242,16 @@ export function WorkflowParameterForm({
                   key={name}
                   name={name}
                   field={field}
+                  error={fieldErrors[name]}
                   value={values[name]}
-                  onChange={(nextValue) => setValues((current) => ({ ...current, [name]: nextValue }))}
+                  onChange={(nextValue) => {
+                    setValues((current) => ({ ...current, [name]: nextValue }));
+                    setFieldErrors((current) => {
+                      const next = { ...current };
+                      delete next[name];
+                      return next;
+                    });
+                  }}
                 />
               ))}
             </div>
@@ -239,6 +286,7 @@ export function WorkflowParameterForm({
             onClick={() => {
               setValues(buildWorkflowDefaultValues(schema));
               setErrorMessage(null);
+              setFieldErrors({});
             }}
           >
             重置默认值

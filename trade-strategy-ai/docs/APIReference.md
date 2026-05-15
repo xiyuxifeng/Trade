@@ -351,55 +351,145 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 - 返回 Job 日志行
 
-### 4.9 `POST /api/ui/v1/jobs/{job_id}/cancel`
+### 4.9 `GET /api/ui/v1/jobs/{job_id}/timeline`
+
+功能：
+
+- 返回 Job 时间线事件
+- 当前读取 Job audit events，后续 `NW-V1-S2-002` 会切换为正式 Step Timeline 数据
+- 返回空 `items` 时 UI 应显示 empty timeline 状态
+
+返回要点：
+
+- `job_id`
+- `count`
+- `items`
+
+### 4.10 `GET /api/ui/v1/jobs/{job_id}/artifacts`
+
+功能：
+
+- 返回 Job 绑定的 artifact 引用
+- 只返回 contract 中的安全 artifact 元数据，不返回服务器绝对路径
+
+返回要点：
+
+- `job_id`
+- `count`
+- `items`
+
+### 4.11 `POST /api/ui/v1/jobs/{job_id}/cancel`
 
 功能：
 
 - 请求取消 Job
 
-### 4.10 `GET /api/ui/v1/workflows`
+### 4.12 `GET /api/ui/v1/workflows`
 
 功能：
 
 - 列出 Workflow 定义
 
-### 4.11 `GET /api/ui/v1/workflows/{workflow_id}`
+### 4.13 `GET /api/ui/v1/workflows/{workflow_id}`
 
 功能：
 
 - 返回单个 Workflow 定义
 
-### 4.12 `POST /api/ui/v1/workflows/{workflow_id}/run`
+### 4.14 `POST /api/ui/v1/workflows/{workflow_id}/run`
 
 功能：
 
 - 运行 Workflow 并创建 Job
 
-### 4.13 `GET /api/ui/v1/artifacts`
+### 4.15 `GET /api/ui/v1/pipelines`
+
+功能：
+
+- 列出 Web UI 支持的 Pipeline
+- V1 仅暴露 canonical `article_pipeline`
+- `article_pipeline` 映射到 `WorkflowService` 中的 `pipeline` workflow，不直接执行 pipeline 内部函数
+
+返回要点：
+
+- `count`
+- `items[].pipeline_id`
+- `items[].workflow_id`
+- `items[].job_type`
+- `items[].title`
+- `items[].description`
+
+### 4.16 `GET /api/ui/v1/pipelines/article_pipeline`
+
+功能：
+
+- 返回 `article_pipeline` 的运行定义
+- definition 来源于后端 Workflow / JobDefinition schema，供 UI schema-driven form 使用
+
+返回要点：
+
+- `pipeline.pipeline_id`
+- `pipeline.workflow_id`
+- `pipeline.workflow`
+- `pipeline.workflow.job_definition.params_schema`
+
+### 4.17 `POST /api/ui/v1/pipelines/article_pipeline/run`
+
+功能：
+
+- 通过 Workflow / Job 体系创建 `article_pipeline` Job
+- 不在 API Router 中直接调用 pipeline/provider
+
+请求体 `PipelineRunRequest`：
+
+- `params`
+- `created_by`
+- `idempotency_key`
+- `confirmed`
+
+返回要点：
+
+- `workflow`
+- `job`
+
+错误结构：
+
+```json
+{
+  "detail": {
+    "code": "pipeline_not_found",
+    "message": "pipeline not found",
+    "status": "not_found",
+    "fields": {}
+  }
+}
+```
+
+### 4.18 `GET /api/ui/v1/artifacts`
 
 功能：
 
 - 列出主要产物并返回基础索引
 
-### 4.14 `GET /api/ui/v1/artifacts/{artifact_id}`
+### 4.19 `GET /api/ui/v1/artifacts/{artifact_id}`
 
 功能：
 
 - 返回单个产物的预览信息
 
-### 4.15 `GET /api/ui/v1/artifacts/{artifact_id}/download`
+### 4.20 `GET /api/ui/v1/artifacts/{artifact_id}/download`
 
 功能：
 
 - 下载单个产物文件
 
-### 4.16 `GET /api/ui/v1/market/symbols`
+### 4.21 `GET /api/ui/v1/market/symbols`
 
 功能：
 
 - 返回行情标的列表
 
-### 4.17 `GET /api/ui/v1/market/ohlcv`
+### 4.22 `GET /api/ui/v1/market/ohlcv`
 
 功能：
 

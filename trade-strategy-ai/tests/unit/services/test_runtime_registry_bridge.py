@@ -40,3 +40,19 @@ def test_runtime_registry_bridge_normalizes_workflow_definition() -> None:
     assert contract["steps"][2]["required_job_type"] == "pipeline-run"
     assert "job_definition" not in contract
     assert "service_name" not in contract
+
+
+def test_runtime_registry_bridge_normalizes_pipeline_definition() -> None:
+    """Bridge 应把 PipelineSpec 归一化成 canonical contract。"""
+    from src.services.runtime_registry_bridge import get_pipeline_contract, list_pipeline_contracts
+
+    contracts = list_pipeline_contracts()
+    contract = get_pipeline_contract("article_pipeline")
+
+    assert contracts
+    assert contract is not None
+    assert contract["pipeline_id"] == "article_pipeline"
+    assert contract["workflow_id"] == "pipeline"
+    assert contract["ui_page"] == "/articles"
+    assert "UI-V1-010" in contract["ui_task_ids"]
+    assert contract["output_artifacts"][0]["kind"] == "result-json"

@@ -17,15 +17,15 @@ const mockedGetJob = vi.mocked(getJob);
 const mockedGetJobLogs = vi.mocked(getJobLogs);
 
 describe('JobDetailPage', () => {
-  it('renders job detail sections, artifacts and config snapshot', async () => {
+  it('renders successful job detail sections, artifacts and config snapshot', async () => {
     mockedGetJob.mockResolvedValue({
       job: {
         id: 'job-1',
         job_type: 'pipeline-run',
-        status: 'running',
+        status: 'success',
         params: { config_path: '/Users/example/project/config/app.yaml', force: true },
         result: { message: 'ok' },
-        error: { type: 'runner_error', message: 'handler failed' },
+        error: null,
         artifacts: [
           {
             artifact_id: 'artifact-1',
@@ -115,9 +115,100 @@ describe('JobDetailPage', () => {
     renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/job-1']);
 
     expect(await screen.findByText('执行报告')).toBeInTheDocument();
-    expect(await screen.findByText('任务仍在运行，页面会自动刷新状态。')).toBeInTheDocument();
+    expect(screen.getByText('成功')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
+  });
+
+  it('renders failed job detail with empty artifact fallback', async () => {
+    mockedGetJob.mockResolvedValue({
+      job: {
+        id: 'job-2',
+        job_type: 'pipeline-run',
+        status: 'failed',
+        params: { config_path: '/Users/example/project/config/app.yaml' },
+        result: null,
+        error: { type: 'runner_error', message: 'handler failed' },
+        artifacts: [],
+        created_by: 'web',
+        idempotency_key: null,
+        retry_count: 0,
+        max_retries: 3,
+        retry_backoff_seconds: 0,
+        timeout_seconds: null,
+        cancel_requested: false,
+        cancel_requested_at: null,
+        worker_id: 'worker-1',
+        lock_token: null,
+        lock_acquired_at: '2026-05-09T08:00:00Z',
+        heartbeat_at: '2026-05-09T08:01:00Z',
+        scheduled_at: null,
+        started_at: '2026-05-09T08:00:00Z',
+        finished_at: '2026-05-09T08:05:00Z',
+        audit_events: [
+          {
+            id: 'audit-1',
+            job_id: 'job-2',
+            operation: 'create',
+            actor: 'web',
+            source: 'ui',
+            params_summary: { config_path: '/Users/example/project/config/app.yaml' },
+            payload: { details: { request_context: { channel: 'ui' } } },
+            event_at: '2026-05-09T08:00:00Z',
+            created_at: '2026-05-09T08:00:00Z',
+            updated_at: '2026-05-09T08:00:00Z',
+          },
+          {
+            id: 'audit-2',
+            job_id: 'job-2',
+            operation: 'fail',
+            actor: 'worker-1',
+            source: 'runner',
+            params_summary: { config_path: '/Users/example/project/config/app.yaml' },
+            payload: { details: { error_type: 'runner_error' } },
+            event_at: '2026-05-09T08:05:00Z',
+            created_at: '2026-05-09T08:05:00Z',
+            updated_at: '2026-05-09T08:05:00Z',
+          },
+        ],
+        created_at: '2026-05-09T08:00:00Z',
+        updated_at: '2026-05-09T08:05:00Z',
+        config_snapshot_path: '/tmp/job-2/config_snapshot.json',
+        config_snapshot: {
+          config_snapshot_id: 'snapshot-2',
+          job_id: 'job-2',
+          config_path: '/Users/example/project/config/app.yaml',
+          config_source: '/Users/example/project/config/app.yaml',
+          config_hash: 'hash-2',
+          masked_snapshot: {
+            app: {
+              api_key: '***',
+            },
+          },
+          captured_at: '2026-05-09T07:55:00Z',
+          snapshot_path: '/tmp/job-2/config_snapshot.json',
+        },
+      },
+      job_dir: '/tmp/job-2',
+      log_path: '/tmp/job-2/job.log',
+      params_path: '/tmp/job-2/params.json',
+      result_path: '/tmp/job-2/result.json',
+      artifacts_path: '/tmp/job-2/artifacts.json',
+    });
+    mockedGetJobLogs.mockResolvedValue({
+      job_id: 'job-2',
+      log_path: '/tmp/job-2/job.log',
+      count: 2,
+      items: ['job started', 'handler failed'],
+    });
+
+    renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/job-2']);
+
+    expect(await screen.findByText('handler failed')).toBeInTheDocument();
+    expect(screen.getAllByText('失败').length).toBeGreaterThan(0);
+    expect(screen.getByText('先检查日志和结果摘要，再决定是否重试。')).toBeInTheDocument();
+    expect(screen.getByText('该任务未产生任何产物。')).toBeInTheDocument();
+    expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
   });
 
   it('renders not found and permission denied states', async () => {

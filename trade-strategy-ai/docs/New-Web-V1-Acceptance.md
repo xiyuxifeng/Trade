@@ -44,7 +44,31 @@ V1 不作为阻断项的能力：
 | Web UI 人工验收路径 | `NW-V1-S4-001`, `NW-V1-S4-002` | `UI-V1-011` | 有可执行的人工验收步骤，能完整走通 V1 主链路。 |
 | E2E 命令 | `NW-V1-S4-001`, `NW-V1-S4-002` | `UI-V1-011` | 保留统一回归命令，例如 `python -m cli.main e2e-regression --config config/app.yaml`。 |
 
-## 3. 验收判定规则
+## 3. 推荐验证路径
+
+### 3.1 自动化检查
+
+建议按以下顺序执行，覆盖 V1 的基础回归和验收面：
+
+1. `web/src/app/route-registry.test.ts`
+2. `web/src/pages/jobs/index.test.tsx`
+3. `web/src/pages/jobs/JobDetailPage.test.tsx`
+4. `web/src/features/workflows/workflow-parameter-form.test.tsx`
+5. `web/src/pages/articles/index.test.tsx`
+6. `web/src/components/profiles/config-snapshot-panel.test.tsx`
+7. `web/src/components/artifacts/artifact-panel.test.tsx`
+
+### 3.2 人工验收路径
+
+1. 打开 `/jobs`，确认任务列表可访问，并能看到 loading、empty、error 和 permission denied 的可解释状态。
+2. 打开一个成功 Job 的详情页，确认能看到步骤时间线、产物区和脱敏配置快照。
+3. 打开一个失败 Job 的详情页，确认能看到失败原因、重试建议和无产物回退。
+4. 打开 `/workflows`，进入参数表单，清空必填项后确认本地校验会阻止提交。
+5. 打开 `/articles`，提交 `article_pipeline`，确认能跳转到 Job Detail。
+6. 打开带有配置快照的 Job Detail，确认敏感字段只显示脱敏内容。
+7. 打开产物区，确认缺失产物时不会暴露服务器绝对路径。
+
+## 4. 验收判定规则
 
 - 每个验收项必须写明主任务和 UI 任务，不允许只写“页面可用”。
 - UI 验收必须覆盖 `loading`、`empty`、`error`、`permission denied`。
@@ -52,7 +76,7 @@ V1 不作为阻断项的能力：
 - 如果某个能力只有后端而没有对应 UI，必须明确写出当前缺口和后续任务。
 - 只有当验收项、文档、任务状态三者一致时，才算可交付。
 
-## 4. 当前结论
+## 5. 当前结论
 
 - V1 的验收边界已经可以被 `NW-V1-S0-003` 直接引用。
 - `UI-V1-011` 是 V1 验收的最终测试与人工验收入口，但不作为本任务的完成前提。

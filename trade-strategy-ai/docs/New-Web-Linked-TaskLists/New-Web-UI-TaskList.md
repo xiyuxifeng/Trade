@@ -804,7 +804,7 @@ Artifact 类型至少支持：
 
 ---
 
-### [ ] UI-V1-011 P0 Web UI 基础测试和验收
+### [x] UI-V1-011 P0 Web UI 基础测试和验收
 
 任务目标：为 V1 UI 提供基础回归和人工验收路径。
 
@@ -833,6 +833,12 @@ Artifact 类型至少支持：
 
 - 有自动化测试或明确人工验收步骤。
 - 文档能指导用户完整跑通 V1 UI。
+
+完成情况：
+
+- 已补充 V1 验收文档 [docs/New-Web-V1-Acceptance.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-V1-Acceptance.md)，整理自动化检查顺序和人工验收路径。
+- 已补齐 `Job Detail` 的成功、失败、无产物回退覆盖，和现有 `Job List`、`Workflow Form`、`Article Pipeline`、`Config Snapshot`、`Artifact Panel` 测试共同构成 V1 基础回归面。
+- 路由可访问性由 `web/src/app/route-registry.test.ts` 覆盖，V1 页面与验收文档保持一致。
 
 主任务关联：
 

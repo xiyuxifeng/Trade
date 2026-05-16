@@ -1148,7 +1148,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S2-003 P0 扩展 Market Snapshot 数据覆盖
+### [x] NW-V2-S2-003 P0 扩展 Market Snapshot 数据覆盖
 
 任务目标：扩展当前 `snapshot-build` 的市场数据覆盖范围，解决 Market Snapshot 数据过少的问题，并为盘前策略、盘后归因、回测和 Regime-aware Rule Selection 提供统一市场上下文。
 
@@ -1192,18 +1192,18 @@ UI 关联任务：
    - `data_quality`
    - `sections`
 2. Snapshot sections 至少预留并按可用 provider 逐步实现：
-   - `indices`：指数数据
-   - `sectors`：板块/行业数据
-   - `ohlcv`：个股日线数据
-   - `topics`：热点/题材
-   - `topic_constituents`：题材成分股
-   - `auction`：竞价数据
-   - `limit_up_down`：涨停/跌停数据
+   - ✅ `indices`：指数数据（由 `overview` 覆盖）
+   - ✅ `sectors`：板块/行业数据（由 `sector_activity` 覆盖）
+   - ✅ `ohlcv`：个股日线数据
+   - ✅ `topics`：热点/题材（由 `hot_topics` 覆盖）
+   - ✅ `topic_constituents`：题材成分股
+   - ✅ `auction`：竞价数据
+   - ✅ `limit_up_down`：涨停/跌停数据
    - `dragon_tiger`：龙虎榜
    - `liquidity`：成交额/量能
    - `breadth`：市场广度
-   - `sentiment`：情绪指标
-   - `strong_symbols`：强势股候选池
+   - ✅ `sentiment`：情绪指标（由 `overview` 覆盖）
+   - ✅ `strong_symbols`：强势股候选池
    - `event_data`：盘后解释需要的事件型数据
 3. 每个 section 必须记录：
    - provider
@@ -1240,6 +1240,36 @@ UI 关联任务：
 - `UI-V2-005 Market Data Workspace`
 - `UI-V2-010 Market Snapshot Browser`
 - `UI-V2-007 Artifact Center`
+
+完成情况：
+
+- 已新增结构化 `MarketSnapshot` schema、section registry 和首批 section builders。
+- 已实现首批 section：`overview`、`limit_up_down`、`sector_activity`、`auction`、`ohlcv`、`hot_topics`、`topic_constituents`、`strong_symbols`、`market_state`。
+- 已保留旧 `snapshot_service` 兼容层，不新增产品级 CLI 入口。
+- 已输出 `snapshot.json`、`snapshot.summary.json`、`snapshot.quality.json` 三类产物，并接入 Job artifact 绑定。
+- 已补齐 `market_data PipelineSpec` 的新 artifact 声明。
+- 已通过定向回归测试和 legacy 兼容测试。
+
+第一批 snapshot sections 数据源映射：
+
+| Section | 主要来源 | 说明 |
+|---|---|---|
+| `overview` | `ChangeStatistics` / `MarketCapacity` / `GetZsReal`（或 `RefreshStockList`） | 覆盖情绪、容量和指数概览 |
+| `limit_up_down` | `MarketStockZDNum` / `DailyLimitIndex` / `ZhangTingExpression` / `fetch_limit_up_info` / `fetch_limit_up_reason` / `DailyLimitPerformance2` / `GetPMSL_PMLD` / `fetch_lhb_list` | 覆盖涨停、跌停、破板、亮点与龙虎榜 |
+| `sector_activity` | `RealRankingInfo` / `ZhiShuRanking` / `WeightPerformance` / `GetBKJJ_W36` / `GetBKJJBL` | 覆盖板块、行业、地区、权重和竞价 |
+| `auction` | `MorningBidding` / `MorningBiddingNum` / `MorningBiddingList` / `GetWPQC` | 覆盖盘前竞价和尾盘竞价 |
+| `ohlcv` | `MarketService.get_ohlcv` + `MarketDataCache` fallback | 覆盖个股日线行情 |
+| `hot_topics` | 现有 `market_universe` 热题材链路 | 覆盖热点/题材 |
+| `topic_constituents` | 现有 `market_universe` 题材成分链路 | 覆盖题材成分股 |
+| `strong_symbols` | 现有 `market_universe` 强势标的筛选链路 | 覆盖强势股候选池 |
+| `market_state` | `PersonaService.build_market_state` | 覆盖市场状态上下文 |
+
+UI 操作方式：
+
+- 当前用户在 `快照中心` 页面提交抓取任务，填写开始日期、结束日期、时间插槽、快照类型、是否强制、是否离线后，点击 `构建快照`。
+- 页面不会逐个 section 勾选；`snapshot-build` 会按 registry 统一构建已注册的 sections。
+- `Kaipan` 页面负责原始市场数据的 `Fetch / Normalize / Run`，可选 `trade_date` 和 `slot`，适合先抓原始数据再由 `snapshot-build` 聚合。
+- 构建完成后，用户在 `快照中心` 里查看快照列表和详情，或跳转到 Job Detail / Artifact Center 查看摘要和质量报告。
 
 ---
 

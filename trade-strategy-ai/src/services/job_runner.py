@@ -42,6 +42,31 @@ def _to_plain(value: Any) -> Any:
     return value
 
 
+_SENSITIVE_RESULT_PATH_KEYS = {
+    "html_path",
+    "market_state_path",
+    "quality_report_path",
+    "result_path",
+    "snapshot_path",
+    "snapshot_summary_path",
+}
+
+
+def _sanitize_result_payload_for_output(payload: dict[str, Any]) -> dict[str, Any]:
+    """把对外写入的 job result 脱敏，避免暴露绝对路径。"""
+
+    def _sanitize(value: Any, key: str | None = None) -> Any:
+        if isinstance(value, dict):
+            return {item_key: _sanitize(item_value, item_key) for item_key, item_value in value.items()}
+        if isinstance(value, list):
+            return [_sanitize(item) for item in value]
+        if key in _SENSITIVE_RESULT_PATH_KEYS and isinstance(value, (str, Path)):
+            return Path(value).name
+        return value
+
+    return _sanitize(_to_plain(payload))
+
+
 def _parse_date(value: Any) -> date:
     """将字符串或 date 统一解析为 date。"""
     if isinstance(value, date):
@@ -170,15 +195,16 @@ class JobRunner(BaseService):
 
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
-            return await service.build_snapshot(
+            trade_date = params.get("trade_date") or params.get("date") or date.today().isoformat()
+            return await service.build_market_snapshot(
                 config_path=params.get("config_path", "config/app.yaml"),
-                date=params.get("date"),
-                start_date=params.get("start_date"),
-                end_date=params.get("end_date"),
+                trade_date=str(trade_date),
                 slot=str(params.get("slot") or "17-30"),
-                snapshot_type=str(params.get("snapshot_type") or "all"),
+                profile_id=params.get("profile_id") or "default",
+                market=str(params.get("market") or "CN"),
                 force=_parse_bool(params.get("force"), default=False),
                 offline=_parse_bool(params.get("offline"), default=False),
+                snapshot_type=str(params.get("snapshot_type") or "all"),
             )
 
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
@@ -273,6 +299,10 @@ class JobRunner(BaseService):
             artifact_specs.append(("market-state-json", "市场状态 JSON", payload["market_state_path"]))
         if payload.get("snapshot_path"):
             artifact_specs.append(("snapshot-json", "市场快照 JSON", payload["snapshot_path"]))
+        if payload.get("snapshot_summary_path"):
+            artifact_specs.append(("snapshot-summary-json", "市场快照摘要 JSON", payload["snapshot_summary_path"]))
+        if payload.get("quality_report_path"):
+            artifact_specs.append(("snapshot-quality-json", "市场快照质量报告 JSON", payload["quality_report_path"]))
         snapshot_paths = payload.get("snapshot_paths")
         if isinstance(snapshot_paths, list):
             artifact_specs.extend(("snapshot-json", "市场快照 JSON", item) for item in snapshot_paths if item)
@@ -357,7 +387,8 @@ class JobRunner(BaseService):
         try:
             result = await handler(params)
             result_payload = _to_plain(result.model_dump())
-            result_path = await self._write_result_file(job_dir=job_dir, payload=result_payload)
+            public_result_payload = _sanitize_result_payload_for_output(result_payload)
+            result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
             await self._job_service.bind_artifact(
                 job_id=job_id,
                 kind="result-json",
@@ -384,7 +415,7 @@ class JobRunner(BaseService):
                 return ServiceResult(
                     status="error",
                     message="job execution failed",
-                    payload={"job": failed.payload.get("job"), "result": result_payload, "result_path": str(result_path)},
+                    payload={"job": failed.payload.get("job"), "result": public_result_payload, "result_path": result_path.name},
                 )
 
             completed = await self._job_service.complete_job(job_id=job_id, result=result_payload)
@@ -397,8 +428,8 @@ class JobRunner(BaseService):
                 message="job executed",
                 payload={
                     "job": completed.payload["job"],
-                    "result": result_payload,
-                    "result_path": str(result_path),
+                    "result": public_result_payload,
+                    "result_path": result_path.name,
                 },
             )
         except Exception as exc:  # noqa: BLE001

@@ -15,6 +15,8 @@ def test_market_data_pipeline_spec_summary() -> None:
     assert "kaipan-fetch" in summary["job_types"]
     assert "snapshot-build" in summary["job_types"]
     assert any(item["kind"] == "market-state-json" for item in summary["output_artifacts"])
+    assert any(item["kind"] == "snapshot-summary-json" for item in summary["output_artifacts"])
+    assert any(item["kind"] == "snapshot-quality-json" for item in summary["output_artifacts"])
     assert any(step["job_type"] == "snapshot-build" for step in summary["steps"])
     assert summary["extensions"]["permissions_by_job_type"]["kaipan-fetch"] == "admin"
     assert summary["extensions"]["permissions_by_job_type"]["snapshot-build"] == "operator"

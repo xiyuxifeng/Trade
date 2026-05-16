@@ -19,6 +19,7 @@ from src.services.job_service import JobService
 from src.services.job_runner import JobRunner
 from src.services.kaipan_service import KaipanService
 from src.services.market_service import MarketService
+from src.services.market_snapshot_service import MarketSnapshotService
 from src.services.optimize_service import OptimizeService
 from src.services.pipeline_application_service import PipelineApplicationService
 from src.services.persona_service import PersonaService
@@ -54,6 +55,7 @@ __all__ = [
     "PipelineService",
     "SnapshotService",
     "MarketService",
+    "MarketSnapshotService",
     "StrategyService",
     "PersonaService",
     "SignalService",

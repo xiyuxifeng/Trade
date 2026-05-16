@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -127,6 +128,55 @@ def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
     assert loaded.payload["job"]["status"] == "success"
     assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
     assert any(item["kind"] == "market-state-json" for item in loaded.payload["job"]["artifacts"])
+    asyncio.run(engine.dispose())
+
+
+def test_submit_snapshot_job_binds_summary_and_quality_artifacts(tmp_path: Path) -> None:
+    """结构化 snapshot job 应绑定摘要与质量报告产物。"""
+
+    async def _handler(params: dict[str, Any]) -> Any:
+        del params
+        snapshot_path = tmp_path / "snapshot.json"
+        summary_path = tmp_path / "snapshot.summary.json"
+        quality_path = tmp_path / "snapshot.quality.json"
+        snapshot_path.write_text("{}", encoding="utf-8")
+        summary_path.write_text("{}", encoding="utf-8")
+        quality_path.write_text("{}", encoding="utf-8")
+        return ServiceResult(
+            status="ok",
+            payload={
+                "snapshot_path": str(snapshot_path),
+                "snapshot_summary_path": str(summary_path),
+                "quality_report_path": str(quality_path),
+            },
+            message="snapshot done",
+        )
+
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        handlers={"snapshot-build": _handler},
+    )
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="snapshot-build",
+            params={"config_path": "config/app.yaml", "trade_date": "2026-05-16"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    executed = asyncio.run(runner.execute_job(job_id=job_id))
+    loaded = asyncio.run(job_service.get_job(job_id))
+    result_payload = json.loads((tmp_path / "jobs" / str(job_id) / "result.json").read_text(encoding="utf-8"))
+
+    kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
+    assert executed.status == "ok"
+    assert str(tmp_path) not in json.dumps(result_payload, ensure_ascii=False)
+    assert result_payload["result"]["payload"]["snapshot_path"] == "snapshot.json"
+    assert result_payload["result"]["payload"]["snapshot_summary_path"] == "snapshot.summary.json"
+    assert result_payload["result"]["payload"]["quality_report_path"] == "snapshot.quality.json"
+    assert "snapshot-json" in kinds
+    assert "snapshot-summary-json" in kinds
+    assert "snapshot-quality-json" in kinds
     asyncio.run(engine.dispose())
 
 

@@ -58,6 +58,31 @@ def _sanitize_audit_data(value: Any) -> Any:
     return plain
 
 
+_SENSITIVE_RESULT_PATH_KEYS = {
+    "html_path",
+    "market_state_path",
+    "quality_report_path",
+    "result_path",
+    "snapshot_path",
+    "snapshot_summary_path",
+}
+
+
+def _sanitize_result_payload_for_output(payload: dict[str, Any]) -> dict[str, Any]:
+    """把落盘的 job result 脱敏，避免暴露绝对路径。"""
+
+    def _sanitize(value: Any, key: str | None = None) -> Any:
+        if isinstance(value, dict):
+            return {item_key: _sanitize(item_value, item_key) for item_key, item_value in value.items()}
+        if isinstance(value, list):
+            return [_sanitize(item) for item in value]
+        if key in _SENSITIVE_RESULT_PATH_KEYS and isinstance(value, (str, Path)):
+            return Path(value).name
+        return value
+
+    return _sanitize(_to_plain(payload))
+
+
 class JobService(BaseService):
     """Job Center 的数据库服务。"""
 
@@ -215,7 +240,7 @@ class JobService(BaseService):
         if profile_snapshot_payload is not None:
             self._write_json_file(self._profile_snapshot_path(job.id), profile_snapshot_payload)
         if result_payload is not None:
-            self._write_json_file(self._result_path(job.id), result_payload)
+            self._write_json_file(self._result_path(job.id), _sanitize_result_payload_for_output(result_payload))
 
     def _load_config_snapshot(self, job_id: UUID) -> dict[str, Any] | None:
         """从 job 目录读取配置快照摘要。"""

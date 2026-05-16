@@ -118,7 +118,21 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
         PipelineOutputArtifactSpec(
             kind="snapshot-json",
             title="市场快照 JSON",
-            description="snapshot-build 的输出结果。",
+            description="结构化 market snapshot 的完整输出结果。",
+            previewable=True,
+            extensions={"required": False},
+        ),
+        PipelineOutputArtifactSpec(
+            kind="snapshot-summary-json",
+            title="市场快照摘要 JSON",
+            description="snapshot-build 的覆盖率和 section 摘要。",
+            previewable=True,
+            extensions={"required": False},
+        ),
+        PipelineOutputArtifactSpec(
+            kind="snapshot-quality-json",
+            title="市场快照质量报告 JSON",
+            description="snapshot-build 的质量和缺失原因报告。",
             previewable=True,
             extensions={"required": False},
         ),

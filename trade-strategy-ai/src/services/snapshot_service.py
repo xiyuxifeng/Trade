@@ -12,6 +12,7 @@ from src.pipeline.tasks.snapshot_tasks import (
     handle_topic_constituents_snapshot,
 )
 from src.services.base import BaseService, ServiceResult
+from src.services.market_snapshot_service import MarketSnapshotService
 
 
 def _project_base_dir(config_path: Path) -> Path:
@@ -153,3 +154,28 @@ class SnapshotService(BaseService):
     def delete_snapshot(self, trade_date: str, slot: str) -> bool:
         """删除单个快照。"""
         return self._backend.delete(trade_date, slot)
+
+    async def build_market_snapshot(
+        self,
+        *,
+        config_path: str | Path,
+        trade_date: str,
+        slot: str = "17-30",
+        profile_id: str | None = "default",
+        market: str = "CN",
+        offline: bool = False,
+        force: bool = False,
+        snapshot_type: str = "all",
+    ) -> ServiceResult:
+        """构建结构化 Market Snapshot。"""
+        service = MarketSnapshotService()
+        return await service.build_market_snapshot(
+            config_path=config_path,
+            trade_date=trade_date,
+            slot=slot,
+            profile_id=profile_id,
+            market=market,
+            offline=offline,
+            force=force,
+            snapshot_type=snapshot_type,
+        )

@@ -23,7 +23,17 @@ import {
   validateSettingsDraft,
 } from './settings';
 import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup } from './ops';
-import { listSymbols, getOhlcv } from './market';
+import {
+  getMarketDataset,
+  getMarketSnapshot,
+  getMarketSnapshotQuality,
+  getMarketSnapshotSection,
+  getOhlcv,
+  listMarketDatasets,
+  listMarketSnapshotSections,
+  listMarketSnapshots,
+  listSymbols,
+} from './market';
 
 describe('UI API client contract', () => {
   beforeEach(() => {
@@ -94,6 +104,13 @@ describe('UI API client contract', () => {
     } as never);
     await listSymbols('000001', 50);
     await getOhlcv('000001.SZ', '2026-05-01', '2026-05-10');
+    await listMarketSnapshots({ tradeDate: '2026-05-16', market: 'cn', limit: 10, offset: 0 });
+    await getMarketSnapshot('snapshot-001');
+    await listMarketSnapshotSections('snapshot-001', 20, 0);
+    await getMarketSnapshotSection('snapshot-001', 'overview', { limit: 10, offset: 0 });
+    await listMarketDatasets({ tradeDate: '2026-05-16', market: 'cn', limit: 10, offset: 0 });
+    await getMarketDataset('dataset-001', 10, 0);
+    await getMarketSnapshotQuality('snapshot-001');
 
     const calls = vi.mocked(fetch).mock.calls.map(([url, init]) => ({
       url: String(url),
@@ -159,6 +176,13 @@ describe('UI API client contract', () => {
     });
     expect(findCall('/api/ui/v1/market/symbols?q=000001&limit=50')).toBeTruthy();
     expect(findCall('/api/ui/v1/market/ohlcv?symbol=000001.SZ&start_date=2026-05-01&end_date=2026-05-10')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/snapshots?trade_date=2026-05-16&market=cn&limit=10&offset=0')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/snapshots/snapshot-001')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/snapshots/snapshot-001/sections?limit=20&offset=0')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/snapshots/snapshot-001/sections/overview?limit=10&offset=0')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/datasets?trade_date=2026-05-16&market=cn&limit=10&offset=0')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/datasets/dataset-001?limit=10&offset=0')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/snapshots/snapshot-001/quality')).toBeTruthy();
 
     for (const call of calls) {
       expect(call.headers.get('X-API-Key')).toBe('demo-key');

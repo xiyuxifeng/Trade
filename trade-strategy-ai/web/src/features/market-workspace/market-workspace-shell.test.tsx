@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
-import { MarketPage } from './index';
+import { MarketWorkspaceShell } from './market-workspace-shell';
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
@@ -25,13 +25,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('MarketPage', () => {
-  it('renders the market workspace entry page and submits snapshot-build jobs', async () => {
+describe('MarketWorkspaceShell', () => {
+  it('renders the market workspace and can submit a market job', async () => {
     const user = userEvent.setup();
 
     mockedListJobs.mockResolvedValue({
-      count: 0,
-      total: 0,
+      count: 1,
+      total: 1,
       skip: 0,
       limit: 12,
       items: [],
@@ -53,9 +53,10 @@ describe('MarketPage', () => {
       artifacts_path: '/tmp/job-market-1/artifacts',
     } as never);
 
-    renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
+    renderWithRouter([{ path: '/market', element: <MarketWorkspaceShell /> }], ['/market']);
 
     expect(await screen.findByRole('heading', { name: '市场数据工作台' })).toBeInTheDocument();
+    expect(screen.getByText('运行指定任务')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行快照构建' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '运行快照构建' }));
@@ -64,7 +65,9 @@ describe('MarketPage', () => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
         expect.objectContaining({
           job_type: 'snapshot-build',
-          params: expect.objectContaining({ config_path: 'config/app.yaml' }),
+          params: expect.objectContaining({
+            config_path: 'config/app.yaml',
+          }),
         }),
       );
     });

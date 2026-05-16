@@ -23,6 +23,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '工作流', path: '/workflows/:workflowId/run', description: '基于用户手册的引导流程', kind: 'canonical' },
   { label: '文章', path: '/articles', description: '文章处理链路的验收入口', kind: 'canonical' },
   { label: '产物', path: '/artifacts', description: '日志、下载文件与输出结果', kind: 'canonical' },
+  { label: '市场数据', path: '/market', description: '市场数据工作台', kind: 'canonical' },
   { label: '告警', path: '/alerts', description: '告警历史与处理详情', kind: 'canonical' },
   { label: '告警', path: '/alerts/:recordId', description: '告警历史与处理详情', kind: 'canonical' },
   { label: '设置', path: '/settings', description: '应用配置与密钥管理', kind: 'canonical' },

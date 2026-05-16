@@ -15,6 +15,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/workflows/pipeline/run').path).toBe('/workflows/:workflowId/run');
     expect(resolveRouteByPathname('/articles').path).toBe('/articles');
     expect(resolveRouteByPathname('/artifacts').path).toBe('/artifacts');
+    expect(resolveRouteByPathname('/market').path).toBe('/market');
     expect(resolveRouteByPathname('/alerts').path).toBe('/alerts');
     expect(resolveRouteByPathname('/alerts/record-1').path).toBe('/alerts/:recordId');
     expect(resolveRouteByPathname('/settings').path).toBe('/settings');

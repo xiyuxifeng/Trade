@@ -1049,7 +1049,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-005 P0 Market Data Workspace
+### [x] UI-V2-005 P0 Market Data Workspace
 
 任务目标：提供市场数据链路的正式 Web 工作台。
 
@@ -1087,6 +1087,13 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 - `NW-V2-S2-001`
 - `NW-V2-S2-002`
+
+完成情况说明：
+
+- 已将 `/market` 收敛为浅色中文市场数据工作台，风格与 `UI-V2-002` 保持一致。
+- 已支持通过 Job Center 触发 Kaipan、OHLCV、Market State 和 Snapshot 相关任务。
+- 已补齐最近任务、重点告警、最近产物和 Job Detail 跳转。
+- 未新增 CLI 产品入口，不直接调用 provider。
 
 ---
 

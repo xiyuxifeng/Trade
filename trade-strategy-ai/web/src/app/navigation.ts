@@ -14,7 +14,7 @@ export const mainNavigation: NavItem[] = [
   { label: '工作流', path: '/workflows', description: '基于用户手册的引导流程' },
   { label: '文章', path: '/articles', description: '文章处理链路的验收入口' },
   { label: '产物', path: '/artifacts', description: '日志、下载文件与输出结果' },
-  { label: '市场', path: '/market', description: '标的与 K 线数据查询' },
+  { label: '市场数据', path: '/market', description: '市场数据工作台' },
   { label: '快照', path: '/snapshots', description: '市场全貌快照管理' },
   { label: '策略实验室', path: '/strategy-studio', description: '策略版本、优化与规则池' },
   { label: '信号', path: '/signals', description: '信号浏览与上下文摘要' },

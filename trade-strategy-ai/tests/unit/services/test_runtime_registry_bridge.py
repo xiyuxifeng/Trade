@@ -48,11 +48,19 @@ def test_runtime_registry_bridge_normalizes_pipeline_definition() -> None:
 
     contracts = list_pipeline_contracts()
     contract = get_pipeline_contract("article_pipeline")
+    strategy_contract = get_pipeline_contract("strategy")
 
     assert contracts
     assert contract is not None
+    assert strategy_contract is not None
     assert contract["pipeline_id"] == "article_pipeline"
     assert contract["workflow_id"] == "pipeline"
     assert contract["ui_page"] == "/articles"
     assert "UI-V1-010" in contract["ui_task_ids"]
     assert contract["output_artifacts"][0]["kind"] == "result-json"
+    assert strategy_contract["pipeline_id"] == "strategy"
+    assert strategy_contract["workflow_id"] == "strategy"
+    assert strategy_contract["ui_page"] == "/strategies"
+    assert "UI-V2-006" in strategy_contract["ui_task_ids"]
+    assert strategy_contract["steps"][0]["job_type"] == "strategy-build"
+    assert strategy_contract["steps"][1]["depends_on"] == ["strategy-build"]

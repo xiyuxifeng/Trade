@@ -1563,7 +1563,7 @@ UI 关联任务：
 
 ## Stage V2-S3：Strategy Run 纵向切片
 
-### [ ] NW-V2-S3-001 P0 定义 strategy PipelineSpec
+### [x] NW-V2-S3-001 P0 定义 strategy PipelineSpec
 
 覆盖能力：
 
@@ -1585,6 +1585,13 @@ UI 关联任务：
 
 - `UI-V2-006 Strategy Workspace`
 - `UI-V2-007 Artifact Center`
+
+完成情况：
+
+- 已新增 [`src/pipelines/strategy_pipeline_spec.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/pipelines/strategy_pipeline_spec.py) 作为 strategy 的 canonical PipelineSpec，明确 `strategy-build`、`run-pre-market`、`run-after-close` 的输入、产物、UI 页面和 UI Task ID。
+- 已将 strategy PipelineSpec 接入 [`src/pipelines/__init__.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/pipelines/__init__.py) 与 [`src/services/runtime_registry_bridge.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/src/services/runtime_registry_bridge.py)，保证 catalog / bridge 可以读取同一份规范。
+- 已补充 [`docs/New-Web-Strategy-PipelineSpec.md`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-Strategy-PipelineSpec.md) 说明文档与 [`tests/pipelines/test_strategy_pipeline_spec.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/pipelines/test_strategy_pipeline_spec.py)、[`tests/unit/services/test_runtime_registry_bridge.py`](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/tests/unit/services/test_runtime_registry_bridge.py) 回归测试。
+- 已通过相关验证：`python -m pytest tests/pipelines/test_strategy_pipeline_spec.py tests/unit/services/test_runtime_registry_bridge.py tests/api/routers/test_pipelines.py tests/api/test_ui_openapi_contract.py -q`
 
 ---
 

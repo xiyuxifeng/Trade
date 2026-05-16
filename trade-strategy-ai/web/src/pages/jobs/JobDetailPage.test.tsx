@@ -204,9 +204,9 @@ describe('JobDetailPage', () => {
 
     renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/job-2']);
 
-    expect(await screen.findByText('handler failed')).toBeInTheDocument();
-    expect(screen.getAllByText('失败').length).toBeGreaterThan(0);
-    expect(screen.getByText('先检查日志和结果摘要，再决定是否重试。')).toBeInTheDocument();
+    expect(await screen.findByText('任务执行失败')).toBeInTheDocument();
+    expect(screen.getByText('先打开 Job 详情确认错误，再决定是否重试。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新运行' })).toBeInTheDocument();
     expect(screen.getByText('该任务未产生任何产物。')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
   });

@@ -17,6 +17,7 @@ describe('buildErrorRecoveryState', () => {
 
     expect(state.category).toBe('artifact missing');
     expect(state.retryable).toBe(true);
+    expect(state.actions[0].label).toBe('打开产物中心');
     expect(state.actions.some((action) => action.to === '/artifacts')).toBe(true);
     expect(state.actions.some((action) => action.to === '/jobs')).toBe(true);
   });

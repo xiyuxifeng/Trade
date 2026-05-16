@@ -15,7 +15,7 @@ import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
-import type { JobError, JobRecord, JobDetailResponse } from '@/types/jobs';
+import type { JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
 
 function statusVariant(status: string) {
@@ -34,26 +34,6 @@ function getStatusLabel(status: string) {
     cancelled: '已取消',
   };
   return mapping[status] || status;
-}
-
-function getRetrySuggestion(error: JobError | string | null) {
-  if (!error) {
-    return '如问题已修复，可以重新运行任务。';
-  }
-  const type = typeof error === 'string' ? '' : error.type || '';
-  if (type === 'timeout') {
-    return '可检查超时配置后重试。';
-  }
-  if (type === 'cancelled' || type === 'cancel_requested') {
-    return '该任务已被取消，确认后再重新提交。';
-  }
-  if (type === 'unsupported_job_type') {
-    return '需要先补齐白名单定义或调整任务类型。';
-  }
-  if (type === 'handler_error' || type === 'runner_error') {
-    return '先检查日志和结果摘要，再决定是否重试。';
-  }
-  return '可以先查看日志和错误详情，再判断是否重试。';
 }
 
 function buildTimelineItems(job: JobRecord): StepTimelineItem[] {
@@ -131,31 +111,6 @@ function SectionCard({
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
-  );
-}
-
-function ErrorBlock({ error }: { error: JobError | string | null }) {
-  if (!error) {
-    return <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">暂无错误。</div>;
-  }
-
-  const errorObject = typeof error === 'string' ? { message: error } : error;
-  const technicalDetail = stringifyJson(errorObject);
-
-  return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-3">
-        <Field label="错误类型" value={errorObject.type ?? '未提供'} />
-        <Field label="用户消息" value={errorObject.message ?? '未提供'} />
-        <Field label="重试建议" value={getRetrySuggestion(error)} />
-      </div>
-      <details className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-        <summary className="cursor-pointer text-sm font-medium text-slate-100">技术详情</summary>
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
-          {technicalDetail}
-        </pre>
-      </details>
-    </div>
   );
 }
 
@@ -400,7 +355,15 @@ export function JobDetailPage() {
             title="错误"
             description={detail.status === 'failed' || detail.status === 'cancelled' ? '失败或取消时会显示原因和建议。' : '任务正常时此处展示为空态。'}
           >
-            <ErrorBlock error={errorObject} />
+            {errorObject ? (
+              <ErrorState
+                {...buildErrorRecoveryState(errorObject, 'job-detail')}
+                onRetry={canOperateJobs ? () => rerunMutation.mutate() : undefined}
+                retryLabel="重新运行"
+              />
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">暂无错误。</div>
+            )}
           </SectionCard>
 
           <SectionCard

@@ -33,9 +33,36 @@ function toText(value: unknown) {
   return '';
 }
 
+function collectErrorText(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return '';
+  }
+
+  const record = error as {
+    type?: unknown;
+    message?: unknown;
+    detail?: unknown;
+    payload?: unknown;
+    code?: unknown;
+    metadata?: unknown;
+  };
+
+  return [
+    toText(record.type),
+    toText(record.message),
+    toText(record.detail),
+    toText(record.payload),
+    toText(record.code),
+    toText(record.metadata),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 function classifyCategory(error: unknown): ErrorRecoveryCategory {
   if (error instanceof ApiError) {
-    const rawText = `${error.message} ${toText(error.detail)} ${toText(error.payload)}`.toLowerCase();
+    const rawText = `${error.message} ${toText(error.detail)} ${toText(error.payload)} ${collectErrorText(error.payload)}`.toLowerCase();
 
     if (error.status === 401 || error.status === 403 || rawText.includes('permission') || rawText.includes('unauthorized')) {
       return 'permission denied';
@@ -59,6 +86,28 @@ function classifyCategory(error: unknown): ErrorRecoveryCategory {
       return 'data empty';
     }
     return error.status >= 500 ? 'provider unavailable' : 'network error';
+  }
+
+  const rawText = collectErrorText(error);
+  if (rawText) {
+    if (rawText.includes('permission') || rawText.includes('unauthorized')) {
+      return 'permission denied';
+    }
+    if (rawText.includes('validation')) {
+      return 'validation error';
+    }
+    if (rawText.includes('config')) {
+      return 'config missing';
+    }
+    if (rawText.includes('provider') || rawText.includes('service unavailable')) {
+      return 'provider unavailable';
+    }
+    if (rawText.includes('artifact')) {
+      return 'artifact missing';
+    }
+    if (rawText.includes('job failed') || rawText.includes('runner') || rawText.includes('handler')) {
+      return 'job failed';
+    }
   }
 
   if (error instanceof TypeError) {
@@ -324,6 +373,6 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
     suggestion,
     detail,
     retryable,
-    actions: isApi404 ? buildActions('data empty', page) : buildActions(category, page),
+    actions: isApi404 && category !== 'artifact missing' ? buildActions('data empty', page) : buildActions(category, page),
   };
 }

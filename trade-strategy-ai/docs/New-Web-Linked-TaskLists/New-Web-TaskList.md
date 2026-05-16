@@ -1081,7 +1081,7 @@ UI 关联任务：
 
 ## Stage V2-S2：Market Data 纵向切片
 
-### [ ] NW-V2-S2-001 P0 定义 market_data PipelineSpec
+### [x] NW-V2-S2-001 P0 定义 market_data PipelineSpec
 
 覆盖能力：
 
@@ -1103,6 +1103,10 @@ UI 关联任务：
 
 - `UI-V2-005 Market Data Workspace`
 - `UI-V2-007 Artifact Center`
+
+规范说明：
+
+- 参见 `docs/New-Web-Market-PipelineSpec.md`
 
 ---
 

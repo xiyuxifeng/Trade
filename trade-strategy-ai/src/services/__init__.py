@@ -10,6 +10,7 @@ from src.services.artifact_service import ArtifactService
 from src.services.base import BaseService, ServiceResult
 from src.services.backtest_service import BacktestService
 from src.services.config_edit_service import ConfigEditService
+from src.services.config_profile_service import ConfigProfileService
 from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.dashboard_service import DashboardService
 from src.services.config_service import ConfigService
@@ -38,6 +39,7 @@ __all__ = [
     "ArtifactService",
     "BacktestService",
     "ConfigEditService",
+    "ConfigProfileService",
     "ConfigSnapshotService",
     "DashboardService",
     "ConfigService",

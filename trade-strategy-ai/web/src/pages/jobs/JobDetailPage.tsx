@@ -383,6 +383,22 @@ export function JobDetailPage() {
                 <Field label="快照哈希" value={configSnapshot?.config_hash} />
                 <Field label="快照来源" value={maskAbsolutePath(configSnapshot?.config_source)} />
               </div>
+              {configSnapshot?.profile_id && configSnapshot?.config_snapshot_id ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(
+                        `/profiles/${encodeURIComponent(configSnapshot.profile_id)}/snapshots/${encodeURIComponent(
+                          configSnapshot.config_snapshot_id,
+                        )}`,
+                      )
+                    }
+                  >
+                    查看 Profile 快照
+                  </Button>
+                </div>
+              ) : null}
               <ConfigSnapshotPanel snapshot={configSnapshot} />
             </div>
           </SectionCard>

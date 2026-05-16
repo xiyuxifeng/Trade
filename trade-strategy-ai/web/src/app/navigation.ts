@@ -10,6 +10,7 @@ export type NavItem = {
 export const mainNavigation: NavItem[] = [
   { label: '仪表盘', path: '/dashboard', description: '系统运行状态与入口摘要' },
   { label: '任务', path: '/jobs', description: '长时间运行的任务中心' },
+  { label: '配置管理', path: '/profiles', description: '正式 Profile 配置入口' },
   { label: '工作流', path: '/workflows', description: '基于用户手册的引导流程' },
   { label: '文章', path: '/articles', description: '文章处理链路的验收入口' },
   { label: '产物', path: '/artifacts', description: '日志、下载文件与输出结果' },

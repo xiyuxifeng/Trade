@@ -8,6 +8,7 @@ def test_runtime_contract_round_trip_and_error_classification() -> None:
     from src.services.runtime_contracts import (
         ArtifactRef,
         ConfigSnapshotRef,
+        ProfileSnapshotRef,
         RunContext,
         StepError,
         StepErrorType,
@@ -23,6 +24,12 @@ def test_runtime_contract_round_trip_and_error_classification() -> None:
         config_source="config/app.yaml",
         config_hash="hash-001",
         masked_snapshot={"secret_token": "***"},
+    )
+    profile_snapshot = ProfileSnapshotRef(
+        profile_snapshot_id="profile-snapshot-001",
+        profile_id="profile-001",
+        profile_hash="profile-hash-001",
+        masked_sections={"llm": {"api_key": "***"}},
     )
     artifact = ArtifactRef(
         artifact_id="artifact-001",
@@ -71,6 +78,11 @@ def test_runtime_contract_round_trip_and_error_classification() -> None:
     assert payload["errors"][0]["type"] == "permission"
     assert restored.run_context.workflow_id == "workflow-001"
     assert restored.errors[0].type == StepErrorType.permission
+
+    profile_payload = profile_snapshot.model_dump(mode="json")
+    restored_profile = ProfileSnapshotRef.model_validate(profile_payload)
+    assert restored_profile.profile_hash == "profile-hash-001"
+    assert restored_profile.masked_sections["llm"]["api_key"] == "***"
 
 
 def test_runtime_contract_rejects_absolute_storage_paths() -> None:

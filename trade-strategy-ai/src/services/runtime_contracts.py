@@ -109,6 +109,16 @@ class ConfigSnapshotRef(ContractModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProfileSnapshotRef(ContractModel):
+    """Profile 快照引用，用于 Job 回溯和稳定解释。"""
+
+    profile_snapshot_id: str
+    profile_id: str
+    profile_hash: str | None = None
+    masked_sections: dict[str, Any] = Field(default_factory=dict)
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class StorageRef(ContractModel):
     """物理存储引用的抽象描述。
 

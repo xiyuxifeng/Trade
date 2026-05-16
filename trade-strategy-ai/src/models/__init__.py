@@ -20,6 +20,7 @@ from src.models.trader_strategy_version import TraderStrategyVersion
 from src.models.trader_memory import TraderMemory
 from src.models.trade_log import TradeLog
 from src.models.user import User, UserSession
+from src.models.config_profile import ConfigProfile
 
 __all__ = [
     "OHLCVBar",
@@ -47,4 +48,5 @@ __all__ = [
     "TradeLog",
     "User",
     "UserSession",
+    "ConfigProfile",
 ]

@@ -902,7 +902,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-002 P0 Profile List / Detail / Import
+### [x] UI-V2-002 P0 Profile List / Detail / Import
 
 任务目标：建立正式 Profile 管理入口，为 config_path 迁移提供用户路径。
 
@@ -963,6 +963,14 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 - `NW-V2-S1-001`
 - `NW-V2-S1-002`
+
+当前进度：
+
+- 已新增 Profile API contract 与 typed client。
+- 已新增 Profile List / Detail / Import / Snapshot 页面。
+- 已接入主路由与主导航，支持 `/profiles` 及 snapshot 深链。
+- 已在 Job Detail 增加跳转 Profile 快照入口。
+- 已完成浅色主题收口、文案全量中文化和测试验证。
 
 ---
 

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from src.services.config_service import ConfigService
 from src.services.config_snapshot_service import ConfigSnapshotService
+from src.services.config_profile_service import ConfigProfileService
 from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
 from src.services.base import BaseService, ServiceResult
@@ -68,11 +69,13 @@ class JobService(BaseService):
         session_scope_factory: Callable[[], Any] | None = None,
         job_base_dir: str | Path = resolve_project_path("data/jobs"),
         config_snapshot_service: ConfigSnapshotService | None = None,
+        config_profile_service: ConfigProfileService | None = None,
         step_timeline_service: StepTimelineService | None = None,
     ) -> None:
         self._session_scope_factory = session_scope_factory
         self._job_base_dir = resolve_project_path(job_base_dir)
         self._config_snapshot_service = config_snapshot_service or ConfigSnapshotService()
+        self._config_profile_service = config_profile_service or ConfigProfileService()
         self._step_timeline_service = step_timeline_service or StepTimelineService()
 
     def _ensure_session_factory(self) -> Callable[[], Any]:
@@ -108,6 +111,10 @@ class JobService(BaseService):
     def _config_snapshot_path(self, job_id: UUID) -> Path:
         """返回 job 的配置快照文件路径。"""
         return self._job_dir(job_id) / "config_snapshot.json"
+
+    def _profile_snapshot_path(self, job_id: UUID) -> Path:
+        """返回 job 的 Profile 快照文件路径。"""
+        return self._job_dir(job_id) / "profile_snapshot.json"
 
     def _write_json_file(self, path: Path, payload: Any) -> None:
         """把结构化 payload 写入 JSON 文件。"""
@@ -181,6 +188,7 @@ class JobService(BaseService):
         job: Job,
         result_payload: dict[str, Any] | None = None,
         config_snapshot_payload: dict[str, Any] | None = None,
+        profile_snapshot_payload: dict[str, Any] | None = None,
     ) -> None:
         """把 Job 的文件目录统一落盘。
 
@@ -198,8 +206,14 @@ class JobService(BaseService):
 
         self._write_json_file(self._params_path(job.id), job.params or {})
         self._write_json_file(self._artifacts_path(job.id), job.artifacts or [])
+        if config_snapshot_payload is None:
+            config_snapshot_payload = self._load_config_snapshot(job.id)
+        if profile_snapshot_payload is None:
+            profile_snapshot_payload = self._load_profile_snapshot(job.id)
         if config_snapshot_payload is not None:
             self._write_json_file(self._config_snapshot_path(job.id), config_snapshot_payload)
+        if profile_snapshot_payload is not None:
+            self._write_json_file(self._profile_snapshot_path(job.id), profile_snapshot_payload)
         if result_payload is not None:
             self._write_json_file(self._result_path(job.id), result_payload)
 
@@ -210,9 +224,31 @@ class JobService(BaseService):
             return None
         return json.loads(snapshot_path.read_text(encoding="utf-8"))
 
+    def _load_profile_snapshot(self, job_id: UUID) -> dict[str, Any] | None:
+        """从 job 目录读取 Profile 快照摘要。"""
+        snapshot_path = self._profile_snapshot_path(job_id)
+        if not snapshot_path.exists():
+            return None
+        return json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+    def _job_path_payload(self, job_id: UUID) -> dict[str, Any]:
+        """构造 Job 文件路径返回结构。"""
+        config_snapshot_path = self._config_snapshot_path(job_id)
+        profile_snapshot_path = self._profile_snapshot_path(job_id)
+        return {
+            "job_dir": str(self._job_dir(job_id)),
+            "log_path": str(self._log_path(job_id)),
+            "params_path": str(self._params_path(job_id)),
+            "result_path": str(self._result_path(job_id)),
+            "artifacts_path": str(self._artifacts_path(job_id)),
+            "config_snapshot_path": str(config_snapshot_path) if self._load_config_snapshot(job_id) is not None else None,
+            "profile_snapshot_path": str(profile_snapshot_path) if self._load_profile_snapshot(job_id) is not None else None,
+        }
+
     def _serialize_job(self, job: Job) -> dict[str, Any]:
         """把 Job ORM 对象转成前端可用结构。"""
         config_snapshot = self._load_config_snapshot(job.id)
+        profile_snapshot = self._load_profile_snapshot(job.id)
         artifacts = [self._serialize_artifact(artifact) for artifact in (job.artifacts or [])]
         return {
             "id": str(job.id),
@@ -239,6 +275,8 @@ class JobService(BaseService):
             "finished_at": _to_plain(job.finished_at),
             "config_snapshot_path": str(self._config_snapshot_path(job.id)) if config_snapshot is not None else None,
             "config_snapshot": config_snapshot,
+            "profile_snapshot_path": str(self._profile_snapshot_path(job.id)) if profile_snapshot is not None else None,
+            "profile_snapshot": profile_snapshot,
             "audit_events": [self._serialize_audit_event(event) for event in getattr(job, "audit_events", [])],
             "created_at": _to_plain(job.created_at),
             "updated_at": _to_plain(job.updated_at),
@@ -302,8 +340,20 @@ class JobService(BaseService):
         """创建新的 Job 记录。"""
         session_scope = self._ensure_session_factory()
         config_snapshot_payload: dict[str, Any] | None = None
+        profile_snapshot_payload: dict[str, Any] | None = None
         config_path_value = (params or {}).get("config_path")
-        if config_path_value is not None:
+        profile_id_value = (params or {}).get("profile_id")
+        if profile_id_value is not None:
+            snapshot_result = await self._config_profile_service.capture_profile_snapshot(str(profile_id_value))
+            if snapshot_result.status != "ok":
+                return ServiceResult(
+                    status="error",
+                    message=snapshot_result.message or "profile snapshot capture failed",
+                    payload=snapshot_result.payload,
+                    warnings=snapshot_result.warnings,
+                )
+            profile_snapshot_payload = snapshot_result.payload
+        elif config_path_value is not None:
             snapshot_result = self._config_snapshot_service.capture_config_snapshot(config_path_value)
             if snapshot_result.status != "ok":
                 return ServiceResult(
@@ -323,17 +373,8 @@ class JobService(BaseService):
                     return ServiceResult(
                         status="ok",
                         message="job already exists",
-                    payload={
-                        "created": False,
-                        "job_dir": str(self._job_dir(existing.id)),
-                        "log_path": str(self._log_path(existing.id)),
-                        "params_path": str(self._params_path(existing.id)),
-                        "result_path": str(self._result_path(existing.id)),
-                        "artifacts_path": str(self._artifacts_path(existing.id)),
-                        "config_snapshot_path": str(self._config_snapshot_path(existing.id)) if self._load_config_snapshot(existing.id) is not None else None,
-                        "job": self._serialize_job(existing),
-                    },
-                )
+                        payload={"created": False, **self._job_path_payload(existing.id), "job": self._serialize_job(existing)},
+                    )
 
         job_id = uuid4()
         now = datetime.now(UTC)
@@ -386,19 +427,18 @@ class JobService(BaseService):
             )
             await session.flush()
 
-        self._materialize_job_dir(job=job, config_snapshot_payload=config_snapshot_payload)
+        self._materialize_job_dir(
+            job=job,
+            config_snapshot_payload=config_snapshot_payload,
+            profile_snapshot_payload=profile_snapshot_payload,
+        )
 
         return ServiceResult(
             status="ok",
             message="job created",
             payload={
                 "created": True,
-                "job_dir": str(self._job_dir(job_id)),
-                "log_path": str(self._log_path(job_id)),
-                "params_path": str(self._params_path(job_id)),
-                "result_path": str(self._result_path(job_id)),
-                "artifacts_path": str(self._artifacts_path(job_id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job_id)) if config_snapshot_payload is not None else None,
+                **self._job_path_payload(job_id),
                 "job": self._serialize_job(job),
             },
         )
@@ -420,15 +460,7 @@ class JobService(BaseService):
         return ServiceResult(
             status="ok",
             message="job loaded",
-            payload={
-                "job_dir": str(self._job_dir(job.id)),
-                "log_path": str(self._log_path(job.id)),
-                "params_path": str(self._params_path(job.id)),
-                "result_path": str(self._result_path(job.id)),
-                "artifacts_path": str(self._artifacts_path(job.id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
-                "job": self._serialize_job(job),
-            },
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
     async def get_job_timeline(self, job_id: str | UUID) -> ServiceResult:
@@ -591,15 +623,7 @@ class JobService(BaseService):
         return ServiceResult(
             status="ok",
             message="job started",
-            payload={
-                "job_dir": str(self._job_dir(job.id)),
-                "log_path": str(self._log_path(job.id)),
-                "params_path": str(self._params_path(job.id)),
-                "result_path": str(self._result_path(job.id)),
-                "artifacts_path": str(self._artifacts_path(job.id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
-                "job": self._serialize_job(job),
-            },
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
     async def complete_job(
@@ -654,19 +678,12 @@ class JobService(BaseService):
                 "error": _to_plain(job.error),
             },
             config_snapshot_payload=self._load_config_snapshot(job.id),
+            profile_snapshot_payload=self._load_profile_snapshot(job.id),
         )
         return ServiceResult(
             status="ok",
             message="job completed",
-            payload={
-                "job_dir": str(self._job_dir(job.id)),
-                "log_path": str(self._log_path(job.id)),
-                "params_path": str(self._params_path(job.id)),
-                "result_path": str(self._result_path(job.id)),
-                "artifacts_path": str(self._artifacts_path(job.id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
-                "job": self._serialize_job(job),
-            },
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
     async def fail_job(
@@ -716,19 +733,12 @@ class JobService(BaseService):
                 "error": _to_plain(job.error),
             },
             config_snapshot_payload=self._load_config_snapshot(job.id),
+            profile_snapshot_payload=self._load_profile_snapshot(job.id),
         )
         return ServiceResult(
             status="ok",
             message="job failed",
-            payload={
-                "job_dir": str(self._job_dir(job.id)),
-                "log_path": str(self._log_path(job.id)),
-                "params_path": str(self._params_path(job.id)),
-                "result_path": str(self._result_path(job.id)),
-                "artifacts_path": str(self._artifacts_path(job.id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
-                "job": self._serialize_job(job),
-            },
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
     async def cancel_job(
@@ -782,19 +792,12 @@ class JobService(BaseService):
                 "error": _to_plain(job.error),
             },
             config_snapshot_payload=self._load_config_snapshot(job.id),
+            profile_snapshot_payload=self._load_profile_snapshot(job.id),
         )
         return ServiceResult(
             status="ok",
             message="job cancelled",
-            payload={
-                "job_dir": str(self._job_dir(job.id)),
-                "log_path": str(self._log_path(job.id)),
-                "params_path": str(self._params_path(job.id)),
-                "result_path": str(self._result_path(job.id)),
-                "artifacts_path": str(self._artifacts_path(job.id)),
-                "config_snapshot_path": str(self._config_snapshot_path(job.id)) if self._load_config_snapshot(job.id) is not None else None,
-                "job": self._serialize_job(job),
-            },
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
     async def append_log(self, *, job_id: str | UUID, line: str) -> ServiceResult:

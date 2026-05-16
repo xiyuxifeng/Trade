@@ -7,12 +7,13 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.models.config_profile import ConfigProfile
 from src.models.job import Job
 from src.models.job_audit_event import JobAuditEvent
 from src.common.paths import project_root
 
 
-def _build_job_service(tmp_path: Path):
+def _build_job_service(tmp_path: Path, *, config_profile_service=None):
     """创建一个可用于 JobService 单测的临时 SQLite 服务实例。"""
     from src.services.job_service import JobService
 
@@ -37,7 +38,39 @@ def _build_job_service(tmp_path: Path):
                 await session.rollback()
                 raise
 
-    service = JobService(session_scope_factory=_session_scope, job_base_dir=tmp_path / "jobs")
+    service = JobService(
+        session_scope_factory=_session_scope,
+        job_base_dir=tmp_path / "jobs",
+        config_profile_service=config_profile_service,
+    )
+    return service, engine
+
+
+def _build_profile_service(tmp_path: Path):
+    """创建一个可用于 ConfigProfileService 单测的临时 SQLite 服务实例。"""
+    from src.services.config_profile_service import ConfigProfileService
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'profiles.db'}")
+
+    async def _init_schema() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(ConfigProfile.__table__.create)
+
+    asyncio.run(_init_schema())
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    service = ConfigProfileService(session_scope_factory=_session_scope, snapshot_root=tmp_path / "profile_snapshots")
     return service, engine
 
 
@@ -251,6 +284,36 @@ llm:
     assert Path(created.payload["job"]["config_snapshot_path"]).exists()
 
     asyncio.run(engine.dispose())
+
+
+def test_job_service_records_profile_snapshot_when_profile_id_present(tmp_path: Path) -> None:
+    """JobService 在存在 profile_id 时应记录冻结 Profile 快照。"""
+    profile_service, profile_engine = _build_profile_service(tmp_path)
+    service, job_engine = _build_job_service(tmp_path, config_profile_service=profile_service)
+
+    profile = asyncio.run(profile_service.create_default_profile(environment="dev", created_by="system"))
+    asyncio.run(profile_service.update_profile(profile.profile_id, sections={"llm": {"model": "gpt-5"}}))
+
+    created = asyncio.run(
+        service.create_job(
+            job_type="pipeline-run",
+            params={"profile_id": profile.profile_id},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    loaded = asyncio.run(service.get_job(job_id))
+
+    assert created.status == "ok"
+    assert created.payload["job"]["profile_snapshot"]["profile_id"] == profile.profile_id
+    assert created.payload["profile_snapshot_path"] is not None
+    assert Path(created.payload["profile_snapshot_path"]).exists()
+    assert loaded.payload["job"]["profile_snapshot"]["profile_id"] == profile.profile_id
+    assert loaded.payload["job"]["profile_snapshot"]["sections"]["llm"]["model"] == "gpt-5"
+    assert Path(loaded.payload["job"]["profile_snapshot_path"]).exists()
+
+    asyncio.run(profile_engine.dispose())
+    asyncio.run(job_engine.dispose())
 
 
 def test_job_service_rejects_missing_config_file_for_snapshot_jobs(tmp_path: Path) -> None:

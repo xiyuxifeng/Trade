@@ -7,6 +7,10 @@ import { ArticlesPage } from '@/pages/articles';
 import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
+import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
+import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
+import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
+import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
 import { MarketPage } from '@/pages/market';
 import { MarketStatePage } from '@/pages/market-state';
 import { PersonaPage } from '@/pages/persona';
@@ -75,6 +79,22 @@ export const appRouter = createBrowserRouter([
       {
         path: 'jobs/:jobId',
         element: <JobDetailPage />,
+      },
+      {
+        path: 'profiles',
+        element: <ProfileListPage />,
+      },
+      {
+        path: 'profiles/import',
+        element: <ProfileImportPage />,
+      },
+      {
+        path: 'profiles/:profileId',
+        element: <ProfileDetailPage />,
+      },
+      {
+        path: 'profiles/:profileId/snapshots/:snapshotId',
+        element: <ProfileSnapshotPage />,
       },
       {
         path: 'workflows',

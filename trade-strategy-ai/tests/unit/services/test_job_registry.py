@@ -51,7 +51,18 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
 
 def test_job_registry_marks_only_connected_jobs_runnable() -> None:
     """只有已接通 handler 的 job type 才能进入 runner 白名单。"""
-    assert get_runnable_job_types() == ["pipeline-run", "pipeline-step", "run-pre-market", "run-after-close"]
+    assert get_runnable_job_types() == [
+        "pipeline-run",
+        "pipeline-step",
+        "run-pre-market",
+        "run-after-close",
+        "market-state-build",
+        "snapshot-build",
+        "ohlcv-crawl",
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "kaipan-run",
+    ]
 
 
 def test_validate_job_submission_enforces_schema() -> None:
@@ -78,6 +89,14 @@ def test_validate_job_submission_enforces_schema() -> None:
     )
     assert ok.status == "ok"
     assert ok.payload["params"]["config_path"] == "config/app.yaml"
+
+    market = validate_job_submission(
+        job_type="ohlcv-crawl",
+        params={"config_path": "config/app.yaml", "symbols": ["000001.SZ"]},
+        created_by="web",
+    )
+    assert market.status == "ok"
+    assert market.payload["params"]["symbols"] == ["000001.SZ"]
 
 
 def test_job_definition_lookup_exposes_metadata() -> None:

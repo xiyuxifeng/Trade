@@ -93,6 +93,71 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
+    """Market state job 应能绑定结构化产物引用。"""
+
+    async def _handler(params: dict[str, Any]) -> Any:
+        artifact_path = tmp_path / "market_state.json"
+        artifact_path.write_text("{}", encoding="utf-8")
+        return ServiceResult(
+            status="ok",
+            payload={
+                "config_path": params.get("config_path", "config/app.yaml"),
+                "market_state_path": str(artifact_path),
+                "market_state": {"state": "bull"},
+            },
+            message="market state done",
+        )
+
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        handlers={"market-state-build": _handler},
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="market-state-build",
+            params={"config_path": "config/app.yaml", "as_of": "2026-05-16"},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
+    assert any(item["kind"] == "market-state-json" for item in loaded.payload["job"]["artifacts"])
+    asyncio.run(engine.dispose())
+
+
+def test_submit_market_job_classifies_external_dependency_failure(tmp_path: Path) -> None:
+    """市场 job 失败时应保留结构化错误分类。"""
+
+    async def _handler(params: dict[str, Any]) -> Any:
+        del params
+        raise RuntimeError("provider unavailable: akshare offline")
+
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        handlers={"ohlcv-crawl": _handler},
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="ohlcv-crawl",
+            params={"config_path": "config/app.yaml", "symbols": ["000001.SZ"]},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "error"
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["error"]["type"] == "external_dependency"
+    assert loaded.payload["job"]["error"]["code"] == "provider_unavailable"
+    asyncio.run(engine.dispose())
+
+
 def test_run_pending_jobs_once_processes_pending_jobs(tmp_path: Path) -> None:
     """JobRunner 应能轮询并执行 pending Job。"""
     runner, job_service, engine, ServiceResult = _build_job_runner(

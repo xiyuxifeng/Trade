@@ -72,6 +72,17 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     install = next(item for item in listed.payload["items"] if item["workflow_id"] == "install-config")
     assert install["steps"][0]["param_schema"]["fields"]["config_path"]["required"] is True
 
+    scheduler = next(item for item in listed.payload["items"] if item["workflow_id"] == "scheduler")
+    scheduler_step_ids = [step["step_id"] for step in scheduler["steps"]]
+    assert scheduler_step_ids == [
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "kaipan-run",
+        "ohlcv-crawl",
+        "market-state-build",
+        "snapshot-build",
+    ]
+
 
 def test_workflow_service_runs_workflow_through_job_service() -> None:
     """WorkflowService 应将工作流运行委托给 WorkflowRunner。"""
@@ -92,6 +103,33 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
     assert result.payload["job"]["job_type"] == "run-pre-market"
     assert fake_runner.calls[0]["workflow"].workflow_id == "pre-market"
     assert fake_runner.calls[0]["params"]["config_path"] == "config/app.yaml"
+
+
+def test_workflow_service_accepts_market_scheduler_params() -> None:
+    """Scheduler 工作流应能承接 market 数据所需的联合参数。"""
+    from src.services import WorkflowService
+
+    fake_runner = _FakeWorkflowRunner(calls=[])
+    service = WorkflowService(workflow_runner=fake_runner)
+    result = __import__("asyncio").run(
+        service.run_workflow(
+            workflow_id="scheduler",
+            params={
+                "config_path": "config/app.yaml",
+                "trade_date": "2026-05-16",
+                "slot": "17-30",
+                "symbols": ["000001.SZ"],
+                "date": "2026-05-16",
+                "as_of": "2026-05-16",
+                "snapshot_type": "all",
+            },
+            created_by="web",
+        )
+    )
+
+    assert result.status == "ok"
+    assert fake_runner.calls[0]["workflow"].workflow_id == "scheduler"
+    assert fake_runner.calls[0]["params"]["symbols"] == ["000001.SZ"]
 
 
 def test_workflow_service_rejects_unconfirmed_high_risk_workflow() -> None:

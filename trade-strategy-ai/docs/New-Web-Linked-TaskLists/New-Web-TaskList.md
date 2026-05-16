@@ -1077,6 +1077,12 @@ UI 关联任务：
 
 - `UI-V2-002 Profile List / Detail / Import`
 
+完成情况：
+
+- 已提供 `ConfigMigrationService` 和内部迁移脚本。
+- 已支持 masked preview、缺失项校验和 Profile 保存。
+- 已保留 `config_path` 兼容入口，并把迁移说明收口为独立文档。
+
 ---
 
 ## Stage V2-S2：Market Data 纵向切片
@@ -1108,9 +1114,15 @@ UI 关联任务：
 
 - 参见 `docs/New-Web-Market-PipelineSpec.md`
 
+完成情况：
+
+- 已定义 market_data canonical `PipelineSpec`。
+- 已补齐权限与错误分类定义，供后续 market 工作台直接消费。
+- 已明确 UI 页面与 UI Task ID 绑定关系。
+
 ---
 
-### [ ] NW-V2-S2-002 P0 实现 Market Data Workflow
+### [x] NW-V2-S2-002 P0 实现 Market Data Workflow
 
 任务目标：将市场数据能力接入 Workflow Runner 和 Job Center。
 
@@ -1127,6 +1139,12 @@ UI 关联任务：
 - `UI-V2-005 Market Data Workspace`
 - `UI-V1-005 Job Detail 页面`
 - `UI-V2-008 Web UI 错误恢复体验`
+
+完成情况：
+
+- 已将 market data 接入 `WorkflowRunner` 和 `Job Center`。
+- 已支持 Kaipan 抓取/归一化、OHLCV 抓取、market state 与 snapshot 构建。
+- 已在 Job Detail 侧可回溯 market artifacts，并回传 provider / config / data / system 错误分类。
 
 ---
 

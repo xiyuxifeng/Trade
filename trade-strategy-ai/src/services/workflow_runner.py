@@ -114,6 +114,13 @@ class WorkflowRunner(BaseService):
         job = payload.get("job")
         return job if isinstance(job, dict) else None
 
+    def _step_params(self, workflow_params: dict[str, Any], step: Any) -> dict[str, Any]:
+        """按 step 参数白名单收敛提交给子 job 的参数。"""
+        allowed = list(getattr(step, "parameters", []) or [])
+        if not allowed:
+            return dict(workflow_params)
+        return {name: workflow_params[name] for name in allowed if name in workflow_params}
+
     async def run_workflow(
         self,
         *,
@@ -186,12 +193,13 @@ class WorkflowRunner(BaseService):
         failure_error: StepError | None = None
 
         for order, step in enumerate(getattr(workflow, "steps", []), start=1):
+            step_params = self._step_params(workflow_params, step)
             step_input = StepInput(
                 step_name=step.step_id,
                 payload={
                     "workflow_id": workflow.workflow_id,
                     "workflow_job_type": workflow.job_type,
-                    "params": workflow_params,
+                    "params": step_params,
                 },
                 input_id=f"{root_job_id}:{step.step_id}",
                 metadata={"order": order, "required_job_type": step.required_job_type},
@@ -200,7 +208,7 @@ class WorkflowRunner(BaseService):
 
             submission = await runner.submit_job(
                 job_type=step.required_job_type,
-                params=workflow_params,
+                params=step_params,
                 created_by=created_by,
                 idempotency_key=f"{root_job_id}:{step.step_id}",
             )

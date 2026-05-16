@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import load_app_config
 from src.services.base import BaseService, ServiceResult
+from src.services.kaipan_service import KaipanService
 from src.services.job_registry import (
     get_job_definition,
     get_job_type_limits,
@@ -22,7 +23,10 @@ from src.services.job_registry import (
 )
 from src.services.job_service import JobService
 from src.services.pipeline_service import PipelineService
+from src.services.market_service import MarketService
+from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
+from src.services.snapshot_service import SnapshotService
 
 
 def _to_plain(value: Any) -> Any:
@@ -45,6 +49,17 @@ def _parse_date(value: Any) -> date:
     if isinstance(value, str) and value:
         return date.fromisoformat(value)
     return date.today()
+
+
+def _parse_optional_date(value: Any) -> date | None:
+    """将可选日期参数归一化为 date。"""
+    if value in {None, ""}:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    raise ValueError(f"invalid date value: {value}")
 
 
 def _parse_bool(value: Any, default: bool = False) -> bool:
@@ -108,6 +123,64 @@ class JobRunner(BaseService):
     def _build_default_handlers(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[ServiceResult]]]:
         """构建默认的 Job 处理器集合。"""
 
+        async def _kaipan_fetch(params: dict[str, Any]) -> ServiceResult:
+            service = KaipanService()
+            return service.fetch(
+                config_path=params.get("config_path", "config/app.yaml"),
+                trade_date=params.get("trade_date"),
+                slot=params.get("slot", "all"),
+            )
+
+        async def _kaipan_normalize(params: dict[str, Any]) -> ServiceResult:
+            service = KaipanService()
+            return service.normalize(
+                config_path=params.get("config_path", "config/app.yaml"),
+                trade_date=params.get("trade_date"),
+                slot=params.get("slot", "all"),
+            )
+
+        async def _kaipan_run(params: dict[str, Any]) -> ServiceResult:
+            service = KaipanService()
+            return service.run(
+                config_path=params.get("config_path", "config/app.yaml"),
+                start_scheduler=_parse_bool(params.get("start_scheduler"), default=False),
+                block=_parse_bool(params.get("block"), default=False),
+            )
+
+        async def _ohlcv_crawl(params: dict[str, Any]) -> ServiceResult:
+            service = MarketService()
+            return await service.crawl_ohlcv(
+                config_path=params.get("config_path", "config/app.yaml"),
+                mode=str(params.get("mode") or "incremental"),
+                symbols=params.get("symbols"),
+                start_date=_parse_optional_date(params.get("start_date")),
+                end_date=_parse_optional_date(params.get("end_date")),
+                limit=int(params.get("limit") or 100),
+            )
+
+        async def _market_state_build(params: dict[str, Any]) -> ServiceResult:
+            service = PersonaService()
+            return service.build_market_state(
+                config_path=params.get("config_path", "config/app.yaml"),
+                as_of=params.get("as_of"),
+                dest=params.get("dest", "data/processed/persona/market_state.json"),
+                from_akshare=_parse_bool(params.get("from_akshare"), default=False),
+                cache_csv=_parse_bool(params.get("cache_csv"), default=True),
+            )
+
+        async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
+            service = SnapshotService()
+            return await service.build_snapshot(
+                config_path=params.get("config_path", "config/app.yaml"),
+                date=params.get("date"),
+                start_date=params.get("start_date"),
+                end_date=params.get("end_date"),
+                slot=str(params.get("slot") or "17-30"),
+                snapshot_type=str(params.get("snapshot_type") or "all"),
+                force=_parse_bool(params.get("force"), default=False),
+                offline=_parse_bool(params.get("offline"), default=False),
+            )
+
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
             manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
             service = RunService(manager)
@@ -154,7 +227,64 @@ class JobRunner(BaseService):
             "run-after-close": _run_after_close,
             "pipeline-run": _pipeline_run,
             "pipeline-step": _pipeline_step,
+            "kaipan-fetch": _kaipan_fetch,
+            "kaipan-normalize": _kaipan_normalize,
+            "kaipan-run": _kaipan_run,
+            "ohlcv-crawl": _ohlcv_crawl,
+            "market-state-build": _market_state_build,
+            "snapshot-build": _snapshot_build,
         }
+
+    def _classify_error(self, *, job_type: str, message: str, payload: dict[str, Any] | None = None) -> tuple[str, str | None, bool]:
+        """把 handler 失败原因收敛为可展示的错误分类。"""
+        text = " ".join(
+            [
+                job_type.lower(),
+                message.lower(),
+                str(_to_plain(payload or {})).lower(),
+            ]
+        )
+        if any(token in text for token in ("permission denied", "unauthorized", "forbidden")):
+            return "permission", "permission_denied", False
+        if any(token in text for token in ("provider unavailable", "akshare", "network", "timeout", "connection", "http", "fetch failed")):
+            return "external_dependency", "provider_unavailable", True
+        if any(token in text for token in ("config", "missing required param", "not set", "invalid slot", "invalid date", "must be provided", "must be")):
+            return "user_error", "config_missing", False
+        if any(token in text for token in ("empty", "invalid", "malformed", "parse", "format")):
+            return "user_error", "data_invalid", False
+        return "system_error", "system_error", True
+
+    async def _bind_result_artifacts(
+        self,
+        *,
+        job_id: str | UUID,
+        job_type: str,
+        result_payload: dict[str, Any],
+    ) -> None:
+        """把 handler 返回中的文件路径自动收敛为 Job artifact。"""
+        payload = result_payload.get("payload")
+        if not isinstance(payload, dict):
+            return
+
+        artifact_specs: list[tuple[str, str, Any]] = []
+        if payload.get("html_path"):
+            artifact_specs.append(("html", "HTML 报告", payload["html_path"]))
+        if payload.get("market_state_path"):
+            artifact_specs.append(("market-state-json", "市场状态 JSON", payload["market_state_path"]))
+        if payload.get("snapshot_path"):
+            artifact_specs.append(("snapshot-json", "市场快照 JSON", payload["snapshot_path"]))
+        snapshot_paths = payload.get("snapshot_paths")
+        if isinstance(snapshot_paths, list):
+            artifact_specs.extend(("snapshot-json", "市场快照 JSON", item) for item in snapshot_paths if item)
+
+        for kind, title, path in artifact_specs:
+            await self._job_service.bind_artifact(
+                job_id=job_id,
+                kind=kind,
+                path=path,
+                title=title,
+                metadata={"job_type": job_type, "source": "job_result"},
+            )
 
     def _handler_for(self, job_type: str) -> Callable[[dict[str, Any]], Awaitable[ServiceResult]] | None:
         """获取某个 job type 的处理器。"""
@@ -234,19 +364,20 @@ class JobRunner(BaseService):
                 path=result_path,
                 metadata={"job_type": job_payload["job_type"]},
             )
-            if result_payload.get("payload", {}).get("html_path"):
-                await self._job_service.bind_artifact(
-                    job_id=job_id,
-                    kind="html",
-                    path=result_payload["payload"]["html_path"],
-                    metadata={"job_type": job_payload["job_type"]},
-                )
+            await self._bind_result_artifacts(job_id=job_id, job_type=job_payload["job_type"], result_payload=result_payload)
             if result.status == "error":
+                error_type, error_code, retryable = self._classify_error(
+                    job_type=job_payload["job_type"],
+                    message=result.message or "job handler returned error",
+                    payload=result_payload,
+                )
                 failed = await self._job_service.fail_job(
                     job_id=job_id,
                     error={
-                        "type": "handler_error",
+                        "type": error_type,
                         "message": result.message or "job handler returned error",
+                        "code": error_code,
+                        "retryable": retryable,
                         "result": result_payload,
                     },
                 )
@@ -272,9 +403,13 @@ class JobRunner(BaseService):
             )
         except Exception as exc:  # noqa: BLE001
             await self._job_service.append_log(job_id=job_id, line=f"[runner] failed: {exc}")
+            error_type, error_code, retryable = self._classify_error(
+                job_type=job_payload["job_type"],
+                message=str(exc),
+            )
             failed = await self._job_service.fail_job(
                 job_id=job_id,
-                error={"type": "runner_error", "message": str(exc)},
+                error={"type": error_type, "message": str(exc), "code": error_code, "retryable": retryable},
             )
             return ServiceResult(
                 status="error",

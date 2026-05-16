@@ -237,6 +237,78 @@ def _build_workflow() -> WorkflowDefinition:
     )
 
 
+def _build_market_workflow() -> WorkflowDefinition:
+    return WorkflowDefinition(
+        workflow_id="scheduler",
+        title="Market Scheduler",
+        description="market workflow",
+        job_type="kaipan-run",
+        permissions="operator",
+        steps=[
+            WorkflowStep(
+                step_id="kaipan-fetch",
+                title="Kaipan 抓取",
+                description="fetch",
+                required_job_type="kaipan-fetch",
+                parameters=["config_path", "trade_date", "slot"],
+                param_schema={"description": "fetch", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+            WorkflowStep(
+                step_id="kaipan-normalize",
+                title="Kaipan 归一化",
+                description="normalize",
+                required_job_type="kaipan-normalize",
+                parameters=["config_path", "trade_date", "slot"],
+                param_schema={"description": "normalize", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+            WorkflowStep(
+                step_id="kaipan-run",
+                title="Kaipan 一键运行",
+                description="run",
+                required_job_type="kaipan-run",
+                parameters=["config_path", "trade_date", "slot"],
+                param_schema={"description": "run", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+            WorkflowStep(
+                step_id="ohlcv-crawl",
+                title="抓取 OHLCV",
+                description="ohlcv",
+                required_job_type="ohlcv-crawl",
+                parameters=["config_path", "symbols", "start_date", "end_date"],
+                param_schema={"description": "ohlcv", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+            WorkflowStep(
+                step_id="market-state-build",
+                title="构建市场状态",
+                description="state",
+                required_job_type="market-state-build",
+                parameters=["config_path", "as_of"],
+                param_schema={"description": "state", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+            WorkflowStep(
+                step_id="snapshot-build",
+                title="构建快照",
+                description="snapshot",
+                required_job_type="snapshot-build",
+                parameters=["config_path", "date", "slot"],
+                param_schema={"description": "snapshot", "fields": {}, "allow_additional_fields": False},
+                risk="medium",
+                requires_confirmation=False,
+            ),
+        ],
+    )
+
+
 def test_workflow_runner_executes_steps_in_order() -> None:
     """WorkflowRunner 应按步骤顺序执行并汇总结果。"""
     from src.services.workflow_runner import WorkflowRunner
@@ -325,3 +397,67 @@ def test_workflow_runner_stops_after_failed_step() -> None:
     assert result.payload["workflow_run"]["run_context"]["status"] == "failed"
     assert len(result.payload["workflow_run"]["step_results"]) == 2
     assert result.payload["workflow_run"]["errors"][0]["type"] == "system_error"
+
+
+def test_workflow_runner_executes_market_workflow_steps() -> None:
+    """WorkflowRunner 应能按 scheduler market workflow 顺序执行 market 步骤。"""
+    from src.services.workflow_runner import WorkflowRunner
+
+    workflow = _build_market_workflow()
+    job_service = _FakeJobService()
+    job_runner = _FakeJobRunner(outcomes={})
+    runner = WorkflowRunner(job_service=job_service, job_runner_factory=lambda _: job_runner, worker_id="runner-1")
+
+    result = __import__("asyncio").run(
+        runner.run_workflow(
+            workflow=workflow,
+            params={
+                "config_path": "config/app.yaml",
+                "trade_date": "2026-05-16",
+                "slot": "17-30",
+                "symbols": ["000001.SZ"],
+                "as_of": "2026-05-16",
+                "date": "2026-05-16",
+            },
+            created_by="web",
+            idempotency_key="run-market-001",
+            audit_source={"channel": "ui"},
+        )
+    )
+
+    assert result.status == "ok"
+    assert [call["job_type"] for call in job_runner.calls] == [
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "kaipan-run",
+        "ohlcv-crawl",
+        "market-state-build",
+        "snapshot-build",
+    ]
+    assert job_runner.calls[0]["params"] == {
+        "config_path": "config/app.yaml",
+        "trade_date": "2026-05-16",
+        "slot": "17-30",
+    }
+    assert job_runner.calls[3]["params"] == {
+        "config_path": "config/app.yaml",
+        "symbols": ["000001.SZ"],
+    }
+    assert job_runner.calls[4]["params"] == {
+        "config_path": "config/app.yaml",
+        "as_of": "2026-05-16",
+    }
+    assert job_runner.calls[5]["params"] == {
+        "config_path": "config/app.yaml",
+        "date": "2026-05-16",
+        "slot": "17-30",
+    }
+    assert result.payload["workflow_run"]["run_context"]["status"] == "success"
+    assert [step["step_name"] for step in result.payload["workflow_run"]["step_results"]] == [
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "kaipan-run",
+        "ohlcv-crawl",
+        "market-state-build",
+        "snapshot-build",
+    ]

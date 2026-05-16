@@ -254,12 +254,15 @@ DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
     _workflow(
         "scheduler",
         "调度与监控",
-        "管理 Kaipan 抓取、归一化与一键运行。",
+        "管理 Kaipan 抓取、归一化、行情回灌、市场状态与快照。",
         "kaipan-run",
         steps=[
             _workflow_step("kaipan-fetch", "Kaipan 抓取", "抓取指定交易日的原始数据。", "kaipan-fetch"),
             _workflow_step("kaipan-normalize", "Kaipan 归一化", "将原始数据规范化。", "kaipan-normalize"),
             _workflow_step("kaipan-run", "Kaipan 一键运行", "构建调度计划或启动调度器。", "kaipan-run"),
+            _workflow_step("ohlcv-crawl", "抓取 OHLCV", "抓取日线行情并写入数据库。", "ohlcv-crawl"),
+            _workflow_step("market-state-build", "构建市场状态", "先准备市场状态数据。", "market-state-build"),
+            _workflow_step("snapshot-build", "构建候选池快照", "生成盘前/盘后需要的快照。", "snapshot-build"),
         ],
     ),
     _workflow(

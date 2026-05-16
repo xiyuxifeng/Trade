@@ -53,6 +53,10 @@ class SnapshotService(BaseService):
         self._topic_constituents_handler = topic_constituents_handler
         self._strong_symbols_handler = strong_symbols_handler
 
+    def _snapshot_path(self, trade_date: str, slot: str) -> Path:
+        """返回 MarketUniverse 快照路径。"""
+        return self._backend.base_dir / trade_date / f"{slot}.json"
+
     async def build_snapshot(
         self,
         *,
@@ -87,6 +91,7 @@ class SnapshotService(BaseService):
             raise ValueError("invalid snapshot_type")
 
         results: list[dict[str, Any]] = []
+        snapshot_paths: list[str] = []
         success_count = 0
         failure_count = 0
 
@@ -105,6 +110,9 @@ class SnapshotService(BaseService):
                         await self._topic_constituents_handler(details, config=loaded.config)
                     else:
                         await self._strong_symbols_handler(details, config=loaded.config)
+                    snapshot_path = str(self._snapshot_path(trade_date, slot))
+                    if snapshot_path not in snapshot_paths:
+                        snapshot_paths.append(snapshot_path)
                     success_count += 1
                     results.append({"trade_date": trade_date, "type": stype, "status": "ok"})
                 except Exception as exc:  # noqa: BLE001
@@ -128,6 +136,7 @@ class SnapshotService(BaseService):
                 "snapshot_type": snapshot_type,
                 "success_count": success_count,
                 "failure_count": failure_count,
+                "snapshot_paths": snapshot_paths,
                 "results": results,
             },
             warnings=[item["error"] for item in results if item.get("status") == "error"],

@@ -71,6 +71,19 @@ class _FakeMarketSnapshotQueryService:
     async def get_snapshot_detail(self, snapshot_id: str) -> Any:
         if snapshot_id == "snap-missing":
             return _result({"error": {"type": "snapshot_not_found", "message": "snapshot not found", "detail": snapshot_id, "metadata": {"snapshot_id": snapshot_id}}}, status="partial", message="snapshot not found")
+        if snapshot_id == "snap-partial":
+            return _result(
+                {
+                    "error": {
+                        "type": "partial_data",
+                        "message": "market snapshot detail is partial",
+                        "detail": "quality report missing",
+                        "metadata": {"snapshot_id": snapshot_id, "warnings": ["quality report missing"]},
+                    }
+                },
+                status="partial",
+                message="market snapshot detail is partial",
+            )
         return _result(
             {
                 "snapshot": {
@@ -238,6 +251,19 @@ class _FakeMarketSnapshotQueryService:
     async def get_quality_report(self, snapshot_id: str) -> Any:
         if snapshot_id == "snap-missing":
             return _result({"error": {"type": "snapshot_not_found", "message": "snapshot not found", "detail": snapshot_id, "metadata": {"snapshot_id": snapshot_id}}}, status="partial", message="snapshot not found")
+        if snapshot_id == "snap-partial":
+            return _result(
+                {
+                    "error": {
+                        "type": "partial_data",
+                        "message": "quality report not found",
+                        "detail": snapshot_id,
+                        "metadata": {"snapshot_id": snapshot_id},
+                    }
+                },
+                status="partial",
+                message="quality report not found",
+            )
         return _result({"quality_report": {"snapshot_id": snapshot_id, "overall_status": "ok"}})
 
 
@@ -320,3 +346,7 @@ async def test_market_snapshot_query_endpoint_returns_structured_error(client: A
     missing = await client.get("/api/ui/v1/market/snapshots/snap-missing")
     assert missing.status_code == 404
     assert missing.json()["detail"]["type"] == "snapshot_not_found"
+
+    partial = await client.get("/api/ui/v1/market/snapshots/snap-partial")
+    assert partial.status_code == 206
+    assert partial.json()["detail"]["type"] == "partial_data"

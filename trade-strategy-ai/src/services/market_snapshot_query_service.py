@@ -85,6 +85,38 @@ class MarketSnapshotQueryService(BaseService):
             },
         )
 
+    def _empty_data(
+        self,
+        *,
+        message: str,
+        detail: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """构建空数据错误。"""
+        return self._error(
+            status="error",
+            error_type="empty_data",
+            message=message,
+            detail=detail,
+            metadata=metadata,
+        )
+
+    def _partial_data(
+        self,
+        *,
+        message: str,
+        detail: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """构建部分数据错误。"""
+        return self._error(
+            status="partial",
+            error_type="partial_data",
+            message=message,
+            detail=detail,
+            metadata=metadata,
+        )
+
     def _page_payload(self, *, total: int, limit: int, offset: int, count: int) -> dict[str, int]:
         """构建分页信息。"""
         return {
@@ -235,6 +267,19 @@ class MarketSnapshotQueryService(BaseService):
                 filtered.append(snapshot)
 
             total = len(filtered)
+            if total == 0:
+                return self._empty_data(
+                    message="market snapshot list is empty",
+                    detail="no snapshots matched the query",
+                    metadata={
+                        "trade_date": normalized_trade_date.isoformat() if normalized_trade_date else None,
+                        "market": market,
+                        "section": section,
+                        "symbol": symbol,
+                        "topic": topic,
+                        "quality_status": quality_status,
+                    },
+                )
             page_items = filtered[offset : offset + limit]
             return ServiceResult(
                 status="ok",
@@ -272,10 +317,18 @@ class MarketSnapshotQueryService(BaseService):
             warnings.append("quality report missing")
         if dataset is None:
             warnings.append("dataset missing")
+        if not sections:
+            warnings.append("sections missing")
+        if warnings:
+            return self._partial_data(
+                message="market snapshot detail is partial",
+                detail="; ".join(warnings),
+                metadata={"snapshot_id": snapshot_id, "warnings": warnings},
+            )
 
         return ServiceResult(
             status="ok",
-            message="market snapshot detail loaded" if not warnings else "market snapshot detail loaded with warnings",
+            message="market snapshot detail loaded",
             payload={
                 "snapshot": self._snapshot_summary(snapshot),
                 "sections": [self._section_summary(section) for section in sections],
@@ -311,6 +364,12 @@ class MarketSnapshotQueryService(BaseService):
             sections = await self._section_repository.list_by_snapshot_id(session, snapshot_id)
 
         page_items = sections[offset : offset + limit]
+        if not page_items:
+            return self._empty_data(
+                message="snapshot sections are empty",
+                detail=snapshot_id,
+                metadata={"snapshot_id": snapshot_id},
+            )
         return ServiceResult(
             status="ok",
             message="snapshot sections loaded",
@@ -370,6 +429,12 @@ class MarketSnapshotQueryService(BaseService):
                 continue
             filtered.append(item)
 
+        if not filtered:
+            return self._empty_data(
+                message="snapshot section is empty",
+                detail=section_id,
+                metadata={"snapshot_id": snapshot_id, "section_id": section_id, "filters": {"symbol": symbol, "topic": topic}},
+            )
         page_items = filtered[offset : offset + limit]
         return ServiceResult(
             status="ok",
@@ -463,11 +528,23 @@ class MarketSnapshotQueryService(BaseService):
             items = await self._item_repository.list_by_dataset_id(session, dataset_id)
             snapshot = await self._snapshot_repository.get_by_snapshot_id(session, dataset.snapshot_id) if dataset.snapshot_id else None
 
+        if not items:
+            return self._empty_data(
+                message="dataset is empty",
+                detail=dataset_id,
+                metadata={"dataset_id": dataset_id},
+            )
         page_items = items[offset : offset + limit]
         warnings = ["source snapshot missing"] if dataset.snapshot_id and snapshot is None else []
+        if warnings:
+            return self._partial_data(
+                message="market dataset detail is partial",
+                detail="; ".join(warnings),
+                metadata={"dataset_id": dataset_id, "warnings": warnings},
+            )
         return ServiceResult(
             status="ok",
-            message="market dataset detail loaded" if not warnings else "market dataset detail loaded with warnings",
+            message="market dataset detail loaded",
             payload={
                 "dataset": dataset.to_dict(),
                 "snapshot": self._snapshot_summary(snapshot) if snapshot is not None else None,
@@ -493,9 +570,7 @@ class MarketSnapshotQueryService(BaseService):
             quality = await self._quality_repository.get_by_snapshot_id(session, snapshot_id)
 
         if quality is None:
-            return self._error(
-                status="partial",
-                error_type="quality_report_not_found",
+            return self._partial_data(
                 message="quality report not found",
                 detail=snapshot_id,
                 metadata={"snapshot_id": snapshot_id},

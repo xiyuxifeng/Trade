@@ -56,6 +56,8 @@ def _raise_query_error(result: Any) -> None:
         status_code = 403
     elif error_type == "invalid_query":
         status_code = 422
+    elif error_type == "partial_data":
+        status_code = 206
     elif error_type == "api_unavailable":
         status_code = 503
     elif error_type == "empty_data":

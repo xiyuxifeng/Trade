@@ -191,6 +191,18 @@ async def test_list_snapshots_filters_and_paginates(market_snapshot_query_sessio
 
 
 @pytest.mark.asyncio()
+async def test_list_snapshots_returns_empty_data_for_no_match(market_snapshot_query_session_factory) -> None:
+    from src.services.market_snapshot_query_service import MarketSnapshotQueryService
+
+    service = MarketSnapshotQueryService(session_factory=market_snapshot_query_session_factory)
+
+    result = await service.list_snapshots(trade_date="2026-05-18", market="CN", limit=10, offset=0)
+
+    assert result.status == "error"
+    assert result.payload["error"]["type"] == "empty_data"
+
+
+@pytest.mark.asyncio()
 async def test_get_snapshot_detail_returns_sections_quality_and_dataset(market_snapshot_query_session_factory) -> None:
     from src.services.market_snapshot_query_service import MarketSnapshotQueryService
 
@@ -203,6 +215,18 @@ async def test_get_snapshot_detail_returns_sections_quality_and_dataset(market_s
     assert len(result.payload["sections"]) == 2
     assert result.payload["quality_report"]["overall_status"] == "ok"
     assert result.payload["dataset"]["dataset_id"] == "snap-001:dataset"
+
+
+@pytest.mark.asyncio()
+async def test_get_snapshot_detail_returns_partial_for_missing_related_data(market_snapshot_query_session_factory) -> None:
+    from src.services.market_snapshot_query_service import MarketSnapshotQueryService
+
+    service = MarketSnapshotQueryService(session_factory=market_snapshot_query_session_factory)
+
+    result = await service.get_snapshot_detail("snap-002")
+
+    assert result.status == "partial"
+    assert result.payload["error"]["type"] == "partial_data"
 
 
 @pytest.mark.asyncio()
@@ -233,6 +257,18 @@ async def test_get_dataset_detail_returns_items(market_snapshot_query_session_fa
     assert result.payload["snapshot"]["snapshot_id"] == "snap-001"
     assert result.payload["page"]["total"] == 3
     assert result.payload["page"]["count"] == 1
+
+
+@pytest.mark.asyncio()
+async def test_get_quality_report_returns_partial_when_report_missing(market_snapshot_query_session_factory) -> None:
+    from src.services.market_snapshot_query_service import MarketSnapshotQueryService
+
+    service = MarketSnapshotQueryService(session_factory=market_snapshot_query_session_factory)
+
+    result = await service.get_quality_report("snap-002")
+
+    assert result.status == "partial"
+    assert result.payload["error"]["type"] == "partial_data"
 
 
 @pytest.mark.asyncio()

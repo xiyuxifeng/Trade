@@ -152,6 +152,13 @@ async def test_ui_write_route_allows_valid_key(client: AsyncClient, monkeypatch:
         ("/api/ui/v1/profiles", "get"),
         ("/api/ui/v1/artifacts", "get"),
         ("/api/ui/v1/market/symbols", "get"),
+        ("/api/ui/v1/market/snapshots", "get"),
+        ("/api/ui/v1/market/snapshots/snap-001", "get"),
+        ("/api/ui/v1/market/snapshots/snap-001/sections", "get"),
+        ("/api/ui/v1/market/snapshots/snap-001/sections/overview", "get"),
+        ("/api/ui/v1/market/datasets", "get"),
+        ("/api/ui/v1/market/datasets/snap-001:dataset", "get"),
+        ("/api/ui/v1/market/snapshots/snap-001/quality", "get"),
     ],
 )
 async def test_ui_routes_reject_missing_api_key_for_core_endpoints(

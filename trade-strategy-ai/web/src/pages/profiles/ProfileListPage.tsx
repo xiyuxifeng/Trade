@@ -9,18 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ErrorState } from '@/components/state/ErrorState';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { listProfiles } from '@/lib/api/profiles';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import { ProfileEmptyState } from '@/components/profiles/ProfileEmptyState';
 import { ProfileStatusBadge } from '@/components/profiles/ProfileStatusBadge';
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return '配置数据加载失败';
-}
 
 function formatTimestamp(value: string | null | undefined) {
   if (!value) return '未记录';
@@ -187,18 +183,10 @@ export function ProfileListPage() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : profilesQuery.error ? (
-            <div
-              className={`rounded-2xl border p-4 text-sm ${
-                permissionDenied ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-rose-200 bg-rose-50 text-rose-800'
-              }`}
-            >
-              <p>{getErrorMessage(profilesQuery.error)}</p>
-              {!permissionDenied ? (
-                <Button className="mt-3" variant="outline" onClick={() => profilesQuery.refetch()}>
-                  重试
-                </Button>
-              ) : null}
-            </div>
+            <ErrorState
+              {...buildErrorRecoveryState(profilesQuery.error, 'profiles')}
+              onRetry={permissionDenied ? undefined : () => void profilesQuery.refetch()}
+            />
           ) : !profiles.length ? (
             <ProfileEmptyState
               title="暂无配置"

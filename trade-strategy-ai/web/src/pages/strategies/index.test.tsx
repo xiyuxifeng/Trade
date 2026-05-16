@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import { ApiError } from '@/lib/api/http';
 import { StrategiesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
@@ -119,5 +120,19 @@ describe('StrategiesPage', () => {
     expect(screen.getByText('正式入口')).toBeInTheDocument();
     expect((await screen.findAllByText('config/strategy-v3.yaml')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
+  });
+
+  it('shows a shared recovery error when profile lookup fails', async () => {
+    mockedListProfiles.mockRejectedValueOnce(new ApiError(403, 'forbidden'));
+    mockedGetProfile.mockResolvedValue({
+      profile: null,
+      linked_jobs: [],
+      snapshots: [],
+    } as never);
+
+    renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
+
+    expect(await screen.findAllByText('没有权限访问策略工作台')).toHaveLength(2);
+    expect(screen.getAllByText('请切换到有权限的账号，或联系管理员调整权限。')).toHaveLength(2);
   });
 });

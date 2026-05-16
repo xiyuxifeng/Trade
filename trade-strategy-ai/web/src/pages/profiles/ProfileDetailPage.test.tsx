@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import { ApiError } from '@/lib/api/http';
 import { renderWithRouter } from '@/test/test-utils';
 import { getProfile } from '@/lib/api/profiles';
 import { ProfileDetailPage } from './ProfileDetailPage';
@@ -65,5 +66,14 @@ describe('ProfileDetailPage', () => {
     expect(screen.getByText('关联任务')).toBeInTheDocument();
     expect(screen.getByText('历史快照')).toBeInTheDocument();
     expect(screen.getByText('snapshot-1')).toBeInTheDocument();
+  });
+
+  it('shows a recovery error state when the profile is missing', async () => {
+    mockedGetProfile.mockRejectedValueOnce(new ApiError(404, 'missing'));
+
+    renderWithRouter([{ path: '/profiles/:profileId', element: <ProfileDetailPage /> }], ['/profiles/missing']);
+
+    expect(await screen.findByText('配置不存在')).toBeInTheDocument();
+    expect(screen.getByText('请检查配置 ID 是否正确，或返回配置列表查看可用配置。')).toBeInTheDocument();
   });
 });

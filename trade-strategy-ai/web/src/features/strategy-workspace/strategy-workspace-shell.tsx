@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/layout/page-header';
+import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { JobRecord } from '@/types/jobs';
 import type { ArtifactRecord } from '@/types/artifacts';
@@ -22,7 +24,6 @@ import { StrategyWorkspaceArtifacts } from './strategy-workspace-artifacts';
 import { StrategyWorkspaceHistory } from './strategy-workspace-history';
 import {
   formatWorkspaceTimestamp,
-  getWorkspaceErrorMessage,
   isWorkspacePermissionDenied,
   selectLatestProfileSnapshot,
   selectLatestSnapshotConfigPath,
@@ -101,10 +102,10 @@ function ProfileDetailState({
         {isLoading ? (
           <ProfilesLoadingCard />
         ) : error ? (
-          <div className={`rounded-2xl border p-4 text-sm ${permissionDenied ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-rose-200 bg-rose-50 text-rose-800'}`}>
-            <p className="font-medium">{getWorkspaceErrorMessage(error, 'Profile 详情加载失败')}</p>
-            <ButtonLike onClick={onRetry}>重试</ButtonLike>
-          </div>
+          <ErrorState
+            {...buildErrorRecoveryState(error, 'strategy')}
+            onRetry={permissionDenied ? undefined : onRetry}
+          />
         ) : detail ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -128,14 +129,6 @@ function ProfileDetailState({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function ButtonLike({ onClick, children }: { onClick: () => void; children: string }) {
-  return (
-    <button className="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={onClick} type="button">
-      {children}
-    </button>
   );
 }
 
@@ -294,10 +287,10 @@ export function StrategyWorkspaceShell() {
             {profilesQuery.isLoading ? (
               <Skeleton className="h-44 w-full bg-slate-100" />
             ) : profilesQuery.error ? (
-              <div className={`rounded-2xl border p-4 text-sm ${isWorkspacePermissionDenied(profilesQuery.error) ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-rose-200 bg-rose-50 text-rose-800'}`}>
-                <p className="font-medium">{getWorkspaceErrorMessage(profilesQuery.error, 'Profile 列表加载失败')}</p>
-                <ButtonLike onClick={() => void profilesQuery.refetch()}>重试</ButtonLike>
-              </div>
+              <ErrorState
+                {...buildErrorRecoveryState(profilesQuery.error, 'strategy')}
+                onRetry={isWorkspacePermissionDenied(profilesQuery.error) ? undefined : () => void profilesQuery.refetch()}
+              />
             ) : profileItems.length ? (
               <>
                 <div className="grid gap-3 md:grid-cols-3">

@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ErrorState } from '@/components/state/ErrorState';
 import { createJob } from '@/lib/api/jobs';
 import { formatWorkspaceTimestamp, getWorkspaceErrorMessage } from './strategy-workspace-utils';
 
@@ -181,9 +182,17 @@ export function StrategyWorkspaceActions({
         ) : null}
 
         {submissionError ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-            {submissionError}
-          </div>
+          <ErrorState
+            category="job failed"
+            title="策略任务提交失败"
+            description="提交到 Job Center 时返回了错误。"
+            suggestion="请先查看错误详情，再确认是否重新提交。"
+            detail={submissionError}
+            actions={[
+              { label: '查看任务列表', to: '/jobs' },
+              { label: '前往配置管理', to: '/profiles' },
+            ]}
+          />
         ) : null}
       </CardContent>
 

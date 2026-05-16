@@ -10,22 +10,13 @@ import { ArtifactPanel } from '@/components/artifacts/artifact-panel';
 import { formatTimestamp, maskAbsolutePath, stringifyJson } from '@/components/artifacts/artifact-utils';
 import { ConfigSnapshotPanel } from '@/components/profiles/ConfigSnapshotPanel';
 import { PageHeader } from '@/components/layout/page-header';
+import { ErrorState } from '@/components/state/ErrorState';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
-import { ApiError } from '@/lib/api/http';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
 import type { JobError, JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return '任务详情加载失败';
-}
 
 function statusVariant(status: string) {
   if (status === 'success') return 'success';
@@ -238,9 +229,13 @@ export function JobDetailPage() {
   if (!jobId) {
     return (
       <main className="page-stack">
-        <SectionCard title="任务不存在" description="缺少任务 ID，无法打开详情页。">
-          <Button onClick={() => navigate('/jobs')}>返回任务列表</Button>
-        </SectionCard>
+        <ErrorState
+          category="validation error"
+          title="任务详情参数缺失"
+          description="缺少任务 ID，无法打开详情页。"
+          suggestion="请从任务列表重新打开一个 Job 详情。"
+          actions={[{ label: '返回任务列表', to: '/jobs' }]}
+        />
       </main>
     );
   }
@@ -259,33 +254,14 @@ export function JobDetailPage() {
   }
 
   if (detailQuery.error) {
-    const error = detailQuery.error;
-    const title = error instanceof ApiError && error.status === 404
-      ? '任务不存在'
-      : error instanceof ApiError && (error.status === 401 || error.status === 403)
-        ? '没有权限访问该任务'
-        : '任务详情加载失败';
-    const description = error instanceof ApiError && error.status === 404
-      ? '系统没有找到该 Job 记录。'
-      : error instanceof ApiError && (error.status === 401 || error.status === 403)
-        ? '当前身份无法查看该任务详情。'
-        : getErrorMessage(error);
-
     return (
       <main className="page-stack">
-        <SectionCard
-          title={title}
-          description={description}
-          action={
-            <Button variant="outline" onClick={() => detailQuery.refetch()}>
-              重试
-            </Button>
-          }
-        >
-          <Button variant="secondary" onClick={() => navigate('/jobs')}>
-            返回任务列表
-          </Button>
-        </SectionCard>
+        <ErrorState
+          {...buildErrorRecoveryState(detailQuery.error, 'job-detail')}
+          onRetry={() => {
+            void detailQuery.refetch();
+          }}
+        />
       </main>
     );
   }
@@ -293,9 +269,13 @@ export function JobDetailPage() {
   if (!detail) {
     return (
       <main className="page-stack">
-        <SectionCard title="任务不存在" description="无法读取任务详情。">
-          <Button onClick={() => navigate('/jobs')}>返回任务列表</Button>
-        </SectionCard>
+        <ErrorState
+          category="data empty"
+          title="任务不存在"
+          description="无法读取任务详情。"
+          suggestion="请返回任务列表重新选择一个 Job。"
+          actions={[{ label: '返回任务列表', to: '/jobs' }]}
+        />
       </main>
     );
   }
@@ -429,18 +409,21 @@ export function JobDetailPage() {
             action={
               <Button variant="outline" size="sm" onClick={() => logsQuery.refetch()} disabled={logsQuery.isFetching}>
                 {logsQuery.isFetching ? '刷新中' : '刷新日志'}
-              </Button>
-            }
+            </Button>
+          }
           >
-            <pre className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
-              {logsQuery.isLoading
-                ? '正在加载日志...'
-                : logsQuery.error
-                  ? getErrorMessage(logsQuery.error)
-                  : logs.length
-                    ? logs.join('\n')
-                    : '尚无日志。'}
-            </pre>
+            {logsQuery.error ? (
+              <ErrorState
+                {...buildErrorRecoveryState(logsQuery.error, 'job-detail')}
+                onRetry={() => {
+                  void logsQuery.refetch();
+                }}
+              />
+            ) : (
+              <pre className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                {logsQuery.isLoading ? '正在加载日志...' : logs.length ? logs.join('\n') : '尚无日志。'}
+              </pre>
+            )}
           </SectionCard>
 
           <SectionCard title="产物" description="只展示后端返回的产物引用，不推断文件系统路径。">

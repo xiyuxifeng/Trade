@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '@/test/test-utils';
@@ -64,8 +65,12 @@ describe('ProfileListPage', () => {
 
     renderWithRouter([{ path: '/profiles', element: <ProfileListPage /> }], ['/profiles']);
 
+    expect(await screen.findByText('网络请求失败')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '查看技术详情' }));
     await waitFor(() => {
-      expect(screen.getByText('boom')).toBeInTheDocument();
+      expect(screen.getByText(/boom/)).toBeInTheDocument();
     });
   });
 });

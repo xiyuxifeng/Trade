@@ -1,7 +1,7 @@
 # New-Web-UI-TaskList
 
-> `trade-strategy-ai` Web UI 专项 AI 可执行任务清单。  
-> 本文档不是独立项目，而是 `New-Web-TaskList.md` 的 UI 子计划。  
+> `trade-strategy-ai` Web UI 专项 AI 可执行任务清单。
+> 本文档不是独立项目，而是 `New-Web-TaskList.md` 的 UI 子计划。
 > **UI 任务必须随着 V1/V2/V3 主任务一起执行，不能等后端全部完成后再补。**
 
 ---
@@ -32,7 +32,7 @@
 
 ### 0.3 重要原则
 
-当前 Web UI 是临时解决方案，但 Web UI 任务不能随意堆功能。  
+当前 Web UI 是临时解决方案，但 Web UI 任务不能随意堆功能。
 长期稳定资产是：
 
 ```text
@@ -144,7 +144,7 @@ web/src/
 
 ## UI-V1 目标
 
-UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。  
+UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
 但它必须为后续正式 UI 打好边界：
 
 - 统一 API Client。
@@ -851,7 +851,7 @@ Artifact 类型至少支持：
 
 ## UI-V2 目标
 
-UI-V2 从临时验收 UI 升级为正式用户工作台。  
+UI-V2 从临时验收 UI 升级为正式用户工作台。
 重点是 Profile 迁移、正式信息架构、Dashboard、Market Data、Strategy、Artifact Center。
 
 ---
@@ -1195,7 +1195,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-008 P1 Web UI 错误恢复体验
+### [x] UI-V2-008 P1 Web UI 错误恢复体验
 
 任务目标：统一错误展示，让用户知道下一步怎么处理。
 
@@ -1226,6 +1226,13 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 - 所有 V2 P0。
 
+完成情况：
+
+- 已抽出统一 `ErrorState`，并接入 Job / Profile / Market / Strategy 页面。
+- 已支持错误详情折叠、用户建议展示、重试与跳转动作。
+- 已补充 `validation error`、`permission denied`、`config missing`、`provider unavailable`、`data empty`、`artifact missing`、`job failed`、`network error` 的映射与测试。
+- 已通过相关验证：`pnpm vitest run src/lib/error-recovery.test.ts src/components/state/ErrorState.test.tsx src/pages/jobs/index.test.tsx src/pages/jobs/JobDetailPage.test.tsx src/pages/profiles/ProfileListPage.test.tsx src/pages/profiles/ProfileDetailPage.test.tsx src/pages/market/index.test.tsx src/pages/strategies/index.test.tsx`
+
 ---
 
 ### [ ] UI-V2-009 P1 UI Component Kit
@@ -1255,7 +1262,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 主任务关联：
 
-- 所有 UI-V2 页面。
+- 所有 UI 页面。
 
 ---
 

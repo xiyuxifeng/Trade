@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/state/ErrorState';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { getProfile } from '@/lib/api/profiles';
 import type { ProfileDetailResponse, ProfileLinkedJob, ProfileSnapshotRecord } from '@/types/profile';
 import { ProfileSectionsPanel } from '@/components/profiles/ProfileSectionsPanel';
@@ -19,12 +21,6 @@ function formatTimestamp(value: string | null | undefined) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return '配置详情加载失败';
 }
 
 function MetaCard({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -168,16 +164,10 @@ export function ProfileDetailPage() {
           <Skeleton className="h-64 w-full" />
         </div>
       ) : profileQuery.error ? (
-        <section
-          className={`rounded-3xl border p-6 ${
-            permissionDenied ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-rose-200 bg-rose-50 text-rose-800'
-          }`}
-        >
-          <p className="font-medium">{notFound ? '配置不存在' : getErrorMessage(profileQuery.error)}</p>
-          <p className="mt-2 text-sm text-slate-600">
-            {notFound ? '请检查配置 ID 是否正确。' : '请稍后重试或检查访问权限。'}
-          </p>
-        </section>
+        <ErrorState
+          {...buildErrorRecoveryState(profileQuery.error, 'profile-detail')}
+          onRetry={permissionDenied || notFound ? undefined : () => void profileQuery.refetch()}
+        />
       ) : profile ? (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -216,10 +216,11 @@ describe('JobDetailPage', () => {
 
     renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/missing']);
     expect(await screen.findByText('任务不存在')).toBeInTheDocument();
+    expect(screen.getByText('请检查任务 ID 是否正确，或返回任务列表查看最近任务。')).toBeInTheDocument();
 
     mockedGetJob.mockRejectedValueOnce(new ApiError(403, 'forbidden'));
 
     renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/forbidden']);
-    expect(await screen.findByText('没有权限访问该任务')).toBeInTheDocument();
+    expect(await screen.findByText('没有权限访问任务详情')).toBeInTheDocument();
   });
 });

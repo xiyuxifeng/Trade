@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api/http';
 import { MarketPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob, listJobs } from '@/lib/api/jobs';
@@ -68,5 +69,21 @@ describe('MarketPage', () => {
         }),
       );
     });
+  });
+
+  it('shows a shared recovery error when market queries fail', async () => {
+    mockedListJobs.mockRejectedValueOnce(new ApiError(503, 'provider unavailable'));
+    mockedListArtifacts.mockResolvedValue({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 8,
+      items: [],
+    } as never);
+
+    renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
+
+    expect(await screen.findAllByText('上游服务不可用')).toHaveLength(2);
+    expect(screen.getAllByText('前往设置').length).toBeGreaterThan(0);
   });
 });

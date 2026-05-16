@@ -4,7 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getWorkspaceErrorMessage, formatWorkspaceTimestamp } from './strategy-workspace-utils';
+import { ErrorState } from '@/components/state/ErrorState';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
+import { formatWorkspaceTimestamp } from './strategy-workspace-utils';
 import type { JobRecord } from '@/types/jobs';
 
 const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
@@ -74,10 +76,10 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
             <Skeleton className="h-24 w-full bg-slate-100" />
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-            <p className="font-medium">{getWorkspaceErrorMessage(error, '策略任务加载失败')}</p>
-            <p className="mt-1 text-rose-700">请重试后继续查看任务详情。</p>
-          </div>
+          <ErrorState
+            {...buildErrorRecoveryState(error, 'strategy')}
+            onRetry={onRetry}
+          />
         ) : strategyJobs.length ? (
           strategyJobs.map((job) => (
             <button

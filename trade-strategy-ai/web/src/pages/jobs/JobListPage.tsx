@@ -7,27 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/layout/page-header';
+import { ErrorState } from '@/components/state/ErrorState';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { listJobs } from '@/lib/api/jobs';
 import type { JobsListResponse } from '@/types/jobs';
 import { JobTable } from '@/components/jobs/JobTable';
 
 const PAGE_SIZE = 20;
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return '任务列表加载失败';
-}
-
-function hasPermissionDenied(error: unknown) {
-  return error instanceof ApiError && (error.status === 401 || error.status === 403);
-}
 
 export function JobListPage() {
   const navigate = useNavigate();
@@ -75,8 +63,6 @@ export function JobListPage() {
       </main>
     );
   }
-
-  const permissionDenied = hasPermissionDenied(jobsQuery.error);
 
   return (
     <main className="page-stack">
@@ -159,15 +145,12 @@ export function JobListPage() {
                 <Skeleton className="h-14 w-full" />
               </div>
             ) : jobsQuery.error ? (
-              <div
-                className={`rounded-xl border p-4 text-sm ${
-                  permissionDenied
-                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                    : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                }`}
-              >
-                {getErrorMessage(jobsQuery.error)}
-              </div>
+              <ErrorState
+                {...buildErrorRecoveryState(jobsQuery.error, 'jobs')}
+                onRetry={() => {
+                  void jobsQuery.refetch();
+                }}
+              />
             ) : !jobs.length ? (
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
                 暂无符合条件的任务。
@@ -207,10 +190,14 @@ export function JobListPage() {
               <li>点击“查看详情”进入任务详情查看日志、步骤、产物和配置快照。</li>
               <li>列表页不直接展示文件路径，也不修改任务状态。</li>
             </ul>
-            {jobsQuery.error && !permissionDenied ? (
-              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
-                {getErrorMessage(jobsQuery.error)}
-              </div>
+            {jobsQuery.error ? (
+              <ErrorState
+                {...buildErrorRecoveryState(jobsQuery.error, 'jobs')}
+                className="mt-4"
+                onRetry={() => {
+                  void jobsQuery.refetch();
+                }}
+              />
             ) : null}
           </CardContent>
         </Card>

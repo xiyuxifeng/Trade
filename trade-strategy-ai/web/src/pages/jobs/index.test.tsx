@@ -172,7 +172,8 @@ describe('JobsPage', () => {
   it('shows error state', async () => {
     mockedListJobs.mockRejectedValueOnce(new ApiError(500, 'server exploded'));
     renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?refresh=1']);
-    expect(await screen.findAllByText('server exploded')).toHaveLength(2);
+    expect(await screen.findAllByText('上游服务不可用')).toHaveLength(2);
+    expect(screen.getAllByText('稍后重试，或先确认上游服务状态。')).toHaveLength(2);
   });
 
   it('shows permission denied state', async () => {

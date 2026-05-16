@@ -4,7 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getWorkspaceErrorMessage, formatWorkspaceTimestamp } from './strategy-workspace-utils';
+import { ErrorState } from '@/components/state/ErrorState';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
+import { formatWorkspaceTimestamp } from './strategy-workspace-utils';
 import type { ArtifactRecord } from '@/types/artifacts';
 import type { StrategyVersionDetailItem, StrategyVersionSummaryItem } from '@/types/strategyStudio';
 
@@ -105,18 +107,12 @@ export function StrategyWorkspaceArtifacts({
               <Skeleton className="h-24 w-full bg-slate-100" />
               <Skeleton className="h-24 w-full bg-slate-100" />
             </div>
-          ) : versionsError ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-              <p className="font-medium">{getWorkspaceErrorMessage(versionsError, '策略版本加载失败')}</p>
-              <Button
-                className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
-                onClick={onRetryVersions}
-                variant="outline"
-              >
-                重试
-              </Button>
-            </div>
-          ) : versionItems.length ? (
+            ) : versionsError ? (
+              <ErrorState
+                {...buildErrorRecoveryState(versionsError, 'strategy')}
+                onRetry={onRetryVersions}
+              />
+            ) : versionItems.length ? (
             versionItems.map((item) => (
               <button
                 key={item.version_id}
@@ -181,16 +177,10 @@ export function StrategyWorkspaceArtifacts({
                 <Skeleton className="h-28 w-full bg-slate-100" />
               </div>
             ) : versionDetailError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-                <p className="font-medium">{getWorkspaceErrorMessage(versionDetailError, '策略版本详情加载失败')}</p>
-                <Button
-                  className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
-                  onClick={onRetryVersionDetail}
-                  variant="outline"
-                >
-                  重试
-                </Button>
-              </div>
+              <ErrorState
+                {...buildErrorRecoveryState(versionDetailError, 'strategy')}
+                onRetry={onRetryVersionDetail}
+              />
             ) : selectedVersion ? (
               <>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -300,12 +290,10 @@ export function StrategyWorkspaceArtifacts({
                 <Skeleton className="h-20 w-full bg-slate-100" />
               </div>
             ) : artifactsError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
-                <p className="font-medium">{getWorkspaceErrorMessage(artifactsError, '策略产物加载失败')}</p>
-                <Button className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50" onClick={onRetryArtifacts} variant="outline">
-                  重试
-                </Button>
-              </div>
+              <ErrorState
+                {...buildErrorRecoveryState(artifactsError, 'strategy')}
+                onRetry={onRetryArtifacts}
+              />
             ) : relevantArtifacts.length ? (
               relevantArtifacts.slice(0, 6).map((artifact) => (
                 <button

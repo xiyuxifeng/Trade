@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { PageHeader } from '@/components/layout/page-header';
+import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import type { JobRecord } from '@/types/jobs';
 import { MarketWorkspaceSummary } from './market-workspace-summary';
 import { MarketWorkspaceRunners, type MarketWorkspaceRunner } from './market-workspace-runners';
@@ -235,6 +237,8 @@ export function MarketWorkspaceShell() {
   );
   const failedJobs = useMemo(() => marketJobs.filter((job) => job.status === 'failed'), [marketJobs]);
   const artifacts = artifactsQuery.data?.items ?? [];
+  const jobsError = jobsQuery.error ? buildErrorRecoveryState(jobsQuery.error, 'market') : null;
+  const artifactsError = artifactsQuery.error ? buildErrorRecoveryState(artifactsQuery.error, 'market') : null;
 
   const updateForm = (patch: Partial<WorkspaceFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -376,8 +380,26 @@ export function MarketWorkspaceShell() {
         </Card>
 
         <div className="space-y-6">
-          <MarketWorkspaceErrors failedJobs={failedJobs.slice(0, 3)} />
-          <MarketWorkspaceArtifacts artifacts={artifacts.slice(0, 6)} loading={artifactsQuery.isLoading} />
+          {jobsError ? (
+            <ErrorState
+              {...jobsError}
+              onRetry={() => {
+                void jobsQuery.refetch();
+              }}
+            />
+          ) : (
+            <MarketWorkspaceErrors failedJobs={failedJobs.slice(0, 3)} />
+          )}
+          {artifactsError ? (
+            <ErrorState
+              {...artifactsError}
+              onRetry={() => {
+                void artifactsQuery.refetch();
+              }}
+            />
+          ) : (
+            <MarketWorkspaceArtifacts artifacts={artifacts.slice(0, 6)} loading={artifactsQuery.isLoading} />
+          )}
         </div>
       </section>
 
@@ -390,7 +412,17 @@ export function MarketWorkspaceShell() {
         }}
       />
 
-      <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} />
+      {jobsError ? (
+        <ErrorState
+          {...jobsError}
+          onRetry={() => {
+            void jobsQuery.refetch();
+          }}
+          className="mt-2"
+        />
+      ) : (
+        <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} />
+      )}
 
       <section className="grid gap-4 md:grid-cols-2">
         <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">

@@ -114,10 +114,10 @@ function AlertDetailSummary({ alert }: { alert: AlertHistoryItem }) {
   const tags = alert.tags.length ? alert.tags.join(', ') : 'n/a';
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard title="Alert ID" value={alert.alert_id} accent="text-sky-300" />
-      <SummaryCard title="Channel" value={alert.channel} />
-      <SummaryCard title="Aggregated" value={alert.aggregated_count} accent="text-emerald-300" />
-      <SummaryCard title="Tags" value={tags} />
+      <SummaryCard title="告警编号" value={alert.alert_id} accent="text-sky-300" />
+      <SummaryCard title="告警通道" value={alert.channel} />
+      <SummaryCard title="聚合次数" value={alert.aggregated_count} accent="text-emerald-300" />
+      <SummaryCard title="标签" value={tags} />
     </div>
   );
 }
@@ -191,7 +191,7 @@ export function AlertsCenter() {
     mutationFn: () => acknowledgeAlert(selectedAlertId as string, 'web'),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      setActionMessage('Alert acknowledged.');
+      setActionMessage('已确认告警。');
       setActionError(null);
     },
     onError: (error) => {
@@ -204,7 +204,7 @@ export function AlertsCenter() {
     mutationFn: () => resolveAlert(selectedAlertId as string, 'web'),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      setActionMessage('Alert resolved.');
+      setActionMessage('已解决告警。');
       setActionError(null);
     },
     onError: (error) => {
@@ -217,7 +217,7 @@ export function AlertsCenter() {
     mutationFn: () => sendTestAlert(),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      setActionMessage('Test alert sent.');
+      setActionMessage('测试告警已发送。');
       setActionError(null);
       setTestDialogOpen(false);
     },
@@ -417,7 +417,7 @@ export function AlertsCenter() {
               <Tabs defaultValue="summary" className="w-full">
                 <TabsList className="flex flex-wrap">
                   <TabsTrigger value="summary">摘要</TabsTrigger>
-                  <TabsTrigger value="json">JSON</TabsTrigger>
+                  <TabsTrigger value="json">原始数据</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="summary" className="space-y-4">

@@ -81,7 +81,7 @@ describe('AlertsPage', () => {
     expect(await screen.findByText('告警中心')).toBeInTheDocument();
     expect(await screen.findByText('Database offline')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '摘要' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'JSON' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '原始数据' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看详情' })).toHaveAttribute('href', '/alerts/record-1');
 
     await waitFor(() => {

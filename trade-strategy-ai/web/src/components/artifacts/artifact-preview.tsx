@@ -131,7 +131,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         if (block.type === 'heading') {
           const HeadingTag = `h${block.level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
           return (
-            <HeadingTag className="font-semibold text-slate-50" key={`heading-${index}`}>
+            <HeadingTag className="font-semibold text-slate-900" key={`heading-${index}`}>
               {renderInlineText(block.text)}
             </HeadingTag>
           );
@@ -139,7 +139,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
 
         if (block.type === 'list') {
           return (
-            <ul className="list-disc space-y-2 pl-5 text-sm text-slate-200" key={`list-${index}`}>
+            <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700" key={`list-${index}`}>
               {block.items.map((item, itemIndex) => (
                 <li key={`${block.type}-${index}-${itemIndex}`}>{renderInlineText(item)}</li>
               ))}
@@ -150,7 +150,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         if (block.type === 'quote') {
           return (
             <blockquote
-              className="border-l-4 border-sky-500/60 bg-slate-950/60 px-4 py-3 text-sm text-slate-300"
+              className="border-l-4 border-sky-300 bg-sky-50 px-4 py-3 text-sm text-slate-700"
               key={`quote-${index}`}
             >
               {renderInlineText(block.text)}
@@ -162,7 +162,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
           return (
             <div className="space-y-2" key={`code-${index}`}>
               {block.language ? <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{block.language}</p> : null}
-              <pre className="overflow-auto rounded-2xl border border-slate-800 bg-slate-950/90 p-4 text-sm text-slate-100">
+              <pre className="overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
                 <code className="whitespace-pre-wrap font-mono">{block.code}</code>
               </pre>
             </div>
@@ -170,7 +170,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         }
 
         return (
-          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-200" key={`paragraph-${index}`}>
+          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700" key={`paragraph-${index}`}>
             {renderInlineText(block.text)}
           </p>
         );
@@ -205,7 +205,7 @@ export function ArtifactPreview({ kind, content, title }: ArtifactPreviewProps) 
 
   if (!previewContent) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
         暂无可用预览。
       </div>
     );
@@ -217,7 +217,7 @@ export function ArtifactPreview({ kind, content, title }: ArtifactPreviewProps) 
 
   if (kind === 'markdown') {
     return (
-      <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Markdown preview</p>
           <p className="text-xs text-slate-500">已安全转义渲染</p>

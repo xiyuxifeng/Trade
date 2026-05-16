@@ -63,6 +63,7 @@ const artifacts: ArtifactRecord[] = [
   {
     artifact_id: 'artifact-1',
     name: 'strategy_report.html',
+    title: 'strategy_report.html',
     path: 'artifacts/strategy_report.html',
     kind: 'report',
     source: 'job',
@@ -71,6 +72,14 @@ const artifacts: ArtifactRecord[] = [
     modified_at: '2026-05-16T09:10:00Z',
     previewable: true,
     job_id: 'job-strategy-2',
+    job_type: 'strategy-build',
+    storage_ref: {
+      source: 'file',
+      logical_id: 'artifacts/strategy_report.html',
+      relative_path: 'artifacts/strategy_report.html',
+      uri: null,
+      metadata: {},
+    },
     metadata: {},
     preview: 'Strategy report preview',
     download_name: 'strategy_report.html',

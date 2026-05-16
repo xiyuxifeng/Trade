@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { ApiError } from '@/lib/api/http';
 import { downloadArtifact } from '@/lib/api/artifacts';
+import { renderWithRouter } from '@/test/test-utils';
 import { ArtifactPanel } from './artifact-panel';
 import type { JobArtifactRef } from '@/types/jobs';
 
@@ -48,34 +49,42 @@ describe('ArtifactPanel', () => {
     const user = userEvent.setup();
     mockedDownloadArtifact.mockResolvedValueOnce(new Blob(['artifact']));
 
-    render(
-      <ArtifactPanel
-        artifacts={[
-          makeArtifact({
-            artifact_id: 'artifact-1',
-            title: '抓取结果',
-            step_id: 'crawl',
-            metadata: { output_path: '/tmp/job-1/result.json', records: 3 },
-          }),
-          makeArtifact({
-            artifact_id: 'artifact-2',
-            title: '清洗结果',
-            step_id: 'transform',
-            kind: 'csv',
-            summary: '清洗后的明细表',
-            safe_download_url: null,
-            metadata: { source: '/Users/wanghui/project/data.csv', rows: 12 },
-          }),
-          makeArtifact({
-            artifact_id: 'artifact-3',
-            title: '运行日志',
-            step_id: null,
-            kind: 'log',
-            summary: null,
-            metadata: { lines: 120 },
-          }),
-        ]}
-      />,
+    renderWithRouter(
+      [
+        {
+          path: '/',
+          element: (
+            <ArtifactPanel
+              artifacts={[
+                makeArtifact({
+                  artifact_id: 'artifact-1',
+                  title: '抓取结果',
+                  step_id: 'crawl',
+                  metadata: { output_path: '/tmp/job-1/result.json', records: 3 },
+                }),
+                makeArtifact({
+                  artifact_id: 'artifact-2',
+                  title: '清洗结果',
+                  step_id: 'transform',
+                  kind: 'csv',
+                  summary: '清洗后的明细表',
+                  safe_download_url: null,
+                  metadata: { source: '/Users/wanghui/project/data.csv', rows: 12 },
+                }),
+                makeArtifact({
+                  artifact_id: 'artifact-3',
+                  title: '运行日志',
+                  step_id: null,
+                  kind: 'log',
+                  summary: null,
+                  metadata: { lines: 120 },
+                }),
+              ]}
+            />
+          ),
+        },
+      ],
+      ['/'],
     );
 
     expect(screen.getByText('步骤 crawl')).toBeInTheDocument();
@@ -84,6 +93,7 @@ describe('ArtifactPanel', () => {
     expect(screen.getByText('抓取结果')).toBeInTheDocument();
     expect(screen.getByText('清洗结果')).toBeInTheDocument();
     expect(screen.getByText('运行日志')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '查看来源 Job' })[0]).toHaveAttribute('href', '/jobs/job-1');
 
     await user.click(screen.getAllByRole('button', { name: '预览' })[0]);
     await user.click(screen.getAllByRole('button', { name: '下载' })[0]);
@@ -96,7 +106,7 @@ describe('ArtifactPanel', () => {
   });
 
   it('shows an empty fallback when no artifacts exist', () => {
-    render(<ArtifactPanel artifacts={[]} />);
+    renderWithRouter([{ path: '/', element: <ArtifactPanel artifacts={[]} /> }], ['/']);
 
     expect(screen.getByText('该任务未产生任何产物。')).toBeInTheDocument();
   });
@@ -105,10 +115,18 @@ describe('ArtifactPanel', () => {
     const user = userEvent.setup();
     mockedDownloadArtifact.mockRejectedValueOnce(new ApiError(403, 'forbidden'));
 
-    render(<ArtifactPanel artifacts={[makeArtifact({ artifact_id: 'artifact-403' })]} />);
+    renderWithRouter(
+      [
+        {
+          path: '/',
+          element: <ArtifactPanel artifacts={[makeArtifact({ artifact_id: 'artifact-403' })]} />,
+        },
+      ],
+      ['/'],
+    );
 
     await user.click(screen.getByRole('button', { name: '下载' }));
 
-    expect(await screen.findByText('没有权限下载该产物。')).toBeInTheDocument();
+    expect(await screen.findByText(/没有权限下载该产物。/)).toBeInTheDocument();
   });
 });

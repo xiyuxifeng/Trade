@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import type { JobArtifactRef } from '@/types/jobs';
+import { Link } from 'react-router-dom';
 import { buildArtifactPreviewPayload, formatBytes, formatTimestamp, getVisibilityLabel, stringifyJson } from './artifact-utils';
 
 function kindVariant(kind: string) {
@@ -60,6 +61,14 @@ export function ArtifactCard({
           <Button variant="outline" size="sm" onClick={onDownload} disabled={missingDownload || downloadPending}>
             {downloadPending ? '下载中' : missingDownload ? '下载不可用' : '下载'}
           </Button>
+          {artifact.job_id ? (
+            <Link
+              className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 bg-transparent px-3 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
+              to={`/jobs/${artifact.job_id}`}
+            >
+              查看来源 Job
+            </Link>
+          ) : null}
         </div>
       </div>
 

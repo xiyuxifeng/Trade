@@ -1,7 +1,8 @@
 export type ArtifactRecord = {
   artifact_id: string;
   name: string;
-  path: string;
+  title: string;
+  path?: string | null;
   kind: string;
   source: string;
   exists: boolean;
@@ -9,6 +10,14 @@ export type ArtifactRecord = {
   modified_at: string | null;
   previewable: boolean;
   job_id: string | null;
+  job_type: string | null;
+  storage_ref: {
+    source: 'file' | 'db' | 'external';
+    logical_id: string;
+    relative_path: string | null;
+    uri: string | null;
+    metadata: Record<string, unknown>;
+  } | null;
   metadata: Record<string, unknown>;
   preview?: string;
   download_name?: string;

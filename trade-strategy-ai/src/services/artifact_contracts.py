@@ -25,6 +25,7 @@ class ArtifactCatalogItem(BaseModel):
     modified_at: str | None = None
     previewable: bool = False
     job_id: str | None = None
+    job_type: str | None = None
     workflow_id: str | None = None
     step_id: str | None = None
     safe_download_url: str | None = None
@@ -42,4 +43,3 @@ class ArtifactDetail(ArtifactCatalogItem):
     """产物详情契约。"""
 
     artifact_ref: ArtifactRef | None = None
-

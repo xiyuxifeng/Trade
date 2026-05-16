@@ -1154,7 +1154,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-007 P0 Artifact Center
+### [x] UI-V2-007 P0 Artifact Center
 
 任务目标：提供跨 Job 的产物检索和查看入口。
 
@@ -1184,6 +1184,14 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 - `NW-V1-S1-003`
 - `NW-V2-S2-002`
 - `NW-V2-S3-002`
+
+完成情况：
+
+- 已将 `/artifacts` 升级为正式 Artifact Center，采用与 `UI-V2-002` 一致的浅色工作台风格。
+- 已支持 `artifact kind`、`job_type`、`date`、关键字与 `job_id` 筛选，并在列表和详情中提供预览、下载与来源 Job 跳转。
+- 已补齐 `ArtifactService` / UI BFF 的 `job_type` 与 `date` contract，且不暴露服务器绝对路径。
+- 已补充相关测试，覆盖 API contract、服务筛选、页面过滤与 Artifact Panel 来源 Job 跳转。
+- 已通过相关验证：`python -m pytest tests/unit/services/test_artifact_service.py tests/api/routers/test_artifacts.py tests/api/test_ui_openapi_contract.py -q`、`pnpm vitest run src/pages/artifacts/index.test.tsx src/components/artifacts/artifact-panel.test.tsx src/features/strategy-workspace/strategy-workspace-artifacts.test.tsx`
 
 ---
 

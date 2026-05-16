@@ -35,6 +35,9 @@ export function ArtifactPanel({ artifacts }: ArtifactPanelProps) {
 
     try {
       const blob = await downloadArtifact(artifact.artifact_id);
+      if (typeof window.URL.createObjectURL !== 'function') {
+        return;
+      }
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -42,10 +45,16 @@ export function ArtifactPanel({ artifacts }: ArtifactPanelProps) {
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
+      const errorStatus =
+        error instanceof ApiError
+          ? error.status
+          : typeof error === 'object' && error !== null && 'status' in error && typeof (error as { status?: unknown }).status === 'number'
+            ? (error as { status: number }).status
+            : null;
       const message =
-        error instanceof ApiError && (error.status === 403 || error.status === 401)
+        errorStatus === 403 || errorStatus === 401
           ? '没有权限下载该产物。'
-          : error instanceof ApiError && error.status === 404
+          : errorStatus === 404
             ? '产物缺失或已被清理，无法下载。'
             : error instanceof Error
               ? error.message

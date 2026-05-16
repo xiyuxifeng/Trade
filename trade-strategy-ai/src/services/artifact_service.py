@@ -49,6 +49,7 @@ class ArtifactRecord:
     modified_at: str | None
     previewable: bool
     job_id: str | None = None
+    job_type: str | None = None
     workflow_id: str | None = None
     step_id: str | None = None
     safe_download_url: str | None = None
@@ -70,6 +71,7 @@ class ArtifactRecord:
             modified_at=self.modified_at,
             previewable=self.previewable,
             job_id=self.job_id,
+            job_type=self.job_type,
             workflow_id=self.workflow_id,
             step_id=self.step_id,
             safe_download_url=self.safe_download_url,
@@ -245,6 +247,7 @@ class ArtifactService(BaseService):
             modified_at=self._format_modified_at(path),
             previewable=kind in {"json", "yaml", "html", "markdown", "csv", "text"},
             job_id=self._parse_job_id(path, root),
+            job_type=None,
             safe_download_url=self._safe_download_url(artifact_id),
             download_name=path.name,
             metadata=metadata or {},
@@ -289,6 +292,43 @@ class ArtifactService(BaseService):
         records.sort(key=lambda item: (item.modified_at or "", str(item._path)), reverse=True)
         return records
 
+    async def _job_metadata_by_id(self, job_ids: set[str]) -> dict[str, dict[str, Any]]:
+        """按 job_id 拉取可用于筛选和展示的作业元数据。"""
+        if not job_ids:
+            return {}
+
+        try:
+            from src.services.job_service import JobService
+        except Exception:  # noqa: BLE001
+            return {}
+
+        metadata: dict[str, dict[str, Any]] = {}
+        service = JobService()
+        for job_id in sorted(job_ids):
+            try:
+                result = await service.get_job(job_id)
+            except Exception:  # noqa: BLE001
+                continue
+            if result.status != "ok":
+                continue
+            job_payload = result.payload.get("job") if isinstance(result.payload, dict) else None
+            if not isinstance(job_payload, dict):
+                continue
+            metadata[job_id] = {
+                "job_type": job_payload.get("job_type"),
+                "created_at": job_payload.get("created_at"),
+            }
+        return metadata
+
+    def _apply_job_metadata(self, records: list[ArtifactRecord], job_metadata: dict[str, dict[str, Any]]) -> None:
+        """把作业元数据回填到产物记录，便于筛选和展示。"""
+        for record in records:
+            if not record.job_id:
+                continue
+            metadata = job_metadata.get(record.job_id)
+            if metadata:
+                record.job_type = metadata.get("job_type")
+
     def _preview_path(self, path: Path, kind: str) -> str | None:
         """为可预览文件生成文本预览。"""
         if not path.exists() or not path.is_file():
@@ -325,6 +365,8 @@ class ArtifactService(BaseService):
         *,
         kind: str | None = None,
         source: str | None = None,
+        job_type: str | None = None,
+        date: str | None = None,
         job_id: str | None = None,
         q: str | None = None,
         skip: int = 0,
@@ -332,10 +374,17 @@ class ArtifactService(BaseService):
     ) -> ServiceResult:
         """列出可用产物。"""
         records = self._scan_files()
+        self._apply_job_metadata(records, await self._job_metadata_by_id({record.job_id for record in records if record.job_id}))
         if kind is not None:
             records = [item for item in records if item.kind == kind]
         if source is not None:
             records = [item for item in records if item.source == source]
+        if job_type is not None:
+            records = [item for item in records if item.job_type == job_type]
+        if date is not None:
+            date_prefix = date.strip()
+            if date_prefix:
+                records = [item for item in records if item.modified_at and item.modified_at.startswith(date_prefix)]
         if job_id is not None:
             records = [item for item in records if item.job_id == job_id]
         if q:
@@ -361,6 +410,7 @@ class ArtifactService(BaseService):
         for record in self._scan_files():
             if record.artifact_id != artifact_id:
                 continue
+            self._apply_job_metadata([record], await self._job_metadata_by_id({record.job_id} if record.job_id else set()))
             preview = self._preview_path(record._path, record.kind) if record.previewable else None
             detail = ArtifactDetail(**record.to_payload(preview=preview))
             return ServiceResult(

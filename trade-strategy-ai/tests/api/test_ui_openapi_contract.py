@@ -65,6 +65,9 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         assert path in paths, path
         assert set(paths[path]) == methods
 
+    artifact_query_params = {param["name"] for param in paths["/api/ui/v1/artifacts"]["get"].get("parameters", [])}
+    assert {"job_type", "date"} <= artifact_query_params
+
     expected_request_refs = {
         ("/api/ui/v1/jobs", "post"): "#/components/schemas/JobSubmissionRequest",
         ("/api/ui/v1/jobs/{job_id}/cancel", "post"): "#/components/schemas/JobCancelRequest",

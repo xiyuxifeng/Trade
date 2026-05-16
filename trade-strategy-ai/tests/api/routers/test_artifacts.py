@@ -18,7 +18,8 @@ from api.routers.ui.artifacts import get_artifact_service
 class _FakeArtifactService:
     artifact_path: Path
 
-    async def list_artifacts(self, **_: Any) -> Any:
+    async def list_artifacts(self, **kwargs: Any) -> Any:
+        self.last_list_kwargs = kwargs
         return _result(
             {
                 "count": 1,
@@ -35,8 +36,16 @@ class _FakeArtifactService:
                         "modified_at": "2026-05-09T00:00:00+00:00",
                         "previewable": True,
                         "job_id": None,
+                        "job_type": None,
                         "safe_download_url": "/api/ui/v1/artifacts/artifact-1/download",
                         "download_name": self.artifact_path.name,
+                        "storage_ref": {
+                            "source": "file",
+                            "logical_id": self.artifact_path.name,
+                            "relative_path": self.artifact_path.name,
+                            "uri": None,
+                            "metadata": {},
+                        },
                         "metadata": {},
                     }
                 ],
@@ -58,8 +67,16 @@ class _FakeArtifactService:
                 "modified_at": "2026-05-09T00:00:00+00:00",
                 "previewable": True,
                 "job_id": None,
+                "job_type": None,
                 "safe_download_url": "/api/ui/v1/artifacts/artifact-1/download",
                 "download_name": self.artifact_path.name,
+                "storage_ref": {
+                    "source": "file",
+                    "logical_id": self.artifact_path.name,
+                    "relative_path": self.artifact_path.name,
+                    "uri": None,
+                    "metadata": {},
+                },
                 "metadata": {},
                 "preview": "<html><body>artifact</body></html>",
             }
@@ -100,8 +117,16 @@ class _UnsafeArtifactService:
                 "modified_at": "2026-05-09T00:00:00+00:00",
                 "previewable": True,
                 "job_id": None,
+                "job_type": None,
                 "safe_download_url": "/api/ui/v1/artifacts/artifact-escape/download",
                 "download_name": "escape.html",
+                "storage_ref": {
+                    "source": "file",
+                    "logical_id": "escape.html",
+                    "relative_path": "escape.html",
+                    "uri": None,
+                    "metadata": {},
+                },
                 "metadata": {},
                 "preview": "<html><body>escape</body></html>",
             }
@@ -151,6 +176,26 @@ async def test_list_get_and_download_artifacts(client: AsyncClient) -> None:
     downloaded = await client.get("/api/ui/v1/artifacts/artifact-1/download")
     assert downloaded.status_code == 200
     assert downloaded.text.startswith("<html>")
+
+
+@pytest.mark.asyncio
+async def test_list_artifacts_accepts_job_type_and_date(tmp_path: Path) -> None:
+    """Artifact UI API 应暴露 job_type 和 date 筛选。"""
+    artifact_path = tmp_path / "artifact.html"
+    artifact_path.write_text("<html><body>artifact</body></html>", encoding="utf-8")
+    fake_service = _FakeArtifactService(artifact_path=artifact_path)
+
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_artifact_service] = lambda: fake_service
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/api/ui/v1/artifacts?job_type=strategy-build&date=2026-05-16")
+        assert response.status_code == 200
+        assert fake_service.last_list_kwargs == {"kind": None, "source": None, "job_type": "strategy-build", "date": "2026-05-16", "job_id": None, "q": None, "skip": 0, "limit": 50}
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio

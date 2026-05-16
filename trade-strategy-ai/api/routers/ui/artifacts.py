@@ -22,6 +22,8 @@ def get_artifact_service() -> ArtifactService:
 async def list_artifacts(
     kind: str | None = Query(default=None),
     source: str | None = Query(default=None),
+    job_type: str | None = Query(default=None),
+    date: str | None = Query(default=None),
     job_id: str | None = Query(default=None),
     q: str | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
@@ -30,7 +32,16 @@ async def list_artifacts(
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     """列出主要产物。"""
-    result = await artifact_service.list_artifacts(kind=kind, source=source, job_id=job_id, q=q, skip=skip, limit=limit)
+    result = await artifact_service.list_artifacts(
+        kind=kind,
+        source=source,
+        job_type=job_type,
+        date=date,
+        job_id=job_id,
+        q=q,
+        skip=skip,
+        limit=limit,
+    )
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "artifact listing failed")
     return result.payload

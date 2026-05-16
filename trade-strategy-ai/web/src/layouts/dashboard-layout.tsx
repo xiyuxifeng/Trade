@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { mainNavigation } from '@/app/navigation';
+import { allNavigationItems } from '@/app/navigation';
 import { resolveRouteByPathname } from '@/app/route-registry';
 import { Sidebar } from '@/components/layout/sidebar';
 import { StatusStrip } from '@/components/layout/status-strip';
@@ -10,13 +10,13 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-context';
 
 function resolveCurrentRoute(pathname: string) {
-  const exactMatch = mainNavigation.find((item) => item.path === pathname);
+  const exactMatch = allNavigationItems.find((item) => item.path === pathname);
   if (exactMatch) {
     return exactMatch;
   }
 
   const matched = resolveRouteByPathname(pathname);
-  const visibleRoute = mainNavigation.find((item) => item.path === matched.path || item.label === matched.label);
+  const visibleRoute = allNavigationItems.find((item) => item.path === matched.path || item.label === matched.label);
   return visibleRoute ?? {
     label: matched.label,
     path: matched.path,

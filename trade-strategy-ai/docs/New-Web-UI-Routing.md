@@ -27,7 +27,13 @@
 | `/workflows` | Workflow 目录入口。 |
 | `/workflows/:workflowId/run` | Workflow 运行入口。 |
 | `/articles` | article_pipeline 验收入口。 |
+| `/market` | 市场数据工作台。 |
+| `/strategies` | 策略工作台。 |
+| `/backtest` | 回测占位入口。 |
+| `/rule-pool` | 规则池占位入口。 |
 | `/artifacts` | Artifact Center 入口。 |
+| `/profiles` | Profile 管理入口。 |
+| `/admin` | 管理中心。 |
 | `/settings` | 设置入口。 |
 
 ## 3. Legacy 兼容层
@@ -39,6 +45,13 @@
 | `/jobs?jobId=...` | `/jobs/:jobId` | V1, V2 | V3 | 兼容旧查询参数选中任务。 |
 | `/workflows/:workflowId` | `/workflows/:workflowId/run` | V1, V2 | V3 | 兼容旧工作流详情入口。 |
 | `/legacy/*` | 具体 legacy 页面 | V1, V2 | V3 | 过渡壳，用于临时页面收口。 |
+| `/alerts` | `/alerts` | V1, V2 | V3 | 旧告警页。 |
+| `/reports` | `/reports` | V1, V2 | V3 | 旧报告页。 |
+| `/snapshots` | `/snapshots` | V1, V2 | V3 | 旧快照页。 |
+| `/strategy-studio` | `/strategy-studio` | V1, V2 | V3 | 旧策略实验页。 |
+| `/backtests` | `/backtests` | V1, V2 | V3 | 旧回测入口。 |
+| `/users` | `/users` | V1, V2 | V3 | 旧用户管理页。 |
+| `/ops` | `/ops` | V1, V2 | V3 | 旧运维页。 |
 
 ## 4. 阶段化收口计划
 

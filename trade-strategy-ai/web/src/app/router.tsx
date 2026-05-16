@@ -2,9 +2,11 @@ import { createBrowserRouter } from 'react-router-dom';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { BacktestsPage } from '@/pages/backtests';
+import { BacktestPage } from '@/pages/backtest';
 import { AlertsPage } from '@/pages/alerts';
 import { AlertDetailPage } from '@/pages/alerts/AlertDetailPage';
 import { ArticlesPage } from '@/pages/articles';
+import { AdminPage } from '@/pages/admin';
 import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
@@ -21,6 +23,7 @@ import { DataHealthPage } from '@/pages/data-health';
 import { ImportsPage } from '@/pages/imports';
 import { ReportsPage } from '@/pages/reports';
 import { SnapshotsPage } from '@/pages/snapshots';
+import { RulePoolPage } from '@/pages/rule-pool';
 import { SettingsPage } from '@/pages/settings';
 import { SignalsPage } from '@/pages/signals';
 import { KaipanPage } from '@/pages/kaipan';
@@ -119,6 +122,14 @@ export const appRouter = createBrowserRouter([
         element: <ArticlesPage />,
       },
       {
+        path: 'backtest',
+        element: <BacktestPage />,
+      },
+      {
+        path: 'rule-pool',
+        element: <RulePoolPage />,
+      },
+      {
         path: 'artifacts',
         element: <ArtifactsPage />,
       },
@@ -127,12 +138,12 @@ export const appRouter = createBrowserRouter([
         element: <MarketPage />,
       },
       {
-        path: 'snapshots',
-        element: <SnapshotsPage />,
-      },
-      {
         path: 'strategies',
         element: <StrategiesPage />,
+      },
+      {
+        path: 'snapshots',
+        element: <SnapshotsPage />,
       },
       {
         path: 'strategy-studio',
@@ -177,6 +188,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'reports',
         element: <ReportsPage />,
+      },
+      {
+        path: 'admin',
+        element: <AdminPage />,
       },
       {
         path: 'settings',

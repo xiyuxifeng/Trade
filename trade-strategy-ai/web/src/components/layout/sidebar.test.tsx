@@ -33,7 +33,10 @@ describe('Sidebar', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('link', { name: /Ops/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getAllByRole('link', { name: /运维/ }).find((link) => link.getAttribute('href') === '/ops')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByText('viewer')).toBeInTheDocument();
   });
 });

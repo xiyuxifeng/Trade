@@ -856,7 +856,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-001 P0 正式 Web 信息架构
+### [x] UI-V2-001 P0 正式 Web 信息架构
 
 任务目标：建立正式产品级导航与页面分组，替代 V1 临时页面结构。
 
@@ -893,6 +893,15 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 - V1 页面仍可访问。
 - 新导航结构清晰。
 - 未完成模块显示 V2/V3 placeholder。
+
+完成情况：
+
+- 已将正式入口收口为 `Dashboard / Jobs / Workflows / Articles / Market Data / Strategy / Backtest / Rule Pool / Artifacts / Profiles / Admin / Settings`。
+- 已把旧页面收纳进独立的兼容入口分组，保留 V1/V2 历史链接可访问。
+- 已新增 `docs/New-Web-UI-Information-Architecture.md`，并同步更新 `docs/New-Web-UI-Routing.md`。
+- 已补齐 `/backtest`、`/rule-pool`、`/admin` 的正式 placeholder 页面与路由。
+- 已更新 sidebar、route registry 和布局路由标题逻辑，保持与 `UI-V2-002` 一致的浅色工作台风格。
+- 已通过相关测试：`route-registry`、`sidebar`、`admin`、`backtest`、`rule-pool`。
 
 主任务关联：
 

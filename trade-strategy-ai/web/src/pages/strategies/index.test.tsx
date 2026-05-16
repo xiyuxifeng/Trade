@@ -4,12 +4,11 @@ import { StrategiesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 
 describe('StrategiesPage', () => {
-  it('renders the placeholder shell for the strategies center', () => {
+  it('renders the formal strategies entry page', () => {
     renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
 
-    expect(screen.getByRole('heading', { name: 'Strategies' })).toBeInTheDocument();
-    expect(screen.getByText('Stage 4 placeholder')).toBeInTheDocument();
-    expect(screen.getByText('Coming next')).toBeInTheDocument();
-    expect(screen.getByText('Strategy content will be connected in later stages.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '策略' })).toBeInTheDocument();
+    expect(screen.getByText('V2 正式入口')).toBeInTheDocument();
+    expect(screen.getByText('策略工作台正在收口到正式界面')).toBeInTheDocument();
   });
 });

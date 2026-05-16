@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { mainNavigation } from '@/app/navigation';
+import { navigationGroups } from '@/app/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/utils';
@@ -34,42 +34,49 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
       </div>
 
       <nav className="sidebar-nav" aria-label="Primary">
-        {mainNavigation.map((item) => {
-          const disabled = item.minRole ? !canAccess(item.minRole) : false;
+        {navigationGroups.map((group) => (
+          <div key={group.title} className="sidebar-nav-group">
+            {!collapsed && <p className="sidebar-nav-group-title">{group.title}</p>}
+            {group.items.map((item) => {
+              const disabled = item.minRole ? !canAccess(item.minRole) : false;
+              const isCompatibility = group.title === '兼容入口';
 
-          return (
-            <NavLink
-              aria-disabled={disabled || undefined}
-              className={({ isActive }) =>
-                cn(
-                  'sidebar-link',
-                  isActive && 'sidebar-link-active',
-                  disabled && 'sidebar-link-disabled',
-                  collapsed && 'sidebar-link-collapsed',
-                )
-              }
-              key={item.path}
-              onClick={
-                disabled
-                  ? (event) => {
-                      event.preventDefault();
-                    }
-                  : onNavigate
-              }
-              tabIndex={disabled ? -1 : undefined}
-              to={item.path}
-              end={item.path === '/'}
-              title={disabled ? `需要 ${item.minRole} 权限` : item.description}
-            >
-              <span className="sidebar-link-label">{item.label}</span>
-              {!collapsed && (
-                <span className="sidebar-link-description">
-                  {disabled ? `需要 ${item.minRole} 权限` : item.description}
-                </span>
-              )}
-            </NavLink>
-          );
-        })}
+              return (
+                <NavLink
+                  aria-disabled={disabled || undefined}
+                  className={({ isActive }) =>
+                    cn(
+                      'sidebar-link',
+                      isActive && 'sidebar-link-active',
+                      disabled && 'sidebar-link-disabled',
+                      collapsed && 'sidebar-link-collapsed',
+                      isCompatibility && 'sidebar-link-compatibility',
+                    )
+                  }
+                  key={item.path}
+                  onClick={
+                    disabled
+                      ? (event) => {
+                          event.preventDefault();
+                        }
+                      : onNavigate
+                  }
+                  tabIndex={disabled ? -1 : undefined}
+                  to={item.path}
+                  end={item.path === '/'}
+                  title={disabled ? `需要 ${item.minRole} 权限` : item.description}
+                >
+                  <span className="sidebar-link-label">{item.label}</span>
+                  {!collapsed && (
+                    <span className="sidebar-link-description">
+                      {disabled ? `需要 ${item.minRole} 权限` : item.description}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {!collapsed && (

@@ -18,3 +18,4 @@ def test_create_app_registers_critical_routes() -> None:
     assert "/api/ui/v1/profiles" in paths
     assert "/api/ui/v1/artifacts" in paths
     assert "/api/ui/v1/market/ohlcv" in paths
+    assert "/api/ui/v1/market/snapshots" in paths

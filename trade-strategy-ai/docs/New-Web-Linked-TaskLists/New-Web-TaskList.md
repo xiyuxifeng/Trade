@@ -1424,7 +1424,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S2-005 P0 Market Snapshot Query API
+### [x] NW-V2-S2-005 P0 Market Snapshot Query API
 
 任务目标：提供稳定 API 给 Web UI 和外部系统查询 Market Snapshot / Dataset，避免直接读取文件或绕过 Application Service。
 
@@ -1490,6 +1490,13 @@ UI 关联任务：
 - `UI-V2-010 Market Snapshot Browser`
 - `UI-V2-011 Market Dataset Viewer`
 - `UI-V2-005 Market Data Workspace`
+
+完成情况：
+
+- 已新增 `MarketSnapshotQueryService`，统一通过 repository 查询 DB 中的 snapshot / section / item / dataset / quality report。
+- 已在 `api/routers/ui/market.py` 暴露 snapshot 列表、详情、sections、section detail、dataset 列表、dataset detail 和 quality report 端点。
+- 已补齐结构化查询 schema、分页模型和错误契约，Router 不再拼复杂查询逻辑。
+- 已补充 `docs/New-Web-Market-Snapshot-API.md` 说明文档与测试覆盖，且未新增 CLI surface。
 
 ---
 

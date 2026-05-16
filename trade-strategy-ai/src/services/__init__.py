@@ -21,6 +21,7 @@ from src.services.kaipan_service import KaipanService
 from src.services.market_service import MarketService
 from src.services.market_data_storage_service import MarketDataStorageService
 from src.services.market_snapshot_service import MarketSnapshotService
+from src.services.market_snapshot_query_service import MarketSnapshotQueryService
 from src.services.optimize_service import OptimizeService
 from src.services.pipeline_application_service import PipelineApplicationService
 from src.services.persona_service import PersonaService
@@ -58,6 +59,7 @@ __all__ = [
     "MarketService",
     "MarketDataStorageService",
     "MarketSnapshotService",
+    "MarketSnapshotQueryService",
     "StrategyService",
     "PersonaService",
     "SignalService",

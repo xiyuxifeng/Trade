@@ -6,7 +6,16 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies import verify_api_key
-from src.services.market_service import MarketService
+from api.schemas.market import (
+    MarketDatasetDetailResponse,
+    MarketDatasetListResponse,
+    MarketSnapshotDetailResponse,
+    MarketSnapshotListResponse,
+    MarketSnapshotQualityResponse,
+    MarketSnapshotSectionListResponse,
+    MarketSnapshotSectionResponse,
+)
+from src.services import MarketService, MarketSnapshotQueryService
 
 
 router = APIRouter(prefix="/api/ui/v1/market", tags=["ui-market"])
@@ -15,6 +24,44 @@ router = APIRouter(prefix="/api/ui/v1/market", tags=["ui-market"])
 def get_market_service() -> MarketService:
     """获取 MarketService 实例，便于测试覆盖。"""
     return MarketService()
+
+
+def get_market_snapshot_query_service() -> MarketSnapshotQueryService:
+    """获取 MarketSnapshotQueryService 实例，便于测试覆盖。"""
+    return MarketSnapshotQueryService()
+
+
+def _structured_error(error_type: str, message: str, detail: str | None = None, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    """构造统一的结构化错误。"""
+    return {
+        "type": error_type,
+        "message": message,
+        "detail": detail,
+        "metadata": metadata or {},
+    }
+
+
+def _raise_query_error(result: Any) -> None:
+    """把服务层错误映射到 HTTPException。"""
+    error = (result.payload or {}).get("error") if hasattr(result, "payload") else None
+    if not isinstance(error, dict):
+        raise HTTPException(status_code=400, detail=_structured_error("query_failed", result.message or "query failed"))
+
+    error_type = str(error.get("type") or "query_failed")
+    message = str(error.get("message") or result.message or "query failed")
+    status_code = 400
+    if error_type in {"snapshot_not_found", "dataset_not_found", "section_not_found", "quality_report_not_found"}:
+        status_code = 404
+    elif error_type == "permission_denied":
+        status_code = 403
+    elif error_type == "invalid_query":
+        status_code = 422
+    elif error_type == "api_unavailable":
+        status_code = 503
+    elif error_type == "empty_data":
+        status_code = 404
+
+    raise HTTPException(status_code=status_code, detail=_structured_error(error_type, message, error.get("detail"), metadata=error.get("metadata") or {}))
 
 
 @router.get("/symbols")
@@ -45,3 +92,137 @@ async def get_ohlcv(
         raise HTTPException(status_code=400, detail=result.message or "ohlcv query failed")
     return result.payload
 
+
+@router.get("/snapshots", response_model=MarketSnapshotListResponse)
+async def list_market_snapshots(
+    trade_date: date | None = Query(default=None),
+    market: str | None = Query(default=None),
+    section: str | None = Query(default=None),
+    symbol: str | None = Query(default=None),
+    topic: str | None = Query(default=None),
+    quality_status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 Market Snapshot 列表。"""
+    result = await query_service.list_snapshots(
+        trade_date=trade_date,
+        market=market,
+        section=section,
+        symbol=symbol,
+        topic=topic,
+        quality_status=quality_status,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}", response_model=MarketSnapshotDetailResponse)
+async def get_market_snapshot(
+    snapshot_id: str,
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 Market Snapshot 详情。"""
+    result = await query_service.get_snapshot_detail(snapshot_id)
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}/sections", response_model=MarketSnapshotSectionListResponse)
+async def list_market_snapshot_sections(
+    snapshot_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 snapshot 的 sections。"""
+    result = await query_service.list_snapshot_sections(snapshot_id, limit=limit, offset=offset)
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}/sections/{section}", response_model=MarketSnapshotSectionResponse)
+async def get_market_snapshot_section(
+    snapshot_id: str,
+    section: str,
+    symbol: str | None = Query(default=None),
+    topic: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 snapshot 内单个 section 的明细。"""
+    result = await query_service.get_snapshot_section(
+        snapshot_id,
+        section,
+        symbol=symbol,
+        topic=topic,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/datasets", response_model=MarketDatasetListResponse)
+async def list_market_datasets(
+    trade_date: date | None = Query(default=None),
+    market: str | None = Query(default=None),
+    dataset_type: str | None = Query(default=None),
+    quality_status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 Market Dataset 列表。"""
+    result = await query_service.list_datasets(
+        trade_date=trade_date,
+        market=market,
+        dataset_type=dataset_type,
+        quality_status=quality_status,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/datasets/{dataset_id}", response_model=MarketDatasetDetailResponse)
+async def get_market_dataset(
+    dataset_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 Market Dataset 详情。"""
+    result = await query_service.get_dataset_detail(dataset_id, limit=limit, offset=offset)
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}/quality", response_model=MarketSnapshotQualityResponse)
+async def get_market_snapshot_quality(
+    snapshot_id: str,
+    query_service: MarketSnapshotQueryService = Depends(get_market_snapshot_query_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 Market Snapshot 的质量报告。"""
+    result = await query_service.get_quality_report(snapshot_id)
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload

@@ -52,6 +52,13 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/ops/restore": {"post"},
         "/api/ui/v1/market/symbols": {"get"},
         "/api/ui/v1/market/ohlcv": {"get"},
+        "/api/ui/v1/market/snapshots": {"get"},
+        "/api/ui/v1/market/snapshots/{snapshot_id}": {"get"},
+        "/api/ui/v1/market/snapshots/{snapshot_id}/sections": {"get"},
+        "/api/ui/v1/market/snapshots/{snapshot_id}/sections/{section}": {"get"},
+        "/api/ui/v1/market/datasets": {"get"},
+        "/api/ui/v1/market/datasets/{dataset_id}": {"get"},
+        "/api/ui/v1/market/snapshots/{snapshot_id}/quality": {"get"},
     }
 
     for path, methods in expected_methods.items():

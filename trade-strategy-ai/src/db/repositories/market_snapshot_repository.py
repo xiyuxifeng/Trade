@@ -44,12 +44,28 @@ class MarketSnapshotRepository:
         """按 snapshot_id 查询快照。"""
         return await session.scalar(select(MarketSnapshot).where(MarketSnapshot.snapshot_id == snapshot_id))
 
-    async def list_by_trade_date(self, session: AsyncSession, trade_date: date, market: str | None = None) -> list[MarketSnapshot]:
-        """按 trade_date 查询快照列表。"""
-        stmt = select(MarketSnapshot).where(MarketSnapshot.trade_date == trade_date)
+    async def list_snapshots(
+        self,
+        session: AsyncSession,
+        *,
+        trade_date: date | None = None,
+        market: str | None = None,
+        quality_status: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MarketSnapshot]:
+        """按条件查询快照列表。"""
+        stmt = select(MarketSnapshot)
+        if trade_date is not None:
+            stmt = stmt.where(MarketSnapshot.trade_date == trade_date)
         if market:
             stmt = stmt.where(MarketSnapshot.market == market)
+        if quality_status:
+            stmt = stmt.where(MarketSnapshot.quality_status == quality_status)
         stmt = stmt.order_by(MarketSnapshot.created_at.desc())
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
-

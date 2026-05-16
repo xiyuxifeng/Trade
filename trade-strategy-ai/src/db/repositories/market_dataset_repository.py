@@ -37,12 +37,31 @@ class MarketDatasetRepository:
         """按 dataset_id 查询数据集。"""
         return await session.scalar(select(MarketDataset).where(MarketDataset.dataset_id == dataset_id))
 
-    async def list_by_trade_date(self, session: AsyncSession, trade_date: date, market: str | None = None) -> list[MarketDataset]:
-        """按 trade_date 查询数据集列表。"""
-        stmt = select(MarketDataset).where(MarketDataset.trade_date == trade_date)
+    async def list_datasets(
+        self,
+        session: AsyncSession,
+        *,
+        trade_date: date | None = None,
+        market: str | None = None,
+        dataset_type: str | None = None,
+        quality_status: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MarketDataset]:
+        """按条件查询数据集列表。"""
+        stmt = select(MarketDataset)
+        if trade_date is not None:
+            stmt = stmt.where(MarketDataset.trade_date == trade_date)
         if market:
             stmt = stmt.where(MarketDataset.market == market)
+        if dataset_type:
+            stmt = stmt.where(MarketDataset.dataset_type == dataset_type)
+        if quality_status:
+            stmt = stmt.where(MarketDataset.quality_status == quality_status)
         stmt = stmt.order_by(MarketDataset.created_at.desc())
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
-

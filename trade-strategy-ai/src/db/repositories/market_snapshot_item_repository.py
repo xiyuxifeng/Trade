@@ -44,33 +44,57 @@ class MarketSnapshotItemRepository:
         )
         return list(result.all())
 
-    async def list_by_symbol(self, session: AsyncSession, symbol: str) -> list[MarketSnapshotItem]:
+    async def list_by_symbol(
+        self,
+        session: AsyncSession,
+        symbol: str,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MarketSnapshotItem]:
         """按 symbol 查询明细列表。"""
-        result = await session.scalars(
-            select(MarketSnapshotItem)
-            .where(MarketSnapshotItem.symbol == symbol)
-            .order_by(MarketSnapshotItem.source_time.desc().nullslast())
-        )
+        stmt = select(MarketSnapshotItem).where(MarketSnapshotItem.symbol == symbol).order_by(MarketSnapshotItem.source_time.desc().nullslast())
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.scalars(stmt)
         return list(result.all())
 
-    async def list_by_section(self, session: AsyncSession, snapshot_id: str, section_id: str) -> list[MarketSnapshotItem]:
+    async def list_by_section(
+        self,
+        session: AsyncSession,
+        snapshot_id: str,
+        section_id: str,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MarketSnapshotItem]:
         """按 snapshot_id + section_id 查询明细列表。"""
-        result = await session.scalars(
-            select(MarketSnapshotItem)
-            .where(
-                MarketSnapshotItem.snapshot_id == snapshot_id,
-                MarketSnapshotItem.section_id == section_id,
-            )
-            .order_by(MarketSnapshotItem.item_key.asc())
-        )
+        stmt = select(MarketSnapshotItem).where(
+            MarketSnapshotItem.snapshot_id == snapshot_id,
+            MarketSnapshotItem.section_id == section_id,
+        ).order_by(MarketSnapshotItem.item_key.asc())
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.scalars(stmt)
         return list(result.all())
 
-    async def list_by_dataset_id(self, session: AsyncSession, dataset_id: str) -> list[MarketSnapshotItem]:
+    async def list_by_dataset_id(
+        self,
+        session: AsyncSession,
+        dataset_id: str,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MarketSnapshotItem]:
         """按 dataset_id 查询明细列表。"""
-        result = await session.scalars(
-            select(MarketSnapshotItem)
-            .where(MarketSnapshotItem.dataset_id == dataset_id)
-            .order_by(MarketSnapshotItem.section_id.asc(), MarketSnapshotItem.item_key.asc())
-        )
+        stmt = select(MarketSnapshotItem).where(MarketSnapshotItem.dataset_id == dataset_id).order_by(MarketSnapshotItem.section_id.asc(), MarketSnapshotItem.item_key.asc())
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await session.scalars(stmt)
         return list(result.all())
-

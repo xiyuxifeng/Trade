@@ -33,7 +33,40 @@ trade-strategy-ai/docs/agent-rules/
 
 ---
 
-## 1. Required Rule Loading Matrix（规则加载矩阵）
+## 1. 项目路径
+
+项目根目录：
+
+```text
+trade-strategy-ai
+```
+
+`docs`路径：
+如果当前在workspace根目录，则`docs`路径为：
+```text
+trade-strategy-ai/docs
+```
+
+推荐使用相对 workspace 根目录路径：
+
+```text
+trade-strategy-ai/daily-sessions
+trade-strategy-ai/daily-report
+trade-strategy-ai/docs/New-Web-Linked-TaskLists
+trade-strategy-ai/docs/superpowers
+```
+
+尽量不要在对话中依赖 `cd`。
+
+详细见：
+
+```text
+docs/agent-rules/language-and-paths.md
+```
+
+---
+
+## 2. Required Rule Loading Matrix（规则加载矩阵）
 
 | 场景 | 必须读取 |
 |---|---|
@@ -48,7 +81,7 @@ trade-strategy-ai/docs/agent-rules/
 
 ---
 
-## 2. 默认语言
+## 3. 默认语言
 
 - 默认使用中文回答
 - 默认使用中文更新：
@@ -57,33 +90,6 @@ trade-strategy-ai/docs/agent-rules/
   - TaskList
 - 技术术语可以保留英文原词
 - 用户明确要求其他语言时，优先遵循用户要求
-
-详细见：
-
-```text
-docs/agent-rules/language-and-paths.md
-```
-
----
-
-## 3. 项目路径
-
-项目根目录：
-
-```text
-trade-strategy-ai
-```
-
-推荐使用相对 workspace 根目录路径：
-
-```text
-trade-strategy-ai/daily-sessions
-trade-strategy-ai/daily-report
-trade-strategy-ai/docs/New-Web-Linked-TaskLists
-trade-strategy-ai/docs/superpowers
-```
-
-尽量不要在对话中依赖 `cd`。
 
 详细见：
 
@@ -143,7 +149,7 @@ docs/agent-rules/architecture-boundary.md
 2. Review 是否满足验收标准
 3. 根据实际完成度更新 Task 状态
 4. 必要时更新 `daily-sessions` / `daily-report`
-5. 输出完成内容、修改文件、验证结果、风险和下一步建议
+5. 输出完成内容、修改文件、验证结果、风险和下一步建议, 必须根据以下文档进行
 
 详细见：
 

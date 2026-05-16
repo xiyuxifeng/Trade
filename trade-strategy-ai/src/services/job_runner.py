@@ -27,6 +27,7 @@ from src.services.market_service import MarketService
 from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
 from src.services.snapshot_service import SnapshotService
+from src.services.strategy_service import StrategyService
 
 
 def _to_plain(value: Any) -> Any:
@@ -207,6 +208,15 @@ class JobRunner(BaseService):
                 snapshot_type=str(params.get("snapshot_type") or "all"),
             )
 
+        async def _strategy_build(params: dict[str, Any]) -> ServiceResult:
+            service = StrategyService()
+            return await service.build_strategy_version(
+                config_path=params.get("config_path", "config/app.yaml"),
+                trader_id=str(params.get("trader_id") or ""),
+                strategy_date=str(params.get("strategy_date") or date.today().isoformat()),
+                force=_parse_bool(params.get("force"), default=False),
+            )
+
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
             manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
             service = RunService(manager)
@@ -259,6 +269,7 @@ class JobRunner(BaseService):
             "ohlcv-crawl": _ohlcv_crawl,
             "market-state-build": _market_state_build,
             "snapshot-build": _snapshot_build,
+            "strategy-build": _strategy_build,
         }
 
     def _classify_error(self, *, job_type: str, message: str, payload: dict[str, Any] | None = None) -> tuple[str, str | None, bool]:

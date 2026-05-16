@@ -58,6 +58,7 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
         "run-after-close",
         "market-state-build",
         "snapshot-build",
+        "strategy-build",
         "ohlcv-crawl",
         "kaipan-fetch",
         "kaipan-normalize",

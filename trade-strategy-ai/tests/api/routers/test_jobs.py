@@ -49,3 +49,23 @@ async def test_validate_job_submission_enforces_whitelist(client: AsyncClient) -
     )
     assert response.status_code == 400
     assert "not runnable" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_validate_job_submission_accepts_strategy_build(client: AsyncClient) -> None:
+    """提交校验接口应接受正式可运行的 strategy-build。"""
+    response = await client.post(
+        "/api/ui/v1/jobs/validate",
+        json={
+            "job_type": "strategy-build",
+            "params": {
+                "config_path": "config/app.yaml",
+                "trader_id": "trader-001",
+                "strategy_date": "2026-05-16",
+                "force": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["params"]["trader_id"] == "trader-001"

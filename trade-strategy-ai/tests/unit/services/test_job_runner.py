@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -91,6 +92,57 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
     assert any(item["kind"] == "html" for item in loaded.payload["job"]["artifacts"])
     assert (tmp_path / "jobs" / job_id / "result.json").exists()
+    asyncio.run(engine.dispose())
+
+
+def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """strategy-build 应走默认 handler 并可通过 Web 提交执行。"""
+
+    from src.services import job_runner as job_runner_module
+
+    class _FakeStrategyService:
+        async def build_strategy_version(
+            self,
+            *,
+            config_path: str | Path,
+            trader_id: str,
+            strategy_date: str,
+            force: bool = False,
+        ) -> Any:
+            del force
+            return job_runner_module.ServiceResult(
+                status="ok",
+                payload={
+                    "config_path": str(config_path),
+                    "trader_id": trader_id,
+                    "strategy_date": strategy_date,
+                    "strategy_version_path": str(tmp_path / "strategy-version.json"),
+                },
+                message="strategy version build completed",
+            )
+
+    monkeypatch.setattr(job_runner_module, "StrategyService", _FakeStrategyService)
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="strategy-build",
+            params={
+                "config_path": "config/app.yaml",
+                "trader_id": "trader-001",
+                "strategy_date": "2026-05-16",
+                "force": False,
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert submitted.payload["execution"]["job"]["status"] == "success"
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["result"]["payload"]["trader_id"] == "trader-001"
+    assert loaded.payload["job"]["result"]["payload"]["strategy_date"] == "2026-05-16"
     asyncio.run(engine.dispose())
 
 

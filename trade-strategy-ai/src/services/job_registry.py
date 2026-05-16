@@ -602,7 +602,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="strategy",
         requires_confirmation=False,
-        runnable=False,
+        runnable=True,
         description="生成交易员策略版本。",
         param_schema=_schema(
             "策略构建参数",

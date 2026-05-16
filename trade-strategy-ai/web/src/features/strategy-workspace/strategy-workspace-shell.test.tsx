@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { StrategiesPage } from './index';
+import { StrategyWorkspaceShell } from './strategy-workspace-shell';
 import { renderWithRouter } from '@/test/test-utils';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listJobs, createJob } from '@/lib/api/jobs';
@@ -38,8 +38,8 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('StrategiesPage', () => {
-  it('renders the formal strategy workspace entry', async () => {
+describe('StrategyWorkspaceShell', () => {
+  it('loads the latest profile snapshot config_path and keeps the workspace usable', async () => {
     mockedListProfiles.mockResolvedValue({
       count: 1,
       total: 1,
@@ -113,11 +113,12 @@ describe('StrategiesPage', () => {
       },
     } as never);
 
-    renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
+    renderWithRouter([{ path: '/strategies', element: <StrategyWorkspaceShell /> }], ['/strategies']);
 
     expect(await screen.findByRole('heading', { name: '策略工作台' })).toBeInTheDocument();
-    expect(screen.getByText('正式入口')).toBeInTheDocument();
     expect((await screen.findAllByText('config/strategy-v3.yaml')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /盘前运行/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /盘后运行/ })).toBeInTheDocument();
+    expect(mockedCreateJob).not.toHaveBeenCalled();
   });
 });

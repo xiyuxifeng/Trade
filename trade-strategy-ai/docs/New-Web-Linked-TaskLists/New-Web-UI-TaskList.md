@@ -1106,7 +1106,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-006 P0 Strategy Workspace
+### [x] UI-V2-006 P0 Strategy Workspace
 
 任务目标：提供策略版本、盘前、盘后相关操作入口。
 
@@ -1143,6 +1143,14 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 - `NW-V2-S3-001`
 - `NW-V2-S3-002`
+
+完成情况说明：
+
+- 已将 `/strategies` 落成正式策略工作台，沿用 Web 正式信息架构和浅色卡片式工作台风格。
+- 已接入 `Profile` 最新 snapshot 的 `config_path` 解析，支持 `trader/date/profile` 选择与正式 Job 提交。
+- 已支持 `strategy-build`、`run-pre-market`、`run-after-close` 的确认弹窗、Job 提交、最近任务、版本详情、证据包与报告产物解释。
+- 已补齐策略工作台到 Artifact Center 的跳转，并覆盖 loading / empty / error / retry / success 状态。
+- 已通过相关 Vitest 验证：`src/pages/strategies/index.test.tsx`、`src/features/strategy-workspace/*.test.tsx`。
 
 ---
 

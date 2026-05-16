@@ -138,6 +138,9 @@ class ConfigProfileService(BaseService):
         *,
         profile_id: str,
         created_by: str,
+        name: str | None = None,
+        environment: str | None = None,
+        validation_status: str | None = None,
     ) -> ConfigProfile:
         """从现有 config_path 导入正式 Profile。"""
         resolved = resolve_project_path(config_path)
@@ -157,12 +160,12 @@ class ConfigProfileService(BaseService):
             if existing is None:
                 profile = ConfigProfile(
                     profile_id=profile_id,
-                    name=profile_id,
-                    environment=str(raw_payload.get("environment") or raw_config.get("environment") or "default"),
+                    name=name or profile_id,
+                    environment=str(environment or raw_payload.get("environment") or raw_config.get("environment") or "default"),
                     version=1,
                     sections=masked_sections,
                     secret_refs=secret_refs,
-                    validation_status="validated",
+                    validation_status=validation_status or "validated",
                     created_by=created_by,
                     archived_at=None,
                     created_at=now,
@@ -170,12 +173,12 @@ class ConfigProfileService(BaseService):
                 )
                 session.add(profile)
             else:
-                existing.name = profile_id
-                existing.environment = str(raw_payload.get("environment") or raw_config.get("environment") or existing.environment or "default")
+                existing.name = name or profile_id
+                existing.environment = str(environment or raw_payload.get("environment") or raw_config.get("environment") or existing.environment or "default")
                 existing.version = int(existing.version or 1) + 1
                 existing.sections = masked_sections
                 existing.secret_refs = secret_refs
-                existing.validation_status = "validated"
+                existing.validation_status = validation_status or "validated"
                 existing.archived_at = None
                 existing.updated_at = now
                 profile = existing

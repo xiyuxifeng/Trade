@@ -1053,14 +1053,14 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S1-002 P0 实现 config_path 到 Profile 的迁移工具
+### [-] NW-V2-S1-002 P0 实现 config_path 到 Profile 的迁移工具
 
 任务目标：让现有配置可迁移到正式 Profile，而不是长期依赖 config_path。
 
 输出：
 
 - `src/services/config_migration_service.py`
-- dev CLI 子命令或脚本
+- 内部迁移脚本
 - tests
 - `docs/New-Web-Config-Migration.md`
 

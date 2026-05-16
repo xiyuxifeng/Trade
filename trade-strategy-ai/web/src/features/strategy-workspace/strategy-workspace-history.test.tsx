@@ -130,6 +130,7 @@ describe('StrategyWorkspaceHistory', () => {
       ['/strategies'],
     );
 
-    expect(screen.getByText('加载失败')).toBeInTheDocument();
+    expect(screen.getByText('网络请求失败')).toBeInTheDocument();
+    expect(screen.getByText('请确认网络连接后重试。')).toBeInTheDocument();
   });
 });

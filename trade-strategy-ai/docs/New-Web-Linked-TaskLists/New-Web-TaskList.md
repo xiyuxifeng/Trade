@@ -1595,7 +1595,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S3-002 P0 实现 Strategy Workflow
+### [x] NW-V2-S3-002 P0 实现 Strategy Workflow
 
 验收标准：
 
@@ -1609,6 +1609,13 @@ UI 关联任务：
 - `UI-V2-006 Strategy Workspace`
 - `UI-V2-007 Artifact Center`
 - `UI-V2-008 Web UI 错误恢复体验`
+
+完成情况：
+
+- 已打通 `strategy-build`、`run-pre-market`、`run-after-close` 的 Web/API 执行闭环。
+- 已让 Job Detail 通过共享错误组件解释策略任务结果，并能展示策略相关产物。
+- 已让 Artifact Center 支持策略产物检索与来源 Job 跳转。
+- 已通过相关后端和前端回归测试。
 
 ---
 

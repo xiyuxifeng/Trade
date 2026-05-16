@@ -199,12 +199,12 @@ export function JobListPage() {
         <Card>
           <CardHeader>
             <CardTitle>操作说明</CardTitle>
-            <CardDescription>Job List 只负责查看和跳转，不承担执行逻辑。</CardDescription>
+            <CardDescription>任务列表只负责查看和跳转，不承担执行逻辑。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
             <ul className="list-disc space-y-2 pl-5 text-slate-400">
               <li>通过状态、任务类型和创建者过滤任务。</li>
-              <li>点击“查看详情”进入 Job Detail 查看日志、步骤、产物和配置快照。</li>
+              <li>点击“查看详情”进入任务详情查看日志、步骤、产物和配置快照。</li>
               <li>列表页不直接展示文件路径，也不修改任务状态。</li>
             </ul>
             {jobsQuery.error && !permissionDenied ? (

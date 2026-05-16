@@ -12,7 +12,6 @@ export function StatusStrip({ title, description, path, className }: StatusStrip
   return (
     <div className={cn('status-strip', className)}>
       <div className="status-strip-left">
-        <Badge variant="success">Dashboard shell</Badge>
         <div>
           <p className="status-strip-title">{title}</p>
           <p className="status-strip-description">{description}</p>

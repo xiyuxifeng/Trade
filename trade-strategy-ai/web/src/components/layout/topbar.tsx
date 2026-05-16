@@ -26,13 +26,12 @@ export function Topbar({ title, description, onMenuClick }: TopbarProps) {
           Menu
         </Button>
         <div>
-          <p className="topbar-kicker">Stage 4 dashboard shell</p>
           <h2 className="topbar-title">{title}</h2>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <p className="topbar-description">{description}</p>
+        <p className="topbar-description">登出</p>
         {isAuthenticated && (
           <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="登出">
             <LogOut className="h-4 w-4" />

@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 from src.pipelines.article_pipeline_spec import PipelineOutputArtifactSpec, PipelineSpec, PipelineStepSpec
+from src.services.job_registry import JobPermission
+
+
+def _step_extensions(*, permission: JobPermission, error_modes: tuple[str, ...]) -> dict[str, object]:
+    """为市场数据步骤附加权限与错误分类。"""
+    return {
+        "permission": permission.value,
+        "error_modes": list(error_modes),
+    }
 
 
 MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
@@ -123,6 +132,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             description="抓取原始市场数据。",
             job_type="kaipan-fetch",
             output_artifacts=("raw-json",),
+            extensions=_step_extensions(
+                permission=JobPermission.admin,
+                error_modes=("provider unavailable", "config missing", "data invalid", "system error"),
+            ),
         ),
         PipelineStepSpec(
             step_id="kaipan-normalize",
@@ -131,6 +144,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             job_type="kaipan-normalize",
             depends_on=("kaipan-fetch",),
             output_artifacts=("normalized-json",),
+            extensions=_step_extensions(
+                permission=JobPermission.admin,
+                error_modes=("config missing", "data empty", "data invalid", "system error"),
+            ),
         ),
         PipelineStepSpec(
             step_id="kaipan-run",
@@ -139,6 +156,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             job_type="kaipan-run",
             depends_on=("kaipan-normalize",),
             output_artifacts=("normalized-json",),
+            extensions=_step_extensions(
+                permission=JobPermission.admin,
+                error_modes=("config missing", "provider unavailable", "system error"),
+            ),
         ),
         PipelineStepSpec(
             step_id="ohlcv-crawl",
@@ -146,6 +167,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             description="抓取并回灌日线行情。",
             job_type="ohlcv-crawl",
             output_artifacts=("ohlcv-bundle",),
+            extensions=_step_extensions(
+                permission=JobPermission.operator,
+                error_modes=("provider unavailable", "config missing", "data empty", "data invalid", "system error"),
+            ),
         ),
         PipelineStepSpec(
             step_id="market-state-build",
@@ -154,6 +179,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             job_type="market-state-build",
             depends_on=("ohlcv-crawl",),
             output_artifacts=("market-state-json",),
+            extensions=_step_extensions(
+                permission=JobPermission.operator,
+                error_modes=("config missing", "data empty", "partial snapshot", "system error"),
+            ),
         ),
         PipelineStepSpec(
             step_id="snapshot-build",
@@ -162,6 +191,10 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
             job_type="snapshot-build",
             depends_on=("market-state-build",),
             output_artifacts=("snapshot-json",),
+            extensions=_step_extensions(
+                permission=JobPermission.operator,
+                error_modes=("config missing", "data empty", "partial snapshot", "system error"),
+            ),
         ),
     ),
     user_visible_success_criteria=(
@@ -174,9 +207,24 @@ MARKET_DATA_PIPELINE_SPEC = PipelineSpec(
     extensions={
         "supported_input_modes": ("config_path", "profile"),
         "migration_target": "profile",
+        "permissions_by_job_type": {
+            "kaipan-fetch": JobPermission.admin.value,
+            "kaipan-normalize": JobPermission.admin.value,
+            "kaipan-run": JobPermission.admin.value,
+            "ohlcv-crawl": JobPermission.operator.value,
+            "market-state-build": JobPermission.operator.value,
+            "snapshot-build": JobPermission.operator.value,
+        },
+        "error_modes_by_job_type": {
+            "kaipan-fetch": ["provider unavailable", "config missing", "data invalid", "system error"],
+            "kaipan-normalize": ["config missing", "data empty", "data invalid", "system error"],
+            "kaipan-run": ["config missing", "provider unavailable", "system error"],
+            "ohlcv-crawl": ["provider unavailable", "config missing", "data empty", "data invalid", "system error"],
+            "market-state-build": ["config missing", "data empty", "partial snapshot", "system error"],
+            "snapshot-build": ["config missing", "data empty", "partial snapshot", "system error"],
+        },
         "ui_note": "市场数据工作台后续只读此 spec，不再拼接临时入口。",
     },
 )
 
 MARKET_DATA_PIPELINE_SPECS: tuple[PipelineSpec, ...] = (MARKET_DATA_PIPELINE_SPEC,)
-

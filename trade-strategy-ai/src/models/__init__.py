@@ -10,6 +10,11 @@ from src.models.data_audit_event import DataAuditEvent
 
 from src.models.strong_symbols_snapshot import StrongSymbolsSnapshot
 from src.models.topic_constituents_snapshot import TopicConstituentsSnapshot
+from src.models.market_data_snapshot import MarketSnapshot
+from src.models.market_data_snapshot_section import MarketSnapshotSection
+from src.models.market_data_snapshot_item import MarketSnapshotItem
+from src.models.market_dataset import MarketDataset
+from src.models.market_data_quality_report import MarketDataQualityReport
 from src.models.raw_article import RawArticle
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
@@ -36,6 +41,11 @@ __all__ = [
     "Signal",
     "StrongSymbolsSnapshot",
     "StockInfo",
+    "MarketSnapshot",
+    "MarketSnapshotSection",
+    "MarketSnapshotItem",
+    "MarketDataset",
+    "MarketDataQualityReport",
     "Job",
     "JobStatus",
     "JobAuditEvent",

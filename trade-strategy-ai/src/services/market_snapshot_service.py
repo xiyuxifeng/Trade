@@ -14,6 +14,7 @@ from src.models.market_snapshot import MarketSnapshot, MarketSnapshotBuildContex
 from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 from src.services.base import BaseService, ServiceResult
 from src.services.config_service import ConfigService
+from src.services.market_data_storage_service import MarketDataStorageService
 from src.services.market_service import MarketService
 from src.services.market_snapshot_builders import build_default_market_snapshot_registry
 from src.services.market_snapshot_registry import MarketSnapshotRegistry
@@ -82,12 +83,14 @@ class MarketSnapshotService(BaseService):
         market_service: MarketService | None = None,
         persona_service: PersonaService | None = None,
         config_service: ConfigService | None = None,
+        storage_service: MarketDataStorageService | None = None,
         snapshot_root: str | Path | None = None,
     ) -> None:
         self._provider_factory = provider_factory
         self._market_service = market_service
         self._persona_service = persona_service
         self._config_service = config_service or ConfigService()
+        self._storage_service = storage_service
         self._snapshot_root = Path(snapshot_root).expanduser().resolve() if snapshot_root is not None else None
 
     def _load_runtime(self, config_path: str | Path) -> tuple[Any, Path]:
@@ -328,6 +331,21 @@ class MarketSnapshotService(BaseService):
         if warnings:
             status = "partial"
 
+        storage_result: ServiceResult | None = None
+        if self._storage_service is not None:
+            try:
+                storage_result = asyncio.run(
+                    self._storage_service.save_snapshot(
+                        snapshot,
+                        summary_payload=summary_payload,
+                        quality_payload=quality_payload,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"db storage failed: {exc}")
+                storage_result = ServiceResult(status="error", message="db storage failed", payload={"error": str(exc)})
+                status = "partial" if status == "ok" else status
+
         return ServiceResult(
             status=status,
             message="market snapshot built" if status == "ok" else "market snapshot built with partial coverage",
@@ -346,6 +364,7 @@ class MarketSnapshotService(BaseService):
                 "quality_report": quality_payload,
                 "sections": section_results,
                 "provider_sources": provider_sources,
+                "db_storage": storage_result.payload if storage_result is not None else None,
             },
             warnings=warnings,
         )

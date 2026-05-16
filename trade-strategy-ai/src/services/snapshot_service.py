@@ -12,6 +12,7 @@ from src.pipeline.tasks.snapshot_tasks import (
     handle_topic_constituents_snapshot,
 )
 from src.services.base import BaseService, ServiceResult
+from src.services.market_data_storage_service import MarketDataStorageService
 from src.services.market_snapshot_service import MarketSnapshotService
 
 
@@ -168,7 +169,7 @@ class SnapshotService(BaseService):
         snapshot_type: str = "all",
     ) -> ServiceResult:
         """构建结构化 Market Snapshot。"""
-        service = MarketSnapshotService()
+        service = MarketSnapshotService(storage_service=MarketDataStorageService())
         return await service.build_market_snapshot(
             config_path=config_path,
             trade_date=trade_date,

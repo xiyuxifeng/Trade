@@ -1273,7 +1273,7 @@ UI 操作方式：
 
 ---
 
-### [ ] NW-V2-S2-004 P0 Market Data DB Storage
+### [x] NW-V2-S2-004 P0 Market Data DB Storage
 
 任务目标：把市场数据从“文件为主的事实源”迁移为“数据库为主的查询源”，文件只保留为导出、调试、归档或备份产物，支撑 Web 查询和外部系统接入。
 
@@ -1348,6 +1348,15 @@ UI 关联任务：
 - `UI-V2-010 Market Snapshot Browser`
 - `UI-V2-011 Market Dataset Viewer`
 - `UI-V2-007 Artifact Center`
+
+完成情况：
+
+- 已建立 `market_snapshots`、`market_snapshot_sections`、`market_snapshot_items`、`market_datasets`、`market_data_quality_reports` 五张表的 ORM 模型与 Alembic migration。
+- 已实现 `MarketSnapshotRepository`、`MarketSnapshotSectionRepository`、`MarketSnapshotItemRepository`、`MarketDatasetRepository`、`MarketDataQualityRepository`。
+- 已实现 `MarketDataStorageService`，并将 `snapshot-build` 的真实编排链路接入 DB 持久化。
+- 已在 `SnapshotService -> MarketSnapshotService` 真实路径中默认启用 DB storage，保持文件导出兼容层不变。
+- 已补齐模型、repository、storage service 与编排回归测试。
+- 已补充 [New-Web-Market-Data-Storage.md](/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/docs/New-Web-Market-Data-Storage.md) 说明文档。
 
 ---
 

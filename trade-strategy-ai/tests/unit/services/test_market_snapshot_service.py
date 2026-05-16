@@ -5,6 +5,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 
 @dataclass
 class _FakeProvider:
@@ -110,6 +112,28 @@ class _FakePersonaService:
         )
 
 
+@pytest.fixture()
+async def market_data_session_factory(tmp_path):
+    """创建用于 MarketSnapshotService 持久化测试的 sqlite session factory。"""
+    from src.models.market_data_quality_report import MarketDataQualityReport
+    from src.models.market_dataset import MarketDataset
+    from src.models.market_data_snapshot import MarketSnapshot as MarketDataSnapshotRecord
+    from src.models.market_data_snapshot_item import MarketSnapshotItem
+    from src.models.market_data_snapshot_section import MarketSnapshotSection
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'market_snapshot_service.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(MarketDataSnapshotRecord.__table__.create)
+        await conn.run_sync(MarketSnapshotSection.__table__.create)
+        await conn.run_sync(MarketDataset.__table__.create)
+        await conn.run_sync(MarketSnapshotItem.__table__.create)
+        await conn.run_sync(MarketDataQualityReport.__table__.create)
+    yield async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    await engine.dispose()
+
+
 def test_market_snapshot_service_writes_snapshot_summary_and_quality_reports(tmp_path: Path) -> None:
     """MarketSnapshotService 应输出完整的 snapshot / summary / quality 产物。"""
     from src.services.market_snapshot_service import MarketSnapshotService
@@ -180,3 +204,38 @@ def test_market_snapshot_service_reports_partial_coverage(tmp_path: Path) -> Non
 
     assert result.status == "partial"
     assert any("overview" in warning or "sector_activity" in warning for warning in result.warnings)
+
+
+@pytest.mark.asyncio()
+async def test_market_snapshot_service_persists_snapshot_to_database(tmp_path: Path, market_data_session_factory) -> None:
+    """MarketSnapshotService 真实编排路径应把 snapshot 写入 DB。"""
+    from src.services.market_data_storage_service import MarketDataStorageService
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        storage_service=MarketDataStorageService(session_factory=market_data_session_factory),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    result = await service.build_market_snapshot(
+        config_path=config_path,
+        trade_date="2026-05-16",
+        slot="17-30",
+        profile_id="default",
+        offline=False,
+        force=True,
+    )
+
+    loaded = await service._storage_service.load_snapshot(result.payload["snapshot_id"])  # noqa: SLF001
+    assert result.status == "ok"
+    assert result.payload["db_storage"]["snapshot_id"] == result.payload["snapshot_id"]
+    assert loaded.status == "ok"
+    assert loaded.payload["snapshot"]["snapshot_id"] == result.payload["snapshot_id"]
+    assert loaded.payload["dataset"]["dataset_id"] == f"{result.payload['snapshot_id']}:dataset"

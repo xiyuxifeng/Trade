@@ -78,28 +78,29 @@ describe('AlertsPage', () => {
       expect(mockedListAlertHistory).toHaveBeenCalled();
     });
 
-    expect(await screen.findByText('Alerts Center')).toBeInTheDocument();
+    expect(await screen.findByText('告警中心')).toBeInTheDocument();
     expect(await screen.findByText('Database offline')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Summary' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '摘要' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看详情' })).toHaveAttribute('href', '/alerts/record-1');
 
     await waitFor(() => {
       expect(mockedGetAlertHistory).toHaveBeenCalledWith('record-1');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
+    await user.click(screen.getByRole('button', { name: '确认 (Acknowledge)' }));
     await waitFor(() => {
       expect(mockedAcknowledgeAlert).toHaveBeenCalledWith('record-1', 'web');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    await user.click(screen.getByRole('button', { name: '解决 (Resolve)' }));
     await waitFor(() => {
       expect(mockedResolveAlert).toHaveBeenCalledWith('record-1', 'web');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Send test alert' }));
-    expect(await screen.findByText('Send test alert?')).toBeInTheDocument();
-    await user.click(screen.getAllByRole('button', { name: 'Send test alert' })[1]);
+    await user.click(screen.getByRole('button', { name: '发送测试告警' }));
+    expect(await screen.findByText('发送测试告警？')).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: '发送测试告警' })[1]);
 
     await waitFor(() => {
       expect(mockedSendTestAlert).toHaveBeenCalled();
@@ -124,15 +125,15 @@ describe('AlertsPage', () => {
     });
 
     expect(await screen.findByText('当前筛选范围内暂无告警历史。')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Reset filters' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: '重置过滤器' })).toHaveLength(2);
 
-    await user.type(screen.getByLabelText('Tag'), 'snapshot');
-    await user.click(screen.getAllByRole('button', { name: 'Reset filters' })[1]);
+    await user.type(screen.getByLabelText('标签'), 'snapshot');
+    await user.click(screen.getAllByRole('button', { name: '重置过滤器' })[1]);
 
-    expect(screen.getByLabelText('Status')).toHaveValue('');
-    expect(screen.getByLabelText('Level')).toHaveValue('');
-    expect(screen.getByLabelText('Tag')).toHaveValue('');
-    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
-    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+    expect(screen.getByLabelText('状态')).toHaveValue('');
+    expect(screen.getByLabelText('级别')).toHaveValue('');
+    expect(screen.getByLabelText('标签')).toHaveValue('');
+    expect(screen.getByLabelText('开始日期')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('结束日期')).toHaveValue(today);
   });
 });

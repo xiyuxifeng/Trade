@@ -3,6 +3,7 @@ import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { BacktestsPage } from '@/pages/backtests';
 import { AlertsPage } from '@/pages/alerts';
+import { AlertDetailPage } from '@/pages/alerts/AlertDetailPage';
 import { ArticlesPage } from '@/pages/articles';
 import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
@@ -168,6 +169,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'alerts',
         element: <AlertsPage />,
+      },
+      {
+        path: 'alerts/:recordId',
+        element: <AlertDetailPage />,
       },
       {
         path: 'reports',

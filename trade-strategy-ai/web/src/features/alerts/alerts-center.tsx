@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -454,6 +455,11 @@ export function AlertsCenter() {
                         >
                           解决 (Resolve)
                         </Button>
+                      </div>
+                      <div className="mt-3">
+                        <Link className="text-sm font-medium text-sky-300 hover:text-sky-200 hover:underline" to={`/alerts/${selectedDetail.id}`}>
+                          查看详情
+                        </Link>
                       </div>
                       <p className="mt-3 text-xs text-slate-500">操作成功后将立即更新历史记录表中的状态。</p>
                     </div>

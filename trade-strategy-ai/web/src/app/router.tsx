@@ -8,6 +8,7 @@ import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
+import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
 import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
 import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
@@ -91,6 +92,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'profiles/:profileId',
         element: <ProfileDetailPage />,
+      },
+      {
+        path: 'profiles/:profileId/edit',
+        element: <ProfileEditPage />,
       },
       {
         path: 'profiles/:profileId/snapshots/:snapshotId',

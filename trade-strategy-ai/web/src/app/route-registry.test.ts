@@ -9,6 +9,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/profiles').path).toBe('/profiles');
     expect(resolveRouteByPathname('/profiles/default').path).toBe('/profiles/:profileId');
     expect(resolveRouteByPathname('/profiles/import').path).toBe('/profiles/import');
+    expect(resolveRouteByPathname('/profiles/default/edit').path).toBe('/profiles/:profileId/edit');
     expect(resolveRouteByPathname('/profiles/default/snapshots/snapshot-1').path).toBe('/profiles/:profileId/snapshots/:snapshotId');
     expect(resolveRouteByPathname('/workflows').path).toBe('/workflows');
     expect(resolveRouteByPathname('/workflows/pipeline/run').path).toBe('/workflows/:workflowId/run');

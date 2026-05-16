@@ -141,7 +141,11 @@ class ConfigMigrationService(BaseService):
             environment=str(preview.payload["environment"]),
             validation_status=str(preview.payload["validation_status"]),
         )
-        snapshot_result = await self._profile_service.capture_profile_snapshot(profile.profile_id)
+        snapshot_result = await self._profile_service.capture_profile_snapshot(
+            profile.profile_id,
+            source=str(resolved),
+            config_path=resolved,
+        )
         if snapshot_result.status != "ok":
             return ServiceResult(
                 status="error",

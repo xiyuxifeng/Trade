@@ -101,3 +101,89 @@ def test_profile_update_and_archive_increment_version(tmp_path: Path) -> None:
     assert archived.version == 3
 
     asyncio.run(engine.dispose())
+
+
+def test_profile_edit_payload_and_save_create_new_version_without_overwriting_history(tmp_path: Path) -> None:
+    """编辑保存应生成新版本，并保留旧快照文件不变。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    profile = asyncio.run(service.create_default_profile(environment="dev", created_by="system"))
+    original_snapshot = asyncio.run(service.capture_profile_snapshot(profile.profile_id, job_id="job-001"))
+    original_snapshot_path = Path(original_snapshot.payload["profile_snapshot_path"])
+    original_snapshot_content = original_snapshot_path.read_text(encoding="utf-8")
+
+    edit_payload = asyncio.run(service.build_profile_edit_payload(profile.profile_id))
+    assert edit_payload.status == "ok"
+    assert edit_payload.payload["validation"]["valid"] is True
+    assert edit_payload.payload["validation"]["next_version"] == 2
+    assert edit_payload.payload["section_guide"] == []
+
+    saved = asyncio.run(
+        service.save_profile_update(
+            profile.profile_id,
+            {
+                "name": "默认配置",
+                "environment": "dev",
+                "sections": {"app": {"timezone": "Asia/Shanghai"}},
+            },
+            created_by="web",
+        )
+    )
+
+    assert saved.status == "ok"
+    assert saved.payload["profile"]["version"] == 2
+    assert saved.payload["snapshot"]["profile_id"] == profile.profile_id
+    assert original_snapshot_path.exists()
+    assert original_snapshot_path.read_text(encoding="utf-8") == original_snapshot_content
+
+    asyncio.run(engine.dispose())
+
+
+def test_save_profile_update_rolls_back_when_snapshot_write_fails(tmp_path: Path) -> None:
+    """保存更新时若快照写失败，应回滚 Profile 修改。"""
+    service, engine = _build_profile_service(tmp_path)
+    service._persist_snapshot_payload = lambda payload: (_ for _ in ()).throw(RuntimeError("snapshot failed"))  # type: ignore[method-assign]
+
+    profile = asyncio.run(service.create_default_profile(environment="dev", created_by="system"))
+    result = asyncio.run(
+        service.save_profile_update(
+            profile.profile_id,
+            {
+                "name": "新名称",
+                "environment": "dev",
+                "sections": {"app": {"timezone": "Asia/Shanghai"}},
+            },
+            created_by="web",
+        )
+    )
+    persisted = asyncio.run(service.get_profile(profile.profile_id))
+
+    assert result is None or result.status != "ok"
+    assert persisted is not None
+    assert persisted.name == "Default Profile"
+    assert persisted.version == 1
+
+    asyncio.run(engine.dispose())
+
+
+def test_profile_edit_payload_keeps_existing_sections_when_missing(tmp_path: Path) -> None:
+    """编辑草稿未传 sections 时，应继续沿用现有 sections。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    profile = asyncio.run(service.create_default_profile(environment="dev", created_by="system"))
+    asyncio.run(service.update_profile(profile.profile_id, sections={"app": {"timezone": "Asia/Shanghai"}}))
+    edited = asyncio.run(
+        service.build_profile_edit_payload(
+            profile.profile_id,
+            {
+                "name": "默认配置-2",
+                "environment": "dev",
+            },
+        )
+    )
+
+    assert edited.status == "ok"
+    assert edited.payload["draft"]["sections"] == {"app": {"timezone": "Asia/Shanghai"}}
+    assert edited.payload["validation"]["valid"] is True
+
+    asyncio.run(engine.dispose())

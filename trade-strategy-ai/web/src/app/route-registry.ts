@@ -16,6 +16,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '任务', path: '/jobs/:jobId', description: '长时间运行的任务中心', kind: 'canonical' },
   { label: '配置管理', path: '/profiles', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '配置管理', path: '/profiles/import', description: '正式 Profile 配置入口', kind: 'canonical' },
+  { label: '配置管理', path: '/profiles/:profileId/edit', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '配置管理', path: '/profiles/:profileId/snapshots/:snapshotId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '配置管理', path: '/profiles/:profileId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '工作流', path: '/workflows', description: '基于用户手册的引导流程', kind: 'canonical' },

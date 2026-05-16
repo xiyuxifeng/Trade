@@ -69,3 +69,59 @@ export type ProfileSnapshotResponse = {
   snapshot: ProfileSnapshotRecord;
   linked_job: ProfileLinkedJob | null;
 };
+
+export type ProfileEditSectionGuide = {
+  key: string;
+  title: string;
+  description: string;
+  source: string;
+  default_value: unknown;
+  current_value: unknown;
+  draft_value: unknown;
+};
+
+export type ProfileValidationIssue = {
+  field: string;
+  message: string;
+};
+
+export type ProfileEditValidation = {
+  valid: boolean;
+  issues: ProfileValidationIssue[];
+  next_version: number;
+  validation_status: ProfileValidationStatus;
+};
+
+export type ProfileEditDraft = {
+  name: string;
+  environment: string;
+  sections: ProfileSectionMap;
+};
+
+export type ProfileEditResponse = {
+  profile: ProfileRecord;
+  draft: ProfileEditDraft;
+  preview: ProfileRecord;
+  section_guide: ProfileEditSectionGuide[];
+  validation: ProfileEditValidation;
+};
+
+export type ProfileUpdateRequest = ProfileEditDraft & {
+  confirmed: boolean;
+};
+
+export type ProfileUpdateResponse = {
+  profile: ProfileRecord;
+  snapshot: ProfileSnapshotRecord;
+  validation: ProfileEditValidation;
+};
+
+export type ProfileArchiveRequest = {
+  archived_by?: string;
+};
+
+export type ProfileArchiveResponse = {
+  profile: ProfileRecord;
+};
+
+export type ProfileValidationResponse = ProfileEditResponse;

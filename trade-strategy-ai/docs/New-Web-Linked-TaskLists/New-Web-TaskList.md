@@ -1003,7 +1003,7 @@ V2 必须交付：
 
 ## Stage V2-S1：Profile 正式迁移
 
-### [-] NW-V2-S1-001 P0 定义 Profile 最终模型
+### [x] NW-V2-S1-001 P0 定义 Profile 最终模型
 
 任务目标：确定 Profile 是长期配置事实源，`config_path` 降级为导入/导出/dev 兼容入口。
 
@@ -1049,11 +1049,11 @@ UI 关联任务：
 
 - 后端 Profile 模型、服务、迁移和 Job ProfileSnapshot 已实现。
 - 相关单测已通过。
-  - 由于 UI-V2-003 仍未完成，当前任务暂保留 `[-]`，等待 UI 侧剩余编辑能力收口后再做最终验收。
+- UI-V2-002 与 UI-V2-003 已收口，Profile 查看、导入、编辑、校验、保存新版本和归档链路已完整打通。
 
 ---
 
-### [-] NW-V2-S1-002 P0 实现 config_path 到 Profile 的迁移工具
+### [x] NW-V2-S1-002 P0 实现 config_path 到 Profile 的迁移工具
 
 任务目标：让现有配置可迁移到正式 Profile，而不是长期依赖 config_path。
 

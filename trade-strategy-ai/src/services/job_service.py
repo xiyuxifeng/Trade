@@ -343,8 +343,27 @@ class JobService(BaseService):
         profile_snapshot_payload: dict[str, Any] | None = None
         config_path_value = (params or {}).get("config_path")
         profile_id_value = (params or {}).get("profile_id")
+        if idempotency_key:
+            async with session_scope() as session:
+                stmt = select(Job).options(selectinload(Job.audit_events)).where(Job.idempotency_key == idempotency_key)
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing is not None:
+                    self._materialize_job_dir(job=existing)
+                    return ServiceResult(
+                        status="ok",
+                        message="job already exists",
+                        payload={"created": False, **self._job_path_payload(existing.id), "job": self._serialize_job(existing)},
+                    )
+
+        job_id = uuid4()
         if profile_id_value is not None:
-            snapshot_result = await self._config_profile_service.capture_profile_snapshot(str(profile_id_value))
+            snapshot_result = await self._config_profile_service.capture_profile_snapshot(
+                str(profile_id_value),
+                job_id=str(job_id),
+                source="job",
+                config_path=config_path_value,
+            )
             if snapshot_result.status != "ok":
                 return ServiceResult(
                     status="error",
@@ -363,20 +382,6 @@ class JobService(BaseService):
                     warnings=snapshot_result.warnings,
                 )
             config_snapshot_payload = snapshot_result.payload
-        if idempotency_key:
-            async with session_scope() as session:
-                stmt = select(Job).options(selectinload(Job.audit_events)).where(Job.idempotency_key == idempotency_key)
-                result = await session.execute(stmt)
-                existing = result.scalar_one_or_none()
-                if existing is not None:
-                    self._materialize_job_dir(job=existing)
-                    return ServiceResult(
-                        status="ok",
-                        message="job already exists",
-                        payload={"created": False, **self._job_path_payload(existing.id), "job": self._serialize_job(existing)},
-                    )
-
-        job_id = uuid4()
         now = datetime.now(UTC)
         job = Job(
             id=job_id,

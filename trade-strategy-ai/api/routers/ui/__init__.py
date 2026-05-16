@@ -9,6 +9,7 @@ from .persona import router as persona_router
 from .pipelines import router as pipelines_router
 from .signals import router as signals_router
 from .market import router as market_router
+from .profiles import router as profiles_router
 from .snapshots import router as snapshots_router
 from .settings import router as settings_router
 from .ops import router as ops_router
@@ -26,6 +27,7 @@ __all__ = [
     "data_health_router",
     "legacy_system_router",
     "market_router",
+    "profiles_router",
     "persona_router",
     "pipelines_router",
     "settings_router",

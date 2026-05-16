@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { ArrowRight, PencilLine, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,6 +98,7 @@ export function ProfileDetailPage() {
   const profileId = params.profileId?.trim() || '';
 
   const canViewProfiles = canAccess('viewer');
+  const canEditProfiles = canAccess('operator');
 
   const profileQuery = useQuery<ProfileDetailResponse, ApiError>({
     queryKey: ['profile-detail', profileId],
@@ -148,6 +149,12 @@ export function ProfileDetailPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               {profileQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
+            {canEditProfiles && profile ? (
+              <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/profiles/${encodeURIComponent(profile.profile_id)}/edit`)}>
+                <PencilLine className="mr-2 h-4 w-4" />
+                编辑配置
+              </Button>
+            ) : null}
             <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate('/profiles')}>
               返回列表
             </Button>

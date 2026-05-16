@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from './http';
-import { getProfile, getProfileSnapshot, importProfile, listProfiles } from './profiles';
+import {
+  archiveProfile,
+  getProfile,
+  getProfileEdit,
+  getProfileSnapshot,
+  importProfile,
+  listProfiles,
+  updateProfile,
+  validateProfileUpdate,
+} from './profiles';
 
 describe('profiles api client', () => {
   beforeEach(() => {
@@ -52,6 +61,96 @@ describe('profiles api client', () => {
 
     const [url] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(url).toBe('/api/ui/v1/profiles/default');
+  });
+
+  it('loads a profile edit payload', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        profile: { profile_id: 'default' },
+        draft: { name: '默认配置', environment: 'production', sections: {} },
+        preview: { profile_id: 'default' },
+        section_guide: [],
+        validation: { valid: true, issues: [], next_version: 2, validation_status: 'validated' },
+      }),
+    } as Response);
+
+    await expect(getProfileEdit('default')).resolves.toMatchObject({
+      profile: { profile_id: 'default' },
+    });
+
+    const [url] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/profiles/default/edit');
+  });
+
+  it('posts a profile validation request', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        profile: { profile_id: 'default' },
+        draft: { name: '默认配置', environment: 'production', sections: {} },
+        preview: { profile_id: 'default' },
+        section_guide: [],
+        validation: { valid: true, issues: [], next_version: 2, validation_status: 'validated' },
+      }),
+    } as Response);
+
+    await expect(
+      validateProfileUpdate('default', {
+        name: '默认配置',
+        environment: 'production',
+        sections: {},
+      }),
+    ).resolves.toMatchObject({
+      validation: { valid: true },
+    });
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/profiles/default/validate');
+    expect(init?.method).toBe('POST');
+  });
+
+  it('puts a profile update request', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        profile: { profile_id: 'default' },
+        snapshot: { snapshot_id: 'snapshot-2' },
+        validation: { valid: true, issues: [], next_version: 2, validation_status: 'validated' },
+      }),
+    } as Response);
+
+    await expect(
+      updateProfile('default', {
+        name: '默认配置',
+        environment: 'production',
+        sections: {},
+        confirmed: true,
+      }),
+    ).resolves.toMatchObject({
+      snapshot: { snapshot_id: 'snapshot-2' },
+    });
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/profiles/default');
+    expect(init?.method).toBe('PUT');
+  });
+
+  it('posts a profile archive request', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        profile: { profile_id: 'default' },
+      }),
+    } as Response);
+
+    await expect(archiveProfile('default', { archived_by: 'web' })).resolves.toMatchObject({
+      profile: { profile_id: 'default' },
+    });
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/profiles/default/archive');
+    expect(init?.method).toBe('POST');
   });
 
   it('posts a profile import request', async () => {

@@ -21,6 +21,7 @@ from api.routers.ui import data_health_router as ui_data_health_router
 from api.routers.ui import kaipan_router as ui_kaipan_router
 from api.routers.ui import legacy_system_router as ui_legacy_system_router
 from api.routers.ui import market_router as ui_market_router
+from api.routers.ui import profiles_router as ui_profiles_router
 from api.routers.ui import ops_router as ui_ops_router
 from api.routers.ui import pipelines_router as ui_pipelines_router
 from api.routers.ui import settings_router as ui_settings_router
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_pipelines_router)
     app.include_router(ui_artifacts_router)
     app.include_router(ui_market_router)
+    app.include_router(ui_profiles_router)
     app.include_router(ui_ops_router)
     app.include_router(ui_snapshots_router)
     app.include_router(ui_strategy_studio_router)

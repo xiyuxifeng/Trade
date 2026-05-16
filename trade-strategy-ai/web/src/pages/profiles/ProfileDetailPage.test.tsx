@@ -59,6 +59,7 @@ describe('ProfileDetailPage', () => {
 
     expect(await screen.findByText('默认配置')).toBeInTheDocument();
     expect(screen.getByText('配置管理')).toBeInTheDocument();
+    expect(screen.getByText('编辑配置')).toBeInTheDocument();
     expect(screen.getByText('配置分区')).toBeInTheDocument();
     expect(screen.getByText('脱敏字段')).toBeInTheDocument();
     expect(screen.getByText('关联任务')).toBeInTheDocument();

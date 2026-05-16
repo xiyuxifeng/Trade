@@ -149,6 +149,7 @@ async def test_ui_write_route_allows_valid_key(client: AsyncClient, monkeypatch:
         ("/api/ui/v1/system/status", "get"),
         ("/api/ui/v1/workflows", "get"),
         ("/api/ui/v1/jobs/definitions", "get"),
+        ("/api/ui/v1/profiles", "get"),
         ("/api/ui/v1/artifacts", "get"),
         ("/api/ui/v1/market/symbols", "get"),
     ],

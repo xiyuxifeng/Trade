@@ -1,15 +1,14 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArtifactPanel } from '@/components/artifacts/artifact-panel';
-import { formatTimestamp, maskAbsolutePath, stringifyJson } from '@/components/artifacts/artifact-utils';
+import { formatTimestamp, maskAbsolutePath } from '@/components/artifacts/artifact-utils';
 import { ConfigSnapshotPanel } from '@/components/profiles/ConfigSnapshotPanel';
 import { PageHeader } from '@/components/layout/page-header';
+import { JsonViewer, LoadingState, LogViewer, SectionCard, StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { useAuth } from '@/features/auth/auth-context';
@@ -17,24 +16,6 @@ import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
 import type { JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
-
-function statusVariant(status: string) {
-  if (status === 'success') return 'success';
-  if (status === 'failed' || status === 'cancelled') return 'destructive';
-  if (status === 'running') return 'info';
-  return 'warning';
-}
-
-function getStatusLabel(status: string) {
-  const mapping: Record<string, string> = {
-    pending: '等待中',
-    running: '运行中',
-    success: '成功',
-    failed: '失败',
-    cancelled: '已取消',
-  };
-  return mapping[status] || status;
-}
 
 function buildTimelineItems(job: JobRecord): StepTimelineItem[] {
   const statusByOperation: Record<string, StepTimelineItem['status']> = {
@@ -84,33 +65,6 @@ function Field({ label, value }: { label: string; value: string | number | null 
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
       <p className="mt-1 break-all text-sm text-slate-100">{value ?? '未记录'}</p>
     </div>
-  );
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-  action,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle>{title}</CardTitle>
-            {description ? <CardDescription>{description}</CardDescription> : null}
-          </div>
-          {action}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
   );
 }
 
@@ -175,8 +129,6 @@ export function JobDetailPage() {
   });
 
   const timelineItems = useMemo(() => (detail ? buildTimelineItems(detail) : []), [detail]);
-  const sanitizedParams = useMemo(() => stringifyJson(detail?.params), [detail?.params]);
-  const sanitizedResult = useMemo(() => stringifyJson(detail?.result), [detail?.result]);
   const errorObject = detail?.error ?? null;
   const configSnapshot = detail?.config_snapshot ?? null;
   const logs = logsQuery.data?.items ?? [];
@@ -200,7 +152,7 @@ export function JobDetailPage() {
       <main className="page-stack">
         <PageHeader kicker="任务" title="任务详情" description="正在加载任务、步骤、日志、产物和配置快照。" />
         <div className="space-y-4">
-          <Skeleton className="h-32 w-full" />
+          <LoadingState label="正在加载任务详情" description="正在获取任务、步骤、日志、产物和配置快照。" />
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-56 w-full" />
         </div>
@@ -285,7 +237,7 @@ export function JobDetailPage() {
           <SectionCard
             title={`${detail.job_type}`}
             description={detail.id}
-            action={<Badge variant={statusVariant(detail.status)}>{getStatusLabel(detail.status)}</Badge>}
+            action={<StatusBadge value={detail.status} />}
           >
             <div className="grid gap-3 md:grid-cols-3">
               <Field label="创建者" value={detail.created_by} />
@@ -300,18 +252,8 @@ export function JobDetailPage() {
           <SectionCard title="参数快照" description="展示任务提交时的参数和关联配置快照。">
             <div className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">参数</p>
-                  <pre className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
-                    {sanitizedParams}
-                  </pre>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">执行结果</p>
-                  <pre className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
-                    {sanitizedResult}
-                  </pre>
-                </div>
+                <JsonViewer value={detail.params} title="参数" />
+                <JsonViewer value={detail.result} title="执行结果" />
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="快照 ID" value={configSnapshot?.config_snapshot_id} />
@@ -383,9 +325,7 @@ export function JobDetailPage() {
                 }}
               />
             ) : (
-              <pre className="max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
-                {logsQuery.isLoading ? '正在加载日志...' : logs.length ? logs.join('\n') : '尚无日志。'}
-              </pre>
+              <LogViewer lines={logsQuery.isLoading ? ['正在加载日志...'] : logs} emptyLabel="尚无日志。" />
             )}
           </SectionCard>
 

@@ -68,7 +68,7 @@ const strategyJobs: JobRecord[] = [
 
 describe('StrategyWorkspaceHistory', () => {
   it('shows loading and empty states', () => {
-    const { container } = renderWithRouter(
+    renderWithRouter(
       [
         {
           path: '/strategies',
@@ -78,7 +78,7 @@ describe('StrategyWorkspaceHistory', () => {
       ['/strategies'],
     );
 
-    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+    expect(screen.getByText('正在加载策略任务历史')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no strategy jobs', () => {

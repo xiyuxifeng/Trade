@@ -1235,7 +1235,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-009 P1 UI Component Kit
+### [x] UI-V2-009 P1 UI Component Kit
 
 任务目标：提供统一组件，避免业务页面重复实现。
 
@@ -1263,6 +1263,12 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 主任务关联：
 
 - 所有 UI 页面。
+
+完成情况：
+
+- 已抽出 `PageHeader`、`SectionCard`、`StatusBadge`、`RiskBadge`、`LoadingState`、`EmptyState`、`ConfirmDialog`、`JsonViewer`、`LogViewer`、`SchemaForm` 等共享组件。
+- 已让 Job、Profile、Market、Strategy 页面复用共享组件或薄包装。
+- 已通过相关前端回归测试，且 `git diff --check` 通过。
 
 ---
 

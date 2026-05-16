@@ -1,17 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog, SectionCard } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { createJob } from '@/lib/api/jobs';
 import { formatWorkspaceTimestamp, getWorkspaceErrorMessage } from './strategy-workspace-utils';
@@ -125,24 +116,16 @@ export function StrategyWorkspaceActions({
   );
 
   return (
-    <Card className="border-slate-200 bg-white shadow-sm">
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Badge variant="info" className="w-fit">
-              正式动作
-            </Badge>
-            <CardTitle className="mt-2 text-slate-950">策略提交入口</CardTitle>
-            <CardDescription className="text-slate-600">
-              所有动作都通过 Job Center 提交，不扩张 CLI 入口。
-            </CardDescription>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            <p>最新 snapshot：{snapshotCapturedAt ? formatWorkspaceTimestamp(snapshotCapturedAt) : '未记录'}</p>
-          </div>
+    <SectionCard
+      title="策略提交入口"
+      description="所有动作都通过 Job Center 提交，不扩张 CLI 入口。"
+      action={<Badge variant="info" className="w-fit">正式动作</Badge>}
+    >
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <p>最新 snapshot：{snapshotCapturedAt ? formatWorkspaceTimestamp(snapshotCapturedAt) : '未记录'}</p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+
         <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
           {selectedSummary.map((item) => (
             <div key={item.label} className="space-y-1">
@@ -194,53 +177,34 @@ export function StrategyWorkspaceActions({
             ]}
           />
         ) : null}
-      </CardContent>
+      </div>
 
-      <Dialog open={Boolean(selectedAction)} onOpenChange={(open) => !open && setSelectedAction(null)}>
-        <DialogContent
-          aria-label={selectedAction?.confirmTitle ?? '确认策略任务'}
-          className="max-w-xl border-slate-200 bg-white text-slate-900 shadow-2xl"
-          role="dialog"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-slate-950">{selectedAction?.confirmTitle}</DialogTitle>
-            <DialogDescription className="text-slate-600">
-              本操作会通过正式 Job 提交到后端，执行后可在 Job Center、Artifact Center 和 Report Center 查看结果。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 md:grid-cols-2">
-            {selectedSummary.map((item) => (
-              <div key={item.label}>
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
-                <p className="mt-1 break-all text-slate-900">{item.value}</p>
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-4 text-sm leading-6 text-slate-600">
-            确认后会提交 {selectedActionLabel}，不会调用 CLI，也不会在前端计算策略结果。
-          </p>
-
-          <DialogFooter>
-            <DialogClose className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              取消
-            </DialogClose>
-            <Button
-              className="bg-sky-500 text-slate-950 hover:bg-sky-400"
-              disabled={mutation.isPending}
-              onClick={() => {
-                if (!selectedAction || !canSubmit) {
-                  return;
-                }
-                void mutation.mutateAsync(selectedAction);
-              }}
-            >
-              {mutation.isPending ? '提交中' : '确认提交'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
+      <ConfirmDialog
+        open={Boolean(selectedAction)}
+        onOpenChange={(open) => !open && setSelectedAction(null)}
+        title={selectedAction?.confirmTitle ?? '确认策略任务'}
+        description="本操作会通过正式 Job 提交到后端，执行后可在 Job Center、Artifact Center 和 Report Center 查看结果。"
+        confirmLabel={mutation.isPending ? '提交中' : '确认提交'}
+        cancelLabel="取消"
+        onConfirm={() => {
+          if (!selectedAction || !canSubmit) {
+            return;
+          }
+          void mutation.mutateAsync(selectedAction);
+        }}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          {selectedSummary.map((item) => (
+            <div key={item.label}>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+              <p className="mt-1 break-all text-slate-900">{item.value}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm leading-6 text-slate-600">
+          确认后会提交 {selectedActionLabel}，不会调用 CLI，也不会在前端计算策略结果。
+        </p>
+      </ConfirmDialog>
+    </SectionCard>
   );
 }

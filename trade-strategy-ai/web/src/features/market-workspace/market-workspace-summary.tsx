@@ -1,4 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { SectionCard } from '@/components/kit';
 
 type MarketWorkspaceSummaryProps = {
   taskCount: number;
@@ -9,13 +9,9 @@ type MarketWorkspaceSummaryProps = {
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
-    <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
-      <CardContent className="space-y-2 p-4">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{label}</p>
-        <p className="text-2xl font-semibold text-slate-900">{value}</p>
-        <p className="text-sm text-slate-500">{hint}</p>
-      </CardContent>
-    </Card>
+    <SectionCard title={label} description={hint}>
+      <p className="text-2xl font-semibold text-slate-950">{value}</p>
+    </SectionCard>
   );
 }
 

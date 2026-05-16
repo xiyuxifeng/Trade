@@ -1,5 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { SectionCard, StatusBadge, EmptyState } from '@/components/kit';
 import type { JobRecord } from '@/types/jobs';
 
 function classifyJobError(job: JobRecord) {
@@ -18,40 +17,34 @@ type MarketWorkspaceErrorsProps = {
 };
 
 export function MarketWorkspaceErrors({ failedJobs }: MarketWorkspaceErrorsProps) {
+  if (!failedJobs.length) {
+    return (
+      <SectionCard title="重点告警" description="只展示最需要处理的市场任务失败信息。">
+        <EmptyState title="当前没有需要处理的市场告警。" description="当市场任务失败时，会在这里显示。"/>
+      </SectionCard>
+    );
+  }
+
   return (
-    <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
-      <CardHeader>
-        <CardTitle className="text-slate-900">重点告警</CardTitle>
-        <CardDescription className="text-slate-500">只展示最需要处理的市场任务失败信息。</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {failedJobs.length ? (
-          <div className="space-y-3">
-            {failedJobs.map((job) => (
-              <div key={job.id} className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-900">{job.job_type}</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {typeof job.error === 'string' ? job.error : job.error?.message ?? '任务失败'}
-                    </p>
-                  </div>
-                  <Badge variant="destructive">{classifyJobError(job)}</Badge>
-                </div>
-                <div className="mt-3">
-                  <a className="text-sm font-medium text-sky-700 hover:text-sky-800" href={`/jobs/${job.id}`}>
-                    查看 Job 详情
-                  </a>
-                </div>
+    <SectionCard title="重点告警" description="只展示最需要处理的市场任务失败信息。">
+      <div className="space-y-3">
+        {failedJobs.map((job) => (
+          <div key={job.id} className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-medium text-slate-900">{job.job_type}</p>
+                <p className="mt-1 text-sm text-slate-600">{typeof job.error === 'string' ? job.error : job.error?.message ?? '任务失败'}</p>
               </div>
-            ))}
+              <StatusBadge value="failed" label={classifyJobError(job)} />
+            </div>
+            <div className="mt-3">
+              <a className="text-sm font-medium text-sky-700 hover:text-sky-800" href={`/jobs/${job.id}`}>
+                查看 Job 详情
+              </a>
+            </div>
           </div>
-        ) : (
-          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-            当前没有需要处理的市场告警。
-          </p>
-        )}
-      </CardContent>
-    </Card>
+        ))}
+      </div>
+    </SectionCard>
   );
 }

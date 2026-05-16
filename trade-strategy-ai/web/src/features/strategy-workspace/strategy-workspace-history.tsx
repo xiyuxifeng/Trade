@@ -1,22 +1,13 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/state/ErrorState';
+import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { formatWorkspaceTimestamp } from './strategy-workspace-utils';
 import type { JobRecord } from '@/types/jobs';
 
 const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
-
-function statusVariant(status: string) {
-  if (status === 'success') return 'success';
-  if (status === 'failed') return 'destructive';
-  if (status === 'running' || status === 'queued' || status === 'pending') return 'warning';
-  return 'info';
-}
 
 function describeStrategyJob(job: JobRecord) {
   const params = job.params ?? {};
@@ -48,40 +39,22 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
   );
 
   return (
-    <Card className="border-slate-200 bg-white shadow-sm">
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Badge variant="info" className="w-fit">
-              最近任务
-            </Badge>
-            <CardTitle className="mt-2 text-slate-950">策略任务历史</CardTitle>
-            <CardDescription className="text-slate-600">
-              仅展示 `strategy-build`、`run-pre-market` 和 `run-after-close`。
-            </CardDescription>
-          </div>
-          <Button
-            className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            onClick={onRetry}
-            variant="outline"
-          >
-            刷新
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-24 w-full bg-slate-100" />
-            <Skeleton className="h-24 w-full bg-slate-100" />
-          </div>
-        ) : error ? (
-          <ErrorState
-            {...buildErrorRecoveryState(error, 'strategy')}
-            onRetry={onRetry}
-          />
-        ) : strategyJobs.length ? (
-          strategyJobs.map((job) => (
+    <SectionCard
+      title="策略任务历史"
+      description="仅展示 `strategy-build`、`run-pre-market` 和 `run-after-close`。"
+      action={
+        <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetry} variant="outline">
+          刷新
+        </Button>
+      }
+    >
+      {isLoading ? (
+        <LoadingState label="正在加载策略任务历史" description="稍后会展示最近的策略执行记录。" />
+      ) : error ? (
+        <ErrorState {...buildErrorRecoveryState(error, 'strategy')} onRetry={onRetry} />
+      ) : strategyJobs.length ? (
+        <div className="space-y-3">
+          {strategyJobs.map((job) => (
             <button
               key={job.id}
               className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-sky-200 hover:bg-sky-50/70"
@@ -93,7 +66,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
                   <p className="text-base font-medium text-slate-950">{job.id}</p>
                   <p className="mt-1 text-sm text-slate-600">{job.job_type}</p>
                 </div>
-                <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
+                <StatusBadge value={job.status} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                 <span className="rounded-full border border-slate-200 px-2 py-1">{describeStrategyJob(job) || '参数待查看'}</span>
@@ -105,13 +78,11 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
                 </p>
               ) : null}
             </button>
-          ))
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-            暂无策略任务。提交 `strategy-build`、`run-pre-market` 或 `run-after-close` 后，这里会展示最近执行记录。
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="暂无策略任务。" description="提交 `strategy-build`、`run-pre-market` 或 `run-after-close` 后，这里会展示最近执行记录。" />
+      )}
+    </SectionCard>
   );
 }

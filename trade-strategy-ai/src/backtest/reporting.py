@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from typing import Any
 
 from src.backtest.schemas import BacktestResult, RuleValidationResult
@@ -110,6 +112,54 @@ def render_backtest_json(result: BacktestResult) -> str:
         ensure_ascii=False,
         indent=2,
     )
+
+
+def render_backtest_csv(result: BacktestResult) -> str:
+    """把回测结果渲染为 CSV 字符串。"""
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "trade_date",
+            "trader_id",
+            "strategy_version_id",
+            "symbol",
+            "status",
+            "entry_price",
+            "exit_price",
+            "entry_date",
+            "exit_date",
+            "return_pct",
+            "mfe",
+            "mae",
+            "volume",
+            "is_valid_lot_size",
+            "skip_reason",
+            "evidence_refs",
+        ]
+    )
+    for record in result.records:
+        writer.writerow(
+            [
+                record.trade_date.isoformat(),
+                record.trader_id,
+                record.strategy_version_id,
+                record.symbol,
+                record.status,
+                record.entry_price,
+                record.exit_price,
+                record.entry_date,
+                record.exit_date,
+                record.return_pct,
+                record.mfe,
+                record.mae,
+                record.volume,
+                record.is_valid_lot_size,
+                record.skip_reason,
+                json.dumps(record.evidence_refs, ensure_ascii=False),
+            ]
+        )
+    return output.getvalue()
 
 
 def render_rule_validation_markdown(results: list[RuleValidationResult]) -> str:

@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.backtest.schemas import BacktestResult, BacktestSummary, BacktestTradeRecord
+
 
 @dataclass
 class _FakeSummary:
@@ -17,16 +19,6 @@ class _FakeSummary:
     avg_return_pct: float | None = 0.03
 
 
-@dataclass
-class _FakeBacktestResult:
-    request_trader_id: str
-    request_date_from: date
-    request_date_to: date
-    records: list[SimpleNamespace]
-    summary: _FakeSummary | None = None
-    result_version: str = "1.0"
-
-
 class _FakeEngine:
     def __init__(self) -> None:
         self.run_sync_calls: list[object] = []
@@ -34,12 +26,12 @@ class _FakeEngine:
 
     def run_sync(self, request):
         self.run_sync_calls.append(request)
-        return _FakeBacktestResult(
+        return BacktestResult(
             request_trader_id=request.trader_id,
             request_date_from=request.date_from,
             request_date_to=request.date_to,
             records=[
-                SimpleNamespace(
+                BacktestTradeRecord(
                     trade_date=request.date_from,
                     trader_id=request.trader_id,
                     strategy_version_id="sv-001",
@@ -53,17 +45,24 @@ class _FakeEngine:
                     skip_reason=None,
                 )
             ],
-            summary=_FakeSummary(),
+            summary=BacktestSummary(
+                total_days=_FakeSummary().total_days,
+                total_trades=_FakeSummary().total_trades,
+                valid_trades=_FakeSummary().valid_trades,
+                skipped_trades=_FakeSummary().skipped_trades,
+                win_rate=_FakeSummary().win_rate,
+                avg_return_pct=_FakeSummary().avg_return_pct,
+            ),
         )
 
     async def run_rules_backtest(self, **kwargs):
         self.rule_pool_calls.append(kwargs)
-        return _FakeBacktestResult(
+        return BacktestResult(
             request_trader_id="rule_pool",
             request_date_from=kwargs["start_date"],
             request_date_to=kwargs["end_date"],
             records=[
-                SimpleNamespace(
+                BacktestTradeRecord(
                     trade_date=kwargs["end_date"],
                     trader_id="rule_pool",
                     strategy_version_id="rule-001",
@@ -77,7 +76,14 @@ class _FakeEngine:
                     skip_reason=None,
                 )
             ],
-            summary=_FakeSummary(),
+            summary=BacktestSummary(
+                total_days=_FakeSummary().total_days,
+                total_trades=_FakeSummary().total_trades,
+                valid_trades=_FakeSummary().valid_trades,
+                skipped_trades=_FakeSummary().skipped_trades,
+                win_rate=_FakeSummary().win_rate,
+                avg_return_pct=_FakeSummary().avg_return_pct,
+            ),
         )
 
 
@@ -112,8 +118,12 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
         trader_id="trader_a",
         date_from=date(2026, 4, 1),
         date_to=date(2026, 4, 3),
+        strategy_version_id="sv-001",
+        symbols=["000001.SZ"],
         mode="full",
         config_path="config/app.yaml",
+        use_snapshot_only=True,
+        scoring_profile="stage5",
     )
 
     rendered = service.render_backtest_report(
@@ -123,7 +133,11 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
 
     assert run_result.status == "ok"
     assert run_result.payload["request"]["trader_id"] == "trader_a"
+    assert run_result.payload["request"]["symbols"] == ["000001.SZ"]
+    assert run_result.payload["request"]["use_snapshot_only"] is True
+    assert run_result.payload["request"]["scoring_profile"] == "stage5"
     assert run_result.payload["result"]["summary"]["total_trades"] == 6
+    assert len(run_result.payload["fingerprint"]) == 64
     assert "Backtest Report" in rendered.payload["content"]
     assert len(engine.run_sync_calls) == 1
 
@@ -183,6 +197,7 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
         trader_id="trader_a",
         date_from=date(2026, 4, 1),
         date_to=date(2026, 4, 3),
+        symbols=["000001.SZ"],
         config_path=tmp_path / "config" / "app.yaml",
     )
 
@@ -198,6 +213,7 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
     assert reproducibility.status == "ok"
     assert reproducibility.payload["matches"] is True
     assert reproducibility.payload["fingerprint_a"] == reproducibility.payload["fingerprint_b"]
+    assert reproducibility.payload["request"]["symbols"] == ["000001.SZ"]
     assert rule_pool_result.status == "ok"
     assert rule_pool_result.payload["summary"]["total_trades"] == 6
     assert session_factory.calls == 1

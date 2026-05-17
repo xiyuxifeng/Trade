@@ -9,6 +9,7 @@
 from src.backtest.engine import BacktestEngine, validate_rule_hits, validate_rules_for_trader
 from src.backtest.execution import classify_rules_snapshot_gap, replay_candidates
 from src.backtest.reporting import (
+    render_backtest_csv,
     render_backtest_json,
     render_backtest_markdown,
     render_rule_validation_markdown,
@@ -44,6 +45,7 @@ __all__ = [
     # snapshot
     "SnapshotLoader",
     # reporting
+    "render_backtest_csv",
     "render_backtest_markdown",
     "render_backtest_json",
     "render_rule_validation_markdown",

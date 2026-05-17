@@ -150,6 +150,20 @@ class TestRenderJSONResult:
         assert "summary" in parsed
 
 
+class TestRenderCSVResult:
+    """CSV 报告渲染测试。"""
+
+    def test_render_csv_result_contains_header_and_symbol(self):
+        """CSV 输出应包含稳定表头和交易记录。"""
+        from src.backtest.reporting import render_backtest_csv
+
+        result = _sample_result()
+        csv_text = render_backtest_csv(result)
+
+        assert "trade_date,trader_id,strategy_version_id" in csv_text
+        assert "000001.SZ" in csv_text
+
+
 class TestRuleValidationMarkdown:
     """规则验真报告测试"""
 

@@ -14,9 +14,145 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.models.job import Job
 from src.models.job_audit_event import JobAuditEvent
+from src.services.base import ServiceResult
 
 
-def _build_job_runner(tmp_path: Path, handlers: dict[str, Any] | None = None):
+class _FakeBacktestService:
+    def __init__(self) -> None:
+        self.run_calls: list[dict[str, object]] = []
+        self.validate_calls: list[dict[str, object]] = []
+        self.repro_calls: list[dict[str, object]] = []
+
+    def run_backtest(self, **kwargs):
+        self.run_calls.append(kwargs)
+        return ServiceResult(
+            status="ok",
+            message="backtest completed",
+            payload={
+                "request": {
+                    "trader_id": kwargs["trader_id"],
+                    "date_from": kwargs["date_from"].isoformat(),
+                    "date_to": kwargs["date_to"].isoformat(),
+                    "strategy_version_id": kwargs.get("strategy_version_id"),
+                    "symbols": kwargs.get("symbols") or [],
+                    "mode": kwargs.get("mode"),
+                    "use_snapshot_only": kwargs.get("use_snapshot_only"),
+                    "scoring_profile": kwargs.get("scoring_profile"),
+                },
+                "result": {
+                    "request_trader_id": kwargs["trader_id"],
+                    "request_date_from": kwargs["date_from"],
+                    "request_date_to": kwargs["date_to"],
+                    "records": [
+                        {
+                            "trade_date": kwargs["date_from"],
+                            "trader_id": kwargs["trader_id"],
+                            "strategy_version_id": kwargs.get("strategy_version_id") or "sv-001",
+                            "symbol": "000001.SZ",
+                            "status": "closed",
+                            "entry_price": 10.0,
+                            "exit_price": 10.5,
+                            "entry_date": None,
+                            "exit_date": None,
+                            "return_pct": 0.05,
+                            "mfe": None,
+                            "mae": None,
+                            "volume": None,
+                            "is_valid_lot_size": None,
+                            "skip_reason": None,
+                            "evidence_refs": [],
+                        }
+                    ],
+                    "summary": {
+                        "total_days": 3,
+                        "total_trades": 6,
+                        "valid_trades": 4,
+                        "skipped_trades": 2,
+                        "win_rate": 0.5,
+                        "avg_return_pct": 0.03,
+                    },
+                    "result_version": "1.0",
+                },
+                "summary": {
+                    "total_days": 3,
+                    "total_trades": 6,
+                    "valid_trades": 4,
+                    "skipped_trades": 2,
+                    "win_rate": 0.5,
+                    "avg_return_pct": 0.03,
+                },
+                "fingerprint": "f" * 64,
+            },
+        )
+
+    async def validate_rules(self, **kwargs):
+        self.validate_calls.append(kwargs)
+        return ServiceResult(
+            status="ok",
+            message="rule validation completed",
+            payload={
+                "trader_id": kwargs["trader_id"],
+                "date_from": kwargs["date_from"].isoformat(),
+                "date_to": kwargs["date_to"].isoformat(),
+                "coverage": {"total": 1, "programmable": 1, "validated": 1},
+                "results": [
+                    {
+                        "trader_id": kwargs["trader_id"],
+                        "strategy_version_id": kwargs.get("strategy_version_id") or "sv-001",
+                        "rule_id": "rule-001",
+                        "rule_text": "rsi < 30",
+                        "programmable": True,
+                        "validation_status": "validated",
+                        "hit_count": 2,
+                        "sample_count": 4,
+                        "hit_rate": 0.5,
+                        "posterior_return_mean": 0.02,
+                        "posterior_return_median": 0.015,
+                        "notes": [],
+                        "result_version": "1.0",
+                    }
+                ],
+                "report": "# Rule Validation Report\n",
+            },
+        )
+
+    def reproducibility_check(self, **kwargs):
+        self.repro_calls.append(kwargs)
+        return ServiceResult(
+            status="ok",
+            message="reproducibility check completed",
+            payload={
+                "request": {
+                    "trader_id": kwargs["trader_id"],
+                    "date_from": kwargs["date_from"].isoformat(),
+                    "date_to": kwargs["date_to"].isoformat(),
+                    "strategy_version_id": kwargs.get("strategy_version_id"),
+                    "symbols": kwargs.get("symbols") or [],
+                    "mode": kwargs.get("mode"),
+                    "use_snapshot_only": kwargs.get("use_snapshot_only"),
+                    "scoring_profile": kwargs.get("scoring_profile"),
+                },
+                "fingerprint_a": "f" * 64,
+                "fingerprint_b": "f" * 64,
+                "matches": True,
+                "result_a": {},
+                "result_b": {},
+            },
+        )
+
+    def render_backtest_report(self, result, *, format: str):
+        del result
+        if format == "csv":
+            return ServiceResult(status="ok", message="backtest report rendered", payload={"content": "trade_date,trader_id,strategy_version_id\n"})
+        return ServiceResult(status="ok", message="backtest report rendered", payload={"content": "# Backtest Report\n"})
+
+
+def _build_job_runner(
+    tmp_path: Path,
+    handlers: dict[str, Any] | None = None,
+    *,
+    backtest_service_factory: Any | None = None,
+):
     """创建一个可用于 JobRunner 单测的临时 SQLite runner。"""
     from src.services import JobRunner, JobService, ServiceResult
 
@@ -42,7 +178,12 @@ def _build_job_runner(tmp_path: Path, handlers: dict[str, Any] | None = None):
                 raise
 
     job_service = JobService(session_scope_factory=_session_scope, job_base_dir=tmp_path / "jobs")
-    runner = JobRunner(job_service=job_service, handlers=handlers or {}, heartbeat_interval_seconds=0.01)
+    runner = JobRunner(
+        job_service=job_service,
+        handlers=handlers or {},
+        heartbeat_interval_seconds=0.01,
+        backtest_service_factory=backtest_service_factory or _FakeBacktestService,
+    )
     return runner, job_service, engine, ServiceResult
 
 
@@ -143,6 +284,82 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
     assert loaded.payload["job"]["status"] == "success"
     assert loaded.payload["job"]["result"]["payload"]["trader_id"] == "trader-001"
     assert loaded.payload["job"]["result"]["payload"]["strategy_date"] == "2026-05-16"
+    asyncio.run(engine.dispose())
+
+
+def test_submit_backtest_run_binds_report_and_csv_artifacts(tmp_path: Path) -> None:
+    """backtest-run 应通过默认 handler 执行并绑定报告与 CSV 产物。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="backtest-run",
+            params={
+                "trader_id": "trader_a",
+                "date_from": "2026-04-01",
+                "date_to": "2026-04-03",
+                "strategy_version_id": "sv-001",
+                "symbols": ["000001.SZ"],
+                "mode": "full",
+                "config_path": "config/app.yaml",
+                "use_snapshot_only": True,
+                "scoring_profile": "stage5",
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+    artifact_kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
+    result_payload = json.loads((tmp_path / "jobs" / str(job_id) / "result.json").read_text(encoding="utf-8"))
+
+    assert submitted.status == "ok"
+    assert submitted.payload["execution"]["job"]["status"] == "success"
+    assert loaded.payload["job"]["status"] == "success"
+    assert "report-markdown" in artifact_kinds
+    assert "records-csv" in artifact_kinds
+    assert result_payload["result"]["payload"]["fingerprint"] == "f" * 64
+    assert result_payload["result"]["payload"]["request"]["symbols"] == ["000001.SZ"]
+    assert (tmp_path / "jobs" / job_id / "backtest_report.md").exists()
+    assert (tmp_path / "jobs" / job_id / "backtest_records.csv").exists()
+    asyncio.run(engine.dispose())
+
+
+def test_submit_backtest_validate_rules_binds_validation_report(tmp_path: Path) -> None:
+    """backtest-validate-rules 应绑定规则验真报告。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="backtest-validate-rules",
+            params={
+                "trader_id": "trader_a",
+                "date_from": "2026-04-01",
+                "date_to": "2026-04-03",
+                "strategy_version_id": "sv-001",
+                "symbols": ["000001.SZ"],
+                "config_path": "config/app.yaml",
+                "use_snapshot_only": True,
+                "scoring_profile": "stage5",
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+    artifact_kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
+    result_payload = json.loads((tmp_path / "jobs" / str(job_id) / "result.json").read_text(encoding="utf-8"))
+
+    assert submitted.status == "ok"
+    assert "validation-report-markdown" in artifact_kinds
+    assert result_payload["result"]["payload"]["report"].startswith("# Rule Validation Report")
+    assert (tmp_path / "jobs" / job_id / "backtest_validation_report.md").exists()
     asyncio.run(engine.dispose())
 
 

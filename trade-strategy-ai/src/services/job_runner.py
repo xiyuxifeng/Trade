@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 from uuid import UUID, uuid4
 
 from src.agents.manager_agent.agent import ManagerAgent
+from src.services.backtest_service import BacktestService
 from src.common.config import load_app_config
 from src.services.base import BaseService, ServiceResult
 from src.services.kaipan_service import KaipanService
@@ -120,6 +121,7 @@ class JobRunner(BaseService):
         job_service: JobService | None = None,
         manager_factory: Callable[..., ManagerAgent] = ManagerAgent,
         pipeline_service_factory: Callable[[], PipelineService] = PipelineService,
+        backtest_service_factory: Callable[[], BacktestService] = BacktestService,
         config_loader: Callable[[str | Path], Any] = load_app_config,
         worker_id: str | None = None,
         heartbeat_interval_seconds: float = 5.0,
@@ -129,6 +131,7 @@ class JobRunner(BaseService):
         self._job_service = job_service or JobService()
         self._manager_factory = manager_factory
         self._pipeline_service_factory = pipeline_service_factory
+        self._backtest_service_factory = backtest_service_factory
         self._config_loader = config_loader
         self._worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
         self._heartbeat_interval_seconds = max(0.1, float(heartbeat_interval_seconds))
@@ -217,6 +220,48 @@ class JobRunner(BaseService):
                 force=_parse_bool(params.get("force"), default=False),
             )
 
+        async def _backtest_run(params: dict[str, Any]) -> ServiceResult:
+            service = self._backtest_service_factory()
+            return service.run_backtest(
+                trader_id=str(params.get("trader_id") or ""),
+                date_from=_parse_date(params.get("date_from")),
+                date_to=_parse_date(params.get("date_to")),
+                strategy_version_id=params.get("strategy_version_id"),
+                symbols=params.get("symbols") or [],
+                mode=str(params.get("mode") or "full"),
+                config_path=params.get("config_path", "config/app.yaml"),
+                use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                scoring_profile=str(params.get("scoring_profile") or "stage5"),
+            )
+
+        async def _backtest_validate_rules(params: dict[str, Any]) -> ServiceResult:
+            service = self._backtest_service_factory()
+            return await service.validate_rules(
+                trader_id=str(params.get("trader_id") or ""),
+                date_from=_parse_date(params.get("date_from")),
+                date_to=_parse_date(params.get("date_to")),
+                strategy_version_id=params.get("strategy_version_id"),
+                symbols=params.get("symbols") or [],
+                mode=str(params.get("mode") or "rule_validation"),
+                config_path=params.get("config_path", "config/app.yaml"),
+                use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                scoring_profile=str(params.get("scoring_profile") or "stage5"),
+            )
+
+        async def _backtest_reproducibility_check(params: dict[str, Any]) -> ServiceResult:
+            service = self._backtest_service_factory()
+            return service.reproducibility_check(
+                trader_id=str(params.get("trader_id") or ""),
+                date_from=_parse_date(params.get("date_from")),
+                date_to=_parse_date(params.get("date_to")),
+                strategy_version_id=params.get("strategy_version_id"),
+                symbols=params.get("symbols") or [],
+                mode=str(params.get("mode") or "full"),
+                config_path=params.get("config_path", "config/app.yaml"),
+                use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                scoring_profile=str(params.get("scoring_profile") or "stage5"),
+            )
+
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
             manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
             service = RunService(manager)
@@ -270,6 +315,9 @@ class JobRunner(BaseService):
             "market-state-build": _market_state_build,
             "snapshot-build": _snapshot_build,
             "strategy-build": _strategy_build,
+            "backtest-run": _backtest_run,
+            "backtest-validate-rules": _backtest_validate_rules,
+            "backtest-reproducibility-check": _backtest_reproducibility_check,
         }
 
     def _classify_error(self, *, job_type: str, message: str, payload: dict[str, Any] | None = None) -> tuple[str, str | None, bool]:
@@ -295,6 +343,7 @@ class JobRunner(BaseService):
         self,
         *,
         job_id: str | UUID,
+        job_dir: Path,
         job_type: str,
         result_payload: dict[str, Any],
     ) -> None:
@@ -317,6 +366,21 @@ class JobRunner(BaseService):
         snapshot_paths = payload.get("snapshot_paths")
         if isinstance(snapshot_paths, list):
             artifact_specs.extend(("snapshot-json", "市场快照 JSON", item) for item in snapshot_paths if item)
+
+        if job_type == "backtest-run" and "result" in payload:
+            backtest_service = self._backtest_service_factory()
+            report_content = backtest_service.render_backtest_report(payload["result"], format="markdown").payload["content"]
+            csv_content = backtest_service.render_backtest_report(payload["result"], format="csv").payload["content"]
+            report_path = job_dir / "backtest_report.md"
+            csv_path = job_dir / "backtest_records.csv"
+            report_path.write_text(report_content, encoding="utf-8")
+            csv_path.write_text(csv_content, encoding="utf-8")
+            artifact_specs.append(("report-markdown", "回测报告", report_path))
+            artifact_specs.append(("records-csv", "回测交易记录", csv_path))
+        elif job_type == "backtest-validate-rules" and "report" in payload:
+            report_path = job_dir / "backtest_validation_report.md"
+            report_path.write_text(str(payload["report"]), encoding="utf-8")
+            artifact_specs.append(("validation-report-markdown", "规则验真报告", report_path))
 
         for kind, title, path in artifact_specs:
             await self._job_service.bind_artifact(
@@ -397,7 +461,7 @@ class JobRunner(BaseService):
         params = dict(job_payload.get("params") or {})
         try:
             result = await handler(params)
-            result_payload = _to_plain(result.model_dump())
+            result_payload = _to_plain(result.model_dump(mode="json"))
             public_result_payload = _sanitize_result_payload_for_output(result_payload)
             result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
             await self._job_service.bind_artifact(
@@ -406,7 +470,12 @@ class JobRunner(BaseService):
                 path=result_path,
                 metadata={"job_type": job_payload["job_type"]},
             )
-            await self._bind_result_artifacts(job_id=job_id, job_type=job_payload["job_type"], result_payload=result_payload)
+            await self._bind_result_artifacts(
+                job_id=job_id,
+                job_dir=job_dir,
+                job_type=job_payload["job_type"],
+                result_payload=result_payload,
+            )
             if result.status == "error":
                 error_type, error_code, retryable = self._classify_error(
                     job_type=job_payload["job_type"],

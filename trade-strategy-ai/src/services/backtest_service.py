@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from src.backtest.engine import BacktestEngine, validate_rules_for_trader
 from src.backtest.reporting import (
+    render_backtest_csv,
     render_backtest_json,
     render_backtest_markdown,
     render_rule_validation_markdown,
@@ -147,8 +148,14 @@ def _coerce_rule_validation_result(value: Any) -> RuleValidationResult:
     )
 
 
-def _default_engine_factory(*, config_path: str | Path | None = None) -> BacktestEngine:
+def _default_engine_factory(
+    *,
+    config_path: str | Path | None = None,
+    use_snapshot_only: bool = True,
+    scoring_profile: str = "stage5",
+) -> BacktestEngine:
     """从配置文件构建默认回测引擎。"""
+    del scoring_profile
     if config_path is None:
         return BacktestEngine()
 
@@ -175,6 +182,7 @@ def _default_engine_factory(*, config_path: str | Path | None = None) -> Backtes
         strategy_repo=StrategyRepoAdapter(),
         indicator_service=IndicatorService(session_factory),
         session_factory=session_factory,
+        use_snapshot_only=use_snapshot_only,
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)
 
@@ -195,9 +203,19 @@ class BacktestService(BaseService):
         self._rule_validation_runner = rule_validation_runner
         self._session_scope_factory = session_scope_factory
 
-    def _build_engine(self, *, config_path: str | Path | None = None) -> BacktestEngine:
+    def _build_engine(
+        self,
+        *,
+        config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
+    ) -> BacktestEngine:
         """按需构建回测引擎。"""
-        return self._engine_factory(config_path=config_path)
+        return self._engine_factory(
+            config_path=config_path,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
 
     def _build_request(
         self,
@@ -206,7 +224,10 @@ class BacktestService(BaseService):
         date_from: date,
         date_to: date,
         strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
         mode: str = "full",
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
     ) -> BacktestRequest:
         """构造统一的回测请求模型。"""
         return BacktestRequest(
@@ -214,7 +235,10 @@ class BacktestService(BaseService):
             date_from=date_from,
             date_to=date_to,
             strategy_version_id=strategy_version_id,
+            symbols=symbols or [],
             mode=mode,  # type: ignore[arg-type]
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
         )
 
     def run_backtest(
@@ -224,8 +248,11 @@ class BacktestService(BaseService):
         date_from: date,
         date_to: date,
         strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
     ) -> ServiceResult:
         """运行离线回测。"""
         request = self._build_request(
@@ -233,10 +260,18 @@ class BacktestService(BaseService):
             date_from=date_from,
             date_to=date_to,
             strategy_version_id=strategy_version_id,
+            symbols=symbols,
             mode=mode,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
         )
-        engine = self._build_engine(config_path=config_path)
+        engine = self._build_engine(
+            config_path=config_path,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
         result = engine.run_sync(request)
+        fingerprint = fingerprint_result(result)
         return ServiceResult(
             status="ok",
             message="backtest completed",
@@ -245,6 +280,7 @@ class BacktestService(BaseService):
                 "request": _to_plain(request),
                 "result": _to_plain(result),
                 "summary": _to_plain(result.summary),
+                "fingerprint": fingerprint,
             },
         )
 
@@ -268,10 +304,12 @@ class BacktestService(BaseService):
         *,
         format: str = "markdown",
     ) -> ServiceResult:
-        """把回测结果渲染为 Markdown 或 JSON 文本。"""
+        """把回测结果渲染为 Markdown、JSON 或 CSV 文本。"""
         coerced = _coerce_backtest_result(result)
         if format == "json":
             content = render_backtest_json(coerced)
+        elif format == "csv":
+            content = render_backtest_csv(coerced)
         else:
             content = render_backtest_markdown(coerced)
         return ServiceResult(
@@ -291,8 +329,14 @@ class BacktestService(BaseService):
         date_from: date,
         date_to: date,
         config_path: str | Path | None = None,
+        strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
+        mode: str = "rule_validation",
     ) -> ServiceResult:
         """执行规则验真并生成验真报告。"""
+        del strategy_version_id, symbols, use_snapshot_only, scoring_profile, mode
         engine = self._build_engine(config_path=config_path)
         loader_obj = getattr(engine, "loader", None)
         loader = loader_obj if loader_obj is not None else SnapshotLoader()
@@ -347,8 +391,11 @@ class BacktestService(BaseService):
         date_from: date,
         date_to: date,
         strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
     ) -> ServiceResult:
         """运行两次回测并检查 fingerprint 是否一致。"""
         request = self._build_request(
@@ -356,9 +403,16 @@ class BacktestService(BaseService):
             date_from=date_from,
             date_to=date_to,
             strategy_version_id=strategy_version_id,
+            symbols=symbols,
             mode=mode,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
         )
-        engine = self._build_engine(config_path=config_path)
+        engine = self._build_engine(
+            config_path=config_path,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
         result_a = engine.run_sync(request)
         result_b = engine.run_sync(request)
         fingerprint_a = fingerprint_result(_coerce_backtest_result(result_a))

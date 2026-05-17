@@ -60,6 +60,9 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
         "snapshot-build",
         "strategy-build",
         "ohlcv-crawl",
+        "backtest-run",
+        "backtest-validate-rules",
+        "backtest-reproducibility-check",
         "kaipan-fetch",
         "kaipan-normalize",
         "kaipan-run",
@@ -90,6 +93,19 @@ def test_validate_job_submission_enforces_schema() -> None:
     )
     assert ok.status == "ok"
     assert ok.payload["params"]["config_path"] == "config/app.yaml"
+
+    backtest = validate_job_submission(
+        job_type="backtest-run",
+        params={
+            "trader_id": "trader_a",
+            "date_from": "2026-04-01",
+            "date_to": "2026-04-03",
+            "symbols": ["000001.SZ"],
+        },
+        created_by="web",
+    )
+    assert backtest.status == "ok"
+    assert backtest.payload["params"]["symbols"] == ["000001.SZ"]
 
     market = validate_job_submission(
         job_type="ohlcv-crawl",

@@ -1770,7 +1770,7 @@ V3 完成完整项目交付：
 
 ## Stage V3-S1：Backtest / Optimize / Rule Pool
 
-### [ ] NW-V3-S1-001 P0 定义并实现 backtest PipelineSpec / Workflow
+### [x] NW-V3-S1-001 P0 定义并实现 backtest PipelineSpec / Workflow
 
 覆盖能力：
 

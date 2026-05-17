@@ -7,7 +7,7 @@ import { AuthProvider } from '@/features/auth/auth-context';
 import { Sidebar } from './sidebar';
 
 describe('Sidebar', () => {
-  it('disables admin-only ops navigation for viewer principals', () => {
+  it('disables admin-only management navigation for viewer principals', () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -33,7 +33,7 @@ describe('Sidebar', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getAllByRole('link', { name: /运维/ }).find((link) => link.getAttribute('href') === '/ops')).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /管理中心/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );

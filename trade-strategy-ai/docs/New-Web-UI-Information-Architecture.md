@@ -61,7 +61,7 @@
 | `/workflows` | Workflow 目录入口 | 正式 |
 | `/workflows/:workflowId/run` | Workflow 运行入口 | 正式 |
 | `/articles` | article_pipeline 验收入口 | 正式 |
-| `/market` | 市场数据工作台 | 正式 |
+| `/market` | 市场快照浏览器 | 正式 |
 | `/strategies` | 策略工作台 | 正式 |
 | `/backtest` | 回测占位入口 | 预留 |
 | `/rule-pool` | 规则池占位入口 | 预留 |
@@ -106,4 +106,3 @@
 - `UI-V2-001` 负责落地这份 IA。
 - `UI-V2-006`、`UI-V2-007`、`UI-V2-010`、`UI-V2-011` 在这份 IA 下继续补正式页面。
 - `NW-V2-S4-001` 依赖这份 IA 完成 V2 正式工作台收口。
-

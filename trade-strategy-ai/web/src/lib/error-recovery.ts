@@ -180,7 +180,7 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     'job-detail': '任务详情',
     profiles: '配置列表',
     'profile-detail': '配置详情',
-    market: '市场数据工作台',
+    market: '市场快照浏览器',
     strategy: '策略工作台',
   }[page];
 
@@ -204,6 +204,13 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
         suggestion: '先检查 Profile 和 config_path，再重新打开页面。',
       };
     case 'provider unavailable':
+      if (page === 'market') {
+        return {
+          title: '市场快照浏览器暂不可用',
+          description: '后端服务或 provider 当前无法响应。',
+          suggestion: '请稍后重试，或先确认上游服务状态。',
+        };
+      }
       return {
         title: '上游服务不可用',
         description: '后端服务或 provider 当前无法响应。',
@@ -334,9 +341,9 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请稍后刷新页面，或前往配置管理继续查看。',
         },
         market: {
-          title: '市场数据暂不可用',
-          description: '当前市场工作台没有返回可展示的数据。',
-          suggestion: '请稍后重试，或切换到其他市场入口查看。',
+          title: '快照不存在',
+          description: '系统没有找到该 Market Snapshot。',
+          suggestion: '请检查 snapshot_id 是否正确，或返回列表重新筛选。',
         },
         strategy: {
           title: '策略工作台暂不可用',

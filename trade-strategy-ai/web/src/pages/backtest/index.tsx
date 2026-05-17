@@ -27,7 +27,7 @@ export function BacktestPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm leading-6 text-slate-600">
-            <p>请先通过策略工作台、市场数据工作台和产物中心完成前置数据检查。</p>
+            <p>请先通过策略工作台、市场快照浏览器和产物中心完成前置数据检查。</p>
             <p className="mt-2">本页不展示本地文件路径，也不执行任何回测计算。</p>
           </CardContent>
         </Card>
@@ -42,7 +42,7 @@ export function BacktestPage() {
               前往策略
             </Button>
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/market')}>
-              前往市场数据
+              前往市场快照浏览器
             </Button>
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/artifacts')}>
               前往产物中心

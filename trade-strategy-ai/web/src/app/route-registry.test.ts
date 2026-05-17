@@ -10,6 +10,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/workflows/pipeline/run').path).toBe('/workflows/:workflowId/run');
     expect(resolveRouteByPathname('/articles').path).toBe('/articles');
     expect(resolveRouteByPathname('/market').path).toBe('/market');
+    expect(resolveRouteByPathname('/market').description).toBe('市场快照浏览器');
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
     expect(resolveRouteByPathname('/backtest').path).toBe('/backtest');
     expect(resolveRouteByPathname('/rule-pool').path).toBe('/rule-pool');

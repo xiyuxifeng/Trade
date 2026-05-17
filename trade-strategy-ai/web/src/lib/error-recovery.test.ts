@@ -21,4 +21,12 @@ describe('buildErrorRecoveryState', () => {
     expect(state.actions.some((action) => action.to === '/artifacts')).toBe(true);
     expect(state.actions.some((action) => action.to === '/jobs')).toBe(true);
   });
+
+  it('uses market snapshot browser wording for market recovery', () => {
+    const state = buildErrorRecoveryState(new ApiError(503, 'provider unavailable'), 'market');
+
+    expect(state.title).toContain('市场快照浏览器');
+    expect(state.actions.some((action) => action.to === '/dashboard')).toBe(true);
+    expect(state.actions.some((action) => action.to === '/settings')).toBe(true);
+  });
 });

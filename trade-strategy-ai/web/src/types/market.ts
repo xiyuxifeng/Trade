@@ -136,3 +136,33 @@ export type MarketDatasetDetailResponse = {
 export type MarketSnapshotQualityResponse = {
   quality_report: Record<string, unknown>;
 };
+
+export type MarketRegimeFeatureSummary = {
+  id: string;
+  snapshot_id: string;
+  trade_date: string;
+  market: string;
+  feature_version: string;
+  quality_status: string;
+  available_feature_count: number;
+  partial_feature_count: number;
+  missing_feature_count: number;
+  feature_payload_json: Record<string, unknown>;
+  summary_json: Record<string, unknown>;
+  storage_ref: Record<string, unknown>;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type MarketRegimeFeatureListResponse = {
+  filters: Record<string, unknown>;
+  page: MarketQueryPage;
+  items: MarketRegimeFeatureSummary[];
+};
+
+export type MarketRegimeFeatureDetailResponse = {
+  feature: MarketRegimeFeatureSummary;
+  feature_payload_json: Record<string, unknown>;
+  summary_json: Record<string, unknown>;
+  warnings: string[];
+};

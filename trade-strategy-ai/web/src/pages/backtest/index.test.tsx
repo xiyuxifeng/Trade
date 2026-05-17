@@ -8,6 +8,6 @@ describe('BacktestPage', () => {
     renderWithRouter([{ path: '/backtest', element: <BacktestPage /> }], ['/backtest']);
 
     expect(await screen.findByRole('heading', { name: '回测' })).toBeInTheDocument();
-    expect(screen.getByText(/V3 预留/)).toBeInTheDocument();
+    expect(screen.getByText('前往市场快照浏览器')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
-import { MarketWorkspaceShell } from '@/features/market-workspace';
+import { MarketSnapshotBrowserShell } from '@/features/market-browser';
 
 export function MarketPage() {
-  return <MarketWorkspaceShell />;
+  return <MarketSnapshotBrowserShell />;
 }

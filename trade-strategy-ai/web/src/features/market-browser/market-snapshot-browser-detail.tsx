@@ -1,0 +1,180 @@
+import { Link } from 'react-router-dom';
+import { EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
+import { buildErrorRecoveryState } from '@/lib/error-recovery';
+import type {
+  MarketRegimeFeatureDetailResponse,
+  MarketRegimeFeatureSummary,
+  MarketSnapshotDetailResponse,
+  MarketSnapshotListItem,
+  MarketSnapshotQualityResponse,
+  MarketSnapshotSectionSummary,
+} from '@/types/market';
+import { MarketSnapshotBrowserRegimeFeatures } from './market-snapshot-browser-regime-features';
+
+type MarketSnapshotBrowserDetailProps = {
+  snapshotId: string | null;
+  selectedSnapshot: MarketSnapshotListItem | null;
+  detail: MarketSnapshotDetailResponse | null;
+  sections: MarketSnapshotSectionSummary[];
+  quality: MarketSnapshotQualityResponse | null;
+  regimeFeatures: MarketRegimeFeatureSummary[];
+  regimeFeatureDetail: MarketRegimeFeatureDetailResponse | null;
+  isLoading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  tradeDate: string;
+};
+
+function readNestedString(value: unknown, path: string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    if (!current || typeof current !== 'object') {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === 'string' && current.trim() ? current : null;
+}
+
+function readAnyString(values: unknown[], path: string[]): string | null {
+  for (const value of values) {
+    const found = readNestedString(value, path);
+    if (found) return found;
+  }
+  return null;
+}
+
+function SummaryItem({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-2 break-all text-sm font-medium text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+export function MarketSnapshotBrowserDetail({
+  snapshotId,
+  selectedSnapshot,
+  detail,
+  sections,
+  quality,
+  regimeFeatures,
+  regimeFeatureDetail,
+  isLoading,
+  error,
+  onRetry,
+  tradeDate,
+}: MarketSnapshotBrowserDetailProps) {
+  const sourceJobId = readAnyString(
+    [detail?.dataset, detail?.quality_report, regimeFeatureDetail?.feature_payload_json, regimeFeatureDetail?.summary_json],
+    ['storage_ref', 'metadata', 'job_id'],
+  );
+  const fallbackArtifactLink = `/artifacts?jobType=snapshot-build&date=${tradeDate}&source=market-snapshot-browser`;
+  const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : fallbackArtifactLink;
+  const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : '/jobs';
+  const errorState = error ? buildErrorRecoveryState(error, 'market') : null;
+  const qualityReport = quality?.quality_report as Record<string, unknown> | null | undefined;
+  const qualityStatus = typeof qualityReport?.overall_status === 'string' ? qualityReport.overall_status : selectedSnapshot?.quality_status ?? 'unknown';
+  const warnings = detail?.warnings ?? [];
+  const qualitySummary =
+    typeof qualityReport?.summary === 'string'
+      ? qualityReport.summary
+      : warnings.length
+        ? warnings.join('；')
+        : '质量报告已加载。';
+
+  return (
+    <SectionCard
+      title="快照详情"
+      description={snapshotId ? '右侧保持当前快照详情，切换列表筛选后如果快照仍然存在会继续保留。' : '请选择一个 snapshot 查看详情。'}
+      className="border-slate-200 bg-white"
+      action={
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          to={artifactLink}
+        >
+          前往产物中心
+        </Link>
+      }
+    >
+      {isLoading ? (
+        <LoadingState label="正在加载快照详情" description="包括 snapshot、sections、quality report 和 regime features。" />
+      ) : errorState ? (
+        <ErrorState
+          {...errorState}
+          onRetry={errorState.retryable ? onRetry : undefined}
+        />
+      ) : detail && selectedSnapshot ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryItem label="Snapshot" value={selectedSnapshot.snapshot_id} />
+            <SummaryItem label="Trade Date" value={selectedSnapshot.trade_date ?? '未记录'} />
+            <SummaryItem label="Market" value={selectedSnapshot.market} />
+            <SummaryItem label="Data Version" value={selectedSnapshot.data_version} />
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">质量状态</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{qualityStatus}</p>
+                </div>
+                <StatusBadge value={selectedSnapshot.quality_status} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{qualitySummary}</p>
+              <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                <Link className="text-sky-700 hover:underline" to={jobLink}>
+                  前往 Job 详情
+                </Link>
+                <span className="text-slate-400">·</span>
+                <Link className="text-sky-700 hover:underline" to={artifactLink}>
+                  前往产物中心
+                </Link>
+              </div>
+            </div>
+
+            <JsonViewer value={quality?.quality_report ?? detail.quality_report ?? {}} title="质量报告" />
+          </div>
+
+          <SectionCard title="Sections" description="展示当前 snapshot 的 section 摘要与缺失信息。">
+            {sections.length ? (
+              <div className="space-y-3">
+                {sections.map((section) => (
+                  <div key={section.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-950">{section.section_id}</p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {section.provider ?? '未知 provider'} · {section.source_time ?? '未记录'} · {section.section_version ?? '未知版本'}
+                        </p>
+                      </div>
+                      <StatusBadge value={section.quality_status} />
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <SummaryItem label="Record Count" value={section.record_count} />
+                      <SummaryItem label="Missing Reason" value={section.missing_reason ?? '无'} />
+                      <SummaryItem label="Storage Ref" value={section.storage_ref?.source ?? 'db'} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="暂无 sections" description="这个 snapshot 还没有可展示的 section 摘要。" />
+            )}
+          </SectionCard>
+
+          <MarketSnapshotBrowserRegimeFeatures
+            items={regimeFeatures}
+            detail={regimeFeatureDetail}
+            isLoading={false}
+            errorState={null}
+          />
+        </div>
+      ) : (
+        <EmptyState title="请选择一个 snapshot" description="点击左侧 snapshot 列表中的任意一项查看详情。" />
+      )}
+    </SectionCard>
+  );
+}

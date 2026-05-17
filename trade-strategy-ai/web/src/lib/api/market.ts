@@ -2,6 +2,8 @@ import { fetchJson } from './http';
 import type {
   MarketDatasetDetailResponse,
   MarketDatasetListResponse,
+  MarketRegimeFeatureDetailResponse,
+  MarketRegimeFeatureListResponse,
   MarketSnapshotDetailResponse,
   MarketSnapshotListResponse,
   MarketSnapshotQualityResponse,
@@ -116,4 +118,30 @@ export function getMarketDataset(datasetId: string, limit = 100, offset = 0) {
 
 export function getMarketSnapshotQuality(snapshotId: string) {
   return fetchJson<MarketSnapshotQualityResponse>(`/market/snapshots/${snapshotId}/quality`);
+}
+
+export function listMarketRegimeFeatures(params: {
+  tradeDate?: string;
+  snapshotId?: string;
+  market?: string;
+  featureVersion?: string;
+  limit?: number;
+  offset?: number;
+} = {}) {
+  const query = buildQueryString({
+    trade_date: params.tradeDate,
+    snapshot_id: params.snapshotId,
+    market: params.market,
+    feature_version: params.featureVersion,
+    limit: params.limit,
+    offset: params.offset,
+  });
+  return fetchJson<MarketRegimeFeatureListResponse>(`/market/regime-features${query ? `?${query}` : ''}`);
+}
+
+export function getMarketRegimeFeature(snapshotId: string, featureVersion?: string) {
+  const query = buildQueryString({ feature_version: featureVersion });
+  return fetchJson<MarketRegimeFeatureDetailResponse>(
+    `/market/snapshots/${snapshotId}/regime-features${query ? `?${query}` : ''}`,
+  );
 }

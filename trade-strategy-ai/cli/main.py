@@ -42,14 +42,18 @@ from src.agents.data_agent.skills.import_trade_logs import (
 from src.persona.cluster_builder import build_clusters_from_db
 from src.backup.service import backup_project_state, restore_project_state
 from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
+from src.services.config_migration_service import ConfigMigrationService
 from src.services.persona_service import PersonaService
 from src.services.signal_service import SignalService
 from src.services.job_runner import JobRunner
+from src.services.pipeline_service import PipelineService
+from src.services.workflow_service import WorkflowService
 from scripts.init_db import init_db
 from scripts.seed_data import seed_project_data
 
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, help="Dev/debug CLI only. Formal user flows are served by Web.")
+dev_app = typer.Typer(add_completion=False, help="Dev-only debug commands for workflow and migration recovery.")
 
 
 _DEFAULT_CONFIG_YAML = """## trade-strategy-ai 配置文件（YAML）
@@ -220,6 +224,24 @@ kaipan:
 """
 
 
+def _echo_service_result(result) -> None:
+	"""输出 ServiceResult 的简洁摘要。"""
+	typer.echo(f"status={result.status} message={result.message or '-'}")
+
+
+def _load_params_json(params_json: str | None) -> dict[str, Any] | None:
+	"""把 CLI 输入的 JSON 参数解析成字典。"""
+	if not params_json:
+		return None
+	try:
+		params = json.loads(params_json)
+	except json.JSONDecodeError as exc:
+		raise typer.BadParameter(f"invalid JSON: {exc}") from exc
+	if not isinstance(params, dict):
+		raise typer.BadParameter("params_json must decode to a JSON object")
+	return params
+
+
 def _parse_date(value: str | None) -> date:
 	if not value:
 		return date.today()
@@ -330,6 +352,114 @@ def db_migrate(
 	cfg = _alembic_config(project_root.resolve())
 	command.upgrade(cfg, revision)
 	typer.echo(f"Migrated to: {revision}")
+
+
+@dev_app.command("run-step")
+def dev_run_step(
+	step: str = typer.Argument(..., help="步骤名称: crawl, clean, validate, store, stock_info_update, process, export, cleanup"),
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	max_articles: int | None = typer.Option(None, help="限制处理的文章数量（crawl/clean/validate/store 步骤生效）"),
+	force: bool = typer.Option(False, help="强制重新执行（覆盖已有产物）"),
+	use_db: bool = typer.Option(False, help="Crawl/Clean 阶段使用数据库模式"),
+	new_version: str | None = typer.Option(None, help="使用新版本号重新提取（如 v2, v3）"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""dev 调试入口：执行 pipeline 的某个步骤。"""
+	configure_logging(log_level)
+	result = run_async_with_cleanup(
+		PipelineService().run_pipeline_step(
+			step=step,
+			config_path=config,
+			max_articles=max_articles,
+			force=force,
+			use_db=use_db,
+			new_version=new_version,
+		)
+	)
+	_echo_service_result(result)
+	typer.echo(f"config_path={result.payload.get('config_path', '-')} base_dir={result.payload.get('base_dir', '-')}")
+
+
+@dev_app.command("run-workflow")
+def dev_run_workflow(
+	workflow_id: str = typer.Argument(..., help="工作流 ID"),
+	params_json: str | None = typer.Option(None, "--params-json", help="JSON 格式参数对象"),
+	created_by: str | None = typer.Option(None, "--created-by", help="触发人"),
+	idempotency_key: str | None = typer.Option(None, "--idempotency-key", help="幂等键"),
+	confirmed: bool = typer.Option(False, "--confirmed", help="是否已确认高风险工作流"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""dev 调试入口：按 workflow_id 运行工作流。"""
+	configure_logging(log_level)
+	params = _load_params_json(params_json)
+	result = run_async_with_cleanup(
+		WorkflowService().run_workflow(
+			workflow_id=workflow_id,
+			params=params,
+			created_by=created_by,
+			idempotency_key=idempotency_key,
+			confirmed=confirmed,
+		)
+	)
+	_echo_service_result(result)
+	typer.echo(f"workflow_id={workflow_id}")
+	if result.payload.get("job"):
+		typer.echo(f"job_id={result.payload['job'].get('id', '-')}")
+
+
+@dev_app.command("list-workflows")
+def dev_list_workflows(
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""dev 调试入口：列出工作流定义。"""
+	configure_logging(log_level)
+	result = run_async_with_cleanup(WorkflowService().list_workflows())
+	_echo_service_result(result)
+	typer.echo(f"count={result.payload.get('count', 0)}")
+	for item in result.payload.get("items", []):
+		typer.echo(f"  {item.get('workflow_id', '-')}: {item.get('title', '-')}")
+
+
+@dev_app.command("config-migrate")
+def dev_config_migrate(
+	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	preview: bool = typer.Option(False, help="仅预览迁移，不写入数据库"),
+	profile_id: str | None = typer.Option(None, help="Profile ID（默认使用配置文件名）"),
+	created_by: str = typer.Option("system", help="创建人"),
+	name: str | None = typer.Option(None, help="Profile 名称"),
+	environment: str | None = typer.Option(None, help="Profile 环境"),
+	log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+	"""dev 调试入口：把旧 config_path 迁移为正式 Profile。"""
+	configure_logging(log_level)
+	service = ConfigMigrationService()
+	result = service.preview_migration(
+		config,
+		profile_id=profile_id,
+		created_by=created_by,
+		name=name,
+		environment=environment,
+	)
+	if result.status != "ok":
+		_echo_service_result(result)
+		raise typer.Exit(code=1)
+
+	if preview:
+		_echo_service_result(result)
+		typer.echo(f"profile_id={result.payload.get('profile_id', '-')}")
+		return
+
+	migrated = run_async_with_cleanup(
+		service.migrate_config_path(
+			config,
+			profile_id=profile_id,
+			created_by=created_by,
+			name=name,
+			environment=environment,
+		)
+	)
+	_echo_service_result(migrated)
+	typer.echo(f"profile_id={migrated.payload.get('profile_id', '-')}")
 
 
 @app.command("pipeline-run")
@@ -1301,6 +1431,9 @@ app.add_typer(strategy_app, name="strategy")
 
 # 注册 rule-pool 子命令（NTL-S11-009）
 app.add_typer(rule_pool_app, name="rule-pool")
+
+# 注册 dev 调试命令（正式用户入口已迁移到 Web）
+app.add_typer(dev_app, name="dev")
 
 
 def main() -> None:

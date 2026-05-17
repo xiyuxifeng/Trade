@@ -1647,7 +1647,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S4-002 P0 CLI 正式入口降级
+### [x] NW-V2-S4-002 P0 CLI 正式入口降级
 
 任务目标：CLI 不再作为正式用户入口，只保留 dev 调试能力。
 
@@ -1674,6 +1674,12 @@ UI 关联任务：
 UI 关联任务：
 
 - V2 所有正式工作台任务。
+
+完成情况：
+
+- 已补齐 `dev` 调试命令组：`run-step`、`run-workflow`、`list-workflows`、`config-migrate`。
+- 已将 README 的 CLI 说明收敛为 dev/debug 语义，明确正式用户路径在 Web 工作台。
+- 已补充 CLI 入口测试，确认 `dev` 命令树暴露且现有 CLI 子命令未受影响。
 
 ---
 

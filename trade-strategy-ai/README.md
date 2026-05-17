@@ -11,6 +11,8 @@ trade-strategy-ai 是一个面向“多交易员文章 + 交易记录”的多 A
 3. 强化盘前/盘后总结、考核与反馈闭环。
 4. 兼容第三方大模型 API，提升智能分析能力。
 
+正式用户路径已迁移到 Web 工作台。CLI 仅保留 dev/debug 与本地维护入口，不再作为正式产品入口。
+
 ## 本地安装（无 Docker）
 
 前置：Python 3.11+。
@@ -119,28 +121,34 @@ python -m scripts.web_local start-worker
 
 说明：仓库里涉及的 `config/...`、`data/...`、`logs/...` 相对路径，运行时默认按 `trade-strategy-ai` 项目根目录解析，不依赖当前 shell 所在目录。
 
-## 数据 Pipeline（一键链路）
+## CLI dev/debug（仅供维护）
 
-从真实站点抓取 → 清洗 → 校验 → 入库：
+从真实站点抓取 → 清洗 → 校验 → 入库的调试入口：
 
 ```bash
-python -m cli.main pipeline-run --config config/app.yaml
+python -m cli.main dev run-step crawl --config config/app.yaml
 ```
 
-LLM 抽取 v0（文章抽取已整合到 pipeline-step process 中，未配置 LLM 时会 fallback 并记录 raw_llm_output）：
+单步恢复入口（例如 `process`）：
 
 ```bash
-python -m cli.main pipeline-step process --config config/app.yaml --new-version v1
+python -m cli.main dev run-step process --config config/app.yaml --new-version v1
 ```
 
-从真实抽取数据生成 StyleClusters：
+查看可用工作流定义：
 
 ```bash
-python -m cli.main clusters-build --config config/app.yaml
+python -m cli.main dev list-workflows
 ```
 
-端到端回归（crawl→store→extract→clusters→run-pre-market+HTML）：
+按 workflow_id 运行调试工作流：
 
 ```bash
-python -m cli.main e2e-regression --config config/app.yaml
+python -m cli.main dev run-workflow article_pipeline --params-json '{"config_path":"config/app.yaml"}'
+```
+
+把旧 `config_path` 迁移到正式 Profile：
+
+```bash
+python -m cli.main dev config-migrate --config config/app.yaml
 ```

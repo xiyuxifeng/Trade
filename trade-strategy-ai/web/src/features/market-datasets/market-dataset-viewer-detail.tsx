@@ -64,9 +64,9 @@ export function MarketDatasetViewerDetail({
     ['metadata', 'job_id'],
   );
   const snapshotId = detail?.snapshot?.snapshot_id ?? selectedDataset?.snapshot_id ?? null;
-  const datasetLink = snapshotId ? `/market?snapshot_id=${encodeURIComponent(snapshotId)}` : '/market';
-  const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : '/jobs';
-  const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : '/artifacts';
+  const datasetLink = snapshotId ? `/market?snapshot_id=${encodeURIComponent(snapshotId)}` : null;
+  const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : null;
+  const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : null;
   const warnings = detail?.warnings ?? [];
   const pageTotal = detail?.page.total ?? detail?.items.length ?? 0;
   const storageSource = readNestedString(selectedDataset?.storage_ref, ['source']) ?? 'db';
@@ -114,17 +114,29 @@ export function MarketDatasetViewerDetail({
                 <SummaryItem label="Storage Ref" value={storageSource} />
               </div>
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <Link className="text-sky-700 hover:underline" to={datasetLink}>
-                  前往 Snapshot
-                </Link>
-                <span className="text-slate-400">·</span>
-                <Link className="text-sky-700 hover:underline" to={jobLink}>
-                  前往 Job 详情
-                </Link>
-                <span className="text-slate-400">·</span>
-                <Link className="text-sky-700 hover:underline" to={artifactLink}>
-                  前往产物中心
-                </Link>
+                {datasetLink ? (
+                  <Link className="text-sky-700 hover:underline" to={datasetLink}>
+                    前往 Snapshot
+                  </Link>
+                ) : (
+                  <span className="text-slate-500">暂无 Snapshot 回链</span>
+                )}
+                {jobLink ? (
+                  <>
+                    <span className="text-slate-400">·</span>
+                    <Link className="text-sky-700 hover:underline" to={jobLink}>
+                      前往 Job 详情
+                    </Link>
+                  </>
+                ) : null}
+                {artifactLink ? (
+                  <>
+                    <span className="text-slate-400">·</span>
+                    <Link className="text-sky-700 hover:underline" to={artifactLink}>
+                      前往产物中心
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
 

@@ -10,6 +10,7 @@ from typing import Any, Callable
 from src.services.base import BaseService, ServiceResult
 from src.services.job_runner import JobRunner
 from src.services.job_service import JobService
+from src.services.workflow_run_service import WorkflowRunService
 from src.services.runtime_contracts import (
     ArtifactRef,
     RunContext,
@@ -49,12 +50,15 @@ class WorkflowRunner(BaseService):
         *,
         job_service: JobService | None = None,
         job_runner_factory: Callable[[JobService], JobRunner] | None = None,
+        workflow_run_service_factory: Callable[[], WorkflowRunService] | None = None,
         worker_id: str | None = None,
     ) -> None:
         self._job_service = job_service or JobService()
         self._job_runner_factory = job_runner_factory
+        self._workflow_run_service_factory = workflow_run_service_factory
         self._worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:workflow"
         self._job_runner: JobRunner | None = None
+        self._workflow_run_service: WorkflowRunService | None = None
 
     def _build_job_runner(self) -> JobRunner:
         """延迟构造 JobRunner，便于测试替身注入。"""
@@ -65,6 +69,16 @@ class WorkflowRunner(BaseService):
         else:
             self._job_runner = JobRunner(job_service=self._job_service, worker_id=self._worker_id)
         return self._job_runner
+
+    def _build_workflow_run_service(self) -> WorkflowRunService:
+        """延迟构造 WorkflowRunService，便于测试替身注入。"""
+        if self._workflow_run_service is not None:
+            return self._workflow_run_service
+        if self._workflow_run_service_factory is not None:
+            self._workflow_run_service = self._workflow_run_service_factory()
+        else:
+            self._workflow_run_service = WorkflowRunService()
+        return self._workflow_run_service
 
     def _step_error_type(self, status: str, error: dict[str, Any] | None) -> StepErrorType:
         """把 job 状态和错误内容映射成 StepErrorType。"""
@@ -129,6 +143,7 @@ class WorkflowRunner(BaseService):
         created_by: str | None = None,
         idempotency_key: str | None = None,
         audit_source: dict[str, Any] | None = None,
+        confirmed: bool = False,
     ) -> ServiceResult:
         """顺序执行一个 WorkflowDefinition。"""
         runner = self._build_job_runner()
@@ -185,10 +200,11 @@ class WorkflowRunner(BaseService):
                 "workflow_id": workflow.workflow_id,
                 "workflow_title": getattr(workflow, "title", workflow.workflow_id),
                 "root_job_id": root_job_id,
+                "idempotency_key": idempotency_key,
+                "confirmed": confirmed,
             },
         )
 
-        step_jobs: list[dict[str, Any]] = []
         run_status = "success"
         failure_error: StepError | None = None
 
@@ -221,6 +237,20 @@ class WorkflowRunner(BaseService):
                     metadata={"step_id": step.step_id, "workflow_id": workflow.workflow_id},
                 )
                 workflow_run.errors.append(failure_error)
+                workflow_run.step_results.append(
+                    StepResult(
+                        step_name=step.step_id,
+                        status="failed",
+                        payload={},
+                        artifacts=[],
+                        error=failure_error,
+                        metadata={
+                            "job_id": None,
+                            "job_type": step.required_job_type,
+                            "workflow_step_id": step.step_id,
+                        },
+                    )
+                )
                 break
 
             step_status = self._job_status_to_step_status(str(child_job.get("status") or "success"))
@@ -243,7 +273,6 @@ class WorkflowRunner(BaseService):
             )
             workflow_run.step_results.append(step_result)
             workflow_run.artifacts.extend(artifacts)
-            step_jobs.append(child_job)
 
             if step_status in {"failed", "cancelled"}:
                 run_status = step_status
@@ -284,6 +313,18 @@ class WorkflowRunner(BaseService):
             if fail_result.status == "ok":
                 root_job = fail_result.payload["job"]
 
+        persistence_result = await self._build_workflow_run_service().record_workflow_run(
+            workflow=workflow,
+            workflow_run=workflow_run,
+            confirmed=confirmed,
+            audit_source=audit_source,
+        )
+        payload_warnings: list[str] = []
+        if persistence_result.status != "ok":
+            payload_warnings.extend(persistence_result.warnings or [])
+            if persistence_result.message:
+                payload_warnings.append(persistence_result.message)
+
         payload = {
             "workflow": workflow_summary,
             "workflow_run": workflow_run.model_dump(mode="json"),
@@ -293,6 +334,7 @@ class WorkflowRunner(BaseService):
             "params_path": created_result.payload.get("params_path"),
             "result_path": created_result.payload.get("result_path"),
             "artifacts_path": created_result.payload.get("artifacts_path"),
+            "warnings": payload_warnings,
         }
 
         if run_status == "success":

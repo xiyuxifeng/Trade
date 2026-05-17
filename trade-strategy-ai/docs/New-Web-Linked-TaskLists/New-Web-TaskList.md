@@ -1360,7 +1360,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S2-004-2 P0 Workflow Run DB Storage
+### [x] NW-V2-S2-004-2 P0 Workflow Run DB Storage
 
 任务目标：把 Workflow 的运行实例从“服务层返回结果”升级为“数据库级事实源”，支持运行追踪、恢复、审计和历史查询。该子任务只作为后续收口，不在当前 V2-S2 第一版里强制落地。
 
@@ -1393,6 +1393,14 @@ UI 关联任务：
   - `step_order`
   - `job_id`
   - `job_type`
+
+完成情况：
+
+- 已新增 `workflow_runs`、`workflow_run_steps` 两张表的 ORM 模型与迁移。
+- 已实现 `WorkflowRunRepository` 与 `WorkflowRunService`，支持运行事实源写入、详情查询、列表查询和 step 明细查询。
+- 已在 `WorkflowRunner -> WorkflowService` 真实执行链路中接入持久化回写，保留 best-effort 语义，存储失败时返回 warnings 而不阻断用户运行结果。
+- 已补齐 `/api/ui/v1/workflows/runs`、`/api/ui/v1/workflows/runs/{workflow_run_id}`、`/api/ui/v1/workflows/runs/{workflow_run_id}/steps` 查询 API。
+- 已补齐 repository、service、router、OpenAPI 与 runner 回归测试。
   - `status`
   - `started_at`
   - `finished_at`

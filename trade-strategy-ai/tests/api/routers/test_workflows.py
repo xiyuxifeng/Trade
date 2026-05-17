@@ -10,9 +10,10 @@ from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
-from api.routers.ui.workflows import get_workflow_service
+from api.routers.ui.workflows import get_workflow_run_service, get_workflow_service
 
 _workflow_service_spy: _FakeWorkflowService | None = None
+_workflow_run_service_spy: _FakeWorkflowRunService | None = None
 
 
 @dataclass
@@ -52,6 +53,133 @@ class _FakeWorkflowService:
         )
 
 
+@dataclass
+class _FakeWorkflowRunService:
+    """Workflow run API 单测用的替身。"""
+
+    list_calls: list[dict[str, Any]]
+    detail_calls: list[str]
+    step_calls: list[dict[str, Any]]
+
+    async def list_workflow_runs(self, **kwargs: Any) -> Any:
+        self.list_calls.append(kwargs)
+        return _result(
+            {
+                "filters": {
+                    "workflow_id": kwargs.get("workflow_id"),
+                    "status": kwargs.get("status"),
+                    "created_by": kwargs.get("created_by"),
+                },
+                "page": {"total": 1, "limit": kwargs.get("limit", 50), "offset": kwargs.get("offset", 0), "count": 1},
+                "items": [
+                    {
+                        "id": "run-1",
+                        "workflow_id": "pre-market",
+                        "workflow_title": "盘前工作台",
+                        "workflow_version": "kaipan-run",
+                        "status": "success",
+                        "trigger_source": "ui",
+                        "created_by": "web",
+                        "confirmed": True,
+                        "idempotency_key": "run-1",
+                        "started_at": "2026-05-16T09:30:00+00:00",
+                        "finished_at": "2026-05-16T09:32:00+00:00",
+                        "duration_ms": 120000,
+                        "input_params_json": {"config_path": "config/app.yaml"},
+                        "output_summary_json": {"step_count": 1},
+                        "error_json": None,
+                        "metadata_json": {"workflow_summary": {"workflow_id": "pre-market"}},
+                        "created_at": "2026-05-16T09:30:00+00:00",
+                        "updated_at": "2026-05-16T09:32:00+00:00",
+                    }
+                ],
+            }
+        )
+
+    async def get_workflow_run(self, workflow_run_id: str) -> Any:
+        self.detail_calls.append(workflow_run_id)
+        if workflow_run_id == "run-missing":
+            return _result({"error": {"type": "workflow_run_not_found", "message": "workflow run not found", "detail": workflow_run_id, "metadata": {"workflow_run_id": workflow_run_id}}}, status="partial", message="workflow run not found")
+        return _result(
+            {
+                "workflow_run": {
+                    "id": workflow_run_id,
+                    "workflow_id": "pre-market",
+                    "workflow_title": "盘前工作台",
+                    "workflow_version": "kaipan-run",
+                    "status": "success",
+                    "trigger_source": "ui",
+                    "created_by": "web",
+                    "confirmed": True,
+                    "idempotency_key": "run-1",
+                    "started_at": "2026-05-16T09:30:00+00:00",
+                    "finished_at": "2026-05-16T09:32:00+00:00",
+                    "duration_ms": 120000,
+                    "input_params_json": {"config_path": "config/app.yaml"},
+                    "output_summary_json": {"step_count": 1},
+                    "error_json": None,
+                    "metadata_json": {"workflow_summary": {"workflow_id": "pre-market"}},
+                    "created_at": "2026-05-16T09:30:00+00:00",
+                    "updated_at": "2026-05-16T09:32:00+00:00",
+                },
+                "steps": [
+                    {
+                        "id": "step-1",
+                        "workflow_run_id": workflow_run_id,
+                        "step_id": "run-pre-market",
+                        "step_name": "盘前报表",
+                        "step_order": 1,
+                        "job_id": "job-1",
+                        "job_type": "run-pre-market",
+                        "status": "success",
+                        "started_at": "2026-05-16T09:30:00+00:00",
+                        "finished_at": "2026-05-16T09:31:00+00:00",
+                        "duration_ms": 60000,
+                        "input_json": {"workflow_id": "pre-market"},
+                        "output_json": {"job_type": "run-pre-market"},
+                        "error_json": None,
+                        "artifact_refs_json": [],
+                        "metadata_json": {"workflow_step_id": "run-pre-market"},
+                        "created_at": "2026-05-16T09:30:00+00:00",
+                        "updated_at": "2026-05-16T09:31:00+00:00",
+                    }
+                ],
+                "page": {"total": 1, "limit": 1, "offset": 0, "count": 1},
+            }
+        )
+
+    async def list_workflow_run_steps(self, workflow_run_id: str, **kwargs: Any) -> Any:
+        self.step_calls.append({"workflow_run_id": workflow_run_id, **kwargs})
+        return _result(
+            {
+                "workflow_run_id": workflow_run_id,
+                "page": {"total": 1, "limit": kwargs.get("limit", 200), "offset": kwargs.get("offset", 0), "count": 1},
+                "items": [
+                    {
+                        "id": "step-1",
+                        "workflow_run_id": workflow_run_id,
+                        "step_id": "run-pre-market",
+                        "step_name": "盘前报表",
+                        "step_order": 1,
+                        "job_id": "job-1",
+                        "job_type": "run-pre-market",
+                        "status": "success",
+                        "started_at": "2026-05-16T09:30:00+00:00",
+                        "finished_at": "2026-05-16T09:31:00+00:00",
+                        "duration_ms": 60000,
+                        "input_json": {"workflow_id": "pre-market"},
+                        "output_json": {"job_type": "run-pre-market"},
+                        "error_json": None,
+                        "artifact_refs_json": [],
+                        "metadata_json": {"workflow_step_id": "run-pre-market"},
+                        "created_at": "2026-05-16T09:30:00+00:00",
+                        "updated_at": "2026-05-16T09:31:00+00:00",
+                    }
+                ],
+            }
+        )
+
+
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     from types import SimpleNamespace
 
@@ -62,8 +190,11 @@ def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok")
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
     global _workflow_service_spy
+    global _workflow_run_service_spy
     fake_service = _FakeWorkflowService(run_calls=[])
+    fake_run_service = _FakeWorkflowRunService(list_calls=[], detail_calls=[], step_calls=[])
     _workflow_service_spy = fake_service
+    _workflow_run_service_spy = fake_run_service
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: "test-key"
@@ -75,6 +206,7 @@ async def client() -> AsyncIterator[AsyncClient]:
             api_key="operator-key",
         )
         app.dependency_overrides[get_workflow_service] = lambda: fake_service
+        app.dependency_overrides[get_workflow_run_service] = lambda: fake_run_service
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
@@ -146,3 +278,29 @@ async def test_high_risk_workflow_requires_confirmation(client: AsyncClient) -> 
     )
     assert approved.status_code == 200
     assert approved.json()["workflow"]["workflow_id"] == "init-project"
+
+
+@pytest.mark.asyncio
+async def test_list_and_get_workflow_runs(client: AsyncClient) -> None:
+    """Workflow run 查询 API 应支持列表、详情和 step 明细。"""
+    listed = await client.get("/api/ui/v1/workflows/runs?workflow_id=pre-market&status=success&created_by=web")
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["workflow_id"] == "pre-market"
+    assert _workflow_run_service_spy is not None
+    assert _workflow_run_service_spy.list_calls[0]["workflow_id"] == "pre-market"
+
+    detail = await client.get("/api/ui/v1/workflows/runs/run-1")
+    assert detail.status_code == 200
+    assert detail.json()["workflow_run"]["id"] == "run-1"
+
+    steps = await client.get("/api/ui/v1/workflows/runs/run-1/steps")
+    assert steps.status_code == 200
+    assert steps.json()["items"][0]["step_id"] == "run-pre-market"
+
+
+@pytest.mark.asyncio
+async def test_missing_workflow_run_returns_404(client: AsyncClient) -> None:
+    """不存在的 workflow run 应返回结构化 404。"""
+    response = await client.get("/api/ui/v1/workflows/runs/run-missing")
+    assert response.status_code == 404
+    assert response.json()["detail"]["type"] == "workflow_run_not_found"

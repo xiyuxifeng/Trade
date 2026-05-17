@@ -24,6 +24,7 @@ from src.models import (  # noqa: F401
     job_audit_event,
     raw_article,
     market_regime,
+    workflow_run,
     signal,
     stock_info,
     strong_symbols_snapshot,

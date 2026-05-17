@@ -354,6 +354,7 @@ class WorkflowService(BaseService):
             created_by=created_by,
             idempotency_key=idempotency_key,
             audit_source=audit_source,
+            confirmed=confirmed,
         )
 
 

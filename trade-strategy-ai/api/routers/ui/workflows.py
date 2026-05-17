@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from api.dependencies import CurrentPrincipal, require_role, verify_api_key
+from api.schemas.workflow import WorkflowRunDetailResponse, WorkflowRunListResponse, WorkflowRunStepListResponse
 from src.services.job_service import JobService, get_job_service
+from src.services.workflow_run_service import WorkflowRunService, make_workflow_run_service
 from src.services.workflow_service import WorkflowService, make_workflow_service
 
 
@@ -40,6 +43,46 @@ def get_workflow_service(job_service: JobService = Depends(get_job_service)) -> 
     return make_workflow_service(job_service=job_service)
 
 
+def get_workflow_run_service() -> WorkflowRunService:
+    """获取 WorkflowRunService 实例，便于测试覆盖。"""
+    return make_workflow_run_service()
+
+
+def _structured_error(error_type: str, message: str, detail: str | None = None, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    """构造统一的结构化错误。"""
+    return {
+        "type": error_type,
+        "message": message,
+        "detail": detail,
+        "metadata": metadata or {},
+    }
+
+
+def _raise_run_query_error(result: Any) -> None:
+    """把 workflow run service 的错误映射成 HTTPException。"""
+    error = (result.payload or {}).get("error") if hasattr(result, "payload") else None
+    if not isinstance(error, dict):
+        raise HTTPException(status_code=400, detail=_structured_error("query_failed", result.message or "query failed"))
+
+    error_type = str(error.get("type") or "query_failed")
+    message = str(error.get("message") or result.message or "query failed")
+    status_code = 400
+    if error_type == "workflow_run_not_found":
+        status_code = 404
+    elif error_type == "permission_denied":
+        status_code = 403
+    elif error_type == "invalid_query":
+        status_code = 422
+    elif error_type == "partial_data":
+        status_code = 206
+    elif error_type == "api_unavailable":
+        status_code = 503
+    elif error_type == "empty_data":
+        status_code = 404
+
+    raise HTTPException(status_code=status_code, detail=_structured_error(error_type, message, error.get("detail"), metadata=error.get("metadata") or {}))
+
+
 @router.get("")
 async def list_workflows(
     workflow_service: WorkflowService = Depends(get_workflow_service),
@@ -49,6 +92,61 @@ async def list_workflows(
     result = await workflow_service.list_workflows()
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "workflow listing failed")
+    return result.payload
+
+
+@router.get("/runs", response_model=WorkflowRunListResponse)
+async def list_workflow_runs(
+    workflow_id: str | None = None,
+    status: str | None = None,
+    created_by: str | None = None,
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    workflow_run_service: WorkflowRunService = Depends(get_workflow_run_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 workflow runs 列表。"""
+    result = await workflow_run_service.list_workflow_runs(
+        workflow_id=workflow_id,
+        status=status,
+        created_by=created_by,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status != "ok":
+        _raise_run_query_error(result)
+    return result.payload
+
+
+@router.get("/runs/{workflow_run_id}", response_model=WorkflowRunDetailResponse)
+async def get_workflow_run(
+    workflow_run_id: str,
+    workflow_run_service: WorkflowRunService = Depends(get_workflow_run_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 workflow run 详情。"""
+    result = await workflow_run_service.get_workflow_run(workflow_run_id)
+    if result.status != "ok":
+        _raise_run_query_error(result)
+    return result.payload
+
+
+@router.get("/runs/{workflow_run_id}/steps", response_model=WorkflowRunStepListResponse)
+async def list_workflow_run_steps(
+    workflow_run_id: str,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    workflow_run_service: WorkflowRunService = Depends(get_workflow_run_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 workflow run 的 step 明细。"""
+    result = await workflow_run_service.list_workflow_run_steps(workflow_run_id, limit=limit, offset=offset)
+    if result.status != "ok":
+        _raise_run_query_error(result)
     return result.payload
 
 

@@ -21,6 +21,7 @@ from src.models.signal import Signal
 from src.models.stock_info import StockInfo
 from src.models.job import Job, JobStatus
 from src.models.job_audit_event import JobAuditEvent
+from src.models.workflow_run import WorkflowRun, WorkflowRunStep
 from src.models.step_timeline import JobTimeline, StepTimelineItem, StepTimelineStatus
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.models.trader_memory import TraderMemory
@@ -51,6 +52,8 @@ __all__ = [
     "Job",
     "JobStatus",
     "JobAuditEvent",
+    "WorkflowRun",
+    "WorkflowRunStep",
     "JobTimeline",
     "StepTimelineItem",
     "StepTimelineStatus",

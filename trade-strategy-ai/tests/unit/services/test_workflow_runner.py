@@ -201,6 +201,17 @@ class _FakeJobRunner:
         )
 
 
+@dataclass
+class _FakeWorkflowRunService:
+    """WorkflowRunner 单测用的 WorkflowRunService 替身。"""
+
+    calls: list[dict[str, Any]]
+
+    async def record_workflow_run(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        return _result({"workflow_run": {"id": "run-1"}, "step_count": len(kwargs.get("workflow_run").step_results)})
+
+
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     return SimpleNamespace(status=status, message=message, payload=payload)
 
@@ -316,7 +327,13 @@ def test_workflow_runner_executes_steps_in_order() -> None:
     workflow = _build_workflow()
     job_service = _FakeJobService()
     job_runner = _FakeJobRunner(outcomes={})
-    runner = WorkflowRunner(job_service=job_service, job_runner_factory=lambda _: job_runner, worker_id="runner-1")
+    workflow_run_service = _FakeWorkflowRunService(calls=[])
+    runner = WorkflowRunner(
+        job_service=job_service,
+        job_runner_factory=lambda _: job_runner,
+        workflow_run_service_factory=lambda: workflow_run_service,
+        worker_id="runner-1",
+    )
 
     result = __import__("asyncio").run(
         runner.run_workflow(
@@ -337,6 +354,7 @@ def test_workflow_runner_executes_steps_in_order() -> None:
     assert result.payload["workflow_run"]["run_context"]["status"] == "success"
     assert result.payload["workflow_run"]["step_results"][0]["step_name"] == "crawl"
     assert result.payload["workflow_run"]["step_results"][1]["step_name"] == "pipeline-run"
+    assert workflow_run_service.calls[0]["confirmed"] is False
 
 
 def test_workflow_runner_stops_after_failed_step() -> None:
@@ -378,7 +396,13 @@ def test_workflow_runner_stops_after_failed_step() -> None:
             },
         }
     )
-    runner = WorkflowRunner(job_service=job_service, job_runner_factory=lambda _: job_runner, worker_id="runner-1")
+    workflow_run_service = _FakeWorkflowRunService(calls=[])
+    runner = WorkflowRunner(
+        job_service=job_service,
+        job_runner_factory=lambda _: job_runner,
+        workflow_run_service_factory=lambda: workflow_run_service,
+        worker_id="runner-1",
+    )
 
     result = __import__("asyncio").run(
         runner.run_workflow(
@@ -397,6 +421,7 @@ def test_workflow_runner_stops_after_failed_step() -> None:
     assert result.payload["workflow_run"]["run_context"]["status"] == "failed"
     assert len(result.payload["workflow_run"]["step_results"]) == 2
     assert result.payload["workflow_run"]["errors"][0]["type"] == "system_error"
+    assert workflow_run_service.calls[0]["confirmed"] is False
 
 
 def test_workflow_runner_executes_market_workflow_steps() -> None:
@@ -406,7 +431,13 @@ def test_workflow_runner_executes_market_workflow_steps() -> None:
     workflow = _build_market_workflow()
     job_service = _FakeJobService()
     job_runner = _FakeJobRunner(outcomes={})
-    runner = WorkflowRunner(job_service=job_service, job_runner_factory=lambda _: job_runner, worker_id="runner-1")
+    workflow_run_service = _FakeWorkflowRunService(calls=[])
+    runner = WorkflowRunner(
+        job_service=job_service,
+        job_runner_factory=lambda _: job_runner,
+        workflow_run_service_factory=lambda: workflow_run_service,
+        worker_id="runner-1",
+    )
 
     result = __import__("asyncio").run(
         runner.run_workflow(
@@ -461,3 +492,4 @@ def test_workflow_runner_executes_market_workflow_steps() -> None:
         "market-state-build",
         "snapshot-build",
     ]
+    assert workflow_run_service.calls[0]["confirmed"] is False

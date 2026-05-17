@@ -1621,7 +1621,7 @@ UI 关联任务：
 
 ## Stage V2-S4：正式 UI 与 CLI 降级
 
-### [ ] NW-V2-S4-001 P0 正式 Web 工作台收口
+### [x] NW-V2-S4-001 P0 正式 Web 工作台收口
 
 任务目标：确保 V2 的 Profile、Market、Strategy 有正式 Web 工作台，而不是临时页面堆叠。
 
@@ -1638,6 +1638,12 @@ UI 关联任务：
 - `UI-V2-004 Dashboard 首页`
 - `UI-V2-008 Web UI 错误恢复体验`
 - `UI-V2-009 UI Component Kit`
+
+完成情况：
+
+- 已将 Dashboard 快捷入口补齐为 `Profile / Market / Strategy / Jobs / Artifacts` 的正式入口集合。
+- 已将 Dashboard 的总览失败态与告警失败态统一到共享 `ErrorState`，保持与其他 V2 页面一致的错误恢复语言。
+- 已通过首页回归测试与 `git diff --check` 验证。
 
 ---
 

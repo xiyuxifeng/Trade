@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
+import { ErrorState } from '@/components/state/ErrorState';
 import { useDashboardAlertSummary } from '@/features/dashboard/use-dashboard-alert-summary';
 import type { AlertHistoryItem } from '@/types/alerts';
 
@@ -71,24 +72,18 @@ export function DashboardAlertStrip() {
   if (error) {
     const message = error instanceof ApiError ? error.message : '重点告警加载失败';
     return (
-      <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-slate-900">重点告警</CardTitle>
-            <CardDescription>当前告警摘要接口请求失败。</CardDescription>
-          </div>
-          <button
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50"
-            onClick={() => refetch()}
-            type="button"
-          >
-            {isFetching ? '重试中' : '重试'}
-          </button>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{message}</div>
-        </CardContent>
-      </Card>
+      <ErrorState
+        category="network error"
+        title="重点告警加载失败"
+        description="当前告警摘要接口请求失败。"
+        suggestion="重试后查看告警中心，确认是否已有新的告警记录。"
+        detail={message}
+        retryLabel={isFetching ? '重试中' : '重试'}
+        onRetry={() => {
+          void refetch();
+        }}
+        actions={[{ label: '告警中心', to: '/alerts' }]}
+      />
     );
   }
 
@@ -116,4 +111,3 @@ export function DashboardAlertStrip() {
     </Card>
   );
 }
-

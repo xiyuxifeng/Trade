@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
+import { ErrorState } from '@/components/state/ErrorState';
 import { useRecentArtifacts } from '@/features/artifacts/use-recent-artifacts';
 import { useRecentJobs } from '@/features/jobs/use-recent-jobs';
 import { useDashboardAlertSummary } from '@/features/dashboard/use-dashboard-alert-summary';
@@ -66,23 +67,19 @@ export function DashboardStatusSummary() {
   return (
     <section className="space-y-4">
       {error ? (
-        <Card className="border-rose-200 bg-rose-50 shadow-sm shadow-rose-100/50">
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <CardTitle className="text-rose-800">部分总览数据加载失败</CardTitle>
-              <CardDescription className="text-rose-700">
-                {error instanceof ApiError ? error.message : '系统总览存在部分数据异常。'}
-              </CardDescription>
-            </div>
-            <button
-              className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-50"
-              onClick={() => reloadAll()}
-              type="button"
-            >
-              重试
-            </button>
-          </CardHeader>
-        </Card>
+        <ErrorState
+          category="network error"
+          title="部分总览数据加载失败"
+          description={error instanceof ApiError ? error.message : '系统总览存在部分数据异常。'}
+          suggestion="重新加载总览数据，或先前往任务中心和产物中心确认相关结果是否已经生成。"
+          actions={[
+            { label: '任务中心', to: '/jobs' },
+            { label: '产物中心', to: '/artifacts' },
+          ]}
+          onRetry={() => {
+            void reloadAll();
+          }}
+        />
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -132,6 +129,7 @@ export function DashboardQuickLinks() {
             { label: '任务中心', path: '/jobs' },
             { label: '配置管理', path: '/profiles' },
             { label: '市场数据', path: '/market' },
+            { label: '策略工作台', path: '/strategies' },
             { label: '告警中心', path: '/alerts' },
             { label: '产物中心', path: '/artifacts' },
           ].map((item) => (

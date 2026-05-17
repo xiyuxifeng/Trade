@@ -239,6 +239,7 @@ describe('OverviewPage', () => {
     );
     expect(screen.getByRole('link', { name: '任务中心' })).toHaveAttribute('href', '/jobs');
     expect(screen.getByRole('link', { name: '配置管理' })).toHaveAttribute('href', '/profiles');
+    expect(screen.getByRole('link', { name: '策略工作台' })).toHaveAttribute('href', '/strategies');
   });
 
   it('surfaces empty states from the dashboard panels', () => {

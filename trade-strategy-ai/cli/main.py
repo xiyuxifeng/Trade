@@ -1187,7 +1187,7 @@ def migrate_crawl_state(
 
 @app.command("seed-admin")
 def seed_admin(
-    username: str = typer.Option("admin", help="管理员用户名"),
+    username: str = typer.Option("Dev", help="管理员用户名"),
     password: str = typer.Option("wanghui", help="管理员密码"),
     log_level: str = typer.Option("INFO", help="日志级别"),
 ) -> None:

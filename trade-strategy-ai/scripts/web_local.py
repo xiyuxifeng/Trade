@@ -147,7 +147,7 @@ def migrate() -> None:
 
 @app.command("seed-admin")
 def seed_admin(
-    username: str = typer.Option("admin", help="管理员用户名"),
+    username: str = typer.Option("Dev", help="管理员用户名"),
     password: str = typer.Option("wanghui", help="管理员密码"),
 ) -> None:
     """创建或更新默认管理员用户。"""

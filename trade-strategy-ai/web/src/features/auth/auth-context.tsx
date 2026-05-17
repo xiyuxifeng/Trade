@@ -26,6 +26,7 @@ const anonymousPrincipal: CurrentPrincipal = {
   api_key_label: null,
   authenticated: false,
   source: 'anonymous',
+  username: '',
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);

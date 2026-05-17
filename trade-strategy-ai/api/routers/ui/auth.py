@@ -190,6 +190,7 @@ async def get_current_user(
                 "api_key_label": record["label"],
                 "authenticated": True,
                 "source": "api_key",
+                "username": "",
             }
 
     # 未认证
@@ -198,6 +199,7 @@ async def get_current_user(
         "api_key_label": None,
         "authenticated": False,
         "source": "anonymous",
+        "username": "",
     }
 
 

@@ -275,7 +275,7 @@ docker compose up -d db
 docker compose run --rm api python -m cli.main db-migrate --config config/app.yaml
 
 # 创建默认管理员用户
-docker compose run --rm api python -m cli.main seed-admin --username admin --password wanghui
+docker compose run --rm api python -m cli.main seed-admin --username Dev --password wanghui
 
 # 启动应用、工作进程和 Web 服务
 docker compose up -d api worker web
@@ -285,7 +285,7 @@ docker compose up -d api worker web
 
 ```bash
 python -m cli.main db-migrate --config config/app.yaml
-python -m cli.main seed-admin --username admin --password wanghui
+python -m cli.main seed-admin --username Dev --password wanghui
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 python -m cli.main job-worker-start --config config/app.yaml
 corepack pnpm build
@@ -322,7 +322,7 @@ python -m scripts.web_local start-worker
 
 - `build` 在 `web/` 下执行 `corepack pnpm build`
 - `migrate` 执行数据库迁移
-- `seed-admin` 创建默认管理员用户（admin/wanghui）
+- `seed-admin` 创建默认管理员用户（Dev/wanghui）
 - `start-api` 和 `start` 会要求 `web/dist/index.html` 已存在
 - API 在 `WEB_STATIC_DIR=web/dist` 时直接托管前端静态页面
 - 浏览器访问 `http://localhost:8000` 即可同时使用 Web 页面和 `/api/ui/v1/*`

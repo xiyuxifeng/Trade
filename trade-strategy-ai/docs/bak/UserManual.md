@@ -2,7 +2,7 @@
 # Trade Strategy AI 操作手册
 
 > 适用版本：仓库当前 `pyproject.toml` 中的 `trade-strategy-ai==0.1.0`（以代码为准）。
-> 
+>
 > 本手册面向“第一次接触项目的人”，目标是：**按步骤照做即可跑通**抓取 → 处理 → 盘前日报 → 盘后考核 → 回测/优化 的主链路。
 > 本文档的 CLI 章节按当前 `cli/main.py` 已注册命令整理，包含配置、数据处理、盘前盘后、快照、回测、优化、规则池和调度等全部常用操作入口。
 
@@ -377,7 +377,7 @@ python -m cli.main <command> --help
 
 - `seed-admin`
 	- 说明：创建或更新默认管理员用户（用于 Web 登录认证）
-	- `--username`：管理员用户名（默认 `admin`）
+	- `--username`：管理员用户名（默认 `Dev`）
 	- `--password`：管理员密码（默认 `wanghui`）
 	- `--log-level`：日志级别（默认 `INFO`）
 

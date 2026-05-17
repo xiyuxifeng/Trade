@@ -79,7 +79,7 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
         ))}
       </nav>
 
-      {!collapsed && (
+      {/* {!collapsed && (
         <div className="sidebar-footer">
           <div className="flex flex-wrap items-center gap-2">
             <p>Versioned UI BFF</p>
@@ -94,7 +94,7 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
             </NavLink>
           )}
         </div>
-      )}
+      )} */}
     </aside>
   );
 }

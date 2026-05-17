@@ -30,6 +30,7 @@ export function LoginPage() {
         api_key_label: result.user.display_name || result.user.username,
         authenticated: true,
         source: 'session',
+        username: result.user.username,
       };
       queryClient.setQueryData(['auth', 'me'], principal);
 

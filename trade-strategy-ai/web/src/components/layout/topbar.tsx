@@ -1,6 +1,7 @@
 import { LogOut, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/features/auth/auth-context';
 
 type TopbarProps = {
@@ -31,11 +32,18 @@ export function Topbar({ title, description, onMenuClick }: TopbarProps) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <p className="topbar-description">登出</p>
         {isAuthenticated && (
-          <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="登出">
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>{principal.username || principal.api_key_label || principal.source}</span>
+              <Badge variant={principal.role === 'admin' ? 'success' : principal.role === 'operator' ? 'info' : 'default'}>
+                {principal.role}
+              </Badge>
+            </span>
+            <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="登出">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </>
         )}
       </div>
     </header>

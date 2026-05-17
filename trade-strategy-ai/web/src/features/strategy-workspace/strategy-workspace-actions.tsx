@@ -185,12 +185,13 @@ export function StrategyWorkspaceActions({
         title={selectedAction?.confirmTitle ?? '确认策略任务'}
         description="本操作会通过正式 Job 提交到后端，执行后可在 Job Center、Artifact Center 和 Report Center 查看结果。"
         confirmLabel={mutation.isPending ? '提交中' : '确认提交'}
+        confirmDisabled={mutation.isPending || !selectedAction || !canSubmit}
         cancelLabel="取消"
         onConfirm={() => {
           if (!selectedAction || !canSubmit) {
-            return;
+            return Promise.resolve();
           }
-          void mutation.mutateAsync(selectedAction);
+          return mutation.mutateAsync(selectedAction).then(() => undefined);
         }}
       >
         <div className="grid gap-3 md:grid-cols-2">

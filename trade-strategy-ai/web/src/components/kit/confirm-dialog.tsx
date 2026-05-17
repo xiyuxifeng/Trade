@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -9,7 +10,8 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm?: () => void;
+  confirmDisabled?: boolean;
+  onConfirm?: () => void | Promise<void>;
   children?: ReactNode;
 };
 
@@ -20,9 +22,13 @@ export function ConfirmDialog({
   description,
   confirmLabel = '确认提交',
   cancelLabel = '取消',
+  confirmDisabled = false,
   onConfirm,
   children,
 }: ConfirmDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isConfirmDisabled = confirmDisabled || isSubmitting;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-label={title} className="border-slate-200 bg-white text-slate-950" role="dialog">
@@ -36,9 +42,21 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
-            onClick={() => {
-              onConfirm?.();
-              onOpenChange(false);
+            disabled={isConfirmDisabled}
+            onClick={async () => {
+              if (isConfirmDisabled) {
+                return;
+              }
+
+              setIsSubmitting(true);
+              try {
+                await onConfirm?.();
+                onOpenChange(false);
+              } catch {
+                // Keep the dialog open so the caller can surface the error and the user can retry.
+              } finally {
+                setIsSubmitting(false);
+              }
             }}
           >
             {confirmLabel}

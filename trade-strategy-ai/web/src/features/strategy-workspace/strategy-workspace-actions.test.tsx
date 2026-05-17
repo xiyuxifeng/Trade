@@ -71,6 +71,54 @@ describe('StrategyWorkspaceActions', () => {
     });
   });
 
+  it('keeps the confirm action disabled while a strategy submission is pending', async () => {
+    const user = userEvent.setup();
+    let resolveJob!: (value: unknown) => void;
+
+    mockedCreateJob.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveJob = resolve;
+        }) as never,
+    );
+
+    renderWithRouter(
+      [
+        {
+          path: '/',
+          element: (
+            <StrategyWorkspaceActions
+              configPath="config/strategy-v3.yaml"
+              disabled={false}
+              onSubmitted={() => undefined}
+              profileId="default"
+              profileName="默认配置"
+              snapshotCapturedAt="2026-05-16T08:00:00Z"
+              strategyDate="2026-05-16"
+              traderId="trader_a"
+            />
+          ),
+        },
+      ],
+      ['/'],
+    );
+
+    await user.click(screen.getByRole('button', { name: /构建策略版本/ }));
+    await user.click(screen.getByRole('button', { name: '确认提交' }));
+
+    const pendingButton = await screen.findByRole('button', { name: '提交中' });
+    expect(pendingButton).toBeDisabled();
+
+    await user.click(pendingButton);
+    expect(mockedCreateJob).toHaveBeenCalledTimes(1);
+
+    resolveJob({ created: true, job: { id: 'job-strategy-2' } });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '确认构建策略版本' })).not.toBeInTheDocument();
+    });
+  });
+
   it('submits pre-market jobs with as_of_date derived from the selected strategy date', async () => {
     const user = userEvent.setup();
 

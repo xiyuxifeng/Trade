@@ -59,13 +59,12 @@ const compatibilityNavigationItems: NavItem[] = [
   { label: '运维', path: '/ops', description: '部署与恢复工具', minRole: 'admin' },
 ];
 
-export const navigationGroups: NavGroup[] = [
-  ...formalNavigationGroups,
-  {
-    title: '兼容入口',
-    items: compatibilityNavigationItems,
-  },
-];
+export const navigationGroups: NavGroup[] = [...formalNavigationGroups];
+
+export const compatibilityNavigationGroup: NavGroup = {
+  title: '兼容入口',
+  items: compatibilityNavigationItems,
+};
 
 export const mainNavigation: NavItem[] = formalNavigationGroups.flatMap((group) => group.items);
-export const allNavigationItems: NavItem[] = navigationGroups.flatMap((group) => group.items);
+export const allNavigationItems: NavItem[] = [...mainNavigation, ...compatibilityNavigationItems];

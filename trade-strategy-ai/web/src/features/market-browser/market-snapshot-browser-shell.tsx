@@ -128,11 +128,11 @@ export function MarketSnapshotBrowserShell() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="市场数据"
         title="Market Snapshot Browser"
         description="在 Web 中浏览 Market Snapshot，查看 sections、质量报告和派生特征，而不是切换到调试式任务页。"
-      />
+      /> */}
 
       <div className="flex justify-end">
         <Link

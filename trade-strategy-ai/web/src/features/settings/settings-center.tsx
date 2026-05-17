@@ -389,11 +389,11 @@ export function SettingsCenter() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="系统设置"
         title="配置中心"
         description="查看受掩码保护的运行时配置，编辑目标部分，预览差异结构，并管理系统备份。"
-      />
+      /> */}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
         <Card>

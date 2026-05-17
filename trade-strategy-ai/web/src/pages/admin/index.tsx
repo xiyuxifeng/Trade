@@ -23,11 +23,11 @@ export function AdminPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="配置与管理"
         title="管理中心"
         description="将用户管理和运维恢复能力收束到正式入口，避免继续把它们散落在多个临时页面里。"
-      />
+      /> */}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">

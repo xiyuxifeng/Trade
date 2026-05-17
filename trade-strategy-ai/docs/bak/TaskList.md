@@ -2261,4 +2261,23 @@ cli backup, web backup 是否备份了所有的必要数据
 8. 新增UI风格是否一致
 
 
-V1 阶段的完成状态整理成一个简短的收尾摘要
+Review v2相关的所有任务，根据两份TaskList，结合 New-Web-Current-State-Audit， New-Web-Migration-Matrix，New-Web-UI-Routing，进行分析：
+1. 达到V2的交付目标
+2. 每个任务都满足任务的实现要求和验收标准
+3.   每个任务都是完成状态并且有代码支持，不是错误标记
+4. 符合New-Web-TaskList## 0. 执行方式总则，## 2. AI Implementation Rules
+5. 满足New-Web-UI-TaskList## 0. 执行关系，## 1. AI UI Implementation Rules
+6. 满足### 0.4 单一入口与退役原则
+7. 任务没有错漏和bug, 任务之间可以正常联通没有断层
+如果有问题，直接修复相关问题和文档，并提交代码
+
+
+推进 UI-V2-006, 注意1. 项目目标是“面向最终交付的重构”的Web项目，不是继续堆Demo功能强化CLI命令 2.关注## 0. 执行方式总则 3. 任务目标和验收标准 4.UI和UI-V2-002一致
+
+
+V2完成 ？ V3 完成？
+1.UI Component Kit 适配 V1 UI
+2. 更新整体主题UI
+3. V1的UI 风格 保持和V2一致
+V3完成后再做？ 可以知道哪些页面是V1的，到时候看看是否需要更改UI页面 ？？？
+确认哪些数据是生成到文件 哪些是数据库

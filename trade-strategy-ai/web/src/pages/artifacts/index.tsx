@@ -177,11 +177,11 @@ export function ArtifactsPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="正式工作台"
         title="产物中心"
         description="跨 Job 检索、预览和下载正式产物。"
-      />
+      /> */}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">

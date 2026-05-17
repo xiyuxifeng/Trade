@@ -7,11 +7,11 @@ import { DashboardRecentJobsPanel } from '@/components/dashboard/dashboard-recen
 export function OverviewRoute() {
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="概览"
         title="运维总览"
         description="系统状态优先的正式工作台入口。"
-      />
+      /> */}
 
       <section className="space-y-4">
         <DashboardStatusSummary />

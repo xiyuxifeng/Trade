@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils';
 
 type PageHeaderProps = {
   kicker?: string;
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   actionLabel?: string;
   onAction?: () => void;
   className?: string;
@@ -23,8 +23,8 @@ export function PageHeader({
     <header className={cn('page-header', className)}>
       <div className="page-header-copy">
         {kicker ? <Badge variant="info">{kicker}</Badge> : null}
-        <h1>{title}</h1>
-        <p>{description}</p>
+        {title ? <h1>{title}</h1> : null}
+        {description ? <p>{description}</p> : null}
       </div>
       {actionLabel && onAction ? (
         <Button variant="outline" onClick={onAction}>

@@ -66,11 +66,11 @@ export function JobListPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="任务"
         title="任务列表"
         description="查看最近的任务记录，按状态、任务类型和创建者筛选，并跳转到任务详情。"
-      />
+      /> */}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <Card>

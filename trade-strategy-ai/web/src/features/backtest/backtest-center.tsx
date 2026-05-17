@@ -291,9 +291,9 @@ export function BacktestCenter() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="正式入口"
-        title="回测中心"
-        description="运行回测、查看最近结果、复核报告和可复现性。"
+        // kicker="正式入口"
+        // title="回测中心"
+        // description="运行回测、查看最近结果、复核报告和可复现性。"
         actionLabel="打开任务中心"
         onAction={() => navigate('/jobs')}
       />

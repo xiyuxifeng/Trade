@@ -245,11 +245,11 @@ export function StrategyWorkspaceShell() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="正式入口"
         title="策略工作台"
         description="在 Web 中构建策略版本、运行盘前和盘后任务，并通过 Job、Artifact 和 Report 解释结果。"
-      />
+      /> */}
 
       {submissionMessage ? (
         <section className="rounded-[28px] border border-sky-200 bg-sky-50 px-6 py-4 text-sky-900 shadow-sm">

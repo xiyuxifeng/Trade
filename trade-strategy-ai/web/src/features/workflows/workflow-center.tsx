@@ -208,11 +208,11 @@ export function WorkflowCenter() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="工作流"
         title="引导式操作"
         description="将操作手册流程映射为引导式控制台，提供深度链接、步骤检查和预填运行表单。"
-      />
+      /> */}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.4fr)]">
         <Card>

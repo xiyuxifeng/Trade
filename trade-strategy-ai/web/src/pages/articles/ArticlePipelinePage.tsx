@@ -209,11 +209,11 @@ export function ArticlePipelinePage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
+      {/* <PageHeader
         kicker="文章"
         title="Article Pipeline"
         description="通过 Web 触发 article_pipeline，检查参数约束，查看最近运行记录，并直接跳到 Job Detail。"
-      />
+      /> */}
 
       {submitMessage ? (
         <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">{submitMessage}</div>

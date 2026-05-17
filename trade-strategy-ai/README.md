@@ -144,7 +144,7 @@ python -m cli.main dev list-workflows
 按 workflow_id 运行调试工作流：
 
 ```bash
-python -m cli.main dev run-workflow article_pipeline --params-json '{"config_path":"config/app.yaml"}'
+python -m cli.main dev run-workflow pipeline --params-json '{"config_path":"config/app.yaml"}'
 ```
 
 把旧 `config_path` 迁移到正式 Profile：

@@ -229,6 +229,13 @@ def _echo_service_result(result) -> None:
 	typer.echo(f"status={result.status} message={result.message or '-'}")
 
 
+def _echo_service_result_or_exit(result) -> None:
+	"""输出 ServiceResult 摘要，非 ok 时以非零退出。"""
+	_echo_service_result(result)
+	if getattr(result, "status", None) != "ok":
+		raise typer.Exit(code=1)
+
+
 def _load_params_json(params_json: str | None) -> dict[str, Any] | None:
 	"""把 CLI 输入的 JSON 参数解析成字典。"""
 	if not params_json:
@@ -376,7 +383,7 @@ def dev_run_step(
 			new_version=new_version,
 		)
 	)
-	_echo_service_result(result)
+	_echo_service_result_or_exit(result)
 	typer.echo(f"config_path={result.payload.get('config_path', '-')} base_dir={result.payload.get('base_dir', '-')}")
 
 
@@ -401,7 +408,7 @@ def dev_run_workflow(
 			confirmed=confirmed,
 		)
 	)
-	_echo_service_result(result)
+	_echo_service_result_or_exit(result)
 	typer.echo(f"workflow_id={workflow_id}")
 	if result.payload.get("job"):
 		typer.echo(f"job_id={result.payload['job'].get('id', '-')}")
@@ -458,7 +465,7 @@ def dev_config_migrate(
 			environment=environment,
 		)
 	)
-	_echo_service_result(migrated)
+	_echo_service_result_or_exit(migrated)
 	typer.echo(f"profile_id={migrated.payload.get('profile_id', '-')}")
 
 

@@ -18,6 +18,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '工作流', path: '/workflows/:workflowId/run', description: '基于用户手册的引导流程', kind: 'canonical' },
   { label: '文章', path: '/articles', description: '文章处理链路的验收入口', kind: 'canonical' },
   { label: '市场数据', path: '/market', description: '市场快照浏览器', kind: 'canonical' },
+  { label: '市场数据集', path: '/market/datasets', description: '市场数据集浏览器', kind: 'canonical' },
   { label: '策略', path: '/strategies', description: '策略版本与正式工作台入口', kind: 'canonical' },
   { label: '回测', path: '/backtest', description: '回测能力预留入口', kind: 'canonical' },
   { label: '规则池', path: '/rule-pool', description: '规则池能力预留入口', kind: 'canonical' },

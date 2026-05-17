@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
@@ -121,6 +121,7 @@ export function MarketSnapshotBrowserShell() {
   });
 
   const listErrorState = snapshotsQuery.error ? buildErrorRecoveryState(snapshotsQuery.error, 'market') : null;
+  const datasetViewerLink = `/market/datasets?trade_date=${encodeURIComponent(tradeDate)}&market=${encodeURIComponent(market)}`;
 
   const selectedDetail: MarketSnapshotDetailResponse | null = detail;
   const detailError = detailQuery.error;
@@ -132,6 +133,15 @@ export function MarketSnapshotBrowserShell() {
         title="Market Snapshot Browser"
         description="在 Web 中浏览 Market Snapshot，查看 sections、质量报告和派生特征，而不是切换到调试式任务页。"
       />
+
+      <div className="flex justify-end">
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+          to={datasetViewerLink}
+        >
+          查看数据集
+        </Link>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="space-y-4">

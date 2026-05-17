@@ -1340,7 +1340,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 ---
 
-### [ ] UI-V2-011 P0 Market Dataset Viewer
+### [x] UI-V2-011 P0 Market Dataset Viewer
 
 任务目标：让用户查看 DB 中的市场数据集摘要和样本，支撑外部系统接入前的人工验证。
 
@@ -1351,9 +1351,15 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 允许修改：
 
-- `web/src/pages/market/MarketDatasetViewerPage.*`
-- `web/src/components/market/*`
-- `web/src/api/market.ts`
+- `web/src/pages/market/datasets/index.tsx`
+- `web/src/features/market-datasets/*`
+- `web/src/app/router.tsx`
+- `web/src/app/route-registry.ts`
+- `web/src/app/navigation.ts`
+- `web/src/features/market-browser/market-snapshot-browser-shell.tsx`
+- `web/src/pages/market/index.test.tsx`
+- `web/src/pages/market/datasets/index.test.tsx`
+- `web/src/lib/api/market.ts`
 - `web/src/types/market.ts`
 
 禁止修改：
@@ -1387,6 +1393,16 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 - 大数据集不会一次性全量加载。
 - 数据集能回溯到 snapshot_id。
 - 页面不暴露服务器绝对路径。
+
+完成情况：
+
+- 已新增独立 canonical 路由 `/market/datasets`，并在 `/market` 页面提供跳转入口。
+- 已实现数据集目录、详情面板、分页样本和 sample-row 本地过滤。
+- 已接入 dataset metadata、snapshot 回链、Job / Artifact 回链与共享错误恢复组件。
+- 已补充并通过前端测试：
+  - `web/src/app/route-registry.test.ts`
+  - `web/src/pages/market/index.test.tsx`
+  - `web/src/pages/market/datasets/index.test.tsx`
 
 ---
 

@@ -27,6 +27,7 @@
 - 工作流
 - 文章
 - 市场数据
+- 数据集
 - 策略
 - 回测
 - 规则池
@@ -62,6 +63,7 @@
 | `/workflows/:workflowId/run` | Workflow 运行入口 | 正式 |
 | `/articles` | article_pipeline 验收入口 | 正式 |
 | `/market` | 市场快照浏览器 | 正式 |
+| `/market/datasets` | 市场数据集浏览器 | 正式 |
 | `/strategies` | 策略工作台 | 正式 |
 | `/backtest` | 回测占位入口 | 预留 |
 | `/rule-pool` | 规则池占位入口 | 预留 |

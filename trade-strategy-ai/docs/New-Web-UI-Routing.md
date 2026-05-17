@@ -28,6 +28,7 @@
 | `/workflows/:workflowId/run` | Workflow 运行入口。 |
 | `/articles` | article_pipeline 验收入口。 |
 | `/market` | 市场快照浏览器。 |
+| `/market/datasets` | 市场数据集浏览器。 |
 | `/strategies` | 策略工作台。 |
 | `/backtest` | 回测占位入口。 |
 | `/rule-pool` | 规则池占位入口。 |

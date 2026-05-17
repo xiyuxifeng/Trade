@@ -153,6 +153,10 @@ describe('MarketPage', () => {
       expect(screen.queryByText('正在加载快照详情')).not.toBeInTheDocument();
     });
     expect(screen.getAllByText('snap-001').length).toBeGreaterThan(1);
+    expect(screen.getByRole('link', { name: '查看数据集' })).toHaveAttribute(
+      'href',
+      '/market/datasets?trade_date=2026-05-16&market=CN',
+    );
     expect(await screen.findByText('质量报告')).toBeInTheDocument();
     expect(screen.getByText('趋势特征')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '前往 Job 详情' })).toHaveAttribute('href', '/jobs/job-001');

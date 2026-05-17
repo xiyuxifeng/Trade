@@ -16,6 +16,7 @@ import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
 import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
 import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
 import { MarketPage } from '@/pages/market';
+import { MarketDatasetPage } from '@/pages/market/datasets';
 import { MarketStatePage } from '@/pages/market-state';
 import { PersonaPage } from '@/pages/persona';
 import { OpsPage } from '@/pages/ops';
@@ -136,6 +137,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'market',
         element: <MarketPage />,
+      },
+      {
+        path: 'market/datasets',
+        element: <MarketDatasetPage />,
       },
       {
         path: 'strategies',

@@ -287,6 +287,72 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
     asyncio.run(engine.dispose())
 
 
+def test_submit_candidate_review_binds_review_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """candidate-review 应通过默认 handler 执行并绑定审核产物。"""
+
+    from src.services import job_runner as job_runner_module
+
+    class _FakeOptimizeService:
+        async def review_candidate(
+            self,
+            *,
+            candidate_version_id: str,
+            decision: str,
+            reviewed_by: str = "web",
+            force: bool = False,
+        ) -> Any:
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="candidate reviewed",
+                payload={
+                    "candidate_version_id": candidate_version_id,
+                    "decision": decision,
+                    "review_status": "released" if decision == "approve" else "draft",
+                    "reviewed_by": reviewed_by,
+                    "force": force,
+                    "candidate": {
+                        "version_id": candidate_version_id,
+                        "status": "released" if decision == "approve" else "draft",
+                    },
+                    "report": "# Candidate Review Report\n",
+                    "audit_log": {
+                        "candidate_version_id": candidate_version_id,
+                        "decision": decision,
+                        "reviewed_by": reviewed_by,
+                        "force": force,
+                        "review_status": "released" if decision == "approve" else "draft",
+                    },
+                },
+            )
+
+    monkeypatch.setattr(job_runner_module, "OptimizeService", _FakeOptimizeService)
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="candidate-review",
+            params={
+                "candidate_version_id": "candidate-001",
+                "decision": "approve",
+                "reviewed_by": "web",
+                "force": True,
+            },
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    executed = asyncio.run(runner.execute_job(job_id=job_id))
+    loaded = asyncio.run(job_service.get_job(job_id))
+    artifact_kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
+
+    assert executed.status == "ok"
+    assert loaded.payload["job"]["status"] == "success"
+    assert "review-report-markdown" in artifact_kinds
+    assert "audit-log-json" in artifact_kinds
+    assert (tmp_path / "jobs" / job_id / "candidate_review_report.md").exists()
+    assert (tmp_path / "jobs" / job_id / "candidate_review_audit.json").exists()
+    asyncio.run(engine.dispose())
+
+
 def test_submit_backtest_run_binds_report_and_csv_artifacts(tmp_path: Path) -> None:
     """backtest-run 应通过默认 handler 执行并绑定报告与 CSV 产物。"""
     fake_backtest_service = _FakeBacktestService()

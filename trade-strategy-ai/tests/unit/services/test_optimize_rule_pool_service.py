@@ -185,6 +185,65 @@ def test_optimize_service_db_candidate_flow(tmp_path: Path) -> None:
     assert result.payload["candidate"]["version_type"] == "candidate"
 
 
+def test_optimize_service_reviews_candidate_version(tmp_path: Path) -> None:
+    """OptimizeService 应能把候选审核回写到策略库。"""
+    from src.services.optimize_service import OptimizeService
+    from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus, StrategyVersionType
+
+    class _FakeStrategyService:
+        def __init__(self) -> None:
+            self.saved: list[StrategyVersion] = []
+
+        async def get_version(self, session, version_id: str):
+            del session, version_id
+            return StrategyVersion(
+                version_id="trader_a_2026-04-01_candidate_12345678",
+                trader_id="trader_a",
+                strategy_date=date(2026, 4, 1),
+                status=StrategyVersionStatus.draft,
+                version_type=StrategyVersionType.candidate,
+                parent_version_id="released-001",
+                recommendations=[StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.8)],
+                source_article_ids=["article-1"],
+                evidence_refs=["evidence-1"],
+                notes="seed notes",
+                released_at=None,
+                rules_snapshot=[{"rule_id": "rule-001"}],
+            )
+
+        async def save_version(self, session, version: StrategyVersion):
+            del session
+            self.saved.append(version)
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def commit(self):
+            return None
+
+    service = OptimizeService(
+        strategy_service_factory=_FakeStrategyService,
+        session_scope_factory=lambda: _FakeSession(),
+    )
+    result = asyncio.run(
+        service.review_candidate(
+            candidate_version_id="trader_a_2026-04-01_candidate_12345678",
+            decision="approve",
+            reviewed_by="web",
+            force=True,
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.payload["review_status"] == "released"
+    assert result.payload["candidate"]["status"] == "released"
+    assert "reviewed_by=web" in result.payload["candidate"]["notes"]
+
+
 def test_rule_pool_service_lists_shows_and_reviews_rules() -> None:
     """RulePoolService 应支持查询和审核。"""
     from src.services.rule_pool_service import RulePoolService

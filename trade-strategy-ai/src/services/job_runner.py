@@ -25,6 +25,7 @@ from src.services.job_registry import (
 from src.services.job_service import JobService
 from src.services.pipeline_service import PipelineService
 from src.services.market_service import MarketService
+from src.services.optimize_service import OptimizeService
 from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
 from src.services.snapshot_service import SnapshotService
@@ -262,6 +263,15 @@ class JobRunner(BaseService):
                 scoring_profile=str(params.get("scoring_profile") or "stage5"),
             )
 
+        async def _candidate_review(params: dict[str, Any]) -> ServiceResult:
+            service = OptimizeService()
+            return await service.review_candidate(
+                candidate_version_id=str(params.get("candidate_version_id") or ""),
+                decision=str(params.get("decision") or "pending"),
+                reviewed_by=str(params.get("reviewed_by") or "web"),
+                force=_parse_bool(params.get("force"), default=False),
+            )
+
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
             manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
             service = RunService(manager)
@@ -318,6 +328,7 @@ class JobRunner(BaseService):
             "backtest-run": _backtest_run,
             "backtest-validate-rules": _backtest_validate_rules,
             "backtest-reproducibility-check": _backtest_reproducibility_check,
+            "candidate-review": _candidate_review,
         }
 
     def _classify_error(self, *, job_type: str, message: str, payload: dict[str, Any] | None = None) -> tuple[str, str | None, bool]:
@@ -381,6 +392,14 @@ class JobRunner(BaseService):
             report_path = job_dir / "backtest_validation_report.md"
             report_path.write_text(str(payload["report"]), encoding="utf-8")
             artifact_specs.append(("validation-report-markdown", "规则验真报告", report_path))
+        if job_type == "candidate-review" and "report" in payload:
+            report_path = job_dir / "candidate_review_report.md"
+            report_path.write_text(str(payload["report"]), encoding="utf-8")
+            artifact_specs.append(("review-report-markdown", "候选审核报告", report_path))
+        if job_type == "candidate-review" and "audit_log" in payload:
+            audit_path = job_dir / "candidate_review_audit.json"
+            audit_path.write_text(json.dumps(payload["audit_log"], ensure_ascii=False, indent=2), encoding="utf-8")
+            artifact_specs.append(("audit-log-json", "候选审核审计", audit_path))
 
         for kind, title, path in artifact_specs:
             await self._job_service.bind_artifact(

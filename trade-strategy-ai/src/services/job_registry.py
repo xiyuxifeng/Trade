@@ -781,7 +781,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="optimize-review",
         requires_confirmation=True,
-        runnable=False,
+        runnable=True,
         description="审核候选策略版本并写入审计结果。",
         param_schema=_schema(
             "候选版本审核参数",

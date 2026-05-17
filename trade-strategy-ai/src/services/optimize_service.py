@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, is_dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
@@ -233,3 +233,94 @@ class OptimizeService(BaseService):
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return ServiceResult(status="ok", message="candidate version created", payload=payload)
+
+    async def review_candidate(
+        self,
+        *,
+        candidate_version_id: str,
+        decision: str,
+        reviewed_by: str = "web",
+        force: bool = False,
+    ) -> ServiceResult:
+        """审核候选版本并写回策略库。"""
+        decision_map = {
+            "approve": StrategyVersionStatus.released,
+            "reject": StrategyVersionStatus.archived,
+            "pending": StrategyVersionStatus.draft,
+        }
+        if decision not in decision_map:
+            raise ValueError("invalid decision")
+
+        if self._strategy_service_factory is None or self._session_scope_factory is None:
+            from src.db.session import session_scope
+            from src.strategy_library.service import StrategyLibraryService
+
+            self._session_scope_factory = session_scope
+            self._strategy_service_factory = StrategyLibraryService
+
+        strategy_service = self._strategy_service_factory()
+
+        async with self._session_scope_factory() as session:
+            candidate = await strategy_service.get_version(session=session, version_id=candidate_version_id)
+            if candidate is None:
+                raise ValueError(f"未找到候选版本: {candidate_version_id}")
+            if candidate.version_type != StrategyVersionType.candidate:
+                raise ValueError(f"不是候选版本: {candidate_version_id}")
+
+            review_status = decision_map[decision]
+            review_note = (
+                f"[review] decision={decision} reviewed_by={reviewed_by} "
+                f"at={datetime.now(UTC).isoformat()} force={force}"
+            )
+            notes = candidate.notes or ""
+            if notes:
+                notes = f"{notes}\n{review_note}"
+            else:
+                notes = review_note
+
+            updated = StrategyVersion(
+                version_id=candidate.version_id,
+                trader_id=candidate.trader_id,
+                strategy_date=candidate.strategy_date,
+                status=review_status,
+                version_type=candidate.version_type,
+                parent_version_id=candidate.parent_version_id,
+                recommendations=candidate.recommendations,
+                source_article_ids=candidate.source_article_ids,
+                evidence_refs=candidate.evidence_refs,
+                notes=notes,
+                released_at=datetime.now(UTC) if review_status == StrategyVersionStatus.released else candidate.released_at,
+                rules_snapshot=candidate.rules_snapshot,
+            )
+            await strategy_service.save_version(session=session, version=updated)
+            await session.commit()
+
+        review_report = [
+            f"# Candidate Review Report",
+            "",
+            f"- candidate_version_id: {candidate_version_id}",
+            f"- decision: {decision}",
+            f"- reviewed_by: {reviewed_by}",
+            f"- force: {force}",
+            f"- result_status: {review_status.value}",
+        ]
+        return ServiceResult(
+            status="ok",
+            message="candidate reviewed",
+            payload={
+                "candidate_version_id": candidate_version_id,
+                "decision": decision,
+                "review_status": review_status.value,
+                "reviewed_by": reviewed_by,
+                "force": force,
+                "candidate": _to_plain(updated),
+                "report": "\n".join(review_report),
+                "audit_log": {
+                    "candidate_version_id": candidate_version_id,
+                    "decision": decision,
+                    "reviewed_by": reviewed_by,
+                    "force": force,
+                    "review_status": review_status.value,
+                },
+            },
+        )

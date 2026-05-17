@@ -65,6 +65,7 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
         "backtest-run",
         "backtest-validate-rules",
         "backtest-reproducibility-check",
+        "candidate-review",
         "kaipan-fetch",
         "kaipan-normalize",
         "kaipan-run",

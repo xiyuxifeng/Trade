@@ -235,6 +235,8 @@ export function StrategyWorkspaceCandidate({
       onReviewSubmitted?.(result.job.id);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       await queryClient.invalidateQueries({ queryKey: ['strategy-workspace', 'candidate-versions'] });
+      await queryClient.invalidateQueries({ queryKey: ['strategy-workspace', 'candidate-detail', selectedCandidateIdResolved] });
+      await queryClient.invalidateQueries({ queryKey: ['strategy-workspace', 'candidate-artifacts', traderId, selectedCandidateIdResolved] });
     },
     onError: (error) => {
       setStatusMessage(null);

@@ -14,6 +14,8 @@ import { useAuth } from '@/features/auth/auth-context';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { getJobAuditDetail, listJobAudits } from '@/lib/api/job-audits';
 import type { JobAuditListItem } from '@/types/job-audits';
+import { listPermissionDeniedLogs } from '@/lib/api/security-audits';
+import type { PermissionDeniedLogItem } from '@/types/security-audits';
 
 function buildSearchParams(base: URLSearchParams, patch: Record<string, string | null | undefined>) {
   const next = new URLSearchParams(base);
@@ -40,6 +42,21 @@ function AuditSummaryCard({ label, value }: { label: string; value: string | num
       <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
     </div>
   );
+}
+
+function renderPermissionDeniedDetail(item: PermissionDeniedLogItem) {
+  const detail = item.request_context.response.detail;
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (detail === null || detail === undefined) {
+    return '未记录';
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return '未记录';
+  }
 }
 
 function EventTableRow({
@@ -135,6 +152,19 @@ export function AdminAuditWorkspace() {
   });
 
   const detail = detailQuery.data ?? null;
+  const permissionDeniedQuery = useQuery({
+    queryKey: ['permission-denied-logs', startDate, endDate],
+    queryFn: () =>
+      listPermissionDeniedLogs({
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        skip: 0,
+        limit: 20,
+      }),
+    enabled: canManage,
+    staleTime: 30_000,
+  });
+  const permissionDeniedItems = permissionDeniedQuery.data?.items ?? [];
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -203,6 +233,7 @@ export function AdminAuditWorkspace() {
           onClick={() => {
             listQuery.refetch();
             detailQuery.refetch();
+            permissionDeniedQuery.refetch();
           }}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -358,11 +389,11 @@ export function AdminAuditWorkspace() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                        {auditItems.map((item) => (
-                          <EventTableRow
-                            key={item.id}
-                            item={item}
-                            selected={item.job_id === selectedJobId}
+                {auditItems.map((item) => (
+                  <EventTableRow
+                    key={item.id}
+                    item={item}
+                    selected={item.job_id === selectedJobId}
                     onSelect={(nextJobId) => {
                       setSearchParams(
                         buildSearchParams(searchParams, {
@@ -438,11 +469,11 @@ export function AdminAuditWorkspace() {
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">审计轨迹</p>
-                    <h3 className="mt-1 text-lg font-semibold text-slate-950">事件列表</h3>
-                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">审计轨迹</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-950">事件列表</h3>
+                    </div>
                     <Link className="text-sm font-medium text-sky-700 hover:underline" to={`/jobs/${detail.job.id}`}>
                       打开 Job 详情
                     </Link>
@@ -543,6 +574,79 @@ export function AdminAuditWorkspace() {
           <EmptyState
             title="暂无审计详情"
             description="先从上面的审计列表选择一个 Job。"
+          />
+        )}
+      </SectionCard>
+
+      <SectionCard title="权限拒绝日志" description="记录所有 403 请求，保持和任务与 UI 的验收标准一致。">
+        {permissionDeniedQuery.isLoading ? (
+          <LoadingState label="正在加载权限拒绝日志" description="正在获取 403 访问记录。" />
+        ) : permissionDeniedQuery.error ? (
+          <ErrorState
+            {...buildErrorRecoveryState(permissionDeniedQuery.error, 'admin-audit')}
+            onRetry={() => {
+              void permissionDeniedQuery.refetch();
+            }}
+          />
+        ) : permissionDeniedItems.length ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <AuditSummaryCard label="403 日志" value={permissionDeniedQuery.data?.summary.total ?? 0} />
+              <AuditSummaryCard label="受影响 Actor" value={permissionDeniedQuery.data?.summary.unique_actors ?? 0} />
+              <AuditSummaryCard label="受影响路径" value={permissionDeniedQuery.data?.summary.unique_paths ?? 0} />
+            </div>
+            <div className="overflow-auto rounded-2xl border border-slate-200">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>时间</TableHead>
+                    <TableHead>Actor</TableHead>
+                    <TableHead>来源</TableHead>
+                    <TableHead>请求</TableHead>
+                    <TableHead>原因</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {permissionDeniedItems.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-slate-50">
+                      <TableCell className="whitespace-nowrap text-slate-700">{formatTimestamp(item.event_at)}</TableCell>
+                      <TableCell className="text-slate-700">
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-950">{item.actor}</p>
+                          <p className="text-xs text-slate-500">
+                            {item.request_context.principal.api_key_label ?? item.request_context.principal.role ?? '未记录'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-slate-700">
+                        <div className="space-y-1">
+                          <Badge variant="info">{item.source}</Badge>
+                          <p className="text-xs text-slate-500">{item.request_context.principal.source ?? '未记录'}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-slate-700">
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-950">{item.request_context.request.method ?? '未知方法'}</p>
+                          <p className="text-xs text-slate-500">{item.request_context.request.path ?? item.entity_id ?? '未记录'}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[24rem] text-slate-700">
+                        <p className="line-clamp-2 text-sm">{renderPermissionDeniedDetail(item)}</p>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            title="没有权限拒绝日志"
+            description="当前筛选条件下没有 403 访问记录。"
+            actionLabel="清空筛选"
+            onAction={() => {
+              setSearchParams(new URLSearchParams());
+            }}
           />
         )}
       </SectionCard>

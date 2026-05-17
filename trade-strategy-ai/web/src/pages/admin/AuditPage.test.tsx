@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { ApiError } from '@/lib/api/http';
 import { getJobAuditDetail, listJobAudits } from '@/lib/api/job-audits';
+import { listPermissionDeniedLogs } from '@/lib/api/security-audits';
 import { renderWithRouter } from '@/test/test-utils';
 import { AdminAuditPage } from './AuditPage';
 
@@ -10,8 +11,13 @@ vi.mock('@/lib/api/job-audits', () => ({
   listJobAudits: vi.fn(),
 }));
 
+vi.mock('@/lib/api/security-audits', () => ({
+  listPermissionDeniedLogs: vi.fn(),
+}));
+
 const mockedListJobAudits = vi.mocked(listJobAudits);
 const mockedGetJobAuditDetail = vi.mocked(getJobAuditDetail);
+const mockedListPermissionDeniedLogs = vi.mocked(listPermissionDeniedLogs);
 
 describe('AdminAuditPage', () => {
   it('renders audit list and job detail for admin principals', async () => {
@@ -116,6 +122,50 @@ describe('AdminAuditPage', () => {
         },
       ],
     });
+    mockedListPermissionDeniedLogs.mockResolvedValue({
+      filters: {
+        actor: null,
+        source: null,
+        path: null,
+        start_date: null,
+        end_date: null,
+      },
+      summary: {
+        total: 1,
+        unique_actors: 1,
+        unique_paths: 1,
+        source_counts: { ui: 1 },
+      },
+      page: { total: 1, skip: 0, limit: 20, count: 1 },
+      items: [
+        {
+          id: 'audit-403',
+          event_type: 'permission_denied',
+          actor: 'viewer',
+          entity_type: 'http_request',
+          entity_id: 'GET /api/ui/v1/job-audits',
+          dataset_version: null,
+          source: 'ui',
+          request_context: {
+            request: { method: 'GET', path: '/api/ui/v1/job-audits' },
+            response: { status_code: 403, detail: 'insufficient permissions' },
+            principal: {
+              role: 'viewer',
+              api_key_label: 'Local Viewer',
+              authenticated: true,
+              source: 'api_key',
+            },
+          },
+          payload: {
+            request: { method: 'GET', path: '/api/ui/v1/job-audits' },
+            response: { status_code: 403, detail: 'insufficient permissions' },
+          },
+          event_at: '2026-05-17T00:00:00+00:00',
+          created_at: '2026-05-17T00:00:00+00:00',
+          updated_at: '2026-05-17T00:00:00+00:00',
+        },
+      ],
+    });
 
     renderWithRouter([{ path: '/admin/audit', element: <AdminAuditPage /> }], ['/admin/audit'], {
       initialPrincipal: {
@@ -128,6 +178,8 @@ describe('AdminAuditPage', () => {
 
     expect(await screen.findByRole('heading', { name: '权限与审计' })).toBeInTheDocument();
     expect(await screen.findByText('回测报告')).toBeInTheDocument();
+    expect(await screen.findByText('权限拒绝日志')).toBeInTheDocument();
+    expect(await screen.findByText('GET')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '打开 Job 详情' })).toBeInTheDocument();
     expect(screen.getAllByText('已确认').length).toBeGreaterThan(0);
   });
@@ -153,6 +205,23 @@ describe('AdminAuditPage', () => {
       items: [],
     });
     mockedGetJobAuditDetail.mockRejectedValue(new ApiError(403, 'forbidden'));
+    mockedListPermissionDeniedLogs.mockResolvedValue({
+      filters: {
+        actor: null,
+        source: null,
+        path: null,
+        start_date: null,
+        end_date: null,
+      },
+      summary: {
+        total: 0,
+        unique_actors: 0,
+        unique_paths: 0,
+        source_counts: {},
+      },
+      page: { total: 0, skip: 0, limit: 20, count: 0 },
+      items: [],
+    });
 
     renderWithRouter([{ path: '/admin/audit', element: <AdminAuditPage /> }], ['/admin/audit'], {
       initialPrincipal: {

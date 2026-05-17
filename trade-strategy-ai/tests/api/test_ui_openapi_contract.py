@@ -21,6 +21,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/jobs/{job_id}/cancel": {"post"},
         "/api/ui/v1/job-audits": {"get"},
         "/api/ui/v1/job-audits/{job_id}": {"get"},
+        "/api/ui/v1/security/permission-denied": {"get"},
+        "/api/ui/v1/security/permission-denied/{event_id}": {"get"},
         "/api/ui/v1/optimize/versions": {"get"},
         "/api/ui/v1/optimize/versions/{version_id}": {"get"},
         "/api/ui/v1/optimize/advise-rule-validations": {"post"},

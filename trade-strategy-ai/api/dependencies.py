@@ -114,6 +114,19 @@ def _find_api_key_record(key: str | None) -> dict[str, str] | None:
     return None
 
 
+def describe_api_key(key: str | None) -> dict[str, Any] | None:
+    """把明文 API Key 映射成公开可展示的身份标签。"""
+    record = _find_api_key_record(key)
+    if record is None:
+        return None
+    return {
+        "role": record["role"],
+        "api_key_label": record["label"],
+        "authenticated": True,
+        "source": "api_key",
+    }
+
+
 def _require_valid_api_key(key: str | None) -> dict[str, str]:
     """校验 API Key，并在失败时抛出统一错误。"""
     record = _find_api_key_record(key)

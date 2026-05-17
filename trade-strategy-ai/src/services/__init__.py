@@ -29,6 +29,7 @@ from src.services.pipeline_application_service import PipelineApplicationService
 from src.services.persona_service import PersonaService
 from src.services.pipeline_service import PipelineService
 from src.services.signal_service import SignalService
+from src.services.security_audit_query_service import SecurityAuditQueryService
 from src.services.rule_pool_service import RulePoolService
 from src.services.setup_service import SetupService
 from src.services.step_timeline_service import StepTimelineService
@@ -70,6 +71,7 @@ __all__ = [
     "PersonaService",
     "SignalService",
     "KaipanService",
+    "SecurityAuditQueryService",
     "OptimizeService",
     "PipelineApplicationService",
     "RulePoolService",

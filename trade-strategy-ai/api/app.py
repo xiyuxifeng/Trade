@@ -6,12 +6,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from api.dependencies import verify_api_key
+from api.dependencies import describe_api_key, verify_api_key
 from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
 from api.routers.ui import auth_router as ui_auth_router
@@ -25,6 +26,7 @@ from api.routers.ui import market_router as ui_market_router
 from api.routers.ui import profiles_router as ui_profiles_router
 from api.routers.ui import ops_router as ui_ops_router
 from api.routers.ui import optimize_router as ui_optimize_router
+from api.routers.ui import security_audit_router as ui_security_audit_router
 from api.routers.ui import pipelines_router as ui_pipelines_router
 from api.routers.ui import settings_router as ui_settings_router
 from api.routers.ui import persona_router as ui_persona_router
@@ -36,6 +38,7 @@ from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
+from src.audit.service import AuditService
 from src.health.routes import health_router
 
 
@@ -96,6 +99,58 @@ def _register_legacy_trigger_routes(app: FastAPI) -> None:
         return await handle_command_async(command)
 
 
+def get_audit_service() -> AuditService:
+    """返回用于记录安全审计的服务实例。"""
+    return AuditService()
+
+
+def _permission_denied_actor(request: Request) -> dict[str, Any]:
+    """把 403 请求整理成可审计的公开身份信息。"""
+    api_key = request.headers.get("X-API-Key")
+    principal = describe_api_key(api_key)
+    if principal is not None:
+        return principal
+
+    return {
+        "role": "anonymous" if not api_key else "api_key",
+        "api_key_label": None,
+        "authenticated": False,
+        "source": "anonymous" if not api_key else "api_key",
+    }
+
+
+async def _record_permission_denied(request: Request, exc: HTTPException) -> None:
+    """把 403 请求记录为只读安全日志。"""
+    if exc.status_code != 403:
+        return
+
+    actor = _permission_denied_actor(request)
+    payload = {
+        "request": {
+            "method": request.method,
+            "path": request.url.path,
+        },
+        "response": {
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+        },
+        "principal": actor,
+    }
+    source = "ui" if request.url.path.startswith("/api/ui/") else "api"
+    try:
+        await get_audit_service().record(
+            event_type="permission_denied",
+            actor=str(actor.get("api_key_label") or actor.get("role") or "anonymous"),
+            entity_type="http_request",
+            entity_id=f"{request.method} {request.url.path}",
+            dataset_version=None,
+            payload=payload,
+            source=source,
+        )
+    except Exception:
+        return
+
+
 def create_app() -> FastAPI:
     """构建并返回统一的 FastAPI 应用。"""
     local_web_static_dir = _resolve_local_web_static_dir()
@@ -134,6 +189,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_profiles_router)
     app.include_router(ui_ops_router)
     app.include_router(ui_optimize_router)
+    app.include_router(ui_security_audit_router)
     app.include_router(ui_snapshots_router)
     app.include_router(ui_rule_pool_router)
     app.include_router(ui_strategy_studio_router)
@@ -148,6 +204,16 @@ def create_app() -> FastAPI:
     app.include_router(trades_router)
     app.include_router(market_router)
     app.include_router(health_router)
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        """统一处理 HTTPException，并记录 403 访问拒绝日志。"""
+        await _record_permission_denied(request, exc)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
 
     _register_legacy_trigger_routes(app)
 

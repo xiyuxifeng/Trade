@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildBacktestReproducibilityParams,
+  buildBacktestRunParams,
+  buildBacktestValidateRulesParams,
   downloadBacktestReport,
   downloadBacktestValidationReport,
   getBacktestResult,
@@ -80,5 +83,53 @@ describe('backtests api client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/backtest_results/result-1', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/backtest_results/result-1/report', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/backtest_results/result-1/validate_rules', expect.any(Object));
+  });
+
+  it('builds canonical backtest job params for all backtest job types', () => {
+    const submission = {
+      traderId: 'trader_a',
+      dateFrom: '2026-05-01',
+      dateTo: '2026-05-05',
+      strategyVersionId: 'sv-1',
+      mode: 'full' as const,
+      configPath: 'config/app.yaml',
+      symbols: ['000001.SZ'],
+      useSnapshotOnly: true,
+      scoringProfile: 'stage5',
+    };
+
+    expect(buildBacktestRunParams(submission)).toEqual({
+      trader_id: 'trader_a',
+      date_from: '2026-05-01',
+      date_to: '2026-05-05',
+      strategy_version_id: 'sv-1',
+      mode: 'full',
+      config_path: 'config/app.yaml',
+      symbols: ['000001.SZ'],
+      use_snapshot_only: true,
+      scoring_profile: 'stage5',
+    });
+    expect(buildBacktestValidateRulesParams(submission)).toEqual({
+      trader_id: 'trader_a',
+      date_from: '2026-05-01',
+      date_to: '2026-05-05',
+      strategy_version_id: 'sv-1',
+      mode: 'full',
+      config_path: 'config/app.yaml',
+      symbols: ['000001.SZ'],
+      use_snapshot_only: true,
+      scoring_profile: 'stage5',
+    });
+    expect(buildBacktestReproducibilityParams(submission)).toEqual({
+      trader_id: 'trader_a',
+      date_from: '2026-05-01',
+      date_to: '2026-05-05',
+      strategy_version_id: 'sv-1',
+      mode: 'full',
+      config_path: 'config/app.yaml',
+      symbols: ['000001.SZ'],
+      use_snapshot_only: true,
+      scoring_profile: 'stage5',
+    });
   });
 });

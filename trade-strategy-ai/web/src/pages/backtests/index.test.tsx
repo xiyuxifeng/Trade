@@ -139,40 +139,40 @@ describe('BacktestsPage', () => {
       expect(mockedListBacktestResults).toHaveBeenCalled();
     });
 
-    expect(await screen.findByText('Backtests Center')).toBeInTheDocument();
+    expect(await screen.findByText('回测中心')).toBeInTheDocument();
     expect(await screen.findByText('result-1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reset filters' })).toBeInTheDocument();
-    expect(await screen.findByText('Valid trades')).toBeInTheDocument();
-    expect(await screen.findByText('Skipped trades')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重置筛选' })).toBeInTheDocument();
+    expect(await screen.findByText('有效交易')).toBeInTheDocument();
+    expect(await screen.findByText('跳过交易')).toBeInTheDocument();
 
-    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
-    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+    expect(screen.getByLabelText('开始日期')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('结束日期')).toHaveValue(today);
 
-    await user.click(screen.getByRole('button', { name: '7d' }));
-    expect(screen.getByLabelText('Date from')).toHaveValue(dayjs(today).subtract(7, 'day').format('YYYY-MM-DD'));
-    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+    await user.click(screen.getByRole('button', { name: '7天' }));
+    expect(screen.getByLabelText('开始日期')).toHaveValue(dayjs(today).subtract(7, 'day').format('YYYY-MM-DD'));
+    expect(screen.getByLabelText('结束日期')).toHaveValue(today);
 
-    await user.click(screen.getByRole('button', { name: 'Reset filters' }));
-    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
-    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+    await user.click(screen.getByRole('button', { name: '重置筛选' }));
+    expect(screen.getByLabelText('开始日期')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('结束日期')).toHaveValue(today);
 
-    await user.type(screen.getByLabelText('Trader ID'), 'trader_a');
+    await user.type(screen.getByLabelText('交易员 ID'), 'trader_a');
 
-    await user.click(screen.getByRole('button', { name: 'Run backtest' }));
+    await user.click(screen.getByRole('button', { name: '运行回测' }));
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
         expect.objectContaining({ job_type: 'backtest-run' }),
       );
     });
 
-    await user.click(screen.getByRole('button', { name: 'Validate rules' }));
+    await user.click(screen.getByRole('button', { name: '验证规则' }));
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
         expect.objectContaining({ job_type: 'backtest-validate-rules' }),
       );
     });
 
-    await user.click(screen.getByRole('button', { name: 'Reproducibility check' }));
+    await user.click(screen.getByRole('button', { name: '复现性检查' }));
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
         expect.objectContaining({ job_type: 'backtest-reproducibility-check' }),
@@ -184,29 +184,29 @@ describe('BacktestsPage', () => {
       expect(mockedDownloadBacktestValidationReport).toHaveBeenCalled();
     });
 
-    await user.click(screen.getByRole('button', { name: 'Report' }));
+    await user.click(screen.getByRole('button', { name: '报告' }));
     expect(await screen.findByRole('heading', { name: 'Backtest Report' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Validation' }));
+    await user.click(screen.getByRole('button', { name: '验真' }));
     expect(await screen.findByRole('heading', { name: 'Rule Validation Report' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Summary' }));
-    expect(await screen.findByTestId('backtest-detail-summary')).toHaveTextContent('Total days');
+    await user.click(screen.getByRole('button', { name: '摘要' }));
+    expect(await screen.findByTestId('backtest-detail-summary')).toHaveTextContent('总天数');
     await user.click(screen.getByRole('button', { name: 'JSON' }));
     expect(await screen.findByTestId('backtest-detail-json')).toHaveTextContent('"result_version"');
 
-    expect(screen.getByText('Summary')).toBeInTheDocument();
-    expect(screen.getByText('Records')).toBeInTheDocument();
-    expect(screen.getByText('Report')).toBeInTheDocument();
-    expect(screen.getByText('Validation')).toBeInTheDocument();
+    expect(screen.getByText('摘要')).toBeInTheDocument();
+    expect(screen.getByText('记录')).toBeInTheDocument();
+    expect(screen.getByText('报告')).toBeInTheDocument();
+    expect(screen.getByText('验真')).toBeInTheDocument();
     expect(screen.getByText('JSON')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Report' }));
+    await user.click(screen.getByRole('button', { name: '报告' }));
     expect(screen.getByRole('button', { name: '下载原文' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '原文' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Validation' }));
+    await user.click(screen.getByRole('button', { name: '验真' }));
     expect(screen.getByRole('button', { name: '下载原文' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '原文' })).toBeInTheDocument();
@@ -233,14 +233,14 @@ describe('BacktestsPage', () => {
     });
 
     expect(await screen.findByText('当前筛选范围内暂无回测结果。')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Reset filters' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Last 30d' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '重置筛选' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '最近 30 天' })).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Trader ID'), 'trader_b');
-    await user.click(screen.getAllByRole('button', { name: 'Reset filters' })[1]);
+    await user.type(screen.getByLabelText('交易员 ID'), 'trader_b');
+    await user.click(screen.getAllByRole('button', { name: '重置筛选' })[1]);
 
-    expect(screen.getByLabelText('Trader ID')).toHaveValue('');
-    expect(screen.getByLabelText('Date from')).toHaveValue(thirtyDaysAgo);
-    expect(screen.getByLabelText('Date to')).toHaveValue(today);
+    expect(screen.getByLabelText('交易员 ID')).toHaveValue('');
+    expect(screen.getByLabelText('开始日期')).toHaveValue(thirtyDaysAgo);
+    expect(screen.getByLabelText('结束日期')).toHaveValue(today);
   });
 });

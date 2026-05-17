@@ -69,4 +69,7 @@ export type BacktestJobSubmission = {
   strategyVersionId: string;
   mode: 'full' | 'replay' | 'rule_validation';
   configPath: string;
+  symbols: string[];
+  useSnapshotOnly: boolean;
+  scoringProfile: string;
 };

@@ -46,6 +46,9 @@ export function buildBacktestRunParams(submission: BacktestJobSubmission): Recor
     strategy_version_id: submission.strategyVersionId || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
+    symbols: submission.symbols,
+    use_snapshot_only: submission.useSnapshotOnly,
+    scoring_profile: submission.scoringProfile,
   };
 }
 
@@ -54,7 +57,12 @@ export function buildBacktestValidateRulesParams(submission: BacktestJobSubmissi
     trader_id: submission.traderId,
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
+    strategy_version_id: submission.strategyVersionId || undefined,
+    mode: submission.mode,
     config_path: submission.configPath,
+    symbols: submission.symbols,
+    use_snapshot_only: submission.useSnapshotOnly,
+    scoring_profile: submission.scoringProfile,
   };
 }
 

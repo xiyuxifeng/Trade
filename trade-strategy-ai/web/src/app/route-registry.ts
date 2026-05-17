@@ -20,7 +20,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '市场数据', path: '/market', description: '市场快照浏览器', kind: 'canonical' },
   { label: '市场数据集', path: '/market/datasets', description: '市场数据集浏览器', kind: 'canonical' },
   { label: '策略', path: '/strategies', description: '策略版本与正式工作台入口', kind: 'canonical' },
-  { label: '回测', path: '/backtest', description: '回测能力预留入口', kind: 'canonical' },
+  { label: '回测', path: '/backtest', description: '回测正式工作台', kind: 'canonical' },
   { label: '规则池', path: '/rule-pool', description: '规则池能力预留入口', kind: 'canonical' },
   { label: '产物', path: '/artifacts', description: '日志、下载文件与输出结果', kind: 'canonical' },
   { label: '配置管理', path: '/profiles', description: '正式 Profile 配置入口', kind: 'canonical' },

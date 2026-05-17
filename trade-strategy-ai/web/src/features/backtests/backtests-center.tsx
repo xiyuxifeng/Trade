@@ -26,6 +26,7 @@ import type { JobSubmissionRequest } from '@/types/jobs';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
 
 const DEFAULT_CONFIG_PATH = 'config/app.yaml';
+const DEFAULT_SCORING_PROFILE = 'stage5';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
@@ -84,6 +85,9 @@ function toJobSubmission(form: BacktestJobFormState): BacktestJobSubmission {
     strategyVersionId: form.strategyVersionId,
     mode: form.mode,
     configPath: form.configPath,
+    symbols: form.symbols,
+    useSnapshotOnly: form.useSnapshotOnly,
+    scoringProfile: form.scoringProfile,
   };
 }
 
@@ -94,6 +98,9 @@ type BacktestJobFormState = {
   strategyVersionId: string;
   mode: 'full' | 'replay' | 'rule_validation';
   configPath: string;
+  symbols: string[];
+  useSnapshotOnly: boolean;
+  scoringProfile: string;
 };
 
 function SummaryCard({ title, value, accent = 'text-slate-100' }: { title: string; value: string | number; accent?: string }) {
@@ -312,7 +319,17 @@ export function BacktestsCenter() {
   });
 
   async function submitJob(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
-    const submission = toJobSubmission({ traderId, dateFrom, dateTo, strategyVersionId, mode, configPath });
+    const submission = toJobSubmission({
+      traderId,
+      dateFrom,
+      dateTo,
+      strategyVersionId,
+      mode,
+      configPath,
+      symbols: [],
+      useSnapshotOnly: true,
+      scoringProfile: DEFAULT_SCORING_PROFILE,
+    });
     const params =
       jobType === 'backtest-run'
         ? buildBacktestRunParams(submission)

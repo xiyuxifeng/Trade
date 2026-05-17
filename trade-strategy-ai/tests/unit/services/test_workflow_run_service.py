@@ -148,3 +148,19 @@ async def test_workflow_run_service_rejects_invalid_pagination(workflow_run_serv
     result = await service.list_workflow_runs(limit=0, offset=-1)
     assert result.status == "error"
     assert result.payload["error"]["type"] == "invalid_query"
+
+
+@pytest.mark.asyncio()
+async def test_workflow_run_service_rejects_invalid_workflow_run_id(workflow_run_service_session_factory) -> None:
+    """非法 workflow run id 应返回结构化错误。"""
+    from src.services.workflow_run_service import WorkflowRunService
+
+    service = WorkflowRunService(session_factory=workflow_run_service_session_factory)
+
+    detail = await service.get_workflow_run("not-a-uuid")
+    assert detail.status == "error"
+    assert detail.payload["error"]["type"] == "invalid_query"
+
+    steps = await service.list_workflow_run_steps("not-a-uuid")
+    assert steps.status == "error"
+    assert steps.payload["error"]["type"] == "invalid_query"

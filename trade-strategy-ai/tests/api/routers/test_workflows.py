@@ -98,6 +98,19 @@ class _FakeWorkflowRunService:
 
     async def get_workflow_run(self, workflow_run_id: str) -> Any:
         self.detail_calls.append(workflow_run_id)
+        if workflow_run_id == "not-a-uuid":
+            return _result(
+                {
+                    "error": {
+                        "type": "invalid_query",
+                        "message": "invalid workflow run id",
+                        "detail": "bad uuid",
+                        "metadata": {"workflow_run_id": workflow_run_id},
+                    }
+                },
+                status="error",
+                message="invalid workflow run id",
+            )
         if workflow_run_id == "run-missing":
             return _result({"error": {"type": "workflow_run_not_found", "message": "workflow run not found", "detail": workflow_run_id, "metadata": {"workflow_run_id": workflow_run_id}}}, status="partial", message="workflow run not found")
         return _result(
@@ -150,6 +163,19 @@ class _FakeWorkflowRunService:
 
     async def list_workflow_run_steps(self, workflow_run_id: str, **kwargs: Any) -> Any:
         self.step_calls.append({"workflow_run_id": workflow_run_id, **kwargs})
+        if workflow_run_id == "not-a-uuid":
+            return _result(
+                {
+                    "error": {
+                        "type": "invalid_query",
+                        "message": "invalid workflow run id",
+                        "detail": "bad uuid",
+                        "metadata": {"workflow_run_id": workflow_run_id},
+                    }
+                },
+                status="error",
+                message="invalid workflow run id",
+            )
         return _result(
             {
                 "workflow_run_id": workflow_run_id,
@@ -304,3 +330,11 @@ async def test_missing_workflow_run_returns_404(client: AsyncClient) -> None:
     response = await client.get("/api/ui/v1/workflows/runs/run-missing")
     assert response.status_code == 404
     assert response.json()["detail"]["type"] == "workflow_run_not_found"
+
+
+@pytest.mark.asyncio
+async def test_invalid_workflow_run_id_returns_422(client: AsyncClient) -> None:
+    """非法 workflow run id 应返回结构化 422。"""
+    response = await client.get("/api/ui/v1/workflows/runs/not-a-uuid")
+    assert response.status_code == 422
+    assert response.json()["detail"]["type"] == "invalid_query"

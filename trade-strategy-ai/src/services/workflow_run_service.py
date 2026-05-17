@@ -355,22 +355,36 @@ class WorkflowRunService(BaseService):
 
     async def get_workflow_run(self, workflow_run_id: str) -> ServiceResult:
         """按 run_id 查询 workflow run 详情。"""
-        async with self._session_factory() as session:
-            run = await self._repository.get_by_run_id(session, workflow_run_id)
-            if run is None:
-                return ServiceResult(
-                    status="partial",
-                    message="workflow run not found",
-                    payload={
-                        "error": {
-                            "type": "workflow_run_not_found",
-                            "message": "workflow run not found",
-                            "detail": workflow_run_id,
-                            "metadata": {"workflow_run_id": workflow_run_id},
-                        }
-                    },
-                )
-            steps = await self._repository.list_steps_by_run_id(session, workflow_run_id)
+        try:
+            async with self._session_factory() as session:
+                run = await self._repository.get_by_run_id(session, workflow_run_id)
+                if run is None:
+                    return ServiceResult(
+                        status="partial",
+                        message="workflow run not found",
+                        payload={
+                            "error": {
+                                "type": "workflow_run_not_found",
+                                "message": "workflow run not found",
+                                "detail": workflow_run_id,
+                                "metadata": {"workflow_run_id": workflow_run_id},
+                            }
+                        },
+                    )
+                steps = await self._repository.list_steps_by_run_id(session, workflow_run_id)
+        except ValueError as exc:
+            return ServiceResult(
+                status="error",
+                message="invalid workflow run id",
+                payload={
+                    "error": {
+                        "type": "invalid_query",
+                        "message": "invalid workflow run id",
+                        "detail": str(exc),
+                        "metadata": {"workflow_run_id": workflow_run_id},
+                    }
+                },
+            )
 
         return ServiceResult(
             status="ok",
@@ -398,22 +412,36 @@ class WorkflowRunService(BaseService):
                 },
             )
 
-        async with self._session_factory() as session:
-            run = await self._repository.get_by_run_id(session, workflow_run_id)
-            if run is None:
-                return ServiceResult(
-                    status="partial",
-                    message="workflow run not found",
-                    payload={
-                        "error": {
-                            "type": "workflow_run_not_found",
-                            "message": "workflow run not found",
-                            "detail": workflow_run_id,
-                            "metadata": {"workflow_run_id": workflow_run_id},
-                        }
-                    },
-                )
-            steps = await self._repository.list_steps_by_run_id(session, workflow_run_id)
+        try:
+            async with self._session_factory() as session:
+                run = await self._repository.get_by_run_id(session, workflow_run_id)
+                if run is None:
+                    return ServiceResult(
+                        status="partial",
+                        message="workflow run not found",
+                        payload={
+                            "error": {
+                                "type": "workflow_run_not_found",
+                                "message": "workflow run not found",
+                                "detail": workflow_run_id,
+                                "metadata": {"workflow_run_id": workflow_run_id},
+                            }
+                        },
+                    )
+                steps = await self._repository.list_steps_by_run_id(session, workflow_run_id)
+        except ValueError as exc:
+            return ServiceResult(
+                status="error",
+                message="invalid workflow run id",
+                payload={
+                    "error": {
+                        "type": "invalid_query",
+                        "message": "invalid workflow run id",
+                        "detail": str(exc),
+                        "metadata": {"workflow_run_id": workflow_run_id},
+                    }
+                },
+            )
 
         paged_steps = steps[offset : offset + limit] if limit is not None else steps[offset:]
         return ServiceResult(

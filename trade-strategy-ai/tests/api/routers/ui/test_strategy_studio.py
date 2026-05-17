@@ -543,3 +543,17 @@ async def test_strategy_studio_endpoints_cover_versions_rules_and_candidate_crea
     )
     assert batch.status_code == 200
     assert batch.json()['filter_status'] == 'pending'
+
+    canonical_versions = await client.get(
+        '/api/ui/v1/optimize/versions',
+        params={'trader_id': 'trader_a', 'status': 'released', 'version_type': 'manual', 'skip': 0, 'limit': 10},
+    )
+    assert canonical_versions.status_code == 200
+    assert canonical_versions.json()['count'] == 1
+
+    canonical_rule_review = await client.post(
+        '/api/ui/v1/rule-pool/rule-1/review',
+        json={'decision': 'approve', 'force': False, 'reviewed_by': 'web'},
+    )
+    assert canonical_rule_review.status_code == 200
+    assert canonical_rule_review.json()['review_status'] == 'approve'

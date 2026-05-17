@@ -118,7 +118,7 @@ export function StrategyWorkspaceActions({
   return (
     <SectionCard
       title="策略提交入口"
-      description="所有动作都通过 Job Center 提交，不扩张 CLI 入口。"
+      description="所有动作都通过 Job Center 提交，不扩张 CLI 入口。候选版本在下方候选区生成与审核。"
       action={<Badge variant="info" className="w-fit">正式动作</Badge>}
     >
       <div className="space-y-4">

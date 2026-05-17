@@ -13,7 +13,9 @@ from .profiles import router as profiles_router
 from .snapshots import router as snapshots_router
 from .settings import router as settings_router
 from .ops import router as ops_router
+from .optimize import router as optimize_router
 from .strategy_studio import router as strategy_studio_router
+from .rule_pool import router as rule_pool_router
 from .system import legacy_router as legacy_system_router
 from .system import router as system_router
 from api.routers.ui.jobs import router as jobs_router
@@ -32,8 +34,10 @@ __all__ = [
     "pipelines_router",
     "settings_router",
     "ops_router",
+    "optimize_router",
     "snapshots_router",
     "signals_router",
+    "rule_pool_router",
     "strategy_studio_router",
     "system_router",
 ]

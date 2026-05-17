@@ -15,6 +15,8 @@ def test_create_app_registers_critical_routes() -> None:
     assert "/api/ui/v1/system/status" in paths
     assert "/api/ui/v1/jobs/definitions" in paths
     assert "/api/ui/v1/workflows" in paths
+    assert "/api/ui/v1/optimize/versions" in paths
+    assert "/api/ui/v1/rule-pool" in paths
     assert "/api/ui/v1/profiles" in paths
     assert "/api/ui/v1/artifacts" in paths
     assert "/api/ui/v1/market/ohlcv" in paths

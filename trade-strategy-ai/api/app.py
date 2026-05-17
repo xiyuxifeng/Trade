@@ -23,10 +23,12 @@ from api.routers.ui import legacy_system_router as ui_legacy_system_router
 from api.routers.ui import market_router as ui_market_router
 from api.routers.ui import profiles_router as ui_profiles_router
 from api.routers.ui import ops_router as ui_ops_router
+from api.routers.ui import optimize_router as ui_optimize_router
 from api.routers.ui import pipelines_router as ui_pipelines_router
 from api.routers.ui import settings_router as ui_settings_router
 from api.routers.ui import persona_router as ui_persona_router
 from api.routers.ui import snapshots_router as ui_snapshots_router
+from api.routers.ui import rule_pool_router as ui_rule_pool_router
 from api.routers.ui import signals_router as ui_signals_router
 from api.routers.ui import strategy_studio_router as ui_strategy_studio_router
 from api.routers.ui import system_router as ui_system_router
@@ -130,7 +132,9 @@ def create_app() -> FastAPI:
     app.include_router(ui_market_router)
     app.include_router(ui_profiles_router)
     app.include_router(ui_ops_router)
+    app.include_router(ui_optimize_router)
     app.include_router(ui_snapshots_router)
+    app.include_router(ui_rule_pool_router)
     app.include_router(ui_strategy_studio_router)
     app.include_router(ui_signals_router)
     app.include_router(ui_persona_router)

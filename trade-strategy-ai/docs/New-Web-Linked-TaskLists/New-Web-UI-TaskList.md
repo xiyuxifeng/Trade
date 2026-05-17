@@ -1451,7 +1451,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-002 P0 Rule Pool Review UI
+### [x] UI-V3-002 P0 Rule Pool Review UI
 
 任务目标：提供规则池审核、回测、批准/拒绝入口。
 
@@ -1482,7 +1482,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-003 P0 Optimize Candidate UI
+### [x] UI-V3-003 P0 Optimize Candidate UI
 
 任务目标：提供优化候选版本查看、比较和提交审核入口。
 

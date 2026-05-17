@@ -16,6 +16,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
     expect(resolveRouteByPathname('/backtest').path).toBe('/backtest');
     expect(resolveRouteByPathname('/rule-pool').path).toBe('/rule-pool');
+    expect(resolveRouteByPathname('/rule-pool').description).toBe('规则池审核中心');
     expect(resolveRouteByPathname('/artifacts').path).toBe('/artifacts');
     expect(resolveRouteByPathname('/profiles').path).toBe('/profiles');
     expect(resolveRouteByPathname('/profiles/default').path).toBe('/profiles/:profileId');

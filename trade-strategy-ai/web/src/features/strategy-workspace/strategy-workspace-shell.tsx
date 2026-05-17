@@ -22,6 +22,7 @@ import type { StrategyVersionDetailItem, StrategyVersionSummaryItem } from '@/ty
 import { StrategyWorkspaceActions } from './strategy-workspace-actions';
 import { StrategyWorkspaceArtifacts } from './strategy-workspace-artifacts';
 import { StrategyWorkspaceHistory } from './strategy-workspace-history';
+import { StrategyWorkspaceCandidate } from './strategy-workspace-candidate';
 import {
   formatWorkspaceTimestamp,
   isWorkspacePermissionDenied,
@@ -360,11 +361,23 @@ export function StrategyWorkspaceShell() {
         />
       </section>
 
+      <StrategyWorkspaceCandidate
+        traderId={traderId}
+        selectedVersion={selectedVersionDetail}
+        onCandidateCreated={() => {
+          void versionsQuery.refetch();
+        }}
+        onReviewSubmitted={() => {
+          void jobsQuery.refetch();
+        }}
+      />
+
       <ProfileDetailState
         detail={selectedProfileDetail}
         error={profileError}
         isLoading={profileDetailLoading}
         onRetry={() => {
+          void profilesQuery.refetch();
           void profileDetailQuery.refetch();
         }}
         profile={selectedProfile}

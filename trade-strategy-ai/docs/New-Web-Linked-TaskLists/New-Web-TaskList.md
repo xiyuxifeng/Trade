@@ -1792,7 +1792,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V3-S1-002 P0 定义并实现 optimize / rule_pool PipelineSpec / Workflow
+### [x] NW-V3-S1-002 P0 定义并实现 optimize / rule_pool PipelineSpec / Workflow
 
 覆盖能力：
 

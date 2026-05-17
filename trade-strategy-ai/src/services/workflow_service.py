@@ -243,6 +243,38 @@ DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
         ],
     ),
     _workflow(
+        "optimize-rule-pool",
+        "优化与规则池",
+        "串联候选创建、规则池回测和候选 / 规则审核。",
+        "optimize-create-candidate",
+        steps=[
+            _workflow_step(
+                "optimize-create-candidate",
+                "生成候选版本",
+                "从规则调整生成候选策略版本。",
+                "optimize-create-candidate",
+            ),
+            _workflow_step(
+                "rule-pool-backtest",
+                "规则池回测",
+                "对规则池候选进行回测并回写结果。",
+                "rule-pool-backtest",
+            ),
+            _workflow_step(
+                "candidate-review",
+                "候选版本审核",
+                "对候选版本执行人工审核。",
+                "candidate-review",
+            ),
+            _workflow_step(
+                "rule-review",
+                "规则审核",
+                "对规则池条目执行批准或拒绝审核。",
+                "rule-review",
+            ),
+        ],
+    ),
+    _workflow(
         "rule-pool",
         "规则池管理",
         "围绕规则池回测和审核流程组织操作。",

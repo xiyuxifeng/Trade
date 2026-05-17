@@ -71,3 +71,23 @@ def test_runtime_registry_bridge_normalizes_pipeline_definition() -> None:
     assert "UI-V2-006" in strategy_contract["ui_task_ids"]
     assert strategy_contract["steps"][0]["job_type"] == "strategy-build"
     assert strategy_contract["steps"][1]["depends_on"] == ["strategy-build"]
+
+
+def test_runtime_registry_bridge_normalizes_optimize_rule_pool_pipeline_definition() -> None:
+    """Bridge 应把 optimize / rule_pool 归一化成 canonical contract。"""
+    from src.services.runtime_registry_bridge import get_pipeline_contract, list_pipeline_contracts
+
+    contracts = list_pipeline_contracts()
+    contract = get_pipeline_contract("optimize-rule-pool")
+
+    assert contracts
+    assert contract is not None
+    assert contract["pipeline_id"] == "optimize-rule-pool"
+    assert contract["workflow_id"] == "optimize-rule-pool"
+    assert contract["ui_page"] == "/rule-pool"
+    assert "UI-V3-002" in contract["ui_task_ids"]
+    assert "UI-V3-003" in contract["ui_task_ids"]
+    assert contract["output_artifacts"][0]["kind"] == "candidate-json"
+    assert contract["steps"][0]["job_type"] == "optimize-create-candidate"
+    assert contract["steps"][1]["depends_on"] == ["optimize-create-candidate"]
+    assert contract["steps"][2]["job_type"] == "candidate-review"

@@ -6,6 +6,7 @@ import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listJobs, createJob } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
+import { getOptimizeVersion, listOptimizeVersions, createOptimizeCandidateVersion } from '@/lib/api/optimize';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
@@ -26,6 +27,12 @@ vi.mock('@/lib/api/strategyStudio', () => ({
   getStrategyVersion: vi.fn(),
 }));
 
+vi.mock('@/lib/api/optimize', () => ({
+  listOptimizeVersions: vi.fn(),
+  getOptimizeVersion: vi.fn(),
+  createOptimizeCandidateVersion: vi.fn(),
+}));
+
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListJobs = vi.mocked(listJobs);
@@ -33,6 +40,8 @@ const mockedCreateJob = vi.mocked(createJob);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
+const mockedListOptimizeVersions = vi.mocked(listOptimizeVersions);
+const mockedGetOptimizeVersion = vi.mocked(getOptimizeVersion);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -112,6 +121,8 @@ describe('StrategyWorkspaceShell', () => {
         rules_snapshot: [],
       },
     } as never);
+    mockedListOptimizeVersions.mockResolvedValue({ status: 'success', count: 0, total: 0, skip: 0, limit: 8, items: [] } as never);
+    mockedGetOptimizeVersion.mockResolvedValue({ status: 'success', item: null } as never);
 
     renderWithRouter([{ path: '/strategies', element: <StrategyWorkspaceShell /> }], ['/strategies']);
 
@@ -119,6 +130,8 @@ describe('StrategyWorkspaceShell', () => {
     expect((await screen.findAllByText('config/strategy-v3.yaml')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /盘前运行/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /盘后运行/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '候选版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '生成候选版本' })).toBeInTheDocument();
     expect(mockedCreateJob).not.toHaveBeenCalled();
   });
 });

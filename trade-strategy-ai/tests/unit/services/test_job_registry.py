@@ -40,6 +40,8 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
         "backtest-reproducibility-check",
         "rule-pool-backtest",
         "optimize-create-candidate",
+        "candidate-review",
+        "rule-review",
         "kaipan-fetch",
         "kaipan-normalize",
         "kaipan-run",

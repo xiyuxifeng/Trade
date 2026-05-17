@@ -122,4 +122,5 @@ export type JobSubmissionRequest = {
   max_retries?: number;
   retry_backoff_seconds?: number;
   timeout_seconds?: number | null;
+  confirmed?: boolean;
 };

@@ -1,3 +1,9 @@
+"""Legacy strategy-studio UI API 路由。
+
+这是兼容层：正式入口已经拆分到 `/api/ui/v1/optimize` 和
+`/api/ui/v1/rule-pool`，这里继续保留旧组合路由，避免一次性切断旧页面。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable

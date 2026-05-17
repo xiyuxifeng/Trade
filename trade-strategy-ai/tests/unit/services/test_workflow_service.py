@@ -57,6 +57,7 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
         "strategy",
         "backtest",
         "optimize",
+        "optimize-rule-pool",
         "rule-pool",
         "scheduler",
         "report",
@@ -82,6 +83,15 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
         "market-state-build",
         "snapshot-build",
     ]
+
+    optimize_rule_pool = next(item for item in listed.payload["items"] if item["workflow_id"] == "optimize-rule-pool")
+    assert [step["step_id"] for step in optimize_rule_pool["steps"]] == [
+        "optimize-create-candidate",
+        "rule-pool-backtest",
+        "candidate-review",
+        "rule-review",
+    ]
+    assert optimize_rule_pool["steps"][0]["param_schema"]["fields"]["adjustments_path"]["required"] is True
 
 
 def test_workflow_service_runs_workflow_through_job_service() -> None:

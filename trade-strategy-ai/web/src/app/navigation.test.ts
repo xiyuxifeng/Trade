@@ -19,6 +19,7 @@ describe('navigation contract', () => {
       '/admin',
       '/settings',
     ]);
+    expect(mainNavigation.find((item) => item.path === '/rule-pool')?.description).toBe('规则池审核中心');
   });
 
   it('still resolves legacy routes for current route chrome', () => {

@@ -347,7 +347,10 @@ def test_workflow_runner_executes_steps_in_order() -> None:
 
     assert result.status == "ok"
     assert [call["job_type"] for call in job_runner.calls] == ["crawl", "pipeline-run"]
+    assert job_runner.calls[0]["confirmed"] is False
+    assert job_runner.calls[1]["confirmed"] is False
     assert job_service.created_jobs[0]["job_type"] == "pipeline-run"
+    assert job_service.created_jobs[0]["confirmed"] is False
     assert job_service.started_jobs[0]["job_id"] == "job-1"
     assert job_service.completed_jobs[0]["job_id"] == "job-1"
     assert result.payload["job"]["status"] == "success"
@@ -416,7 +419,10 @@ def test_workflow_runner_stops_after_failed_step() -> None:
 
     assert result.status == "ok"
     assert [call["job_type"] for call in job_runner.calls] == ["crawl", "pipeline-run"]
+    assert job_runner.calls[0]["confirmed"] is False
+    assert job_runner.calls[1]["confirmed"] is False
     assert job_service.failed_jobs[0]["job_id"] == "job-1"
+    assert job_service.created_jobs[0]["confirmed"] is False
     assert result.payload["job"]["status"] == "failed"
     assert result.payload["workflow_run"]["run_context"]["status"] == "failed"
     assert len(result.payload["workflow_run"]["step_results"]) == 2
@@ -483,6 +489,8 @@ def test_workflow_runner_executes_market_workflow_steps() -> None:
         "date": "2026-05-16",
         "slot": "17-30",
     }
+    assert job_runner.calls[0]["confirmed"] is False
+    assert job_service.created_jobs[0]["confirmed"] is False
     assert result.payload["workflow_run"]["run_context"]["status"] == "success"
     assert [step["step_name"] for step in result.payload["workflow_run"]["step_results"]] == [
         "kaipan-fetch",

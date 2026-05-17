@@ -359,6 +359,7 @@ class JobService(BaseService):
         max_retries: int = 3,
         retry_backoff_seconds: int = 0,
         timeout_seconds: int | None = None,
+        confirmed: bool = False,
         scheduled_at: datetime | None = None,
         audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
@@ -443,7 +444,7 @@ class JobService(BaseService):
                 job=job,
                 operation="create",
                 actor=created_by,
-                audit_source=audit_source,
+                audit_source={**(audit_source or {}), "confirmed": confirmed},
                 params_summary=params or {},
                 payload={
                     "job_type": job_type,
@@ -451,6 +452,7 @@ class JobService(BaseService):
                     "max_retries": max_retries,
                     "retry_backoff_seconds": retry_backoff_seconds,
                     "timeout_seconds": timeout_seconds,
+                    "confirmed": confirmed,
                     "scheduled_at": _to_plain(scheduled_at),
                 },
                 event_at=now,

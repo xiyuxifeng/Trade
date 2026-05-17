@@ -560,9 +560,10 @@ class JobRunner(BaseService):
         idempotency_key: str | None = None,
         worker_id: str | None = None,
         lock_token: str | None = None,
+        confirmed: bool = False,
     ) -> ServiceResult:
         """创建并立即执行 Job。"""
-        validated = validate_job_submission(job_type=job_type, params=params or {}, created_by=created_by)
+        validated = validate_job_submission(job_type=job_type, params=params or {}, created_by=created_by, confirmed=confirmed)
         if validated.status != "ok":
             return validated
         created = await self._job_service.create_job(
@@ -570,6 +571,7 @@ class JobRunner(BaseService):
             params=validated.payload["params"],
             created_by=created_by,
             idempotency_key=idempotency_key,
+            confirmed=confirmed,
         )
         job_payload = created.payload["job"]
         if created.payload.get("created") is False and job_payload.get("status") != "pending":

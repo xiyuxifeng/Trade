@@ -55,6 +55,9 @@ export function AdminPage() {
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/users')}>
               用户管理
             </Button>
+            <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/admin/audit')}>
+              权限与审计
+            </Button>
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/ops')}>
               运维恢复
             </Button>

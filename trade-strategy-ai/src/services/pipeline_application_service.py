@@ -142,6 +142,7 @@ class PipelineApplicationService(BaseService):
             created_by=created_by,
             idempotency_key=idempotency_key,
             audit_source=audit_source,
+            confirmed=confirmed,
         )
         payload = dict(result.payload)
         payload["pipeline"] = self._pipeline_summary()

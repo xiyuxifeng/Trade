@@ -209,6 +209,7 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     assert created.status_code == 200
     job_id = created.json()["job"]["id"]
     assert _job_service_spy is not None
+    assert _job_service_spy.create_calls[0]["confirmed"] is False
     assert _job_service_spy.create_calls[0]["audit_source"]["channel"] == "ui"
     assert _job_service_spy.create_calls[0]["audit_source"]["path"] == "/api/ui/v1/jobs"
 
@@ -286,6 +287,8 @@ async def test_high_risk_job_requires_confirmation(client: AsyncClient) -> None:
     )
     assert approved.status_code == 200
     assert approved.json()["job"]["job_type"] == "init-project"
+    assert _job_service_spy is not None
+    assert _job_service_spy.create_calls[-1]["confirmed"] is True
 
 
 @pytest.mark.asyncio

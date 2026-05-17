@@ -24,6 +24,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/profiles/default/edit').path).toBe('/profiles/:profileId/edit');
     expect(resolveRouteByPathname('/profiles/default/snapshots/snapshot-1').path).toBe('/profiles/:profileId/snapshots/:snapshotId');
     expect(resolveRouteByPathname('/admin').path).toBe('/admin');
+    expect(resolveRouteByPathname('/admin/audit').path).toBe('/admin/audit');
     expect(resolveRouteByPathname('/settings').path).toBe('/settings');
   });
 

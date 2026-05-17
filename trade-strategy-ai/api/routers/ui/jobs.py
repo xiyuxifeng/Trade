@@ -86,6 +86,7 @@ async def create_job(
         max_retries=request.max_retries,
         retry_backoff_seconds=request.retry_backoff_seconds,
         timeout_seconds=request.timeout_seconds,
+        confirmed=request.confirmed,
         audit_source=_audit_source_from_request(http_request),
     )
     if result.status != "ok":

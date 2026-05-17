@@ -115,6 +115,7 @@ async def test_article_pipeline_list_detail_and_run(client: AsyncClient) -> None
     assert run.status_code == 200
     assert run.json()["job"]["id"] == "job-article-1"
     assert client.fake_service.run_calls[0]["pipeline_id"] == "article_pipeline"  # type: ignore[attr-defined]
+    assert client.fake_service.run_calls[0]["confirmed"] is False  # type: ignore[attr-defined]
     assert client.fake_service.run_calls[0]["audit_source"]["path"] == "/api/ui/v1/pipelines/article_pipeline/run"  # type: ignore[attr-defined]
 
 

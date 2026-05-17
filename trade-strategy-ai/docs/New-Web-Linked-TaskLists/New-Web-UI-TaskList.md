@@ -1597,7 +1597,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-007 P0 Permission / Audit UI
+### [x] UI-V3-007 P0 Permission / Audit UI
 
 任务目标：让管理员查看权限、审计和高风险操作历史。
 

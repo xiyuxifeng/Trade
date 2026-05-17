@@ -229,6 +229,7 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     assert submitted.status == "ok"
     assert submitted.payload["execution"]["job"]["status"] == "success"
     assert loaded.payload["job"]["created_by"] == "web"
+    assert loaded.payload["job"]["audit_events"][0]["payload"]["request_context"]["confirmed"] is False
     assert loaded.payload["job"]["result"]["payload"]["html_path"] == str(tmp_path / "report.html")
     assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
     assert any(item["kind"] == "html" for item in loaded.payload["job"]["artifacts"])

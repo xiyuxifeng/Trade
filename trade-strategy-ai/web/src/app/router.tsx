@@ -7,6 +7,7 @@ import { AlertsPage } from '@/pages/alerts';
 import { AlertDetailPage } from '@/pages/alerts/AlertDetailPage';
 import { ArticlesPage } from '@/pages/articles';
 import { AdminPage } from '@/pages/admin';
+import { AdminAuditPage } from '@/pages/admin/AuditPage';
 import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
@@ -197,6 +198,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'admin',
         element: <AdminPage />,
+      },
+      {
+        path: 'admin/audit',
+        element: <AdminAuditPage />,
       },
       {
         path: 'settings',

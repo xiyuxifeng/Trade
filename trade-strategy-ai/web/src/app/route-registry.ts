@@ -29,6 +29,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '配置管理', path: '/profiles/:profileId/snapshots/:snapshotId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '配置管理', path: '/profiles/:profileId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '管理中心', path: '/admin', description: '用户、运维与权限管理入口', kind: 'canonical' },
+  { label: '管理中心', path: '/admin/audit', description: '用户、运维与权限管理入口', kind: 'canonical' },
   { label: '设置', path: '/settings', description: '应用配置与密钥管理', kind: 'canonical' },
   { label: '告警', path: '/alerts', description: '告警历史与处理详情', kind: 'legacy', retirementStage: 'V3' },
   { label: '告警', path: '/alerts/:recordId', description: '告警历史与处理详情', kind: 'legacy', retirementStage: 'V3' },

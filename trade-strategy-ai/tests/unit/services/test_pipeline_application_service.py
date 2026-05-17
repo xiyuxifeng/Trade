@@ -82,6 +82,7 @@ def test_pipeline_application_service_runs_article_pipeline_through_workflow_run
     assert result.payload["job"]["job_type"] == "pipeline-run"
     assert fake_runner.calls[0]["workflow"].workflow_id == "article_pipeline"
     assert fake_runner.calls[0]["params"]["config_path"].endswith("config/app.yaml")
+    assert fake_runner.calls[0]["confirmed"] is True
 
 
 def test_pipeline_application_service_rejects_unknown_pipeline() -> None:

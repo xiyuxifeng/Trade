@@ -16,6 +16,7 @@ from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.dashboard_service import DashboardService
 from src.services.config_service import ConfigService
 from src.services.job_service import JobService
+from src.services.job_audit_query_service import JobAuditQueryService
 from src.services.job_runner import JobRunner
 from src.services.kaipan_service import KaipanService
 from src.services.market_service import MarketService
@@ -51,6 +52,7 @@ __all__ = [
     "DashboardService",
     "ConfigService",
     "JobService",
+    "JobAuditQueryService",
     "JobRunner",
     "SystemService",
     "RunService",

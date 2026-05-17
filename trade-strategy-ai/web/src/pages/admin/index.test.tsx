@@ -20,6 +20,7 @@ describe('AdminPage', () => {
 
     expect(await screen.findByRole('heading', { name: '管理中心' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '用户管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '权限与审计' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运维恢复' })).toBeInTheDocument();
   });
 });

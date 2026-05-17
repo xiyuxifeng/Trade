@@ -113,6 +113,7 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
     assert result.payload["job"]["job_type"] == "run-pre-market"
     assert fake_runner.calls[0]["workflow"].workflow_id == "pre-market"
     assert fake_runner.calls[0]["params"]["config_path"] == "config/app.yaml"
+    assert fake_runner.calls[0]["confirmed"] is False
 
 
 def test_workflow_service_accepts_market_scheduler_params() -> None:
@@ -182,3 +183,4 @@ def test_workflow_service_allows_confirmed_high_risk_workflow() -> None:
     assert result.payload["workflow"]["workflow_id"] == "install-config"
     assert result.payload["job"]["job_type"] == "init-project"
     assert fake_runner.calls[0]["workflow"].workflow_id == "install-config"
+    assert fake_runner.calls[0]["confirmed"] is True

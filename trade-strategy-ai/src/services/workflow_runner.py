@@ -154,6 +154,7 @@ class WorkflowRunner(BaseService):
             created_by=created_by,
             idempotency_key=idempotency_key,
             audit_source=audit_source,
+            confirmed=confirmed,
         )
         if created_result.status != "ok":
             return created_result
@@ -227,6 +228,7 @@ class WorkflowRunner(BaseService):
                 params=step_params,
                 created_by=created_by,
                 idempotency_key=f"{root_job_id}:{step.step_id}",
+                confirmed=confirmed,
             )
             child_job = self._extract_child_job(submission.payload)
             if child_job is None:

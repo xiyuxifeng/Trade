@@ -2281,3 +2281,16 @@ V2完成 ？ V3 完成？
 3. V1的UI 风格 保持和V2一致
 V3完成后再做？ 可以知道哪些页面是V1的，到时候看看是否需要更改UI页面 ？？？
 确认哪些数据是生成到文件 哪些是数据库
+
+
+"scripts": {
+    "dev": "vite",
+    "build": "pnpm typecheck && pnpm lint && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }

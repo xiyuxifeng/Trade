@@ -86,6 +86,30 @@ class _FakeOpsRecoveryService:
             }
         )
 
+    async def recover_stale_jobs(
+        self,
+        *,
+        stale_before_minutes: int = 10,
+        actor: str | None = None,
+        audit_source: dict[str, Any] | None = None,
+    ) -> Any:
+        self.calls.append(
+            {
+                "method": "recover_stale_jobs",
+                "stale_before_minutes": stale_before_minutes,
+                "actor": actor,
+                "audit_source": audit_source,
+            }
+        )
+        return _result(
+            {
+                "count": 1,
+                "job_ids": ["job-stale-1"],
+                "stale_before": "2026-05-17T08:50:00Z",
+                "stale_before_minutes": stale_before_minutes,
+            }
+        )
+
 
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     """构造测试用 ServiceResult 替身。"""
@@ -172,3 +196,13 @@ async def test_ops_api_rejects_backup_paths_outside_root(client: AsyncClient) ->
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "backup path must stay within backup root"
+
+
+@pytest.mark.asyncio
+async def test_ops_api_supports_stale_job_recovery(client: AsyncClient) -> None:
+    """Ops UI API 应支持 stale job 回收。"""
+    response = await client.post("/api/ui/v1/ops/recover-stale", json={"stale_before_minutes": 12})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    assert payload["stale_before_minutes"] == 12

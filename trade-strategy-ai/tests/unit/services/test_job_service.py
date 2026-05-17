@@ -352,8 +352,12 @@ def test_job_timeout_and_recovery(tmp_path: Path) -> None:
     stale_id = stale.payload["job"]["id"]
     asyncio.run(service.start_job(job_id=stale_id, worker_id="worker-2", lock_token="lock-2"))
     recovered = asyncio.run(service.recover_stale_jobs(stale_before=datetime.now(UTC) + timedelta(seconds=1)))
+    loaded = asyncio.run(service.get_job(stale_id))
 
     assert recovered.payload["count"] >= 1
     assert stale_id in recovered.payload["job_ids"]
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["audit_events"][-1]["operation"] == "stale_recovery"
+    assert loaded.payload["job"]["audit_events"][-1]["actor"] == "web"
 
     asyncio.run(engine.dispose())

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 from api.dependencies import CurrentPrincipal, require_role, verify_api_key
@@ -26,6 +27,12 @@ class OpsRestoreRequest(BaseModel):
     backup_path: str
     include_processed: bool = True
     confirmed: bool = False
+
+
+class OpsRecoverStaleRequest(BaseModel):
+    """stale Job 回收请求。"""
+
+    stale_before_minutes: int = Field(default=10, ge=1, le=1440)
 
 
 def _raise_service_error(result: Any, *, default_message: str) -> None:
@@ -81,6 +88,29 @@ async def restore_backup(
         _handle_value_error(exc)
     if result.status != "ok":
         _raise_service_error(result, default_message="restore failed")
+    return result.payload
+
+
+@router.post("/recover-stale", dependencies=[Depends(verify_api_key)])
+async def recover_stale_jobs(
+    request: OpsRecoverStaleRequest,
+    service: OpsRecoveryService = Depends(get_ops_recovery_service),
+    principal: CurrentPrincipal = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """回收 stale 的 running Job。"""
+    result = await service.recover_stale_jobs(
+        stale_before_minutes=request.stale_before_minutes,
+        actor=principal.api_key_label or principal.role,
+        audit_source={
+            "channel": "ui",
+            "path": "/api/ui/v1/ops/recover-stale",
+            "method": "POST",
+            "actor": principal.api_key_label or principal.role,
+            "principal": principal.to_public_dict(),
+        },
+    )
+    if result.status != "ok":
+        _raise_service_error(result, default_message="stale recovery failed")
     return result.payload
 
 

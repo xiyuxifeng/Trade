@@ -6,8 +6,8 @@ export function DataHealthPage() {
     <main className="page-stack">
       <PageHeader
         kicker="数据运维"
-        title="运维仪表盘"
-        description="实时故障、运行时间、数据新鲜度和报告产物。"
+        title="Health Check Dashboard"
+        description="系统状态、健康组件、数据新鲜度和报告产物的正式查看入口。"
       />
       <OperationalDashboardCenter />
       <DataHealthCenter />

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +10,7 @@ from src.audit.service import AuditService
 from src.backup.service import BackupStats, RestoreStats, backup_project_state, restore_project_state
 from src.common.paths import resolve_project_path
 from src.common.utils import read_json
+from src.services.job_service import JobService
 from src.services.base import BaseService, ServiceResult
 
 
@@ -39,11 +40,13 @@ class OpsRecoveryService(BaseService):
         backup_root: str | Path | None = None,
         engine: Any | None = None,
         audit_service: AuditService | None = None,
+        job_service: JobService | None = None,
     ) -> None:
         self._base_dir = resolve_project_path(base_dir or None)
         self._backup_root = resolve_project_path(backup_root or "data/backups")
         self._engine = engine or get_engine()
         self._audit_service = audit_service or AuditService()
+        self._job_service = job_service or JobService()
 
     def _resolve_backup_dir(self, value: str | Path | None) -> Path:
         """解析并校验备份目录。"""
@@ -108,6 +111,8 @@ class OpsRecoveryService(BaseService):
             engine=self._engine,
             include_processed=include_processed,
             audit_service=self._audit_service,
+            actor="ui.ops",
+            source="ui",
         )
         item = self._backup_item(stats.backup_dir)
         payload = asdict(stats)
@@ -139,6 +144,8 @@ class OpsRecoveryService(BaseService):
                 include_processed=include_processed,
                 force=True,
                 audit_service=self._audit_service,
+                actor="ui.ops",
+                source="ui",
             )
         except FileNotFoundError:
             return ServiceResult(status="error", message="backup package not found", payload={"backup_path": str(resolved_backup_dir)})
@@ -150,6 +157,33 @@ class OpsRecoveryService(BaseService):
         payload["include_processed"] = include_processed
         payload["backup_item"] = self._backup_item(resolved_backup_dir)
         return ServiceResult(status="ok", message="project backup restored", payload=payload)
+
+    async def recover_stale_jobs(
+        self,
+        *,
+        stale_before_minutes: int = 10,
+        actor: str | None = None,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """回收超时未心跳的运行中 Job。"""
+        if stale_before_minutes < 1:
+            return ServiceResult(
+                status="error",
+                message="invalid stale_before_minutes",
+                payload={"stale_before_minutes": stale_before_minutes},
+            )
+
+        stale_before = datetime.now(UTC) - timedelta(minutes=stale_before_minutes)
+        result = await self._job_service.recover_stale_jobs(stale_before=stale_before, actor=actor, audit_source=audit_source)
+        return ServiceResult(
+            status=result.status,
+            message=result.message,
+            payload={
+                **result.payload,
+                "stale_before_minutes": stale_before_minutes,
+            },
+            warnings=result.warnings,
+        )
 
 
 def get_ops_recovery_service() -> OpsRecoveryService:

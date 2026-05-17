@@ -22,7 +22,8 @@ import {
   saveSettings,
   validateSettingsDraft,
 } from './settings';
-import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup } from './ops';
+import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
+import { listDataAudits } from './data-audits';
 import {
   getMarketDataset,
   getMarketSnapshot,
@@ -102,6 +103,8 @@ describe('UI API client contract', () => {
       include_processed: true,
       confirmed: true,
     } as never);
+    await recoverStaleJobs({ stale_before_minutes: 12 } as never);
+    await listDataAudits({ entity_type: 'backup', limit: 10 });
     await listSymbols('000001', 50);
     await getOhlcv('000001.SZ', '2026-05-01', '2026-05-10');
     await listMarketSnapshots({ tradeDate: '2026-05-16', market: 'cn', limit: 10, offset: 0 });
@@ -174,6 +177,8 @@ describe('UI API client contract', () => {
       include_processed: true,
       confirmed: true,
     });
+    expectJsonBody('/api/ui/v1/ops/recover-stale', 'POST', { stale_before_minutes: 12 });
+    expect(findCall('/api/ui/v1/data-audits?entity_type=backup&limit=10')).toBeTruthy();
     expect(findCall('/api/ui/v1/market/symbols?q=000001&limit=50')).toBeTruthy();
     expect(findCall('/api/ui/v1/market/ohlcv?symbol=000001.SZ&start_date=2026-05-01&end_date=2026-05-10')).toBeTruthy();
     expect(findCall('/api/ui/v1/market/snapshots?trade_date=2026-05-16&market=cn&limit=10&offset=0')).toBeTruthy();

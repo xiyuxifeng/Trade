@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react';
 import { DataHealthPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { buildDashboardReport } from '@/lib/api/dataHealth';
-import { getSystemDashboard } from '@/lib/api/system';
+import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
 
 vi.mock('@/lib/api/dataHealth', () => ({
   buildDashboardReport: vi.fn(),
@@ -11,18 +11,29 @@ vi.mock('@/lib/api/dataHealth', () => ({
 
 vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn(),
+  getSystemStatus: vi.fn(),
 }));
 
 const mockedBuildDashboardReport = vi.mocked(buildDashboardReport);
 const mockedGetSystemDashboard = vi.mocked(getSystemDashboard);
+const mockedGetSystemStatus = vi.mocked(getSystemStatus);
 
 describe('DataHealthPage', () => {
-  it('renders the data health page title', async () => {
+  it('renders the health dashboard and report panel', async () => {
+    mockedGetSystemStatus.mockResolvedValue({
+      status: 'ok',
+      config_path: 'config/app.yaml',
+      project_root: '/project',
+      run_mode: 'web',
+      database: { name: 'database', status: 'ok', latency_ms: 3.2 },
+      directories: { data: { path: '/project/data', exists: true }, logs: { path: '/project/logs', exists: true } },
+      warnings: [],
+    });
     mockedGetSystemDashboard.mockResolvedValue({
       status: 'partial',
       generated_at: '2026-05-11T09:10:00Z',
       config_path: 'config/app.yaml',
-      health: { overall: 'healthy', issues: [], database: { name: 'database', status: 'ok', latency_ms: 3.2 } },
+      health: { overall: 'healthy', issues: [], database: { name: 'database', status: 'ok', latency_ms: 3.2 }, provider: { name: 'provider', status: 'ok', latency_ms: 4.1 } },
       worker: { status: 'ok', heartbeat_at: '2026-05-11T09:05:30Z', heartbeat_age_minutes: 4.5, current_job_id: 'job-running-1' },
       failed_jobs: [{ id: 'job-failed-1', job_type: 'run_after_close', status: 'failed', duration_seconds: 180, error_message: 'boom' }],
       duration_summary: { average_seconds: 240, p95_seconds: 300, recent_jobs: [] },
@@ -41,7 +52,7 @@ describe('DataHealthPage', () => {
 
     renderWithRouter([{ path: '/data-health', element: <DataHealthPage /> }], ['/data-health']);
 
-    expect(await screen.findByText('Operational Dashboard', { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Health Check Dashboard', level: 1 })).toBeInTheDocument();
     expect((await screen.findAllByText('job-failed-1')).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('stale market data')).toBeInTheDocument();
     expect(

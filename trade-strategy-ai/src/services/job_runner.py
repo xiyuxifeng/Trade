@@ -630,9 +630,15 @@ class JobRunner(BaseService):
         """兼容旧入口：执行当前可领取的 Job。"""
         return await self.run_worker_once(limit=limit)
 
-    async def recover_stale_jobs(self, *, stale_before: datetime) -> ServiceResult:
+    async def recover_stale_jobs(
+        self,
+        *,
+        stale_before: datetime,
+        actor: str | None = None,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
         """回收 stale 的 running Job，并标记哪些任务仍然可重试。"""
-        recovered = await self._job_service.recover_stale_jobs(stale_before=stale_before)
+        recovered = await self._job_service.recover_stale_jobs(stale_before=stale_before, actor=actor, audit_source=audit_source)
         retryable_job_ids: list[str] = []
         for job_id in recovered.payload.get("job_ids", []):
             loaded = await self._job_service.get_job(job_id)

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from './http';
-import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup } from './ops';
+import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
 
 describe('Ops API client contract', () => {
   beforeEach(() => {
@@ -34,6 +34,7 @@ describe('Ops API client contract', () => {
       include_processed: true,
       confirmed: true,
     });
+    await recoverStaleJobs({ stale_before_minutes: 12 });
 
     const calls = vi.mocked(fetch).mock.calls.map(([url, init]) => ({
       url: String(url),
@@ -59,6 +60,7 @@ describe('Ops API client contract', () => {
       include_processed: true,
       confirmed: true,
     });
+    expectJsonBody('/api/ui/v1/ops/recover-stale', 'POST', { stale_before_minutes: 12 });
 
     for (const call of calls) {
       expect(call.headers.get('X-API-Key')).toBe('demo-key');

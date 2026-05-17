@@ -47,3 +47,14 @@ export type RecoveryRestoreResponse = {
   artifacts_restored?: boolean;
   backup_item?: RecoveryBackupItem | null;
 };
+
+export type RecoveryStaleRequest = {
+  stale_before_minutes?: number;
+};
+
+export type RecoveryStaleResponse = {
+  count: number;
+  job_ids: string[];
+  stale_before: string;
+  stale_before_minutes: number;
+};

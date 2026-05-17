@@ -1508,7 +1508,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-004 P0 Admin Ops Console
+### [x] UI-V3-004 P0 Admin Ops Console
 
 任务目标：提供管理员运维入口。
 
@@ -1539,7 +1539,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-005 P0 Health Check Dashboard
+### [x] UI-V3-005 P0 Health Check Dashboard
 
 任务目标：展示系统健康状态。
 
@@ -1565,7 +1565,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-006 P0 Backup / Restore UI
+### [x] UI-V3-006 P0 Backup / Restore UI
 
 任务目标：提供备份和恢复操作入口。
 

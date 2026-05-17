@@ -1,111 +1,143 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
-import { getSystemDashboard } from '@/lib/api/system';
-import type { SystemDashboardFailedJob, SystemDashboardResponse } from '@/types/system';
+import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
+import type { SystemDashboardFailedJob, SystemDashboardResponse, SystemStatusResponse } from '@/types/system';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
-  return 'Operational Dashboard 加载失败';
+  return '健康仪表盘加载失败';
 }
 
-function SummaryCard({ title, value, accent = 'text-slate-100' }: { title: string; value: string | number; accent?: string }) {
+function statusVariant(status: string | null | undefined) {
+  const normalized = String(status ?? '').toLowerCase();
+  if (normalized === 'ok' || normalized === 'healthy' || normalized === 'success') return 'success';
+  if (normalized === 'warning' || normalized === 'partial') return 'warning';
+  if (normalized === 'error' || normalized === 'failed' || normalized === 'critical') return 'destructive';
+  return 'info';
+}
+
+function SummaryCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{title}</p>
-      <p className={`mt-2 text-2xl font-semibold ${accent}`}>{value}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-sm text-slate-600">{detail}</p>
+    </div>
+  );
+}
+
+function SystemComponentRow({ label, status, detail }: { label: string; status?: string | null; detail?: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div>
+        <p className="font-medium text-slate-950">{label}</p>
+        <p className="text-xs text-slate-500">{detail ?? 'n/a'}</p>
+      </div>
+      <Badge variant={statusVariant(status)}>{status ?? 'n/a'}</Badge>
     </div>
   );
 }
 
 function FailedJobRow({ job }: { job: SystemDashboardFailedJob }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-semibold text-slate-100">{job.id}</p>
-          <p className="text-xs text-slate-400">{job.job_type}</p>
+          <p className="font-semibold text-slate-950">{job.id}</p>
+          <p className="text-xs text-slate-500">{job.job_type}</p>
         </div>
         <Badge variant="destructive">{job.status}</Badge>
       </div>
-      <div className="mt-3 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
-        <p>耗时: {job.duration_seconds ?? 'n/a'} s</p>
-        <p>结束: {job.finished_at ?? 'n/a'}</p>
-        <p className="md:col-span-2">错误: {job.error_message ?? 'n/a'}</p>
+      <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+        <p>耗时：{job.duration_seconds ?? 'n/a'} s</p>
+        <p>结束：{job.finished_at ?? 'n/a'}</p>
+        <p className="md:col-span-2">错误：{job.error_message ?? 'n/a'}</p>
       </div>
     </div>
   );
 }
 
-function SourceFreshnessRow({
-  source,
-  entityType,
-  freshnessHours,
-  isStale,
-}: {
-  source: string;
-  entityType: string;
-  freshnessHours: number | null | undefined;
-  isStale: boolean;
-}) {
+function TraceRow({ jobId, method, path, clientHost }: { jobId: string; method?: string; path?: string; clientHost?: string | null }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-      <div>
-        <p className="font-medium text-slate-100">{source}</p>
-        <p className="text-xs text-slate-400">{entityType}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-slate-300">{freshnessHours ?? 'n/a'} h</span>
-        <Badge variant={isStale ? 'warning' : 'success'}>{isStale ? 'stale' : 'fresh'}</Badge>
-      </div>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="font-medium text-slate-950">{jobId}</p>
+      <p className="mt-2 text-sm text-slate-700">
+        {method ?? 'n/a'} {path ?? 'n/a'}
+      </p>
+      <p className="text-xs text-slate-500">client: {clientHost ?? 'n/a'}</p>
     </div>
   );
 }
 
 export function OperationalDashboardCenter() {
-  const dashboardQuery = useQuery({
-    queryKey: ['system', 'dashboard'],
+  const statusQuery = useQuery<SystemStatusResponse, ApiError>({
+    queryKey: ['data-health', 'system-status'],
+    queryFn: () => getSystemStatus(),
+    staleTime: 10_000,
+  });
+
+  const dashboardQuery = useQuery<SystemDashboardResponse, ApiError>({
+    queryKey: ['data-health', 'system-dashboard'],
     queryFn: () => getSystemDashboard(),
     staleTime: 10_000,
   });
 
+  const status = statusQuery.data ?? null;
   const dashboard = dashboardQuery.data ?? null;
 
-  if (dashboardQuery.isLoading) {
+  const healthComponents = useMemo(
+    () =>
+      dashboard
+        ? Object.entries(dashboard.health)
+            .filter(([key, value]) => key !== 'overall' && key !== 'issues' && key !== 'database' && value && typeof value === 'object')
+            .map(([key, value]) => ({ key, value: value as { status?: string; latency_ms?: number | null; error?: string | null } }))
+        : [],
+    [dashboard],
+  );
+
+  if (statusQuery.isLoading || dashboardQuery.isLoading) {
     return (
-      <section className="dashboard-grid">
-        <Card className="xl:col-span-12">
+      <section className="space-y-4">
+        <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>Operational Dashboard</CardTitle>
-            <CardDescription>正在读取运维摘要。</CardDescription>
+            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardDescription className="text-slate-600">正在读取系统健康状态。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-6 w-1/2" />
-            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-10 w-56 bg-slate-100" />
+            <Skeleton className="h-52 rounded-2xl bg-slate-100" />
           </CardContent>
         </Card>
       </section>
     );
   }
 
-  if (dashboardQuery.isError) {
+  if (statusQuery.isError || dashboardQuery.isError) {
+    const error = statusQuery.error ?? dashboardQuery.error;
     return (
-      <section className="dashboard-grid">
-        <Card className="xl:col-span-12">
+      <section className="space-y-4">
+        <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>Operational Dashboard</CardTitle>
-            <CardDescription>当前摘要接口请求失败。</CardDescription>
+            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardDescription className="text-slate-600">当前健康状态接口请求失败。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
-              {getErrorMessage(dashboardQuery.error)}
-            </div>
-            <Button variant="outline" onClick={() => dashboardQuery.refetch()} disabled={dashboardQuery.isFetching}>
-              {dashboardQuery.isFetching ? '重试中' : '重试'}
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{getErrorMessage(error)}</div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void statusQuery.refetch();
+                void dashboardQuery.refetch();
+              }}
+              disabled={statusQuery.isFetching || dashboardQuery.isFetching}
+            >
+              {statusQuery.isFetching || dashboardQuery.isFetching ? '重试中' : '重试'}
             </Button>
           </CardContent>
         </Card>
@@ -113,13 +145,13 @@ export function OperationalDashboardCenter() {
     );
   }
 
-  if (!dashboard) {
+  if (!status || !dashboard) {
     return (
-      <section className="dashboard-grid">
-        <Card className="xl:col-span-12">
+      <section className="space-y-4">
+        <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>Operational Dashboard</CardTitle>
-            <CardDescription>暂无可显示的数据。</CardDescription>
+            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardDescription className="text-slate-600">暂无可显示的数据。</CardDescription>
           </CardHeader>
         </Card>
       </section>
@@ -130,62 +162,111 @@ export function OperationalDashboardCenter() {
   const failedJobs = dashboard.failed_jobs ?? [];
   const latestAlerts = dashboard.alerts.latest ?? [];
   const latestTraces = dashboard.traces ?? [];
-  const worker =
-    dashboard.worker ?? {
-      status: 'warning' as const,
-      heartbeat_at: null,
-      heartbeat_age_minutes: null,
-      current_job_id: null,
-    };
+  const configIssues = status.warnings ?? [];
 
   return (
-    <section className="dashboard-grid">
-      <Card className="xl:col-span-12">
+    <section className="space-y-4">
+      <Card className="border-slate-200 bg-white shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Operational Dashboard</CardTitle>
-              <CardDescription>最近失败任务、耗时、新鲜度、告警和追踪线索。</CardDescription>
+              <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+              <CardDescription className="text-slate-600">API、DB、worker、queue、provider、storage 与配置校验摘要。</CardDescription>
             </div>
-            <Button variant="outline" onClick={() => dashboardQuery.refetch()} disabled={dashboardQuery.isFetching}>
-              {dashboardQuery.isFetching ? '刷新中' : '刷新'}
+            <Button
+              variant="outline"
+              onClick={() => {
+                void statusQuery.refetch();
+                void dashboardQuery.refetch();
+              }}
+              disabled={statusQuery.isFetching || dashboardQuery.isFetching}
+            >
+              {statusQuery.isFetching || dashboardQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard title="Failed jobs" value={failedJobs.length} accent="text-rose-300" />
-            <SummaryCard title="Avg duration" value={dashboard.duration_summary.average_seconds ?? 'n/a'} accent="text-amber-300" />
-            <SummaryCard title="Critical alerts" value={dashboard.alerts.critical} accent="text-fuchsia-300" />
-            <SummaryCard title="Stale sources" value={freshnessSources.filter((item) => item.is_stale).length} accent="text-sky-300" />
+            <SummaryCard title="API status" value={status.status} detail="系统状态接口返回值" />
+            <SummaryCard title="DB status" value={status.database.status} detail={`latency ${status.database.latency_ms ?? 'n/a'} ms`} />
+            <SummaryCard title="Worker status" value={dashboard.worker.status} detail={dashboard.worker.current_job_id ?? 'no current job'} />
+            <SummaryCard title="Job queue" value={dashboard.status} detail="综合健康结果" />
+          </div>
+
+          {configIssues.length ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-medium">配置 / 目录提醒</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {configIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-900">健康组件</p>
+              <div className="space-y-3">
+                <SystemComponentRow label="数据库" status={status.database.status} detail={status.database.error ?? undefined} />
+                {healthComponents.map((component) => (
+                  <SystemComponentRow
+                    key={component.key}
+                    label={component.key}
+                    status={component.value.status}
+                    detail={component.value.error ?? component.value.latency_ms?.toString() ?? undefined}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-900">关键目录</p>
+              <div className="space-y-3">
+                {Object.entries(status.directories).map(([key, item]) => (
+                  <div key={key} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="font-medium text-slate-950">{key}</p>
+                      <p className="text-xs text-slate-500">{item.path}</p>
+                    </div>
+                    <Badge variant={item.exists ? 'success' : 'destructive'}>{item.exists ? 'exists' : 'missing'}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="space-y-3">
-              <p className="text-sm font-medium text-slate-200">Failed jobs</p>
+              <p className="text-sm font-medium text-slate-900">Recent critical failures</p>
               {failedJobs.length ? (
                 failedJobs.map((job) => <FailedJobRow job={job} key={job.id} />)
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   暂无失败任务。
                 </div>
               )}
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-medium text-slate-200">Freshness</p>
+              <p className="text-sm font-medium text-slate-900">Freshness</p>
               {freshnessSources.length ? (
-                freshnessSources.map((source) => (
-                  <SourceFreshnessRow
-                    entityType={source.entity_type}
-                    freshnessHours={source.freshness_hours}
-                    isStale={source.is_stale}
-                    key={source.source}
-                    source={source.source}
-                  />
-                ))
+                <div className="space-y-3">
+                  {freshnessSources.map((source) => (
+                    <div key={source.source} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div>
+                        <p className="font-medium text-slate-950">{source.source}</p>
+                        <p className="text-xs text-slate-500">{source.entity_type}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-slate-700">{source.freshness_hours ?? 'n/a'} h</span>
+                        <Badge variant={source.is_stale ? 'warning' : 'success'}>{source.is_stale ? 'stale' : 'fresh'}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   暂无新鲜度数据。
                 </div>
               )}
@@ -194,52 +275,45 @@ export function OperationalDashboardCenter() {
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="space-y-3">
-              <p className="text-sm font-medium text-slate-200">Latest alerts</p>
+              <p className="text-sm font-medium text-slate-900">Latest alerts</p>
               {latestAlerts.length ? (
                 <div className="space-y-3">
                   {latestAlerts.map((alert, index) => (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4" key={`${String(alert.title)}-${index}`}>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={`${String(alert.title)}-${index}`}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="font-medium text-slate-100">{String(alert.title ?? 'alert')}</p>
+                        <p className="font-medium text-slate-950">{String(alert.title ?? 'alert')}</p>
                         <Badge variant={String(alert.level) === 'critical' ? 'destructive' : 'warning'}>{String(alert.level ?? 'info')}</Badge>
                       </div>
-                      <p className="mt-2 text-sm text-slate-300">{String(alert.message ?? '')}</p>
+                      <p className="mt-2 text-sm text-slate-700">{String(alert.message ?? '')}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   暂无告警。
                 </div>
               )}
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-medium text-slate-200">Trace hints</p>
+              <p className="text-sm font-medium text-slate-900">Trace hints</p>
               {latestTraces.length ? (
                 <div className="space-y-3">
                   {latestTraces.map((trace) => (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4" key={trace.job_id}>
-                      <p className="font-medium text-slate-100">{trace.job_id}</p>
-                      <p className="mt-2 text-sm text-slate-300">{trace.request_context?.method ?? 'n/a'} {trace.request_context?.path ?? 'n/a'}</p>
-                      <p className="text-xs text-slate-500">client: {trace.request_context?.client_host ?? 'n/a'}</p>
-                    </div>
+                    <TraceRow
+                      key={trace.job_id}
+                      jobId={trace.job_id}
+                      method={trace.request_context?.method}
+                      path={trace.request_context?.path}
+                      clientHost={trace.request_context?.client_host}
+                    />
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   暂无追踪线索。
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-sm font-medium text-slate-200">Worker</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <SummaryCard title="Status" value={worker.status} accent="text-emerald-300" />
-              <SummaryCard title="Heartbeat" value={worker.heartbeat_at ?? 'n/a'} accent="text-sky-300" />
-              <SummaryCard title="Heartbeat age" value={worker.heartbeat_age_minutes ?? 'n/a'} accent="text-amber-300" />
             </div>
           </div>
         </CardContent>

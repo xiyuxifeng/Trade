@@ -5,6 +5,8 @@ import type {
   RecoveryBackupsResponse,
   RecoveryRestoreRequest,
   RecoveryRestoreResponse,
+  RecoveryStaleRequest,
+  RecoveryStaleResponse,
 } from '@/types/ops';
 
 export function listRecoveryBackups() {
@@ -23,6 +25,16 @@ export function createRecoveryBackup(request: RecoveryBackupRequest) {
 
 export function restoreRecoveryBackup(request: RecoveryRestoreRequest) {
   return fetchJson<RecoveryRestoreResponse>('/ops/restore', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+}
+
+export function recoverStaleJobs(request: RecoveryStaleRequest) {
+  return fetchJson<RecoveryStaleResponse>('/ops/recover-stale', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

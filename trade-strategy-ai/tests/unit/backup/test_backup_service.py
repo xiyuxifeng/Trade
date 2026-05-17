@@ -239,3 +239,4 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert (artifacts_dir / "report.json").read_text(encoding="utf-8") == "{\"status\": \"ok\"}"
     assert audit_record.await_count == 2
     assert audit_record.call_args.kwargs["event_type"] == "restore_project_state"
+    assert audit_record.call_args.kwargs["payload"]["artifacts_restored"] is True

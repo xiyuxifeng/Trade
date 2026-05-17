@@ -986,10 +986,13 @@ class JobService(BaseService):
         self,
         *,
         stale_before: datetime,
+        actor: str | None = None,
+        audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把超出心跳阈值的 running Job 标记为 failed。"""
         session_scope = self._ensure_session_factory()
         recovered: list[str] = []
+        now = datetime.now(UTC)
         async with session_scope() as session:
             stmt = select(Job).where(
                 Job.status == JobStatus.running.value,
@@ -1007,16 +1010,30 @@ class JobService(BaseService):
                     "type": "stale_recovery",
                     "message": f"heartbeat stale before {stale_before.isoformat()}",
                 }
-                job.finished_at = datetime.now(UTC)
+                job.finished_at = now
                 job.worker_id = None
                 job.lock_token = None
                 job.lock_acquired_at = None
                 if job.retry_count < job.max_retries:
                     backoff_seconds = max(0, int(job.retry_backoff_seconds or 0))
-                    job.scheduled_at = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
+                    job.scheduled_at = now + timedelta(seconds=backoff_seconds)
                 else:
                     job.scheduled_at = None
                 await self._persist(session, job)
+                await self._record_job_audit(
+                    session=session,
+                    job=job,
+                    operation="stale_recovery",
+                    actor=actor or job.created_by,
+                    audit_source=audit_source,
+                    params_summary=job.params,
+                    payload={
+                        "stale_before": stale_before.isoformat(),
+                        "retry_count": job.retry_count,
+                        "scheduled_at": _to_plain(job.scheduled_at),
+                    },
+                    event_at=now,
+                )
                 recovered.append(str(job.id))
 
         return ServiceResult(

@@ -23,6 +23,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/job-audits/{job_id}": {"get"},
         "/api/ui/v1/security/permission-denied": {"get"},
         "/api/ui/v1/security/permission-denied/{event_id}": {"get"},
+        "/api/ui/v1/data-audits": {"get"},
+        "/api/ui/v1/data-audits/{event_id}": {"get"},
         "/api/ui/v1/optimize/versions": {"get"},
         "/api/ui/v1/optimize/versions/{version_id}": {"get"},
         "/api/ui/v1/optimize/advise-rule-validations": {"post"},
@@ -66,6 +68,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/ops/backups": {"get"},
         "/api/ui/v1/ops/backup": {"post"},
         "/api/ui/v1/ops/restore": {"post"},
+        "/api/ui/v1/ops/recover-stale": {"post"},
         "/api/ui/v1/market/symbols": {"get"},
         "/api/ui/v1/market/ohlcv": {"get"},
         "/api/ui/v1/market/snapshots": {"get"},
@@ -101,6 +104,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         ("/api/ui/v1/settings/restore", "post"): "#/components/schemas/SettingsRestoreRequest",
         ("/api/ui/v1/ops/backup", "post"): "#/components/schemas/OpsBackupRequest",
         ("/api/ui/v1/ops/restore", "post"): "#/components/schemas/OpsRestoreRequest",
+        ("/api/ui/v1/ops/recover-stale", "post"): "#/components/schemas/OpsRecoverStaleRequest",
     }
 
     for (path, method), schema_ref in expected_request_refs.items():
@@ -124,3 +128,5 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
     assert components["OpsBackupRequest"]["properties"]["include_processed"]["default"] is True
     assert set(components["OpsRestoreRequest"]["properties"]) >= {"backup_path", "confirmed", "include_processed"}
     assert components["OpsRestoreRequest"]["properties"]["confirmed"]["default"] is False
+    assert set(components["OpsRecoverStaleRequest"]["properties"]) >= {"stale_before_minutes"}
+    assert components["OpsRecoverStaleRequest"]["properties"]["stale_before_minutes"]["default"] == 10

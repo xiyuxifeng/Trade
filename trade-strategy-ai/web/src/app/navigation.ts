@@ -52,11 +52,11 @@ const compatibilityNavigationItems: NavItem[] = [
   { label: '市场状态', path: '/market-state', description: '市场状态快照构建器' },
   { label: '导入', path: '/imports', description: '交易日志与爬虫状态迁移' },
   { label: '开盘', path: '/kaipan', description: 'Kaipan 获取、清洗与运行控制' },
-  { label: '数据健康', path: '/data-health', description: '运维仪表盘与 HTML 报告产物' },
+  { label: '数据健康', path: '/data-health', description: '健康检查与报告产物' },
   { label: '策略实验室', path: '/strategy-studio', description: '旧策略实验入口，仅作兼容' },
   { label: '回测中心', path: '/backtests', description: '旧回测入口，仅作兼容' },
   { label: '用户管理', path: '/users', description: '用户、角色与权限管理', minRole: 'admin' },
-  { label: '运维', path: '/ops', description: '部署与恢复工具', minRole: 'admin' },
+  { label: '运维', path: '/ops', description: '管理员运维与恢复入口', minRole: 'admin' },
 ];
 
 export const navigationGroups: NavGroup[] = [...formalNavigationGroups];

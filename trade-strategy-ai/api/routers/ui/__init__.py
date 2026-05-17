@@ -5,6 +5,7 @@ from .auth import router as auth_router
 from .imports import router as imports_router
 from .kaipan import router as kaipan_router
 from .data_health import router as data_health_router
+from .data_audits import router as data_audits_router
 from .persona import router as persona_router
 from .pipelines import router as pipelines_router
 from .signals import router as signals_router
@@ -30,6 +31,7 @@ __all__ = [
     "jobs_router",
     "kaipan_router",
     "data_health_router",
+    "data_audits_router",
     "legacy_system_router",
     "market_router",
     "profiles_router",

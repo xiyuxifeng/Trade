@@ -14,6 +14,7 @@ from src.services.config_migration_service import ConfigMigrationService
 from src.services.config_profile_service import ConfigProfileService
 from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.dashboard_service import DashboardService
+from src.services.data_audit_query_service import DataAuditQueryService
 from src.services.config_service import ConfigService
 from src.services.job_service import JobService
 from src.services.job_audit_query_service import JobAuditQueryService
@@ -51,6 +52,7 @@ __all__ = [
     "ConfigProfileService",
     "ConfigSnapshotService",
     "DashboardService",
+    "DataAuditQueryService",
     "ConfigService",
     "JobService",
     "JobAuditQueryService",

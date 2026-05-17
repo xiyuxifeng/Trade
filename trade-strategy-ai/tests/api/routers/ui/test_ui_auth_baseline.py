@@ -159,6 +159,8 @@ async def test_ui_write_route_allows_valid_key(client: AsyncClient, monkeypatch:
         ("/api/ui/v1/market/datasets", "get"),
         ("/api/ui/v1/market/datasets/snap-001:dataset", "get"),
         ("/api/ui/v1/market/snapshots/snap-001/quality", "get"),
+        ("/api/ui/v1/data-audits", "get"),
+        ("/api/ui/v1/ops/recover-stale", "post"),
     ],
 )
 async def test_ui_routes_reject_missing_api_key_for_core_endpoints(

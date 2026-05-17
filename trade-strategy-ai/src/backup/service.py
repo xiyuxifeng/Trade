@@ -139,6 +139,8 @@ async def backup_project_state(
     engine: AsyncEngine | None = None,
     include_processed: bool = True,
     audit_service: AuditService | None = None,
+    actor: str = "cli.backup_data",
+    source: str = "backup-data",
 ) -> BackupStats:
     """Back up database tables and the processed-data directory into one folder."""
 
@@ -195,12 +197,12 @@ async def backup_project_state(
     write_json(_backup_manifest_path(target_dir), manifest)
     await audit.record(
         event_type="backup_project_state",
-        actor="cli.backup_data",
+        actor=actor,
         entity_type="backup",
         entity_id=target_dir.name,
         dataset_version=target_dir.name,
         payload=manifest,
-        source="backup-data",
+        source=source,
     )
     return BackupStats(
         backup_dir=target_dir,
@@ -219,6 +221,8 @@ async def restore_project_state(
     include_processed: bool = True,
     force: bool = False,
     audit_service: AuditService | None = None,
+    actor: str = "cli.restore_data",
+    source: str = "restore-data",
 ) -> RestoreStats:
     """Restore database tables and processed data from one backup package."""
 
@@ -283,7 +287,7 @@ async def restore_project_state(
 
     await audit.record(
         event_type="restore_project_state",
-        actor="cli.restore_data",
+        actor=actor,
         entity_type="backup",
         entity_id=backup_dir.name,
         dataset_version=backup_dir.name,
@@ -292,8 +296,9 @@ async def restore_project_state(
             "row_counts": row_counts,
             "include_processed": include_processed,
             "processed_restored": processed_restored,
+            "artifacts_restored": artifacts_restored,
         },
-        source="restore-data",
+        source=source,
     )
 
     return RestoreStats(

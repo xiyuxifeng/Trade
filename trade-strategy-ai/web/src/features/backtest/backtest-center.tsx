@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -53,22 +53,9 @@ type BacktestQueryState = {
   limit: number;
 };
 
-function formatTimestamp(value: string | null | undefined) {
-  if (!value) return '未记录';
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
 function formatPct(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return 'n/a';
   return `${(value * 100).toFixed(2)}%`;
-}
-
-function formatNumber(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(value)) return 'n/a';
-  return value.toLocaleString('zh-CN');
 }
 
 function shiftDate(value: string, days: number) {
@@ -260,12 +247,6 @@ export function BacktestCenter() {
     queryFn: () => downloadBacktestValidationReport(selectedResultId as string),
     enabled: Boolean(selectedResultId) && canViewBacktest,
   });
-
-  useEffect(() => {
-    if (selectedResultId && selectedResult?.result_id === selectedResultId) {
-      return;
-    }
-  }, [selectedResultId, selectedResult]);
 
   async function runBacktest(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
     setSubmissionError(null);

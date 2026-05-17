@@ -171,3 +171,39 @@ class MarketSnapshotQualityResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     quality_report: dict[str, Any]
+
+
+class MarketRegimeFeatureSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    snapshot_id: str
+    trade_date: str
+    market: str
+    feature_version: str
+    quality_status: str
+    available_feature_count: int
+    partial_feature_count: int
+    missing_feature_count: int
+    feature_payload_json: dict[str, Any] = Field(default_factory=dict)
+    summary_json: dict[str, Any] = Field(default_factory=dict)
+    storage_ref: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class MarketRegimeFeatureListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    filters: dict[str, Any] = Field(default_factory=dict)
+    page: MarketQueryPage
+    items: list[MarketRegimeFeatureSummary] = Field(default_factory=list)
+
+
+class MarketRegimeFeatureDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feature: MarketRegimeFeatureSummary
+    feature_payload_json: dict[str, Any] = Field(default_factory=dict)
+    summary_json: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)

@@ -1500,7 +1500,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V2-S2-006 P1 Market Regime Feature Build
+### [x] NW-V2-S2-006 P1 Market Regime Feature Build
 
 任务目标：在 V2 阶段只生成市场状态特征，不做 rule 优化，为 V3 的 Regime-aware Backtest 和 Rule Applicability Profile 准备数据。
 
@@ -1558,6 +1558,14 @@ UI 关联任务：
 
 - `UI-V2-010 Market Snapshot Browser`
 - `UI-V2-007 Artifact Center`
+
+完成情况：
+
+- 已新增 `MarketRegimeFeature` 主表模型、仓储和迁移，支持 `snapshot_id + feature_version` 唯一写入。
+- 已新增 `MarketRegimeFeatureService`，从已落库 `Market Snapshot` 派生 `market_regime_features`，并支持 partial 结果。
+- 已在 `api/routers/ui/market.py` 暴露 `regime-features` 列表和详情 API，API 不直接读 provider，也不暴露服务器绝对路径。
+- 已输出 JSON artifact 到 `data/processed/market_regime_features/{trade_date}/{snapshot_id}/{feature_version}.json`。
+- 已补充 `docs/New-Web-Market-Regime-Features.md`、测试和 daily 记录，并通过回归验证。
 
 ---
 

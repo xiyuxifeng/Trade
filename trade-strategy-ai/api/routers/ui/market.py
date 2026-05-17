@@ -3,19 +3,21 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from api.dependencies import verify_api_key
 from api.schemas.market import (
     MarketDatasetDetailResponse,
     MarketDatasetListResponse,
+    MarketRegimeFeatureDetailResponse,
+    MarketRegimeFeatureListResponse,
     MarketSnapshotDetailResponse,
     MarketSnapshotListResponse,
     MarketSnapshotQualityResponse,
     MarketSnapshotSectionListResponse,
     MarketSnapshotSectionResponse,
 )
-from src.services import MarketService, MarketSnapshotQueryService
+from src.services import MarketRegimeFeatureService, MarketService, MarketSnapshotQueryService
 
 
 router = APIRouter(prefix="/api/ui/v1/market", tags=["ui-market"])
@@ -29,6 +31,11 @@ def get_market_service() -> MarketService:
 def get_market_snapshot_query_service() -> MarketSnapshotQueryService:
     """获取 MarketSnapshotQueryService 实例，便于测试覆盖。"""
     return MarketSnapshotQueryService()
+
+
+def get_market_regime_feature_service() -> MarketRegimeFeatureService:
+    """获取 MarketRegimeFeatureService 实例，便于测试覆盖。"""
+    return MarketRegimeFeatureService()
 
 
 def _structured_error(error_type: str, message: str, detail: str | None = None, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -50,7 +57,7 @@ def _raise_query_error(result: Any) -> None:
     error_type = str(error.get("type") or "query_failed")
     message = str(error.get("message") or result.message or "query failed")
     status_code = 400
-    if error_type in {"snapshot_not_found", "dataset_not_found", "section_not_found", "quality_report_not_found"}:
+    if error_type in {"snapshot_not_found", "dataset_not_found", "section_not_found", "quality_report_not_found", "feature_not_found"}:
         status_code = 404
     elif error_type == "permission_denied":
         status_code = 403
@@ -225,6 +232,55 @@ async def get_market_snapshot_quality(
 ) -> dict[str, Any]:
     """查询单个 Market Snapshot 的质量报告。"""
     result = await query_service.get_quality_report(snapshot_id)
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/regime-features", response_model=MarketRegimeFeatureListResponse)
+async def list_market_regime_features(
+    response: Response,
+    trade_date: date | None = Query(default=None),
+    snapshot_id: str | None = Query(default=None),
+    market: str | None = Query(default=None),
+    feature_version: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    feature_service: MarketRegimeFeatureService = Depends(get_market_regime_feature_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 market regime features 列表。"""
+    result = await feature_service.list_features(
+        trade_date=trade_date,
+        snapshot_id=snapshot_id,
+        market=market,
+        feature_version=feature_version,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status == "partial":
+        if response is not None:
+            response.status_code = 206
+        return result.payload
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}/regime-features", response_model=MarketRegimeFeatureDetailResponse)
+async def get_market_regime_feature(
+    response: Response,
+    snapshot_id: str,
+    feature_version: str | None = Query(default=None),
+    feature_service: MarketRegimeFeatureService = Depends(get_market_regime_feature_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 market regime feature 详情。"""
+    result = await feature_service.get_feature_detail(snapshot_id, feature_version=feature_version)
+    if result.status == "partial":
+        if response is not None:
+            response.status_code = 206
+        return result.payload
     if result.status != "ok":
         _raise_query_error(result)
     return result.payload

@@ -23,6 +23,7 @@ from src.models import (  # noqa: F401
     job,
     job_audit_event,
     raw_article,
+    market_regime,
     signal,
     stock_info,
     strong_symbols_snapshot,

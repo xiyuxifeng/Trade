@@ -15,6 +15,7 @@ from src.models.market_data_snapshot_section import MarketSnapshotSection
 from src.models.market_data_snapshot_item import MarketSnapshotItem
 from src.models.market_dataset import MarketDataset
 from src.models.market_data_quality_report import MarketDataQualityReport
+from src.models.market_regime import MarketRegimeFeature
 from src.models.raw_article import RawArticle
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
@@ -46,6 +47,7 @@ __all__ = [
     "MarketSnapshotItem",
     "MarketDataset",
     "MarketDataQualityReport",
+    "MarketRegimeFeature",
     "Job",
     "JobStatus",
     "JobAuditEvent",

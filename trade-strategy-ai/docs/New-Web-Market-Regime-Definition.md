@@ -527,6 +527,8 @@ Market Snapshot
 - 上层不要直接依赖原始字段名
 - 统一由 snapshot / feature 层消费标准化后的字段
 
+> 落表与计算分层设计见：[Kaipan Ingestion and Storage Design](./superpowers/specs/2026-05-18-kaipan-ingestion-storage-design.md)
+
 ---
 
 ## 11. 推荐的数据补齐优先级

@@ -2193,6 +2193,56 @@ UI 关联任务：
 - 最终验收文档与实际路由完全一致。
 - 维护者只需要理解一套 canonical 路由。
 
+---
+
+### [~] NW-V3-S3-003 P2 Snapshot 文件路径收口评估
+
+任务目标：在 `MarketDataStorageService` 已成为结构化数据主读源的前提下，梳理 Market Snapshot 相关文件路径的保留与裁剪边界，避免 DB 与文件层长期双轨。
+
+说明：
+
+- 该任务是优化项，不阻塞第一版交付。
+- 只做“保留 / 后续裁掉”清单与收口方案，不在此任务中直接删除文件路径。
+
+建议保留的路径：
+
+| 路径 | 当前作用 | 保留原因 |
+| --- | --- | --- |
+| `data/processed/market_snapshot/{trade_date}/{slot}/snapshot.json` | 结构化 snapshot artifact | 便于回放、排障、离线比对 |
+| `data/processed/market_snapshot/{trade_date}/{slot}/snapshot.summary.json` | snapshot 摘要 artifact | 便于人工复核与 Job/Artifact 回溯 |
+| `data/processed/market_snapshot/{trade_date}/{slot}/snapshot.quality.json` | 数据质量报告 artifact | 便于排障和质量审计 |
+| `data/kaipan/raw/` | Kaipan 原始抓取缓存 | 便于 provider 回放与接口问题排查 |
+| `data/kaipan/snapshots/` | Kaipan 归一化中间态 | 便于 normalize/debug/回放 |
+| `data/jobs/{job_id}/` | Job 结果、日志、参数、artifact 索引 | Job 可追溯性与运维排障依赖 |
+
+建议后续裁掉或降级为可选 artifact 的路径：
+
+| 路径 | 当前作用 | 裁剪方向 |
+| --- | --- | --- |
+| `data/processed/market_snapshot/**/snapshot.json` 作为 Web 主读源 | 双轨事实源之一 | 未来 UI / 回测全部切到 DB 后，可降级为只读 artifact |
+| `data/processed/market_snapshot/**/snapshot.summary.json` 作为主查询入口 | 双轨事实源之一 | 未来仅保留下载/审计用途，不参与主流程 |
+| `data/processed/market_snapshot/**/snapshot.quality.json` 作为主查询入口 | 双轨事实源之一 | 未来仅保留质量审计，不参与业务读取 |
+| `data/kaipan/raw/` | 原始抓取缓存长期保留 | 在确认 provider 回放不再依赖后再评估裁剪 |
+| `data/kaipan/snapshots/` | 归一化中间态长期保留 | 在确认不再需要离线回放/调试后再评估裁剪 |
+
+收口原则：
+
+1. Web UI、Backtest、Regime 只依赖数据库主读源。
+2. 文件层只作为 artifact / 调试 / 回放层存在。
+3. 若未来裁剪文件层，必须先完成 DB 主链路稳定验证，再分阶段移除。
+4. 不允许把文件路径重新引入为业务事实源。
+
+UI 关联任务：
+
+- 无新增 UI 任务，属于后续收口优化。
+
+验收标准：
+
+- 输出文件路径保留/裁剪清单。
+- 明确每条路径的当前作用和后续去向。
+- 明确 DB 主读源与文件 artifact 的边界。
+- 不影响现有 UI / Backtest / Regime 读链。
+
 UI 关联任务：
 
 - `UI-V3-012Final UX Review`

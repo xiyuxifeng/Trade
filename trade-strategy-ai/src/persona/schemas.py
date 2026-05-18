@@ -48,6 +48,7 @@ class MarketState(BaseModel):
 	as_of_date: date
 	market: str = "CN"
 	scope: str = "market"  # market/instrument
+	benchmark_symbol: str | None = None
 	regime: MarketRegime = MarketRegime.unknown
 	volatility: VolatilityLevel = VolatilityLevel.unknown
 	liquidity: LiquidityLevel = LiquidityLevel.unknown

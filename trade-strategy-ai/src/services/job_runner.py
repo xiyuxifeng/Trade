@@ -190,8 +190,12 @@ class JobRunner(BaseService):
 
         async def _market_state_build(params: dict[str, Any]) -> ServiceResult:
             service = PersonaService()
+            benchmark_symbol = params.get("benchmark_symbol")
+            if not benchmark_symbol:
+                raise ValueError("missing required param: benchmark_symbol")
             return service.build_market_state(
                 config_path=params.get("config_path", "config/app.yaml"),
+                benchmark_symbol=benchmark_symbol,
                 as_of=params.get("as_of"),
                 dest=params.get("dest", "data/processed/persona/market_state.json"),
                 from_akshare=_parse_bool(params.get("from_akshare"), default=False),
@@ -201,8 +205,12 @@ class JobRunner(BaseService):
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
             trade_date = params.get("trade_date") or params.get("date") or date.today().isoformat()
+            benchmark_symbol = params.get("benchmark_symbol")
+            if not benchmark_symbol:
+                raise ValueError("missing required param: benchmark_symbol")
             return await service.build_market_snapshot(
                 config_path=params.get("config_path", "config/app.yaml"),
+                benchmark_symbol=benchmark_symbol,
                 trade_date=str(trade_date),
                 slot=str(params.get("slot") or "17-30"),
                 profile_id=params.get("profile_id") or "default",
@@ -223,13 +231,14 @@ class JobRunner(BaseService):
 
         async def _backtest_run(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
+            benchmark_symbol = params.get("benchmark_symbol")
             return service.run_backtest(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
-                benchmark_symbol=params.get("benchmark_symbol"),
+                benchmark_symbol=benchmark_symbol,
                 mode=str(params.get("mode") or "full"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
@@ -238,13 +247,14 @@ class JobRunner(BaseService):
 
         async def _backtest_validate_rules(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
+            benchmark_symbol = params.get("benchmark_symbol")
             return await service.validate_rules(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
-                benchmark_symbol=params.get("benchmark_symbol"),
+                benchmark_symbol=benchmark_symbol,
                 mode=str(params.get("mode") or "rule_validation"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
@@ -253,13 +263,14 @@ class JobRunner(BaseService):
 
         async def _backtest_reproducibility_check(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
+            benchmark_symbol = params.get("benchmark_symbol")
             return service.reproducibility_check(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
-                benchmark_symbol=params.get("benchmark_symbol"),
+                benchmark_symbol=benchmark_symbol,
                 mode=str(params.get("mode") or "full"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),

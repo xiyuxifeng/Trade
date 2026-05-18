@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
+import { listBenchmarkOptions } from '@/lib/api/market';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import type { JobRecord } from '@/types/jobs';
 import { MarketWorkspaceSummary } from './market-workspace-summary';
@@ -117,6 +118,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState) {
   if (jobType === 'market-state-build') {
     return {
       config_path: form.configPath,
+      benchmark_symbol: form.benchmarkSymbol,
       as_of: form.asOf,
       dest: form.dest,
       from_akshare: form.fromAkshare,
@@ -126,6 +128,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState) {
 
   return {
     config_path: form.configPath,
+    benchmark_symbol: form.benchmarkSymbol,
     date: form.snapshotDate,
     start_date: form.startDate,
     end_date: form.endDate,
@@ -172,6 +175,7 @@ type WorkspaceFormState = {
   offline: boolean;
   fromAkshare: boolean;
   cacheCsv: boolean;
+  benchmarkSymbol: string;
   startScheduler: boolean;
   block: boolean;
 };
@@ -194,12 +198,20 @@ export function MarketWorkspaceShell() {
     offline: false,
     fromAkshare: false,
     cacheCsv: true,
+    benchmarkSymbol: '000300.SH',
     startScheduler: false,
     block: false,
   });
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
   const [submissionJobId, setSubmissionJobId] = useState<string | null>(null);
   const [submittingJobType, setSubmittingJobType] = useState<string | null>(null);
+
+  const benchmarkOptionsQuery = useQuery({
+    queryKey: ['market-workspace-benchmark-options'],
+    queryFn: () => listBenchmarkOptions(20),
+    staleTime: 30_000,
+  });
+  const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
 
   const jobsQuery = useQuery({
     queryKey: ['market-workspace-jobs'],
@@ -320,6 +332,20 @@ export function MarketWorkspaceShell() {
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-700">市场状态日期</span>
               <Input type="date" value={form.asOf} onChange={(event) => updateForm({ asOf: event.target.value })} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">基准指数</span>
+              <Select value={form.benchmarkSymbol} onChange={(event) => updateForm({ benchmarkSymbol: event.target.value })}>
+                {benchmarkOptions.length === 0 ? (
+                  <option value={form.benchmarkSymbol}>{form.benchmarkSymbol}</option>
+                ) : (
+                  benchmarkOptions.map((item) => (
+                    <option key={item.symbol} value={item.symbol}>
+                      {item.name} ({item.symbol})
+                    </option>
+                  ))
+                )}
+              </Select>
             </label>
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium text-slate-700">标的列表（逗号或换行分隔）</span>

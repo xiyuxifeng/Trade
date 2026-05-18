@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { ApiError } from '@/lib/api/http';
 import { createJob } from '@/lib/api/jobs';
+import { listBenchmarkOptions } from '@/lib/api/market';
 import { getSnapshot, listSnapshots } from '@/lib/api/snapshots';
 import type { JobSubmissionRequest } from '@/types/jobs';
 import type { SnapshotDetail, SnapshotListResponse, SnapshotSummaryItem, SnapshotType } from '@/types/snapshots';
@@ -198,9 +199,11 @@ function toBuildParams(form: {
   snapshotType: SnapshotType | 'all';
   force: boolean;
   offline: boolean;
+  benchmarkSymbol: string;
 }) {
   return {
     config_path: DEFAULT_CONFIG_PATH,
+    benchmark_symbol: form.benchmarkSymbol,
     date: form.dateStart === form.dateEnd ? form.dateStart : undefined,
     start_date: form.dateStart,
     end_date: form.dateEnd,
@@ -222,8 +225,16 @@ export function SnapshotsPage() {
   const [snapshotType, setSnapshotType] = useState<SnapshotType | 'all'>('all');
   const [force, setForce] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState('000300.SH');
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [submittedJobId, setSubmittedJobId] = useState<string | null>(null);
+
+  const benchmarkOptionsQuery = useQuery({
+    queryKey: ['snapshot-center-benchmark-options'],
+    queryFn: () => listBenchmarkOptions(20),
+    staleTime: 30_000,
+  });
+  const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
 
   const snapshotsQuery = useQuery<SnapshotListResponse, ApiError>({
     queryKey: ['snapshots', { dateStart, dateEnd, snapshotType }],
@@ -264,7 +275,7 @@ export function SnapshotsPage() {
     mutationFn: async () => {
       const request: JobSubmissionRequest = {
         job_type: 'snapshot-build',
-        params: toBuildParams({ dateStart, dateEnd, slot, snapshotType, force, offline }),
+        params: toBuildParams({ dateStart, dateEnd, slot, snapshotType, force, offline, benchmarkSymbol }),
         created_by: 'web',
         max_retries: 3,
         retry_backoff_seconds: 0,
@@ -329,6 +340,20 @@ export function SnapshotsPage() {
                   <option value="hot_topics">热题材</option>
                   <option value="topic_constituents">题材成分股</option>
                   <option value="strong_symbols">强势标的</option>
+                </Select>
+              </label>
+              <label className="space-y-2 text-sm text-slate-300">
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">基准指数</span>
+                <Select value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
+                  {benchmarkOptions.length === 0 ? (
+                    <option value={benchmarkSymbol}>{benchmarkSymbol}</option>
+                  ) : (
+                    benchmarkOptions.map((item) => (
+                      <option key={item.symbol} value={item.symbol}>
+                        {item.name} ({item.symbol})
+                      </option>
+                    ))
+                  )}
                 </Select>
               </label>
             </div>

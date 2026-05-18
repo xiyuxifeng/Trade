@@ -100,7 +100,16 @@ class _FakeMarketService:
 
 
 class _FakePersonaService:
-    def build_market_state(self, *, config_path, as_of, dest, from_akshare=False, cache_csv=True):
+    def build_market_state(
+        self,
+        *,
+        config_path,
+        benchmark_symbol,
+        as_of,
+        dest,
+        from_akshare=False,
+        cache_csv=True,
+    ):
         from src.services.base import ServiceResult
 
         Path(dest).parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +117,12 @@ class _FakePersonaService:
         return ServiceResult(
             status="ok",
             message="market state written",
-            payload={"market_state_path": str(dest), "source": "cache", "market_state": {"state": "bull"}},
+            payload={
+                "market_state_path": str(dest),
+                "source": "cache",
+                "benchmark_symbol": benchmark_symbol,
+                "market_state": {"state": "bull", "benchmark_symbol": benchmark_symbol},
+            },
         )
 
 
@@ -140,7 +154,7 @@ def test_market_snapshot_service_writes_snapshot_summary_and_quality_reports(tmp
 
     config_path = tmp_path / "config" / "app.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\npersona:\n  market_state_benchmark_symbol: SH000001\n", encoding="utf-8")
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
 
     service = MarketSnapshotService(
         provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
@@ -152,6 +166,7 @@ def test_market_snapshot_service_writes_snapshot_summary_and_quality_reports(tmp
     result = asyncio.run(
         service.build_market_snapshot(
             config_path=config_path,
+            benchmark_symbol="000300.SH",
             trade_date="2026-05-16",
             slot="17-30",
             profile_id="default",
@@ -194,6 +209,7 @@ def test_market_snapshot_service_reports_partial_coverage(tmp_path: Path) -> Non
     result = asyncio.run(
         service.build_market_snapshot(
             config_path=config_path,
+            benchmark_symbol="000300.SH",
             trade_date="2026-05-16",
             slot="17-30",
             profile_id="default",
@@ -226,6 +242,7 @@ async def test_market_snapshot_service_persists_snapshot_to_database(tmp_path: P
 
     result = await service.build_market_snapshot(
         config_path=config_path,
+        benchmark_symbol="000300.SH",
         trade_date="2026-05-16",
         slot="17-30",
         profile_id="default",

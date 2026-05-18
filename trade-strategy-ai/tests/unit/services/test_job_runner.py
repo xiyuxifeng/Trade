@@ -455,7 +455,7 @@ def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
     submitted = asyncio.run(
         runner.submit_job(
             job_type="market-state-build",
-            params={"config_path": "config/app.yaml", "as_of": "2026-05-16"},
+            params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "as_of": "2026-05-16"},
             created_by="web",
         )
     )
@@ -497,7 +497,7 @@ def test_submit_snapshot_job_binds_summary_and_quality_artifacts(tmp_path: Path)
     created = asyncio.run(
         job_service.create_job(
             job_type="snapshot-build",
-            params={"config_path": "config/app.yaml", "trade_date": "2026-05-16"},
+            params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "trade_date": "2026-05-16"},
             created_by="web",
         )
     )

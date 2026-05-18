@@ -118,6 +118,22 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert market.status == "ok"
     assert market.payload["params"]["symbols"] == ["000001.SZ"]
 
+    market_state = validate_job_submission(
+        job_type="market-state-build",
+        params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "as_of": "2026-05-09"},
+        created_by="web",
+    )
+    assert market_state.status == "ok"
+    assert market_state.payload["params"]["benchmark_symbol"] == "000300.SH"
+
+    snapshot = validate_job_submission(
+        job_type="snapshot-build",
+        params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "date": "2026-05-09"},
+        created_by="web",
+    )
+    assert snapshot.status == "ok"
+    assert snapshot.payload["params"]["benchmark_symbol"] == "000300.SH"
+
 
 def test_job_definition_lookup_exposes_metadata() -> None:
     """Job 定义应能按 job_type 查到元数据。"""

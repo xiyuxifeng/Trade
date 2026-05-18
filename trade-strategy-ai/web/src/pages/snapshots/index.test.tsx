@@ -5,6 +5,7 @@ import { fireEvent } from '@testing-library/react';
 import { SnapshotsPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob } from '@/lib/api/jobs';
+import { listBenchmarkOptions } from '@/lib/api/market';
 import { getSnapshot, listSnapshots } from '@/lib/api/snapshots';
 import type { JobDetailResponse } from '@/types/jobs';
 
@@ -17,9 +18,14 @@ vi.mock('@/lib/api/snapshots', () => ({
   listSnapshots: vi.fn(),
 }));
 
+vi.mock('@/lib/api/market', () => ({
+  listBenchmarkOptions: vi.fn(),
+}));
+
 const mockedCreateJob = vi.mocked(createJob);
 const mockedGetSnapshot = vi.mocked(getSnapshot);
 const mockedListSnapshots = vi.mocked(listSnapshots);
+const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 
 describe('SnapshotsPage', () => {
   it('builds a snapshot job and shows snapshot details', async () => {
@@ -39,6 +45,13 @@ describe('SnapshotsPage', () => {
         },
       ],
     });
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'CN', name: '沪深300', security_type: 'index' },
+        { symbol: '510300.SH', code: '510300', market: 'CN', name: '沪深300ETF', security_type: 'etf' },
+      ],
+    } as never);
     mockedGetSnapshot.mockResolvedValue({
       item: {
         trade_date: '2026-05-09',
@@ -131,9 +144,8 @@ describe('SnapshotsPage', () => {
     expect(await screen.findByText('快照中心')).toBeInTheDocument();
     expect(await screen.findByText('2026-05-09')).toBeInTheDocument();
 
-    const dateInputs = screen.getAllByLabelText(/date/i);
-    fireEvent.change(dateInputs[0], { target: { value: '2026-05-09' } });
-    fireEvent.change(dateInputs[1], { target: { value: '2026-05-09' } });
+    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-05-09' } });
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-05-09' } });
 
     await user.click(screen.getByRole('button', { name: '构建快照' }));
 
@@ -141,6 +153,7 @@ describe('SnapshotsPage', () => {
       job_type: 'snapshot-build',
       params: {
         config_path: 'config/app.yaml',
+        benchmark_symbol: '000300.SH',
         date: '2026-05-09',
         start_date: '2026-05-09',
         end_date: '2026-05-09',

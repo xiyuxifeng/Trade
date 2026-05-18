@@ -216,7 +216,7 @@ class MarketSnapshotService(BaseService):
             },
         }
 
-    def _build_registry(self, *, provider: KaipanProvider, base_dir: Path, benchmark_symbol: str | None, config_path: str | Path) -> MarketSnapshotRegistry:
+    def _build_registry(self, *, provider: KaipanProvider, base_dir: Path, benchmark_symbol: str, config_path: str | Path) -> MarketSnapshotRegistry:
         """构建默认 section registry。"""
         market_service = self._market_service or MarketService()
         persona_service = self._persona_service or PersonaService()
@@ -233,6 +233,7 @@ class MarketSnapshotService(BaseService):
         self,
         *,
         config_path: str | Path,
+        benchmark_symbol: str,
         trade_date: str,
         slot: str = "17-30",
         profile_id: str | None = "default",
@@ -247,7 +248,8 @@ class MarketSnapshotService(BaseService):
 
         loaded, base_dir = self._load_runtime(config_path)
         provider = self._create_provider(loaded=loaded, base_dir=base_dir)
-        benchmark_symbol = getattr(loaded.config.persona, "market_state_benchmark_symbol", None)
+        if not benchmark_symbol:
+            raise ValueError("benchmark_symbol is required")
         registry = self._build_registry(
             provider=provider,
             base_dir=base_dir,
@@ -262,7 +264,7 @@ class MarketSnapshotService(BaseService):
             slot=slot,
             market=market,
             offline=offline,
-            metadata={"config_ref": _relative_path_or_name(loaded.config_path, base_dir)},
+            metadata={"config_ref": _relative_path_or_name(loaded.config_path, base_dir), "benchmark_symbol": benchmark_symbol},
         )
 
         sections: dict[str, MarketSnapshotSection] = {}
@@ -316,6 +318,7 @@ class MarketSnapshotService(BaseService):
                 "profile_id": profile_id,
                 "offline": offline,
                 "section_order": list(sections.keys()),
+                "benchmark_symbol": benchmark_symbol,
             },
         )
 
@@ -373,6 +376,7 @@ class MarketSnapshotService(BaseService):
         self,
         *,
         config_path: str | Path,
+        benchmark_symbol: str,
         trade_date: str,
         slot: str = "17-30",
         profile_id: str | None = "default",
@@ -385,6 +389,7 @@ class MarketSnapshotService(BaseService):
         return await asyncio.to_thread(
             self._build_snapshot_sync,
             config_path=config_path,
+            benchmark_symbol=benchmark_symbol,
             trade_date=trade_date,
             slot=slot,
             profile_id=profile_id,

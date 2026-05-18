@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/ui/v1", tags=["ui-persona"])
 class MarketStateBuildRequest(BaseModel):
     """MarketState 构建请求体。"""
 
+    benchmark_symbol: str
     as_of: str | None = None
     from_akshare: bool = False
     cache_csv: bool = True
@@ -46,6 +47,7 @@ async def build_market_state(
     """构建 MarketState 快照。"""
     result = service.build_market_state(
         config_path=_config_path(),
+        benchmark_symbol=request.benchmark_symbol,
         as_of=request.as_of,
         from_akshare=request.from_akshare,
         cache_csv=request.cache_csv,

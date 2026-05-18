@@ -557,6 +557,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
             "市场状态参数",
             {
                 "config_path": _path_field("配置文件路径", required=True),
+                "benchmark_symbol": _string("基准指数代码", required=True),
                 "as_of": _date_field("基准日期"),
                 "dest": _path_field("输出路径"),
                 "from_akshare": _boolean("是否从 AkShare 构建", default=False),
@@ -581,6 +582,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
             "快照构建参数",
             {
                 "config_path": _path_field("配置文件路径", required=True),
+                "benchmark_symbol": _string("基准指数代码", required=True),
                 "date": _date_field("单日快照日期"),
                 "start_date": _date_field("区间开始日期"),
                 "end_date": _date_field("区间结束日期"),

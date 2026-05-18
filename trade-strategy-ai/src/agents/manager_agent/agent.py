@@ -34,6 +34,7 @@ from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.utils import append_jsonl, ensure_dir, read_json, write_json
 from src.reporting.html_reports import write_daily_report_html, write_evaluation_html
+from src.market_data.stock_info_service import COMMON_MARKET_INDICES
 from src.persona.router import PersonaRouter
 from src.persona.market_state import DailySeriesSource, classify_market_state, load_daily_close_series
 from src.persona.schemas import InstrumentFocus, MarketState
@@ -177,17 +178,9 @@ class ManagerAgent:
                 self.logger.warning("persona.market_state_path invalid, using default", path=str(p))
 
         # Phase 0.5: build from benchmark daily CSV (index/ETF)
-        bench_csv = self._resolve_path(getattr(self.config.persona, "market_state_benchmark_csv", None))
-        bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
-        if bench_csv and bench_csv.exists() and bench_symbol:
-            try:
-                src = DailySeriesSource(symbol=bench_symbol, csv_path=bench_csv)
-                df = load_daily_close_series(src)
-                return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
-            except Exception as exc:  # noqa: BLE001
-                self.logger.warning("failed to build MarketState from benchmark CSV", error=str(exc))
+        bench_symbol = COMMON_MARKET_INDICES[0]["symbol"]
         cache_dir = self._resolve_path(getattr(self.config.data, "market_data_cache_dir", None))
-        if cache_dir and bench_symbol:
+        if cache_dir:
             cache = MarketDataCache(cache_dir)
             cached_csv = cache.path_for_symbol(bench_symbol)
             if cached_csv.exists():
@@ -197,7 +190,7 @@ class ManagerAgent:
                     return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
                 except Exception as exc:  # noqa: BLE001
                     self.logger.warning("failed to build MarketState from market data cache", error=str(exc))
-        return MarketState(as_of_date=as_of_date)
+        return MarketState(as_of_date=as_of_date, benchmark_symbol=bench_symbol)
 
     async def _load_market_state_from_db(self, *, as_of_date: date) -> MarketState:
         """从 ohlcv_bars 数据库加载 MarketState（异步）。
@@ -208,9 +201,7 @@ class ManagerAgent:
         Returns:
             MarketState 实例
         """
-        bench_symbol = getattr(self.config.persona, "market_state_benchmark_symbol", None)
-        if not bench_symbol:
-            return MarketState(as_of_date=as_of_date)
+        bench_symbol = COMMON_MARKET_INDICES[0]["symbol"]
 
         try:
             factory = get_session_factory()

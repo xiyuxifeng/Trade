@@ -37,6 +37,7 @@ class _FakePersonaService:
         self,
         *,
         config_path: str,
+        benchmark_symbol: str,
         as_of: str | None = None,
         from_akshare: bool = False,
         cache_csv: bool = True,
@@ -44,6 +45,7 @@ class _FakePersonaService:
         self.market_calls.append(
             {
                 "config_path": config_path,
+                "benchmark_symbol": benchmark_symbol,
                 "as_of": as_of,
                 "from_akshare": from_akshare,
                 "cache_csv": cache_csv,
@@ -90,7 +92,7 @@ async def test_build_market_state_returns_snapshot(client: AsyncClient) -> None:
     """MarketState 构建应返回快照路径别名。"""
     response = await client.post(
         "/api/ui/v1/persona/market-state/build",
-        json={"as_of": "2026-05-09", "from_akshare": False, "cache_csv": True},
+        json={"benchmark_symbol": "000300.SH", "as_of": "2026-05-09", "from_akshare": False, "cache_csv": True},
     )
     assert response.status_code == 200
     payload = response.json()

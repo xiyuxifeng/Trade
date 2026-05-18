@@ -691,11 +691,11 @@ def build_ohlcv_section(
     *,
     market_service: MarketService,
     base_dir: Path,
-    benchmark_symbol: str | None = None,
+    benchmark_symbol: str,
 ) -> MarketSnapshotSection:
     """构建 OHLCV section。"""
     trade_date = _as_date(context.trade_date)
-    symbol = benchmark_symbol or "SH000001"
+    symbol = benchmark_symbol
     end_date = trade_date
     start_date = trade_date - timedelta(days=19)
     missing_reasons: list[str] = []
@@ -866,6 +866,7 @@ def build_market_state_section(
     persona_service: PersonaService,
     config_path: str | Path,
     output_dir: Path,
+    benchmark_symbol: str,
 ) -> MarketSnapshotSection:
     """构建 MarketState section。"""
     trade_date = _as_date(context.trade_date)
@@ -873,6 +874,7 @@ def build_market_state_section(
     try:
         result = persona_service.build_market_state(
             config_path=config_path,
+            benchmark_symbol=benchmark_symbol,
             as_of=trade_date,
             dest=dest,
             from_akshare=False,
@@ -955,7 +957,7 @@ class OhlcvSectionBuilder:
 
     market_service: MarketService
     base_dir: Path
-    benchmark_symbol: str | None = None
+    benchmark_symbol: str
     section_id: str = "ohlcv"
 
     def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
@@ -1007,6 +1009,7 @@ class MarketStateSectionBuilder:
     persona_service: PersonaService
     config_path: str | Path
     output_dir: Path
+    benchmark_symbol: str
     section_id: str = "market_state"
 
     def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
@@ -1015,6 +1018,7 @@ class MarketStateSectionBuilder:
             persona_service=self.persona_service,
             config_path=self.config_path,
             output_dir=self.output_dir,
+            benchmark_symbol=self.benchmark_symbol,
         )
 
 
@@ -1024,7 +1028,7 @@ def build_default_market_snapshot_registry(
     market_service: MarketService,
     persona_service: PersonaService,
     base_dir: Path,
-    benchmark_symbol: str | None,
+    benchmark_symbol: str,
     config_path: str | Path,
 ) -> MarketSnapshotRegistry:
     """创建默认的 MarketSnapshotRegistry。"""
@@ -1037,5 +1041,12 @@ def build_default_market_snapshot_registry(
     registry.register(HotTopicsSectionBuilder(provider=provider))
     registry.register(TopicConstituentsSectionBuilder(provider=provider))
     registry.register(StrongSymbolsSectionBuilder(provider=provider))
-    registry.register(MarketStateSectionBuilder(persona_service=persona_service, config_path=config_path, output_dir=base_dir / "data/processed/market_snapshot"))
+    registry.register(
+        MarketStateSectionBuilder(
+            persona_service=persona_service,
+            config_path=config_path,
+            output_dir=base_dir / "data/processed/market_snapshot",
+            benchmark_symbol=benchmark_symbol,
+        )
+    )
     return registry

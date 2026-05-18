@@ -172,10 +172,6 @@ class PersonaConfig(BaseModel):
     top_k: int = 2
     market_state_path: str | None = None  # optional JSON file for MarketState
 
-    # Phase 0.5: build MarketState from local daily CSV (index/ETF daily)
-    market_state_benchmark_symbol: str | None = None
-    market_state_benchmark_csv: str | None = None
-
 
 class Stage4Config(BaseModel):
     """Stage 4 盘前主链路配置（NTL-S4-009）。

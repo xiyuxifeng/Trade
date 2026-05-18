@@ -154,10 +154,6 @@ persona:
 	top_k: 2
 	# 可选：直接指定 MarketState JSON
 	market_state_path: null
-	# 基准指数/ETF：用于从日线推断 MarketState（regime/vol）
-	market_state_benchmark_symbol: "510300.SH"
-	# 基准日线 CSV；为空时可用 market-state-build --from-akshare 拉取
-	market_state_benchmark_csv: null
 
 traders:
 	- trader_id: trader_a
@@ -1031,20 +1027,19 @@ def persona_init_sample(
 @app.command("market-state-build")
 def market_state_build(
 	config: Path = typer.Option(Path("config/app.yaml"), help="配置文件路径"),
+	benchmark_symbol: str = typer.Option(..., help="用于 MarketState 构建的基准指数代码"),
 	as_of: str | None = typer.Option(None, help="日期 YYYY-MM-DD，默认今天"),
 	dest: Path = typer.Option(resolve_project_path("data/processed/persona/market_state.json"), help="输出 MarketState JSON"),
-	from_akshare: bool = typer.Option(False, help="当未配置 benchmark_csv 时，尝试从 AkShare 拉取日线数据"),
-	cache_csv: bool = typer.Option(True, help="从 AkShare 拉取后是否缓存为 CSV（写入 benchmark_csv 或默认路径）"),
+	from_akshare: bool = typer.Option(False, help="尝试从 AkShare 拉取基准日线数据"),
+	cache_csv: bool = typer.Option(True, help="从 AkShare 拉取后是否缓存为 CSV"),
 	log_level: str = typer.Option("INFO", help="日志级别"),
 ):
-	"""从指数/ETF 日线 CSV 构建 MarketState(regime/vol) 并输出 JSON。
-
-	需要在 config.persona.market_state_benchmark_csv 指定 CSV 路径（列：date,close）。
-	"""
+	"""从显式选择的基准指数日线构建 MarketState(regime/vol) 并输出 JSON。"""
 
 	configure_logging(log_level)
 	result = PersonaService().build_market_state(
 		config_path=config,
+		benchmark_symbol=benchmark_symbol,
 		as_of=as_of,
 		dest=dest,
 		from_akshare=from_akshare,

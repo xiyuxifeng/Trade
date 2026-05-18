@@ -88,52 +88,28 @@ class PersonaService(BaseService):
 		self,
 		*,
 		config_path: str | Path,
+		benchmark_symbol: str,
 		as_of: str | date | None = None,
 		dest: str | Path = resolve_project_path("data/processed/persona/market_state.json"),
 		from_akshare: bool = False,
 		cache_csv: bool = True,
 	) -> ServiceResult:
-		"""从 benchmark CSV / cache / AkShare 构建 MarketState。"""
+		"""从 benchmark 日线 / cache / AkShare 构建 MarketState。"""
 		loaded = load_app_config(config_path)
 		base_dir = _project_base_dir(loaded.config_path)
-		cfg = loaded.config
 		as_of_date = _parse_date_like(as_of)
-
-		bench_symbol = getattr(cfg.persona, "market_state_benchmark_symbol", None)
+		bench_symbol = benchmark_symbol
 		if not bench_symbol:
-			return ServiceResult(
-				status="error",
-				message="persona.market_state_benchmark_symbol is not set",
-				payload={"config_path": str(loaded.config_path), "base_dir": str(base_dir)},
-			)
+			raise ValueError("benchmark_symbol is required")
 
 		market_state: MarketState | None = None
 		source = ""
-		if cfg.persona.market_state_benchmark_csv:
-			csv_path = Path(cfg.persona.market_state_benchmark_csv)
-			if not csv_path.is_absolute():
-				csv_path = base_dir / csv_path
-			try:
-				src = DailySeriesSource(symbol=bench_symbol, csv_path=csv_path)
-				df = load_daily_close_series(src)
-				market_state = classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=src.symbol)
-				source = "csv"
-			except Exception as exc:  # noqa: BLE001
-				return ServiceResult(
-					status="error",
-					message=f"failed to build MarketState from benchmark CSV: {exc}",
-					payload={"config_path": str(loaded.config_path), "base_dir": str(base_dir), "csv_path": str(csv_path)},
-				)
-		elif from_akshare:
+		if from_akshare:
 			try:
 				tool = self._create_akshare_tool()
 				etf_df = tool.fetch_etf_daily_em(AkshareDailyRequest(symbol=bench_symbol))
 				if cache_csv:
-					csv_path = (
-						Path(cfg.persona.market_state_benchmark_csv)
-						if cfg.persona.market_state_benchmark_csv
-						else resolve_project_path("data/processed/persona") / f"{bench_symbol}_daily.csv"
-					)
+					csv_path = resolve_project_path("data/processed/persona") / f"{bench_symbol}_daily.csv"
 					if not csv_path.is_absolute():
 						csv_path = base_dir / csv_path
 					tool.write_daily_csv(df=etf_df, dest_path=csv_path)
@@ -146,7 +122,7 @@ class PersonaService(BaseService):
 					payload={"config_path": str(loaded.config_path), "base_dir": str(base_dir)},
 				)
 		else:
-			cache_dir = base_dir / cfg.data.market_data_cache_dir
+			cache_dir = base_dir / loaded.config.data.market_data_cache_dir
 			cached_csv = MarketDataCache(cache_dir).path_for_symbol(bench_symbol)
 			if cached_csv.exists():
 				try:
@@ -163,8 +139,13 @@ class PersonaService(BaseService):
 			else:
 				return ServiceResult(
 					status="error",
-					message="persona.market_state_benchmark_csv is not set; pass from_akshare or sync cache first",
-					payload={"config_path": str(loaded.config_path), "base_dir": str(base_dir), "cache_path": str(cached_csv)},
+					message="benchmark data not found; pass benchmark_symbol and either from_akshare or sync cache first",
+					payload={
+						"config_path": str(loaded.config_path),
+						"base_dir": str(base_dir),
+						"cache_path": str(cached_csv),
+						"benchmark_symbol": bench_symbol,
+					},
 				)
 
 		assert market_state is not None
@@ -181,6 +162,7 @@ class PersonaService(BaseService):
 				"base_dir": str(base_dir),
 				"market_state_path": str(full_dest),
 				"source": source,
+				"benchmark_symbol": bench_symbol,
 				"market_state": market_state.model_dump(mode="json"),
 			},
 		)

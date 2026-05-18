@@ -128,6 +128,7 @@ def classify_market_state(*, as_of_date: date, daily_df: pd.DataFrame, symbol: s
 	return MarketState(
 		as_of_date=as_of_date,
 		scope="market",
+		benchmark_symbol=symbol,
 		regime=regime,
 		volatility=vol_level,
 		features=features,

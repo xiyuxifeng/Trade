@@ -31,7 +31,7 @@ describe('persona api', () => {
       json: async () => ({ snapshot_path: 'data/processed/market-state/latest.json' }),
     } as Response);
 
-    await buildMarketState({ as_of: '2026-05-09', from_akshare: false, cache_csv: true });
+    await buildMarketState({ benchmark_symbol: '000300.SH', as_of: '2026-05-09', from_akshare: false, cache_csv: true });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(url).toBe('/api/ui/v1/persona/market-state/build');

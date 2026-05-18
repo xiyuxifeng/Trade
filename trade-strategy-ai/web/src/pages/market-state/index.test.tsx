@@ -4,23 +4,37 @@ import { screen, waitFor } from '@testing-library/react';
 import { MarketStatePage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { buildMarketState } from '@/lib/api/persona';
+import { listBenchmarkOptions } from '@/lib/api/market';
 
 vi.mock('@/lib/api/persona', () => ({
   buildMarketState: vi.fn(),
   buildSampleClusters: vi.fn(),
 }));
 
+vi.mock('@/lib/api/market', () => ({
+  listBenchmarkOptions: vi.fn(),
+}));
+
 const mockedBuildMarketState = vi.mocked(buildMarketState);
+const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 
 describe('MarketStatePage', () => {
   it('builds a market state snapshot from the workbench', async () => {
     const user = userEvent.setup();
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'SH', name: '沪深300', security_type: 'index' },
+        { symbol: '000905.SH', code: '000905', market: 'SH', name: '中证500', security_type: 'index' },
+      ],
+    });
     mockedBuildMarketState.mockResolvedValue({
       config_path: 'config/app.yaml',
       base_dir: '/tmp/project',
       market_state_path: '/tmp/project/data/processed/persona/market_state.json',
       snapshot_path: '/tmp/project/data/processed/persona/market_state.json',
       source: 'cache',
+      benchmark_symbol: '000300.SH',
       market_state: { state: 'bull' },
     });
 
@@ -31,6 +45,7 @@ describe('MarketStatePage', () => {
 
     await waitFor(() => {
       expect(mockedBuildMarketState).toHaveBeenCalledWith({
+        benchmark_symbol: '000300.SH',
         as_of: expect.any(String),
         from_akshare: false,
         cache_csv: true,

@@ -100,10 +100,6 @@ persona:
   top_k: 2
   # 可选：直接指定 MarketState JSON
   market_state_path: null
-  # 基准指数/ETF：用于从日线推断 MarketState（regime/vol）
-  market_state_benchmark_symbol: "510300.SH"
-  # 基准日线 CSV；为空时可用 market-state-build --from-akshare 拉取
-  market_state_benchmark_csv: null
 
 traders:
   - trader_id: trader_a

@@ -99,12 +99,21 @@ class _FakeMarketService:
 
 
 class _FakePersonaService:
-    def build_market_state(self, *, config_path, as_of, dest, from_akshare=False, cache_csv=True):
+    def build_market_state(
+        self,
+        *,
+        config_path,
+        benchmark_symbol,
+        as_of,
+        dest,
+        from_akshare=False,
+        cache_csv=True,
+    ):
         from src.services.base import ServiceResult
 
         Path(dest).parent.mkdir(parents=True, exist_ok=True)
         Path(dest).write_text('{"state":"bull"}', encoding="utf-8")
-        del config_path, as_of, from_akshare, cache_csv
+        del config_path, benchmark_symbol, as_of, from_akshare, cache_csv
         return ServiceResult(
             status="ok",
             message="market state written",
@@ -187,6 +196,7 @@ def test_market_state_and_legacy_sections_share_section_shape(tmp_path: Path) ->
         persona_service=_FakePersonaService(),
         config_path=str(tmp_path / "config" / "app.yaml"),
         output_dir=tmp_path / "data" / "processed" / "market_snapshot",
+        benchmark_symbol="000300.SH",
     )
 
     assert hot_topics.quality_status == "ok"

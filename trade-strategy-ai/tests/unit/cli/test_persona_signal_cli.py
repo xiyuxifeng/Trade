@@ -19,8 +19,6 @@ storage:
   output_dir: data/processed/phase0
 persona:
   clusters_path: data/processed/persona/clusters.sample.json
-  market_state_benchmark_symbol: "510300.SH"
-  market_state_benchmark_csv: "data/processed/persona/510300.SH_daily.csv"
 traders:
   - trader_id: trader_a
     display_name: Trader A

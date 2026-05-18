@@ -160,6 +160,7 @@ class SnapshotService(BaseService):
         self,
         *,
         config_path: str | Path,
+        benchmark_symbol: str,
         trade_date: str,
         slot: str = "17-30",
         profile_id: str | None = "default",
@@ -172,6 +173,7 @@ class SnapshotService(BaseService):
         service = MarketSnapshotService(storage_service=MarketDataStorageService())
         return await service.build_market_snapshot(
             config_path=config_path,
+            benchmark_symbol=benchmark_symbol,
             trade_date=trade_date,
             slot=slot,
             profile_id=profile_id,

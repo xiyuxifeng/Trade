@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.backtest.schemas import RegimeBacktestMetric
+
 
 class RuleSourceType(StrEnum):
     """规则来源类型"""
@@ -46,6 +48,9 @@ class RuleBacktestResult(BaseModel):
     run_at: datetime
     start_date: date
     end_date: date
+    rule_id: str | None = None
+    regime_version: str | None = None
+    source_feature_version: str | None = None
     total_trades: int = 0
     hit_trades: int = 0
     miss_trades: int = 0
@@ -56,6 +61,7 @@ class RuleBacktestResult(BaseModel):
     sharpe_ratio: float | None = None
     max_drawdown: float | None = None
     sample_count: int = 0
+    regime_metrics: list[RegimeBacktestMetric] = Field(default_factory=list)
 
 
 class RawCondition(BaseModel):

@@ -22,6 +22,7 @@ class _FakeBacktestService:
         self.run_calls: list[dict[str, object]] = []
         self.validate_calls: list[dict[str, object]] = []
         self.repro_calls: list[dict[str, object]] = []
+        self.rule_pool_calls: list[dict[str, object]] = []
 
     def run_backtest(self, **kwargs):
         self.run_calls.append(kwargs)
@@ -139,6 +140,83 @@ class _FakeBacktestService:
                 "matches": True,
                 "result_a": {},
                 "result_b": {},
+            },
+        )
+
+    async def run_rule_pool_backtest(self, **kwargs):
+        self.rule_pool_calls.append(kwargs)
+        return ServiceResult(
+            status="ok",
+            message="rule pool backtest completed",
+            payload={
+                "request": {
+                    "start_date": kwargs["start_date"].isoformat(),
+                    "end_date": kwargs["end_date"].isoformat(),
+                    "rule_ids": kwargs.get("rule_ids"),
+                    "min_confidence": kwargs.get("min_confidence"),
+                    "market_regime_version": kwargs.get("market_regime_version"),
+                },
+                "result": {
+                    "request_trader_id": "rule_pool",
+                    "request_date_from": kwargs["start_date"],
+                    "request_date_to": kwargs["end_date"],
+                    "benchmark_symbol": None,
+                    "regime_version": kwargs.get("market_regime_version"),
+                    "source_feature_version": "market-regime-features-v3",
+                    "records": [],
+                    "summary": {
+                        "total_days": 3,
+                        "total_trades": 6,
+                        "valid_trades": 4,
+                        "skipped_trades": 2,
+                        "win_rate": 0.5,
+                        "avg_return_pct": 0.03,
+                    },
+                    "regime_metrics": [
+                        {
+                            "regime_label": "trend_up",
+                            "sample_count": 4,
+                            "win_trades": 3,
+                            "loss_trades": 1,
+                            "win_rate": 0.75,
+                            "avg_return": 0.02,
+                            "avg_win_return": 0.03,
+                            "avg_loss_return": -0.01,
+                            "max_drawdown": 0.05,
+                            "profit_factor": 1.5,
+                            "confidence": 0.8,
+                            "low_sample": False,
+                        }
+                    ],
+                    "rule_regime_metrics": {
+                        "rule-001": [
+                            {
+                                "regime_label": "trend_up",
+                                "sample_count": 4,
+                                "win_trades": 3,
+                                "loss_trades": 1,
+                                "win_rate": 0.75,
+                                "avg_return": 0.02,
+                                "avg_win_return": 0.03,
+                                "avg_loss_return": -0.01,
+                                "max_drawdown": 0.05,
+                                "profit_factor": 1.5,
+                                "confidence": 0.8,
+                                "low_sample": False,
+                            }
+                        ]
+                    },
+                    "result_version": "1.0",
+                },
+                "summary": {
+                    "total_days": 3,
+                    "total_trades": 6,
+                    "valid_trades": 4,
+                    "skipped_trades": 2,
+                    "win_rate": 0.5,
+                    "avg_return_pct": 0.03,
+                },
+                "fingerprint": "r" * 64,
             },
         )
 
@@ -394,6 +472,48 @@ def test_submit_backtest_run_binds_report_and_csv_artifacts(tmp_path: Path) -> N
     assert result_payload["result"]["payload"]["request"]["symbols"] == ["000001.SZ"]
     assert (tmp_path / "jobs" / job_id / "backtest_report.md").exists()
     assert (tmp_path / "jobs" / job_id / "backtest_records.csv").exists()
+    asyncio.run(engine.dispose())
+
+
+def test_submit_rule_pool_backtest_binds_regime_artifacts(tmp_path: Path) -> None:
+    """rule-pool-backtest 应通过默认 handler 执行并绑定 regime breakdown。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, job_service, engine, ServiceResult = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="rule-pool-backtest",
+            params={
+                "rule_id": "rule-001",
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-03",
+                "min_confidence": 0.6,
+                "market_regime_version": "market-regime-v3",
+                "config_path": "config/app.yaml",
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+    artifact_kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
+    result_payload = json.loads((tmp_path / "jobs" / str(job_id) / "result.json").read_text(encoding="utf-8"))
+
+    assert submitted.status == "ok"
+    assert submitted.payload["execution"]["job"]["status"] == "success"
+    assert loaded.payload["job"]["status"] == "success"
+    assert "report-markdown" in artifact_kinds
+    assert "records-csv" in artifact_kinds
+    assert result_payload["result"]["payload"]["request"]["market_regime_version"] == "market-regime-v3"
+    assert result_payload["result"]["payload"]["result"]["regime_version"] == "market-regime-v3"
+    assert result_payload["result"]["payload"]["result"]["regime_metrics"][0]["regime_label"] == "trend_up"
+    assert result_payload["result"]["payload"]["result"]["rule_regime_metrics"]["rule-001"][0]["regime_label"] == "trend_up"
+    assert (tmp_path / "jobs" / job_id / "backtest_report.md").exists()
+    assert (tmp_path / "jobs" / job_id / "backtest_records.csv").exists()
+    assert fake_backtest_service.rule_pool_calls[0]["market_regime_version"] == "market-regime-v3"
     asyncio.run(engine.dispose())
 
 

@@ -46,6 +46,16 @@ def render_backtest_markdown(result: BacktestResult) -> str:
             lines.append(f"- 平均收益率: {s.avg_return_pct:.2%}")
         lines.append("")
 
+    if result.regime_version or result.source_feature_version:
+        lines.append("## Regime Version")
+        lines.append(
+            "- regime_version={regime_version} | source_feature_version={source_feature_version}".format(
+                regime_version=result.regime_version or "n/a",
+                source_feature_version=result.source_feature_version or "n/a",
+            )
+        )
+        lines.append("")
+
     if result.records:
         lines.append("## Trade Records")
         for rec in result.records:
@@ -59,6 +69,38 @@ def render_backtest_markdown(result: BacktestResult) -> str:
                 f"| skip_reason={rec.skip_reason}"
             )
         lines.append("")
+
+    if result.regime_metrics:
+        lines.append("## Regime Breakdown")
+        for metric in result.regime_metrics:
+            lines.append(
+                "- {label} | sample={sample} | win_rate={win_rate} | avg_return={avg_return} | max_drawdown={max_drawdown} | confidence={confidence}".format(
+                    label=metric.regime_label,
+                    sample=metric.sample_count,
+                    win_rate="n/a" if metric.win_rate is None else f"{metric.win_rate:.2%}",
+                    avg_return="n/a" if metric.avg_return is None else f"{metric.avg_return:.2%}",
+                    max_drawdown="n/a" if metric.max_drawdown is None else f"{metric.max_drawdown:.2%}",
+                    confidence=f"{metric.confidence:.2f}",
+                )
+            )
+        lines.append("")
+
+    if result.rule_regime_metrics:
+        lines.append("## Rule Regime Breakdown")
+        for rule_id, metrics in sorted(result.rule_regime_metrics.items()):
+            lines.append(f"### {rule_id}")
+            for metric in metrics:
+                lines.append(
+                    "- {label} | sample={sample} | win_rate={win_rate} | avg_return={avg_return} | max_drawdown={max_drawdown} | confidence={confidence}".format(
+                        label=metric.regime_label,
+                        sample=metric.sample_count,
+                        win_rate="n/a" if metric.win_rate is None else f"{metric.win_rate:.2%}",
+                        avg_return="n/a" if metric.avg_return is None else f"{metric.avg_return:.2%}",
+                        max_drawdown="n/a" if metric.max_drawdown is None else f"{metric.max_drawdown:.2%}",
+                        confidence=f"{metric.confidence:.2f}",
+                    )
+                )
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -81,6 +123,8 @@ def render_backtest_json(result: BacktestResult) -> str:
             "date_from": str(result.request_date_from),
             "date_to": str(result.request_date_to),
             "benchmark_symbol": result.benchmark_symbol,
+            "regime_version": result.regime_version,
+            "source_feature_version": result.source_feature_version,
             "result_version": result.result_version,
             "records": [
                 {
@@ -110,6 +154,43 @@ def render_backtest_json(result: BacktestResult) -> str:
                 if result.summary
                 else None
             ),
+            "regime_metrics": [
+                {
+                    "regime_label": metric.regime_label,
+                    "sample_count": metric.sample_count,
+                    "win_trades": metric.win_trades,
+                    "loss_trades": metric.loss_trades,
+                    "win_rate": metric.win_rate,
+                    "avg_return": metric.avg_return,
+                    "avg_win_return": metric.avg_win_return,
+                    "avg_loss_return": metric.avg_loss_return,
+                    "max_drawdown": metric.max_drawdown,
+                    "profit_factor": metric.profit_factor,
+                    "confidence": metric.confidence,
+                    "low_sample": metric.low_sample,
+                }
+                for metric in result.regime_metrics
+            ],
+            "rule_regime_metrics": {
+                rule_id: [
+                    {
+                        "regime_label": metric.regime_label,
+                        "sample_count": metric.sample_count,
+                        "win_trades": metric.win_trades,
+                        "loss_trades": metric.loss_trades,
+                        "win_rate": metric.win_rate,
+                        "avg_return": metric.avg_return,
+                        "avg_win_return": metric.avg_win_return,
+                        "avg_loss_return": metric.avg_loss_return,
+                        "max_drawdown": metric.max_drawdown,
+                        "profit_factor": metric.profit_factor,
+                        "confidence": metric.confidence,
+                        "low_sample": metric.low_sample,
+                    }
+                    for metric in metrics
+                ]
+                for rule_id, metrics in sorted(result.rule_regime_metrics.items())
+            },
         },
         ensure_ascii=False,
         indent=2,

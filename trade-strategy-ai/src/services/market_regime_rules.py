@@ -229,6 +229,41 @@ def _limit_down_score(value: Any) -> float:
     return 0.0
 
 
+def _full_market_pressure_score(window_value: Any, gap_rate_value: Any, extreme_drop_count_value: Any) -> float:
+    """把全市场风险压力转换成分数。"""
+    score = 0.0
+    if isinstance(gap_rate_value, (int, float)):
+        if float(gap_rate_value) >= 0.35:
+            score -= 1.5
+        elif float(gap_rate_value) >= 0.2:
+            score -= 0.8
+        elif float(gap_rate_value) <= 0.08:
+            score += 0.1
+
+    transition_count = None
+    if isinstance(window_value, dict):
+        transition_count = window_value.get("transition_count")
+        if not isinstance(transition_count, (int, float)) or transition_count <= 0:
+            transition_count = None
+
+    if isinstance(extreme_drop_count_value, (int, float)):
+        extreme_drop_count = float(extreme_drop_count_value)
+        if transition_count is not None:
+            extreme_drop_rate = extreme_drop_count / float(transition_count)
+            if extreme_drop_rate >= 0.08:
+                score -= 1.5
+            elif extreme_drop_rate >= 0.04:
+                score -= 0.8
+            elif extreme_drop_rate <= 0.01:
+                score += 0.1
+        else:
+            if extreme_drop_count >= 500:
+                score -= 1.0
+            elif extreme_drop_count >= 200:
+                score -= 0.5
+    return score
+
+
 def _theme_hot(value: Any) -> bool:
     """判断是否命中 theme_hot。"""
     if isinstance(value, str):
@@ -294,6 +329,7 @@ def score_market_regime(
     """根据 market_regime_features 计算最终 Market Regime。"""
     feature_keys = (
         "benchmark_ohlcv_window",
+        "full_market_ohlcv_window",
         "trend",
         "ret_5d",
         "ret_20d",
@@ -313,6 +349,8 @@ def score_market_regime(
         "limit_down_count",
         "gap_down_rate",
         "extreme_drop_count",
+        "gap_down_rate_full_market",
+        "extreme_drop_count_full_market",
     )
     feature_records = [_build_feature_record(key, _extract_feature_entry(features, key)) for key in feature_keys if key in features]
     if not feature_records:
@@ -326,6 +364,9 @@ def score_market_regime(
     theme_entry = _extract_feature_entry(features, "theme_strength")
     limit_up_entry = _extract_feature_entry(features, "limit_up_count")
     limit_down_entry = _extract_feature_entry(features, "limit_down_count")
+    full_market_window_entry = _extract_feature_entry(features, "full_market_ohlcv_window")
+    gap_down_rate_full_market_entry = _extract_feature_entry(features, "gap_down_rate_full_market")
+    extreme_drop_count_full_market_entry = _extract_feature_entry(features, "extreme_drop_count_full_market")
 
     trend_score = _trend_score(_feature_value(trend_entry))
     breadth_score = _breadth_score(_feature_value(breadth_entry))
@@ -334,8 +375,13 @@ def score_market_regime(
     turnover_score = _turnover_score(_feature_value(turnover_entry))
     limit_up_score = 0.5 if isinstance(_feature_value(limit_up_entry), (int, float)) and float(_feature_value(limit_up_entry)) >= 5 else 0.0
     limit_down_score = _limit_down_score(_feature_value(limit_down_entry))
+    full_market_pressure_score = _full_market_pressure_score(
+        _feature_value(full_market_window_entry),
+        _feature_value(gap_down_rate_full_market_entry),
+        _feature_value(extreme_drop_count_full_market_entry),
+    )
 
-    total_score = trend_score + breadth_score + volatility_score + liquidity_score + turnover_score + limit_up_score + limit_down_score
+    total_score = trend_score + breadth_score + volatility_score + liquidity_score + turnover_score + limit_up_score + limit_down_score + full_market_pressure_score
 
     primary_label = "range"
     if total_score >= 4.0:
@@ -366,15 +412,18 @@ def score_market_regime(
             score=round(total_score, 4),
             confidence=confidence,
             status="active" if confidence >= 0.55 else "low_confidence",
-            evidence=[
-                RegimeEvidenceRecord(feature_key="trend", feature_value=_feature_value(trend_entry), source_section=_feature_source_section(trend_entry), source_field=_feature_source_field(trend_entry), contribution=trend_score, note="趋势分数"),
-                RegimeEvidenceRecord(feature_key="breadth", feature_value=_feature_value(breadth_entry), source_section=_feature_source_section(breadth_entry), source_field=_feature_source_field(breadth_entry), contribution=breadth_score, note="广度分数"),
-                RegimeEvidenceRecord(feature_key="volatility", feature_value=_feature_value(volatility_entry), source_section=_feature_source_section(volatility_entry), source_field=_feature_source_field(volatility_entry), contribution=volatility_score, note="波动修正"),
-                RegimeEvidenceRecord(feature_key="liquidity", feature_value=_feature_value(liquidity_entry), source_section=_feature_source_section(liquidity_entry), source_field=_feature_source_field(liquidity_entry), contribution=liquidity_score, note="流动性修正"),
-            ],
-            reason=f"combined_score={total_score:.2f}",
+                evidence=[
+                    RegimeEvidenceRecord(feature_key="trend", feature_value=_feature_value(trend_entry), source_section=_feature_source_section(trend_entry), source_field=_feature_source_field(trend_entry), contribution=trend_score, note="趋势分数"),
+                    RegimeEvidenceRecord(feature_key="breadth", feature_value=_feature_value(breadth_entry), source_section=_feature_source_section(breadth_entry), source_field=_feature_source_field(breadth_entry), contribution=breadth_score, note="广度分数"),
+                    RegimeEvidenceRecord(feature_key="volatility", feature_value=_feature_value(volatility_entry), source_section=_feature_source_section(volatility_entry), source_field=_feature_source_field(volatility_entry), contribution=volatility_score, note="波动修正"),
+                    RegimeEvidenceRecord(feature_key="liquidity", feature_value=_feature_value(liquidity_entry), source_section=_feature_source_section(liquidity_entry), source_field=_feature_source_field(liquidity_entry), contribution=liquidity_score, note="流动性修正"),
+                    RegimeEvidenceRecord(feature_key="full_market_ohlcv_window", feature_value=_feature_value(full_market_window_entry), source_section=_feature_source_section(full_market_window_entry), source_field=_feature_source_field(full_market_window_entry), contribution=full_market_pressure_score, note="全市场压力修正"),
+                    RegimeEvidenceRecord(feature_key="gap_down_rate_full_market", feature_value=_feature_value(gap_down_rate_full_market_entry), source_section=_feature_source_section(gap_down_rate_full_market_entry), source_field=_feature_source_field(gap_down_rate_full_market_entry), contribution=0.0, note="全市场跳空低开压力"),
+                    RegimeEvidenceRecord(feature_key="extreme_drop_count_full_market", feature_value=_feature_value(extreme_drop_count_full_market_entry), source_section=_feature_source_section(extreme_drop_count_full_market_entry), source_field=_feature_source_field(extreme_drop_count_full_market_entry), contribution=0.0, note="全市场极端下跌压力"),
+                ],
+                reason=f"combined_score={total_score:.2f}",
+            )
         )
-    )
 
     if _theme_hot(_feature_value(theme_entry)):
         labels.append(

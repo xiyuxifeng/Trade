@@ -736,12 +736,16 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="rule-pool",
         requires_confirmation=True,
-        runnable=False,
+        runnable=True,
         description="对规则池进行回测并回写结果。",
         param_schema=_schema(
             "规则池回测参数",
             {
-                "rule_id": _string("规则 ID", required=True),
+                "rule_id": _string("规则 ID"),
+                "start_date": _date_field("开始日期", required=True),
+                "end_date": _date_field("结束日期", required=True),
+                "min_confidence": _number("最小置信度", default=0.5),
+                "market_regime_version": _string("市场状态版本", default="market-regime-v3"),
                 "config_path": _path_field("配置文件路径"),
             },
         ),

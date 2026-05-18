@@ -27,7 +27,11 @@ class FakeSnapshotRepository:
 
 
 class FakeFeatureRepository:
+    def __init__(self) -> None:
+        self.last_feature_version: str | None = None
+
     async def get_by_snapshot_and_version(self, session, snapshot_id: str, feature_version: str):
+        self.last_feature_version = feature_version
         return SimpleNamespace(
             snapshot_id=snapshot_id,
             trade_date=date(2026, 5, 16),
@@ -72,3 +76,26 @@ async def test_build_market_regime_uses_feature_snapshot_and_persists_artifact(m
     assert result.payload["artifact_ref"]["artifact_type"] == "market-regime-json"
     assert result.payload["artifact_path"].endswith("market-regime-v1.json")
     assert result.payload["dataset_id"] == "snap-001:market-regime-v1"
+
+
+@pytest.mark.asyncio()
+async def test_build_market_regime_auto_selects_v3_feature_version(market_regime_session_factory, tmp_path):
+    """regime v3 应自动切换到 full-market feature version。"""
+    from src.services.market_regime_service import MarketRegimeService
+
+    feature_repo = FakeFeatureRepository()
+    service = MarketRegimeService(
+        session_factory=market_regime_session_factory,
+        feature_repository=feature_repo,
+        snapshot_repository=FakeSnapshotRepository(),
+        artifact_root=tmp_path,
+    )
+
+    result = await service.build_market_regime(
+        snapshot_id="snap-002",
+        regime_version="market-regime-v3",
+    )
+
+    assert result.status in {"ok", "partial"}
+    assert feature_repo.last_feature_version == "market-regime-features-v3"
+    assert result.payload["regime"]["source_feature_version"] == "market-regime-features-v3"

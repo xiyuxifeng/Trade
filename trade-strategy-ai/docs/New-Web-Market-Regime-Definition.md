@@ -414,8 +414,10 @@ Market Snapshot
 | `vol_spike` | 已落地（计算层） | 现有 `ohlcv` 历史窗口 | 风险判断 | 是 | 需要历史窗口，但不需要新增 provider 接口 |
 | `turnover_ratio` | 已落地（计算层） | `MarketCapacity` / OHLCV 历史均值 | 流动性判断 | 是 | 现有数据足够计算，不必再单独抓新接口 |
 | `theme_concentration` | 已落地（计算层） | `hot_topics` / `topic_constituents` / `strong_symbols` / `strong_fengkou_best` / `WeightPerformance` | `theme_hot` 判定 | 是 | 现有题材/权重数据足够计算 |
-| `gap_down_rate` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | 当前为 benchmark 口径，后续可扩展全市场口径 |
-| `extreme_drop_count` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | 当前为 benchmark 口径，后续可扩展全市场口径 |
+| `gap_down_rate` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | benchmark 口径，和 full-market 口径并存 |
+| `extreme_drop_count` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | benchmark 口径，和 full-market 口径并存 |
+| `gap_down_rate_full_market` | 已落地（计算层） | 全市场 `ohlcv` | `panic` 判定增强 | 是 | full-market 口径，写入 `market_regime_features-v3` |
+| `extreme_drop_count_full_market` | 已落地（计算层） | 全市场 `ohlcv` | `panic` 判定增强 | 是 | full-market 口径，写入 `market_regime_features-v3` |
 | `benchmark_ohlcv_window` | 已落地（计算层） | 现有 `ohlcv` 主链路 | 主要趋势基线 | 是 | 回测不做 ETF fallback，直接用指数序列 |
 
 ### 10.3 数据结论分层

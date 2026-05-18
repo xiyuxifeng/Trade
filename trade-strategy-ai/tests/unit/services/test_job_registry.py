@@ -65,6 +65,7 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
         "backtest-run",
         "backtest-validate-rules",
         "backtest-reproducibility-check",
+        "rule-pool-backtest",
         "candidate-review",
         "kaipan-fetch",
         "kaipan-normalize",
@@ -109,6 +110,15 @@ def test_validate_job_submission_enforces_schema() -> None:
     )
     assert backtest.status == "ok"
     assert backtest.payload["params"]["symbols"] == ["000001.SZ"]
+
+    rule_pool = validate_job_submission(
+        job_type="rule-pool-backtest",
+        params={"rule_id": "rule-001", "start_date": "2026-04-01", "end_date": "2026-04-03"},
+        created_by="web",
+        confirmed=True,
+    )
+    assert rule_pool.status == "ok"
+    assert rule_pool.payload["params"]["market_regime_version"] == "market-regime-v3"
 
     market = validate_job_submission(
         job_type="ohlcv-crawl",

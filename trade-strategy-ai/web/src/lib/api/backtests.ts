@@ -72,4 +72,24 @@ export function buildBacktestReproducibilityParams(submission: BacktestJobSubmis
   return buildBacktestRunParams(submission);
 }
 
+export type RulePoolBacktestSubmission = {
+  ruleId?: string;
+  startDate: string;
+  endDate: string;
+  minConfidence?: number;
+  marketRegimeVersion?: string;
+  configPath: string;
+};
+
+export function buildRulePoolBacktestParams(submission: RulePoolBacktestSubmission): Record<string, unknown> {
+  return {
+    rule_id: submission.ruleId || undefined,
+    start_date: submission.startDate,
+    end_date: submission.endDate,
+    min_confidence: submission.minConfidence ?? 0.5,
+    market_regime_version: submission.marketRegimeVersion || 'market-regime-v3',
+    config_path: submission.configPath,
+  };
+}
+
 export type { BacktestSummary };

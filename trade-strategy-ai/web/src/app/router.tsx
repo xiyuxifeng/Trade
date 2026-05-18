@@ -3,6 +3,7 @@ import { DashboardLayout } from '@/layouts/dashboard-layout';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { BacktestsPage } from '@/pages/backtests';
 import { BacktestPage } from '@/pages/backtest';
+import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { AlertsPage } from '@/pages/alerts';
 import { AlertDetailPage } from '@/pages/alerts/AlertDetailPage';
 import { ArticlesPage } from '@/pages/articles';
@@ -126,6 +127,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'backtest',
         element: <BacktestPage />,
+      },
+      {
+        path: 'backtest/regime',
+        element: <RegimeBacktestReportPage />,
       },
       {
         path: 'rule-pool',

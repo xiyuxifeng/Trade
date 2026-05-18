@@ -17,6 +17,7 @@ from src.services.market_regime_rules import score_market_regime
 
 DEFAULT_REGIME_VERSION = "market-regime-v2"
 DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
+FULL_MARKET_FEATURE_VERSION = "market-regime-features-v3"
 
 
 def _to_plain(value: Any) -> Any:
@@ -32,6 +33,15 @@ def _to_plain(value: Any) -> Any:
     if isinstance(value, date):
         return value.isoformat()
     return value
+
+
+def _feature_version_for_regime_version(regime_version: str, feature_version: str) -> str:
+    """根据 regime_version 推断 feature_version。"""
+    if feature_version != DEFAULT_FEATURE_VERSION:
+        return feature_version
+    if regime_version.endswith("-v3"):
+        return FULL_MARKET_FEATURE_VERSION
+    return feature_version
 
 
 class MarketRegimeService(BaseService):
@@ -103,6 +113,7 @@ class MarketRegimeService(BaseService):
         feature_version: str = DEFAULT_FEATURE_VERSION,
     ) -> ServiceResult:
         """基于指定 snapshot 和 feature version 生成 Market Regime。"""
+        feature_version = _feature_version_for_regime_version(regime_version, feature_version)
         async with self._session_factory() as session:
             snapshot = await self._snapshot_repository.get_by_snapshot_id(session, snapshot_id)
             if snapshot is None:

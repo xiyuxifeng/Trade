@@ -41,6 +41,7 @@ async def market_regime_feature_session_factory(tmp_path):
     from src.models.market_data_snapshot import MarketSnapshot as MarketDataSnapshotRecord
     from src.models.market_data_snapshot_item import MarketSnapshotItem
     from src.models.market_data_snapshot_section import MarketSnapshotSection
+    from src.models.ohlcv_bar import OHLCVBar
     from src.models.market_regime import MarketRegimeFeature
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'market_regime_feature.db'}")
@@ -50,6 +51,7 @@ async def market_regime_feature_session_factory(tmp_path):
         await conn.run_sync(MarketDataset.__table__.create)
         await conn.run_sync(MarketSnapshotItem.__table__.create)
         await conn.run_sync(MarketDataQualityReport.__table__.create)
+        await conn.run_sync(OHLCVBar.__table__.create)
         await conn.run_sync(MarketRegimeFeature.__table__.create)
 
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -155,6 +157,29 @@ async def _seed_snapshot(
             session.add(quality)
             session.add_all(section_records)
             session.add_all(items)
+
+
+async def _seed_ohlcv_rows(session_factory, rows: list[dict[str, object]]) -> None:
+    """写入用于 full-market feature build 的 OHLCV 数据。"""
+    from src.models.ohlcv_bar import OHLCVBar
+
+    async with session_factory() as session:
+        async with session.begin():
+            session.add_all(
+                [
+                    OHLCVBar(
+                        symbol=str(row["symbol"]),
+                        trade_date=row["trade_date"] if isinstance(row["trade_date"], date) else date.fromisoformat(str(row["trade_date"])),
+                        open=float(row["open"]),
+                        high=float(row["high"]),
+                        low=float(row["low"]),
+                        close=float(row["close"]),
+                        volume=float(row["volume"]),
+                        turnover=float(row.get("turnover")) if row.get("turnover") is not None else None,
+                    )
+                    for row in rows
+                ]
+            )
 
 
 @pytest.mark.asyncio()
@@ -288,6 +313,100 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
     assert result.payload["warnings"] == []
     assert result.payload["dataset_id"] == "snap-001:market-regime-features-v2"
     assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v2.json").exists()
+
+
+@pytest.mark.asyncio()
+async def test_build_market_regime_features_v3_includes_full_market_metrics(market_regime_feature_session_factory, tmp_path) -> None:
+    """v3 feature build 应同时写入 full-market 风险特征。"""
+    from src.services.market_regime_feature_service import MarketRegimeFeatureService
+
+    await _seed_snapshot(
+        market_regime_feature_session_factory,
+        snapshot_id="snap-v3",
+        trade_date=date(2026, 5, 16),
+        market="CN",
+        sections=[
+            {
+                "section_id": "overview",
+                "quality_status": "ok",
+                "record_count": 3,
+                "payload_json": {
+                    "sentiment": {"label": "bullish", "score": 0.82},
+                    "capacity": {"last": 23417, "turnover_level": "high"},
+                    "indices": {"trend": "trend_up"},
+                },
+            },
+            {
+                "section_id": "limit_up_down",
+                "quality_status": "ok",
+                "record_count": 3,
+                "payload_json": {
+                    "limit_up_counts": {"info": {"SJZT": "79", "SJDT": "1"}},
+                    "limit_up_reason": {"nums": {"ZT": 79, "DT": 1}},
+                    "limit_up_info": {"info": [{"symbol": "000001.SZ"}, {"symbol": "000002.SZ"}]},
+                },
+            },
+            {
+                "section_id": "market_sentiment",
+                "quality_status": "ok",
+                "record_count": 1,
+                "payload_json": {
+                    "summary": {
+                        "limit_up_count": 79,
+                        "actual_limit_up": 65,
+                        "limit_down_count": 1,
+                        "actual_limit_down": 1,
+                        "up_count": 1860,
+                        "down_count": 820,
+                        "flat_count": 320,
+                        "up_ratio": 0.62,
+                        "down_ratio": 0.2733,
+                    }
+                },
+            },
+            {
+                "section_id": "ohlcv",
+                "quality_status": "ok",
+                "record_count": 3,
+                "payload_json": {
+                    "symbol": "SH000001",
+                    "start_date": "2026-05-14",
+                    "end_date": "2026-05-16",
+                    "count": 3,
+                    "items": _build_ohlcv_rows(date(2026, 5, 16), 3),
+                },
+            },
+        ],
+    )
+
+    await _seed_ohlcv_rows(
+        market_regime_feature_session_factory,
+        rows=[
+            {"symbol": "000001.SZ", "trade_date": "2026-05-14", "open": 9.0, "high": 10.2, "low": 8.8, "close": 10.0, "volume": 100000, "turnover": 1000000},
+            {"symbol": "000001.SZ", "trade_date": "2026-05-15", "open": 9.5, "high": 10.1, "low": 9.2, "close": 10.0, "volume": 110000, "turnover": 1100000},
+            {"symbol": "000001.SZ", "trade_date": "2026-05-16", "open": 9.0, "high": 9.6, "low": 8.8, "close": 9.4, "volume": 120000, "turnover": 1200000},
+            {"symbol": "000002.SZ", "trade_date": "2026-05-14", "open": 19.0, "high": 20.4, "low": 18.8, "close": 20.0, "volume": 200000, "turnover": 2000000},
+            {"symbol": "000002.SZ", "trade_date": "2026-05-15", "open": 20.0, "high": 20.8, "low": 19.7, "close": 20.5, "volume": 210000, "turnover": 2100000},
+            {"symbol": "000002.SZ", "trade_date": "2026-05-16", "open": 20.3, "high": 20.7, "low": 18.6, "close": 19.0, "volume": 220000, "turnover": 2200000},
+        ],
+    )
+
+    service = MarketRegimeFeatureService(
+        session_factory=market_regime_feature_session_factory,
+        artifact_root=tmp_path / "processed" / "market_regime_features",
+    )
+
+    result = await service.build_market_regime_features(snapshot_id="snap-v3", feature_version="market-regime-features-v3")
+
+    assert result.status == "partial"
+    assert result.payload["feature"]["feature_version"] == "market-regime-features-v3"
+    assert result.payload["feature"]["quality_status"] == "partial"
+    assert result.payload["feature_payload_json"]["full_market_ohlcv_window"]["value"]["symbol_count"] == 2
+    assert result.payload["feature_payload_json"]["gap_down_rate_full_market"]["value"] == pytest.approx(0.75)
+    assert result.payload["feature_payload_json"]["extreme_drop_count_full_market"]["value"] == 2
+    assert result.payload["summary"]["available_feature_count"] >= 18
+    assert result.payload["dataset_id"] == "snap-v3:market-regime-features-v3"
+    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-v3" / "market-regime-features-v3.json").exists()
 
 
 @pytest.mark.asyncio()

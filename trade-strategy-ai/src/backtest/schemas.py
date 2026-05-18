@@ -169,6 +169,24 @@ class BacktestSummary:
 
 
 @dataclass
+class RegimeBacktestMetric:
+    """分市场状态回测指标。"""
+
+    regime_label: str
+    sample_count: int
+    win_trades: int
+    loss_trades: int
+    win_rate: float | None = None
+    avg_return: float | None = None
+    avg_win_return: float | None = None
+    avg_loss_return: float | None = None
+    max_drawdown: float | None = None
+    profit_factor: float | None = None
+    confidence: float = 0.0
+    low_sample: bool = False
+
+
+@dataclass
 class BacktestResult:
     """回测结果聚合。
 
@@ -184,8 +202,12 @@ class BacktestResult:
     request_date_from: date
     request_date_to: date
     benchmark_symbol: str | None = None
+    regime_version: str | None = None
+    source_feature_version: str | None = None
     records: list[BacktestTradeRecord] = field(default_factory=list)
     summary: BacktestSummary | None = None
+    regime_metrics: list[RegimeBacktestMetric] = field(default_factory=list)
+    rule_regime_metrics: dict[str, list[RegimeBacktestMetric]] = field(default_factory=dict)
     result_version: str = "1.0"  # S7-009: 用于区分新旧格式
 
 

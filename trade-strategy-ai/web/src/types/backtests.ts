@@ -7,6 +7,21 @@ export type BacktestSummary = {
   avg_return_pct: number | null;
 };
 
+export type RegimeBacktestMetric = {
+  regime_label: string;
+  sample_count: number;
+  win_trades: number;
+  loss_trades: number;
+  win_rate: number | null;
+  avg_return: number | null;
+  avg_win_return: number | null;
+  avg_loss_return: number | null;
+  max_drawdown: number | null;
+  profit_factor: number | null;
+  confidence: number;
+  low_sample: boolean;
+};
+
 export type BacktestListItem = {
   result_id: string;
   trader_id: string | null;
@@ -15,6 +30,8 @@ export type BacktestListItem = {
   request_date_from?: string | null;
   request_date_to?: string | null;
   benchmark_symbol?: string | null;
+  regime_version?: string | null;
+  source_feature_version?: string | null;
   summary: BacktestSummary | Record<string, unknown>;
 };
 
@@ -51,9 +68,13 @@ export type BacktestResultItem = {
   request_date_from: string;
   request_date_to: string;
   benchmark_symbol?: string | null;
+  regime_version?: string | null;
+  source_feature_version?: string | null;
   result_version: string;
   summary: BacktestSummary | null;
   records: BacktestTradeRecord[];
+  regime_metrics?: RegimeBacktestMetric[];
+  rule_regime_metrics?: Record<string, RegimeBacktestMetric[]>;
   trader_id?: string;
   date_from?: string;
   date_to?: string;
@@ -70,6 +91,7 @@ export type BacktestJobSubmission = {
   dateTo: string;
   strategyVersionId: string;
   benchmarkSymbol?: string;
+  marketRegimeVersion?: string;
   mode: 'full' | 'replay' | 'rule_validation';
   configPath: string;
   symbols: string[];

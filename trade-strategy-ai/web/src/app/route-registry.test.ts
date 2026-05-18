@@ -15,6 +15,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/market/datasets').description).toBe('市场数据集浏览器');
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
     expect(resolveRouteByPathname('/backtest').path).toBe('/backtest');
+    expect(resolveRouteByPathname('/backtest/regime').path).toBe('/backtest/regime');
     expect(resolveRouteByPathname('/rule-pool').path).toBe('/rule-pool');
     expect(resolveRouteByPathname('/rule-pool').description).toBe('规则池审核中心');
     expect(resolveRouteByPathname('/artifacts').path).toBe('/artifacts');

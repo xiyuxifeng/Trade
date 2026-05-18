@@ -96,6 +96,8 @@ async def list_backtest_results(
                 "date_from": meta_date_from,
                 "date_to": meta_date_to,
                 "benchmark_symbol": data.get("benchmark_symbol"),
+                "regime_version": data.get("regime_version"),
+                "source_feature_version": data.get("source_feature_version"),
                 "summary": data.get("summary", {}),
             })
         except Exception:

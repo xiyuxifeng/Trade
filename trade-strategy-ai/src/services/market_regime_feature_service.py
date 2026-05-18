@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date
+from datetime import date, timedelta
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.common.paths import resolve_project_path
@@ -19,10 +21,12 @@ from src.db.repositories import (
 )
 from src.db.session import get_session_factory
 from src.models.market_dataset import MarketDataset
+from src.models.ohlcv_bar import OHLCVBar
 from src.models.market_regime import MarketRegimeFeature
 from src.services.base import BaseService, ServiceResult
 
 DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
+FULL_MARKET_FEATURE_VERSION = "market-regime-features-v3"
 
 
 def _normalize_date(value: Any) -> date | None:
@@ -209,6 +213,77 @@ class MarketRegimeFeatureService(BaseService):
         if number >= 10000:
             return "mid"
         return "low"
+
+    async def _full_market_ohlcv_metrics(self, session: AsyncSession, *, trade_date: date, lookback_days: int = 90) -> dict[str, Any]:
+        """基于全市场 OHLCV 计算风险压力特征。"""
+        lookback = trade_date - timedelta(days=lookback_days)
+        stmt = (
+            select(OHLCVBar)
+            .where(OHLCVBar.trade_date >= lookback)
+            .where(OHLCVBar.trade_date <= trade_date)
+            .order_by(OHLCVBar.symbol.asc(), OHLCVBar.trade_date.asc())
+        )
+        result = await session.scalars(stmt)
+        rows = list(result.all())
+        if not rows:
+            return {}
+
+        rows_by_symbol: dict[str, list[OHLCVBar]] = defaultdict(list)
+        for row in rows:
+            rows_by_symbol[row.symbol].append(row)
+
+        def as_float(value: Any) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value.replace(",", ""))
+                except ValueError:
+                    return None
+            return None
+
+        def pct_change(current: float | None, previous: float | None) -> float | None:
+            if current is None or previous in {None, 0}:
+                return None
+            return current / previous - 1.0
+
+        gap_down_count = 0
+        extreme_drop_count = 0
+        transition_count = 0
+        symbol_count = len(rows_by_symbol)
+        for symbol_rows in rows_by_symbol.values():
+            prev_close: float | None = None
+            for bar in symbol_rows:
+                close = as_float(bar.close)
+                open_value = as_float(bar.open)
+                if prev_close is not None:
+                    transition_count += 1
+                    if open_value is not None and open_value < prev_close:
+                        gap_down_count += 1
+                    if close is not None:
+                        daily_return = pct_change(close, prev_close)
+                        if daily_return is not None and daily_return <= -0.05:
+                            extreme_drop_count += 1
+                if close is not None:
+                    prev_close = close
+
+        gap_down_rate_full_market = round(gap_down_count / transition_count, 4) if transition_count else None
+        return {
+            "full_market_ohlcv_window": {
+                "start_date": lookback.isoformat(),
+                "end_date": trade_date.isoformat(),
+                "lookback_days": lookback_days,
+                "symbol_count": symbol_count,
+                "bar_count": len(rows),
+                "transition_count": transition_count,
+                "gap_down_count": gap_down_count,
+                "extreme_drop_count": extreme_drop_count,
+            },
+            "gap_down_rate_full_market": gap_down_rate_full_market,
+            "extreme_drop_count_full_market": extreme_drop_count,
+        }
 
     def _extract_feature_map(
         self,
@@ -661,6 +736,51 @@ class MarketRegimeFeatureService(BaseService):
             items = await self._item_repository.list_by_snapshot_id(session, snapshot_id)
 
             feature_payload_json, warnings, source_sections, available_count, missing_count = self._extract_feature_map(sections=section_map)
+            for entry in feature_payload_json.values():
+                if isinstance(entry, dict) and entry.get("feature_version") is None:
+                    entry["feature_version"] = feature_version
+            if feature_version == FULL_MARKET_FEATURE_VERSION:
+                full_market_metrics = await self._full_market_ohlcv_metrics(session, trade_date=snapshot.trade_date)
+                if full_market_metrics:
+                    feature_payload_json["full_market_ohlcv_window"] = self._build_feature_entry(
+                        key="full_market_ohlcv_window",
+                        value=full_market_metrics["full_market_ohlcv_window"],
+                        source_section="ohlcv_full_market",
+                        confidence=0.85,
+                    )
+                    feature_payload_json["gap_down_rate_full_market"] = self._build_feature_entry(
+                        key="gap_down_rate_full_market",
+                        value=full_market_metrics["gap_down_rate_full_market"],
+                        source_section="ohlcv_full_market",
+                        confidence=0.85,
+                    )
+                    feature_payload_json["extreme_drop_count_full_market"] = self._build_feature_entry(
+                        key="extreme_drop_count_full_market",
+                        value=full_market_metrics["extreme_drop_count_full_market"],
+                        source_section="ohlcv_full_market",
+                        confidence=0.85,
+                    )
+                    available_count += 3
+                    if "ohlcv_full_market" not in source_sections:
+                        source_sections.append("ohlcv_full_market")
+                else:
+                    for key in (
+                        "full_market_ohlcv_window",
+                        "gap_down_rate_full_market",
+                        "extreme_drop_count_full_market",
+                    ):
+                        feature_payload_json[key] = self._build_feature_entry(
+                            key=key,
+                            value=None,
+                            source_section=None,
+                            confidence=0.0,
+                            missing_reason="missing full-market ohlcv coverage",
+                        )
+                        missing_count += 1
+                        warnings.append(f"{key}: missing full-market ohlcv coverage")
+            for entry in feature_payload_json.values():
+                if isinstance(entry, dict) and entry.get("feature_version") is None:
+                    entry["feature_version"] = feature_version
             partial_count = sum(1 for entry in feature_payload_json.values() if entry["missing_reason"] is not None and entry["value"] is None)
             quality_status = "ok" if missing_count == 0 else "partial"
 

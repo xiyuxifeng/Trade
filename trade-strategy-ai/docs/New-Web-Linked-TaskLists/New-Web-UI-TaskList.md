@@ -1709,7 +1709,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-011 P0 Regime Backtest Report
+### [x] UI-V3-011 P0 Regime Backtest Report
 
 任务目标：展示 rule / strategy 在不同 market regime 下的回测表现，避免只看整体指标。
 

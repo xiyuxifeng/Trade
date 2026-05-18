@@ -1996,7 +1996,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V3-SX-002 P0 Regime-aware Backtest
+### [x] NW-V3-SX-002 P0 Regime-aware Backtest
 
 任务目标：在回测中按 Market Regime 分组统计 rule 表现，避免整体回测把特定市场环境下有效的 rule 错误淘汰。
 

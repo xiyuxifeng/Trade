@@ -20,10 +20,14 @@ from src.backtest.schemas import (
     BacktestSummary,
     BacktestTradeRecord,
     RuleValidationResult,
+    RegimeBacktestMetric,
 )
 from src.backtest.snapshot_loader import SnapshotLoader
 from src.common.config import apply_database_config_to_env, load_app_config
+from src.db.repositories.market_snapshot_repository import MarketSnapshotRepository
 from src.services.base import BaseService, ServiceResult
+from src.services.market_regime_feature_service import DEFAULT_FEATURE_VERSION, FULL_MARKET_FEATURE_VERSION, MarketRegimeFeatureService
+from src.services.market_regime_service import DEFAULT_REGIME_VERSION, MarketRegimeService
 
 
 def _to_plain(value: Any) -> Any:
@@ -100,6 +104,43 @@ def _coerce_backtest_summary(value: Any | None) -> BacktestSummary | None:
     )
 
 
+def _coerce_regime_metric(value: Any) -> RegimeBacktestMetric:
+    """把字典恢复为 RegimeBacktestMetric。"""
+    if isinstance(value, RegimeBacktestMetric):
+        return value
+    if not isinstance(value, dict):
+        if hasattr(value, "__dict__"):
+            value = dict(vars(value))
+        else:
+            raise TypeError(f"Unsupported regime metric type: {type(value)!r}")
+    return RegimeBacktestMetric(
+        regime_label=value.get("regime_label", "unknown"),
+        sample_count=int(value.get("sample_count", 0)),
+        win_trades=int(value.get("win_trades", 0)),
+        loss_trades=int(value.get("loss_trades", 0)),
+        win_rate=value.get("win_rate"),
+        avg_return=value.get("avg_return"),
+        avg_win_return=value.get("avg_win_return"),
+        avg_loss_return=value.get("avg_loss_return"),
+        max_drawdown=value.get("max_drawdown"),
+        profit_factor=value.get("profit_factor"),
+        confidence=float(value.get("confidence", 0.0) or 0.0),
+        low_sample=bool(value.get("low_sample", False)),
+    )
+
+
+def _coerce_regime_metric_list(value: Any | None) -> list[RegimeBacktestMetric]:
+    """把 regime metric 容器恢复为结构化列表。"""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
+            value = list(value)
+        else:
+            return []
+    return [_coerce_regime_metric(item) for item in value]
+
+
 def _coerce_backtest_result(value: Any) -> BacktestResult:
     """把前端/序列化对象恢复为 BacktestResult。"""
     if isinstance(value, BacktestResult):
@@ -112,13 +153,24 @@ def _coerce_backtest_result(value: Any) -> BacktestResult:
 
     records = [_coerce_backtest_record(item) for item in value.get("records", [])]
     summary = _coerce_backtest_summary(value.get("summary"))
+    raw_rule_regime_metrics = value.get("rule_regime_metrics")
+    rule_regime_metrics: dict[str, list[RegimeBacktestMetric]] = {}
+    if isinstance(raw_rule_regime_metrics, dict):
+        rule_regime_metrics = {
+            str(rule_id): _coerce_regime_metric_list(metrics)
+            for rule_id, metrics in raw_rule_regime_metrics.items()
+        }
     return BacktestResult(
         request_trader_id=value["request_trader_id"],
         request_date_from=_parse_date(value["request_date_from"]),
         request_date_to=_parse_date(value["request_date_to"]),
         benchmark_symbol=value.get("benchmark_symbol"),
+        regime_version=value.get("regime_version"),
+        source_feature_version=value.get("source_feature_version"),
         records=records,
         summary=summary,
+        regime_metrics=_coerce_regime_metric_list(value.get("regime_metrics")),
+        rule_regime_metrics=rule_regime_metrics,
         result_version=value.get("result_version", "1.0"),
     )
 
@@ -245,6 +297,64 @@ class BacktestService(BaseService):
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
         )
+
+    def _feature_version_for_regime_version(self, regime_version: str | None) -> str | None:
+        """把 regime_version 映射到对应的 feature_version。"""
+        if regime_version is None:
+            return None
+        if regime_version.endswith("-v3"):
+            return FULL_MARKET_FEATURE_VERSION
+        if regime_version.endswith("-v2"):
+            return "market-regime-features-v2"
+        return DEFAULT_FEATURE_VERSION
+
+    async def _prepare_regime_backtest_inputs(
+        self,
+        *,
+        start_date: date,
+        end_date: date,
+        market_regime_version: str | None,
+    ) -> None:
+        """在回测前补齐指定版本的 feature / regime。"""
+        if market_regime_version is None or market_regime_version == DEFAULT_REGIME_VERSION:
+            return
+
+        feature_version = self._feature_version_for_regime_version(market_regime_version)
+        if feature_version is None:
+            return
+
+        if self._session_scope_factory is None:
+            from src.db.session import session_scope
+
+            self._session_scope_factory = session_scope
+
+        snapshot_repo = MarketSnapshotRepository()
+        feature_service = MarketRegimeFeatureService()
+        regime_service = MarketRegimeService()
+
+        from src.backtest.engine import iter_trade_dates
+
+        async with self._session_scope_factory() as session:
+            for trade_date in iter_trade_dates(start_date, end_date):
+                snapshots = await snapshot_repo.list_snapshots(
+                    session,
+                    trade_date=trade_date,
+                    market="CN",
+                    quality_status="ok",
+                    limit=1,
+                )
+                if not snapshots:
+                    continue
+                snapshot = snapshots[0]
+                await feature_service.build_market_regime_features(
+                    snapshot_id=snapshot.snapshot_id,
+                    feature_version=feature_version,
+                )
+                await regime_service.build_market_regime(
+                    snapshot_id=snapshot.snapshot_id,
+                    regime_version=market_regime_version,
+                    feature_version=feature_version,
+                )
 
     def run_backtest(
         self,
@@ -449,6 +559,13 @@ class BacktestService(BaseService):
             warnings=warnings,
         )
 
+    def _ensure_session_scope_factory(self) -> None:
+        """确保 session_scope_factory 已初始化（惰性单例）。"""
+        if self._session_scope_factory is None:
+            from src.db.session import session_scope
+
+            self._session_scope_factory = session_scope
+
     async def run_rule_pool_backtest(
         self,
         *,
@@ -456,22 +573,49 @@ class BacktestService(BaseService):
         end_date: date,
         rule_ids: list[str] | None = None,
         min_confidence: float = 0.5,
+        market_regime_version: str | None = DEFAULT_REGIME_VERSION,
         config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
     ) -> ServiceResult:
         """对规则池中的规则执行回测。"""
-        if self._session_scope_factory is None:
-            from src.db.session import session_scope
+        self._ensure_session_scope_factory()
 
-            self._session_scope_factory = session_scope
+        await self._prepare_regime_backtest_inputs(
+            start_date=start_date,
+            end_date=end_date,
+            market_regime_version=market_regime_version,
+        )
 
-        engine = self._build_engine(config_path=config_path)
-        async with self._session_scope_factory() as session:
-            result = await engine.run_rules_backtest(
-                session=session,
-                rule_ids=rule_ids,
-                start_date=start_date,
-                end_date=end_date,
-                min_confidence=min_confidence,
+        engine = self._build_engine(
+            config_path=config_path,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
+        try:
+            async with self._session_scope_factory() as session:
+                result = await engine.run_rules_backtest(
+                    session=session,
+                    rule_ids=rule_ids,
+                    start_date=start_date,
+                    end_date=end_date,
+                    min_confidence=min_confidence,
+                    market_regime_version=market_regime_version,
+                )
+        except Exception as e:
+            logger = __import__("logging").getLogger(__name__)
+            logger.error("rule pool backtest failed: %s", e, exc_info=True)
+            return ServiceResult(
+                status="error",
+                message=f"rule pool backtest failed: {e!s}",
+                payload={
+                    "config_path": str(config_path) if config_path is not None else None,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "rule_ids": rule_ids,
+                    "min_confidence": min_confidence,
+                    "market_regime_version": market_regime_version,
+                },
             )
 
         return ServiceResult(
@@ -483,8 +627,11 @@ class BacktestService(BaseService):
                 "end_date": end_date.isoformat(),
                 "rule_ids": rule_ids,
                 "min_confidence": min_confidence,
-                "result": _to_plain(result),
+                "market_regime_version": market_regime_version,
                 "summary": _to_plain(result.summary),
+                "regime_version": result.regime_version,
+                "source_feature_version": result.source_feature_version,
+                "result": _to_plain(result),
                 "record_count": len(result.records),
             },
         )

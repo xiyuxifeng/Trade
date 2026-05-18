@@ -13,6 +13,7 @@ import inspect
 import operator
 import re
 import statistics
+from collections import defaultdict
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -27,6 +28,7 @@ from src.backtest.schemas import (
     BacktestTradeRecord,
     MarketContextSnapshot,
     RuleValidationResult,
+    RegimeBacktestMetric,
 )
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
@@ -45,6 +47,66 @@ async def _resolve_maybe_awaitable(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+def _resolve_regime_label(market_regime: Any) -> str:
+    """从 market_regime 对象中提取主状态标签。"""
+    if isinstance(market_regime, dict):
+        primary_label = market_regime.get("primary_label")
+        if isinstance(primary_label, str) and primary_label:
+            return primary_label
+        labels = market_regime.get("labels")
+        if isinstance(labels, list):
+            for label in labels:
+                if not isinstance(label, dict):
+                    continue
+                candidate = label.get("label")
+                if isinstance(candidate, str) and candidate:
+                    return candidate
+    if hasattr(market_regime, "primary_label"):
+        value = getattr(market_regime, "primary_label")
+        if isinstance(value, str) and value:
+            return value
+    return "unknown"
+
+
+def _build_regime_metric(
+    *,
+    regime_label: str,
+    returns: list[float],
+    source_rule_count: int = 0,
+) -> RegimeBacktestMetric:
+    """把单个 regime 的收益序列汇总成稳定指标。"""
+    sample_count = len(returns)
+    win_returns = [value for value in returns if value > 0]
+    loss_returns = [value for value in returns if value < 0]
+    win_trades = len(win_returns)
+    loss_trades = len(loss_returns)
+    win_rate = win_trades / sample_count if sample_count else None
+    avg_return = statistics.mean(returns) if returns else None
+    avg_win_return = statistics.mean(win_returns) if win_returns else None
+    avg_loss_return = statistics.mean(loss_returns) if loss_returns else None
+    max_drawdown = _calc_max_drawdown(returns) if returns else None
+    win_sum = sum(win_returns)
+    loss_sum = abs(sum(loss_returns))
+    profit_factor = (win_sum / loss_sum) if loss_sum else None
+    confidence = min(1.0, sample_count / 20.0) if sample_count else 0.0
+    if source_rule_count and sample_count < 10:
+        confidence = min(confidence, 0.5)
+    return RegimeBacktestMetric(
+        regime_label=regime_label,
+        sample_count=sample_count,
+        win_trades=win_trades,
+        loss_trades=loss_trades,
+        win_rate=win_rate,
+        avg_return=avg_return,
+        avg_win_return=avg_win_return,
+        avg_loss_return=avg_loss_return,
+        max_drawdown=max_drawdown,
+        profit_factor=profit_factor,
+        confidence=confidence,
+        low_sample=sample_count < 10,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1377,6 +1439,7 @@ class BacktestEngine:
         start_date: date = None,
         end_date: date = None,
         min_confidence: float = 0.5,
+        market_regime_version: str | None = None,
     ) -> BacktestResult:
         """
         对规则池中的规则进行回测
@@ -1394,11 +1457,12 @@ class BacktestEngine:
         from src.rule_pool.repository import RulePoolRepository
 
         logger.info(
-            "规则池回测开始: rule_ids=%s, start_date=%s, end_date=%s, min_confidence=%.2f",
+            "规则池回测开始: rule_ids=%s, start_date=%s, end_date=%s, min_confidence=%.2f, market_regime_version=%s",
             rule_ids,
             start_date,
             end_date,
             min_confidence,
+            market_regime_version,
         )
 
         repo = RulePoolRepository(session)
@@ -1428,6 +1492,7 @@ class BacktestEngine:
                 request_date_from=start_date,
                 request_date_to=end_date,
                 benchmark_symbol=None,
+                regime_version=market_regime_version,
                 records=[],
                 summary=BacktestSummary(
                     total_days=0,
@@ -1458,6 +1523,7 @@ class BacktestEngine:
             result = await self._backtest_single_rule(
                 rule, start_date, end_date,
                 session=session, forward_bars=forward_bars,
+                market_regime_version=market_regime_version,
             )
             rule_results.append(result)
 
@@ -1508,6 +1574,7 @@ class BacktestEngine:
         end_date: date,
         session: AsyncSession | None = None,
         forward_bars: dict[str, list[dict[str, Any]]] | None = None,
+        market_regime_version: str | None = None,
     ) -> RuleBacktestResult:
         """
         对单条规则执行真实回测
@@ -1545,16 +1612,19 @@ class BacktestEngine:
                 run_at=datetime.now(),
                 start_date=start_date,
                 end_date=end_date,
+                rule_id=rule.rule_id,
                 total_trades=0,
                 hit_trades=0,
                 miss_trades=0,
                 hit_rate=0.0,
                 avg_return=0.0,
                 sample_count=0,
+                regime_version=market_regime_version,
             )
 
         # 尝试将 mapped_condition 转为简单文本条件（兼容 _evaluate_simple_condition）
         simple_condition_text = _mapped_condition_to_text(mapped_condition)
+        source_feature_version = self._feature_version_for_regime_version(market_regime_version)
 
         trade_dates = iter_trade_dates(start_date, end_date)
         sample_count = len(trade_dates)
@@ -1573,12 +1643,14 @@ class BacktestEngine:
         hit_returns: list[float] = []
         hit_count = 0
         total_checks = 0
+        regime_returns: dict[str, list[float]] = defaultdict(list)
 
         # 确定加载策略：loader 可用时走 loader，否则从预加载的 bars 派生基础 OHLCV 指标
         use_loader = self.loader is not None
 
         for trade_date in trade_dates:
             trade_date_str = trade_date.isoformat()
+            market_regime_obj: Any = None
 
             # 加载指标数据
             indicators_by_symbol: dict[str, dict[str, Any]] = {}
@@ -1587,10 +1659,15 @@ class BacktestEngine:
                     ctx = await self.loader.load_market_context(
                         trade_date=trade_date,
                         symbols=[],
-                        regime_version=None,
+                        regime_version=market_regime_version,
                     )
                     if ctx:
                         indicators_by_symbol = ctx.get("indicators_by_symbol") or {}
+                        market_regime_obj = ctx.get("market_regime")
+                        if isinstance(market_regime_obj, dict):
+                            loaded_source_feature_version = market_regime_obj.get("source_feature_version")
+                            if isinstance(loaded_source_feature_version, str) and loaded_source_feature_version:
+                                source_feature_version = loaded_source_feature_version
                 except Exception as e:
                     logger.debug("加载市场上下文失败: date=%s, error=%s", trade_date, e)
                     continue
@@ -1629,6 +1706,8 @@ class BacktestEngine:
                     )
                     if t1_ret is not None:
                         hit_returns.append(t1_ret)
+                        regime_label = _resolve_regime_label(market_regime_obj) if use_loader else "unknown"
+                        regime_returns[regime_label].append(t1_ret)
 
         # 计算统计指标
         hit_rate = hit_count / total_checks if total_checks > 0 else 0.0
@@ -1646,11 +1725,18 @@ class BacktestEngine:
         # 最大回撤
         max_drawdown = _calc_max_drawdown(hit_returns) if hit_returns else None
 
+        regime_metrics = [
+            _build_regime_metric(regime_label=regime_label, returns=returns, source_rule_count=1)
+            for regime_label, returns in sorted(regime_returns.items())
+        ]
+
         return RuleBacktestResult(
             run_id=str(uuid4()),
             run_at=datetime.now(),
             start_date=start_date,
             end_date=end_date,
+            rule_id=rule.rule_id,
+            regime_version=market_regime_version,
             total_trades=total_checks,
             hit_trades=hit_count,
             miss_trades=total_checks - hit_count,
@@ -1661,6 +1747,8 @@ class BacktestEngine:
             sharpe_ratio=sharpe_ratio,
             max_drawdown=max_drawdown,
             sample_count=sample_count,
+            regime_metrics=regime_metrics,
+            source_feature_version=source_feature_version,
         )
 
     def _aggregate_rule_results(
@@ -1682,6 +1770,7 @@ class BacktestEngine:
                 request_date_from=date.min,
                 request_date_to=date.max,
                 benchmark_symbol=None,
+                regime_version=None,
                 records=[],
                 summary=BacktestSummary(
                     total_days=0,
@@ -1702,6 +1791,70 @@ class BacktestEngine:
 
         # 计算整体胜率
         overall_hit_rate = total_hits / total_samples if total_samples > 0 else 0.0
+
+        regime_bucket_summary: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {
+                "sample_count": 0,
+                "win_trades": 0,
+                "loss_trades": 0,
+                "return_sum": 0.0,
+                "win_return_sum": 0.0,
+                "loss_return_sum": 0.0,
+                "max_drawdown": None,
+                "rule_count": 0,
+            }
+        )
+        rule_regime_metrics: dict[str, list[RegimeBacktestMetric]] = {}
+
+        for result in results:
+            rule_key = result.rule_id or result.run_id
+            rule_regime_metrics[rule_key] = list(result.regime_metrics or [])
+            for metric in result.regime_metrics or []:
+                if not isinstance(metric, RegimeBacktestMetric):
+                    continue
+                bucket = regime_bucket_summary[metric.regime_label]
+                bucket["sample_count"] += metric.sample_count
+                bucket["win_trades"] += metric.win_trades
+                bucket["loss_trades"] += metric.loss_trades
+                bucket["rule_count"] += 1
+                if metric.avg_return is not None:
+                    bucket["return_sum"] += metric.avg_return * metric.sample_count
+                if metric.avg_win_return is not None and metric.win_trades > 0:
+                    bucket["win_return_sum"] += metric.avg_win_return * metric.win_trades
+                if metric.avg_loss_return is not None and metric.loss_trades > 0:
+                    bucket["loss_return_sum"] += metric.avg_loss_return * metric.loss_trades
+                if metric.max_drawdown is not None:
+                    current = bucket["max_drawdown"]
+                    bucket["max_drawdown"] = metric.max_drawdown if current is None else max(float(current), metric.max_drawdown)
+
+        aggregated_regime_metrics: list[RegimeBacktestMetric] = []
+        for regime_label, bucket in sorted(regime_bucket_summary.items()):
+            sample_count = int(bucket["sample_count"])
+            win_trades = int(bucket["win_trades"])
+            loss_trades = int(bucket["loss_trades"])
+            win_rate = win_trades / sample_count if sample_count > 0 else None
+            avg_return = bucket["return_sum"] / sample_count if sample_count > 0 else None
+            avg_win_return = bucket["win_return_sum"] / win_trades if win_trades > 0 else None
+            avg_loss_return = bucket["loss_return_sum"] / loss_trades if loss_trades > 0 else None
+            loss_sum = abs(bucket["loss_return_sum"])
+            profit_factor = bucket["win_return_sum"] / loss_sum if loss_sum else None
+            confidence = min(1.0, sample_count / 20.0) if sample_count else 0.0
+            aggregated_regime_metrics.append(
+                RegimeBacktestMetric(
+                    regime_label=regime_label,
+                    sample_count=sample_count,
+                    win_trades=win_trades,
+                    loss_trades=loss_trades,
+                    win_rate=win_rate,
+                    avg_return=avg_return,
+                    avg_win_return=avg_win_return,
+                    avg_loss_return=avg_loss_return,
+                    max_drawdown=float(bucket["max_drawdown"]) if bucket["max_drawdown"] is not None else None,
+                    profit_factor=profit_factor,
+                    confidence=confidence,
+                    low_sample=sample_count < 10,
+                )
+            )
 
         # 生成汇总记录
         records: list[BacktestTradeRecord] = []
@@ -1728,12 +1881,18 @@ class BacktestEngine:
 
         # 使用第一个结果的时间范围
         first_result = results[0]
+        source_feature_version = next((r.source_feature_version for r in results if r.source_feature_version), None)
+        regime_version = next((r.regime_version for r in results if r.regime_version), None)
 
         return BacktestResult(
             request_trader_id="rule_pool",
             request_date_from=first_result.start_date,
             request_date_to=first_result.end_date,
             benchmark_symbol=None,
+            regime_version=regime_version,
+            source_feature_version=source_feature_version,
             records=records,
             summary=summary,
+            regime_metrics=aggregated_regime_metrics,
+            rule_regime_metrics=rule_regime_metrics,
         )

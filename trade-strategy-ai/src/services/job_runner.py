@@ -286,6 +286,23 @@ class JobRunner(BaseService):
                 force=_parse_bool(params.get("force"), default=False),
             )
 
+        async def _rule_pool_backtest(params: dict[str, Any]) -> ServiceResult:
+            service = self._backtest_service_factory()
+            rule_id = str(params.get("rule_id") or "").strip()
+            rule_ids = [rule_id] if rule_id else None
+            start_date = _parse_optional_date(params.get("start_date"))
+            end_date = _parse_optional_date(params.get("end_date"))
+            if start_date is None or end_date is None:
+                raise ValueError("missing required param: start_date/end_date")
+            return await service.run_rule_pool_backtest(
+                start_date=start_date,
+                end_date=end_date,
+                rule_ids=rule_ids,
+                min_confidence=float(params.get("min_confidence") or 0.5),
+                market_regime_version=params.get("market_regime_version") or "market-regime-v3",
+                config_path=params.get("config_path", "config/app.yaml"),
+            )
+
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
             manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
             service = RunService(manager)
@@ -342,6 +359,7 @@ class JobRunner(BaseService):
             "backtest-run": _backtest_run,
             "backtest-validate-rules": _backtest_validate_rules,
             "backtest-reproducibility-check": _backtest_reproducibility_check,
+            "rule-pool-backtest": _rule_pool_backtest,
             "candidate-review": _candidate_review,
         }
 
@@ -392,7 +410,7 @@ class JobRunner(BaseService):
         if isinstance(snapshot_paths, list):
             artifact_specs.extend(("snapshot-json", "市场快照 JSON", item) for item in snapshot_paths if item)
 
-        if job_type == "backtest-run" and "result" in payload:
+        if job_type in {"backtest-run", "rule-pool-backtest"} and "result" in payload:
             backtest_service = self._backtest_service_factory()
             report_content = backtest_service.render_backtest_report(payload["result"], format="markdown").payload["content"]
             csv_content = backtest_service.render_backtest_report(payload["result"], format="csv").payload["content"]

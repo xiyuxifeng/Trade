@@ -91,7 +91,7 @@ def test_kaipan_service_fetch_includes_10_5_capabilities(tmp_path: Path) -> None
 	result = service.fetch(config_path=config_path, trade_date="2026-04-23", slot="17-30")
 
 	assert result.status == "ok"
-	assert len(result.payload["slot_results"]["17-30"]["success"]) == 15
+	assert len(result.payload["slot_results"]["17-30"]["success"]) == 19
 	assert "market_stock_zd_num" in result.payload["slot_results"]["17-30"]["success"]
 	assert "zhang_ting_expression" in result.payload["slot_results"]["17-30"]["success"]
 	assert "daily_limit_index" in result.payload["slot_results"]["17-30"]["success"]

@@ -72,6 +72,12 @@ class KaipanNormalizer:
             if normalized.get("date") is None and normalized.get("Date") is not None:
                 normalized["date"] = normalized["Date"]
 
+        if action == "GetPlateInfo_w38" and normalized.get("summary") is None and normalized.get("nums") is not None:
+            normalized["summary"] = normalized.get("nums")
+
+        if action in {"GetZsReal", "RefreshStockList"} and normalized.get("StockList") is None and normalized.get("list") is not None:
+            normalized["StockList"] = normalized.get("list")
+
         return normalized
 
     def _get_nested(self, data: Any, path: str) -> Any:
@@ -174,6 +180,18 @@ class KaipanNormalizer:
     def normalize_strong_symbols(self, raw_path: Path, slot: str) -> dict[str, Any]:
         return self.normalize("strong_symbols", raw_path, slot)
 
+    def normalize_market_sentiment(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("market_sentiment", raw_path, slot)
+
+    def normalize_market_index(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("market_index", raw_path, slot)
+
+    def normalize_sharp_withdrawal(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("sharp_withdrawal", raw_path, slot)
+
+    def normalize_sector_ranking(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("sector_ranking", raw_path, slot)
+
     def normalize_market_context(self, raw_path: Path, slot: str) -> dict[str, Any]:
         return self.normalize("market_context", raw_path, slot)
 
@@ -206,6 +224,10 @@ class KaipanNormalizer:
                 "hot_topics",
                 "topic_constituents",
                 "strong_symbols",
+                "market_sentiment",
+                "market_index",
+                "sharp_withdrawal",
+                "sector_ranking",
                 "market_context",
                 "market_stock_zd_num",
                 "zhang_ting_expression",

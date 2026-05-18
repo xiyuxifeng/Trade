@@ -1,0 +1,28 @@
+# sharp_withdrawal 快照字段映射
+# 来源接口：SharpWithdrawal
+
+dataset: sharp_withdrawal
+
+mappings:
+  summary:
+    source:
+      api: SharpWithdrawal
+      controller: HisHomeDingPan
+      params:
+        Day: ""
+    fields:
+      date: {raw_path: "date", type: string}
+      count: {raw_path: "num", type: number}
+
+  items:
+    source:
+      api: SharpWithdrawal
+      controller: HisHomeDingPan
+      params:
+        Day: ""
+    fields:
+      symbol: {raw_path: "info.[i].[0]", type: string}
+      name: {raw_path: "info.[i].[1]", type: string}
+      change_pct: {raw_path: "info.[i].[2]", type: number}
+      withdrawal_pct: {raw_path: "info.[i].[3]", type: number}
+      latest_price: {raw_path: "info.[i].[4]", type: number}

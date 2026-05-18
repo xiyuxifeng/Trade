@@ -103,6 +103,8 @@ class KaipanService(BaseService):
 	def _fetchers_for_slot(self, provider: KaipanProvider, slot: str) -> list[tuple[str, Callable[..., dict[str, Any]]]]:
 		"""返回指定时间槽对应的抓取器列表。"""
 		base_fetchers = [
+			("market_sentiment", provider.fetch_market_sentiment),
+			("market_index", provider.fetch_market_index),
 			("board_strength", provider.fetch_board_strength),
 			("industry_ranking", provider.fetch_industry_ranking),
 			("concept_fengkou", provider.fetch_concept_fengkou),
@@ -128,6 +130,8 @@ class KaipanService(BaseService):
 				("daily_limit_index", provider.fetch_daily_limit_index),
 				("weight_performance", provider.fetch_weight_performance),
 				("strong_fengkou_best", provider.fetch_get_feng_k_list),
+				("sharp_withdrawal", provider.fetch_sharp_withdrawal),
+				("sector_ranking", provider.fetch_sector_ranking),
 			]
 		return []
 

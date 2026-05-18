@@ -8,11 +8,15 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.common.paths import resolve_project_path
-from src.db.repositories import MarketRegimeRepository, MarketRegimeFeatureRepository, MarketSnapshotRepository
+from src.db.repositories import MarketDatasetRepository, MarketRegimeRepository, MarketRegimeFeatureRepository, MarketSnapshotRepository
 from src.db.session import get_session_factory
+from src.models.market_dataset import MarketDataset
 from src.models.market_regime_record import MarketRegimeRecord
 from src.services.base import BaseService, ServiceResult
 from src.services.market_regime_rules import score_market_regime
+
+DEFAULT_REGIME_VERSION = "market-regime-v2"
+DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
 
 
 def _to_plain(value: Any) -> Any:
@@ -42,12 +46,14 @@ class MarketRegimeService(BaseService):
         snapshot_repository: MarketSnapshotRepository | None = None,
         feature_repository: MarketRegimeFeatureRepository | None = None,
         regime_repository: MarketRegimeRepository | None = None,
+        dataset_repository: MarketDatasetRepository | None = None,
         artifact_root: str | Path | None = None,
     ) -> None:
         self._session_factory = session_factory or get_session_factory()
         self._snapshot_repository = snapshot_repository or MarketSnapshotRepository()
         self._feature_repository = feature_repository or MarketRegimeFeatureRepository()
         self._regime_repository = regime_repository or MarketRegimeRepository()
+        self._dataset_repository = dataset_repository or MarketDatasetRepository()
         self._artifact_root = Path(artifact_root).expanduser().resolve() if artifact_root is not None else resolve_project_path("data/processed/market_regimes")
 
     def _error(
@@ -93,8 +99,8 @@ class MarketRegimeService(BaseService):
         self,
         *,
         snapshot_id: str,
-        regime_version: str = "market-regime-v1",
-        feature_version: str = "market-regime-features-v1",
+        regime_version: str = DEFAULT_REGIME_VERSION,
+        feature_version: str = DEFAULT_FEATURE_VERSION,
     ) -> ServiceResult:
         """基于指定 snapshot 和 feature version 生成 Market Regime。"""
         async with self._session_factory() as session:
@@ -141,11 +147,28 @@ class MarketRegimeService(BaseService):
                 missing_reason=evaluation.missing_reason,
                 storage_ref={"snapshot_id": snapshot.snapshot_id, "regime_version": regime_version, "feature_version": feature.feature_version},
             )
+            dataset_record = MarketDataset(
+                dataset_id=f"{snapshot.snapshot_id}:{regime_version}",
+                dataset_type="market_regimes",
+                trade_date=snapshot.trade_date,
+                market=snapshot.market,
+                source="market-regime",
+                storage_ref={
+                    "snapshot_id": snapshot.snapshot_id,
+                    "regime_version": regime_version,
+                    "feature_version": feature.feature_version,
+                    "artifact_type": "market-regime-json",
+                },
+                snapshot_id=snapshot.snapshot_id,
+                profile_id=getattr(snapshot, "profile_id", None),
+                quality_status=evaluation.quality_status,
+            )
 
             saved = regime
             db_warning = False
             try:
                 saved = await self._regime_repository.upsert_regime(session, regime)
+                await self._dataset_repository.upsert_dataset(session, dataset_record)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 db_warning = True
@@ -172,6 +195,7 @@ class MarketRegimeService(BaseService):
             "evaluation": evaluation.to_dict(),
             "artifact_ref": self._artifact_ref(artifact_path),
             "artifact_path": self._artifact_ref(artifact_path)["relative_path"],
+            "dataset_id": dataset_record.dataset_id,
             "warnings": evaluation.warnings,
         }
         return ServiceResult(status=status, message=message, payload=payload, warnings=evaluation.warnings)
@@ -255,7 +279,7 @@ class MarketRegimeService(BaseService):
 
     async def get_regime_detail(self, snapshot_id: str, regime_version: str | None = None) -> ServiceResult:
         """按 snapshot_id / regime_version 查询 regime 详情。"""
-        version = regime_version or "market-regime-v1"
+        version = regime_version or DEFAULT_REGIME_VERSION
         async with self._session_factory() as session:
             snapshot = await self._snapshot_repository.get_by_snapshot_id(session, snapshot_id)
             if snapshot is None:

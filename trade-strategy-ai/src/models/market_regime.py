@@ -31,7 +31,7 @@ class MarketRegimeFeature(TimestampMixin, Base):
     snapshot_id: Mapped[str] = mapped_column(String(128), ForeignKey("market_snapshots.snapshot_id", ondelete="CASCADE"), nullable=False)
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     market: Mapped[str] = mapped_column(String(32), nullable=False, default="CN")
-    feature_version: Mapped[str] = mapped_column(String(64), nullable=False, default="market-regime-features-v1")
+    feature_version: Mapped[str] = mapped_column(String(64), nullable=False, default="market-regime-features-v2")
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="partial")
     available_feature_count: Mapped[int] = mapped_column(nullable=False, default=0)
     partial_feature_count: Mapped[int] = mapped_column(nullable=False, default=0)

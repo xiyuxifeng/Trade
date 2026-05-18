@@ -1,0 +1,34 @@
+# sector_ranking 快照字段映射
+# 来源接口：GetPlateInfo_w38
+
+dataset: sector_ranking
+
+mappings:
+  summary:
+    source:
+      api: GetPlateInfo_w38
+      controller: DailyLimitResumption
+      params:
+        Day: ""
+        Index: 0
+        st: 100
+    fields:
+      up_count: {raw_path: "nums.SZJS", type: number}
+      down_count: {raw_path: "nums.XDJS", type: number}
+      limit_up_count: {raw_path: "nums.ZT", type: number}
+      limit_down_count: {raw_path: "nums.DT", type: number}
+      rise_ratio: {raw_path: "nums.ZBL", type: number}
+      yesterday_rise_ratio: {raw_path: "nums.yestRase", type: number}
+
+  sectors:
+    source:
+      api: GetPlateInfo_w38
+      controller: DailyLimitResumption
+      params:
+        Day: ""
+        Index: 0
+        st: 100
+    fields:
+      sector_code: {raw_path: "list.[i].ZSCode", type: string}
+      sector_name: {raw_path: "list.[i].ZSName", type: string}
+      stock_count: {raw_path: "list.[i].num", type: number}

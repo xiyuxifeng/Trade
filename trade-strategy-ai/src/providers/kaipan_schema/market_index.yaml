@@ -1,0 +1,19 @@
+# market_index 快照字段映射
+# 来源接口：GetZsReal / RefreshStockList
+
+dataset: market_index
+
+mappings:
+  items:
+    source:
+      api: GetZsReal
+      controller: StockL2History
+      params:
+        Day: ""
+    fields:
+      symbol: {raw_path: "StockList.[i].StockID", type: string}
+      name: {raw_path: "StockList.[i].prod_name", type: string}
+      latest_price: {raw_path: "StockList.[i].last_px", type: number}
+      change_pct: {raw_path: "StockList.[i].increase_rate", type: string}
+      turnover: {raw_path: "StockList.[i].turnover", type: number}
+      change_amount: {raw_path: "StockList.[i].increase_amount", type: number}

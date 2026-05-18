@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { PageHeader } from '@/components/kit';
+import { SectionCard } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
@@ -39,12 +39,28 @@ function extractSnapshotId(items: MarketSnapshotListItem[], snapshotId: string |
   return items[0]?.snapshot_id ?? null;
 }
 
+function uniqueVersions(items: Array<{ [key: string]: unknown }>, key: string) {
+  const versions: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const value = item[key];
+    if (typeof value !== 'string' || !value.trim() || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    versions.push(value);
+  }
+  return versions;
+}
+
 export function MarketSnapshotBrowserShell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tradeDate = searchParams.get('trade_date') ?? formatLocalDateInputOffset(0);
   const market = searchParams.get('market') ?? 'CN';
   const qualityStatus = searchParams.get('quality_status') ?? '';
   const selectedSnapshotIdParam = searchParams.get('snapshot_id');
+  const selectedRegimeVersionParam = searchParams.get('regime_version');
+  const selectedFeatureVersionParam = searchParams.get('feature_version');
 
   const snapshotsQuery = useQuery({
     queryKey: ['market-snapshots-browser', tradeDate, market, qualityStatus],
@@ -128,7 +144,25 @@ export function MarketSnapshotBrowserShell() {
     staleTime: 30_000,
   });
 
-  const selectedRegimeVersion = regimeListQuery.data?.items[0]?.regime_version ?? null;
+  const regimeVersions = useMemo(() => uniqueVersions(regimeListQuery.data?.items ?? [], 'regime_version'), [regimeListQuery.data?.items]);
+  const featureVersions = useMemo(() => uniqueVersions(regimeFeaturesQuery.data?.items ?? [], 'feature_version'), [regimeFeaturesQuery.data?.items]);
+  const selectedRegimeVersion = selectedRegimeVersionParam && regimeVersions.includes(selectedRegimeVersionParam) ? selectedRegimeVersionParam : regimeVersions[0] ?? null;
+  const selectedFeatureVersion = selectedFeatureVersionParam && featureVersions.includes(selectedFeatureVersionParam) ? selectedFeatureVersionParam : featureVersions[0] ?? null;
+
+  useEffect(() => {
+    const nextPatch: Record<string, string | null | undefined> = {};
+    if (regimeVersions.length && (!selectedRegimeVersionParam || !regimeVersions.includes(selectedRegimeVersionParam))) {
+      nextPatch.regime_version = regimeVersions[0];
+    }
+    if (featureVersions.length && (!selectedFeatureVersionParam || !featureVersions.includes(selectedFeatureVersionParam))) {
+      nextPatch.feature_version = featureVersions[0];
+    }
+    if (Object.keys(nextPatch).length === 0) {
+      return;
+    }
+    setSearchParams(buildSearchParams(searchParams, nextPatch), { replace: true });
+  }, [featureVersions, regimeVersions, selectedFeatureVersionParam, selectedRegimeVersionParam, searchParams, setSearchParams]);
+
   const regimeDetailQuery = useQuery({
     queryKey: ['market-regime-detail-browser', selectedSnapshotId, selectedRegimeVersion],
     queryFn: () => getMarketRegime(selectedSnapshotId ?? '', selectedRegimeVersion ?? undefined),
@@ -136,11 +170,10 @@ export function MarketSnapshotBrowserShell() {
     staleTime: 30_000,
   });
 
-  const selectedRegimeFeatureVersion = regimeFeaturesQuery.data?.items[0]?.feature_version ?? null;
   const regimeFeatureDetailQuery = useQuery({
-    queryKey: ['market-regime-feature-detail-browser', selectedSnapshotId, selectedRegimeFeatureVersion],
-    queryFn: () => getMarketRegimeFeature(selectedSnapshotId ?? '', selectedRegimeFeatureVersion ?? undefined),
-    enabled: Boolean(selectedSnapshotId && selectedRegimeFeatureVersion),
+    queryKey: ['market-regime-feature-detail-browser', selectedSnapshotId, selectedFeatureVersion],
+    queryFn: () => getMarketRegimeFeature(selectedSnapshotId ?? '', selectedFeatureVersion ?? undefined),
+    enabled: Boolean(selectedSnapshotId && selectedFeatureVersion),
     staleTime: 30_000,
   });
 
@@ -167,6 +200,65 @@ export function MarketSnapshotBrowserShell() {
           查看数据集
         </Link>
       </div>
+
+      <SectionCard
+        title="版本切换"
+        description="通过 URL 和下拉框切换 Market Regime Features 与 Market Regime 版本，默认展示当前可用最新版本。"
+        className="border-slate-200 bg-white"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">feature_version</span>
+            <select
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
+              value={selectedFeatureVersion ?? ''}
+              onChange={(event) => {
+                setSearchParams(
+                  buildSearchParams(searchParams, {
+                    feature_version: event.target.value,
+                  }),
+                  { replace: true },
+                );
+              }}
+            >
+              {featureVersions.length ? (
+                featureVersions.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
+                  </option>
+                ))
+              ) : (
+                <option value="">暂无可用版本</option>
+              )}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">regime_version</span>
+            <select
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
+              value={selectedRegimeVersion ?? ''}
+              onChange={(event) => {
+                setSearchParams(
+                  buildSearchParams(searchParams, {
+                    regime_version: event.target.value,
+                  }),
+                  { replace: true },
+                );
+              }}
+            >
+              {regimeVersions.length ? (
+                regimeVersions.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
+                  </option>
+                ))
+              ) : (
+                <option value="">暂无可用版本</option>
+              )}
+            </select>
+          </label>
+        </div>
+      </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="space-y-4">

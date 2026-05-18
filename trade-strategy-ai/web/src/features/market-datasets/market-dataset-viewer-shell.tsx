@@ -147,11 +147,11 @@ export function MarketDatasetViewerShell() {
 
   return (
     <main className="page-stack">
-      {/* <PageHeader
+      <PageHeader
         kicker="市场数据"
         title="Market Dataset Viewer"
         description="在 Web 中浏览 DB 里的市场数据集、分页样本与关联回链，不把 /market 再扩成一个复合控制台。"
-      /> */}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50" to={listLink}>

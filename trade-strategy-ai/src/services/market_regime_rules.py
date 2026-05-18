@@ -105,7 +105,7 @@ def _build_feature_record(key: str, entry: dict[str, Any]) -> RegimeFeatureRecor
         normalized_value=entry.get("normalized_value") if isinstance(entry, dict) else None,
         source_section=_feature_source_section(entry),
         source_field=_feature_source_field(entry),
-        source_version=str(entry.get("source_version") or entry.get("feature_version") or "market-regime-features-v1") if isinstance(entry, dict) else "market-regime-features-v1",
+        source_version=str(entry.get("source_version") or entry.get("feature_version") or "market-regime-features-v2") if isinstance(entry, dict) else "market-regime-features-v2",
         confidence=_feature_confidence(entry),
         weight=float(entry.get("weight") or 1.0) if isinstance(entry, dict) else 1.0,
         missing_reason=_feature_missing_reason(entry),
@@ -292,7 +292,28 @@ def score_market_regime(
     source_feature_version: str | None = None,
 ) -> MarketRegimeEvaluation:
     """根据 market_regime_features 计算最终 Market Regime。"""
-    feature_keys = ("trend", "breadth", "volatility", "liquidity", "turnover_level", "theme_strength", "limit_up_count", "limit_down_count")
+    feature_keys = (
+        "benchmark_ohlcv_window",
+        "trend",
+        "ret_5d",
+        "ret_20d",
+        "ma20_gap",
+        "ma60_gap",
+        "breadth",
+        "breadth_up_ratio",
+        "breadth_down_ratio",
+        "volatility",
+        "vol_spike",
+        "liquidity",
+        "turnover_level",
+        "turnover_ratio",
+        "theme_strength",
+        "theme_concentration",
+        "limit_up_count",
+        "limit_down_count",
+        "gap_down_rate",
+        "extreme_drop_count",
+    )
     feature_records = [_build_feature_record(key, _extract_feature_entry(features, key)) for key in feature_keys if key in features]
     if not feature_records:
         feature_records = []
@@ -423,7 +444,7 @@ def score_market_regime(
 
     if source_feature_version is None:
         source_candidates = [str(entry.get("source_version")) for entry in (trend_entry, breadth_entry, volatility_entry, liquidity_entry, turnover_entry, theme_entry, limit_up_entry, limit_down_entry) if isinstance(entry, dict) and entry.get("source_version")]
-        source_feature_version = source_candidates[0] if source_candidates else "market-regime-features-v1"
+        source_feature_version = source_candidates[0] if source_candidates else "market-regime-features-v2"
 
     if trade_date is None:
         trade_date = date.today()

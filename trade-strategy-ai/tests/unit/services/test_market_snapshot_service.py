@@ -96,6 +96,38 @@ class _FakeProvider:
     def fetch_get_feng_k_list(self, *, trade_date, slot="17-30", offline=False, time="", **kwargs):
         return {"dataset": "get_feng_k_list", "trade_date": str(trade_date), "slot": slot, "items": [{"symbol": "000001", "name": "示例"}]}
 
+    def fetch_market_sentiment(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {
+            "dataset": "market_sentiment",
+            "trade_date": str(trade_date),
+            "slot": slot,
+            "summary": {"up_count": 3120, "down_count": 1860, "flat_count": 620},
+        }
+
+    def fetch_market_index(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {
+            "dataset": "market_index",
+            "trade_date": str(trade_date),
+            "slot": slot,
+            "items": [{"symbol": "SH000001", "name": "上证指数", "close": 3120.5, "change_pct": 0.62}],
+        }
+
+    def fetch_sharp_withdrawal(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {
+            "dataset": "sharp_withdrawal",
+            "trade_date": str(trade_date),
+            "slot": slot,
+            "items": [{"symbol": "000001", "name": "示例", "withdrawal_pct": 4.3}],
+        }
+
+    def fetch_sector_ranking(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {
+            "dataset": "sector_ranking",
+            "trade_date": str(trade_date),
+            "slot": slot,
+            "sectors": [{"symbol": "881162", "name": "通信服务", "strength": 3.8}],
+        }
+
 
 class _FakeMarketService:
     async def get_ohlcv(self, symbol: str, start_date, end_date):

@@ -54,7 +54,7 @@
 - `ZhangTingExpression`
 - `DailyLimitIndex`
 - `WeightPerformance`
-- `GetFengKList`
+- `GetFengKListBest`
 
 规则：
 
@@ -122,7 +122,7 @@
 | `ZhangTingExpression` | 原始事实 | `market_snapshot_sections` / `market_snapshot_items` | 保存涨停晋级、破板、连板结构 |
 | `DailyLimitIndex` | 原始事实 | `market_snapshot_sections` / `market_snapshot_items` | 保存一板/二板/三板/高板结构 |
 | `WeightPerformance` | 原始事实 | `market_snapshot_sections` / `market_snapshot_items` | 保存权重板块涨跌分布和热点集中度 |
-| `GetFengKList` | 原始事实（增强） | `market_snapshot_sections` / `market_snapshot_items` | 保存全量强势标的，供后续增强使用 |
+| `GetFengKListBest` | 原始事实（增强） | `market_snapshot_sections` / `market_snapshot_items` | 保存全量强势标的，供后续增强使用 |
 
 说明：
 
@@ -194,4 +194,3 @@ Provider 拉取 Kaipan / 行情接口后，先落原始响应。
 - UI 和 Backtest 只依赖标准化后的事实和最终结论
 - 关键派生字段可复现、可回放、可版本化
 - 不新增并行事实源
-

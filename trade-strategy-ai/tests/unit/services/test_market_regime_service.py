@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.models.market_dataset import MarketDataset
 from src.models.market_regime_record import MarketRegimeRecord
 
 
@@ -14,6 +15,7 @@ async def market_regime_session_factory(tmp_path):
     """创建用于 Market Regime Service 测试的 sqlite session factory。"""
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'market_regime_service.db'}")
     async with engine.begin() as conn:
+        await conn.run_sync(MarketDataset.__table__.create)
         await conn.run_sync(MarketRegimeRecord.__table__.create)
     yield async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     await engine.dispose()
@@ -69,3 +71,4 @@ async def test_build_market_regime_uses_feature_snapshot_and_persists_artifact(m
     assert result.payload["regime"]["regime_version"] == "market-regime-v1"
     assert result.payload["artifact_ref"]["artifact_type"] == "market-regime-json"
     assert result.payload["artifact_path"].endswith("market-regime-v1.json")
+    assert result.payload["dataset_id"] == "snap-001:market-regime-v1"

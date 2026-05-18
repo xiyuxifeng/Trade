@@ -1,0 +1,20 @@
+# market_sentiment 快照字段映射
+# 来源接口：HisZhangFuDetail
+
+dataset: market_sentiment
+
+mappings:
+  summary:
+    source:
+      api: HisZhangFuDetail
+      controller: HisHomeDingPan
+      params:
+        Day: ""
+    fields:
+      limit_up_count: {raw_path: "info.ZT", type: number}
+      actual_limit_up: {raw_path: "info.SJZT", type: number}
+      limit_down_count: {raw_path: "info.DT", type: number}
+      actual_limit_down: {raw_path: "info.SJDT", type: number}
+      up_count: {raw_path: "info.SZJS", type: number}
+      down_count: {raw_path: "info.XDJS", type: number}
+      flat_count: {raw_path: "info.0", type: number}

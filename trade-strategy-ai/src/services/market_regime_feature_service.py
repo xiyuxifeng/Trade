@@ -18,8 +18,11 @@ from src.db.repositories import (
     MarketSnapshotSectionRepository,
 )
 from src.db.session import get_session_factory
+from src.models.market_dataset import MarketDataset
 from src.models.market_regime import MarketRegimeFeature
 from src.services.base import BaseService, ServiceResult
+
+DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
 
 
 def _normalize_date(value: Any) -> date | None:
@@ -97,6 +100,20 @@ def _first_text(value: Any) -> str | None:
                 return text
         return None
     return str(value)
+
+
+def _safe_float(value: Any) -> float | None:
+    """把值安全转换为 float。"""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.replace(",", ""))
+        except ValueError:
+            return None
+    return None
 
 
 class MarketRegimeFeatureService(BaseService):
@@ -205,6 +222,11 @@ class MarketRegimeFeatureService(BaseService):
         hot_topics = self._section_payload(sections, "hot_topics")
         topic_constituents = self._section_payload(sections, "topic_constituents")
         strong_symbols = self._section_payload(sections, "strong_symbols")
+        market_sentiment = self._section_payload(sections, "market_sentiment")
+        market_index = self._section_payload(sections, "market_index")
+        sharp_withdrawal = self._section_payload(sections, "sharp_withdrawal")
+        sector_ranking = self._section_payload(sections, "sector_ranking")
+        ohlcv = self._section_payload(sections, "ohlcv")
         market_state = self._market_state_payload(sections)
 
         features: dict[str, Any] = {}
@@ -231,11 +253,188 @@ class MarketRegimeFeatureService(BaseService):
             else:
                 available += 1
 
-        trend = market_state.get("regime") or overview.get("trend") or _first_text(overview.get("indices", {}).get("trend") if isinstance(overview.get("indices"), dict) else None)
-        if trend is None:
-            add_feature("trend", None, None, 0.0, "missing market_state.regime or overview trend")
+        def ohlcv_rows() -> list[dict[str, Any]]:
+            rows = ohlcv.get("items") if isinstance(ohlcv, dict) else []
+            if not isinstance(rows, list):
+                return []
+            normalized_rows: list[dict[str, Any]] = []
+            for row in rows:
+                if isinstance(row, dict):
+                    normalized_rows.append(row)
+            normalized_rows.sort(key=lambda row: str(row.get("time") or ""))
+            return normalized_rows
+
+        def as_float(value: Any) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value.replace(",", ""))
+                except ValueError:
+                    return None
+            return None
+
+        def rolling_mean(values: list[float], window: int) -> float | None:
+            if len(values) < window or window <= 0:
+                return None
+            return sum(values[-window:]) / float(window)
+
+        def pct_change(current: float | None, previous: float | None) -> float | None:
+            if current is None or previous in {None, 0}:
+                return None
+            return current / previous - 1.0
+
+        def mean(values: list[float]) -> float | None:
+            if not values:
+                return None
+            return sum(values) / float(len(values))
+
+        def build_ohlcv_metrics() -> dict[str, Any]:
+            rows = ohlcv_rows()
+            if not rows:
+                return {}
+
+            closes: list[float] = []
+            volumes: list[float] = []
+            turnovers: list[float] = []
+            gap_down_count = 0
+            extreme_drop_count = 0
+            prev_close: float | None = None
+
+            for row in rows:
+                close = as_float(row.get("close"))
+                open_value = as_float(row.get("open"))
+                volume = as_float(row.get("volume"))
+                turnover = as_float(row.get("turnover"))
+                if close is not None:
+                    closes.append(close)
+                if volume is not None:
+                    volumes.append(volume)
+                if turnover is not None:
+                    turnovers.append(turnover)
+                if prev_close is not None:
+                    if open_value is not None and open_value < prev_close:
+                        gap_down_count += 1
+                    if close is not None:
+                        daily_return = pct_change(close, prev_close)
+                        if daily_return is not None and daily_return <= -0.05:
+                            extreme_drop_count += 1
+                if close is not None:
+                    prev_close = close
+
+            latest_close = closes[-1] if closes else None
+            latest_volume = volumes[-1] if volumes else None
+            latest_turnover = turnovers[-1] if turnovers else latest_volume
+            previous_volume = volumes[:-1] if len(volumes) > 1 else volumes
+            previous_turnover = turnovers[:-1] if len(turnovers) > 1 else turnovers
+            avg_volume_20 = mean(previous_volume[-20:])
+            avg_turnover_20 = mean(previous_turnover[-20:])
+            ma20 = rolling_mean(closes, 20)
+            ma60 = rolling_mean(closes, 60)
+
+            benchmark_window = {
+                "symbol": ohlcv.get("symbol"),
+                "start_date": ohlcv.get("start_date"),
+                "end_date": ohlcv.get("end_date"),
+                "count": len(rows),
+                "items": rows[-60:],
+            }
+
+            metrics = {
+                "benchmark_ohlcv_window": benchmark_window,
+                "ret_5d": pct_change(latest_close, closes[-6]) if len(closes) >= 6 else None,
+                "ret_20d": pct_change(latest_close, closes[-21]) if len(closes) >= 21 else None,
+                "ma20_gap": pct_change(latest_close, ma20),
+                "ma60_gap": pct_change(latest_close, ma60),
+                "vol_spike": pct_change(latest_volume, avg_volume_20) if latest_volume is not None else None,
+                "turnover_ratio": pct_change(latest_turnover, avg_turnover_20) if latest_turnover is not None else None,
+                "gap_down_rate": round(gap_down_count / max(len(rows) - 1, 1), 4) if len(rows) > 1 else None,
+                "extreme_drop_count": extreme_drop_count,
+            }
+            if isinstance(metrics["vol_spike"], float):
+                metrics["vol_spike"] = round(metrics["vol_spike"], 4)
+            if isinstance(metrics["turnover_ratio"], float):
+                metrics["turnover_ratio"] = round(metrics["turnover_ratio"], 4)
+            if isinstance(metrics["ma20_gap"], float):
+                metrics["ma20_gap"] = round(metrics["ma20_gap"], 4)
+            if isinstance(metrics["ma60_gap"], float):
+                metrics["ma60_gap"] = round(metrics["ma60_gap"], 4)
+            if isinstance(metrics["ret_5d"], float):
+                metrics["ret_5d"] = round(metrics["ret_5d"], 4)
+            if isinstance(metrics["ret_20d"], float):
+                metrics["ret_20d"] = round(metrics["ret_20d"], 4)
+            return metrics
+
+        def build_theme_concentration() -> dict[str, Any] | None:
+            topics = hot_topics.get("topics", [])
+            topic_scores: list[float] = []
+            if isinstance(topics, list):
+                for topic in topics:
+                    if not isinstance(topic, dict):
+                        continue
+                    score = as_float(topic.get("score"))
+                    if score is not None:
+                        topic_scores.append(score)
+            sector_entries = sector_ranking.get("sectors", [])
+            sector_counts: list[int] = []
+            if isinstance(sector_entries, list):
+                for sector in sector_entries:
+                    if not isinstance(sector, dict):
+                        continue
+                    count = _first_number(sector.get("stock_count"))
+                    if count is not None:
+                        sector_counts.append(count)
+            if not topic_scores and not sector_counts and not strong_symbol_count and not constituent_count:
+                return None
+            topic_scores_sorted = sorted(topic_scores, reverse=True)
+            total_topic_score = sum(topic_scores_sorted)
+            top3_topic_share = round(sum(topic_scores_sorted[:3]) / total_topic_score, 4) if total_topic_score else None
+            total_sector_count = sum(sector_counts)
+            top_sector_share = round(max(sector_counts) / total_sector_count, 4) if total_sector_count else None
+            return {
+                "topic_count": topic_count,
+                "constituent_count": constituent_count,
+                "strong_symbol_count": strong_symbol_count,
+                "sector_count": len(sector_counts),
+                "top_topic_share": top3_topic_share,
+                "top_sector_share": top_sector_share,
+            }
+
+        ohlcv_metrics = build_ohlcv_metrics()
+        if ohlcv_metrics:
+            add_feature(
+                "benchmark_ohlcv_window",
+                ohlcv_metrics["benchmark_ohlcv_window"],
+                "ohlcv",
+                0.95,
+            )
+            trend = {
+                "benchmark_symbol": ohlcv_metrics["benchmark_ohlcv_window"].get("symbol"),
+                "start_date": ohlcv_metrics["benchmark_ohlcv_window"].get("start_date"),
+                "end_date": ohlcv_metrics["benchmark_ohlcv_window"].get("end_date"),
+                "count": ohlcv_metrics["benchmark_ohlcv_window"].get("count"),
+                "ret_5d": ohlcv_metrics["ret_5d"],
+                "ret_20d": ohlcv_metrics["ret_20d"],
+                "ma20_gap": ohlcv_metrics["ma20_gap"],
+                "ma60_gap": ohlcv_metrics["ma60_gap"],
+            }
+            add_feature("trend", trend, "ohlcv", 0.95)
+            add_feature("ret_5d", ohlcv_metrics["ret_5d"], "ohlcv", 0.95)
+            add_feature("ret_20d", ohlcv_metrics["ret_20d"], "ohlcv", 0.95)
+            add_feature("ma20_gap", ohlcv_metrics["ma20_gap"], "ohlcv", 0.95)
+            add_feature("ma60_gap", ohlcv_metrics["ma60_gap"], "ohlcv", 0.95)
+            add_feature("vol_spike", ohlcv_metrics["vol_spike"], "ohlcv", 0.9)
+            add_feature("turnover_ratio", ohlcv_metrics["turnover_ratio"], "ohlcv", 0.9)
+            add_feature("gap_down_rate", ohlcv_metrics["gap_down_rate"], "ohlcv", 0.8)
+            add_feature("extreme_drop_count", ohlcv_metrics["extreme_drop_count"], "ohlcv", 0.8)
         else:
-            add_feature("trend", trend, "market_state" if market_state.get("regime") else "overview", 0.95 if market_state.get("regime") else 0.7)
+            trend = market_state.get("regime") or overview.get("trend") or _first_text(overview.get("indices", {}).get("trend") if isinstance(overview.get("indices"), dict) else None)
+            if trend is None:
+                add_feature("trend", None, None, 0.0, "missing market_state.regime or overview trend")
+            else:
+                add_feature("trend", trend, "market_state" if market_state.get("regime") else "overview", 0.95 if market_state.get("regime") else 0.7)
 
         sentiment_payload = overview.get("sentiment")
         sentiment = None
@@ -277,7 +476,13 @@ class MarketRegimeFeatureService(BaseService):
         volatility_confidence = 0.95 if volatility is not None else 0.0
         if volatility is None:
             volatility = overview.get("volatility") or _first_text(overview.get("indices", {}).get("volatility") if isinstance(overview.get("indices"), dict) else None)
-            if volatility is not None:
+            if volatility is None and ohlcv_metrics.get("vol_spike") is not None:
+                vol_spike_value = ohlcv_metrics["vol_spike"]
+                if isinstance(vol_spike_value, (int, float)):
+                    volatility = "high" if vol_spike_value >= 0.25 else "mid" if vol_spike_value >= 0.1 else "low"
+                    volatility_source = "ohlcv"
+                    volatility_confidence = 0.75
+            if volatility is not None and volatility_source is None:
                 volatility_source = "overview"
                 volatility_confidence = 0.7
         if volatility is None:
@@ -285,23 +490,46 @@ class MarketRegimeFeatureService(BaseService):
         else:
             add_feature("volatility", volatility, volatility_source, volatility_confidence)
 
-        breadth = market_state.get("breadth")
-        breadth_source = "market_state" if breadth is not None else None
-        breadth_confidence = 0.95 if breadth is not None else 0.0
-        if breadth is None and isinstance(sector_activity, dict):
-            if any(sector_activity.get(key) for key in ("board_strength", "industry_ranking", "weight_performance")):
-                breadth = "strong"
-                breadth_source = "sector_activity"
-                breadth_confidence = 0.65
-        if breadth is None and isinstance(overview.get("indices"), dict):
-            breadth = overview["indices"].get("breadth")
-            if breadth is not None:
-                breadth_source = "overview"
-                breadth_confidence = 0.7
-        if breadth is None:
-            add_feature("breadth", None, None, 0.0, "missing market_state.breadth or sector_activity")
+        sentiment_summary = market_sentiment.get("summary") if isinstance(market_sentiment.get("summary"), dict) else {}
+        up_count = _first_number(sentiment_summary.get("up_count"))
+        down_count = _first_number(sentiment_summary.get("down_count"))
+        flat_count = _first_number(sentiment_summary.get("flat_count"))
+        total_count = sum(value for value in (up_count, down_count, flat_count) if isinstance(value, int))
+        if total_count > 0:
+            breadth = {
+                "up_count": up_count,
+                "down_count": down_count,
+                "flat_count": flat_count,
+                "total": total_count,
+                "up_ratio": round((up_count or 0) / total_count, 4),
+                "down_ratio": round((down_count or 0) / total_count, 4),
+            }
+            add_feature("breadth", breadth, "market_sentiment", 0.95)
+            add_feature("breadth_up_ratio", breadth["up_ratio"], "market_sentiment", 0.95)
+            add_feature("breadth_down_ratio", breadth["down_ratio"], "market_sentiment", 0.95)
         else:
-            add_feature("breadth", breadth, breadth_source, breadth_confidence)
+            breadth = market_state.get("breadth")
+            breadth_source = "market_state" if breadth is not None else None
+            breadth_confidence = 0.95 if breadth is not None else 0.0
+            if breadth is None and isinstance(sector_activity, dict):
+                if any(sector_activity.get(key) for key in ("board_strength", "industry_ranking", "weight_performance")):
+                    breadth = "strong"
+                    breadth_source = "sector_activity"
+                    breadth_confidence = 0.65
+            if breadth is None and isinstance(overview.get("indices"), dict):
+                breadth = overview["indices"].get("breadth")
+                if breadth is not None:
+                    breadth_source = "overview"
+                    breadth_confidence = 0.7
+            if breadth is None:
+                add_feature("breadth", None, None, 0.0, "missing market_state.breadth or market_sentiment")
+                add_feature("breadth_up_ratio", None, None, 0.0, "missing market_sentiment.summary counts")
+                add_feature("breadth_down_ratio", None, None, 0.0, "missing market_sentiment.summary counts")
+            else:
+                add_feature("breadth", breadth, breadth_source, breadth_confidence)
+                if isinstance(breadth, dict):
+                    add_feature("breadth_up_ratio", breadth.get("up_ratio"), breadth_source, breadth_confidence)
+                    add_feature("breadth_down_ratio", breadth.get("down_ratio"), breadth_source, breadth_confidence)
 
         topic_count = len(hot_topics.get("topics", [])) if isinstance(hot_topics.get("topics"), list) else 0
         constituent_count = len(topic_constituents.get("constituents", [])) if isinstance(topic_constituents.get("constituents"), list) else 0
@@ -357,10 +585,38 @@ class MarketRegimeFeatureService(BaseService):
             if turnover_level is not None:
                 turnover_source = "overview"
                 turnover_confidence = 0.8
+        if turnover_level is None and ohlcv_metrics.get("turnover_ratio") is not None:
+            turnover_ratio = ohlcv_metrics["turnover_ratio"]
+            if isinstance(turnover_ratio, (int, float)):
+                turnover_level = "high" if turnover_ratio >= 0.15 else "mid" if turnover_ratio >= -0.05 else "low"
+                turnover_source = "ohlcv"
+                turnover_confidence = 0.7
         if turnover_level is None:
             add_feature("turnover_level", None, None, 0.0, "missing market_state.features.turnover_level or overview.capacity")
         else:
             add_feature("turnover_level", turnover_level, turnover_source, turnover_confidence)
+
+        theme_concentration = build_theme_concentration()
+        if theme_concentration is None:
+            add_feature("theme_concentration", None, None, 0.0, "missing hot_topics / sector_ranking / strong_symbols")
+        else:
+            add_feature("theme_concentration", theme_concentration, "hot_topics", 0.8)
+
+        if ohlcv_metrics:
+            if isinstance(ohlcv_metrics.get("vol_spike"), (int, float)) and volatility is None:
+                vol_spike_value = ohlcv_metrics["vol_spike"]
+                if vol_spike_value >= 0.25:
+                    volatility = "high"
+                elif vol_spike_value >= 0.1:
+                    volatility = "mid"
+                else:
+                    volatility = "low"
+                volatility_source = "ohlcv"
+                volatility_confidence = 0.75
+            if isinstance(ohlcv_metrics.get("turnover_ratio"), (int, float)) and turnover_level is None:
+                turnover_level = "high" if ohlcv_metrics["turnover_ratio"] >= 0.15 else "mid" if ohlcv_metrics["turnover_ratio"] >= -0.05 else "low"
+                turnover_source = "ohlcv"
+                turnover_confidence = 0.7
 
         return features, warnings, source_sections, available, missing
 
@@ -384,7 +640,7 @@ class MarketRegimeFeatureService(BaseService):
         self,
         *,
         snapshot_id: str,
-        feature_version: str = "market-regime-features-v1",
+        feature_version: str = DEFAULT_FEATURE_VERSION,
     ) -> ServiceResult:
         """基于指定 snapshot 生成 market_regime_features。"""
         async with self._session_factory() as session:
@@ -452,11 +708,27 @@ class MarketRegimeFeatureService(BaseService):
                 summary_json=summary_json,
                 storage_ref=self._artifact_ref(artifact_path),
             )
+            dataset_record = MarketDataset(
+                dataset_id=f"{snapshot.snapshot_id}:{feature_version}",
+                dataset_type="market_regime_features",
+                trade_date=snapshot.trade_date,
+                market=snapshot.market,
+                source="market-regime-feature",
+                storage_ref={
+                    "snapshot_id": snapshot.snapshot_id,
+                    "feature_version": feature_version,
+                    "artifact_type": "market-regime-features-json",
+                },
+                snapshot_id=snapshot.snapshot_id,
+                profile_id=getattr(snapshot, "profile_id", None),
+                quality_status=quality_status,
+            )
 
             saved = feature
             db_error: str | None = None
             try:
                 saved = await self._feature_repository.upsert_feature(session, feature)
+                await self._dataset_repository.upsert_dataset(session, dataset_record)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 db_error = str(exc)
@@ -469,6 +741,7 @@ class MarketRegimeFeatureService(BaseService):
             "summary": saved.summary_json,
             "artifact_ref": saved.storage_ref,
             "artifact_path": saved.storage_ref.get("relative_path"),
+            "dataset_id": dataset_record.dataset_id,
             "warnings": warnings,
         }
         status = "partial" if db_error is not None else quality_status
@@ -477,6 +750,7 @@ class MarketRegimeFeatureService(BaseService):
 
     async def get_feature_detail(self, snapshot_id: str, feature_version: str | None = None) -> ServiceResult:
         """按 snapshot_id / feature_version 查询 feature 详情。"""
+        version = feature_version or DEFAULT_FEATURE_VERSION
         async with self._session_factory() as session:
             snapshot = await self._snapshot_repository.get_by_snapshot_id(session, snapshot_id)
             if snapshot is None:
@@ -489,11 +763,7 @@ class MarketRegimeFeatureService(BaseService):
                 )
 
             feature = None
-            if feature_version is not None:
-                feature = await self._feature_repository.get_by_snapshot_and_version(session, snapshot_id, feature_version)
-            else:
-                features = await self._feature_repository.list_by_snapshot_id(session, snapshot_id)
-                feature = features[0] if features else None
+            feature = await self._feature_repository.get_by_snapshot_and_version(session, snapshot_id, version)
 
         if feature is None:
             return self._error(
@@ -501,7 +771,7 @@ class MarketRegimeFeatureService(BaseService):
                 error_type="feature_not_found",
                 message="market regime feature not found",
                 detail=snapshot_id,
-                metadata={"snapshot_id": snapshot_id, "feature_version": feature_version},
+                metadata={"snapshot_id": snapshot_id, "feature_version": version},
             )
 
         payload = {

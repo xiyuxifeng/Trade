@@ -396,27 +396,27 @@ Market Snapshot
 
 ### 10.2 数据清单表
 
-| 类别 | 当前是否已有 | 目前来源 | 用途 | 是否足够 | 备注 |
+| 类别 | 当前状态 | 目前来源 | 用途 | 是否足够 | 备注 |
 |---|---:|---|---|---:|---|
-| `overview` 指数概览 | 是 | `overview` | 趋势、情绪、容量判断 | 是 | 首版主状态足够 |
-| `sentiment` 情绪 | 是 | `overview` / `market_state` | 方向判断辅助 | 是 | 可用于弱/强市区分 |
-| `volatility` 波动 | 是 | `market_state` / `overview` | 风险修正 | 基本够 | 更细粒度还需历史基线 |
-| `breadth` 广度 | 是 | `market_state` / `sector_activity` / `overview` | 主状态判定 | 基本够 | 建议补原始上涨/下跌家数 |
-| `liquidity` 流动性 | 是 | `market_state` / `overview.capacity` | 结构标签与风险修正 | 基本够 | 当前以 band 口径为主 |
-| `theme_strength` 热点强度 | 是 | `hot_topics` / `topic_constituents` / `strong_symbols` | `theme_hot` | 是 | 可直接用于首版 |
-| `limit_up_count` / `limit_down_count` | 是 | `limit_up_down` | 风险修正 | 是 | 对 `panic` 很重要 |
-| `ohlcv` 日线 | 是 | `ohlcv` + cache fallback | 趋势 / 收益窗口 | 部分够 | 若不是**基准指数序列**，则不足以稳定算 regime 趋势窗口 |
-| `market_state` 上下文 | 是 | `PersonaService.build_market_state` | 兼容旧语义 | 基本够 | 不能作为唯一事实源 |
-| `breadth_up_ratio` | 否 | 需从原始广度数据推导 | 主状态 / 风险修正 | 不够 | 建议补标准字段 |
-| `breadth_down_ratio` | 否 | 需从原始广度数据推导 | 主状态 / 风险修正 | 不够 | 建议补标准字段 |
-| `ret_5d` / `ret_20d` | 部分 | 可能可由 OHLCV 推导 | 趋势判断 | 部分够 | 取决于是否有稳定 benchmark 序列 |
-| `ma20_gap` / `ma60_gap` | 部分 | 可能可由 OHLCV 推导 | 趋势判断 | 部分够 | 同上 |
-| `vol_spike` | 否 | 需历史窗口计算 | 风险判断 | 不够 | 需要历史基线 |
-| `turnover_ratio` | 否 | 需绝对成交额 + 历史均值 | 流动性判断 | 不够 | 当前 band 不够精细 |
-| `theme_concentration` | 否 | 需题材分布统计 | `theme_hot` 判定 | 不够 | 建议补集中度指标 |
-| `gap_down_rate` | 否 | 需盘口/价格统计 | `panic` 判定 | 不够 | 对极端风险很重要 |
-| `extreme_drop_count` | 否 | 需市场全量统计 | `panic` 判定 | 不够 | 建议补 |
-| `benchmark_ohlcv_window` | 否 | 需指数历史窗口 | 主要趋势基线 | 不够 | 建议作为必须补数据；回测不做 ETF fallback |
+| `overview` 指数概览 | 已落地 | `overview` | 趋势、情绪、容量判断 | 是 | 首版主状态足够 |
+| `sentiment` 情绪 | 已落地 | `overview` / `market_state` | 方向判断辅助 | 是 | 可用于弱/强市区分 |
+| `volatility` 波动 | 已落地 | `market_state` / `overview` | 风险修正 | 基本够 | 更细粒度还需历史基线 |
+| `breadth` 广度 | 已落地 | `market_state` / `sector_activity` / `overview` / `market_sentiment` | 主状态判定 | 基本够 | 已补原始上涨/下跌家数，`breadth_up/down_ratio` 由 feature 层计算 |
+| `liquidity` 流动性 | 已落地 | `market_state` / `overview.capacity` | 结构标签与风险修正 | 基本够 | 当前以 band 口径为主 |
+| `theme_strength` 热点强度 | 已落地 | `hot_topics` / `topic_constituents` / `strong_symbols` / `strong_fengkou_best` | `theme_hot` | 是 | 可直接用于首版 |
+| `limit_up_count` / `limit_down_count` | 已落地 | `limit_up_down` | 风险修正 | 是 | 对 `panic` 很重要 |
+| `ohlcv` 日线 | 已落地 | `ohlcv` + cache fallback | 趋势 / 收益窗口 | 是 | 已有 benchmark_symbol，足够支撑基准指数序列 |
+| `market_state` 上下文 | 已落地 | `PersonaService.build_market_state` | 兼容旧语义 | 基本够 | 不能作为唯一事实源 |
+| `breadth_up_ratio` | 已落地（计算层） | `market_regime_features` / `market_sentiment` | 主状态 / 风险修正 | 是 | 由上涨/下跌/平盘家数计算 |
+| `breadth_down_ratio` | 已落地（计算层） | `market_regime_features` / `market_sentiment` | 主状态 / 风险修正 | 是 | 由上涨/下跌/平盘家数计算 |
+| `ret_5d` / `ret_20d` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | 趋势判断 | 是 | 直接由基准指数序列计算 |
+| `ma20_gap` / `ma60_gap` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | 趋势判断 | 是 | 直接由基准指数序列计算 |
+| `vol_spike` | 已落地（计算层） | 现有 `ohlcv` 历史窗口 | 风险判断 | 是 | 需要历史窗口，但不需要新增 provider 接口 |
+| `turnover_ratio` | 已落地（计算层） | `MarketCapacity` / OHLCV 历史均值 | 流动性判断 | 是 | 现有数据足够计算，不必再单独抓新接口 |
+| `theme_concentration` | 已落地（计算层） | `hot_topics` / `topic_constituents` / `strong_symbols` / `strong_fengkou_best` / `WeightPerformance` | `theme_hot` 判定 | 是 | 现有题材/权重数据足够计算 |
+| `gap_down_rate` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | 当前为 benchmark 口径，后续可扩展全市场口径 |
+| `extreme_drop_count` | 已落地（计算层） | 现有 `ohlcv` + `benchmark_symbol` | `panic` 判定 | 是 | 当前为 benchmark 口径，后续可扩展全市场口径 |
+| `benchmark_ohlcv_window` | 已落地（计算层） | 现有 `ohlcv` 主链路 | 主要趋势基线 | 是 | 回测不做 ETF fallback，直接用指数序列 |
 
 ### 10.3 数据结论分层
 
@@ -431,24 +431,29 @@ Market Snapshot
 - `limit_up_count`
 - `limit_down_count`
 - `turnover_level`
-
-#### 需要补强但不阻塞首版
-
 - `breadth_up_ratio`
 - `breadth_down_ratio`
-- `theme_concentration`
-- `turnover_ratio`
-- `gap_down_rate`
-
-#### 必须补充，才能让 regime 规则稳定可信
-
 - `benchmark_ohlcv_window`
 - `ret_5d`
 - `ret_20d`
 - `ma20_gap`
 - `ma60_gap`
 - `vol_spike`
-- `extreme_drop_count`
+- `turnover_ratio`
+- `theme_concentration`
+
+#### 需要补强但不阻塞首版
+
+- `gap_down_rate` 的全市场版本
+- `extreme_drop_count` 的全市场版本
+
+#### 必须补充，才能让 regime 规则稳定可信
+
+- `benchmark_ohlcv_window` 的历史覆盖
+- `ret_5d` / `ret_20d` 的回看窗口校准
+- `ma20_gap` / `ma60_gap` 的阈值校准
+- `vol_spike` / `turnover_ratio` 的分桶校准
+- `gap_down_rate` / `extreme_drop_count` 的全市场覆盖补齐（如果要做全市场版本）
 
 ### 10.4 可执行列表
 
@@ -518,7 +523,7 @@ Market Snapshot
 | `ZhangTingExpression` | 文档已有，provider 未封装 | 涨停晋级率、破板率、连板结构 | 是 | 对 `breadth`、`panic`、情绪分层更有价值 |
 | `DailyLimitIndex` | 文档已有，provider 未封装 | 一板 / 二板 / 三板 / 高板结构 | 是 | 适合补强连板生态和广度结构 |
 | `WeightPerformance` | 文档已有，provider 未封装 | 权重板块涨跌分布、热点集中度 | 是 | 适合辅助 `theme_concentration` / 指数驱动判断 |
-| `GetFengKList` | 文档已有，provider 未封装 | 收盘时全量强势标的 | 视需要 | 可作为 `theme_strength` 的增强源，不是 P0 阻塞项 |
+| `GetFengKListBest` | 文档已有，provider 已封装并接入 | 收盘时全量强势标的 | 已接入 | 可作为 `theme_strength` 的增强源，当前作为 canonical 入口 |
 
 #### 新增接口的落库建议
 
@@ -561,8 +566,8 @@ Market Snapshot
 ### P2
 
 1. `theme_concentration`
-2. `gap_down_rate`
-3. `extreme_drop_count`
+2. `gap_down_rate`（benchmark 版已实现，全市场版后续补）
+3. `extreme_drop_count`（benchmark 版已实现，全市场版后续补）
 
 原因：
 

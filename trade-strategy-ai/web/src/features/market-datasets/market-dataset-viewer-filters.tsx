@@ -19,6 +19,8 @@ type MarketDatasetViewerFiltersProps = {
 const datasetTypeOptions = [
   '',
   'market_snapshot',
+  'market_regime_features',
+  'market_regimes',
   'market_dataset',
   'regime_feature',
 ];

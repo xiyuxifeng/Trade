@@ -5,6 +5,32 @@ from datetime import date
 import pytest
 
 
+def _build_ohlcv_rows(trade_date: date, count: int = 60) -> list[dict[str, object]]:
+    """构造可用于 benchmark 计算的 OHLCV 样本。"""
+    rows: list[dict[str, object]] = []
+    base = 1000.0
+    for index in range(count):
+        current_date = date.fromordinal(trade_date.toordinal() - (count - 1 - index))
+        close = base + index * 3 + (index % 5) * 1.5
+        open_price = close - 2.0
+        high = close + 5.0
+        low = close - 8.0
+        volume = 100000 + index * 2500
+        turnover = 20000 + index * 600
+        rows.append(
+            {
+                "time": current_date.isoformat(),
+                "open": round(open_price, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "close": round(close, 2),
+                "volume": round(volume, 2),
+                "turnover": round(turnover, 2),
+            }
+        )
+    return rows
+
+
 @pytest.fixture()
 async def market_regime_feature_session_factory(tmp_path):
     """创建用于 MarketRegimeFeatureService 的 sqlite session factory。"""
@@ -207,6 +233,36 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
                     "market_state_path": "data/processed/persona/market_state.json",
                 },
             },
+            {
+                "section_id": "market_sentiment",
+                "quality_status": "ok",
+                "record_count": 1,
+                "payload_json": {
+                    "summary": {
+                        "limit_up_count": 79,
+                        "actual_limit_up": 65,
+                        "limit_down_count": 1,
+                        "actual_limit_down": 1,
+                        "up_count": 1860,
+                        "down_count": 820,
+                        "flat_count": 320,
+                        "up_ratio": 0.62,
+                        "down_ratio": 0.2733,
+                    }
+                },
+            },
+            {
+                "section_id": "ohlcv",
+                "quality_status": "ok",
+                "record_count": 60,
+                "payload_json": {
+                    "symbol": "SH000001",
+                    "start_date": "2026-03-18",
+                    "end_date": "2026-05-16",
+                    "count": 60,
+                    "items": _build_ohlcv_rows(date(2026, 5, 16), 60),
+                },
+            },
         ],
     )
 
@@ -219,15 +275,19 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
 
     assert result.status == "ok"
     assert result.payload["feature"]["snapshot_id"] == "snap-001"
-    assert result.payload["feature"]["feature_version"] == "market-regime-features-v1"
+    assert result.payload["feature"]["feature_version"] == "market-regime-features-v2"
     assert result.payload["feature"]["quality_status"] == "ok"
-    assert result.payload["summary"]["available_feature_count"] == 9
+    assert result.payload["summary"]["available_feature_count"] == 21
     assert result.payload["summary"]["missing_feature_count"] == 0
-    assert result.payload["feature_payload_json"]["trend"]["source_section"] == "market_state"
+    assert result.payload["feature_payload_json"]["trend"]["source_section"] == "ohlcv"
+    assert result.payload["feature_payload_json"]["trend"]["value"]["ret_20d"] is not None
+    assert result.payload["feature_payload_json"]["benchmark_ohlcv_window"]["value"]["symbol"] == "SH000001"
     assert result.payload["feature_payload_json"]["limit_up_count"]["value"] == 79
+    assert result.payload["feature_payload_json"]["breadth_up_ratio"]["value"] == pytest.approx(0.62)
     assert result.payload["feature_payload_json"]["turnover_level"]["value"] == "high"
     assert result.payload["warnings"] == []
-    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v1.json").exists()
+    assert result.payload["dataset_id"] == "snap-001:market-regime-features-v2"
+    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v2.json").exists()
 
 
 @pytest.mark.asyncio()
@@ -390,7 +450,7 @@ async def test_build_market_regime_features_returns_partial_when_db_write_fails(
 
     assert result.status == "partial"
     assert any("database persistence failed" in warning for warning in result.warnings)
-    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-19" / "snap-004" / "market-regime-features-v1.json").exists()
+    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-19" / "snap-004" / "market-regime-features-v2.json").exists()
 
 
 @pytest.mark.asyncio()

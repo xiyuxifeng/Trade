@@ -133,6 +133,22 @@ class KaipanProvider(ProviderBase):
             return self._request_topic_constituents(**kwargs)
         if capability == "strong_symbols":
             return self._request_strong_symbols(**kwargs)
+        if capability == "market_sentiment":
+            return self._request_market_sentiment(**kwargs)
+        if capability == "market_index":
+            return self._request_market_index(**kwargs)
+        if capability == "sharp_withdrawal":
+            return self._request_sharp_withdrawal(**kwargs)
+        if capability == "sector_ranking":
+            return self._request_sector_ranking(**kwargs)
+        if capability == "sector_limit_up_ladder":
+            return self._request_sector_limit_up_ladder(**kwargs)
+        if capability == "market_limit_up_ladder":
+            return self._request_market_limit_up_ladder(**kwargs)
+        if capability == "sector_strength":
+            return self._request_sector_strength(**kwargs)
+        if capability == "multiple_sectors_strength":
+            return self._request_multiple_sectors_strength(**kwargs)
         if capability == "market_stock_zd_num":
             return self._request_market_stock_zd_num(**kwargs)
         if capability == "zhang_ting_expression":
@@ -161,6 +177,22 @@ class KaipanProvider(ProviderBase):
             return self._normalize_topic_constituents(raw=raw, request=request)
         if capability == "strong_symbols":
             return self._normalize_strong_symbols(raw=raw, request=request)
+        if capability == "market_sentiment":
+            return self._normalize_market_sentiment(raw=raw, request=request)
+        if capability == "market_index":
+            return self._normalize_market_index(raw=raw, request=request)
+        if capability == "sharp_withdrawal":
+            return self._normalize_sharp_withdrawal(raw=raw, request=request)
+        if capability == "sector_ranking":
+            return self._normalize_sector_ranking(raw=raw, request=request)
+        if capability == "sector_limit_up_ladder":
+            return self._normalize_sector_limit_up_ladder(raw=raw, request=request)
+        if capability == "market_limit_up_ladder":
+            return self._normalize_market_limit_up_ladder(raw=raw, request=request)
+        if capability == "sector_strength":
+            return self._normalize_sector_strength(raw=raw, request=request)
+        if capability == "multiple_sectors_strength":
+            return self._normalize_multiple_sectors_strength(raw=raw, request=request)
         if capability == "market_stock_zd_num":
             return self._normalize_market_stock_zd_num(raw=raw, request=request)
         if capability == "zhang_ting_expression":
@@ -223,6 +255,98 @@ class KaipanProvider(ProviderBase):
         result = self.run("strong_symbols", request={"trade_date": trade_date, "slot": slot, **kwargs})
         if result.status != ProviderStatus.ok:
             raise ProviderError("; ".join(result.errors) or "failed to fetch strong_symbols")
+        return result.payload
+
+    def fetch_market_sentiment(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回市场情绪数据。"""
+
+        if offline:
+            raw = self._load_canonical_raw("market_sentiment", trade_date=trade_date, slot=slot)
+            return self._normalize_market_sentiment(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("market_sentiment", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch market_sentiment")
+        return result.payload
+
+    def fetch_market_index(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回指数概览数据。"""
+
+        if offline:
+            raw = self._load_canonical_raw("market_index", trade_date=trade_date, slot=slot)
+            return self._normalize_market_index(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("market_index", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch market_index")
+        return result.payload
+
+    def fetch_sharp_withdrawal(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回大幅回撤数据。"""
+
+        if offline:
+            raw = self._load_canonical_raw("sharp_withdrawal", trade_date=trade_date, slot=slot)
+            return self._normalize_sharp_withdrawal(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("sharp_withdrawal", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch sharp_withdrawal")
+        return result.payload
+
+    def fetch_sector_ranking(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回板块排行数据。"""
+
+        if offline:
+            raw = self._load_canonical_raw("sector_ranking", trade_date=trade_date, slot=slot)
+            return self._normalize_sector_ranking(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("sector_ranking", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch sector_ranking")
+        return result.payload
+
+    def fetch_sector_limit_up_ladder(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回板块连板梯队。"""
+
+        if offline:
+            raw = self._load_canonical_raw("sector_limit_up_ladder", trade_date=trade_date, slot=slot)
+            return self._normalize_sector_limit_up_ladder(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("sector_limit_up_ladder", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch sector_limit_up_ladder")
+        return result.payload
+
+    def fetch_market_limit_up_ladder(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回全市场连板梯队。"""
+
+        if offline:
+            raw = self._load_canonical_raw("market_limit_up_ladder", trade_date=trade_date, slot=slot)
+            return self._normalize_market_limit_up_ladder(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("market_limit_up_ladder", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch market_limit_up_ladder")
+        return result.payload
+
+    def fetch_sector_strength(self, *, trade_date: date | str, slot: str = "17-30", sector_code: str, offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """获取并返回单个板块强度。"""
+
+        if offline:
+            raw = self._load_canonical_raw("sector_strength", trade_date=trade_date, slot=slot)
+            request = {"trade_date": trade_date, "slot": slot, "sector_code": sector_code}
+            return self._normalize_sector_strength(raw=raw, request=request)
+        request = {"trade_date": trade_date, "slot": slot, "sector_code": sector_code, **kwargs}
+        result = self.run("sector_strength", request=request)
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch sector_strength")
+        return result.payload
+
+    def fetch_multiple_sectors_strength(self, *, trade_date: date | str, slot: str = "17-30", sector_codes: list[str], offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """批量获取多个板块强度。"""
+
+        if offline:
+            raw = self._load_canonical_raw("multiple_sectors_strength", trade_date=trade_date, slot=slot)
+            request = {"trade_date": trade_date, "slot": slot, "sector_codes": sector_codes}
+            return self._normalize_multiple_sectors_strength(raw=raw, request=request)
+        request = {"trade_date": trade_date, "slot": slot, "sector_codes": sector_codes, **kwargs}
+        result = self.run("multiple_sectors_strength", request=request)
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch multiple_sectors_strength")
         return result.payload
 
     def _config_value(self, key: str, default: Any) -> Any:
@@ -423,6 +547,7 @@ class KaipanProvider(ProviderBase):
         Returns:
             API 响应原始数据
         """
+        params = {key: value for key, value in params.items() if value is not None}
         request = self.build_request(
             api_name=api_name,
             controller=controller,
@@ -627,6 +752,206 @@ class KaipanProvider(ProviderBase):
         data = payload.get("data", {})
         return data if isinstance(data, dict) else {"value": data}
 
+    def _normalize_market_sentiment(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化市场情绪数据。"""
+
+        info = raw.get("info") if isinstance(raw, dict) else {}
+        info = info if isinstance(info, dict) else {}
+        up_count = int(info.get("SZJS", 0) or 0)
+        down_count = int(info.get("XDJS", 0) or 0)
+        flat_count = int(info.get("0", 0) or 0)
+        total = up_count + down_count + flat_count
+        payload = {
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "summary": {
+                "limit_up_count": int(info.get("ZT", 0) or 0),
+                "actual_limit_up": int(info.get("SJZT", 0) or 0),
+                "limit_down_count": int(info.get("DT", 0) or 0),
+                "actual_limit_down": int(info.get("SJDT", 0) or 0),
+                "up_count": up_count,
+                "down_count": down_count,
+                "flat_count": flat_count,
+                "up_ratio": round(up_count / total, 4) if total else None,
+                "down_ratio": round(down_count / total, 4) if total else None,
+            },
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_market_index(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化指数概览数据。"""
+
+        items = raw.get("StockList") if isinstance(raw, dict) else []
+        normalized: list[dict[str, Any]] = []
+        if isinstance(items, list):
+            for row in items:
+                if not isinstance(row, dict):
+                    continue
+                normalized.append(
+                    {
+                        "symbol": row.get("StockID"),
+                        "name": row.get("prod_name"),
+                        "latest_price": row.get("last_px"),
+                        "change_pct": row.get("increase_rate"),
+                        "turnover": row.get("turnover"),
+                        "change_amount": row.get("increase_amount"),
+                    }
+                )
+        payload = {
+            "date": raw.get("Date") if isinstance(raw, dict) else None,
+            "items": normalized,
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_sharp_withdrawal(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化大幅回撤数据。"""
+
+        items = raw.get("info") if isinstance(raw, dict) else []
+        normalized: list[dict[str, Any]] = []
+        if isinstance(items, list):
+            for row in items:
+                if not isinstance(row, list) or len(row) < 5:
+                    continue
+                normalized.append(
+                    {
+                        "symbol": row[0],
+                        "name": row[1],
+                        "change_pct": row[2],
+                        "withdrawal_pct": row[3],
+                        "latest_price": row[4],
+                    }
+                )
+        payload = {
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "count": raw.get("num", len(normalized)) if isinstance(raw, dict) else len(normalized),
+            "items": normalized,
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_sector_ranking(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化板块排行数据。"""
+
+        nums = raw.get("nums", {}) if isinstance(raw, dict) else {}
+        sectors_raw = raw.get("list", []) if isinstance(raw, dict) else []
+        sectors: list[dict[str, Any]] = []
+        if isinstance(sectors_raw, list):
+            for sector_data in sectors_raw:
+                if not isinstance(sector_data, dict):
+                    continue
+                stocks: list[dict[str, Any]] = []
+                for stock in sector_data.get("StockList", []) if isinstance(sector_data.get("StockList"), list) else []:
+                    if not isinstance(stock, list) or len(stock) < 19:
+                        continue
+                    stocks.append(
+                        {
+                            "symbol": stock[0],
+                            "name": stock[1],
+                            "limit_up_price": stock[4] if len(stock) > 4 else None,
+                            "circulating_market_cap": stock[8] if len(stock) > 8 else None,
+                            "consecutive_days": stock[9] if len(stock) > 9 else None,
+                            "consecutive_count": stock[10] if len(stock) > 10 else None,
+                            "concept_tags": stock[11] if len(stock) > 11 else None,
+                            "seal_amount": stock[12] if len(stock) > 12 else None,
+                            "main_force_net": stock[13] if len(stock) > 13 else None,
+                            "first_seal_time": stock[14] if len(stock) > 14 else None,
+                            "total_market_cap": stock[15] if len(stock) > 15 else None,
+                            "limit_reason": stock[16] if len(stock) > 16 else None,
+                            "theme": stock[17] if len(stock) > 17 else None,
+                            "is_first_board": stock[18] if len(stock) > 18 else None,
+                        }
+                    )
+                sectors.append(
+                    {
+                        "sector_code": sector_data.get("ZSCode"),
+                        "sector_name": sector_data.get("ZSName"),
+                        "stock_count": sector_data.get("num", len(stocks)),
+                        "stocks": stocks,
+                    }
+                )
+        payload = {
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "summary": {
+                "up_count": nums.get("SZJS", 0),
+                "down_count": nums.get("XDJS", 0),
+                "limit_up_count": nums.get("ZT", 0),
+                "limit_down_count": nums.get("DT", 0),
+                "rise_ratio": nums.get("ZBL", 0),
+                "yesterday_rise_ratio": nums.get("yestRase", 0),
+            },
+            "sectors": sectors,
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_sector_limit_up_ladder(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化板块连板梯队。"""
+
+        payload = {
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "is_realtime": raw.get("is_realtime") if isinstance(raw, dict) else None,
+            "sectors": raw.get("sectors") if isinstance(raw, dict) and isinstance(raw.get("sectors"), list) else [],
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_market_limit_up_ladder(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化全市场连板梯队。"""
+
+        payload = {
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "is_realtime": raw.get("is_realtime") if isinstance(raw, dict) else None,
+            "statistics": raw.get("statistics") if isinstance(raw, dict) and isinstance(raw.get("statistics"), dict) else {},
+            "ladder": raw.get("ladder") if isinstance(raw, dict) and isinstance(raw.get("ladder"), dict) else {},
+            "broken_stocks": raw.get("broken_stocks") if isinstance(raw, dict) and isinstance(raw.get("broken_stocks"), list) else [],
+            "height_marks": raw.get("height_marks") if isinstance(raw, dict) and isinstance(raw.get("height_marks"), list) else [],
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_sector_strength(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化单个板块强度。"""
+
+        payload = {
+            "sector_code": raw.get("sector_code") if isinstance(raw, dict) else None,
+            "strength": raw.get("strength") if isinstance(raw, dict) else None,
+            "date": raw.get("date") if isinstance(raw, dict) else None,
+            "time": raw.get("time") if isinstance(raw, dict) else None,
+            "raw_data": raw.get("raw_data") if isinstance(raw, dict) else None,
+            "success": raw.get("success") if isinstance(raw, dict) else False,
+            "error": raw.get("error") if isinstance(raw, dict) else None,
+            "is_historical": raw.get("is_historical") if isinstance(raw, dict) else None,
+            "min_day": raw.get("min_day") if isinstance(raw, dict) else None,
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
+    def _normalize_multiple_sectors_strength(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
+        """标准化多个板块强度。"""
+
+        payload = {
+            "results": raw if isinstance(raw, dict) else {},
+            "raw": raw,
+        }
+        if request is not None:
+            payload["request"] = request
+        return payload
+
     # -----------------------------
     # capability 级别的请求与归一化逻辑
     # -----------------------------
@@ -720,6 +1045,132 @@ class KaipanProvider(ProviderBase):
         else:
             raw["morning_bidding_list"] = {"info": []}
         return raw
+
+    def _request_market_sentiment(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取市场情绪所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="market_sentiment",
+            api_name="HisZhangFuDetail",
+            controller="HisHomeDingPan",
+            base_url_key="apphis",
+            method="POST",
+            Day=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_market_index(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取指数概览所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="market_index",
+            api_name="GetZsReal",
+            controller="StockL2History",
+            base_url_key="apphis",
+            method="POST",
+            Day=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_sharp_withdrawal(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取大幅回撤所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="sharp_withdrawal",
+            api_name="SharpWithdrawal",
+            controller="HisHomeDingPan",
+            base_url_key="apphis",
+            method="POST",
+            Day=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_sector_ranking(self, *, trade_date: Any, slot: str = "17-30", index: int = 0, st: int = 100, **kwargs: Any) -> dict[str, Any]:
+        """拉取板块排行所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="sector_ranking",
+            api_name="GetPlateInfo_w38",
+            controller="DailyLimitResumption",
+            base_url_key="apphis",
+            method="POST",
+            Day=td.strftime("%Y-%m-%d"),
+            Index=index,
+            st=st,
+        )
+
+    def _request_sector_limit_up_ladder(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取板块连板梯队所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="sector_limit_up_ladder",
+            api_name="GetYTFP_BKHX",
+            controller="FuPanLa",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="POST",
+            Date=td.strftime("%Y-%m-%d") if td != date.today() else None,
+            apiv="w42",
+        )
+
+    def _request_market_limit_up_ladder(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取全市场连板梯队所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="market_limit_up_ladder",
+            api_name="GetYTFP_SCTD",
+            controller="FuPanLa",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="POST",
+            Date=td.strftime("%Y-%m-%d") if td != date.today() else None,
+            apiv="w42",
+        )
+
+    def _request_sector_strength(self, *, trade_date: Any, slot: str = "17-30", sector_code: str, **kwargs: Any) -> dict[str, Any]:
+        """拉取单个板块强度所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="sector_strength",
+            api_name="GetPlate_Info_QJ",
+            controller="ZhiShuRanking",
+            base_url_key="apphwhq" if td == date.today() else "apphis",
+            method="POST",
+            Date=td.strftime("%Y-%m-%d"),
+            PlateID=sector_code,
+        )
+
+    def _request_multiple_sectors_strength(self, *, trade_date: Any, slot: str = "17-30", sector_codes: list[str], **kwargs: Any) -> dict[str, Any]:
+        """拉取多个板块强度所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        results: dict[str, Any] = {}
+        for sector_code in sector_codes:
+            results[sector_code] = self._request_sector_strength(trade_date=td, slot=slot, sector_code=sector_code, **kwargs)
+        return {
+            "trade_date": td.isoformat(),
+            "slot": slot,
+            "sector_codes": sector_codes,
+            "results": results,
+        }
 
     def _request_market_stock_zd_num(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
         """拉取涨跌停统计所需的 raw 数据。"""

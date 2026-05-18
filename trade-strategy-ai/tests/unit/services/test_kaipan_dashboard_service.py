@@ -75,6 +75,30 @@ def test_kaipan_service_fetch_normalize_status_and_run(tmp_path: Path) -> None:
 	assert run_plan.payload["post_close"] == "17:30"
 
 
+def test_kaipan_service_fetch_includes_10_5_capabilities(tmp_path: Path) -> None:
+	"""KaipanService 收盘抓取应包含 10.5 新接口。"""
+	from src.services.kaipan_service import KaipanService
+
+	config_path = tmp_path / "config" / "app.yaml"
+	_write_kaipan_config(config_path)
+	provider = _FakeProvider(calls=[])
+	normalizer = _FakeNormalizer()
+	service = KaipanService(
+		provider_factory=lambda **kwargs: provider,
+		normalizer_factory=lambda **kwargs: normalizer,
+	)
+
+	result = service.fetch(config_path=config_path, trade_date="2026-04-23", slot="17-30")
+
+	assert result.status == "ok"
+	assert len(result.payload["slot_results"]["17-30"]["success"]) == 15
+	assert "market_stock_zd_num" in result.payload["slot_results"]["17-30"]["success"]
+	assert "zhang_ting_expression" in result.payload["slot_results"]["17-30"]["success"]
+	assert "daily_limit_index" in result.payload["slot_results"]["17-30"]["success"]
+	assert "weight_performance" in result.payload["slot_results"]["17-30"]["success"]
+	assert "get_feng_k_list" in result.payload["slot_results"]["17-30"]["success"]
+
+
 def test_kaipan_service_rejects_invalid_slot(tmp_path: Path) -> None:
 	"""KaipanService 应拒绝非法 slot。"""
 	from src.services.kaipan_service import KaipanService

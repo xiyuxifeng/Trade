@@ -1,0 +1,15 @@
+# market_stock_zd_num 快照字段映射
+# 来源接口：MarketStockZDNum
+
+dataset: market_stock_zd_num
+
+mappings:
+  summary:
+    source:
+      api: MarketStockZDNum
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      limit_up_count: {raw_path: "info.SJZT", type: number}
+      limit_down_count: {raw_path: "info.SJDT", type: number}
+      panic: {raw_path: "info.panic", type: number}

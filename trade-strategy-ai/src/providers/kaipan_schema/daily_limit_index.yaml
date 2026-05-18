@@ -1,0 +1,17 @@
+# daily_limit_index 快照字段映射
+# 来源接口：DailyLimitIndex
+
+dataset: daily_limit_index
+
+mappings:
+  summary:
+    source:
+      api: DailyLimitIndex
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      one_board_count: {raw_path: "info.[0]", type: number}
+      two_board_count: {raw_path: "info.[1]", type: number}
+      three_board_count: {raw_path: "info.[2]", type: number}
+      high_board_count: {raw_path: "info.[3]", type: number}
+      limit_up_count: {raw_path: "info.[4]", type: number}

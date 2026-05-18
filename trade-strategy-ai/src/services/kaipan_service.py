@@ -121,7 +121,14 @@ class KaipanService(BaseService):
 				("limit_up_info", provider.fetch_limit_up_info),
 			]
 		if slot == "17-30":
-			return base_fetchers + [("lhb_list", provider.fetch_lhb_list)]
+			return base_fetchers + [
+				("lhb_list", provider.fetch_lhb_list),
+				("market_stock_zd_num", provider.fetch_market_stock_zd_num),
+				("zhang_ting_expression", provider.fetch_zhang_ting_expression),
+				("daily_limit_index", provider.fetch_daily_limit_index),
+				("weight_performance", provider.fetch_weight_performance),
+				("get_feng_k_list", provider.fetch_get_feng_k_list),
+			]
 		return []
 
 	def fetch(

@@ -120,3 +120,55 @@ async def test_market_data_storage_service_is_idempotent_on_snapshot_id(market_d
     assert loaded.payload["snapshot"]["snapshot_id"] == "snapshot-2026-05-17"
     assert len(loaded.payload["sections"]) == 1
 
+
+@pytest.mark.asyncio()
+async def test_market_data_storage_service_persists_10_5_sections(market_data_session_factory) -> None:
+    """MarketDataStorageService 应能保存 10.5 新 section。"""
+    from src.models.market_snapshot import MarketSnapshot, MarketSnapshotSection
+    from src.services.market_data_storage_service import MarketDataStorageService
+
+    snapshot = MarketSnapshot(
+        snapshot_id="snapshot-2026-05-18",
+        trade_date="2026-05-18",
+        market="CN",
+        data_version="market-snapshot-v1",
+        provider_sources=["kaipan", "market"],
+        created_at=datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc),
+        data_quality={"overall_status": "ok"},
+        sections={
+            "market_stock_zd_num": MarketSnapshotSection(
+                section_id="market_stock_zd_num",
+                provider="kaipan",
+                source_time=datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc),
+                record_count=1,
+                missing_reason=None,
+                quality_status="ok",
+                payload={"dataset": "market_stock_zd_num", "limit_up_count": 79, "limit_down_count": 1, "items": [{"symbol": "000001"}]},
+                metadata={"section_version": "v1"},
+            ),
+            "get_feng_k_list": MarketSnapshotSection(
+                section_id="get_feng_k_list",
+                provider="kaipan",
+                source_time=datetime(2026, 5, 18, 8, 1, tzinfo=timezone.utc),
+                record_count=1,
+                missing_reason=None,
+                quality_status="ok",
+                payload={"dataset": "get_feng_k_list", "items": [{"symbol": "000001", "name": "示例"}]},
+                metadata={"section_version": "v1"},
+            ),
+        },
+        metadata={"profile_id": "default", "slot": "17-30"},
+    )
+
+    service = MarketDataStorageService(session_factory=market_data_session_factory)
+    saved = await service.save_snapshot(
+        snapshot,
+        summary_payload={"section_count": 2, "available_section_count": 2, "partial_section_count": 0, "missing_section_count": 0},
+        quality_payload={"overall_status": "ok"},
+    )
+    loaded = await service.load_snapshot("snapshot-2026-05-18")
+
+    assert saved.status == "ok"
+    assert saved.payload["section_count"] == 2
+    assert loaded.status == "ok"
+    assert {section["section_id"] for section in loaded.payload["sections"]} == {"market_stock_zd_num", "get_feng_k_list"}

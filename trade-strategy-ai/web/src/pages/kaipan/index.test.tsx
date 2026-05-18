@@ -25,6 +25,7 @@ describe('KaipanPage', () => {
     renderWithRouter([{ path: '/kaipan', element: <KaipanPage /> }], ['/kaipan']);
 
     expect(await screen.findByText('Kaipan')).toBeInTheDocument();
+    expect(screen.getByText('10.5 ingestion')).toBeInTheDocument();
     expect(await screen.findByText('2026-05-09_17-30')).toBeInTheDocument();
   });
 });

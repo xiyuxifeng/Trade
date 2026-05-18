@@ -1,0 +1,24 @@
+# zhang_ting_expression 快照字段映射
+# 来源接口：ZhangTingExpression
+
+dataset: zhang_ting_expression
+
+mappings:
+  summary:
+    source:
+      api: ZhangTingExpression
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      total_limit_up: {raw_path: "info.[0]", type: number}
+      first_board_count: {raw_path: "info.[1]", type: number}
+      second_board_count: {raw_path: "info.[2]", type: number}
+      third_board_count: {raw_path: "info.[3]", type: number}
+      high_board_count: {raw_path: "info.[4]", type: number}
+      break_board_rate: {raw_path: "info.[5]", type: number}
+      promotion_rate: {raw_path: "info.[6]", type: number}
+      panic: {raw_path: "info.[7]", type: number}
+      limit_up_close_rate: {raw_path: "info.[8]", type: number}
+      limit_up_open_rate: {raw_path: "info.[9]", type: number}
+      limit_up_persistence_rate: {raw_path: "info.[10]", type: number}
+      summary_text: {raw_path: "info.[11]", type: string}

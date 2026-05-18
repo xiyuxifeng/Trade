@@ -1,0 +1,13 @@
+# weight_performance 快照字段映射
+# 来源接口：WeightPerformance
+
+dataset: weight_performance
+
+mappings:
+  summary:
+    source:
+      api: WeightPerformance
+      controller: HisHomeDingPan
+      params: {}
+    fields:
+      markets: {raw_path: "info", type: object}

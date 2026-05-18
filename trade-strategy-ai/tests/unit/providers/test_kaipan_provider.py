@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from src.providers.base import ProviderStatus
 from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 
@@ -117,3 +119,32 @@ def test_kaipan_provider_fetch_hot_topics_wrapper_returns_payload(tmp_path: Path
 
     assert payload["dataset"] == "hot_topics"
     assert payload["topics"][0]["topic_name"] == "概念A"
+
+
+@pytest.mark.parametrize(
+    "capability, raw_payload, expected_key",
+    [
+        ("market_stock_zd_num", {"info": {"SJZT": "79", "SJDT": "1", "panic": "12"}}, "limit_up_count"),
+        ("zhang_ting_expression", {"info": [71, 5, 1, 2, 10.0, 12.0, 66.0, 21.0, 1.0, 3.0, 1.2, "summary"]}, "items"),
+        ("daily_limit_index", {"info": [71, 5, 1, 1, 1]}, "items"),
+        ("weight_performance", {"info": {"SZ": [["881162", "通信服务", 3.8]]}}, "items"),
+        ("get_feng_k_list", {"List": [["000001", "示例", 88.0, None, 4.5, 1000.0, None, None, 120.0, 80.0, "题材A"]]}, "items"),
+    ],
+)
+def test_kaipan_provider_supports_new_10_5_capabilities(tmp_path: Path, capability: str, raw_payload: dict[str, object], expected_key: str) -> None:
+    provider = _build_provider(tmp_path)
+    captured: list[dict[str, object]] = []
+
+    def _fake_fetch_and_save(**kwargs):
+        captured.append(kwargs)
+        return raw_payload
+
+    provider._fetch_and_save = _fake_fetch_and_save  # type: ignore[method-assign]
+
+    result = provider.run(capability, request={"trade_date": date(2026, 4, 22), "slot": "17-30"})
+
+    assert result.status == ProviderStatus.ok
+    assert result.payload["dataset"] == capability
+    assert expected_key in result.payload
+    assert captured[0]["dataset"] == capability
+    assert captured[0]["canonical_name"] == capability

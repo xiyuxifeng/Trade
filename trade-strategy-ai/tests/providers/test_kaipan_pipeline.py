@@ -16,9 +16,19 @@ class TestKaipanSchemaFiles:
         assert schema_dir.exists(), f"{schema_dir} 不存在"
 
     def test_all_schema_files_exist(self):
-        """4 个 schema 文件都存在。"""
+        """所有 schema 文件都存在。"""
         schema_dir = Path("src/providers/kaipan_schema")
-        for name in ("hot_topics", "topic_constituents", "strong_symbols", "market_context"):
+        for name in (
+            "hot_topics",
+            "topic_constituents",
+            "strong_symbols",
+            "market_context",
+            "market_stock_zd_num",
+            "zhang_ting_expression",
+            "daily_limit_index",
+            "weight_performance",
+            "get_feng_k_list",
+        ):
             path = schema_dir / f"{name}.yaml"
             assert path.exists(), f"{name}.yaml 不存在"
 
@@ -41,6 +51,11 @@ class TestKaipanSchemaFiles:
             "topic_constituents",
             "strong_symbols",
             "market_context",
+            "market_stock_zd_num",
+            "zhang_ting_expression",
+            "daily_limit_index",
+            "weight_performance",
+            "get_feng_k_list",
         }
 
 

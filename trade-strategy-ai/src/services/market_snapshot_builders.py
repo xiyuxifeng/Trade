@@ -856,6 +856,161 @@ def build_strong_symbols_section(
             record_count=0,
             quality_status="missing",
             missing_reason=str(exc),
+        metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+    )
+
+
+def build_market_stock_zd_num_section(
+    context: MarketSnapshotBuildContext,
+    *,
+    provider: KaipanProvider,
+) -> MarketSnapshotSection:
+    """构建涨跌停统计 section。"""
+    trade_date = _as_date(context.trade_date)
+    try:
+        payload = _to_plain(provider.fetch_market_stock_zd_num(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        record_count = 1 if payload else 0
+        return _build_section(
+            section_id="market_stock_zd_num",
+            provider="kaipan",
+            payload=payload,
+            record_count=record_count,
+            quality_status="ok" if record_count else "missing",
+            missing_reason=None if record_count else "no market stock zd num returned",
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_section(
+            section_id="market_stock_zd_num",
+            provider="kaipan",
+            payload={},
+            record_count=0,
+            quality_status="missing",
+            missing_reason=str(exc),
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+
+
+def build_zhang_ting_expression_section(
+    context: MarketSnapshotBuildContext,
+    *,
+    provider: KaipanProvider,
+) -> MarketSnapshotSection:
+    """构建涨停表达式 section。"""
+    trade_date = _as_date(context.trade_date)
+    try:
+        payload = _to_plain(provider.fetch_zhang_ting_expression(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
+        return _build_section(
+            section_id="zhang_ting_expression",
+            provider="kaipan",
+            payload=payload,
+            record_count=record_count or (1 if payload else 0),
+            quality_status="ok" if payload else "missing",
+            missing_reason=None if payload else "no zhang ting expression returned",
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_section(
+            section_id="zhang_ting_expression",
+            provider="kaipan",
+            payload={},
+            record_count=0,
+            quality_status="missing",
+            missing_reason=str(exc),
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+
+
+def build_daily_limit_index_section(
+    context: MarketSnapshotBuildContext,
+    *,
+    provider: KaipanProvider,
+) -> MarketSnapshotSection:
+    """构建连板结构 section。"""
+    trade_date = _as_date(context.trade_date)
+    try:
+        payload = _to_plain(provider.fetch_daily_limit_index(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
+        return _build_section(
+            section_id="daily_limit_index",
+            provider="kaipan",
+            payload=payload,
+            record_count=record_count or (1 if payload else 0),
+            quality_status="ok" if payload else "missing",
+            missing_reason=None if payload else "no daily limit index returned",
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_section(
+            section_id="daily_limit_index",
+            provider="kaipan",
+            payload={},
+            record_count=0,
+            quality_status="missing",
+            missing_reason=str(exc),
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+
+
+def build_weight_performance_section(
+    context: MarketSnapshotBuildContext,
+    *,
+    provider: KaipanProvider,
+) -> MarketSnapshotSection:
+    """构建权重板块表现 section。"""
+    trade_date = _as_date(context.trade_date)
+    try:
+        payload = _to_plain(provider.fetch_weight_performance(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
+        return _build_section(
+            section_id="weight_performance",
+            provider="kaipan",
+            payload=payload,
+            record_count=record_count,
+            quality_status="ok" if record_count else "partial",
+            missing_reason=None if record_count else "no weight performance returned",
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_section(
+            section_id="weight_performance",
+            provider="kaipan",
+            payload={},
+            record_count=0,
+            quality_status="missing",
+            missing_reason=str(exc),
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+
+
+def build_get_feng_k_list_section(
+    context: MarketSnapshotBuildContext,
+    *,
+    provider: KaipanProvider,
+) -> MarketSnapshotSection:
+    """构建收盘强势标的 section。"""
+    trade_date = _as_date(context.trade_date)
+    try:
+        payload = _to_plain(provider.fetch_get_feng_k_list(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
+        return _build_section(
+            section_id="get_feng_k_list",
+            provider="kaipan",
+            payload=payload,
+            record_count=record_count,
+            quality_status="ok" if record_count else "partial",
+            missing_reason=None if record_count else "no get feng k list returned",
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _build_section(
+            section_id="get_feng_k_list",
+            provider="kaipan",
+            payload={},
+            record_count=0,
+            quality_status="missing",
+            missing_reason=str(exc),
             metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
         )
 
@@ -1003,6 +1158,61 @@ class StrongSymbolsSectionBuilder:
 
 
 @dataclass(frozen=True)
+class MarketStockZDNumSectionBuilder:
+    """涨跌停统计 section builder。"""
+
+    provider: KaipanProvider
+    section_id: str = "market_stock_zd_num"
+
+    def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
+        return build_market_stock_zd_num_section(context, provider=self.provider)
+
+
+@dataclass(frozen=True)
+class ZhangTingExpressionSectionBuilder:
+    """涨停表达式 section builder。"""
+
+    provider: KaipanProvider
+    section_id: str = "zhang_ting_expression"
+
+    def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
+        return build_zhang_ting_expression_section(context, provider=self.provider)
+
+
+@dataclass(frozen=True)
+class DailyLimitIndexSectionBuilder:
+    """连板结构 section builder。"""
+
+    provider: KaipanProvider
+    section_id: str = "daily_limit_index"
+
+    def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
+        return build_daily_limit_index_section(context, provider=self.provider)
+
+
+@dataclass(frozen=True)
+class WeightPerformanceSectionBuilder:
+    """权重板块表现 section builder。"""
+
+    provider: KaipanProvider
+    section_id: str = "weight_performance"
+
+    def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
+        return build_weight_performance_section(context, provider=self.provider)
+
+
+@dataclass(frozen=True)
+class GetFengKListSectionBuilder:
+    """收盘强势标的 section builder。"""
+
+    provider: KaipanProvider
+    section_id: str = "get_feng_k_list"
+
+    def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
+        return build_get_feng_k_list_section(context, provider=self.provider)
+
+
+@dataclass(frozen=True)
 class MarketStateSectionBuilder:
     """MarketState section builder。"""
 
@@ -1041,6 +1251,11 @@ def build_default_market_snapshot_registry(
     registry.register(HotTopicsSectionBuilder(provider=provider))
     registry.register(TopicConstituentsSectionBuilder(provider=provider))
     registry.register(StrongSymbolsSectionBuilder(provider=provider))
+    registry.register(MarketStockZDNumSectionBuilder(provider=provider))
+    registry.register(ZhangTingExpressionSectionBuilder(provider=provider))
+    registry.register(DailyLimitIndexSectionBuilder(provider=provider))
+    registry.register(WeightPerformanceSectionBuilder(provider=provider))
+    registry.register(GetFengKListSectionBuilder(provider=provider))
     registry.register(
         MarketStateSectionBuilder(
             persona_service=persona_service,

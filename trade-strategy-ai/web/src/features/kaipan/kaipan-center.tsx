@@ -77,6 +77,7 @@ export function KaipanCenter() {
   const status = statusQuery.data ?? null;
 
   const latestSlot = useMemo(() => status?.latest_slot ?? 'n/a', [status]);
+  const ingestionItems = ['MarketStockZDNum', 'ZhangTingExpression', 'DailyLimitIndex', 'WeightPerformance', 'GetFengKList'];
 
   return (
     <section className="dashboard-grid">
@@ -113,6 +114,17 @@ export function KaipanCenter() {
           <div className="grid gap-3 sm:grid-cols-2">
             <SummaryCard title="Trade date" value={tradeDate} accent="text-sky-300" />
             <SummaryCard title="Slot" value={slot} accent="text-emerald-300" />
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">10.5 ingestion</p>
+            <p className="mt-2 text-sm text-slate-300">现有 /kaipan 入口会一并抓取并标准化以下新增接口，结果继续流入 snapshot / DB 链路。</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ingestionItems.map((item) => (
+                <span key={item} className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-200">
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
           {fetchResult ? <ResultPanel title="Fetch result" payload={fetchResult} /> : null}
           {normalizeResult ? <ResultPanel title="Normalize result" payload={normalizeResult} /> : null}

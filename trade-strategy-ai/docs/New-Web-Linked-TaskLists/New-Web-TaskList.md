@@ -1508,6 +1508,70 @@ UI 关联任务：
 
 ---
 
+### [x] NW-V2-S2-007 P0 Kaipan 10.5 ingestion expansion
+
+任务目标：将 `New-Web-Market-Regime-Definition.md` 10.5 中建议新增的 Kaipan 接口接入现有 Kaipan 抓取入口，并写入现有 snapshot / DB 链路。
+
+当前相关文件：
+
+- `src/providers/kaipan_provider.py`
+- `src/providers/kaipan_normalizer.py`
+- `src/services/kaipan_service.py`
+- `src/services/market_snapshot_builders.py`
+- `src/services/market_snapshot_service.py`
+- `src/services/market_data_storage_service.py`
+- `web/src/features/kaipan/kaipan-center.tsx`
+- `web/src/pages/kaipan/index.tsx`
+- tests
+
+允许修改：
+
+- `src/providers/kaipan_provider.py`
+- `src/providers/kaipan_normalizer.py`
+- `src/providers/kaipan_schema/*.yaml`
+- `src/services/kaipan_service.py`
+- `src/services/market_snapshot_builders.py`
+- `src/services/market_snapshot_service.py`
+- `src/services/market_data_storage_service.py`
+- `web/src/features/kaipan/kaipan-center.tsx`
+- `web/src/pages/kaipan/index.tsx`
+- tests
+
+禁止修改：
+
+- 不新开独立 Kaipan 页面。
+- 不把这批数据做成第二套事实源。
+- 不把结果回退到 CLI 入口。
+- 不把 benchmark 再塞回 persona 默认配置。
+
+实现要求：
+
+1. `MarketStockZDNum`、`ZhangTingExpression`、`DailyLimitIndex`、`WeightPerformance`、`GetFengKList` 有 provider 封装。
+2. 新接口在现有 `/kaipan` 入口可见，并与现有抓取流程同源。
+3. 标准化结果进入现有 snapshot / DB 链路。
+4. 新 section 使用现有 `market_snapshot_sections / market_snapshot_items` 等表保存。
+5. UI 保持浅色正式工作台风格。
+
+验收标准：
+
+- 新接口在 Kaipan provider、normalizer 和 service 中可运行。
+- `snapshot-build` 能把 10.5 数据一并落库。
+- `/kaipan` 页面仍是唯一 Kaipan 入口，并可看到 10.5 ingestion 提示。
+- 测试覆盖 provider、normalizer、service、snapshot storage 和 UI 页面。
+
+UI 关联任务：
+
+- `UI-V2-005 Market Data Workspace`
+
+完成情况：
+
+- 已新增 5 个 Kaipan 10.5 接口封装，并补齐 canonical raw 写出与 normalizer 支持。
+- 已把 10.5 section 接入 `snapshot-build`，并继续写入现有 market snapshot 表体系。
+- 已把 `/kaipan` 页面补为浅色正式工作台中的 10.5 ingestion 提示块，仍然复用现有入口。
+- 已补齐对应测试并通过回归验证。
+
+---
+
 ### [x] NW-V2-S2-006 P1 Market Regime Feature Build
 
 任务目标：在 V2 阶段只生成市场状态特征，不做 rule 优化，为 V3 的 Regime-aware Backtest 和 Rule Applicability Profile 准备数据。

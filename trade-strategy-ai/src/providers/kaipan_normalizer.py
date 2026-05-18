@@ -177,6 +177,21 @@ class KaipanNormalizer:
     def normalize_market_context(self, raw_path: Path, slot: str) -> dict[str, Any]:
         return self.normalize("market_context", raw_path, slot)
 
+    def normalize_market_stock_zd_num(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("market_stock_zd_num", raw_path, slot)
+
+    def normalize_zhang_ting_expression(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("zhang_ting_expression", raw_path, slot)
+
+    def normalize_daily_limit_index(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("daily_limit_index", raw_path, slot)
+
+    def normalize_weight_performance(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("weight_performance", raw_path, slot)
+
+    def normalize_get_feng_k_list(self, raw_path: Path, slot: str) -> dict[str, Any]:
+        return self.normalize("get_feng_k_list", raw_path, slot)
+
     def normalize_date(self, trade_date: str, slots: tuple[str, ...] = ("09-25", "17-30")) -> dict[str, dict[str, Any]]:
         """批量转换某交易日全部时间槽的 snapshots。
 
@@ -187,7 +202,17 @@ class KaipanNormalizer:
         results = {}
         for slot in slots:
             results[slot] = {}
-            for dataset in ("hot_topics", "topic_constituents", "strong_symbols", "market_context"):
+            for dataset in (
+                "hot_topics",
+                "topic_constituents",
+                "strong_symbols",
+                "market_context",
+                "market_stock_zd_num",
+                "zhang_ting_expression",
+                "daily_limit_index",
+                "weight_performance",
+                "get_feng_k_list",
+            ):
                 raw_file = (
                     resolve_project_path("data/kaipan/raw")
                     / dataset

@@ -70,6 +70,21 @@ class _FakeProvider:
     def fetch_lhb_list(self, *, trade_date, slot, index=0, st=300):
         return {"info": [["000001", "示例", 0, "", 1, 2, "板块", 3]]}
 
+    def fetch_market_stock_zd_num(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "market_stock_zd_num", "trade_date": str(trade_date), "slot": slot, "limit_up_count": 79, "limit_down_count": 1, "panic": 12, "summary": {"SJZT": 79, "SJDT": 1}}
+
+    def fetch_zhang_ting_expression(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "zhang_ting_expression", "trade_date": str(trade_date), "slot": slot, "items": [{"total_limit_up": 71, "first_board_count": 5}]}
+
+    def fetch_daily_limit_index(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "daily_limit_index", "trade_date": str(trade_date), "slot": slot, "items": [{"one_board_count": 71, "two_board_count": 5}]}
+
+    def fetch_weight_performance(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "weight_performance", "trade_date": str(trade_date), "slot": slot, "items": [{"market": "SZ", "symbol": "881162", "name": "通信服务", "change_pct": 3.8}]}
+
+    def fetch_get_feng_k_list(self, *, trade_date, slot="17-30", offline=False, time="", **kwargs):
+        return {"dataset": "get_feng_k_list", "trade_date": str(trade_date), "slot": slot, "items": [{"symbol": "000001", "name": "示例"}]}
+
     def fetch_hot_topics(self, *, trade_date, slot, offline=False):
         return {"topics": [{"kind": "concept", "topic_id": "1", "topic_name": "热点"}], "sources": ["board_strength"]}
 
@@ -204,3 +219,24 @@ def test_market_state_and_legacy_sections_share_section_shape(tmp_path: Path) ->
     assert strong_symbols.quality_status == "ok"
     assert market_state.quality_status == "ok"
     assert market_state.payload["market_state"]["state"] == "bull"
+
+
+def test_market_snapshot_registry_includes_10_5_sections(tmp_path: Path) -> None:
+    """默认 registry 应包含 10.5 Kaipan sections。"""
+    from src.services.market_snapshot_builders import build_default_market_snapshot_registry
+
+    registry = build_default_market_snapshot_registry(
+        provider=_FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        base_dir=tmp_path,
+        benchmark_symbol="SH000001",
+        config_path=tmp_path / "config" / "app.yaml",
+    )
+
+    section_ids = registry.section_ids()
+    assert "market_stock_zd_num" in section_ids
+    assert "zhang_ting_expression" in section_ids
+    assert "daily_limit_index" in section_ids
+    assert "weight_performance" in section_ids
+    assert "get_feng_k_list" in section_ids

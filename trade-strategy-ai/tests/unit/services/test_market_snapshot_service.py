@@ -81,6 +81,21 @@ class _FakeProvider:
     def fetch_strong_symbols(self, *, trade_date, slot, offline=False):
         return {"symbols": [{"kind": "strong_fengkou", "symbol": "000001", "name": "示例"}], "sources": ["strong_fengkou"]}
 
+    def fetch_market_stock_zd_num(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "market_stock_zd_num", "trade_date": str(trade_date), "slot": slot, "limit_up_count": 79, "limit_down_count": 1, "panic": 12}
+
+    def fetch_zhang_ting_expression(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "zhang_ting_expression", "trade_date": str(trade_date), "slot": slot, "items": [{"total_limit_up": 71}]}
+
+    def fetch_daily_limit_index(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "daily_limit_index", "trade_date": str(trade_date), "slot": slot, "items": [{"one_board_count": 71}]}
+
+    def fetch_weight_performance(self, *, trade_date, slot="17-30", offline=False, **kwargs):
+        return {"dataset": "weight_performance", "trade_date": str(trade_date), "slot": slot, "items": [{"market": "SZ", "symbol": "881162", "name": "通信服务", "change_pct": 3.8}]}
+
+    def fetch_get_feng_k_list(self, *, trade_date, slot="17-30", offline=False, time="", **kwargs):
+        return {"dataset": "get_feng_k_list", "trade_date": str(trade_date), "slot": slot, "items": [{"symbol": "000001", "name": "示例"}]}
+
 
 class _FakeMarketService:
     async def get_ohlcv(self, symbol: str, start_date, end_date):
@@ -185,6 +200,42 @@ def test_market_snapshot_service_writes_snapshot_summary_and_quality_reports(tmp
     assert result.payload["snapshot_summary"]["metadata"]["config_ref"] == "config/app.yaml"
     assert result.payload["snapshot_summary"]["missing_section_count"] == 0
     assert result.payload["quality_report"]["overall_status"] == "ok"
+
+
+def test_market_snapshot_service_includes_10_5_sections(tmp_path: Path) -> None:
+    """MarketSnapshotService 应把 10.5 section 一起写入 snapshot。"""
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    result = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="17-30",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+
+    section_ids = {item["section_id"] for item in result.payload["sections"]}
+    assert result.status == "ok"
+    assert "market_stock_zd_num" in section_ids
+    assert "zhang_ting_expression" in section_ids
+    assert "daily_limit_index" in section_ids
+    assert "weight_performance" in section_ids
+    assert "get_feng_k_list" in section_ids
 
 
 def test_market_snapshot_service_reports_partial_coverage(tmp_path: Path) -> None:

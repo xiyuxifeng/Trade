@@ -133,6 +133,16 @@ class KaipanProvider(ProviderBase):
             return self._request_topic_constituents(**kwargs)
         if capability == "strong_symbols":
             return self._request_strong_symbols(**kwargs)
+        if capability == "market_stock_zd_num":
+            return self._request_market_stock_zd_num(**kwargs)
+        if capability == "zhang_ting_expression":
+            return self._request_zhang_ting_expression(**kwargs)
+        if capability == "daily_limit_index":
+            return self._request_daily_limit_index(**kwargs)
+        if capability == "weight_performance":
+            return self._request_weight_performance(**kwargs)
+        if capability == "get_feng_k_list":
+            return self._request_get_feng_k_list(**kwargs)
         self.unsupported(capability)
 
     def normalize(
@@ -151,6 +161,16 @@ class KaipanProvider(ProviderBase):
             return self._normalize_topic_constituents(raw=raw, request=request)
         if capability == "strong_symbols":
             return self._normalize_strong_symbols(raw=raw, request=request)
+        if capability == "market_stock_zd_num":
+            return self._normalize_market_stock_zd_num(raw=raw, request=request)
+        if capability == "zhang_ting_expression":
+            return self._normalize_zhang_ting_expression(raw=raw, request=request)
+        if capability == "daily_limit_index":
+            return self._normalize_daily_limit_index(raw=raw, request=request)
+        if capability == "weight_performance":
+            return self._normalize_weight_performance(raw=raw, request=request)
+        if capability == "get_feng_k_list":
+            return self._normalize_get_feng_k_list(raw=raw, request=request)
         self.unsupported(capability)
 
     def fetch_hot_topics(self, *, trade_date: date | str, slot: str = "09-25", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
@@ -384,6 +404,7 @@ class KaipanProvider(ProviderBase):
         base_url_key: str = "apphis",
         method: str = "GET",
         page_key: str | None = None,
+        canonical_name: str | None = None,
         **params: Any,
     ) -> dict[str, Any]:
         """通用抓取保存方法。
@@ -433,6 +454,10 @@ class KaipanProvider(ProviderBase):
         raw_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{raw_filename}.json"
         response = self._fetch_single(request)
         self._save_raw(raw_path, request, response, dataset)
+        if canonical_name:
+            canonical_path = self.raw_dir / dataset / f"{self._trade_date.isoformat()}_{self._slot}" / f"{canonical_name}.json"
+            if canonical_path != raw_path:
+                self._save_raw(canonical_path, request, response, dataset)
         return response
 
     def fetch_custom(
@@ -589,6 +614,19 @@ class KaipanProvider(ProviderBase):
 
         return raw
 
+    def _load_canonical_raw(self, dataset: str, *, trade_date: date | str, slot: str) -> dict[str, Any]:
+        """从 canonical raw 文件加载单接口数据。"""
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        path = self.raw_dir / dataset / f"{td.isoformat()}_{slot}" / f"{dataset}.json"
+        if not path.exists():
+            raise ProviderError(f"离线模式: canonical raw 文件不存在 {path}")
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        data = payload.get("data", {})
+        return data if isinstance(data, dict) else {"value": data}
+
     # -----------------------------
     # capability 级别的请求与归一化逻辑
     # -----------------------------
@@ -683,6 +721,87 @@ class KaipanProvider(ProviderBase):
             raw["morning_bidding_list"] = {"info": []}
         return raw
 
+    def _request_market_stock_zd_num(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取涨跌停统计所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="market_stock_zd_num",
+            api_name="MarketStockZDNum",
+            controller="HisHomeDingPan",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="POST",
+            canonical_name="market_stock_zd_num",
+            Date=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_zhang_ting_expression(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取涨停表达式所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="zhang_ting_expression",
+            api_name="ZhangTingExpression",
+            controller="HisHomeDingPan",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="GET",
+            canonical_name="zhang_ting_expression",
+            Date=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_daily_limit_index(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取连板结构所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="daily_limit_index",
+            api_name="DailyLimitIndex",
+            controller="HisHomeDingPan",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="GET",
+            canonical_name="daily_limit_index",
+            Day=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_weight_performance(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
+        """拉取权重板块表现所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="weight_performance",
+            api_name="WeightPerformance",
+            controller="HisHomeDingPan",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="GET",
+            canonical_name="weight_performance",
+            Day=td.strftime("%Y-%m-%d"),
+        )
+
+    def _request_get_feng_k_list(self, *, trade_date: Any, slot: str = "17-30", time: str = "", **kwargs: Any) -> dict[str, Any]:
+        """拉取收盘强势标的所需的 raw 数据。"""
+
+        td = self._coerce_trade_date(trade_date)
+        self._trade_date = td
+        self._slot = slot
+        return self._fetch_and_save(
+            dataset="get_feng_k_list",
+            api_name="GetFengKList",
+            controller="StockFengKData",
+            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            method="POST",
+            canonical_name="get_feng_k_list",
+            Day=td.strftime("%Y%m%d"),
+            Time=time,
+        )
+
     def _normalize_hot_topics(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
         """把热点主题 raw 数据归一为标准 payload。"""
 
@@ -742,6 +861,168 @@ class KaipanProvider(ProviderBase):
             "symbols": symbols,
             "sources": ["strong_fengkou", "interval_stats_stock", "morning_bidding_list"],
         }
+
+    def _normalize_market_stock_zd_num(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把涨跌停统计 raw 数据归一为标准 payload。"""
+
+        info = raw.get("info", {})
+        return {
+            "dataset": "market_stock_zd_num",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "limit_up_count": self._extract_numeric(info, ("SJZT", "limit_up_count", "up_count", "zt_count")),
+            "limit_down_count": self._extract_numeric(info, ("SJDT", "limit_down_count", "down_count", "dt_count")),
+            "panic": self._extract_numeric(info, ("panic", "PANIC", "panic_index")),
+            "summary": info if isinstance(info, dict) else {"value": info},
+        }
+
+    def _normalize_zhang_ting_expression(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把涨停表达式 raw 数据归一为标准 payload。"""
+
+        info = raw.get("info", [])
+        summary = self._sequence_summary(
+            info,
+            keys=("total_limit_up", "first_board", "second_board", "third_board", "high_board", "break_board_rate", "promotion_rate", "panic", "limit_up_close_rate", "limit_up_open_rate", "limit_up_persistence_rate", "summary"),
+        )
+        return {
+            "dataset": "zhang_ting_expression",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "items": [summary],
+            "sources": ["info"],
+        }
+
+    def _normalize_daily_limit_index(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把连板结构 raw 数据归一为标准 payload。"""
+
+        info = raw.get("info", [])
+        summary = self._sequence_summary(
+            info,
+            keys=("one_board_count", "two_board_count", "three_board_count", "high_board_count", "limit_up_count"),
+        )
+        return {
+            "dataset": "daily_limit_index",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "items": [summary],
+            "sources": ["info"],
+        }
+
+    def _normalize_weight_performance(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把权重板块表现 raw 数据归一为标准 payload。"""
+
+        info = raw.get("info", {})
+        segments: list[dict[str, Any]] = []
+        if isinstance(info, dict):
+            for market, rows in info.items():
+                if not isinstance(rows, list):
+                    continue
+                for row in rows:
+                    if isinstance(row, list):
+                        segments.append(
+                            {
+                                "market": market,
+                                "symbol": row[0] if len(row) > 0 else None,
+                                "name": row[1] if len(row) > 1 else None,
+                                "change_pct": row[2] if len(row) > 2 else None,
+                            }
+                        )
+                    elif isinstance(row, dict):
+                        segment = dict(row)
+                        segment["market"] = market
+                        segments.append(segment)
+        return {
+            "dataset": "weight_performance",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "items": segments,
+            "sources": ["info"],
+        }
+
+    def _normalize_get_feng_k_list(
+        self,
+        *,
+        raw: dict[str, Any],
+        request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """把收盘强势标的 raw 数据归一为标准 payload。"""
+
+        items = raw.get("List") or raw.get("info") or raw.get("list") or []
+        rows: list[dict[str, Any]] = []
+        if isinstance(items, list):
+            for row in items:
+                if isinstance(row, list):
+                    rows.append(
+                        {
+                            "symbol": row[0] if len(row) > 0 else None,
+                            "name": row[1] if len(row) > 1 else None,
+                            "strength_score": row[2] if len(row) > 2 else None,
+                            "change_pct": row[4] if len(row) > 4 else None,
+                            "turnover": row[5] if len(row) > 5 else None,
+                            "main_force_buy": row[8] if len(row) > 8 else None,
+                            "main_force_sell": row[9] if len(row) > 9 else None,
+                            "topic_tags": row[10] if len(row) > 10 else None,
+                        }
+                    )
+                elif isinstance(row, dict):
+                    rows.append(dict(row))
+        return {
+            "dataset": "get_feng_k_list",
+            "trade_date": raw.get("trade_date") or (request or {}).get("trade_date"),
+            "slot": raw.get("slot") or (request or {}).get("slot"),
+            "items": rows,
+            "sources": ["List", "info", "list"],
+        }
+
+    def _extract_numeric(self, value: Any, keys: tuple[str, ...]) -> Any:
+        """从 dict/list 中抽取首个可用数值字段。"""
+
+        if isinstance(value, dict):
+            for key in keys:
+                item = value.get(key)
+                if item is not None:
+                    return item
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    for key in keys:
+                        nested = item.get(key)
+                        if nested is not None:
+                            return nested
+        return None
+
+    def _sequence_summary(self, value: Any, *, keys: tuple[str, ...]) -> dict[str, Any]:
+        """把数组或字典转换成具名摘要。"""
+
+        if isinstance(value, dict):
+            summary = {key: value.get(key) for key in keys}
+            summary["raw"] = value
+            return summary
+        if isinstance(value, list):
+            summary = {key: value[index] if index < len(value) else None for index, key in enumerate(keys)}
+            summary["raw"] = value
+            return summary
+        return {"raw": value}
 
     def _parse_ranked_topics(self, raw: dict[str, Any], *, kind: str) -> list[dict[str, Any]]:
         """解析 RealRankingInfo 的 list 数组。"""
@@ -1262,3 +1543,58 @@ class KaipanProvider(ProviderBase):
             Index=index,
             st=st,
         )
+
+    def fetch_market_stock_zd_num(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """涨跌停统计 - MarketStockZDNum。"""
+
+        if offline:
+            raw = self._load_canonical_raw("market_stock_zd_num", trade_date=trade_date, slot=slot)
+            return self._normalize_market_stock_zd_num(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("market_stock_zd_num", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch market_stock_zd_num")
+        return result.payload
+
+    def fetch_zhang_ting_expression(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """涨停表达式 - ZhangTingExpression。"""
+
+        if offline:
+            raw = self._load_canonical_raw("zhang_ting_expression", trade_date=trade_date, slot=slot)
+            return self._normalize_zhang_ting_expression(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("zhang_ting_expression", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch zhang_ting_expression")
+        return result.payload
+
+    def fetch_daily_limit_index(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """连板结构 - DailyLimitIndex。"""
+
+        if offline:
+            raw = self._load_canonical_raw("daily_limit_index", trade_date=trade_date, slot=slot)
+            return self._normalize_daily_limit_index(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("daily_limit_index", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch daily_limit_index")
+        return result.payload
+
+    def fetch_weight_performance(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, **kwargs: Any) -> dict[str, Any]:
+        """权重板块表现 - WeightPerformance。"""
+
+        if offline:
+            raw = self._load_canonical_raw("weight_performance", trade_date=trade_date, slot=slot)
+            return self._normalize_weight_performance(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("weight_performance", request={"trade_date": trade_date, "slot": slot, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch weight_performance")
+        return result.payload
+
+    def fetch_get_feng_k_list(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, time: str = "", **kwargs: Any) -> dict[str, Any]:
+        """收盘强势标的 - GetFengKList。"""
+
+        if offline:
+            raw = self._load_canonical_raw("get_feng_k_list", trade_date=trade_date, slot=slot)
+            return self._normalize_get_feng_k_list(raw=raw, request={"trade_date": trade_date, "slot": slot})
+        result = self.run("get_feng_k_list", request={"trade_date": trade_date, "slot": slot, "time": time, **kwargs})
+        if result.status != ProviderStatus.ok:
+            raise ProviderError("; ".join(result.errors) or "failed to fetch get_feng_k_list")
+        return result.payload

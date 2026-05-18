@@ -14,6 +14,7 @@ export type BacktestListItem = {
   date_to: string | null;
   request_date_from?: string | null;
   request_date_to?: string | null;
+  benchmark_symbol?: string | null;
   summary: BacktestSummary | Record<string, unknown>;
 };
 
@@ -49,6 +50,7 @@ export type BacktestResultItem = {
   request_trader_id: string;
   request_date_from: string;
   request_date_to: string;
+  benchmark_symbol?: string | null;
   result_version: string;
   summary: BacktestSummary | null;
   records: BacktestTradeRecord[];
@@ -67,6 +69,7 @@ export type BacktestJobSubmission = {
   dateFrom: string;
   dateTo: string;
   strategyVersionId: string;
+  benchmarkSymbol?: string;
   mode: 'full' | 'replay' | 'rule_validation';
   configPath: string;
   symbols: string[];

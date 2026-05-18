@@ -1085,6 +1085,7 @@ class BacktestEngine:
             request_trader_id=request.trader_id,
             request_date_from=request.date_from,
             request_date_to=request.date_to,
+            benchmark_symbol=request.benchmark_symbol,
             records=records,
             summary=summary,
         )
@@ -1134,6 +1135,7 @@ class BacktestEngine:
             trade_date=trade_date,
             symbols=request.symbols,
             regime_version=request.market_regime_version,
+            benchmark_symbol=request.benchmark_symbol,
         )
 
         # 规则验真模式：暂不处理交易评分
@@ -1425,6 +1427,7 @@ class BacktestEngine:
                 request_trader_id="rule_pool",
                 request_date_from=start_date,
                 request_date_to=end_date,
+                benchmark_symbol=None,
                 records=[],
                 summary=BacktestSummary(
                     total_days=0,
@@ -1678,6 +1681,7 @@ class BacktestEngine:
                 request_trader_id="rule_pool",
                 request_date_from=date.min,
                 request_date_to=date.max,
+                benchmark_symbol=None,
                 records=[],
                 summary=BacktestSummary(
                     total_days=0,
@@ -1729,6 +1733,7 @@ class BacktestEngine:
             request_trader_id="rule_pool",
             request_date_from=first_result.start_date,
             request_date_to=first_result.end_date,
+            benchmark_symbol=None,
             records=records,
             summary=summary,
         )

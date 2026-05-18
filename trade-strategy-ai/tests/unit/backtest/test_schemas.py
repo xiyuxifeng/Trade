@@ -32,6 +32,7 @@ class TestBacktestRequest:
         assert req.scoring_profile == "stage5"
         assert req.strategy_version_id is None
         assert req.symbols == []
+        assert req.benchmark_symbol is None
 
     def test_backtest_request_all_fields(self):
         """完整参数构造"""
@@ -41,6 +42,7 @@ class TestBacktestRequest:
             date_to=date(2026, 4, 10),
             strategy_version_id="v1",
             symbols=["000001.SZ"],
+            benchmark_symbol="000300.SH",
             mode="replay",
             use_snapshot_only=False,
             scoring_profile="custom",
@@ -50,6 +52,7 @@ class TestBacktestRequest:
         assert req.date_to == date(2026, 4, 10)
         assert req.strategy_version_id == "v1"
         assert req.symbols == ["000001.SZ"]
+        assert req.benchmark_symbol == "000300.SH"
         assert req.mode == "replay"
         assert req.use_snapshot_only is False
 

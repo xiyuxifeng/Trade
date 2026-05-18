@@ -229,6 +229,7 @@ class JobRunner(BaseService):
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
+                benchmark_symbol=params.get("benchmark_symbol"),
                 mode=str(params.get("mode") or "full"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
@@ -243,6 +244,7 @@ class JobRunner(BaseService):
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
+                benchmark_symbol=params.get("benchmark_symbol"),
                 mode=str(params.get("mode") or "rule_validation"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
@@ -257,6 +259,7 @@ class JobRunner(BaseService):
                 date_to=_parse_date(params.get("date_to")),
                 strategy_version_id=params.get("strategy_version_id"),
                 symbols=params.get("symbols") or [],
+                benchmark_symbol=params.get("benchmark_symbol"),
                 mode=str(params.get("mode") or "full"),
                 config_path=params.get("config_path", "config/app.yaml"),
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
@@ -573,7 +576,9 @@ class JobRunner(BaseService):
             idempotency_key=idempotency_key,
             confirmed=confirmed,
         )
-        job_payload = created.payload["job"]
+        job_payload = created.payload.get("job") if isinstance(created.payload, dict) else None
+        if not isinstance(job_payload, dict):
+            return created
         if created.payload.get("created") is False and job_payload.get("status") != "pending":
             return created
         execution = await self.execute_job(

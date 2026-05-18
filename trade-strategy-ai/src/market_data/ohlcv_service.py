@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.models.ohlcv_bar import OHLCVBar
+from src.models.stock_info import StockInfo
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,13 +47,15 @@ class OHLCVService:
         symbols: list[str],
         start_date: date | None = None,
         end_date: date | None = None,
+        market_kind_by_symbol: dict[str, str] | None = None,
     ) -> dict[str, int]:
         """抓取并存储 ohlcv 数据。
 
         Args:
-            symbols: 股票代码列表
+            symbols: 标的代码列表（支持股票/指数）
             start_date: 起始日期
             end_date: 结束日期
+            market_kind_by_symbol: 可选的标的类型映射，用于避免按 symbol 重新推断
 
         Returns:
             dict[symbol, count] 抓取成功的记录数
@@ -66,13 +69,18 @@ class OHLCVService:
             fallback_enabled=self._fallback_enabled,
         )
         results: dict[str, int] = {}
+        kind_map = market_kind_by_symbol or {}
 
         for symbol in symbols:
             try:
+                market_kind = kind_map.get(symbol)
+                if not market_kind:
+                    market_kind = await self._resolve_market_kind(symbol)
                 df = provider.fetch_ohlcv_1d(
                     symbol=symbol,
                     start_date=start_date,
                     end_date=end_date,
+                    market_kind=market_kind,
                 )
                 count = await self._upsert_bars(symbol, df)
                 results[symbol] = count
@@ -82,6 +90,17 @@ class OHLCVService:
                 results[symbol] = 0
 
         return results
+
+    async def _resolve_market_kind(self, symbol: str) -> str:
+        """根据 stock_info 表推断标的类型，未命中时回退到股票。"""
+        async with self._factory() as session:
+            stmt = select(StockInfo.security_type).where(StockInfo.symbol == symbol).limit(1)
+            security_type = await session.scalar(stmt)
+        if security_type == "index":
+            return "index"
+        if security_type == "etf":
+            return "etf"
+        return "stock"
 
     async def _upsert_bars(self, symbol: str, df: pd.DataFrame) -> int:
         """批量 upsert bars 到数据库"""

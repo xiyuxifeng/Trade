@@ -279,3 +279,20 @@ class MarketRegimeListResponse(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     page: MarketQueryPage
     items: list[MarketRegimeSummary] = Field(default_factory=list)
+
+
+class MarketBenchmarkOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    symbol: str
+    code: str
+    market: str
+    name: str
+    security_type: str = "index"
+
+
+class MarketBenchmarkOptionListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    count: int
+    items: list[MarketBenchmarkOption] = Field(default_factory=list)

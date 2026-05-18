@@ -61,10 +61,12 @@ async def handle_ohlcv_crawl(
             # 全量模式需要标的列表
             logger.warning("ohlcv_crawl full 模式需要 symbols 参数，跳过")
             return
+        market_kind_by_symbol = None
         results = await service.crawl_bars(
             symbols=symbols,
             start_date=start_date,
             end_date=end_date,
+            market_kind_by_symbol=market_kind_by_symbol,
         )
     else:
         # 增量模式：只抓取 end_date 当日
@@ -74,16 +76,21 @@ async def handle_ohlcv_crawl(
             from src.models.stock_info import StockInfo
 
             async with factory() as session:
-                stmt = select(StockInfo.symbol).where(
-                    StockInfo.security_type == "stock"
+                stmt = select(StockInfo.symbol, StockInfo.security_type).where(
+                    StockInfo.security_type.in_(["stock", "index"])
                 )
-                result = await session.scalars(stmt)
-                symbols = list(result.all())
+                result = await session.execute(stmt)
+                rows = result.all()
+                symbols = [row[0] for row in rows]
+                market_kind_by_symbol = {row[0]: row[1] for row in rows}
+        else:
+            market_kind_by_symbol = None
 
         results = await service.crawl_bars(
             symbols=symbols,
             start_date=end_date,
             end_date=end_date,
+            market_kind_by_symbol=market_kind_by_symbol,
         )
 
     success = sum(1 for c in results.values() if c > 0)

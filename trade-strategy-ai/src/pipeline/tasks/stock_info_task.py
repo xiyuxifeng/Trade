@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from src.common.utils import ensure_dir, write_json
-from src.market_data.stock_info_service import fetch_and_store_stock_list, is_stock_list_fresh
+from src.market_data.stock_info_service import (
+    fetch_and_store_stock_list,
+    is_stock_list_fresh,
+    seed_common_market_indices,
+)
 
 
 @dataclass(slots=True)
@@ -50,6 +54,9 @@ async def run_stock_info_update(
     out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "stock_info")
     stats_path = out_dir / "stock_info_stats.json"
 
+    # 先确保常用指数元数据存在，避免 stock 列表未刷新时漏掉 benchmark 选项
+    index_stats = await seed_common_market_indices()
+
     # 检查是否需要更新
     if not force:
         fresh = await is_stock_list_fresh(max_age_days=max_age_days)
@@ -59,6 +66,9 @@ async def run_stock_info_update(
                 "updated": False,
                 "message": f"股票列表未过期（max_age={max_age_days}天），跳过更新",
                 "checked_at": datetime.now(UTC).isoformat(),
+                "index_total": index_stats["total"],
+                "index_inserted": index_stats["inserted"],
+                "index_updated": index_stats["updated"],
             }
             write_json(stats_path, stats)
             return StockInfoUpdateResult(updated=False, stats_path=stats_path)
@@ -72,6 +82,9 @@ async def run_stock_info_update(
             "inserted": result["inserted"],
             "updated_count": result["updated"],
             "skipped": result["skipped"],
+            "index_total": index_stats["total"],
+            "index_inserted": index_stats["inserted"],
+            "index_updated": index_stats["updated"],
             "checked_at": datetime.now(UTC).isoformat(),
         }
         write_json(stats_path, stats)

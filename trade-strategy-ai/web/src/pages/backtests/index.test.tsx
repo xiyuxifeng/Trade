@@ -11,6 +11,7 @@ import {
   getBacktestResult,
   listBacktestResults,
 } from '@/lib/api/backtests';
+import { listBenchmarkOptions } from '@/lib/api/market';
 
 vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('@/lib/api/backtests', () => ({
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
   })),
@@ -31,6 +33,7 @@ vi.mock('@/lib/api/backtests', () => ({
     trader_id: submission.traderId,
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     config_path: submission.configPath,
   })),
   buildBacktestReproducibilityParams: vi.fn((submission) => ({
@@ -38,11 +41,15 @@ vi.mock('@/lib/api/backtests', () => ({
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
   })),
   getBacktestResult: vi.fn(),
   listBacktestResults: vi.fn(),
+}));
+vi.mock('@/lib/api/market', () => ({
+  listBenchmarkOptions: vi.fn(),
 }));
 
 const mockedCreateJob = vi.mocked(createJob);
@@ -50,6 +57,7 @@ const mockedDownloadBacktestReport = vi.mocked(downloadBacktestReport);
 const mockedDownloadBacktestValidationReport = vi.mocked(downloadBacktestValidationReport);
 const mockedGetBacktestResult = vi.mocked(getBacktestResult);
 const mockedListBacktestResults = vi.mocked(listBacktestResults);
+const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -73,6 +81,7 @@ describe('BacktestsPage', () => {
           trader_id: 'trader_a',
           date_from: '2026-05-01',
           date_to: '2026-05-05',
+          benchmark_symbol: '000300.SH',
           summary: {
             total_days: 5,
             total_trades: 3,
@@ -90,6 +99,7 @@ describe('BacktestsPage', () => {
         request_trader_id: 'trader_a',
         request_date_from: '2026-05-01',
         request_date_to: '2026-05-05',
+        benchmark_symbol: '000300.SH',
         result_version: '1.0',
         summary: {
           total_days: 5,
@@ -123,6 +133,12 @@ describe('BacktestsPage', () => {
     });
     mockedDownloadBacktestReport.mockResolvedValue('# Backtest Report');
     mockedDownloadBacktestValidationReport.mockResolvedValue('# Rule Validation Report');
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 1,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'SH', name: '沪深300', security_type: 'index' },
+      ],
+    });
     mockedCreateJob.mockResolvedValue({
       created: true,
       job: { id: 'job-1', job_type: 'backtest-run' },
@@ -142,11 +158,13 @@ describe('BacktestsPage', () => {
     expect(await screen.findByText('回测中心')).toBeInTheDocument();
     expect(await screen.findByText('result-1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重置筛选' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('沪深300 (000300.SH)')).toBeInTheDocument();
     expect(await screen.findByText('有效交易')).toBeInTheDocument();
     expect(await screen.findByText('跳过交易')).toBeInTheDocument();
 
     expect(screen.getByLabelText('开始日期')).toHaveValue(thirtyDaysAgo);
     expect(screen.getByLabelText('结束日期')).toHaveValue(today);
+    expect(screen.getByDisplayValue('沪深300 (000300.SH)')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '7天' }));
     expect(screen.getByLabelText('开始日期')).toHaveValue(dayjs(today).subtract(7, 'day').format('YYYY-MM-DD'));
@@ -161,7 +179,10 @@ describe('BacktestsPage', () => {
     await user.click(screen.getByRole('button', { name: '运行回测' }));
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
-        expect.objectContaining({ job_type: 'backtest-run' }),
+        expect.objectContaining({
+          job_type: 'backtest-run',
+          params: expect.objectContaining({ benchmark_symbol: '000300.SH' }),
+        }),
       );
     });
 

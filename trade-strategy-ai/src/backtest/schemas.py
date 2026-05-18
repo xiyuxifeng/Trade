@@ -45,6 +45,7 @@ class BacktestRequest(BaseModel):
     strategy_version_id: str | None = None
     symbols: list[str] = Field(default_factory=list)
     market_regime_version: str | None = None
+    benchmark_symbol: str | None = None
     mode: Literal["full", "replay", "rule_validation"] = "full"
     use_snapshot_only: bool = True
     scoring_profile: str = "stage5"
@@ -70,6 +71,7 @@ class MarketContextSnapshot(TypedDict, total=False):
     bars_by_symbol: dict[str, list[dict[str, Any]]]
     indicators_by_symbol: dict[str, dict[str, Any]]
     market_universe: Any
+    benchmark_symbol: str | None
     topic_snapshot: Any
     market_regime: Any
     market_regime_version: str
@@ -181,6 +183,7 @@ class BacktestResult:
     request_trader_id: str
     request_date_from: date
     request_date_to: date
+    benchmark_symbol: str | None = None
     records: list[BacktestTradeRecord] = field(default_factory=list)
     summary: BacktestSummary | None = None
     result_version: str = "1.0"  # S7-009: 用于区分新旧格式

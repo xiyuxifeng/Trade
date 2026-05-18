@@ -405,7 +405,7 @@ Market Snapshot
 | `liquidity` 流动性 | 是 | `market_state` / `overview.capacity` | 结构标签与风险修正 | 基本够 | 当前以 band 口径为主 |
 | `theme_strength` 热点强度 | 是 | `hot_topics` / `topic_constituents` / `strong_symbols` | `theme_hot` | 是 | 可直接用于首版 |
 | `limit_up_count` / `limit_down_count` | 是 | `limit_up_down` | 风险修正 | 是 | 对 `panic` 很重要 |
-| `ohlcv` 日线 | 是 | `ohlcv` + cache fallback | 趋势 / 收益窗口 | 部分够 | 若不是基准指数序列，则不足以稳定算 regime 趋势窗口 |
+| `ohlcv` 日线 | 是 | `ohlcv` + cache fallback | 趋势 / 收益窗口 | 部分够 | 若不是**基准指数序列**，则不足以稳定算 regime 趋势窗口 |
 | `market_state` 上下文 | 是 | `PersonaService.build_market_state` | 兼容旧语义 | 基本够 | 不能作为唯一事实源 |
 | `breadth_up_ratio` | 否 | 需从原始广度数据推导 | 主状态 / 风险修正 | 不够 | 建议补标准字段 |
 | `breadth_down_ratio` | 否 | 需从原始广度数据推导 | 主状态 / 风险修正 | 不够 | 建议补标准字段 |
@@ -416,7 +416,7 @@ Market Snapshot
 | `theme_concentration` | 否 | 需题材分布统计 | `theme_hot` 判定 | 不够 | 建议补集中度指标 |
 | `gap_down_rate` | 否 | 需盘口/价格统计 | `panic` 判定 | 不够 | 对极端风险很重要 |
 | `extreme_drop_count` | 否 | 需市场全量统计 | `panic` 判定 | 不够 | 建议补 |
-| `benchmark_ohlcv_window` | 否 | 需指数/ETF 历史窗口 | 主要趋势基线 | 不够 | 建议作为必须补数据 |
+| `benchmark_ohlcv_window` | 否 | 需指数历史窗口 | 主要趋势基线 | 不够 | 建议作为必须补数据；回测不做 ETF fallback |
 
 ### 10.3 数据结论分层
 
@@ -503,6 +503,29 @@ Market Snapshot
 - 先做后续任务时，尽量只改 `feature layer` 和 `rule layer`。
 - 不要把临时缺失字段写死成 `UI` 或 `Backtest` 的唯一前置条件。
 - 后续补 P0 数据时，优先通过版本化特征和规则切换来吸收，而不是重写整个 Web 交付链路。
+
+### 10.5 建议新增的 Kaipan 接口清单
+
+> 说明：
+>
+> - 下面清单只列 **建议补充到 Kaipan provider 的接口封装**。
+> - `benchmark_ohlcv_window` 仍建议走现有 `market data / ohlcv` 主链路，不建议强行塞进 Kaipan。
+> - 这些接口的目标是把 `10.2` 中“需要补强”的字段尽量前移到抓取层，减少后续 feature 计算的临时分支。
+
+| 接口名 | 目前状态 | 作用字段 / 用途 | 是否建议新增封装 | 备注 |
+|---|---:|---|---:|---|
+| `MarketStockZDNum` | 文档已有，provider 未封装 | `limit_up_count`、`limit_down_count`、`panic` 修正 | 是 | 直接拿涨跌停总数，适合作为基础统计接口 |
+| `ZhangTingExpression` | 文档已有，provider 未封装 | 涨停晋级率、破板率、连板结构 | 是 | 对 `breadth`、`panic`、情绪分层更有价值 |
+| `DailyLimitIndex` | 文档已有，provider 未封装 | 一板 / 二板 / 三板 / 高板结构 | 是 | 适合补强连板生态和广度结构 |
+| `WeightPerformance` | 文档已有，provider 未封装 | 权重板块涨跌分布、热点集中度 | 是 | 适合辅助 `theme_concentration` / 指数驱动判断 |
+| `GetFengKList` | 文档已有，provider 未封装 | 收盘时全量强势标的 | 视需要 | 可作为 `theme_strength` 的增强源，不是 P0 阻塞项 |
+
+#### 新增接口的落库建议
+
+- 原始响应先落 `data/kaipan/raw`
+- 标准化结果落 `data/kaipan/snapshots`
+- 上层不要直接依赖原始字段名
+- 统一由 snapshot / feature 层消费标准化后的字段
 
 ---
 
@@ -617,6 +640,47 @@ artifact 内容至少包含：
 
 - 按 `snapshot_id` 查询 regime 详情
 - 按 `trade_date` / `market` / `regime_version` 列表查询
+
+### 13.4 推荐实现链路
+
+推荐的实现顺序是：
+
+1. **抓取**
+   - 由 Provider 拉取 Kaipan / 行情 / 竞价 / 龙虎榜等原始数据。
+   - 原始响应先落 raw 存储，便于复跑和排障。
+
+2. **入库**
+   - 抓取后的数据进入规范化层，写入 `market_snapshots`、`market_snapshot_sections`、`market_snapshot_items`。
+   - OHLCV 相关数据写入 `ohlcv_bars`。
+   - 这一步完成后，Web 和回测可以统一读取稳定的事实源。
+
+3. **计算 feature**
+   - 由 `MarketRegimeFeatureService` 基于 snapshot sections 提取结构化特征。
+   - 结果写入 `market_regime_features`，并保留 `feature_version`、`quality_status`、`summary_json` 和 artifact。
+   - 这一步只做“事实抽取 + 标准化”，不直接给最终 regime 下结论。
+
+4. **计算 regime**
+   - 由 `MarketRegimeService` 读取指定 `snapshot_id + feature_version` 的 feature。
+   - 通过版本化规则生成 `primary_label`、`labels`、`confidence`、`missing_reason`。
+   - 结果写入 `market_regimes`，并保留 `regime_version`、`source_feature_version` 和 artifact。
+
+5. **UI 展示**
+   - UI 只读取 API 暴露的查询接口，不直接参与计算。
+   - UI 展示 `primary_label`、`labels`、`features`、`confidence`、`quality_status`、`missing_reason`。
+   - 如果需要重算，UI 只负责触发 build / refresh 入口，不能在前端侧拼规则。
+
+6. **版本化切换**
+   - `feature_version` 和 `regime_version` 是整个链路的冻结点。
+   - 后续新增 Provider 或补数据时，只要保持标准化字段语义不变，就只改抓取层和计算层，不动 UI contract。
+
+### 13.5 Benchmark 选择规则
+
+- `benchmark_ohlcv_window` 只允许使用**指数**，不允许回测时 fallback 到 ETF。
+- 常用指数可以预置到 `stock_info`，作为可选 benchmark 列表。
+- 回测请求必须显式携带 `benchmark_symbol`，例如 `000300.SH`、`000905.SH`、`000001.SH`。
+- 如果某次回测未传 `benchmark_symbol`，应当视为配置缺失，而不是自动切到 ETF。
+- `market_regime_features` 和 `market_regimes` 需要记录实际使用的 `benchmark_symbol`，保证可复现。
+- ETF 不进入 benchmark 主链路，因此不需要为回测保留 ETF fallback 分支。
 
 ---
 

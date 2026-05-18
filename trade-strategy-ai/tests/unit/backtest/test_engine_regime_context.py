@@ -13,12 +13,13 @@ class _RecordingLoader:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    async def load_market_context(self, *, trade_date, symbols, regime_version=None):
+    async def load_market_context(self, *, trade_date, symbols, regime_version=None, benchmark_symbol=None):
         self.calls.append(
             {
                 "trade_date": trade_date,
                 "symbols": list(symbols),
                 "regime_version": regime_version,
+                "benchmark_symbol": benchmark_symbol,
             }
         )
         return {
@@ -26,6 +27,7 @@ class _RecordingLoader:
             "bars_by_symbol": {},
             "indicators_by_symbol": {},
             "market_universe": None,
+            "benchmark_symbol": benchmark_symbol,
             "topic_snapshot": None,
             "market_regime": None,
             "market_regime_version": regime_version,

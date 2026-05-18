@@ -95,6 +95,7 @@ async def list_backtest_results(
                 "trader_id": meta_trader_id,
                 "date_from": meta_date_from,
                 "date_to": meta_date_to,
+                "benchmark_symbol": data.get("benchmark_symbol"),
                 "summary": data.get("summary", {}),
             })
         except Exception:

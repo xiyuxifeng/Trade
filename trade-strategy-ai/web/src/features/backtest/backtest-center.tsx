@@ -27,11 +27,14 @@ import {
   getBacktestResult,
   listBacktestResults,
 } from '@/lib/api/backtests';
+import { listBenchmarkOptions } from '@/lib/api/market';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
+import type { MarketBenchmarkOption } from '@/types/market';
 import type { JobRecord, JobSubmissionRequest } from '@/types/jobs';
 
 const DEFAULT_CONFIG_PATH = 'config/app.yaml';
 const DEFAULT_SCORING_PROFILE = 'stage5';
+const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 
 type BacktestFormState = {
   traderId: string;
@@ -39,6 +42,7 @@ type BacktestFormState = {
   dateTo: string;
   strategyVersionId: string;
   symbols: string;
+  benchmarkSymbol: string;
   mode: BacktestJobSubmission['mode'];
   configPath: string;
   useSnapshotOnly: boolean;
@@ -99,6 +103,7 @@ function buildSubmission(form: BacktestFormState): BacktestJobSubmission {
     dateFrom: form.dateFrom,
     dateTo: form.dateTo,
     strategyVersionId: form.strategyVersionId.trim(),
+    benchmarkSymbol: form.benchmarkSymbol,
     mode: form.mode,
     configPath: form.configPath.trim(),
     symbols: splitSymbols(form.symbols),
@@ -162,6 +167,7 @@ function ResultRow({
         <Badge variant="info">{summary?.total_trades ?? 0} 笔</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        {item.benchmark_symbol ? <span className="rounded-full border border-slate-200 px-2 py-1">Benchmark {item.benchmark_symbol}</span> : null}
         <span className="rounded-full border border-slate-200 px-2 py-1">胜率 {formatPct(summary?.win_rate)}</span>
         <span className="rounded-full border border-slate-200 px-2 py-1">平均收益 {formatPct(summary?.avg_return_pct)}</span>
       </div>
@@ -183,6 +189,7 @@ export function BacktestCenter() {
     dateTo: today,
     strategyVersionId: '',
     symbols: '',
+    benchmarkSymbol: DEFAULT_BENCHMARK_SYMBOL,
     mode: 'full',
     configPath: DEFAULT_CONFIG_PATH,
     useSnapshotOnly: true,
@@ -248,6 +255,13 @@ export function BacktestCenter() {
     enabled: Boolean(selectedResultId) && canViewBacktest,
   });
 
+  const benchmarkOptionsQuery = useQuery({
+    queryKey: ['backtest-center', 'benchmark-options'],
+    queryFn: () => listBenchmarkOptions(50),
+    enabled: canViewBacktest,
+    staleTime: 60_000,
+  });
+
   async function runBacktest(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
     setSubmissionError(null);
     const submission = buildSubmission(form);
@@ -273,6 +287,7 @@ export function BacktestCenter() {
   const selectedSummary = getSummary(detailQuery.data?.item ?? selectedResult);
   const fingerprint = getFingerprint(lastJob);
   const resultPayload = getResultPayload(lastJob);
+  const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
 
   if (!canViewBacktest) {
     return (
@@ -378,6 +393,26 @@ export function BacktestCenter() {
                 <p className="text-xs text-slate-500">使用逗号或空格分隔，留空表示全部标的。</p>
               </label>
               <label className="space-y-2">
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark</span>
+                <Select
+                  aria-label="Benchmark 选择"
+                  className="border-slate-200 bg-white text-slate-900"
+                  value={form.benchmarkSymbol}
+                  onChange={(event) => setForm((current) => ({ ...current, benchmarkSymbol: event.target.value }))}
+                  disabled={benchmarkOptionsQuery.isLoading && benchmarkOptions.length === 0}
+                >
+                  {benchmarkOptions.length === 0 ? (
+                    <option value={DEFAULT_BENCHMARK_SYMBOL}>{`沪深300 (${DEFAULT_BENCHMARK_SYMBOL})`}</option>
+                  ) : null}
+                  {benchmarkOptions.map((item: MarketBenchmarkOption) => (
+                    <option key={item.symbol} value={item.symbol}>
+                      {item.name} ({item.symbol})
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-slate-500">默认使用沪深300，可按回测口径切换指数基准。</p>
+              </label>
+              <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">回测模式</span>
                 <Select
                   aria-label="回测模式"
@@ -436,6 +471,11 @@ export function BacktestCenter() {
             {submissionError ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{submissionError}</div>
             ) : null}
+            {benchmarkOptionsQuery.isError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                Benchmark 选项加载失败，当前回退到默认沪深300。
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -447,6 +487,7 @@ export function BacktestCenter() {
             </CardHeader>
             <CardContent className="space-y-3">
               <MetricCard label="当前结果" value={selectedResult?.result_id ?? '未选择结果'} />
+              <MetricCard label="当前 Benchmark" value={form.benchmarkSymbol || DEFAULT_BENCHMARK_SYMBOL} />
               <MetricCard label="最近 fingerprint" value={fingerprint ? `${fingerprint.slice(0, 16)}…` : '提交后可见'} />
               <MetricCard label="最近任务" value={lastJob?.id ?? '暂无'} />
               <div className="flex gap-2">

@@ -116,6 +116,7 @@ def _coerce_backtest_result(value: Any) -> BacktestResult:
         request_trader_id=value["request_trader_id"],
         request_date_from=_parse_date(value["request_date_from"]),
         request_date_to=_parse_date(value["request_date_to"]),
+        benchmark_symbol=value.get("benchmark_symbol"),
         records=records,
         summary=summary,
         result_version=value.get("result_version", "1.0"),
@@ -226,6 +227,7 @@ class BacktestService(BaseService):
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
         market_regime_version: str | None = None,
+        benchmark_symbol: str | None = None,
         mode: str = "full",
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
@@ -238,6 +240,7 @@ class BacktestService(BaseService):
             strategy_version_id=strategy_version_id,
             symbols=symbols or [],
             market_regime_version=market_regime_version,
+            benchmark_symbol=benchmark_symbol,
             mode=mode,  # type: ignore[arg-type]
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
@@ -252,6 +255,7 @@ class BacktestService(BaseService):
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
         market_regime_version: str | None = None,
+        benchmark_symbol: str | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
@@ -265,6 +269,7 @@ class BacktestService(BaseService):
             strategy_version_id=strategy_version_id,
             symbols=symbols,
             market_regime_version=market_regime_version,
+            benchmark_symbol=benchmark_symbol,
             mode=mode,
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
@@ -335,12 +340,13 @@ class BacktestService(BaseService):
         config_path: str | Path | None = None,
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
+        benchmark_symbol: str | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
         mode: str = "rule_validation",
     ) -> ServiceResult:
         """执行规则验真并生成验真报告。"""
-        del strategy_version_id, symbols, use_snapshot_only, scoring_profile, mode
+        del strategy_version_id, symbols, benchmark_symbol, use_snapshot_only, scoring_profile, mode
         engine = self._build_engine(config_path=config_path)
         loader_obj = getattr(engine, "loader", None)
         loader = loader_obj if loader_obj is not None else SnapshotLoader()
@@ -397,6 +403,7 @@ class BacktestService(BaseService):
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
         market_regime_version: str | None = None,
+        benchmark_symbol: str | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
@@ -410,6 +417,7 @@ class BacktestService(BaseService):
             strategy_version_id=strategy_version_id,
             symbols=symbols,
             market_regime_version=market_regime_version,
+            benchmark_symbol=benchmark_symbol,
             mode=mode,
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,

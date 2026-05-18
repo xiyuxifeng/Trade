@@ -47,13 +47,14 @@ describe('backtests api client', () => {
         status: 200,
         json: async () => ({
           status: 'success',
-          item: {
-            request_trader_id: 'trader_a',
-            request_date_from: '2026-05-01',
-            request_date_to: '2026-05-05',
-            result_version: '1.0',
-            summary: {
-              total_days: 5,
+        item: {
+          request_trader_id: 'trader_a',
+          request_date_from: '2026-05-01',
+          request_date_to: '2026-05-05',
+          benchmark_symbol: '000300.SH',
+          result_version: '1.0',
+          summary: {
+            total_days: 5,
               total_trades: 3,
               valid_trades: 2,
               skipped_trades: 1,
@@ -91,6 +92,7 @@ describe('backtests api client', () => {
       dateFrom: '2026-05-01',
       dateTo: '2026-05-05',
       strategyVersionId: 'sv-1',
+      benchmarkSymbol: '000300.SH',
       mode: 'full' as const,
       configPath: 'config/app.yaml',
       symbols: ['000001.SZ'],
@@ -103,6 +105,7 @@ describe('backtests api client', () => {
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
+      benchmark_symbol: '000300.SH',
       mode: 'full',
       config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],
@@ -114,6 +117,7 @@ describe('backtests api client', () => {
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
+      benchmark_symbol: '000300.SH',
       mode: 'full',
       config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],
@@ -125,6 +129,7 @@ describe('backtests api client', () => {
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
+      benchmark_symbol: '000300.SH',
       mode: 'full',
       config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],

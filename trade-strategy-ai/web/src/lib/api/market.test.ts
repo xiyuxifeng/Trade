@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getMarketRegime, getMarketRegimeFeature, listMarketRegimeFeatures, listMarketRegimes } from '@/lib/api/market';
+import {
+  getMarketRegime,
+  getMarketRegimeFeature,
+  listBenchmarkOptions,
+  listMarketRegimeFeatures,
+  listMarketRegimes,
+} from '@/lib/api/market';
 
 describe('market api client', () => {
   it('builds regime feature list and detail urls', async () => {
@@ -20,6 +26,7 @@ describe('market api client', () => {
       limit: 10,
       offset: 0,
     });
+    await listBenchmarkOptions(20);
     await listMarketRegimes({
       tradeDate: '2026-05-16',
       market: 'CN',
@@ -34,6 +41,7 @@ describe('market api client', () => {
     expect(calls).toContain(
       '/api/ui/v1/market/regime-features?trade_date=2026-05-16&market=CN&feature_version=market-regime-features-v1&limit=10&offset=0',
     );
+    expect(calls).toContain('/api/ui/v1/market/benchmark-options?limit=20');
     expect(calls).toContain(
       '/api/ui/v1/market/regimes?trade_date=2026-05-16&market=CN&regime_version=market-regime-v1&limit=10&offset=0',
     );

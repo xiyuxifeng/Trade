@@ -120,6 +120,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
         date_to=date(2026, 4, 3),
         strategy_version_id="sv-001",
         symbols=["000001.SZ"],
+        benchmark_symbol="000300.SH",
         market_regime_version="market-regime-v1",
         mode="full",
         config_path="config/app.yaml",
@@ -135,6 +136,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
     assert run_result.status == "ok"
     assert run_result.payload["request"]["trader_id"] == "trader_a"
     assert run_result.payload["request"]["symbols"] == ["000001.SZ"]
+    assert run_result.payload["request"]["benchmark_symbol"] == "000300.SH"
     assert run_result.payload["request"]["market_regime_version"] == "market-regime-v1"
     assert run_result.payload["request"]["use_snapshot_only"] is True
     assert run_result.payload["request"]["scoring_profile"] == "stage5"

@@ -6,6 +6,7 @@ import type {
   MarketRegimeFeatureListResponse,
   MarketRegimeDetailResponse,
   MarketRegimeListResponse,
+  MarketBenchmarkOptionListResponse,
   MarketSnapshotDetailResponse,
   MarketSnapshotListResponse,
   MarketSnapshotQualityResponse,
@@ -32,6 +33,13 @@ export function listSymbols(q?: string, limit = 200) {
   params.set('limit', String(limit));
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return fetchJson<SymbolListResponse>(`/market/symbols${suffix}`);
+}
+
+export function listBenchmarkOptions(limit = 50) {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchJson<MarketBenchmarkOptionListResponse>(`/market/benchmark-options${suffix}`);
 }
 
 export function getOhlcv(symbol: string, startDate: string, endDate: string) {

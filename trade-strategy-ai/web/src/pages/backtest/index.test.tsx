@@ -14,6 +14,7 @@ import {
   buildBacktestValidateRulesParams,
   buildBacktestReproducibilityParams,
 } from '@/lib/api/backtests';
+import { listBenchmarkOptions } from '@/lib/api/market';
 
 vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('@/lib/api/backtests', () => ({
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
     symbols: submission.symbols,
@@ -38,6 +40,7 @@ vi.mock('@/lib/api/backtests', () => ({
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
     symbols: submission.symbols,
@@ -49,6 +52,7 @@ vi.mock('@/lib/api/backtests', () => ({
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
+    benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
     config_path: submission.configPath,
     symbols: submission.symbols,
@@ -58,12 +62,16 @@ vi.mock('@/lib/api/backtests', () => ({
   getBacktestResult: vi.fn(),
   listBacktestResults: vi.fn(),
 }));
+vi.mock('@/lib/api/market', () => ({
+  listBenchmarkOptions: vi.fn(),
+}));
 
 const mockedCreateJob = vi.mocked(createJob);
 const mockedDownloadBacktestReport = vi.mocked(downloadBacktestReport);
 const mockedDownloadBacktestValidationReport = vi.mocked(downloadBacktestValidationReport);
 const mockedGetBacktestResult = vi.mocked(getBacktestResult);
 const mockedListBacktestResults = vi.mocked(listBacktestResults);
+const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,6 +95,7 @@ describe('BacktestPage', () => {
           trader_id: 'trader_a',
           date_from: '2026-05-01',
           date_to: '2026-05-05',
+          benchmark_symbol: '000300.SH',
           summary: {
             total_days: 5,
             total_trades: 3,
@@ -104,6 +113,7 @@ describe('BacktestPage', () => {
         request_trader_id: 'trader_a',
         request_date_from: '2026-05-01',
         request_date_to: '2026-05-05',
+        benchmark_symbol: '000300.SH',
         result_version: '1.0',
         summary: {
           total_days: 5,
@@ -137,6 +147,13 @@ describe('BacktestPage', () => {
     });
     mockedDownloadBacktestReport.mockResolvedValue('# Backtest Report');
     mockedDownloadBacktestValidationReport.mockResolvedValue('# Rule Validation Report');
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'SH', name: '沪深300', security_type: 'index' },
+        { symbol: '000905.SH', code: '000905', market: 'SH', name: '中证500', security_type: 'index' },
+      ],
+    });
     mockedCreateJob.mockResolvedValue({
       created: true,
       job: {
@@ -157,8 +174,7 @@ describe('BacktestPage', () => {
 
     renderWithRouter([{ path: '/backtest', element: <BacktestPage /> }], ['/backtest']);
 
-    expect(await screen.findByRole('heading', { name: '回测中心' })).toBeInTheDocument();
-    expect(screen.getByText('正式入口')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '回测参数' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行回测' })).toBeInTheDocument();
     expect(screen.getByText('最近结果')).toBeInTheDocument();
     expect(screen.getByText('最近任务')).toBeInTheDocument();
@@ -167,6 +183,7 @@ describe('BacktestPage', () => {
     expect(screen.getByLabelText('仅使用快照数据')).toBeChecked();
     expect(screen.getByLabelText('评分配置')).toHaveValue('stage5');
     expect(screen.getByLabelText('标的列表')).toHaveValue('');
+    expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('000300.SH');
 
     await waitFor(() => {
       expect(mockedListBacktestResults).toHaveBeenCalled();
@@ -187,6 +204,7 @@ describe('BacktestPage', () => {
           params: expect.objectContaining({
             trader_id: 'trader_a',
             strategy_version_id: 'sv-1',
+            benchmark_symbol: '000300.SH',
             symbols: ['000001.SZ', '000002.SZ'],
             use_snapshot_only: true,
             scoring_profile: 'stage5',
@@ -204,6 +222,7 @@ describe('BacktestPage', () => {
           job_type: 'backtest-validate-rules',
           params: expect.objectContaining({
             symbols: ['000001.SZ', '000002.SZ'],
+            benchmark_symbol: '000300.SH',
             use_snapshot_only: true,
             scoring_profile: 'stage5',
           }),
@@ -218,6 +237,7 @@ describe('BacktestPage', () => {
           job_type: 'backtest-reproducibility-check',
           params: expect.objectContaining({
             symbols: ['000001.SZ', '000002.SZ'],
+            benchmark_symbol: '000300.SH',
             use_snapshot_only: true,
             scoring_profile: 'stage5',
           }),

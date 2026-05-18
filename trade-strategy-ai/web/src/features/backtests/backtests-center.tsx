@@ -22,11 +22,14 @@ import {
   getBacktestResult,
   listBacktestResults,
 } from '@/lib/api/backtests';
+import { listBenchmarkOptions } from '@/lib/api/market';
 import type { JobSubmissionRequest } from '@/types/jobs';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
+import type { MarketBenchmarkOption } from '@/types/market';
 
 const DEFAULT_CONFIG_PATH = 'config/app.yaml';
 const DEFAULT_SCORING_PROFILE = 'stage5';
+const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
@@ -83,6 +86,7 @@ function toJobSubmission(form: BacktestJobFormState): BacktestJobSubmission {
     dateFrom: form.dateFrom,
     dateTo: form.dateTo,
     strategyVersionId: form.strategyVersionId,
+    benchmarkSymbol: form.benchmarkSymbol,
     mode: form.mode,
     configPath: form.configPath,
     symbols: form.symbols,
@@ -99,6 +103,7 @@ type BacktestJobFormState = {
   mode: 'full' | 'replay' | 'rule_validation';
   configPath: string;
   symbols: string[];
+  benchmarkSymbol: string;
   useSnapshotOnly: boolean;
   scoringProfile: string;
 };
@@ -194,6 +199,7 @@ function ResultRow({
         <Badge variant={active ? 'info' : 'default'}>{totalTrades !== null ? `${totalTrades} 笔交易` : '回测'}</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+        {item.benchmark_symbol ? <span className="rounded-full border border-slate-800/80 px-2 py-1">Benchmark {item.benchmark_symbol}</span> : null}
         {winRate !== null ? <span className="rounded-full border border-slate-800/80 px-2 py-1">胜率 {formatPct(winRate)}</span> : null}
         <span className="rounded-full border border-slate-800/80 px-2 py-1">{formatTimestamp(item.date_to ?? item.date_from)}</span>
       </div>
@@ -214,6 +220,7 @@ function DetailSummary({ detail }: { detail: BacktestResultItem }) {
   const summary = detail.summary;
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="backtest-detail-summary">
+      <SummaryCard title="Benchmark" value={detail.benchmark_symbol ?? 'n/a'} accent="text-sky-300" />
       <SummaryCard title="总天数" value={summary ? formatNumber(summary.total_days) : 'n/a'} accent="text-sky-300" />
       <SummaryCard title="总交易数" value={summary ? formatNumber(summary.total_trades) : 'n/a'} />
       <SummaryCard title="有效交易" value={summary ? formatNumber(summary.valid_trades) : 'n/a'} accent="text-emerald-300" />
@@ -241,6 +248,7 @@ export function BacktestsCenter() {
   const [skip, setSkip] = useState(0);
   const [limit, setLimit] = useState(50);
   const [strategyVersionId, setStrategyVersionId] = useState('');
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState(DEFAULT_BENCHMARK_SYMBOL);
   const [mode, setMode] = useState<'full' | 'replay' | 'rule_validation'>('full');
   const [configPath, setConfigPath] = useState(DEFAULT_CONFIG_PATH);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
@@ -318,12 +326,20 @@ export function BacktestsCenter() {
     enabled: Boolean(selectedResultId),
   });
 
+  const benchmarkOptionsQuery = useQuery({
+    queryKey: ['backtests', 'benchmark-options'],
+    queryFn: () => listBenchmarkOptions(50),
+    staleTime: 60_000,
+  });
+  const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
+
   async function submitJob(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
     const submission = toJobSubmission({
       traderId,
       dateFrom,
       dateTo,
       strategyVersionId,
+      benchmarkSymbol,
       mode,
       configPath,
       symbols: [],
@@ -442,6 +458,20 @@ export function BacktestsCenter() {
                   <span className="text-xs uppercase tracking-[0.16em] text-slate-500">配置路径</span>
                   <Input value={configPath} onChange={(event) => setConfigPath(event.target.value)} />
                 </label>
+                <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark</span>
+                  <Select value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
+                    {benchmarkOptions.length === 0 ? (
+                      <option value={DEFAULT_BENCHMARK_SYMBOL}>{`沪深300 (${DEFAULT_BENCHMARK_SYMBOL})`}</option>
+                    ) : null}
+                    {benchmarkOptions.map((item: MarketBenchmarkOption) => (
+                      <option key={item.symbol} value={item.symbol}>
+                        {item.name} ({item.symbol})
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-xs text-slate-500">默认使用沪深300，可按回测口径切换指数基准。</p>
+                </label>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -503,6 +533,12 @@ export function BacktestsCenter() {
               {submissionError ? (
                 <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
                   {submissionError}
+                </div>
+              ) : null}
+
+              {benchmarkOptionsQuery.isError ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+                  Benchmark 选项加载失败，当前回退到默认沪深300。
                 </div>
               ) : null}
 

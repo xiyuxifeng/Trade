@@ -226,3 +226,16 @@ export type MarketRegimeDetailResponse = {
   features: MarketRegimeFeature[];
   warnings: string[];
 };
+
+export type MarketBenchmarkOption = {
+  symbol: string;
+  code: string;
+  market: string;
+  name: string;
+  security_type: string;
+};
+
+export type MarketBenchmarkOptionListResponse = {
+  count: number;
+  items: MarketBenchmarkOption[];
+};

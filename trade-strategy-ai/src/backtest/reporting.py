@@ -29,6 +29,7 @@ def render_backtest_markdown(result: BacktestResult) -> str:
         "",
         f"**Trader:** {result.request_trader_id}",
         f"**Date Range:** {result.request_date_from} ~ {result.request_date_to}",
+        f"**Benchmark:** {result.benchmark_symbol or 'n/a'}",
         "",
     ]
 
@@ -79,6 +80,7 @@ def render_backtest_json(result: BacktestResult) -> str:
             "trader_id": result.request_trader_id,
             "date_from": str(result.request_date_from),
             "date_to": str(result.request_date_to),
+            "benchmark_symbol": result.benchmark_symbol,
             "result_version": result.result_version,
             "records": [
                 {

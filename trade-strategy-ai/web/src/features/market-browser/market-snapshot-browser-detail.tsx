@@ -4,11 +4,13 @@ import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import type {
   MarketRegimeFeatureDetailResponse,
   MarketRegimeFeatureSummary,
+  MarketRegimeDetailResponse,
   MarketSnapshotDetailResponse,
   MarketSnapshotListItem,
   MarketSnapshotQualityResponse,
   MarketSnapshotSectionSummary,
 } from '@/types/market';
+import { MarketRegimePanel } from './market-regime-panel';
 import { MarketSnapshotBrowserRegimeFeatures } from './market-snapshot-browser-regime-features';
 
 type MarketSnapshotBrowserDetailProps = {
@@ -17,6 +19,7 @@ type MarketSnapshotBrowserDetailProps = {
   detail: MarketSnapshotDetailResponse | null;
   sections: MarketSnapshotSectionSummary[];
   quality: MarketSnapshotQualityResponse | null;
+  regime: MarketRegimeDetailResponse | null;
   regimeFeatures: MarketRegimeFeatureSummary[];
   regimeFeatureDetail: MarketRegimeFeatureDetailResponse | null;
   isLoading: boolean;
@@ -59,6 +62,7 @@ export function MarketSnapshotBrowserDetail({
   detail,
   sections,
   quality,
+  regime,
   regimeFeatures,
   regimeFeatureDetail,
   isLoading,
@@ -164,6 +168,8 @@ export function MarketSnapshotBrowserDetail({
               <EmptyState title="暂无 sections" description="这个 snapshot 还没有可展示的 section 摘要。" />
             )}
           </SectionCard>
+
+          <MarketRegimePanel regime={regime} isLoading={false} errorState={null} />
 
           <MarketSnapshotBrowserRegimeFeatures
             items={regimeFeatures}

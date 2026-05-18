@@ -1868,7 +1868,7 @@ UI 关联任务：
 
 > 本 Stage 放置在 V3 的 Backtest / Rule Pool 相关任务之后、Strategy / Final Acceptance 之前。它不替代原有 V3 任务，只新增“市场状态变化导致 rule 适用性不同”的实现闭环。
 
-### [ ] NW-V3-SX-001 P0 Market Regime Definition
+### [x] NW-V3-SX-001 P0 Market Regime Definition
 
 任务目标：定义可解释、可版本化、可回测的 Market Regime，用于把不同市场阶段下的 rule 表现分开评估。
 

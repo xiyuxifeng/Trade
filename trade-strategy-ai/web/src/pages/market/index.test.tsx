@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/api/market', () => ({
+  getMarketRegime: vi.fn(),
   getMarketRegimeFeature: vi.fn(),
   getMarketSnapshot: vi.fn(),
   getMarketSnapshotQuality: vi.fn(),
   listMarketRegimeFeatures: vi.fn(),
+  listMarketRegimes: vi.fn(),
   listMarketSnapshotSections: vi.fn(),
   listMarketSnapshots: vi.fn(),
 }));
@@ -14,10 +16,12 @@ import { ApiError } from '@/lib/api/http';
 import { renderWithRouter } from '@/test/test-utils';
 import { MarketPage } from './index';
 import {
+  getMarketRegime,
   getMarketRegimeFeature,
   getMarketSnapshot,
   getMarketSnapshotQuality,
   listMarketRegimeFeatures,
+  listMarketRegimes,
   listMarketSnapshotSections,
   listMarketSnapshots,
 } from '@/lib/api/market';
@@ -28,6 +32,8 @@ const mockedListMarketSnapshotSections = vi.mocked(listMarketSnapshotSections);
 const mockedGetMarketSnapshotQuality = vi.mocked(getMarketSnapshotQuality);
 const mockedListMarketRegimeFeatures = vi.mocked(listMarketRegimeFeatures);
 const mockedGetMarketRegimeFeature = vi.mocked(getMarketRegimeFeature);
+const mockedListMarketRegimes = vi.mocked(listMarketRegimes);
+const mockedGetMarketRegime = vi.mocked(getMarketRegime);
 
 function buildSnapshot(snapshotId: string) {
   return {
@@ -139,10 +145,84 @@ describe('MarketPage', () => {
       summary_json: { label: '趋势特征' },
       warnings: [],
     } as never);
+    mockedListMarketRegimes.mockResolvedValue({
+      filters: { snapshot_id: 'snap-001' },
+      page: { total: 1, limit: 50, offset: 0, count: 1 },
+      items: [
+        {
+          regime_id: 'snap-001:market-regime-v1',
+          snapshot_id: 'snap-001',
+          trade_date: '2026-05-16',
+          market: 'CN',
+          regime_version: 'market-regime-v1',
+          source_feature_version: 'market-regime-features-v1',
+          primary_label: 'strong_bull',
+          labels: [
+            {
+              label: 'strong_bull',
+              label_type: 'primary',
+              score: 5.6,
+              confidence: 0.86,
+              status: 'active',
+              evidence: [],
+              reason: 'combined_score=5.60',
+            },
+          ],
+          confidence: 0.86,
+          quality_status: 'ok',
+          missing_reason: null,
+          storage_ref: { snapshot_id: 'snap-001', regime_version: 'market-regime-v1' },
+          created_at: '2026-05-16T08:09:00Z',
+          updated_at: '2026-05-16T08:09:00Z',
+        },
+      ],
+    } as never);
+    mockedGetMarketRegime.mockResolvedValue({
+      regime: {
+        regime_id: 'snap-001:market-regime-v1',
+        snapshot_id: 'snap-001',
+        trade_date: '2026-05-16',
+        market: 'CN',
+        regime_version: 'market-regime-v1',
+        source_feature_version: 'market-regime-features-v1',
+        primary_label: 'strong_bull',
+        labels: [
+          {
+            label: 'strong_bull',
+            label_type: 'primary',
+            score: 5.6,
+            confidence: 0.86,
+            status: 'active',
+            evidence: [],
+            reason: 'combined_score=5.60',
+          },
+        ],
+        confidence: 0.86,
+        quality_status: 'ok',
+        missing_reason: null,
+        storage_ref: { snapshot_id: 'snap-001', regime_version: 'market-regime-v1' },
+        created_at: '2026-05-16T08:09:00Z',
+        updated_at: '2026-05-16T08:09:00Z',
+      },
+      features: [
+        {
+          feature_key: 'trend',
+          raw_value: { ret_20d: 0.11 },
+          normalized_value: 0.8,
+          source_section: 'overview',
+          source_field: 'trend',
+          source_version: 'market-regime-features-v1',
+          confidence: 0.9,
+          weight: 0.3,
+          missing_reason: null,
+        },
+      ],
+      warnings: [],
+    } as never);
 
     renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market?snapshot_id=snap-001&trade_date=2026-05-16&market=CN']);
 
-    expect(await screen.findByRole('heading', { name: 'Market Snapshot Browser' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '筛选条件' })).toBeInTheDocument();
     await waitFor(() => {
       expect(mockedListMarketSnapshots).toHaveBeenCalled();
     });
@@ -164,6 +244,9 @@ describe('MarketPage', () => {
       'href',
       '/artifacts?jobId=job-001',
     );
+    expect(screen.getByText('Market Regime')).toBeInTheDocument();
+    expect(screen.getByText('Primary Label')).toBeInTheDocument();
+    expect(screen.getAllByText('strong_bull').length).toBeGreaterThan(0);
   });
 
   it('shows a shared recovery error when the selected snapshot is missing', async () => {

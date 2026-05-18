@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from src.common.logger import get_logger
+from src.db.repositories.market_regime_repository import MarketRegimeRepository
 from src.models.ohlcv_bar import OHLCVBar
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class SnapshotLoader:
         self,
         snapshot_service: Any = None,
         strategy_repo: Any = None,
+        regime_repository: Any = None,
         indicator_service: Any = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
         use_evidence_pack_fallback: bool = False,
@@ -55,6 +57,7 @@ class SnapshotLoader:
     ) -> None:
         self.snapshot_service = snapshot_service
         self.strategy_repo = strategy_repo
+        self.regime_repository = regime_repository
         self.indicator_service = indicator_service
         self.session_factory = session_factory
         self.use_evidence_pack_fallback = use_evidence_pack_fallback
@@ -135,8 +138,51 @@ class SnapshotLoader:
             )
             return {}
 
+    async def _load_market_regime_from_db(
+        self,
+        trade_date: date,
+        regime_version: str | None,
+    ) -> dict[str, Any] | None:
+        """按交易日和版本加载 Market Regime。"""
+        if self.session_factory is None or not regime_version:
+            return None
+
+        repository = self.regime_repository or MarketRegimeRepository()
+
+        try:
+            async with self.session_factory() as session:
+                regimes = await repository.list_regimes(
+                    session,
+                    trade_date=trade_date,
+                    regime_version=regime_version,
+                    limit=1,
+                )
+        except Exception as e:
+            logger.warning(
+                "market_regime 加载失败: date=%s, regime_version=%s, error=%s",
+                trade_date,
+                regime_version,
+                e,
+            )
+            return None
+
+        if not regimes:
+            return None
+
+        regime = regimes[0]
+        if hasattr(regime, "to_dict"):
+            return regime.to_dict()
+        if isinstance(regime, dict):
+            return regime
+        if hasattr(regime, "__dict__"):
+            return dict(vars(regime))
+        return None
+
     async def load_market_context(
-        self, trade_date: date, symbols: list[str]
+        self,
+        trade_date: date,
+        symbols: list[str],
+        regime_version: str | None = None,
     ) -> MarketContextSnapshot:
         """加载市场上下文快照。
 
@@ -144,6 +190,7 @@ class SnapshotLoader:
         1. market_universe 快照（从 JSON 文件）
         2. ohlcv_1d bars（从 DB ohlcv_bars 表）
         3. indicators（从 DB indicators 表，首次计算并缓存）
+        4. market_regime（按 trade_date + regime_version 读取，若提供）
         4. 兜底：EvidencePack / SignalVersioning
 
         Args:
@@ -170,6 +217,9 @@ class SnapshotLoader:
         # 3. 从 DB 加载 indicators（首次计算并缓存）
         indicators_by_symbol = await self._load_indicators_from_db(trade_date, symbols)
 
+        # 3.5. 加载指定版本的 Market Regime（若提供）
+        market_regime = await self._load_market_regime_from_db(trade_date, regime_version)
+
         # 4. 兜底：EvidencePack
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
@@ -184,6 +234,8 @@ class SnapshotLoader:
             "indicators_by_symbol": indicators_by_symbol,
             "market_universe": market_universe,
             "topic_snapshot": None,
+            "market_regime": market_regime,
+            "market_regime_version": regime_version,
             "source_refs": [],
             "compatibility_fallback": compatibility_fallback,
             "listing_dates": listing_dates,

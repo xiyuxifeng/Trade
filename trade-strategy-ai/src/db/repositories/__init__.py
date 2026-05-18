@@ -1,5 +1,6 @@
 from src.db.repositories.market_data_quality_repository import MarketDataQualityRepository
 from src.db.repositories.market_dataset_repository import MarketDatasetRepository
+from src.db.repositories.market_regime_repository import MarketRegimeRepository
 from src.db.repositories.market_regime_feature_repository import MarketRegimeFeatureRepository
 from src.db.repositories.market_snapshot_item_repository import MarketSnapshotItemRepository
 from src.db.repositories.market_snapshot_repository import MarketSnapshotRepository
@@ -12,6 +13,7 @@ __all__ = [
     "MarketSnapshotItemRepository",
     "MarketDatasetRepository",
     "MarketDataQualityRepository",
+    "MarketRegimeRepository",
     "MarketRegimeFeatureRepository",
     "WorkflowRunRepository",
 ]

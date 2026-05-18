@@ -166,3 +166,63 @@ export type MarketRegimeFeatureDetailResponse = {
   summary_json: Record<string, unknown>;
   warnings: string[];
 };
+
+export type MarketRegimeEvidence = {
+  feature_key: string;
+  feature_value: unknown;
+  source_section: string;
+  source_field?: string | null;
+  contribution: number;
+  note?: string | null;
+};
+
+export type MarketRegimeLabel = {
+  label: string;
+  label_type: string;
+  score: number;
+  confidence: number;
+  status: string;
+  evidence: MarketRegimeEvidence[];
+  reason: string;
+};
+
+export type MarketRegimeFeature = {
+  feature_key: string;
+  raw_value: unknown;
+  normalized_value?: unknown | null;
+  source_section: string;
+  source_field?: string | null;
+  source_version: string;
+  confidence: number;
+  weight: number;
+  missing_reason?: string | null;
+};
+
+export type MarketRegimeSummary = {
+  regime_id: string;
+  snapshot_id: string;
+  trade_date: string;
+  market: string;
+  regime_version: string;
+  source_feature_version: string;
+  primary_label: string;
+  labels: MarketRegimeLabel[];
+  confidence: number;
+  quality_status: string;
+  missing_reason?: string | null;
+  storage_ref: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type MarketRegimeListResponse = {
+  filters: Record<string, unknown>;
+  page: MarketQueryPage;
+  items: MarketRegimeSummary[];
+};
+
+export type MarketRegimeDetailResponse = {
+  regime: MarketRegimeSummary;
+  features: MarketRegimeFeature[];
+  warnings: string[];
+};

@@ -1680,7 +1680,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-010 P0 Market Regime Viewer
+### [x] UI-V3-010 P0 Market Regime Viewer
 
 任务目标：展示指定交易日或 snapshot 的 Market Regime，让用户理解系统如何判断当前市场状态。
 

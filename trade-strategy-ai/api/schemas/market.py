@@ -207,3 +207,75 @@ class MarketRegimeFeatureDetailResponse(BaseModel):
     feature_payload_json: dict[str, Any] = Field(default_factory=dict)
     summary_json: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+
+
+class MarketRegimeEvidence(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feature_key: str
+    feature_value: Any
+    source_section: str
+    source_field: str | None = None
+    contribution: float = 0.0
+    note: str | None = None
+
+
+class MarketRegimeLabel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    label: str
+    label_type: str
+    score: float
+    confidence: float
+    status: str
+    evidence: list[MarketRegimeEvidence] = Field(default_factory=list)
+    reason: str = ""
+
+
+class MarketRegimeFeature(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feature_key: str
+    raw_value: Any
+    normalized_value: Any | None = None
+    source_section: str
+    source_field: str | None = None
+    source_version: str
+    confidence: float
+    weight: float = 1.0
+    missing_reason: str | None = None
+
+
+class MarketRegimeSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    regime_id: str
+    snapshot_id: str
+    trade_date: str
+    market: str
+    regime_version: str
+    source_feature_version: str
+    primary_label: str
+    labels: list[MarketRegimeLabel] = Field(default_factory=list)
+    confidence: float
+    quality_status: str
+    missing_reason: str | None = None
+    storage_ref: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class MarketRegimeDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    regime: MarketRegimeSummary
+    features: list[MarketRegimeFeature] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class MarketRegimeListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    filters: dict[str, Any] = Field(default_factory=dict)
+    page: MarketQueryPage
+    items: list[MarketRegimeSummary] = Field(default_factory=list)

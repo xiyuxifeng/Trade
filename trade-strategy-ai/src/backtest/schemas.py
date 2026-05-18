@@ -44,6 +44,7 @@ class BacktestRequest(BaseModel):
     date_to: date
     strategy_version_id: str | None = None
     symbols: list[str] = Field(default_factory=list)
+    market_regime_version: str | None = None
     mode: Literal["full", "replay", "rule_validation"] = "full"
     use_snapshot_only: bool = True
     scoring_profile: str = "stage5"
@@ -70,6 +71,8 @@ class MarketContextSnapshot(TypedDict, total=False):
     indicators_by_symbol: dict[str, dict[str, Any]]
     market_universe: Any
     topic_snapshot: Any
+    market_regime: Any
+    market_regime_version: str
     source_refs: list[str]
     compatibility_fallback: bool
     listing_dates: dict[str, str]  # symbol -> YYYY-MM-DD，用于新股判断

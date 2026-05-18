@@ -44,6 +44,8 @@ class TestSnapshotLoaderInterface:
         assert "indicators_by_symbol" in result
         assert "market_universe" in result
         assert "topic_snapshot" in result
+        assert "market_regime" in result
+        assert "market_regime_version" in result
         assert "source_refs" in result
 
     @pytest.mark.asyncio
@@ -57,6 +59,53 @@ class TestSnapshotLoaderInterface:
             symbols=[],
         )
         assert result["bars_by_symbol"] == {}
+
+    @pytest.mark.asyncio
+    async def test_load_market_context_can_load_market_regime_by_version(self):
+        """指定 regime_version 时，loader 应读取对应 Market Regime。"""
+        from src.backtest.snapshot_loader import SnapshotLoader
+
+        class _SessionContext:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _SessionFactory:
+            def __call__(self):
+                return _SessionContext()
+
+        mock_repo = AsyncMock()
+        mock_repo.list_regimes.return_value = [
+            {
+                "regime_id": "snap-001:market-regime-v1",
+                "snapshot_id": "snap-001",
+                "trade_date": "2026-04-01",
+                "market": "CN",
+                "regime_version": "market-regime-v1",
+            }
+        ]
+
+        loader = SnapshotLoader(
+            session_factory=_SessionFactory(),
+            regime_repository=mock_repo,
+        )
+        loader._load_ohlcv_from_db = AsyncMock(return_value={})
+        loader._load_indicators_from_db = AsyncMock(return_value={})
+
+        result = await loader.load_market_context(
+            trade_date=date(2026, 4, 1),
+            symbols=["000001.SZ"],
+            regime_version="market-regime-v1",
+        )
+
+        mock_repo.list_regimes.assert_awaited_once()
+        call_kwargs = mock_repo.list_regimes.call_args.kwargs
+        assert call_kwargs["trade_date"] == date(2026, 4, 1)
+        assert call_kwargs["regime_version"] == "market-regime-v1"
+        assert result["market_regime"]["regime_version"] == "market-regime-v1"
+        assert result["market_regime_version"] == "market-regime-v1"
 
 
 class TestSnapshotLoaderWithMockedService:

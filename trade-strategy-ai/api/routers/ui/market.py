@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from api.dependencies import verify_api_key
 from api.schemas.market import (
+    MarketRegimeDetailResponse,
+    MarketRegimeListResponse,
     MarketDatasetDetailResponse,
     MarketDatasetListResponse,
     MarketRegimeFeatureDetailResponse,
@@ -17,7 +19,7 @@ from api.schemas.market import (
     MarketSnapshotSectionListResponse,
     MarketSnapshotSectionResponse,
 )
-from src.services import MarketRegimeFeatureService, MarketService, MarketSnapshotQueryService
+from src.services import MarketRegimeFeatureService, MarketRegimeService, MarketService, MarketSnapshotQueryService
 
 
 router = APIRouter(prefix="/api/ui/v1/market", tags=["ui-market"])
@@ -36,6 +38,11 @@ def get_market_snapshot_query_service() -> MarketSnapshotQueryService:
 def get_market_regime_feature_service() -> MarketRegimeFeatureService:
     """获取 MarketRegimeFeatureService 实例，便于测试覆盖。"""
     return MarketRegimeFeatureService()
+
+
+def get_market_regime_service() -> MarketRegimeService:
+    """获取 MarketRegimeService 实例，便于测试覆盖。"""
+    return MarketRegimeService()
 
 
 def _structured_error(error_type: str, message: str, detail: str | None = None, *, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -277,6 +284,55 @@ async def get_market_regime_feature(
 ) -> dict[str, Any]:
     """查询单个 market regime feature 详情。"""
     result = await feature_service.get_feature_detail(snapshot_id, feature_version=feature_version)
+    if result.status == "partial":
+        if response is not None:
+            response.status_code = 206
+        return result.payload
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/regimes", response_model=MarketRegimeListResponse)
+async def list_market_regimes(
+    response: Response,
+    trade_date: date | None = Query(default=None),
+    snapshot_id: str | None = Query(default=None),
+    market: str | None = Query(default=None),
+    regime_version: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    regime_service: MarketRegimeService = Depends(get_market_regime_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询 market regime 列表。"""
+    result = await regime_service.list_regimes(
+        trade_date=trade_date,
+        snapshot_id=snapshot_id,
+        market=market,
+        regime_version=regime_version,
+        limit=limit,
+        offset=offset,
+    )
+    if result.status == "partial":
+        if response is not None:
+            response.status_code = 206
+        return result.payload
+    if result.status != "ok":
+        _raise_query_error(result)
+    return result.payload
+
+
+@router.get("/snapshots/{snapshot_id}/regime", response_model=MarketRegimeDetailResponse)
+async def get_market_regime(
+    response: Response,
+    snapshot_id: str,
+    regime_version: str | None = Query(default=None),
+    regime_service: MarketRegimeService = Depends(get_market_regime_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查询单个 market regime 详情。"""
+    result = await regime_service.get_regime_detail(snapshot_id, regime_version=regime_version)
     if result.status == "partial":
         if response is not None:
             response.status_code = 206

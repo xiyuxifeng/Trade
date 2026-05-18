@@ -120,6 +120,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
         date_to=date(2026, 4, 3),
         strategy_version_id="sv-001",
         symbols=["000001.SZ"],
+        market_regime_version="market-regime-v1",
         mode="full",
         config_path="config/app.yaml",
         use_snapshot_only=True,
@@ -134,6 +135,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
     assert run_result.status == "ok"
     assert run_result.payload["request"]["trader_id"] == "trader_a"
     assert run_result.payload["request"]["symbols"] == ["000001.SZ"]
+    assert run_result.payload["request"]["market_regime_version"] == "market-regime-v1"
     assert run_result.payload["request"]["use_snapshot_only"] is True
     assert run_result.payload["request"]["scoring_profile"] == "stage5"
     assert run_result.payload["result"]["summary"]["total_trades"] == 6
@@ -198,6 +200,7 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
         date_from=date(2026, 4, 1),
         date_to=date(2026, 4, 3),
         symbols=["000001.SZ"],
+        market_regime_version="market-regime-v1",
         config_path=tmp_path / "config" / "app.yaml",
     )
 
@@ -214,6 +217,7 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
     assert reproducibility.payload["matches"] is True
     assert reproducibility.payload["fingerprint_a"] == reproducibility.payload["fingerprint_b"]
     assert reproducibility.payload["request"]["symbols"] == ["000001.SZ"]
+    assert reproducibility.payload["request"]["market_regime_version"] == "market-regime-v1"
     assert rule_pool_result.status == "ok"
     assert rule_pool_result.payload["summary"]["total_trades"] == 6
     assert session_factory.calls == 1

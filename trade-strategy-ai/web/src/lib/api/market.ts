@@ -4,6 +4,8 @@ import type {
   MarketDatasetListResponse,
   MarketRegimeFeatureDetailResponse,
   MarketRegimeFeatureListResponse,
+  MarketRegimeDetailResponse,
+  MarketRegimeListResponse,
   MarketSnapshotDetailResponse,
   MarketSnapshotListResponse,
   MarketSnapshotQualityResponse,
@@ -144,4 +146,28 @@ export function getMarketRegimeFeature(snapshotId: string, featureVersion?: stri
   return fetchJson<MarketRegimeFeatureDetailResponse>(
     `/market/snapshots/${snapshotId}/regime-features${query ? `?${query}` : ''}`,
   );
+}
+
+export function listMarketRegimes(params: {
+  tradeDate?: string;
+  snapshotId?: string;
+  market?: string;
+  regimeVersion?: string;
+  limit?: number;
+  offset?: number;
+} = {}) {
+  const query = buildQueryString({
+    trade_date: params.tradeDate,
+    snapshot_id: params.snapshotId,
+    market: params.market,
+    regime_version: params.regimeVersion,
+    limit: params.limit,
+    offset: params.offset,
+  });
+  return fetchJson<MarketRegimeListResponse>(`/market/regimes${query ? `?${query}` : ''}`);
+}
+
+export function getMarketRegime(snapshotId: string, regimeVersion?: string) {
+  const query = buildQueryString({ regime_version: regimeVersion });
+  return fetchJson<MarketRegimeDetailResponse>(`/market/snapshots/${snapshotId}/regime${query ? `?${query}` : ''}`);
 }

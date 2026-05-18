@@ -803,7 +803,7 @@ async def validate_rules_for_trader(
 
     for trade_date in trade_dates:
         # 加载市场上下文（收集 indicators）
-        ctx = await loader.load_market_context(trade_date=trade_date, symbols=[])
+        ctx = await loader.load_market_context(trade_date=trade_date, symbols=[], regime_version=None)
         if ctx:
             all_contexts.append(ctx)
 
@@ -1133,6 +1133,7 @@ class BacktestEngine:
         market_context = await self.loader.load_market_context(
             trade_date=trade_date,
             symbols=request.symbols,
+            regime_version=request.market_regime_version,
         )
 
         # 规则验真模式：暂不处理交易评分
@@ -1580,7 +1581,11 @@ class BacktestEngine:
             indicators_by_symbol: dict[str, dict[str, Any]] = {}
             if use_loader:
                 try:
-                    ctx = await self.loader.load_market_context(trade_date=trade_date, symbols=[])
+                    ctx = await self.loader.load_market_context(
+                        trade_date=trade_date,
+                        symbols=[],
+                        regime_version=None,
+                    )
                     if ctx:
                         indicators_by_symbol = ctx.get("indicators_by_symbol") or {}
                 except Exception as e:

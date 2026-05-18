@@ -6,14 +6,16 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import {
+  getMarketRegime,
   getMarketRegimeFeature,
   getMarketSnapshot,
   getMarketSnapshotQuality,
   listMarketRegimeFeatures,
+  listMarketRegimes,
   listMarketSnapshotSections,
   listMarketSnapshots,
 } from '@/lib/api/market';
-import type { MarketSnapshotDetailResponse, MarketSnapshotListItem } from '@/types/market';
+import type { MarketRegimeDetailResponse, MarketSnapshotDetailResponse, MarketSnapshotListItem } from '@/types/market';
 import { MarketSnapshotBrowserDetail } from './market-snapshot-browser-detail';
 import { MarketSnapshotBrowserFilters } from './market-snapshot-browser-filters';
 import { MarketSnapshotBrowserList } from './market-snapshot-browser-list';
@@ -112,6 +114,28 @@ export function MarketSnapshotBrowserShell() {
     staleTime: 30_000,
   });
 
+  const regimeListQuery = useQuery({
+    queryKey: ['market-regimes-browser', selectedSnapshotId, tradeDate, market],
+    queryFn: () =>
+      listMarketRegimes({
+        snapshotId: selectedSnapshotId ?? undefined,
+        tradeDate,
+        market,
+        limit: 20,
+        offset: 0,
+      }),
+    enabled: Boolean(selectedSnapshotId),
+    staleTime: 30_000,
+  });
+
+  const selectedRegimeVersion = regimeListQuery.data?.items[0]?.regime_version ?? null;
+  const regimeDetailQuery = useQuery({
+    queryKey: ['market-regime-detail-browser', selectedSnapshotId, selectedRegimeVersion],
+    queryFn: () => getMarketRegime(selectedSnapshotId ?? '', selectedRegimeVersion ?? undefined),
+    enabled: Boolean(selectedSnapshotId && selectedRegimeVersion),
+    staleTime: 30_000,
+  });
+
   const selectedRegimeFeatureVersion = regimeFeaturesQuery.data?.items[0]?.feature_version ?? null;
   const regimeFeatureDetailQuery = useQuery({
     queryKey: ['market-regime-feature-detail-browser', selectedSnapshotId, selectedRegimeFeatureVersion],
@@ -124,7 +148,8 @@ export function MarketSnapshotBrowserShell() {
   const datasetViewerLink = `/market/datasets?trade_date=${encodeURIComponent(tradeDate)}&market=${encodeURIComponent(market)}`;
 
   const selectedDetail: MarketSnapshotDetailResponse | null = detail;
-  const detailError = detailQuery.error;
+  const regimeDetail: MarketRegimeDetailResponse | null = regimeDetailQuery.data ?? null;
+  const detailError = detailQuery.error ?? regimeListQuery.error ?? regimeDetailQuery.error;
 
   return (
     <main className="page-stack">
@@ -195,12 +220,15 @@ export function MarketSnapshotBrowserShell() {
           detail={selectedDetail}
           sections={sectionsQuery.data?.items ?? []}
           quality={qualityQuery.data ?? null}
+          regime={regimeDetail}
           regimeFeatures={regimeFeaturesQuery.data?.items ?? []}
           regimeFeatureDetail={regimeFeatureDetailQuery.data ?? null}
           isLoading={
             detailQuery.isLoading ||
             sectionsQuery.isLoading ||
             qualityQuery.isLoading ||
+            regimeListQuery.isLoading ||
+            regimeDetailQuery.isLoading ||
             regimeFeaturesQuery.isLoading ||
             regimeFeatureDetailQuery.isLoading
           }
@@ -209,6 +237,8 @@ export function MarketSnapshotBrowserShell() {
             void detailQuery.refetch();
             void sectionsQuery.refetch();
             void qualityQuery.refetch();
+            void regimeListQuery.refetch();
+            void regimeDetailQuery.refetch();
             void regimeFeaturesQuery.refetch();
             void regimeFeatureDetailQuery.refetch();
           }}

@@ -148,3 +148,50 @@ def test_kaipan_provider_supports_new_10_5_capabilities(tmp_path: Path, capabili
     assert expected_key in result.payload
     assert captured[0]["dataset"] == capability
     assert captured[0]["canonical_name"] == capability
+
+
+def test_kaipan_provider_10_5_request_params_align_with_docs(tmp_path: Path) -> None:
+    """验证 10.5 新接口的请求参数与文档对齐。"""
+    provider = _build_provider(tmp_path)
+    captured: list[dict[str, object]] = []
+
+    def _fake_fetch_and_save(**kwargs):
+        captured.append(kwargs)
+        return {"ok": True}
+
+    provider._fetch_and_save = _fake_fetch_and_save  # type: ignore[method-assign]
+
+    provider.fetch_market_stock_zd_num(trade_date=date(2026, 4, 22), slot="17-30")
+    provider.fetch_zhang_ting_expression(trade_date=date(2026, 4, 22), slot="17-30")
+    provider.fetch_daily_limit_index(trade_date=date(2026, 4, 22), slot="17-30")
+    provider.fetch_daily_limit_index(trade_date=date(2026, 4, 22), slot="17-30", use_today_url=True)
+    provider.fetch_weight_performance(trade_date=date(2026, 4, 22), slot="17-30")
+    provider.fetch_get_feng_k_list(trade_date=date(2026, 4, 22), slot="17-30")
+
+    assert captured[0]["base_url_key"] == "apphis"
+    assert captured[0]["method"] == "POST"
+    assert captured[0]["Date"] == "2026-04-22"
+
+    assert captured[1]["base_url_key"] == "apphis"
+    assert captured[1]["method"] == "GET"
+    assert captured[1]["Day"] == "2026-04-22"
+
+    assert captured[2]["base_url_key"] == "apphis"
+    assert captured[2]["method"] == "GET"
+    assert captured[2]["Day"] == "2026-04-22"
+
+    assert captured[3]["base_url_key"] == "apphwhq"
+    assert captured[3]["method"] == "GET"
+    assert "Day" not in captured[3]
+
+    assert captured[4]["base_url_key"] == "apphis"
+    assert captured[4]["method"] == "GET"
+    assert captured[4]["Day"] == "2026-04-22"
+
+    assert captured[5]["base_url_key"] in {"apphis", "apphwhq"}
+    assert captured[5]["method"] == "POST"
+    assert captured[5]["Day"] == "20260422"
+    assert captured[5]["Time"] == "1500"
+    assert captured[5]["Index"] == 0
+    assert captured[5]["Order"] == 17
+    assert captured[5]["st"] == 500

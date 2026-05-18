@@ -8,7 +8,8 @@ mappings:
     source:
       api: ZhangTingExpression
       controller: HisHomeDingPan
-      params: {}
+      params:
+        Day: ""
     fields:
       total_limit_up: {raw_path: "info.[0]", type: number}
       first_board_count: {raw_path: "info.[1]", type: number}

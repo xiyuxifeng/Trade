@@ -8,6 +8,7 @@ mappings:
     source:
       api: WeightPerformance
       controller: HisHomeDingPan
-      params: {}
+      params:
+        Day: ""
     fields:
       markets: {raw_path: "info", type: object}

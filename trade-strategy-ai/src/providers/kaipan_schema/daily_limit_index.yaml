@@ -8,7 +8,8 @@ mappings:
     source:
       api: DailyLimitIndex
       controller: HisHomeDingPan
-      params: {}
+      params:
+        Day: ""
     fields:
       one_board_count: {raw_path: "info.[0]", type: number}
       two_board_count: {raw_path: "info.[1]", type: number}

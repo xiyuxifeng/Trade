@@ -8,7 +8,8 @@ mappings:
     source:
       api: MarketStockZDNum
       controller: HisHomeDingPan
-      params: {}
+      params:
+        Date: ""
     fields:
       limit_up_count: {raw_path: "info.SJZT", type: number}
       limit_down_count: {raw_path: "info.SJDT", type: number}

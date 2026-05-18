@@ -2415,7 +2415,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 | a | 是 | `GetFengKListBest` |
 | c | 是 | `StockFengKData` |
 | Day | 是 | 日期，格式：`20260416` |
-| Time | 是 | 时间，填空字符串取最新 |
+| Time | 是 | 时间，`1500` 表示收盘 |
 | **Token** | 是 | 用户Token |
 | **UserID** | 是 | 用户ID |
 

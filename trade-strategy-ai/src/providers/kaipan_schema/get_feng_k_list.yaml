@@ -9,7 +9,11 @@ mappings:
       api: GetFengKList
       controller: StockFengKData
       params:
+        Day: ""
         Time: ""
+        Index: 0
+        Order: 17
+        st: 500
     fields:
       symbol: {raw_path: "List.[i].[0]", type: string}
       name: {raw_path: "List.[i].[1]", type: string}

@@ -992,7 +992,17 @@ def build_get_feng_k_list_section(
     """构建收盘强势标的 section。"""
     trade_date = _as_date(context.trade_date)
     try:
-        payload = _to_plain(provider.fetch_get_feng_k_list(trade_date=trade_date, slot=context.slot, offline=context.offline))
+        payload = _to_plain(
+            provider.fetch_get_feng_k_list(
+                trade_date=trade_date,
+                slot=context.slot,
+                offline=context.offline,
+                time="1500",
+                index=0,
+                order=17,
+                st=500,
+            )
+        )
         record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
         return _build_section(
             section_id="get_feng_k_list",

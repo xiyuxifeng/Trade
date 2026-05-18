@@ -731,7 +731,7 @@ class KaipanProvider(ProviderBase):
             dataset="market_stock_zd_num",
             api_name="MarketStockZDNum",
             controller="HisHomeDingPan",
-            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            base_url_key="apphis",
             method="POST",
             canonical_name="market_stock_zd_num",
             Date=td.strftime("%Y-%m-%d"),
@@ -747,10 +747,10 @@ class KaipanProvider(ProviderBase):
             dataset="zhang_ting_expression",
             api_name="ZhangTingExpression",
             controller="HisHomeDingPan",
-            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            base_url_key="apphis",
             method="GET",
             canonical_name="zhang_ting_expression",
-            Date=td.strftime("%Y-%m-%d"),
+            Day=td.strftime("%Y-%m-%d"),
         )
 
     def _request_daily_limit_index(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
@@ -759,14 +759,18 @@ class KaipanProvider(ProviderBase):
         td = self._coerce_trade_date(trade_date)
         self._trade_date = td
         self._slot = slot
+        base_url_key = self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url"))
+        params: dict[str, Any] = {}
+        if base_url_key != "apphwhq":
+            params["Day"] = td.strftime("%Y-%m-%d")
         return self._fetch_and_save(
             dataset="daily_limit_index",
             api_name="DailyLimitIndex",
             controller="HisHomeDingPan",
-            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            base_url_key=base_url_key,
             method="GET",
             canonical_name="daily_limit_index",
-            Day=td.strftime("%Y-%m-%d"),
+            **params,
         )
 
     def _request_weight_performance(self, *, trade_date: Any, slot: str = "17-30", **kwargs: Any) -> dict[str, Any]:
@@ -779,18 +783,29 @@ class KaipanProvider(ProviderBase):
             dataset="weight_performance",
             api_name="WeightPerformance",
             controller="HisHomeDingPan",
-            base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
+            base_url_key="apphis",
             method="GET",
             canonical_name="weight_performance",
             Day=td.strftime("%Y-%m-%d"),
         )
 
-    def _request_get_feng_k_list(self, *, trade_date: Any, slot: str = "17-30", time: str = "", **kwargs: Any) -> dict[str, Any]:
+    def _request_get_feng_k_list(
+        self,
+        *,
+        trade_date: Any,
+        slot: str = "17-30",
+        time: str = "1500",
+        index: int = 0,
+        order: int = 17,
+        st: int = 500,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """拉取收盘强势标的所需的 raw 数据。"""
 
         td = self._coerce_trade_date(trade_date)
         self._trade_date = td
         self._slot = slot
+        time_value = time or "1500"
         return self._fetch_and_save(
             dataset="get_feng_k_list",
             api_name="GetFengKList",
@@ -799,7 +814,10 @@ class KaipanProvider(ProviderBase):
             method="POST",
             canonical_name="get_feng_k_list",
             Day=td.strftime("%Y%m%d"),
-            Time=time,
+            Time=time_value,
+            Index=index,
+            Order=order,
+            st=st,
         )
 
     def _normalize_hot_topics(self, *, raw: dict[str, Any], request: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1588,13 +1606,35 @@ class KaipanProvider(ProviderBase):
             raise ProviderError("; ".join(result.errors) or "failed to fetch weight_performance")
         return result.payload
 
-    def fetch_get_feng_k_list(self, *, trade_date: date | str, slot: str = "17-30", offline: bool = False, time: str = "", **kwargs: Any) -> dict[str, Any]:
+    def fetch_get_feng_k_list(
+        self,
+        *,
+        trade_date: date | str,
+        slot: str = "17-30",
+        offline: bool = False,
+        time: str = "1500",
+        index: int = 0,
+        order: int = 17,
+        st: int = 500,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """收盘强势标的 - GetFengKList。"""
 
         if offline:
             raw = self._load_canonical_raw("get_feng_k_list", trade_date=trade_date, slot=slot)
             return self._normalize_get_feng_k_list(raw=raw, request={"trade_date": trade_date, "slot": slot})
-        result = self.run("get_feng_k_list", request={"trade_date": trade_date, "slot": slot, "time": time, **kwargs})
+        result = self.run(
+            "get_feng_k_list",
+            request={
+                "trade_date": trade_date,
+                "slot": slot,
+                "time": time,
+                "index": index,
+                "order": order,
+                "st": st,
+                **kwargs,
+            },
+        )
         if result.status != ProviderStatus.ok:
             raise ProviderError("; ".join(result.errors) or "failed to fetch get_feng_k_list")
         return result.payload

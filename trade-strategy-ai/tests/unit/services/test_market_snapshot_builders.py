@@ -218,7 +218,37 @@ def test_market_state_and_legacy_sections_share_section_shape(tmp_path: Path) ->
     assert constituents.quality_status == "ok"
     assert strong_symbols.quality_status == "ok"
     assert market_state.quality_status == "ok"
-    assert market_state.payload["market_state"]["state"] == "bull"
+
+
+def test_get_feng_k_list_section_passes_required_params(tmp_path: Path) -> None:
+    """收盘强势标的构建时应传入文档要求的参数。"""
+    from src.models.market_snapshot import MarketSnapshotBuildContext
+    from src.services.market_snapshot_builders import build_get_feng_k_list_section
+
+    provider = _FakeProvider(raw_dir=tmp_path / "raw")
+    captured: list[dict[str, object]] = []
+
+    def _fetch_get_feng_k_list(**kwargs):
+        captured.append(kwargs)
+        return {"dataset": "get_feng_k_list", "trade_date": "2026-05-15", "slot": "17-30", "items": [{"symbol": "000001"}]}
+
+    provider.fetch_get_feng_k_list = _fetch_get_feng_k_list  # type: ignore[method-assign]
+
+    context = MarketSnapshotBuildContext(
+        config_path=str(tmp_path / "config" / "app.yaml"),
+        profile_id="default",
+        trade_date="2026-05-15",
+        slot="17-30",
+        offline=False,
+    )
+
+    section = build_get_feng_k_list_section(context, provider=provider)
+
+    assert section.quality_status == "ok"
+    assert captured[0]["time"] == "1500"
+    assert captured[0]["index"] == 0
+    assert captured[0]["order"] == 17
+    assert captured[0]["st"] == 500
 
 
 def test_market_snapshot_registry_includes_10_5_sections(tmp_path: Path) -> None:

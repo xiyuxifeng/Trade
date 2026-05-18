@@ -2471,7 +2471,7 @@ Date=2026-04-16&DeviceID=xxx&Index=0&PhoneOSNew=2&Token=xxx&UserID=3807176&VerSi
 
 ---
 
-### 股票风口
+### 股票风口明细
 
 获取股票的详细风口数据。
 

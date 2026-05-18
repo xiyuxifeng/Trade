@@ -220,10 +220,10 @@ def test_market_state_and_legacy_sections_share_section_shape(tmp_path: Path) ->
     assert market_state.quality_status == "ok"
 
 
-def test_get_feng_k_list_section_passes_required_params(tmp_path: Path) -> None:
-    """收盘强势标的构建时应传入文档要求的参数。"""
+def test_strong_fengkou_best_section_passes_required_params(tmp_path: Path) -> None:
+    """最强风口构建时应传入文档要求的参数。"""
     from src.models.market_snapshot import MarketSnapshotBuildContext
-    from src.services.market_snapshot_builders import build_get_feng_k_list_section
+    from src.services.market_snapshot_builders import build_strong_fengkou_best_section
 
     provider = _FakeProvider(raw_dir=tmp_path / "raw")
     captured: list[dict[str, object]] = []
@@ -242,9 +242,10 @@ def test_get_feng_k_list_section_passes_required_params(tmp_path: Path) -> None:
         offline=False,
     )
 
-    section = build_get_feng_k_list_section(context, provider=provider)
+    section = build_strong_fengkou_best_section(context, provider=provider)
 
     assert section.quality_status == "ok"
+    assert section.section_id == "strong_fengkou_best"
     assert captured[0]["time"] == "1500"
     assert captured[0]["index"] == 0
     assert captured[0]["order"] == 17
@@ -269,4 +270,4 @@ def test_market_snapshot_registry_includes_10_5_sections(tmp_path: Path) -> None
     assert "zhang_ting_expression" in section_ids
     assert "daily_limit_index" in section_ids
     assert "weight_performance" in section_ids
-    assert "get_feng_k_list" in section_ids
+    assert "strong_fengkou_best" in section_ids

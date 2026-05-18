@@ -77,7 +77,7 @@ export function KaipanCenter() {
   const status = statusQuery.data ?? null;
 
   const latestSlot = useMemo(() => status?.latest_slot ?? 'n/a', [status]);
-  const ingestionItems = ['MarketStockZDNum', 'ZhangTingExpression', 'DailyLimitIndex', 'WeightPerformance', 'GetFengKList'];
+  const ingestionItems = ['MarketStockZDNum', 'ZhangTingExpression', 'DailyLimitIndex', 'WeightPerformance', 'GetFengKListBest'];
 
   return (
     <section className="dashboard-grid">

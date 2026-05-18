@@ -188,6 +188,7 @@ def test_kaipan_provider_10_5_request_params_align_with_docs(tmp_path: Path) -> 
     assert captured[4]["method"] == "GET"
     assert captured[4]["Day"] == "2026-04-22"
 
+    assert captured[5]["api_name"] == "GetFengKListBest"
     assert captured[5]["base_url_key"] in {"apphis", "apphwhq"}
     assert captured[5]["method"] == "POST"
     assert captured[5]["Day"] == "20260422"

@@ -146,8 +146,8 @@ async def test_market_data_storage_service_persists_10_5_sections(market_data_se
                 payload={"dataset": "market_stock_zd_num", "limit_up_count": 79, "limit_down_count": 1, "items": [{"symbol": "000001"}]},
                 metadata={"section_version": "v1"},
             ),
-            "get_feng_k_list": MarketSnapshotSection(
-                section_id="get_feng_k_list",
+            "strong_fengkou_best": MarketSnapshotSection(
+                section_id="strong_fengkou_best",
                 provider="kaipan",
                 source_time=datetime(2026, 5, 18, 8, 1, tzinfo=timezone.utc),
                 record_count=1,
@@ -171,4 +171,4 @@ async def test_market_data_storage_service_persists_10_5_sections(market_data_se
     assert saved.status == "ok"
     assert saved.payload["section_count"] == 2
     assert loaded.status == "ok"
-    assert {section["section_id"] for section in loaded.payload["sections"]} == {"market_stock_zd_num", "get_feng_k_list"}
+    assert {section["section_id"] for section in loaded.payload["sections"]} == {"market_stock_zd_num", "strong_fengkou_best"}

@@ -235,7 +235,7 @@ def test_market_snapshot_service_includes_10_5_sections(tmp_path: Path) -> None:
     assert "zhang_ting_expression" in section_ids
     assert "daily_limit_index" in section_ids
     assert "weight_performance" in section_ids
-    assert "get_feng_k_list" in section_ids
+    assert "strong_fengkou_best" in section_ids
 
 
 def test_market_snapshot_service_reports_partial_coverage(tmp_path: Path) -> None:

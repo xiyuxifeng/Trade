@@ -800,7 +800,7 @@ class KaipanProvider(ProviderBase):
         st: int = 500,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """拉取收盘强势标的所需的 raw 数据。"""
+        """拉取最强风口所需的 raw 数据。"""
 
         td = self._coerce_trade_date(trade_date)
         self._trade_date = td
@@ -808,7 +808,7 @@ class KaipanProvider(ProviderBase):
         time_value = time or "1500"
         return self._fetch_and_save(
             dataset="get_feng_k_list",
-            api_name="GetFengKList",
+            api_name="GetFengKListBest",
             controller="StockFengKData",
             base_url_key=self._resolve_history_or_today_url(trade_date=td, use_today_url=kwargs.get("use_today_url")),
             method="POST",
@@ -1618,7 +1618,7 @@ class KaipanProvider(ProviderBase):
         st: int = 500,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """收盘强势标的 - GetFengKList。"""
+        """收盘强势标的 - GetFengKListBest。"""
 
         if offline:
             raw = self._load_canonical_raw("get_feng_k_list", trade_date=trade_date, slot=slot)

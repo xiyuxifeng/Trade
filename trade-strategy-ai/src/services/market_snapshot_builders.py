@@ -984,12 +984,12 @@ def build_weight_performance_section(
         )
 
 
-def build_get_feng_k_list_section(
+def build_strong_fengkou_best_section(
     context: MarketSnapshotBuildContext,
     *,
     provider: KaipanProvider,
 ) -> MarketSnapshotSection:
-    """构建收盘强势标的 section。"""
+    """构建最强风口 section。"""
     trade_date = _as_date(context.trade_date)
     try:
         payload = _to_plain(
@@ -1005,17 +1005,17 @@ def build_get_feng_k_list_section(
         )
         record_count = len(payload.get("items", [])) if isinstance(payload, dict) else 0
         return _build_section(
-            section_id="get_feng_k_list",
+            section_id="strong_fengkou_best",
             provider="kaipan",
             payload=payload,
             record_count=record_count,
             quality_status="ok" if record_count else "partial",
-            missing_reason=None if record_count else "no get feng k list returned",
+            missing_reason=None if record_count else "no strong fengkou best returned",
             metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
         )
     except Exception as exc:  # noqa: BLE001
         return _build_section(
-            section_id="get_feng_k_list",
+            section_id="strong_fengkou_best",
             provider="kaipan",
             payload={},
             record_count=0,
@@ -1212,14 +1212,14 @@ class WeightPerformanceSectionBuilder:
 
 
 @dataclass(frozen=True)
-class GetFengKListSectionBuilder:
-    """收盘强势标的 section builder。"""
+class StrongFengkouBestSectionBuilder:
+    """最强风口 section builder。"""
 
     provider: KaipanProvider
-    section_id: str = "get_feng_k_list"
+    section_id: str = "strong_fengkou_best"
 
     def build(self, context: MarketSnapshotBuildContext) -> MarketSnapshotSection:
-        return build_get_feng_k_list_section(context, provider=self.provider)
+        return build_strong_fengkou_best_section(context, provider=self.provider)
 
 
 @dataclass(frozen=True)
@@ -1265,7 +1265,7 @@ def build_default_market_snapshot_registry(
     registry.register(ZhangTingExpressionSectionBuilder(provider=provider))
     registry.register(DailyLimitIndexSectionBuilder(provider=provider))
     registry.register(WeightPerformanceSectionBuilder(provider=provider))
-    registry.register(GetFengKListSectionBuilder(provider=provider))
+    registry.register(StrongFengkouBestSectionBuilder(provider=provider))
     registry.register(
         MarketStateSectionBuilder(
             persona_service=persona_service,

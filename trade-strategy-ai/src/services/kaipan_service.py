@@ -127,7 +127,7 @@ class KaipanService(BaseService):
 				("zhang_ting_expression", provider.fetch_zhang_ting_expression),
 				("daily_limit_index", provider.fetch_daily_limit_index),
 				("weight_performance", provider.fetch_weight_performance),
-				("get_feng_k_list", provider.fetch_get_feng_k_list),
+				("strong_fengkou_best", provider.fetch_get_feng_k_list),
 			]
 		return []
 

@@ -96,7 +96,7 @@ def test_kaipan_service_fetch_includes_10_5_capabilities(tmp_path: Path) -> None
 	assert "zhang_ting_expression" in result.payload["slot_results"]["17-30"]["success"]
 	assert "daily_limit_index" in result.payload["slot_results"]["17-30"]["success"]
 	assert "weight_performance" in result.payload["slot_results"]["17-30"]["success"]
-	assert "get_feng_k_list" in result.payload["slot_results"]["17-30"]["success"]
+	assert "strong_fengkou_best" in result.payload["slot_results"]["17-30"]["success"]
 
 
 def test_kaipan_service_rejects_invalid_slot(tmp_path: Path) -> None:

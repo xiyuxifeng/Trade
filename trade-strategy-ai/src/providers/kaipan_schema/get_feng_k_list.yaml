@@ -1,12 +1,12 @@
 # get_feng_k_list 快照字段映射
-# 来源接口：GetFengKList
+# 来源接口：GetFengKListBest
 
 dataset: get_feng_k_list
 
 mappings:
   items:
     source:
-      api: GetFengKList
+      api: GetFengKListBest
       controller: StockFengKData
       params:
         Day: ""

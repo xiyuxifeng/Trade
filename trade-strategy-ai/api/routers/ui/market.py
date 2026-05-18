@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from api.dependencies import verify_api_key
 from api.schemas.market import (
+    MarketBenchmarkOptionListResponse,
     MarketRegimeDetailResponse,
     MarketRegimeListResponse,
     MarketDatasetDetailResponse,
@@ -19,6 +20,7 @@ from api.schemas.market import (
     MarketSnapshotSectionListResponse,
     MarketSnapshotSectionResponse,
 )
+from src.market_data.stock_info_service import COMMON_MARKET_INDICES, list_index_stock_infos
 from src.services import MarketRegimeFeatureService, MarketRegimeService, MarketService, MarketSnapshotQueryService
 
 
@@ -92,6 +94,38 @@ async def list_symbols(
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "symbol listing failed")
     return result.payload
+
+
+@router.get("/benchmark-options", response_model=MarketBenchmarkOptionListResponse)
+async def list_benchmark_options(
+    limit: int = Query(default=50, ge=1, le=200),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """列出可用于 benchmark 的常用指数。"""
+    items = await list_index_stock_infos()
+    if not items:
+        payload = [
+            {
+                "symbol": item["symbol"],
+                "code": item["code"],
+                "market": item["market"],
+                "name": item["name"],
+                "security_type": "index",
+            }
+            for item in COMMON_MARKET_INDICES[:limit]
+        ]
+        return {"count": len(payload), "items": payload}
+    payload = [
+        {
+            "symbol": item.symbol,
+            "code": item.code,
+            "market": item.market,
+            "name": item.name,
+            "security_type": item.security_type,
+        }
+        for item in items[:limit]
+    ]
+    return {"count": len(payload), "items": payload}
 
 
 @router.get("/ohlcv")

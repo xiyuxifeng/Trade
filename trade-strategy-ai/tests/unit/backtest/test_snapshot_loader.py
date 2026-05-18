@@ -107,6 +107,22 @@ class TestSnapshotLoaderInterface:
         assert result["market_regime"]["regime_version"] == "market-regime-v1"
         assert result["market_regime_version"] == "market-regime-v1"
 
+    @pytest.mark.asyncio
+    async def test_load_market_context_requires_existing_benchmark_symbol(self):
+        """当 benchmark_symbol 未落库时，loader 应显式失败。"""
+        from src.backtest.snapshot_loader import SnapshotLoader
+
+        loader = SnapshotLoader()
+        loader._load_ohlcv_from_db = AsyncMock(return_value={"000001.SZ": [{"symbol": "000001.SZ", "date": "2026-04-01"}]})
+        loader._load_indicators_from_db = AsyncMock(return_value={})
+
+        with pytest.raises(ValueError, match="benchmark_symbol.*000300.SH"):
+            await loader.load_market_context(
+                trade_date=date(2026, 4, 1),
+                symbols=["000001.SZ"],
+                benchmark_symbol="000300.SH",
+            )
+
 
 class TestSnapshotLoaderWithMockedService:
     """使用 mock 服务的 SnapshotLoader 集成测试"""

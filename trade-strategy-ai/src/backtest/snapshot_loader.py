@@ -183,6 +183,7 @@ class SnapshotLoader:
         trade_date: date,
         symbols: list[str],
         regime_version: str | None = None,
+        benchmark_symbol: str | None = None,
     ) -> MarketContextSnapshot:
         """加载市场上下文快照。
 
@@ -196,6 +197,7 @@ class SnapshotLoader:
         Args:
             trade_date: 交易日期
             symbols: 标的列表（空列表表示全部）
+            benchmark_symbol: 回测选择的基准指数代码，会被并入加载列表
 
         Returns:
             MarketContextSnapshot 字典
@@ -211,11 +213,16 @@ class SnapshotLoader:
             except Exception as e:
                 logger.warning("快照加载失败: slot=market_universe, date=%s, error=%s", trade_date, e)
 
+        load_symbols = list(dict.fromkeys([*symbols, benchmark_symbol] if benchmark_symbol else symbols))
+
         # 2. 从 DB 加载 ohlcv_1d
-        bars_by_symbol = await self._load_ohlcv_from_db(trade_date, symbols)
+        bars_by_symbol = await self._load_ohlcv_from_db(trade_date, load_symbols)
+
+        if benchmark_symbol and benchmark_symbol not in bars_by_symbol:
+            raise ValueError(f"benchmark_symbol {benchmark_symbol} has no OHLCV bars in db for trade_date={trade_date}")
 
         # 3. 从 DB 加载 indicators（首次计算并缓存）
-        indicators_by_symbol = await self._load_indicators_from_db(trade_date, symbols)
+        indicators_by_symbol = await self._load_indicators_from_db(trade_date, load_symbols)
 
         # 3.5. 加载指定版本的 Market Regime（若提供）
         market_regime = await self._load_market_regime_from_db(trade_date, regime_version)
@@ -233,6 +240,7 @@ class SnapshotLoader:
             "bars_by_symbol": bars_by_symbol,
             "indicators_by_symbol": indicators_by_symbol,
             "market_universe": market_universe,
+            "benchmark_symbol": benchmark_symbol,
             "topic_snapshot": None,
             "market_regime": market_regime,
             "market_regime_version": regime_version,

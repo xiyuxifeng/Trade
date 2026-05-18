@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import verify_api_key
 from api.main import app
+from api.routers.ui import market as market_ui
 from api.routers.ui.market import get_market_service, get_market_snapshot_query_service
 
 
@@ -303,6 +305,19 @@ async def test_list_symbols_and_ohlcv(client: AsyncClient) -> None:
     )
     assert ohlcv.status_code == 200
     assert ohlcv.json()["items"][0]["close"] == 1.05
+
+
+@pytest.mark.asyncio
+async def test_list_benchmark_options_honors_limit(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
+    """benchmark 选项接口应尊重 limit。"""
+    monkeypatch.setattr(market_ui, "list_index_stock_infos", AsyncMock(return_value=[]))
+
+    resp = await client.get("/api/ui/v1/market/benchmark-options", params={"limit": 1})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["count"] == 1
+    assert len(payload["items"]) == 1
 
 
 @pytest.mark.asyncio

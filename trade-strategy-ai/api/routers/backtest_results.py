@@ -38,6 +38,7 @@ def _get_backtest_results_dirs() -> list[Path]:
     return [
         resolve_project_path("data/backtest/results"),
         resolve_project_path("data/processed/backtest"),
+        resolve_project_path("data/jobs"),
     ]
 
 
@@ -48,12 +49,24 @@ def _extract_meta(data: dict) -> tuple[str | None, str | None, str | None]:
     return trader_id, date_from, date_to
 
 
-def _iter_result_files() -> list[Path]:
-    files: list[Path] = []
+def _iter_result_sources() -> list[tuple[str, Path]]:
+    """遍历可用的回测结果来源。"""
+    sources: list[tuple[str, Path]] = []
     for results_dir in _get_backtest_results_dirs():
         if results_dir.exists():
-            files.extend(results_dir.glob("*.json"))
-    return sorted(files, reverse=True)
+            if results_dir.name == "jobs":
+                for job_dir in results_dir.iterdir():
+                    if not job_dir.is_dir():
+                        continue
+                    result_file = job_dir / "result.json"
+                    report_file = job_dir / "backtest_report.md"
+                    csv_file = job_dir / "backtest_records.csv"
+                    if result_file.exists() and (report_file.exists() or csv_file.exists()):
+                        sources.append((job_dir.name, result_file))
+                continue
+            for result_file in results_dir.glob("*.json"):
+                sources.append((result_file.stem, result_file))
+    return sorted(sources, key=lambda item: item[1].stat().st_mtime if item[1].exists() else 0, reverse=True)
 
 
 def _find_result_file(result_id: str) -> Path | None:
@@ -61,6 +74,10 @@ def _find_result_file(result_id: str) -> Path | None:
         candidate = results_dir / f"{result_id}.json"
         if candidate.exists():
             return candidate
+        if results_dir.name == "jobs":
+            job_result = results_dir / result_id / "result.json"
+            if job_result.exists():
+                return job_result
     return None
 
 
@@ -74,12 +91,12 @@ async def list_backtest_results(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> PaginatedResponse:
     """列出回测结果（基于文件，分页）。"""
-    all_files = _iter_result_files()
-    if not all_files:
+    all_sources = _iter_result_sources()
+    if not all_sources:
         return PaginatedResponse(count=0, total=0, skip=skip, limit=limit, items=[])
 
     items = []
-    for f in all_files:
+    for result_id, f in all_sources:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             meta_trader_id, meta_date_from, meta_date_to = _extract_meta(data)
@@ -91,7 +108,7 @@ async def list_backtest_results(
                 continue
 
             items.append({
-                "result_id": f.stem,
+                "result_id": result_id,
                 "trader_id": meta_trader_id,
                 "date_from": meta_date_from,
                 "date_to": meta_date_to,
@@ -139,6 +156,11 @@ async def download_backtest_report(result_id: str, _key: str = Depends(verify_ap
         if candidate.exists():
             report_file = candidate
             break
+        if results_dir.name == "jobs":
+            job_report = results_dir / result_id / "backtest_report.md"
+            if job_report.exists():
+                report_file = job_report
+                break
     if report_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="回测报告文件未找到")
 
@@ -158,6 +180,11 @@ async def download_validate_rules(result_id: str, _key: str = Depends(verify_api
         if candidate.exists():
             validate_file = candidate
             break
+        if results_dir.name == "jobs":
+            job_validate = results_dir / result_id / "backtest_validation_report.md"
+            if job_validate.exists():
+                validate_file = job_validate
+                break
     if validate_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="规则验真报告未找到")
 

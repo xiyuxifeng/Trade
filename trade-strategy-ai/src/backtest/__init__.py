@@ -6,7 +6,9 @@
 - 支持快照只读重放与规则验真
 """
 
-from src.backtest.engine import BacktestEngine, validate_rule_hits, validate_rules_for_trader
+from importlib import import_module
+from typing import Any
+
 from src.backtest.execution import classify_rules_snapshot_gap, replay_candidates
 from src.backtest.reporting import (
     render_backtest_csv,
@@ -55,3 +57,11 @@ __all__ = [
     # reproducibility
     "fingerprint_result",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """按需加载 engine 相关符号，避免包导入时触发循环依赖。"""
+    if name in {"BacktestEngine", "validate_rule_hits", "validate_rules_for_trader"}:
+        module = import_module("src.backtest.engine")
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

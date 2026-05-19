@@ -10,8 +10,24 @@ import { PageHeader } from '@/components/layout/page-header';
 import { ConfirmDialog, EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { getRulePoolRule, listRulePool, reviewRulePoolRule } from '@/lib/api/rule-pool';
-import type { RuleDetailItem, RulePoolQuery, RulePoolReviewRequest, RuleSummaryItem } from '@/types/rule-pool';
+import {
+  generateRuleApplicabilityProfile,
+  getRuleApplicabilityProfile,
+  getRulePoolRule,
+  listRuleApplicabilityProfiles,
+  listRulePool,
+  reviewRuleApplicabilityProfile,
+  reviewRulePoolRule,
+} from '@/lib/api/rule-pool';
+import type {
+  RuleApplicabilityProfileItem,
+  RuleApplicabilityGenerateRequest,
+  RuleApplicabilityReviewRequest,
+  RuleDetailItem,
+  RulePoolQuery,
+  RulePoolReviewRequest,
+  RuleSummaryItem,
+} from '@/types/rule-pool';
 
 const DEFAULT_FILTERS: RulePoolQuery = {
   status: 'pending',
@@ -35,6 +51,13 @@ function formatConfidence(value: number | null | undefined) {
     return 'n/a';
   }
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatPct(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return 'n/a';
+  }
+  return `${(value * 100).toFixed(2)}%`;
 }
 
 function RuleSummaryCard({
@@ -88,6 +111,104 @@ const REVIEW_ACTIONS: Array<{ decision: ReviewDecision; label: string; intent: '
   { decision: 'reject', label: '拒绝', intent: 'destructive' },
   { decision: 'pending', label: '标记待定', intent: 'secondary' },
 ];
+
+const PROFILE_STATUS_OPTIONS: Array<RuleApplicabilityGenerateRequest['review_status']> = ['draft', 'reviewed', 'active', 'archived'];
+
+function formatDecisionLabel(value: string) {
+  if (value === 'applicable') {
+    return '适用';
+  }
+  if (value === 'blocked') {
+    return '禁用';
+  }
+  return '中性';
+}
+
+function ApplicabilityRegimeList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: RuleApplicabilityProfileItem['applicable_regimes'];
+  tone: 'success' | 'danger' | 'warning';
+}) {
+  const badgeVariant = tone === 'success' ? 'success' : tone === 'danger' ? 'destructive' : 'warning';
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-slate-950">{title}</h4>
+        <Badge variant={badgeVariant}>{items.length} 条</Badge>
+      </div>
+      {items.length ? (
+        <div className="mt-3 space-y-3">
+          {items.map((item) => (
+            <div key={`${title}-${item.regime_label}`} className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-slate-950">{item.regime_label}</span>
+                <Badge variant="info">{formatDecisionLabel(item.decision)}</Badge>
+                {item.low_sample ? <Badge variant="warning">低样本</Badge> : <Badge variant="success">样本充足</Badge>}
+              </div>
+              <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                <span>分数 {item.score.toFixed(3)}</span>
+                <span>样本 {item.sample_count}</span>
+                <span>胜率 {formatPct(item.win_rate)}</span>
+                <span>平均收益 {formatPct(item.avg_return)}</span>
+                <span>最大回撤 {formatPct(item.max_drawdown)}</span>
+                <span>置信度 {formatPct(item.confidence)}</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{item.reason}</p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {item.evidence.map((fact) => (
+                  <span key={fact} className="rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-500">
+                    {fact}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">暂无条目</p>
+      )}
+    </section>
+  );
+}
+
+function ApplicabilityProfileCard({
+  profile,
+  active,
+  onClick,
+}: {
+  profile: RuleApplicabilityProfileItem;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+        active ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white hover:border-sky-200 hover:bg-slate-50'
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">{profile.profile_version}</p>
+          <p className="mt-1 text-xs text-slate-500">来源 {profile.source_backtest_id}</p>
+        </div>
+        <Badge variant={profile.review_status === 'active' ? 'success' : profile.review_status === 'archived' ? 'warning' : 'info'}>
+          {profile.review_status}
+        </Badge>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        <span className="rounded-full border border-slate-200 px-2 py-1">置信度 {formatConfidence(profile.confidence)}</span>
+        <span className="rounded-full border border-slate-200 px-2 py-1">适用 {profile.applicable_regimes.length}</span>
+        <span className="rounded-full border border-slate-200 px-2 py-1">禁用 {profile.blocked_regimes.length}</span>
+      </div>
+    </button>
+  );
+}
 
 export function RulePoolReviewWorkspace() {
   const queryClient = useQueryClient();
@@ -150,6 +271,55 @@ export function RulePoolReviewWorkspace() {
 
   const selectedRule = detailQuery.data?.item ?? null;
 
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [applicabilityMessage, setApplicabilityMessage] = useState<string | null>(null);
+  const [applicabilityError, setApplicabilityError] = useState<string | null>(null);
+  const [profileDraft, setProfileDraft] = useState<{
+    sourceBacktestId: string;
+    profileVersion: string;
+    minSampleCount: number;
+    reviewStatus: RuleApplicabilityGenerateRequest['review_status'];
+  }>({
+    sourceBacktestId: '',
+    profileVersion: 'rule-applicability-v1',
+    minSampleCount: 5,
+    reviewStatus: 'draft',
+  });
+
+  const profilesQuery = useQuery({
+    queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved],
+    queryFn: () => listRuleApplicabilityProfiles(selectedRuleIdResolved as string, { skip: 0, limit: 20 }),
+    enabled: Boolean(selectedRuleIdResolved),
+    staleTime: 30_000,
+  });
+
+  const profileItems = profilesQuery.data?.items ?? [];
+  useEffect(() => {
+    if (!profileItems.length) {
+      setSelectedProfileId(null);
+      return;
+    }
+    if (!selectedProfileId || !profileItems.some((item) => item.profile_id === selectedProfileId)) {
+      setSelectedProfileId(profileItems[0].profile_id);
+    }
+  }, [profileItems, selectedProfileId]);
+
+  const selectedProfile = useMemo(
+    () => profileItems.find((item) => item.profile_id === selectedProfileId) ?? null,
+    [profileItems, selectedProfileId],
+  );
+
+  const selectedProfileIdResolved = selectedProfileId ?? profileItems[0]?.profile_id ?? null;
+
+  const profileDetailQuery = useQuery({
+    queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved, selectedProfileIdResolved],
+    queryFn: () => getRuleApplicabilityProfile(selectedRuleIdResolved as string, selectedProfileIdResolved as string),
+    enabled: Boolean(selectedRuleIdResolved && selectedProfileIdResolved),
+    staleTime: 30_000,
+  });
+
+  const selectedProfileDetail = profileDetailQuery.data?.item ?? selectedProfile ?? null;
+
   const reviewMutation = useMutation({
     mutationFn: async (decision: ReviewDecision) => {
       if (!selectedRuleIdResolved) {
@@ -171,6 +341,55 @@ export function RulePoolReviewWorkspace() {
     },
     onError: (error) => {
       setSubmissionError(error instanceof Error ? error.message : '规则审核失败');
+    },
+  });
+
+  const generateProfileMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRuleIdResolved) {
+        throw new Error('未选择规则');
+      }
+      if (!profileDraft.sourceBacktestId.trim()) {
+        throw new Error('请先填写 source_backtest_id');
+      }
+      return generateRuleApplicabilityProfile(selectedRuleIdResolved, {
+        source_backtest_id: profileDraft.sourceBacktestId.trim(),
+        profile_version: profileDraft.profileVersion.trim() || 'rule-applicability-v1',
+        min_sample_count: profileDraft.minSampleCount,
+        review_status: profileDraft.reviewStatus,
+        reviewed_by: 'web',
+      });
+    },
+    onSuccess: async (response) => {
+      setApplicabilityError(null);
+      setApplicabilityMessage(`规则 ${selectedRuleIdResolved} 已生成适用性画像。`);
+      setSelectedProfileId(response.item.profile_id);
+      await queryClient.invalidateQueries({ queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved] });
+      await queryClient.invalidateQueries({ queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved, response.item.profile_id] });
+    },
+    onError: (error) => {
+      setApplicabilityError(error instanceof Error ? error.message : '适用性画像生成失败');
+    },
+  });
+
+  const reviewProfileMutation = useMutation({
+    mutationFn: async (review_status: RuleApplicabilityReviewRequest['review_status']) => {
+      if (!selectedRuleIdResolved || !selectedProfileIdResolved) {
+        throw new Error('未选择适用性画像');
+      }
+      return reviewRuleApplicabilityProfile(selectedRuleIdResolved, selectedProfileIdResolved, {
+        review_status,
+        reviewed_by: 'web',
+      });
+    },
+    onSuccess: async (response) => {
+      setApplicabilityError(null);
+      setApplicabilityMessage(`画像 ${response.item.profile_id} 已更新为 ${response.item.review_status}。`);
+      await queryClient.invalidateQueries({ queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved] });
+      await queryClient.invalidateQueries({ queryKey: ['rule-pool', 'applicability', selectedRuleIdResolved, selectedProfileIdResolved] });
+    },
+    onError: (error) => {
+      setApplicabilityError(error instanceof Error ? error.message : '适用性画像审核失败');
     },
   });
 
@@ -204,9 +423,9 @@ export function RulePoolReviewWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
-        // kicker="正式入口"
-        // title="规则池审核中心"
-        // description="查看规则列表、回测证据与审计轨迹，并在 Web 中完成批准或拒绝。"
+        kicker="正式入口"
+        title="规则池审核中心"
+        description="查看规则列表、回测证据与审计轨迹，并在 Web 中完成批准或拒绝。"
         actionLabel="刷新"
         onAction={() => void rulesQuery.refetch()}
       />
@@ -381,6 +600,199 @@ export function RulePoolReviewWorkspace() {
                 description="从左侧规则列表中选择一条记录后，会显示详细证据和审核动作。"
               />
             )}
+          </SectionCard>
+
+          <SectionCard title="适用性画像" description="按 Regime-aware Backtest 结果生成规则适用/禁用画像，并支持 Web 审核。">
+            {applicabilityMessage ? (
+              <section className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
+                <p className="font-medium">{applicabilityMessage}</p>
+                <p className="mt-1 text-sm text-emerald-700">画像已落库，后续可从规则池详情回查。</p>
+              </section>
+            ) : null}
+            {applicabilityError ? (
+              <div className="mb-4">
+                <ErrorState
+                  category="job failed"
+                  title="适用性画像操作失败"
+                  description="生成或审核 profile 时发生错误。"
+                  suggestion="请检查回测结果 ID、样本阈值或后端接口返回。"
+                  detail={applicabilityError}
+                />
+              </div>
+            ) : null}
+
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">回测结果 ID</span>
+                  <Input
+                    aria-label="回测结果 ID"
+                    className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                    placeholder="例如 result-20260519-001"
+                    value={profileDraft.sourceBacktestId}
+                    onChange={(event) => setProfileDraft((current) => ({ ...current, sourceBacktestId: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile Version</span>
+                  <Input
+                    aria-label="Profile Version"
+                    className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                    value={profileDraft.profileVersion}
+                    onChange={(event) => setProfileDraft((current) => ({ ...current, profileVersion: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">最小样本数</span>
+                  <Input
+                    aria-label="最小样本数"
+                    className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                    inputMode="numeric"
+                    type="number"
+                    value={profileDraft.minSampleCount}
+                    onChange={(event) =>
+                      setProfileDraft((current) => ({
+                        ...current,
+                        minSampleCount: Number.parseInt(event.target.value, 10) || 1,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">初始状态</span>
+                  <Select
+                    aria-label="初始状态"
+                    className="border-slate-200 bg-white text-slate-900"
+                    value={profileDraft.reviewStatus}
+                    onChange={(event) =>
+                      setProfileDraft((current) => ({
+                        ...current,
+                        reviewStatus: event.target.value as RuleApplicabilityGenerateRequest['review_status'],
+                      }))
+                    }
+                  >
+                    {PROFILE_STATUS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  disabled={!selectedRuleIdResolved || generateProfileMutation.isPending}
+                  onClick={() => void generateProfileMutation.mutateAsync()}
+                >
+                  {generateProfileMutation.isPending ? '生成中' : '生成画像'}
+                </Button>
+                <Button
+                  className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  disabled={!selectedProfileIdResolved || reviewProfileMutation.isPending}
+                  onClick={() => void reviewProfileMutation.mutateAsync('reviewed')}
+                  variant="outline"
+                >
+                  标记已评审
+                </Button>
+                <Button
+                  className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  disabled={!selectedProfileIdResolved || reviewProfileMutation.isPending}
+                  onClick={() => void reviewProfileMutation.mutateAsync('active')}
+                  variant="outline"
+                >
+                  激活
+                </Button>
+                <Button
+                  className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  disabled={!selectedProfileIdResolved || reviewProfileMutation.isPending}
+                  onClick={() => void reviewProfileMutation.mutateAsync('archived')}
+                  variant="outline"
+                >
+                  归档
+                </Button>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+                <div className="space-y-3">
+                  {profilesQuery.isLoading ? (
+                    <LoadingState label="加载画像列表" description="正在读取指定规则的适用性画像。" />
+                  ) : profilesQuery.error ? (
+                    <ErrorState
+                      category="job failed"
+                      title="适用性画像列表加载失败"
+                      description="后端返回了错误。"
+                      suggestion="请检查接口权限或重试。"
+                      detail={profilesQuery.error instanceof Error ? profilesQuery.error.message : '加载失败'}
+                      onRetry={() => void profilesQuery.refetch()}
+                    />
+                  ) : profileItems.length ? (
+                    <div className="grid gap-3">
+                      {profileItems.map((profile) => (
+                        <ApplicabilityProfileCard
+                          key={profile.profile_id}
+                          profile={profile}
+                          active={profile.profile_id === selectedProfileIdResolved}
+                          onClick={() => setSelectedProfileId(profile.profile_id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="暂无适用性画像"
+                      description="当前规则还没有生成 Rule Applicability Profile。"
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  {profileDetailQuery.isLoading ? (
+                    <LoadingState label="加载画像详情" description="正在读取适用/禁用市场环境。" />
+                  ) : selectedProfileDetail ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <SummaryStat label="Profile ID" value={selectedProfileDetail.profile_id} />
+                        <SummaryStat label="Profile Version" value={selectedProfileDetail.profile_version} />
+                        <SummaryStat label="Source Backtest" value={selectedProfileDetail.source_backtest_id} />
+                        <SummaryStat label="置信度" value={formatConfidence(selectedProfileDetail.confidence)} />
+                        <SummaryStat label="最小样本数" value={selectedProfileDetail.min_sample_count} />
+                        <SummaryStat label="审核状态" value={selectedProfileDetail.review_status} />
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <SummaryStat label="适用 Regime" value={selectedProfileDetail.applicable_regimes.length} />
+                        <SummaryStat label="禁用 Regime" value={selectedProfileDetail.blocked_regimes.length} />
+                        <SummaryStat label="中性 Regime" value={selectedProfileDetail.neutral_regimes.length} />
+                      </div>
+
+                      {selectedProfileDetail.applicable_regimes.some((item) => item.low_sample) ||
+                      selectedProfileDetail.blocked_regimes.some((item) => item.low_sample) ||
+                      selectedProfileDetail.neutral_regimes.some((item) => item.low_sample) ? (
+                        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                          <p className="font-medium">当前画像包含低样本 regime，适用于观察，不应直接作为唯一选择依据。</p>
+                        </section>
+                      ) : null}
+
+                      <ApplicabilityRegimeList title="适用市场环境" items={selectedProfileDetail.applicable_regimes} tone="success" />
+                      <ApplicabilityRegimeList title="禁用市场环境" items={selectedProfileDetail.blocked_regimes} tone="danger" />
+                      <ApplicabilityRegimeList title="中性市场环境" items={selectedProfileDetail.neutral_regimes} tone="warning" />
+
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <JsonViewer value={selectedProfileDetail.best_market_conditions ?? {}} title="最佳市场条件" />
+                        <JsonViewer value={selectedProfileDetail.worst_market_conditions ?? {}} title="最差市场条件" />
+                      </div>
+
+                      <JsonViewer value={selectedProfileDetail.summary ?? {}} title="画像摘要" />
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="请选择一个画像"
+                      description="从左侧列表中选择规则画像，或先生成新的 profile。"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           </SectionCard>
 
           <SectionCard title="审计历史" description="该区域只展示与规则相关的可追溯记录。">

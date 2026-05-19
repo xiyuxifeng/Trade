@@ -17,6 +17,7 @@ from src.models.market_dataset import MarketDataset
 from src.models.market_data_quality_report import MarketDataQualityReport
 from src.models.market_regime_record import MarketRegimeRecord, RegimeEvidenceRecord, RegimeFeatureRecord, RegimeLabelRecord
 from src.models.market_regime import MarketRegimeFeature
+from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityRegimeRecord
 from src.models.raw_article import RawArticle
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
@@ -54,6 +55,8 @@ __all__ = [
     "RegimeFeatureRecord",
     "RegimeLabelRecord",
     "MarketRegimeFeature",
+    "RuleApplicabilityProfile",
+    "RuleApplicabilityRegimeRecord",
     "Job",
     "JobStatus",
     "JobAuditEvent",

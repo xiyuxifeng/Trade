@@ -1,5 +1,9 @@
 import { fetchJson } from './http';
 import type {
+  RuleApplicabilityDetailResponse,
+  RuleApplicabilityGenerateRequest,
+  RuleApplicabilityListResponse,
+  RuleApplicabilityReviewRequest,
   RulePoolBatchReviewRequest,
   RulePoolDetailResponse,
   RulePoolListResponse,
@@ -47,3 +51,31 @@ export function reviewRulePoolBatch(request: RulePoolBatchReviewRequest) {
   });
 }
 
+export function listRuleApplicabilityProfiles(ruleId: string, query: Record<string, string | number | boolean | undefined> = {}) {
+  const suffix = buildQueryString(query);
+  return fetchJson<RuleApplicabilityListResponse>(`/rule-pool/${ruleId}/applicability-profiles${suffix ? `?${suffix}` : ''}`);
+}
+
+export function getRuleApplicabilityProfile(ruleId: string, profileId: string) {
+  return fetchJson<RuleApplicabilityDetailResponse>(`/rule-pool/${ruleId}/applicability-profiles/${profileId}`);
+}
+
+export function generateRuleApplicabilityProfile(ruleId: string, request: RuleApplicabilityGenerateRequest) {
+  return fetchJson<RuleApplicabilityDetailResponse>(`/rule-pool/${ruleId}/applicability-profiles/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+}
+
+export function reviewRuleApplicabilityProfile(ruleId: string, profileId: string, request: RuleApplicabilityReviewRequest) {
+  return fetchJson<RuleApplicabilityDetailResponse>(`/rule-pool/${ruleId}/applicability-profiles/${profileId}/review`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+}

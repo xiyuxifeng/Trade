@@ -30,6 +30,47 @@ export type RuleDetailItem = RuleSummaryItem & {
   updated_at: string | null;
 };
 
+export type RuleApplicabilityRegimeItem = {
+  regime_label: string;
+  decision: string;
+  score: number;
+  sample_count: number;
+  win_rate: number | null;
+  avg_return: number | null;
+  avg_win_return: number | null;
+  avg_loss_return: number | null;
+  max_drawdown: number | null;
+  profit_factor: number | null;
+  confidence: number;
+  low_sample: boolean;
+  reason: string;
+  evidence: string[];
+};
+
+export type RuleApplicabilityProfileItem = {
+  profile_id: string;
+  rule_id: string;
+  profile_version: string;
+  source_backtest_id: string;
+  source_rule_version: string | null;
+  market_regime_version: string | null;
+  source_feature_version: string | null;
+  review_status: string;
+  min_sample_count: number;
+  confidence: number;
+  applicable_regimes: RuleApplicabilityRegimeItem[];
+  blocked_regimes: RuleApplicabilityRegimeItem[];
+  neutral_regimes: RuleApplicabilityRegimeItem[];
+  best_market_conditions: Record<string, unknown>;
+  worst_market_conditions: Record<string, unknown>;
+  summary: Record<string, unknown>;
+  storage_ref: Record<string, unknown>;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type RulePoolListResponse = {
   status: string;
   count: number;
@@ -42,6 +83,20 @@ export type RulePoolListResponse = {
 export type RulePoolDetailResponse = {
   status: string;
   item: RuleDetailItem;
+};
+
+export type RuleApplicabilityListResponse = {
+  status: string;
+  count: number;
+  total: number;
+  skip: number;
+  limit: number;
+  items: RuleApplicabilityProfileItem[];
+};
+
+export type RuleApplicabilityDetailResponse = {
+  status: string;
+  item: RuleApplicabilityProfileItem;
 };
 
 export type RulePoolReviewRequest = {
@@ -69,3 +124,15 @@ export type RulePoolQuery = {
   limit?: number;
 };
 
+export type RuleApplicabilityGenerateRequest = {
+  source_backtest_id: string;
+  profile_version?: string;
+  min_sample_count?: number;
+  review_status?: 'draft' | 'reviewed' | 'active' | 'archived';
+  reviewed_by?: string;
+};
+
+export type RuleApplicabilityReviewRequest = {
+  review_status: 'draft' | 'reviewed' | 'active' | 'archived';
+  reviewed_by?: string;
+};

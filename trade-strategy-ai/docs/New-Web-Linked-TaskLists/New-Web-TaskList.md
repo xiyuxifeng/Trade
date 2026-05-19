@@ -2063,7 +2063,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V3-SX-003 P0 Rule Applicability Profile
+### [x] NW-V3-SX-003 P0 Rule Applicability Profile
 
 任务目标：为每条 rule 生成适用市场环境画像，让系统能保留“特定阶段有效”的 rule，而不是只按整体评分淘汰。
 
@@ -2122,6 +2122,64 @@ UI 关联任务：
 UI 关联任务：
 
 - `UI-V3-012Rule Applicability Viewer`
+- `UI-V3-002 Rule Pool`
+
+---
+
+### [~] NW-V3-SX-003A P2 Rule Applicability Aggregated Profile
+
+任务目标：在首版 `Rule Applicability Profile` 之上，基于多个历史 `Regime-aware Backtest` 结果生成聚合画像，降低单次回测噪声，为最终交付提供更稳定的 rule 适用性判断。
+
+当前相关文件：
+
+- `src/services/rule_applicability_service.py`
+- `src/models/rule_applicability.py`
+- `src/models/backtest_result.py`
+- `tests/services/test_rule_applicability_service.py`
+- `docs/New-Web-Rule-Applicability-Profile.md`
+
+允许修改：
+
+- `src/services/rule_applicability_aggregation_service.py`
+- `src/models/rule_applicability.py`
+- `tests/services/test_rule_applicability_aggregation_service.py`
+- `docs/New-Web-Rule-Applicability-Profile.md`
+
+禁止修改：
+
+- 不覆盖 `NW-V3-SX-003` 的单次 `source_backtest_id` 主事实源。
+- 不把聚合结果写成唯一真源。
+- 不在聚合层引入不可解释黑盒评分。
+- 不忽略 low confidence / low sample_count。
+
+实现要求：
+
+1. 支持从多个 `RuleApplicabilityProfile` 版本聚合生成新 profile。
+2. 聚合结果必须保留来源追踪：
+   - `source_backtest_ids`
+   - `aggregation_window`
+   - `aggregation_strategy`
+3. 聚合后的 profile 仍需支持：
+   - `draft`
+   - `reviewed`
+   - `active`
+   - `archived`
+4. 聚合时必须显式处理冲突：
+   - applicable / blocked / neutral 冲突
+   - 不同 regime 方向冲突
+   - 样本数不足
+5. 输出 aggregated applicability artifact。
+
+验收标准：
+
+- 可以基于多个历史 profile 生成聚合版 rule applicability。
+- 聚合版 profile 不会覆盖单次 profile 的可复现性。
+- 聚合策略与来源能被 UI 和审计回溯。
+- 低样本或冲突情况有明确提示，不会静默吞掉。
+
+UI 关联任务：
+
+- `UI-V3-012 Rule Applicability Viewer`
 - `UI-V3-002 Rule Pool`
 
 ---
@@ -2259,7 +2317,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V3-S3-003 P2 Snapshot 文件路径收口评估
+### [~] NW-V3-S3-003 P2 Snapshot 文件路径收口评估
 
 任务目标：在 `MarketDataStorageService` 已成为结构化数据主读源的前提下，梳理 Market Snapshot 相关文件路径的保留与裁剪边界，避免 DB 与文件层长期双轨。
 
@@ -2354,6 +2412,7 @@ UI 关联任务：
 | NW-V3-S2-002 | UI-V3-004, UI-V3-005, UI-V3-006 |
 | NW-V3-S3-001 | UI-V3-016, UI-V3-013 |
 | NW-V3-S3-002 | UI-V3-012, UI-V3-013, UI-V2-001 |
+| NW-V3-SX-003A | UI-V3-012, UI-V3-002 |
 
 ---
 

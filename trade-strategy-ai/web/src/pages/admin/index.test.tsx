@@ -18,9 +18,9 @@ describe('AdminPage', () => {
       },
     );
 
-    expect(await screen.findByRole('heading', { name: '管理中心' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '用户管理' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '管理入口' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '权限与审计' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '运维恢复' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '配置管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回总览' })).toBeInTheDocument();
   });
 });

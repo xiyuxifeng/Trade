@@ -205,8 +205,6 @@ export function StrategyRegimeSelectionWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略工作台"
-        title="Regime-aware 规则选择"
         description="展示盘前策略运行时为什么选择、跳过或阻断某些 rule，并回溯到 market regime 和适用性画像版本。"
         actionLabel="返回策略工作台"
         onAction={() => {
@@ -291,9 +289,9 @@ export function StrategyRegimeSelectionWorkspace() {
             description="当前版本的规则选择结果与回溯字段。"
             action={
               <div className="flex gap-2">
-                <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/strategies')}>
+                {/* <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/strategies')}>
                   策略工作台
-                </Button>
+                </Button> */}
                 <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/rule-pool')}>
                   规则池
                 </Button>

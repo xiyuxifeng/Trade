@@ -76,14 +76,6 @@ export function MarketDatasetViewerDetail({
       title="数据集详情"
       description={selectedDataset ? '展示选中 dataset 的 metadata、sample rows、snapshot 回链和质量信息。' : '请选择一个数据集查看详情。'}
       className="border-slate-200 bg-white"
-      action={
-        <Link
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          to="/market"
-        >
-          返回快照浏览器
-        </Link>
-      }
     >
       {isLoading ? (
         <LoadingState label="正在加载数据集详情" description="包括 metadata、样本行和 snapshot 回链。" />
@@ -181,7 +173,7 @@ export function MarketDatasetViewerDetail({
           <EmptyState title="请选择一个数据集" description="点击左侧列表中的 dataset 进入详情查看。" />
           <div className="flex flex-wrap gap-2 text-sm">
             <Link className="text-sky-700 hover:underline" to="/market">
-              返回 Snapshot Browser
+              返回市场数据
             </Link>
             <span className="text-slate-400">·</span>
             <Link className="text-sky-700 hover:underline" to="/artifacts">

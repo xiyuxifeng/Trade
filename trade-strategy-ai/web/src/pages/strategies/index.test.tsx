@@ -126,8 +126,13 @@ describe('StrategiesPage', () => {
 
     renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
 
-    expect(await screen.findByRole('heading', { name: '策略工作台' })).toBeInTheDocument();
-    expect(screen.getByText('正式入口')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '进入规则选择' })).toHaveAttribute(
+      'href',
+      '/strategies/regime-selection',
+    );
+    expect(
+      screen.getByText('在 Web 中构建策略版本、运行盘前和盘后任务，并通过 Job、Artifact 和 Report 解释结果。'),
+    ).toBeInTheDocument();
     expect((await screen.findAllByText('config/strategy-v3.yaml')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '候选版本' })).toBeInTheDocument();

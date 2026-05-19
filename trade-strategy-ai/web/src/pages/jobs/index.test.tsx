@@ -125,7 +125,7 @@ describe('JobsPage', () => {
       ['/jobs'],
     );
 
-    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
     expect(await screen.findByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('pipeline-run')).toBeInTheDocument();
 
@@ -152,7 +152,7 @@ describe('JobsPage', () => {
 
     renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs']);
 
-    expect(await screen.findByRole('heading', { name: '任务列表' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '下一页' }));
 
     await waitFor(() => {

@@ -23,9 +23,9 @@ function SectionTitle({ children }: { children: string }) {
 
 function FieldCard({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
       <SectionTitle>{label}</SectionTitle>
-      <p className="mt-1 break-all text-sm text-slate-100">{value ?? '未提供'}</p>
+      <p className="mt-1 break-all text-sm text-slate-900">{value ?? '未提供'}</p>
     </div>
   );
 }
@@ -49,9 +49,9 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
   if (state === 'loading') {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-slate-400">正在加载配置快照...</p>
-        <div className="h-12 animate-pulse rounded-xl border border-slate-800 bg-slate-950/60" />
-        <div className="h-36 animate-pulse rounded-xl border border-slate-800 bg-slate-950/60" />
+        <p className="text-sm text-slate-600">正在加载配置快照...</p>
+        <div className="h-12 animate-pulse rounded-xl border border-slate-200 bg-white" />
+        <div className="h-36 animate-pulse rounded-xl border border-slate-200 bg-white" />
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
   }
 
   if (!snapshot) {
-    return <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">该任务没有配置快照。</div>;
+    return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">该任务没有配置快照。</div>;
   }
 
   const invalid = state === 'invalid_config' || isInvalidSnapshot(snapshot);
@@ -90,7 +90,7 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <SectionTitle>masked sections</SectionTitle>
           <div className="mt-2 flex flex-wrap gap-2">
             {maskedSections.length ? (
@@ -100,14 +100,14 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
                 </Badge>
               ))
             ) : (
-              <span className="text-sm text-slate-400">未提供</span>
+              <span className="text-sm text-slate-600">未提供</span>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <SectionTitle>missing / invalid fields</SectionTitle>
-          <div className="mt-2 space-y-3 text-sm text-slate-200">
+          <div className="mt-2 space-y-3 text-sm text-slate-700">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">missing fields</p>
               <p className="mt-1">{arrayOrFallback(snapshot.missing_fields, '无')}</p>
@@ -120,10 +120,10 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
         <SectionTitle>脱敏配置快照</SectionTitle>
         <p className="mt-1 text-xs text-slate-500">只展示脱敏后的内容，用于复盘和问题定位。</p>
-        <pre className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
+        <pre className="mt-3 max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
           {stringifyJson(snapshot.masked_snapshot)}
         </pre>
       </div>

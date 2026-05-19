@@ -438,10 +438,10 @@ export function MarketWorkspaceShell() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {[
-              { label: 'Kaipan', href: '/kaipan' },
-              { label: '市场状态', href: '/market-state' },
-              { label: '快照中心', href: '/snapshots' },
               { label: '任务中心', href: '/jobs' },
+              { label: '市场总览', href: '/market' },
+              { label: '数据集', href: '/market/datasets' },
+              { label: '策略工作台', href: '/strategies' },
               { label: '产物中心', href: '/artifacts' },
             ].map((item) => (
               <a

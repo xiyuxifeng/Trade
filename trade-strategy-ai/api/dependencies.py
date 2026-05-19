@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 import os
 from functools import lru_cache
 from typing import Any
 
-from fastapi import Depends, HTTPException, Security
+from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_403_FORBIDDEN
 
+from config.database import get_async_session
 from src.common.config import AppConfig, ApiKeyAccessConfig, load_app_config
+from src.models.user import User, UserSession
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 _AUTH_ERROR_DETAIL = "Invalid or missing API key"
@@ -114,6 +119,48 @@ def _find_api_key_record(key: str | None) -> dict[str, str] | None:
     return None
 
 
+async def _get_session_principal(
+    request: Request | None,
+    db: AsyncSession | None,
+) -> CurrentPrincipal | None:
+    """尝试用 session token 解析当前身份。"""
+    if request is None or db is None or not hasattr(db, "execute"):
+        return None
+
+    token = request.headers.get("X-Auth-Token") or request.cookies.get("auth_token")
+    if not token:
+        return None
+
+    result = await db.execute(
+        select(UserSession).where(
+            UserSession.token == token,
+        )
+    )
+    user_session = result.scalar_one_or_none()
+    if user_session is None:
+        return None
+
+    user_session.last_used_at = datetime.now(UTC)
+    user_session.expires_at = datetime.now(UTC) + timedelta(days=3650)
+    await db.flush()
+    await db.commit()
+
+    result = await db.execute(
+        select(User).where(User.id == user_session.user_id, User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    return CurrentPrincipal(
+        role=_normalize_role(user.role),
+        api_key_label=user.display_name or user.username,
+        authenticated=True,
+        source="session",
+        api_key=token,
+    )
+
+
 def describe_api_key(key: str | None) -> dict[str, Any] | None:
     """把明文 API Key 映射成公开可展示的身份标签。"""
     record = _find_api_key_record(key)
@@ -146,8 +193,14 @@ def _role_rank(role: str) -> int:
 
 async def get_current_principal(
     key: str | None = Security(_api_key_header),
+    request: Request = None,
+    db: AsyncSession = Depends(get_async_session),
 ) -> CurrentPrincipal:
     """解析当前请求身份。"""
+    session_principal = await _get_session_principal(request, db)
+    if session_principal is not None:
+        return session_principal
+
     if not _is_api_key_enabled():
         return CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous")
 
@@ -174,8 +227,14 @@ def require_role(min_role: str):
 
 async def verify_api_key(
     key: str | None = Security(_api_key_header),
+    request: Request = None,
+    db: AsyncSession = Depends(get_async_session),
 ) -> str:
     """Verify API key from X-API-Key header."""
+    session_principal = await _get_session_principal(request, db)
+    if session_principal is not None:
+        return session_principal.api_key or "session"
+
     if not _is_api_key_enabled():
         return "anonymous"
 

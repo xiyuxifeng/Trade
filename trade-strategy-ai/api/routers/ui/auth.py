@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import _find_api_key_record, _is_api_key_enabled
+from api.dependencies import _find_api_key_record, _is_api_key_enabled, require_role
 from config.database import get_async_session
 from src.auth import hash_password, verify_password
 from src.models.user import User, UserSession
@@ -82,13 +82,7 @@ async def get_current_user_with_session(
     }
 
 
-async def require_admin(
-    current_user: dict[str, Any] = Depends(get_current_user_with_session),
-) -> dict[str, Any]:
-    """要求当前用户具有 admin 角色。"""
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    return current_user
+require_admin = require_role("admin")
 
 
 @router.post("/login")

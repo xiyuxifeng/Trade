@@ -111,7 +111,7 @@ function renderInlineText(text: string): ReactNode[] {
     if (segment.startsWith('`') && segment.endsWith('`') && segment.length > 1) {
       return (
         <code
-          className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-[0.82em] text-sky-200"
+          className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.82em] text-sky-700"
           key={`${segment}-${index}`}
         >
           {segment.slice(1, -1)}
@@ -181,9 +181,9 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
 
 function HtmlPreviewFrame({ html, title = 'HTML 预览' }: { html: string; title?: string }) {
   return (
-    <iframe
+        <iframe
       aria-label={title}
-      className="min-h-[30rem] w-full rounded-2xl border border-slate-800 bg-white"
+      className="min-h-[30rem] w-full rounded-2xl border border-slate-200 bg-white"
       loading="lazy"
       sandbox="allow-same-origin"
       srcDoc={html}
@@ -194,7 +194,7 @@ function HtmlPreviewFrame({ html, title = 'HTML 预览' }: { html: string; title
 
 function RawPreview({ content }: { content: string }) {
   return (
-    <pre className="max-h-[36rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-200">
+    <pre className="max-h-[36rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
       {content}
     </pre>
   );

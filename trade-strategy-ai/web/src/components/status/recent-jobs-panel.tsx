@@ -67,26 +67,26 @@ export function RecentJobsPanel() {
             {getErrorMessage(error)}
           </div>
         ) : !data?.items.length ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
             暂无最近任务。
           </div>
         ) : (
           data.items.map((job) => (
             <article
               className={cn(
-                'cursor-pointer rounded-2xl border border-slate-800 bg-slate-950/60 p-4 transition-colors hover:border-sky-500/25 hover:bg-slate-900/70',
+                'cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-sky-300 hover:bg-sky-50/70',
               )}
               key={job.id}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="font-medium text-slate-100">{job.job_type}</p>
-                  <p className="text-xs text-slate-400">{job.id}</p>
+                  <p className="font-medium text-slate-900">{job.job_type}</p>
+                  <p className="text-xs text-slate-500">{job.id}</p>
                 </div>
                 <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
               </div>
 
-              <div className="mt-3 grid gap-2 text-xs text-slate-400 md:grid-cols-2">
+              <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
                 <div>
                   <span className="text-slate-500">Created by:</span> {job.created_by}
                 </div>

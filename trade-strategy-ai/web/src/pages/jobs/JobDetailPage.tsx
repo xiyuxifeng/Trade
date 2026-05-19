@@ -61,9 +61,9 @@ function buildTimelineItems(job: JobRecord): StepTimelineItem[] {
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-1 break-all text-sm text-slate-100">{value ?? '未记录'}</p>
+      <p className="mt-1 break-all text-sm text-slate-900">{value ?? '未记录'}</p>
     </div>
   );
 }
@@ -227,7 +227,7 @@ export function JobDetailPage() {
       </div>
 
       {runningRefresh ? (
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           任务仍在运行，页面会自动刷新状态。
         </div>
       ) : null}
@@ -304,7 +304,7 @@ export function JobDetailPage() {
                 retryLabel="重新运行"
               />
             ) : (
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">暂无错误。</div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">暂无错误。</div>
             )}
           </SectionCard>
 

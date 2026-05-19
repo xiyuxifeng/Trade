@@ -87,11 +87,11 @@ function summarizeParams(job: JobRecord) {
 
 function SchemaFieldRow({ fieldName, field }: { fieldName: string; field: PipelineParamsSchemaField }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-medium text-slate-100">{fieldName}</p>
-          <p className="mt-1 text-sm text-slate-400">{field.description ?? '未提供说明'}</p>
+          <p className="font-medium text-slate-900">{fieldName}</p>
+          <p className="mt-1 text-sm text-slate-600">{field.description ?? '未提供说明'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="info">{field.type}</Badge>
@@ -105,10 +105,10 @@ function SchemaFieldRow({ fieldName, field }: { fieldName: string; field: Pipeli
 
 function RecentJobRow({ job, onOpen }: { job: JobRecord; onOpen: () => void }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-slate-100">{job.id}</p>
+          <p className="font-medium text-slate-900">{job.id}</p>
           <p className="mt-1 text-xs text-slate-500">
             {formatTimestamp(job.created_at)} · {summarizeParams(job)}
           </p>
@@ -215,7 +215,7 @@ export function ArticlePipelinePage() {
       /> */}
 
       {submitMessage ? (
-        <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">{submitMessage}</div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{submitMessage}</div>
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
@@ -241,30 +241,30 @@ export function ArticlePipelinePage() {
             ) : pipeline ? (
               <>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Pipeline ID</p>
-                    <p className="mt-1 break-all text-sm text-slate-100">{pipeline.pipeline_id}</p>
+                    <p className="mt-1 break-all text-sm text-slate-900">{pipeline.pipeline_id}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Workflow</p>
-                    <p className="mt-1 break-all text-sm text-slate-100">{pipeline.workflow.workflow_id}</p>
+                    <p className="mt-1 break-all text-sm text-slate-900">{pipeline.workflow.workflow_id}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Job Type</p>
-                    <p className="mt-1 break-all text-sm text-slate-100">{pipeline.workflow.job_type}</p>
+                    <p className="mt-1 break-all text-sm text-slate-900">{pipeline.workflow.job_type}</p>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Pipeline 说明</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{pipeline.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{pipeline.description}</p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <p className="text-sm font-medium text-slate-100">{pipeline.workflow.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{pipeline.workflow.description}</p>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-medium text-slate-900">{pipeline.workflow.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{pipeline.workflow.description}</p>
                 </div>
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-slate-100">输入参数</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">输入参数</h3>
                     <Badge variant="info">
                       {pipeline.workflow.job_definition?.params_schema?.allow_additional_fields ? '允许额外字段' : '仅 schema 字段'}
                     </Badge>
@@ -276,7 +276,7 @@ export function ArticlePipelinePage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                       当前 pipeline 没有可编辑的参数定义。
                     </div>
                   )}
@@ -325,15 +325,15 @@ export function ArticlePipelinePage() {
                   disabled={isLoading || Boolean(pipelineError)}
                 />
                 {fieldErrors[mode] ? (
-                  <p id="article-pipeline-value-error" className="text-sm text-rose-300">
-                    {fieldErrors[mode]}
-                  </p>
+                <p id="article-pipeline-value-error" className="text-sm text-rose-700">
+                  {fieldErrors[mode]}
+                </p>
                 ) : null}
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
-              <p className="font-medium text-slate-100">常见失败原因</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">常见失败原因</p>
               <ul className="mt-2 space-y-2">
                 <li>config_path 不存在、写错，或者运行账号没有读取权限。</li>
                 <li>Profile 与当前环境不匹配，导致配置加载失败。</li>
@@ -395,7 +395,7 @@ export function ArticlePipelinePage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 暂无 article_pipeline 运行记录。
               </div>
             )}
@@ -407,9 +407,9 @@ export function ArticlePipelinePage() {
             <CardTitle>失败定位</CardTitle>
             <CardDescription>如果运行失败，先去 Job Detail 看 logs、artifacts 和 audit trail。</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-300">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="font-medium text-slate-100">定位顺序</p>
+          <CardContent className="space-y-3 text-sm text-slate-700">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-medium text-slate-900">定位顺序</p>
               <ol className="mt-2 space-y-2 pl-4">
                 <li>打开对应 Job Detail。</li>
                 <li>检查错误 message 和 log 文件。</li>
@@ -417,8 +417,8 @@ export function ArticlePipelinePage() {
                 <li>再回到这里补 config_path 或 Profile。</li>
               </ol>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="font-medium text-slate-100">页面状态覆盖</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-medium text-slate-900">页面状态覆盖</p>
               <ul className="mt-2 space-y-2">
                 <li>API unavailable: 概览或最近任务加载失败时显示重试。</li>
                 <li>validation error: 本地空值校验和后端字段错误都会落到表单下方。</li>

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import { SettingsPage } from './index';
@@ -29,6 +29,10 @@ const mockedSaveSettings = vi.mocked(saveSettings);
 const mockedValidateSettingsDraft = vi.mocked(validateSettingsDraft);
 
 describe('SettingsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('previews diff and saves the pending config section', async () => {
     const user = userEvent.setup();
 
@@ -88,7 +92,9 @@ describe('SettingsPage', () => {
       },
     );
 
-    expect(await screen.findByText('Configuration Studio')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '配置管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回管理中心' })).toBeInTheDocument();
+    expect(await screen.findByText('配置文件路径')).toBeInTheDocument();
 
     const editor = await screen.findByLabelText('Timezone');
     await user.clear(editor);
@@ -167,6 +173,7 @@ describe('SettingsPage', () => {
       },
     );
 
+    expect(await screen.findByRole('heading', { name: '配置管理' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Backup history' })).toBeInTheDocument();
     expect(await screen.findByText('app.20260510-080000.yaml')).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Restore' }));
@@ -222,9 +229,10 @@ describe('SettingsPage', () => {
       },
     );
 
-    expect(await screen.findByText('Configuration Studio')).toBeInTheDocument();
-    expect(await screen.findByText('app.20260510-080000.yaml')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '保存配置' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled();
+    expect(await screen.findByRole('heading', { name: '没有权限访问配置管理' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '返回管理中心' })).toBeInTheDocument();
+    expect(mockedGetSettingsConfig).not.toHaveBeenCalled();
+    expect(mockedGetSettingsSchema).not.toHaveBeenCalled();
+    expect(mockedListSettingsBackups).not.toHaveBeenCalled();
   });
 });

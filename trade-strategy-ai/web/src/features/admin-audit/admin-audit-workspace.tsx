@@ -214,9 +214,8 @@ export function AdminAuditWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="配置与管理"
         title="权限与审计"
-        description="查看关键操作、确认轨迹和 Job 审计详情，保持和现有正式工作台一致的浅色界面。"
+        description="查看关键操作、确认轨迹和 Job 审计详情。"
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -160,11 +160,11 @@ describe('UI API client contract', () => {
     expect(findCall('/reports/evaluation/2026-05-10')).toBeTruthy();
     expect(findCall('/reports/daily/2026-05-10/html')).toBeTruthy();
     expect(findCall('/reports/evaluation/2026-05-10/html')).toBeTruthy();
-    expect(findCall('/api/ui/v1/settings/config?configPath=config%2Fapp.yaml')).toBeTruthy();
-    expect(findCall('/api/ui/v1/settings/schema?configPath=config%2Fapp.yaml')).toBeTruthy();
+    expect(findCall('/api/ui/v1/settings/config?config_path=config%2Fapp.yaml')).toBeTruthy();
+    expect(findCall('/api/ui/v1/settings/schema?config_path=config%2Fapp.yaml')).toBeTruthy();
     expectJsonBody('/api/ui/v1/settings/validate', 'POST', { config_path: 'config/app.yaml', draft: {} });
     expectJsonBody('/api/ui/v1/settings/save', 'POST', { config_path: 'config/app.yaml', draft: {}, confirmed: true });
-    expect(findCall('/api/ui/v1/settings/backups?configPath=config%2Fapp.yaml')).toBeTruthy();
+    expect(findCall('/api/ui/v1/settings/backups?config_path=config%2Fapp.yaml')).toBeTruthy();
     expectJsonBody('/api/ui/v1/settings/restore', 'POST', {
       config_path: 'config/app.yaml',
       backup_path: 'data/backups/app.yaml',

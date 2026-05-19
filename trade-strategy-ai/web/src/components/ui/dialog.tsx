@@ -46,10 +46,10 @@ export function DialogContent({ className, children, ...props }: HTMLAttributes<
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
       <div
         className={cn(
-          'w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-6 text-slate-100 shadow-2xl',
+          'w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl',
           className,
         )}
         {...props}
@@ -69,7 +69,7 @@ export function DialogTitle({ className, ...props }: HTMLAttributes<HTMLHeadingE
 }
 
 export function DialogDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-slate-400', className)} {...props} />;
+  return <p className={cn('text-sm text-slate-600', className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

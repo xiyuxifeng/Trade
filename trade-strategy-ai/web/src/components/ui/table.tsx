@@ -19,13 +19,13 @@ export function TableBody({ className, ...props }: HTMLAttributes<HTMLTableSecti
 }
 
 export function TableFooter({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
-  return <tfoot className={cn('border-t bg-slate-950/80 font-medium [&>tr]:last:border-b-0', className)} {...props} />;
+  return <tfoot className={cn('border-t bg-slate-50 font-medium [&>tr]:last:border-b-0', className)} {...props} />;
 }
 
 export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn('border-b border-slate-800/80 transition-colors hover:bg-slate-900/70 data-[state=selected]:bg-slate-900/70', className)}
+      className={cn('border-b border-slate-200 transition-colors hover:bg-slate-50 data-[state=selected]:bg-slate-50', className)}
       {...props}
     />
   );
@@ -44,7 +44,7 @@ export function TableHead({ className, ...props }: HTMLAttributes<HTMLTableCellE
 }
 
 export function TableCell({ className, ...props }: HTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('px-4 py-3 align-middle text-slate-300', className)} {...props} />;
+  return <td className={cn('px-4 py-3 align-middle text-slate-700', className)} {...props} />;
 }
 
 export function TableCaption({ className, ...props }: HTMLAttributes<HTMLTableCaptionElement>) {

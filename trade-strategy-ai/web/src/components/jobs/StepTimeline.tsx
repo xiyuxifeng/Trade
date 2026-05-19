@@ -98,7 +98,7 @@ export function StepTimeline({ items, emptyLabel = '暂无步骤时间线' }: St
   }, [items]);
 
   if (!orderedItems.length) {
-    return <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">{emptyLabel}</div>;
+    return <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">{emptyLabel}</div>;
   }
 
   function toggleExpanded(itemId: string) {
@@ -116,7 +116,7 @@ export function StepTimeline({ items, emptyLabel = '暂无步骤时间线' }: St
         const summary = timelineSummary(item);
 
         return (
-          <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <button
                 type="button"
@@ -138,7 +138,7 @@ export function StepTimeline({ items, emptyLabel = '暂无步骤时间线' }: St
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-medium text-slate-100">{item.title ?? item.stepName}</p>
+                    <p className="truncate font-medium text-slate-900">{item.title ?? item.stepName}</p>
                     <Badge variant={statusVariant(item.status)}>{getStatusLabel(item.status)}</Badge>
                   </div>
                   <p className="mt-1 break-all text-xs text-slate-500">
@@ -151,7 +151,7 @@ export function StepTimeline({ items, emptyLabel = '暂无步骤时间线' }: St
 
               <button
                 type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-transparent text-slate-100 transition-colors hover:bg-slate-800"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-transparent text-slate-700 transition-colors hover:bg-slate-100"
                 aria-label={isExpanded ? '收起步骤详情' : '展开步骤详情'}
                 onClick={() => toggleExpanded(item.id)}
               >
@@ -161,27 +161,27 @@ export function StepTimeline({ items, emptyLabel = '暂无步骤时间线' }: St
 
             {isExpanded ? (
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">开始时间</p>
-                  <p className="mt-1 text-sm text-slate-100">{formatTimestamp(item.startedAt)}</p>
+                  <p className="mt-1 text-sm text-slate-900">{formatTimestamp(item.startedAt)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">完成时间</p>
-                  <p className="mt-1 text-sm text-slate-100">{formatTimestamp(item.finishedAt)}</p>
+                  <p className="mt-1 text-sm text-slate-900">{formatTimestamp(item.finishedAt)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">耗时</p>
-                  <p className="mt-1 text-sm text-slate-100">{formatDuration(item.durationMs)}</p>
+                  <p className="mt-1 text-sm text-slate-900">{formatDuration(item.durationMs)}</p>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">错误摘要</p>
-                  <p className={cn('mt-1 text-sm', item.errorSummary ? 'text-rose-200' : 'text-slate-100')}>
+                  <p className={cn('mt-1 text-sm', item.errorSummary ? 'text-rose-600' : 'text-slate-900')}>
                     {item.errorSummary ?? '未提供'}
                   </p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">详情</p>
-                  <pre className="mt-2 max-h-60 overflow-auto rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-200">
+                  <pre className="mt-2 max-h-60 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
                     {stringifyDetails(item.details)}
                   </pre>
                 </div>

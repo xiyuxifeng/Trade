@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -305,13 +305,22 @@ export function BacktestCenter() {
 
   return (
     <main className="page-stack">
-      <PageHeader
-        // kicker="正式入口"
-        // title="回测中心"
-        // description="运行回测、查看最近结果、复核报告和可复现性。"
-        actionLabel="打开任务中心"
-        onAction={() => navigate('/jobs')}
-      />
+      <div className="flex flex-wrap items-center justify-start gap-3">
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+          to="/backtest/regime"
+        >
+          进入 Regime 回测
+        </Link>
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          to="/jobs"
+        >
+          打开任务中心
+        </Link>
+      </div>
+
+      <PageHeader />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.55fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">

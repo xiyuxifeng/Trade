@@ -202,7 +202,7 @@ function getArtifactsRoute() {
 }
 
 function getMarketStateRoute() {
-  return '/market-state';
+  return '/market';
 }
 
 function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecoveryPage) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { PageHeader, ErrorState } from '@/components/kit';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import {
@@ -137,13 +139,13 @@ function SectionEditor({
 }) {
   const inputId = `setting-${section.key}`;
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <label className="font-medium text-slate-100" htmlFor={inputId}>
+          <label className="font-medium text-slate-900" htmlFor={inputId}>
             {section.title}
           </label>
-          <p className="mt-1 text-sm text-slate-400">{section.summary}</p>
+          <p className="mt-1 text-sm text-slate-600">{section.summary}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant={dirty ? 'warning' : 'default'}>{dirty ? '已修改' : '未修改'}</Badge>
@@ -202,10 +204,10 @@ function BackupCard({
   onRestore: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-medium text-slate-100">{item.name}</p>
+          <p className="font-medium text-slate-900">{item.name}</p>
           <p className="mt-1 break-all text-xs text-slate-500">{item.path}</p>
         </div>
         <Badge variant="info">{formatBytes(item.size_bytes)}</Badge>
@@ -222,6 +224,7 @@ function BackupCard({
 
 export function SettingsCenter() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { canAccess, principal } = useAuth();
   const [configPathInput, setConfigPathInput] = useState('config/app.yaml');
   const [configPath, setConfigPath] = useState('config/app.yaml');
@@ -239,18 +242,21 @@ export function SettingsCenter() {
   const configQuery = useQuery<SettingsConfigResponse, ApiError>({
     queryKey: ['settings-config', configPath],
     queryFn: () => getSettingsConfig(configPath),
+    enabled: canAccess('admin'),
     staleTime: 10_000,
   });
 
   const schemaQuery = useQuery({
     queryKey: ['settings-schema', configPath],
     queryFn: () => getSettingsSchema(configPath),
+    enabled: canAccess('admin'),
     staleTime: 10_000,
   });
 
   const backupsQuery = useQuery({
     queryKey: ['settings-backups', configPath],
     queryFn: () => listSettingsBackups(configPath),
+    enabled: canAccess('admin'),
     staleTime: 10_000,
   });
 
@@ -386,13 +392,29 @@ export function SettingsCenter() {
     setValidationMessage('已重置为当前配置快照。');
   };
 
+  if (!canEditSettings) {
+    return (
+      <main className="page-stack">
+        <ErrorState
+          category="permission denied"
+          title="没有权限访问配置管理"
+          description="当前身份只能浏览配置相关入口，不能直接打开配置编辑页。"
+          suggestion="请返回管理中心，或切换到管理员账号后重试。"
+          actions={[{ label: '返回管理中心', to: '/admin' }]}
+        />
+      </main>
+    );
+  }
+
   return (
     <main className="page-stack">
-      {/* <PageHeader
+      <PageHeader
         kicker="系统设置"
-        title="配置中心"
+        title="配置管理"
         description="查看受掩码保护的运行时配置，编辑目标部分，预览差异结构，并管理系统备份。"
-      /> */}
+        actionLabel="返回管理中心"
+        onAction={() => navigate('/admin')}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
         <Card>
@@ -431,21 +453,21 @@ export function SettingsCenter() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">配置分段 (Sections)</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-100">{sections.length}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{sections.length}</p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已修改 (Dirty)</p>
-                <p className="mt-2 text-2xl font-semibold text-amber-300">{dirtyCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-700">{dirtyCount}</p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">备份数 (Backups)</p>
-                <p className="mt-2 text-2xl font-semibold text-emerald-300">{backupCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-700">{backupCount}</p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">分段导航 (Section Navigator)</p>
               <div className="mt-3 grid gap-2">
                 {sections.map((section) => (
@@ -454,7 +476,7 @@ export function SettingsCenter() {
                       'rounded-xl border px-3 py-3 text-left transition-colors',
                       section.key === activeSection?.key
                         ? 'border-sky-500/40 bg-sky-500/10'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/80',
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
                     ].join(' ')}
                     key={section.key}
                     onClick={() => setActiveSectionKey(section.key)}
@@ -462,7 +484,7 @@ export function SettingsCenter() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium text-slate-100">{section.title}</p>
+                        <p className="font-medium text-slate-900">{section.title}</p>
                         <p className="mt-1 text-xs text-slate-500">{section.summary}</p>
                       </div>
                       <Badge variant={dirtySections.has(section.key) ? 'warning' : sectionBadgeVariant(getValueKind(currentConfig[section.key]))}>
@@ -502,7 +524,7 @@ export function SettingsCenter() {
               </div>
             ) : null}
             {canEditSettings ? (
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
                 保存和恢复会先写入临时文件并原子替换配置，然后重新加载验证。若运行中的 API / Worker 仍缓存旧配置，请按提示重载。
               </div>
             ) : null}
@@ -528,7 +550,7 @@ export function SettingsCenter() {
             </CardHeader>
             <CardContent>
               {!activeSection ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
                   {configQuery.isLoading || schemaQuery.isLoading ? '正在加载配置…' : '没有可编辑的配置项。'}
                 </div>
               ) : (
@@ -565,7 +587,7 @@ export function SettingsCenter() {
                     {getErrorMessage(configQuery.error)}
                   </div>
                 ) : (
-                  <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                  <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-800">
                     {prettyJson(currentConfig)}
                   </pre>
                 )}
@@ -581,11 +603,11 @@ export function SettingsCenter() {
                 {validateMutation.isPending ? (
                   <Skeleton className="h-72 w-full" />
                 ) : validationDiff ? (
-                  <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+                  <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-800">
                     {prettyJson(validationDiff)}
                   </pre>
                 ) : (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
                     点击“预览差异”后，这里会显示脱敏后的变更结果。
                   </div>
                 )}
@@ -613,7 +635,7 @@ export function SettingsCenter() {
                   {getErrorMessage(backupsQuery.error)}
                 </div>
               ) : !backupsQuery.data?.items.length ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
                   当前路径没有找到备份文件。
                 </div>
               ) : (
@@ -646,18 +668,18 @@ export function SettingsCenter() {
 
           <div className="grid gap-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Config path</p>
-                <p className="mt-2 break-all font-medium text-slate-100">{configPath}</p>
+                <p className="mt-2 break-all font-medium text-slate-900">{configPath}</p>
               </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Dirty sections</p>
-                <p className="mt-2 font-medium text-slate-100">{dirtyCount}</p>
+                <p className="mt-2 font-medium text-slate-900">{dirtyCount}</p>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Draft payload</p>
-              <pre className="mt-3 max-h-60 overflow-auto text-xs text-slate-200">
+              <pre className="mt-3 max-h-60 overflow-auto text-xs text-slate-800">
                 {prettyJson(buildDraftPayload(sections, draftValues, draftKinds, dirtySections))}
               </pre>
             </div>
@@ -695,13 +717,13 @@ export function SettingsCenter() {
 
           <div className="grid gap-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Backup path</p>
-                <p className="mt-2 break-all font-medium text-slate-100">{restoreTarget?.path}</p>
+                <p className="mt-2 break-all font-medium text-slate-900">{restoreTarget?.path}</p>
               </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Target config</p>
-                <p className="mt-2 break-all font-medium text-slate-100">{configPath}</p>
+                <p className="mt-2 break-all font-medium text-slate-900">{configPath}</p>
               </div>
             </div>
           </div>

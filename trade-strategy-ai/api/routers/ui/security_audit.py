@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role
 from src.services.security_audit_query_service import SecurityAuditQueryService
 
 
@@ -27,8 +27,7 @@ async def list_permission_denied_logs(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     query_service: SecurityAuditQueryService = Depends(get_security_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询权限拒绝日志。"""
     result = await query_service.list_permission_denied_logs(
@@ -49,8 +48,7 @@ async def list_permission_denied_logs(
 async def get_permission_denied_log(
     event_id: str,
     query_service: SecurityAuditQueryService = Depends(get_security_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询单条权限拒绝日志。"""
     result = await query_service.get_permission_denied_log(event_id)

@@ -37,6 +37,5 @@ describe('Sidebar', () => {
       'aria-disabled',
       'true',
     );
-    expect(screen.getByText('viewer')).toBeInTheDocument();
   });
 });

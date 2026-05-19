@@ -66,11 +66,11 @@ function FieldEditor({
 }) {
   const errorId = `workflow-field-${name}-error`;
   const label = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <p className="font-medium text-slate-100">{name}</p>
-        <p className="mt-1 text-sm text-slate-400">{field.description}</p>
-      </div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-slate-900">{name}</p>
+          <p className="mt-1 text-sm text-slate-600">{field.description}</p>
+        </div>
       <div className="flex flex-wrap gap-2">
         <Badge variant={field.required ? 'warning' : 'default'}>{field.required ? '必填' : '可选'}</Badge>
         <Badge variant="info">{field.type}</Badge>
@@ -79,16 +79,16 @@ function FieldEditor({
   );
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
       {label}
       <div className="mt-4">
         {field.type === 'boolean' ? (
-          <label className="flex items-center gap-3 text-sm text-slate-200">
+          <label className="flex items-center gap-3 text-sm text-slate-700">
             <input
               aria-describedby={error ? errorId : undefined}
               aria-invalid={error ? 'true' : undefined}
               checked={Boolean(value)}
-              className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+              className="h-4 w-4 rounded border-slate-300 bg-white"
               onChange={(event) => onChange(event.target.checked)}
               type="checkbox"
             />
@@ -129,7 +129,7 @@ function FieldEditor({
         )}
       </div>
       {error ? (
-        <p className="mt-2 text-sm text-rose-300" id={errorId}>
+        <p className="mt-2 text-sm text-rose-700" id={errorId}>
           {error}
         </p>
       ) : null}
@@ -231,9 +231,9 @@ export function WorkflowParameterForm({
       </CardHeader>
       <CardContent className="space-y-4">
         {!schema ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-            当前工作流没有可编辑参数。
-          </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          当前工作流没有可编辑参数。
+        </div>
         ) : (
           <>
             <div className="grid gap-3">
@@ -256,9 +256,9 @@ export function WorkflowParameterForm({
               ))}
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">参数预览</p>
-              <pre className="mt-3 max-h-64 overflow-auto text-xs text-slate-200">
+              <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-800">
                 {prettyJson(values)}
               </pre>
             </div>
@@ -266,16 +266,16 @@ export function WorkflowParameterForm({
         )}
 
         {errorMessage ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
-            {errorMessage}
-          </div>
-        ) : null}
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {errorMessage}
+        </div>
+      ) : null}
 
-        {submittedSummary ? (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            工作流已提交到 Job Center。
-          </div>
-        ) : null}
+      {submittedSummary ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          工作流已提交到 Job Center。
+        </div>
+      ) : null}
 
         <div className="flex flex-wrap gap-3">
           <Button onClick={submit} disabled={runMutation.isPending || !schema || !canRunWorkflow}>
@@ -293,7 +293,7 @@ export function WorkflowParameterForm({
           </Button>
         </div>
         {!canRunWorkflow ? (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
             当前身份仅可查看参数，提交运行需要 operator 权限。
           </div>
         ) : null}
@@ -310,27 +310,27 @@ export function WorkflowParameterForm({
 
           <div className="grid gap-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">工作流</p>
-                <p className="mt-2 font-medium text-slate-100">{workflow.title}</p>
-                <p className="mt-1 text-sm text-slate-400">{workflow.description}</p>
+                <p className="mt-2 font-medium text-slate-900">{workflow.title}</p>
+                <p className="mt-1 text-sm text-slate-600">{workflow.description}</p>
               </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">风险说明</p>
-                <p className="mt-2 font-medium text-slate-100">{workflow.job_definition?.risk ?? 'medium'}</p>
-                <p className="mt-1 text-sm text-slate-400">提交后会创建 Job 并进入任务中心。</p>
+                <p className="mt-2 font-medium text-slate-900">{workflow.job_definition?.risk ?? 'medium'}</p>
+                <p className="mt-1 text-sm text-slate-600">提交后会创建 Job 并进入任务中心。</p>
               </div>
             </div>
             <div>
-              <p className="mb-2 text-sm font-medium text-slate-200">参数摘要</p>
-              <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-200">
+              <p className="mb-2 text-sm font-medium text-slate-800">参数摘要</p>
+              <pre className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-800">
                 {prettyJson(previewParams)}
               </pre>
             </div>
           </div>
 
           <DialogFooter>
-            <DialogClose className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800">
+            <DialogClose className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50">
               取消
             </DialogClose>
             <Button

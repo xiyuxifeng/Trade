@@ -178,9 +178,6 @@ export function StrategyWorkspaceArtifacts({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge value={regimeSelection.quality_status ? String(regimeSelection.quality_status) : 'info'} />
-                    <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/strategies/regime-selection?version_id=${selectedVersion.version_id}`)} variant="outline">
-                      查看完整视图
-                    </Button>
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">

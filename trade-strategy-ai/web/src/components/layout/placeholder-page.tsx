@@ -16,7 +16,7 @@ export function PlaceholderPage({ title, description, note }: PlaceholderPagePro
           <CardTitle>Coming next</CardTitle>
           <CardDescription>Shell complete, content will be connected in the next stage.</CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-slate-300">
+        <CardContent className="text-sm text-slate-700">
           <p>{note}</p>
         </CardContent>
       </Card>

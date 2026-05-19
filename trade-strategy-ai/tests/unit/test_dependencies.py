@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
 
@@ -18,6 +20,32 @@ async def test_verify_api_key_allows_when_auth_disabled(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_verify_api_key_uses_session_principal_when_auth_disabled(monkeypatch) -> None:
+    """关闭鉴权时也应优先识别 session 身份。"""
+    monkeypatch.setattr(
+        "api.dependencies._get_api_config",
+        lambda: {"auth": {"enabled": False, "api_keys": []}},
+    )
+
+    async def fake_session_principal(request, db):
+        return CurrentPrincipal(
+            role="admin",
+            api_key_label="Local Admin",
+            authenticated=True,
+            source="session",
+            api_key="session-token",
+        )
+
+    monkeypatch.setattr("api.dependencies._get_session_principal", fake_session_principal)
+
+    assert await verify_api_key(
+        None,
+        request=SimpleNamespace(headers={}, cookies={}),
+        db=SimpleNamespace(execute=lambda *args, **kwargs: None),
+    ) == "session-token"
+
+
+@pytest.mark.asyncio
 async def test_verify_api_key_accepts_matching_key(monkeypatch) -> None:
     """鉴权开启且 key 命中时应通过。"""
     monkeypatch.setattr(
@@ -26,6 +54,96 @@ async def test_verify_api_key_accepts_matching_key(monkeypatch) -> None:
     )
 
     assert await verify_api_key("demo-key") == "demo-key"
+
+
+@pytest.mark.asyncio
+async def test_verify_api_key_accepts_session_principal(monkeypatch) -> None:
+    """session principal 存在时也应允许通过。"""
+    monkeypatch.setattr(
+        "api.dependencies._get_api_config",
+        lambda: {"auth": {"enabled": True, "api_keys": ["demo-key"]}},
+    )
+
+    async def fake_session_principal(request, db):
+        return CurrentPrincipal(
+            role="admin",
+            api_key_label="Local Admin",
+            authenticated=True,
+            source="session",
+            api_key="session-token",
+        )
+
+    monkeypatch.setattr("api.dependencies._get_session_principal", fake_session_principal)
+
+    principal = await verify_api_key(
+        None,
+        request=SimpleNamespace(headers={}, cookies={}),
+        db=SimpleNamespace(execute=lambda *args, **kwargs: None),
+    )
+
+    assert principal == "session-token"
+
+
+@pytest.mark.asyncio
+async def test_get_current_principal_accepts_session_principal(monkeypatch) -> None:
+    """session principal 存在时也应返回对应身份。"""
+    monkeypatch.setattr(
+        "api.dependencies._get_api_config",
+        lambda: {"auth": {"enabled": True, "api_keys": ["demo-key"]}},
+    )
+
+    async def fake_session_principal(request, db):
+        return CurrentPrincipal(
+            role="admin",
+            api_key_label="Local Admin",
+            authenticated=True,
+            source="session",
+            api_key="session-token",
+        )
+
+    monkeypatch.setattr("api.dependencies._get_session_principal", fake_session_principal)
+
+    principal = await get_current_principal(
+        None,
+        request=SimpleNamespace(headers={}, cookies={}),
+        db=SimpleNamespace(execute=lambda *args, **kwargs: None),
+    )
+
+    assert isinstance(principal, CurrentPrincipal)
+    assert principal.role == "admin"
+    assert principal.source == "session"
+    assert principal.api_key == "session-token"
+
+
+@pytest.mark.asyncio
+async def test_get_current_principal_uses_session_principal_when_auth_disabled(monkeypatch) -> None:
+    """关闭鉴权时也应优先返回 session principal。"""
+    monkeypatch.setattr(
+        "api.dependencies._get_api_config",
+        lambda: {"auth": {"enabled": False, "api_keys": []}},
+    )
+
+    async def fake_session_principal(request, db):
+        return CurrentPrincipal(
+            role="admin",
+            api_key_label="Local Admin",
+            authenticated=True,
+            source="session",
+            api_key="session-token",
+        )
+
+    monkeypatch.setattr("api.dependencies._get_session_principal", fake_session_principal)
+
+    principal = await get_current_principal(
+        None,
+        request=SimpleNamespace(headers={}, cookies={}),
+        db=SimpleNamespace(execute=lambda *args, **kwargs: None),
+    )
+
+    assert isinstance(principal, CurrentPrincipal)
+    assert principal.role == "admin"
+    assert principal.source == "session"
+    assert principal.api_key == "session-token"
 
 
 @pytest.mark.asyncio

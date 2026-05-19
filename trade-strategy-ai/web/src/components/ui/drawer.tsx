@@ -46,10 +46,10 @@ export function DrawerContent({ className, children, ...props }: HTMLAttributes<
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 p-4">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-4 backdrop-blur-sm">
       <div
         className={cn(
-          'h-full w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 p-6 text-slate-100 shadow-2xl',
+          'h-full w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl',
           className,
         )}
         {...props}
@@ -69,7 +69,7 @@ export function DrawerTitle({ className, ...props }: HTMLAttributes<HTMLHeadingE
 }
 
 export function DrawerDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-slate-400', className)} {...props} />;
+  return <p className={cn('text-sm text-slate-600', className)} {...props} />;
 }
 
 export function DrawerFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

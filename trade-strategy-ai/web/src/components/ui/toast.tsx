@@ -35,11 +35,11 @@ export function Toaster() {
         <div
           key={`${item.title}-${index}`}
           className={cn(
-            'rounded-xl border border-slate-700 bg-slate-950/95 px-4 py-3 text-sm text-slate-100 shadow-2xl',
+            'rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-2xl',
           )}
         >
           <p className="font-medium">{item.title}</p>
-          {item.description ? <p className="mt-1 text-slate-400">{item.description}</p> : null}
+          {item.description ? <p className="mt-1 text-slate-600">{item.description}</p> : null}
         </div>
       ))}
     </div>

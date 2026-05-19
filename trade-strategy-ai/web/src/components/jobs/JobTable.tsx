@@ -37,9 +37,9 @@ export function JobTable({
   onViewDetail: (jobId: string) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <Table>
-        <TableHeader className="bg-slate-950/80">
+        <TableHeader className="bg-slate-50">
           <TableRow>
             <TableHead>Job ID</TableHead>
             <TableHead>任务类型</TableHead>
@@ -56,7 +56,7 @@ export function JobTable({
           {jobs.map((job) => (
             <TableRow key={job.id}>
               <TableCell>
-                <p className="break-all font-medium text-slate-100">{job.id}</p>
+                <p className="break-all font-medium text-slate-900">{job.id}</p>
               </TableCell>
               <TableCell>{job.job_type}</TableCell>
               <TableCell>

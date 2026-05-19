@@ -1,7 +1,7 @@
 """add rule applicability profiles table
 
-Revision ID: 2026_05_19_0001
-Revises: 2026_05_18_0001
+Revision ID: 2026_05_19_0002
+Revises: 2026_05_19_0001
 Create Date: 2026-05-19
 """
 from __future__ import annotations
@@ -13,8 +13,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "2026_05_19_0001"
-down_revision: Union[str, None] = "2026_05_18_0001"
+revision: str = "2026_05_19_0002"
+down_revision: Union[str, None] = "2026_05_19_0001"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -2,13 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { OperationalDashboardCenter } from './operational-dashboard-center';
 import { renderWithRouter } from '@/test/test-utils';
-import { getSystemDashboard } from '@/lib/api/system';
+import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
+import type { SystemStatusResponse } from '@/types/system';
 
 vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn(),
+  getSystemStatus: vi.fn(),
 }));
 
 const mockedGetSystemDashboard = vi.mocked(getSystemDashboard);
+const mockedGetSystemStatus = vi.mocked(getSystemStatus);
 
 describe('OperationalDashboardCenter', () => {
   it('renders operational summary data', async () => {
@@ -43,11 +46,21 @@ describe('OperationalDashboardCenter', () => {
           request_context: { path: '/api/ui/v1/jobs', method: 'POST', client_host: '127.0.0.1' },
         },
       ],
-    });
+    } as never);
+    const systemStatusResponse: SystemStatusResponse = {
+      status: 'ok',
+      run_mode: 'production',
+      database: { name: 'database', status: 'ok', latency_ms: 3.2, error: null },
+      config_path: 'config/app.yaml',
+      project_root: '/repo',
+      directories: {},
+      warnings: [],
+    };
+    mockedGetSystemStatus.mockResolvedValue(systemStatusResponse);
 
     renderWithRouter([{ path: '/data-health', element: <OperationalDashboardCenter /> }], ['/data-health']);
 
-    expect(await screen.findByText('Operational Dashboard')).toBeInTheDocument();
+    expect(await screen.findByText('Health Check Dashboard')).toBeInTheDocument();
     expect((await screen.findAllByText('job-failed-1')).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('stale market data')).toBeInTheDocument();
     expect(await screen.findByText('market_data')).toBeInTheDocument();

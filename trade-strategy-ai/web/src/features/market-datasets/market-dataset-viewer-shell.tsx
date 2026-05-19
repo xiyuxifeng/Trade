@@ -133,32 +133,15 @@ export function MarketDatasetViewerShell() {
     setSearchParams(buildSearchParams(searchParams, patch), { replace: true });
   };
 
-  const listLinkParams = new URLSearchParams({
-    trade_date: tradeDate,
-    market,
-  });
-  if (datasetType) {
-    listLinkParams.set('dataset_type', datasetType);
-  }
-  if (qualityStatus) {
-    listLinkParams.set('quality_status', qualityStatus);
-  }
-  const listLink = `/market/datasets?${listLinkParams.toString()}`;
-
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="市场数据"
-        title="Market Dataset Viewer"
         description="在 Web 中浏览 DB 里的市场数据集、分页样本与关联回链，不把 /market 再扩成一个复合控制台。"
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50" to={listLink}>
-          返回数据集列表
-        </Link>
+      <div className="flex flex-wrap items-center justify-start gap-3">
         <Link className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50" to="/market">
-          前往快照浏览器
+          返回市场数据
         </Link>
       </div>
 
@@ -202,12 +185,8 @@ export function MarketDatasetViewerShell() {
           <div className="space-y-4">
             <ErrorState {...invalidQueryState} />
             <div className="flex flex-wrap gap-2 text-sm">
-              <Link className="text-sky-700 hover:underline" to="/market/datasets">
-                返回数据集列表
-              </Link>
-              <span className="text-slate-400">·</span>
               <Link className="text-sky-700 hover:underline" to="/market">
-                返回快照浏览器
+                返回市场数据
               </Link>
             </div>
           </div>

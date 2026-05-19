@@ -104,40 +104,40 @@ export function SystemStatusPanel() {
       </CardHeader>
       <CardContent className="grid gap-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">运行模式</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">运行模式</p>
             <p className="mt-2 text-base font-semibold">{data.run_mode}</p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">数据库</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">数据库</p>
             <div className="mt-2 flex items-center gap-2">
               <Badge variant={statusVariant(data.database.status)}>{data.database.status}</Badge>
               {data.database.latency_ms != null ? (
-                <span className="text-sm text-slate-400">{data.database.latency_ms} ms</span>
+                <span className="text-sm text-slate-600">{data.database.latency_ms} ms</span>
               ) : null}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">配置路径</p>
-            <p className="mt-2 break-all text-sm text-slate-200">{data.config_path}</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">配置路径</p>
+            <p className="mt-2 break-all text-sm text-slate-900">{data.config_path}</p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">项目根目录</p>
-            <p className="mt-2 break-all text-sm text-slate-200">{data.project_root}</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">项目根目录</p>
+            <p className="mt-2 break-all text-sm text-slate-900">{data.project_root}</p>
           </div>
         </div>
 
         <div className="grid gap-3">
-          <p className="text-sm font-medium text-slate-200">关键目录</p>
+          <p className="text-sm font-medium text-slate-800">关键目录</p>
           <div className="grid gap-2">
             {directoryEntries.map(([name, info]) => (
               <div
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
                 key={name}
               >
                 <div>
                   <p className="font-medium">{name}</p>
-                  <p className="text-xs text-slate-400 break-all">{info.path}</p>
+                  <p className="text-xs text-slate-500 break-all">{info.path}</p>
                 </div>
                 <Badge variant={info.exists ? 'success' : 'warning'}>
                   {info.exists ? '存在' : '缺失'}
@@ -148,7 +148,7 @@ export function SystemStatusPanel() {
         </div>
 
         <div className="grid gap-2">
-          <p className="text-sm font-medium text-slate-200">告警与提示</p>
+          <p className="text-sm font-medium text-slate-800">告警与提示</p>
           {data.warnings.length ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
               <p className="font-medium">发现 {data.warnings.length} 个目录异常</p>

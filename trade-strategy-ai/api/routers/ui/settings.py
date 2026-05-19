@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from api.dependencies import CurrentPrincipal, require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role
 from src.common.paths import resolve_project_path
 from src.services.config_edit_service import ConfigEditService, get_config_edit_service
 
@@ -85,10 +85,11 @@ def _raise_service_error(result: Any, *, default_message: str) -> None:
     raise HTTPException(status_code=status_code, detail=detail)
 
 
-@router.get("/config", dependencies=[Depends(verify_api_key)])
+@router.get("/config")
 async def get_config(
     config_path: str | None = Query(default=None),
     service: ConfigEditService = Depends(get_config_edit_service),
+    _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """返回脱敏后的当前配置。"""
     result = service.get_current_config(_ensure_managed_config_path(config_path))
@@ -97,10 +98,11 @@ async def get_config(
     return result.payload
 
 
-@router.get("/schema", dependencies=[Depends(verify_api_key)])
+@router.get("/schema")
 async def get_schema(
     config_path: str | None = Query(default=None),
     service: ConfigEditService = Depends(get_config_edit_service),
+    _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """返回配置编辑 schema。"""
     result = service.get_edit_schema(_ensure_managed_config_path(config_path))
@@ -109,10 +111,11 @@ async def get_schema(
     return result.payload
 
 
-@router.post("/validate", dependencies=[Depends(verify_api_key)])
+@router.post("/validate")
 async def validate(
     request: SettingsDraftRequest,
     service: ConfigEditService = Depends(get_config_edit_service),
+    _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """校验配置草稿并返回 diff。"""
     result = service.validate_draft(_ensure_managed_config_path(request.config_path), request.draft)
@@ -121,7 +124,7 @@ async def validate(
     return result.payload
 
 
-@router.post("/save", dependencies=[Depends(verify_api_key)])
+@router.post("/save")
 async def save(
     request: SettingsSaveRequest,
     service: ConfigEditService = Depends(get_config_edit_service),
@@ -134,10 +137,11 @@ async def save(
     return result.payload
 
 
-@router.get("/backups", dependencies=[Depends(verify_api_key)])
+@router.get("/backups")
 async def list_backups(
     config_path: str | None = Query(default=None),
     service: ConfigEditService = Depends(get_config_edit_service),
+    _role_principal: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """列出当前配置的备份。"""
     result = service.list_backups(_ensure_managed_config_path(config_path))
@@ -146,7 +150,7 @@ async def list_backups(
     return result.payload
 
 
-@router.post("/restore", dependencies=[Depends(verify_api_key)])
+@router.post("/restore")
 async def restore(
     request: SettingsRestoreRequest,
     service: ConfigEditService = Depends(get_config_edit_service),

@@ -42,7 +42,7 @@ export function Tabs({
 }
 
 export function TabsList({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('inline-flex rounded-lg bg-slate-900 p-1', className)} {...props} />;
+  return <div className={cn('inline-flex rounded-lg bg-slate-100 p-1', className)} {...props} />;
 }
 
 export function TabsTrigger({
@@ -57,7 +57,7 @@ export function TabsTrigger({
     <button
       className={cn(
         'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-sky-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+        active ? 'bg-sky-500 text-white' : 'text-slate-700 hover:bg-slate-200 hover:text-slate-950',
         className,
       )}
       onClick={() => context?.setValue(value)}

@@ -1,23 +1,18 @@
 # New-Web-UI-Routing
 
 > **重点：Web UI 只能有一套 canonical 路由。**
-> 所有旧入口都只能作为显式兼容层存在，不能与 canonical 路由并行演进，更不能继续新增功能。
+> 旧入口与临时壳已经在 V3 收口阶段完成退役，文档只保留正式路由事实源。
 
 ## 1. 路由原则
 
 1. **Canonical 路由唯一。**
    - 新页面、新导航、新文档、新验收只引用 canonical 路由。
-2. **Legacy 入口显式存在。**
-   - legacy 入口只用于历史书签、旧文档、过渡链接。
-   - legacy 入口必须单独列出，不能散落在页面代码里。
-   - legacy 入口不进入正式 sidebar / 顶层导航，只保留直达与过渡壳。
-3. **兼容层必须可退役。**
-   - 每个 legacy 入口都必须标记所属退役阶段。
-   - 到达退役阶段后，legacy 入口必须从导航和正式文档中移除。
-4. **不允许多入口并行扩张。**
-   - 不能把新功能同时挂到 canonical 和 legacy 两条路径。
-   - 不能把 legacy 入口当成“另一个正式入口”。
-   - 正式导航只展示 canonical；legacy 仅用于兼容跳转。
+2. **不再保留旧入口。**
+   - 已退役的旧入口不再写入正式导航、正式文档和正式验收。
+   - 新功能不得再挂到旧入口名下。
+3. **单一事实源。**
+   - 路由文档、导航配置和验收用例必须保持一致。
+   - 维护者只需要理解一套 canonical 路由。
 
 ## 2. Canonical 路由
 
@@ -39,56 +34,15 @@
 | `/admin` | 管理中心。 |
 | `/settings` | 设置入口。 |
 
-## 3. Legacy 兼容层
-
-| Legacy 入口 | Canonical 映射 | 允许存在阶段 | 退役阶段 | 说明 |
-| --- | --- | --- | --- | --- |
-| `/` | `/dashboard` | V1, V2 | V3 | 旧首页入口，仅保留过渡跳转。 |
-| `/overview` | `/dashboard` | V1, V2 | V3 | 旧概览入口，仅作兼容。 |
-| `/jobs?jobId=...` | `/jobs/:jobId` | V1, V2 | V3 | 兼容旧查询参数选中任务。 |
-| `/workflows/:workflowId` | `/workflows/:workflowId/run` | V1, V2 | V3 | 兼容旧工作流详情入口。 |
-| `/legacy/*` | 具体 legacy 页面 | V1, V2 | V3 | 过渡壳，用于临时页面收口。 |
-| `/alerts` | `/alerts` | V1, V2 | V3 | 旧告警页。 |
-| `/reports` | `/reports` | V1, V2 | V3 | 旧报告页。 |
-| `/snapshots` | `/snapshots` | V1, V2 | V3 | 旧快照页。 |
-| `/strategy-studio` | `/strategy-studio` | V1, V2 | V3 | 旧策略实验页。 |
-| `/backtests` | `/backtests` | V1, V2 | V3 | 旧回测入口。 |
-| `/users` | `/users` | V1, V2 | V3 | 旧用户管理页。 |
-| `/ops` | `/ops` | V1, V2 | V3 | 旧运维页。 |
-
-## 4. 阶段化收口计划
-
-### V1
-
-- 定义 canonical 路由。
-- 明确 legacy 兼容映射。
-- 所有未实现页面使用明确 placeholder。
-- 不在 legacy 入口中新增业务逻辑。
-
-### V2
-
-- 所有正式导航只展示 canonical 路由。
-- legacy 入口只能用于历史链接和临时过渡。
-- 路由文档、导航文档、验收文档只写 canonical 路由。
-- 开始减少对 `/legacy/*` 的依赖。
-
-### V3
-
-- 删除 legacy 路由别名。
-- 删除 `/legacy/*` 临时壳。
-- 只保留 canonical 路由。
-- 通过最终 E2E 和发布验收确认路由已收口。
-
-## 5. 维护规则
+## 3. 维护规则
 
 - 页面组件不得自己决定是否“顺手”保留旧入口。
 - 新增路由前必须先判断是否属于 canonical。
-- 任何 legacy 入口若无明确退役阶段，视为设计缺陷。
-- 兼容层如果超过 V3 仍未退役，必须升级为阻塞问题处理。
-- sidebar / 顶层导航不得展示 legacy 入口分组。
+- 任何尝试重新引入旧入口，都必须先补充到 TaskList 和验收文档。
+- sidebar / 顶层导航不得展示旧入口或兼容入口分组。
 
-## 6. 关联任务
+## 4. 关联任务
 
-- `UI-V1-001` 定义 canonical 路由和 legacy 兼容策略。
-- `NW-V2-S4-003` 收口 legacy 入口并冻结兼容层。
-- `NW-V3-S3-002` 删除 legacy 路由并完成最终退役。
+- `UI-V1-001` 定义 canonical 路由。
+- `NW-V2-S4-003` 完成路由收口与导航冻结。
+- `NW-V3-S3-002` 完成最终退役。

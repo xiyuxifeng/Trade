@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role
 from src.services.data_audit_query_service import DataAuditQueryService, get_data_audit_query_service
 
 
@@ -23,8 +23,7 @@ async def list_data_audits(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     query_service: DataAuditQueryService = Depends(get_data_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询数据写入审计记录。"""
     result = await query_service.list_data_audits(
@@ -46,8 +45,7 @@ async def list_data_audits(
 async def get_data_audit_detail(
     event_id: str,
     query_service: DataAuditQueryService = Depends(get_data_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询单条数据审计记录。"""
     result = await query_service.get_data_audit(event_id)
@@ -56,4 +54,3 @@ async def get_data_audit_detail(
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.payload.get("error") or result.message or "data audit query failed")
     return result.payload
-

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -248,9 +248,16 @@ export function StrategyWorkspaceShell() {
 
   return (
     <main className="page-stack">
+      <div className="flex flex-wrap items-center justify-start gap-3">
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+          to="/strategies/regime-selection"
+        >
+          进入规则选择
+        </Link>
+      </div>
+
       <PageHeader
-        kicker="正式入口"
-        title="策略工作台"
         description="在 Web 中构建策略版本、运行盘前和盘后任务，并通过 Job、Artifact 和 Report 解释结果。"
       />
 

@@ -14,7 +14,7 @@ import type {
 function withConfigPath(path: string, configPath?: string) {
   const params = new URLSearchParams();
   if (configPath) {
-    params.set('configPath', configPath);
+    params.set('config_path', configPath);
   }
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return `${path}${suffix}`;

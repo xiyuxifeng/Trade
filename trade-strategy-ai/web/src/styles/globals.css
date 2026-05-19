@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
@@ -12,32 +12,32 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --background: 217 33% 7%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 11%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
   --primary: 199 89% 48%;
   --primary-foreground: 222 47% 11%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 16%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 18%;
-  --accent-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 46%;
+  --accent: 199 89% 95%;
+  --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
-  --border: 217 33% 18%;
-  --input: 217 33% 18%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
   --ring: 199 89% 48%;
   --radius: 0.75rem;
-  --panel-bg: rgba(8, 15, 28, 0.78);
-  --panel-border: rgba(148, 163, 184, 0.16);
-  --panel-shadow: 0 22px 70px rgba(2, 6, 23, 0.35);
-  --app-accent: #7dd3fc;
-  --app-accent-strong: #38bdf8;
-  --app-muted: rgba(191, 201, 224, 0.72);
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(148, 163, 184, 0.18);
+  --panel-shadow: 0 16px 48px rgba(15, 23, 42, 0.08);
+  --app-accent: #0284c7;
+  --app-accent-strong: #0369a1;
+  --app-muted: rgba(71, 85, 105, 0.82);
 }
 
 html,
@@ -50,9 +50,9 @@ body,
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(88, 133, 255, 0.28), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.16), transparent 24%),
-    linear-gradient(180deg, #07111f 0%, #0b1320 100%);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
 }
 
 a {
@@ -126,8 +126,8 @@ body {
 .hero-chip {
   border-radius: 999px;
   padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(125, 211, 252, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.22);
   color: var(--app-accent);
   font-size: 13px;
 }
@@ -184,7 +184,7 @@ body {
   padding: 24px;
   box-sizing: border-box;
   border-right: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(4, 10, 20, 0.8);
+  background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(18px);
   display: flex;
   flex-direction: column;
@@ -207,7 +207,7 @@ body {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(125, 211, 252, 0.28), rgba(56, 189, 248, 0.6));
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(14, 165, 233, 0.78));
   color: white;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -243,7 +243,7 @@ body {
 
 .sidebar-nav-group-title {
   margin: 10px 0 0;
-  color: rgba(148, 163, 184, 0.86);
+  color: rgba(100, 116, 139, 0.9);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -256,7 +256,7 @@ body {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(248, 250, 252, 0.95);
   transition:
     transform 140ms ease,
     border-color 140ms ease,
@@ -265,13 +265,13 @@ body {
 
 .sidebar-link:hover {
   transform: translateX(2px);
-  border-color: rgba(125, 211, 252, 0.2);
-  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(56, 189, 248, 0.24);
+  background: rgba(241, 245, 249, 0.96);
 }
 
 .sidebar-link-active {
-  border-color: rgba(125, 211, 252, 0.35);
-  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.32);
+  background: rgba(224, 242, 254, 0.9);
 }
 
 .sidebar-link-disabled {
@@ -282,7 +282,7 @@ body {
 .sidebar-link-disabled:hover {
   transform: none;
   border-color: transparent;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(248, 250, 252, 0.95);
 }
 
 .sidebar-link-label {
@@ -295,13 +295,13 @@ body {
 }
 
 .sidebar-link-compatibility {
-  background: rgba(15, 23, 42, 0.22);
-  border-color: rgba(148, 163, 184, 0.08);
+  background: rgba(248, 250, 252, 0.76);
+  border-color: rgba(148, 163, 184, 0.12);
 }
 
 .sidebar-link-compatibility:hover {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.42);
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(241, 245, 249, 0.96);
 }
 
 .sidebar-footer {
@@ -355,8 +355,8 @@ body {
   gap: 16px;
   padding: 14px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(8, 15, 28, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
 }
 
@@ -380,7 +380,7 @@ body {
 .status-strip-right code {
   font-size: 12px;
   color: var(--app-accent);
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(224, 242, 254, 0.8);
   padding: 4px 8px;
   border-radius: 999px;
 }
@@ -540,16 +540,16 @@ body {
 }
 
 .sidebar-collapse-btn {
-  position: absolute;
-  top: 20px;
-  right: -14px;
+  position: fixed;
+  top: 50%;
+  left: var(--sidebar-collapse-left, 276px);
   width: 28px;
   height: 56px;
   border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
-  color: rgba(148, 163, 184, 0.7);
+  color: rgba(71, 85, 105, 0.8);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -559,19 +559,19 @@ body {
   padding: 0;
   line-height: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transform: translateY(-50%);
 }
 
 .sidebar-collapse-btn:hover {
   color: var(--app-accent);
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(241, 245, 249, 0.98);
   border-color: var(--app-accent);
-  box-shadow: 0 2px 14px rgba(56, 189, 248, 0.2);
-  transform: scale(1.08);
+  box-shadow: 0 2px 14px rgba(56, 189, 248, 0.14);
+  transform: translateY(-50%) scale(1.08);
 }
 
-/* 折叠时按钮保持在右侧边缘 */
 .dashboard-shell-collapsed .sidebar-collapse-btn {
-  right: -14px;
+  left: var(--sidebar-collapse-left, 16px);
 }
 
 /* ===== 登录页面 ===== */
@@ -582,9 +582,9 @@ body {
   justify-content: center;
   padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(88, 133, 255, 0.28), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.16), transparent 24%),
-    linear-gradient(180deg, #07111f 0%, #0b1320 100%);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
 }
 
 .login-card {
@@ -609,7 +609,7 @@ body {
   border-radius: 16px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(125, 211, 252, 0.28), rgba(56, 189, 248, 0.6));
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(14, 165, 233, 0.72));
   color: white;
   font-weight: 700;
   font-size: 20px;

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,14 +26,12 @@ function statusVariant(status: string) {
 
 function AlertChip({ alert }: { alert: AlertHistoryItem }) {
   return (
-    <Link
-      className="group flex min-w-[18rem] flex-1 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40 transition-colors hover:border-sky-300 hover:bg-sky-50/70"
-      to={`/alerts/${alert.id}`}
-      aria-label={`查看告警详情：${alert.title}`}
+    <article
+      className="flex min-w-[18rem] flex-1 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="font-semibold text-slate-900 group-hover:text-sky-700">{alert.title}</p>
+          <p className="font-semibold text-slate-900">{alert.title}</p>
           <p className="break-all text-xs text-slate-500">记录 {alert.alert_id}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -48,7 +45,7 @@ function AlertChip({ alert }: { alert: AlertHistoryItem }) {
         <span className="rounded-full border border-slate-200 px-2 py-1">{formatTimestamp(alert.created_at)}</span>
         <span className="rounded-full border border-slate-200 px-2 py-1">x{alert.aggregated_count}</span>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -76,13 +73,12 @@ export function DashboardAlertStrip() {
         category="network error"
         title="重点告警加载失败"
         description="当前告警摘要接口请求失败。"
-        suggestion="重试后查看告警中心，确认是否已有新的告警记录。"
+        suggestion="重试后查看任务中心，确认是否已有新的失败任务或告警记录。"
         detail={message}
         retryLabel={isFetching ? '重试中' : '重试'}
         onRetry={() => {
           void refetch();
         }}
-        actions={[{ label: '告警中心', to: '/alerts' }]}
       />
     );
   }
@@ -93,7 +89,7 @@ export function DashboardAlertStrip() {
     <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
       <CardHeader>
         <CardTitle className="text-slate-900">重点告警</CardTitle>
-        <CardDescription>展示最重要的 3 到 5 条告警摘要，点击进入详情页。</CardDescription>
+        <CardDescription>展示最重要的 3 到 5 条告警摘要，便于快速判断告警趋势。</CardDescription>
       </CardHeader>
       <CardContent>
         {!alerts.length ? (

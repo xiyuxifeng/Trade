@@ -22,11 +22,13 @@ describe('buildErrorRecoveryState', () => {
     expect(state.actions.some((action) => action.to === '/jobs')).toBe(true);
   });
 
-  it('uses market snapshot browser wording for market recovery', () => {
-    const state = buildErrorRecoveryState(new ApiError(503, 'provider unavailable'), 'market');
+  it('routes empty market recovery back to the market page', () => {
+    const state = buildErrorRecoveryState(new ApiError(404, 'no market data'), 'market');
 
-    expect(state.title).toContain('市场快照浏览器');
-    expect(state.actions.some((action) => action.to === '/dashboard')).toBe(true);
-    expect(state.actions.some((action) => action.to === '/settings')).toBe(true);
+    expect(state.category).toBe('data empty');
+    expect(state.actions).toEqual([
+      { label: '返回当前页面', to: '/market' },
+      { label: '查看相关数据', to: '/market' },
+    ]);
   });
 });

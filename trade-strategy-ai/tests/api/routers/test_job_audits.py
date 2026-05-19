@@ -194,3 +194,30 @@ async def test_viewer_cannot_access_job_audits(client: AsyncClient) -> None:
             app.dependency_overrides.pop(get_current_principal, None)
         else:
             app.dependency_overrides[get_current_principal] = previous
+
+
+@pytest.mark.asyncio
+async def test_session_admin_can_access_job_audits_without_api_key_override(client: AsyncClient) -> None:
+    """session admin 应可直接访问 Job 审计 UI API。"""
+    previous_principal = app.dependency_overrides.get(get_current_principal)
+    previous_verify = app.dependency_overrides.pop(verify_api_key, None)
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="admin",
+        api_key_label="Local Admin",
+        authenticated=True,
+        source="session",
+        api_key="session-token",
+    )
+    try:
+        response = await client.get("/api/ui/v1/job-audits")
+        assert response.status_code == 200
+        assert response.json()["items"][0]["job_id"] == "job-1"
+    finally:
+        if previous_principal is None:
+            app.dependency_overrides.pop(get_current_principal, None)
+        else:
+            app.dependency_overrides[get_current_principal] = previous_principal
+        if previous_verify is None:
+            app.dependency_overrides.pop(verify_api_key, None)
+        else:
+            app.dependency_overrides[verify_api_key] = previous_verify

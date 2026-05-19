@@ -67,28 +67,28 @@ export function RecentArtifactsPanel() {
             {getErrorMessage(error)}
           </div>
         ) : !data?.items.length ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
             暂无最近产物。
           </div>
         ) : (
           data.items.map((artifact) => (
             <article
               className={cn(
-                'cursor-pointer rounded-2xl border border-slate-800 bg-slate-950/60 p-4 transition-colors hover:border-sky-500/25 hover:bg-slate-900/70',
+                'cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-sky-300 hover:bg-sky-50/70',
               )}
               key={artifact.artifact_id}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="font-medium text-slate-100">{artifact.name}</p>
-                  <p className="text-xs text-slate-400 break-all">{artifact.path}</p>
+                  <p className="font-medium text-slate-900">{artifact.name}</p>
+                  <p className="text-xs text-slate-500 break-all">{artifact.path}</p>
                 </div>
                 <Badge variant={artifact.previewable ? 'success' : 'warning'}>
                   {artifact.kind}
                 </Badge>
               </div>
 
-              <div className="mt-3 grid gap-2 text-xs text-slate-400 md:grid-cols-2">
+              <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
                 <div>
                   <span className="text-slate-500">Source:</span> {artifact.source}
                 </div>

@@ -27,19 +27,9 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/profiles/default/snapshots/snapshot-1').path).toBe('/profiles/:profileId/snapshots/:snapshotId');
     expect(resolveRouteByPathname('/admin').path).toBe('/admin');
     expect(resolveRouteByPathname('/admin/audit').path).toBe('/admin/audit');
+    expect(resolveRouteByPathname('/admin/audit').label).toBe('权限与审计');
     expect(resolveRouteByPathname('/settings').path).toBe('/settings');
+    expect(resolveRouteByPathname('/settings').label).toBe('配置管理');
   });
 
-  it('resolves legacy compatibility routes', () => {
-    expect(resolveRouteByPathname('/').path).toBe('/');
-    expect(resolveRouteByPathname('/overview').path).toBe('/overview');
-    expect(resolveRouteByPathname('/workflows/pipeline').path).toBe('/workflows/:workflowId');
-    expect(resolveRouteByPathname('/legacy/jobs').path).toBe('/legacy/*');
-    expect(resolveRouteByPathname('/alerts').path).toBe('/alerts');
-    expect(resolveRouteByPathname('/alerts/record-1').path).toBe('/alerts/:recordId');
-    expect(resolveRouteByPathname('/backtests').path).toBe('/backtests');
-    expect(resolveRouteByPathname('/strategy-studio').path).toBe('/strategy-studio');
-    expect(resolveRouteByPathname('/users').path).toBe('/users');
-    expect(resolveRouteByPathname('/ops').path).toBe('/ops');
-  });
 });

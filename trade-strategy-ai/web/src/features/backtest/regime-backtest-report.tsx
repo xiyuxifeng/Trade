@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -264,13 +264,15 @@ export function RegimeBacktestReportWorkspace() {
   if (queryError) {
     return (
       <main className="page-stack">
-        <PageHeader
-          kicker="正式入口"
-          title="Regime Backtest Report"
-          description="展示不同 market regime 下的回测表现。"
-          actionLabel="返回回测中心"
-          onAction={() => navigate('/backtest')}
-        />
+        <div className="flex flex-wrap items-center justify-start gap-3">
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+            to="/backtest"
+          >
+            返回回测中心
+          </Link>
+        </div>
+        <PageHeader kicker="正式入口" title="Regime Backtest Report" description="展示不同 market regime 下的回测表现。" />
         <ErrorState
           {...buildErrorRecoveryState(queryError, 'backtest')}
           onRetry={
@@ -293,13 +295,15 @@ export function RegimeBacktestReportWorkspace() {
 
   return (
     <main className="page-stack">
-      <PageHeader
-        kicker="正式入口"
-        title="Regime Backtest Report"
-        description="在同一份 canonical backtest result 上查看 overall metrics、per-regime metrics 和 per-rule per-regime breakdown。"
-        actionLabel="返回回测中心"
-        onAction={() => navigate('/backtest')}
-      />
+      <div className="flex flex-wrap items-center justify-start gap-3">
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+          to="/backtest"
+        >
+          返回回测中心
+        </Link>
+      </div>
+      <PageHeader description="在同一份 canonical backtest result 上查看 overall metrics、per-regime metrics 和 per-rule per-regime breakdown。" />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(320px,0.42fr)_minmax(0,1fr)]">
         <SectionCard

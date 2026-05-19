@@ -53,7 +53,7 @@ describe('ArtifactsPage', () => {
 
     renderWithRouter([{ path: '/artifacts', element: <ArtifactsPage /> }], ['/artifacts?jobId=job-1']);
 
-    expect(screen.getByText('产物中心')).toBeInTheDocument();
+    expect(screen.getByText('最近产物')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('搜索文本')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('按 job type 过滤')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('按日期过滤')).toBeInTheDocument();

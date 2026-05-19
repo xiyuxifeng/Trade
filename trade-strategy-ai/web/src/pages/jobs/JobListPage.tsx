@@ -57,8 +57,8 @@ export function JobListPage() {
       <main className="page-stack">
         <PageHeader kicker="任务" title="任务列表" description="查看系统中已记录的任务执行历史。" />
         <section className="page-card">
-          <p className="text-lg font-semibold text-slate-100">没有权限访问任务列表</p>
-          <p className="mt-2 text-sm text-slate-400">当前身份为 {principal.role}，查看任务列表至少需要 viewer 权限。</p>
+          <p className="text-lg font-semibold text-slate-900">没有权限访问任务列表</p>
+          <p className="mt-2 text-sm text-slate-600">当前身份为 {principal.role}，查看任务列表至少需要 viewer 权限。</p>
         </section>
       </main>
     );
@@ -120,19 +120,19 @@ export function JobListPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">总计</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-100">{total}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{total}</p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">当前页</p>
-                <p className="mt-2 text-2xl font-semibold text-sky-300">
+                <p className="mt-2 text-2xl font-semibold text-sky-700">
                   {currentPage} / {totalPages}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">当前页运行中 / 失败</p>
-                <p className="mt-2 text-2xl font-semibold text-rose-300">
+                <p className="mt-2 text-2xl font-semibold text-rose-600">
                   {summary.running} / {summary.failed}
                 </p>
               </div>
@@ -152,7 +152,7 @@ export function JobListPage() {
                 }}
               />
             ) : !jobs.length ? (
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 暂无符合条件的任务。
               </div>
             ) : (
@@ -160,7 +160,7 @@ export function JobListPage() {
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-600">
                 每页显示 {PAGE_SIZE} 条，当前第 {currentPage} 页，共 {total} 条。
               </p>
               <div className="flex gap-2">
@@ -184,8 +184,8 @@ export function JobListPage() {
             <CardTitle>操作说明</CardTitle>
             <CardDescription>任务列表只负责查看和跳转，不承担执行逻辑。</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-300">
-            <ul className="list-disc space-y-2 pl-5 text-slate-400">
+          <CardContent className="space-y-3 text-sm text-slate-700">
+            <ul className="list-disc space-y-2 pl-5 text-slate-600">
               <li>通过状态、任务类型和创建者过滤任务。</li>
               <li>点击“查看详情”进入任务详情查看日志、步骤、产物和配置快照。</li>
               <li>列表页不直接展示文件路径，也不修改任务状态。</li>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { allNavigationItems } from '@/app/navigation';
@@ -58,7 +58,14 @@ export function DashboardLayout() {
   }
 
   return (
-    <div className={cn('dashboard-shell', sidebarCollapsed && 'dashboard-shell-collapsed')}>
+    <div
+      className={cn('dashboard-shell', sidebarCollapsed && 'dashboard-shell-collapsed')}
+      style={
+        {
+          '--sidebar-collapse-left': sidebarCollapsed ? '16px' : '276px',
+        } as CSSProperties
+      }
+    >
       <div
         className={mobileNavOpen ? 'sidebar-overlay sidebar-overlay-open' : 'sidebar-overlay'}
         onClick={() => setMobileNavOpen(false)}

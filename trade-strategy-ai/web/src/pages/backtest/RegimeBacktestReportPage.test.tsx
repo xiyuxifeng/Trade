@@ -105,6 +105,7 @@ describe('RegimeBacktestReportPage', () => {
 
     renderWithRouter([{ path: '/backtest/regime', element: <RegimeBacktestReportPage /> }], ['/backtest/regime']);
 
+    expect(screen.getByRole('link', { name: '返回回测中心' })).toHaveAttribute('href', '/backtest');
     expect(await screen.findByRole('heading', { name: 'Regime Backtest Report' })).toBeInTheDocument();
     expect(await screen.findByText('market-regime-v3')).toBeInTheDocument();
     expect(screen.getByText('market-regime-features-v3')).toBeInTheDocument();

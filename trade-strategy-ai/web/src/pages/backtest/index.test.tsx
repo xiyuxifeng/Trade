@@ -168,6 +168,8 @@ describe('BacktestPage', () => {
 
     renderWithRouter([{ path: '/backtest', element: <BacktestPage /> }], ['/backtest']);
 
+    expect(screen.getByRole('link', { name: '进入 Regime 回测' })).toHaveAttribute('href', '/backtest/regime');
+    expect(screen.getByRole('link', { name: '打开任务中心' })).toHaveAttribute('href', '/jobs');
     expect(await screen.findByRole('heading', { name: '回测参数' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行回测' })).toBeInTheDocument();
     expect(screen.getByText('最近结果')).toBeInTheDocument();

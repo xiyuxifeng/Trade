@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role
 from src.services.job_audit_query_service import JobAuditQueryService
 
 
@@ -28,8 +28,7 @@ async def list_job_audits(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     query_service: JobAuditQueryService = Depends(get_job_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询 Job 审计记录。"""
     result = await query_service.list_job_audits(
@@ -51,8 +50,7 @@ async def list_job_audits(
 async def get_job_audit_detail(
     job_id: str,
     query_service: JobAuditQueryService = Depends(get_job_audit_query_service),
-    _: str = Depends(verify_api_key),
-    _admin: Any = Depends(require_role("admin")),
+    _admin: CurrentPrincipal = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """查询单个 Job 的审计详情。"""
     result = await query_service.get_job_audit_detail(job_id)

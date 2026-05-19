@@ -192,7 +192,7 @@ export function MarketSnapshotBrowserShell() {
         description="在 Web 中浏览 Market Snapshot，查看 sections、质量报告和派生特征，而不是切换到调试式任务页。"
       /> */}
 
-      <div className="flex justify-end">
+      <div className="flex justify-start">
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
           to={datasetViewerLink}

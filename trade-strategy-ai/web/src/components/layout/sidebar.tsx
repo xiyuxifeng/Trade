@@ -1,6 +1,5 @@
 import { NavLink } from 'react-router-dom';
 import { navigationGroups } from '@/app/navigation';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -12,7 +11,7 @@ type SidebarProps = {
 };
 
 export function Sidebar({ open = true, mobile = false, collapsed = false, onNavigate }: SidebarProps) {
-  const { principal, canAccess } = useAuth();
+  const { canAccess } = useAuth();
 
   return (
     <aside

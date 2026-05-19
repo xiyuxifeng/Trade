@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +22,6 @@ import type {
   RuleApplicabilityProfileItem,
   RuleApplicabilityGenerateRequest,
   RuleApplicabilityReviewRequest,
-  RuleDetailItem,
   RulePoolQuery,
   RulePoolReviewRequest,
   RuleSummaryItem,
@@ -95,11 +93,12 @@ function RuleSummaryCard({
   );
 }
 
-function SummaryStat({ label, value }: { label: string; value: string | number }) {
+function SummaryStat({ label, value }: { label: string; value: string | number | null | undefined }) {
+  const renderedValue = value === null || value === undefined ? 'n/a' : value;
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 break-all text-lg font-semibold text-slate-950">{value}</p>
+      <p className="mt-2 break-all text-lg font-semibold text-slate-950">{renderedValue}</p>
     </div>
   );
 }

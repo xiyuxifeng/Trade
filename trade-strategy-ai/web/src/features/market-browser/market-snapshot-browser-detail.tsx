@@ -47,11 +47,12 @@ function readAnyString(values: unknown[], path: string[]): string | null {
   return null;
 }
 
-function SummaryItem({ label, value }: { label: string; value: string | number }) {
+function SummaryItem({ label, value }: { label: string; value: string | number | null | undefined | Record<string, unknown> }) {
+  const renderedValue = value === null || value === undefined ? 'n/a' : typeof value === 'string' || typeof value === 'number' ? value : JSON.stringify(value);
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 break-all text-sm font-medium text-slate-950">{value}</p>
+      <p className="mt-2 break-all text-sm font-medium text-slate-950">{renderedValue}</p>
     </div>
   );
 }
@@ -159,7 +160,10 @@ export function MarketSnapshotBrowserDetail({
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
                       <SummaryItem label="Record Count" value={section.record_count} />
                       <SummaryItem label="Missing Reason" value={section.missing_reason ?? '无'} />
-                      <SummaryItem label="Storage Ref" value={section.storage_ref?.source ?? 'db'} />
+                      <SummaryItem
+                        label="Storage Ref"
+                        value={typeof section.storage_ref?.source === 'string' ? section.storage_ref.source : 'db'}
+                      />
                     </div>
                   </div>
                 ))}

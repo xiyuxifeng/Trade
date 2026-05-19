@@ -24,8 +24,8 @@ export type JobRecord = {
   audit_events: JobAuditEvent[];
   created_at: string;
   updated_at: string;
-  config_snapshot_path: string | null;
-  config_snapshot: JobConfigSnapshot | null;
+  config_snapshot_path?: string | null;
+  config_snapshot?: JobConfigSnapshot | null;
 };
 
 export type JobAuditEvent = {

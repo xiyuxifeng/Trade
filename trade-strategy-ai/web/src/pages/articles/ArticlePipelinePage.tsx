@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageHeader } from '@/components/layout/page-header';
 import { ApiError } from '@/lib/api/http';
 import { listJobs } from '@/lib/api/jobs';
 import { getArticlePipeline, runArticlePipeline } from '@/lib/api/pipelines';

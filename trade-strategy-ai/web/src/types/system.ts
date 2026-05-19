@@ -56,7 +56,7 @@ export type SystemDashboardFailedJob = {
 export type SystemDashboardResponse = {
   status: 'ok' | 'partial' | 'error';
   generated_at: string;
-  config_path: string;
+  config_path?: string;
   health: {
     overall: string;
     issues: string[];
@@ -101,5 +101,5 @@ export type SystemDashboardResponse = {
       client_host?: string | null;
     } | null;
   }>;
-  report: Record<string, unknown>;
+  report?: Record<string, unknown>;
 };

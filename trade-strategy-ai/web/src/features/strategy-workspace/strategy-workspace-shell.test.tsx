@@ -6,7 +6,7 @@ import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listJobs, createJob } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
-import { getOptimizeVersion, listOptimizeVersions, createOptimizeCandidateVersion } from '@/lib/api/optimize';
+import { getOptimizeVersion, listOptimizeVersions } from '@/lib/api/optimize';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),

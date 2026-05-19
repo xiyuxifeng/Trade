@@ -1,4 +1,3 @@
-import dayjs from 'dayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
@@ -10,9 +9,6 @@ import {
   downloadBacktestValidationReport,
   getBacktestResult,
   listBacktestResults,
-  buildBacktestRunParams,
-  buildBacktestValidateRulesParams,
-  buildBacktestReproducibilityParams,
 } from '@/lib/api/backtests';
 import { listBenchmarkOptions } from '@/lib/api/market';
 
@@ -80,8 +76,6 @@ beforeEach(() => {
 describe('BacktestPage', () => {
   it('renders the formal backtest workbench and submits the canonical contract', async () => {
     const user = userEvent.setup();
-    const today = dayjs().format('YYYY-MM-DD');
-    const thirtyDaysAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
 
     mockedListBacktestResults.mockResolvedValue({
       status: 'success',
@@ -170,7 +164,7 @@ describe('BacktestPage', () => {
       params_path: '/tmp/job-1/params.json',
       result_path: '/tmp/job-1/result.json',
       artifacts_path: '/tmp/job-1/artifacts.json',
-    } as Awaited<ReturnType<typeof createJob>>);
+    } as unknown as Awaited<ReturnType<typeof createJob>>);
 
     renderWithRouter([{ path: '/backtest', element: <BacktestPage /> }], ['/backtest']);
 

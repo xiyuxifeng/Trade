@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   API_KEY_STORAGE_KEY,
-  ApiError,
   buildApiHeaders,
   fetchBlob,
   fetchJson,

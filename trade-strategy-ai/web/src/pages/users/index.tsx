@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listUsers, createUser, updateUser, deleteUser } from '@/lib/api/auth';
 import type { UserRecord } from '@/lib/api/auth';

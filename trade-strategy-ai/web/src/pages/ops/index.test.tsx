@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import { OpsPage } from './index';
@@ -7,6 +7,7 @@ import { createRecoveryBackup, listRecoveryBackups, recoverStaleJobs, restoreRec
 import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
 import { listJobs } from '@/lib/api/jobs';
 import { listDataAudits } from '@/lib/api/data-audits';
+import type { CurrentPrincipal } from '@/types/auth';
 
 vi.mock('@/lib/api/ops', () => ({
   createRecoveryBackup: vi.fn(),
@@ -38,11 +39,12 @@ const mockedListJobs = vi.mocked(listJobs);
 const mockedListDataAudits = vi.mocked(listDataAudits);
 
 describe('OpsPage', () => {
-  const principal = {
+  const principal: CurrentPrincipal = {
     role: 'admin',
     api_key_label: 'Local Admin',
     authenticated: true,
     source: 'api_key',
+    username: 'admin',
   };
 
   beforeEach(() => {

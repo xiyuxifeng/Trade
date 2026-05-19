@@ -75,19 +75,19 @@ describe('ProfileEditPage', () => {
         },
       ],
       validation: { valid: true, issues: [], next_version: 3, validation_status: 'validated' },
-    } as any);
+    } as unknown as GetProfileEditResponse);
     mockedValidateProfileUpdate.mockResolvedValue({
       profile: { profile_id: 'default' },
       draft: { name: '默认配置', environment: 'production', sections: {} },
       preview: { profile_id: 'default' },
       section_guide: [],
       validation: { valid: true, issues: [], next_version: 3, validation_status: 'validated' },
-    } as any);
+    } as unknown as ValidateProfileUpdateResponse);
     mockedUpdateProfile.mockResolvedValue({
       profile: { profile_id: 'default', validation_status: 'validated' },
       snapshot: { snapshot_id: 'snapshot-2' },
       validation: { valid: true, issues: [], next_version: 3, validation_status: 'validated' },
-    } as any);
+    } as unknown as UpdateProfileResponse);
 
     renderWithRouter([{ path: '/profiles/:profileId/edit', element: <ProfileEditPage /> }], ['/profiles/default/edit']);
 
@@ -145,7 +145,7 @@ describe('ProfileEditPage', () => {
         },
       ],
       validation: { valid: false, issues: [{ field: 'environment', message: '运行环境不能为空' }], next_version: 3, validation_status: 'invalid_config' },
-    } as any);
+    } as unknown as GetProfileEditResponse);
 
     renderWithRouter([{ path: '/profiles/:profileId/edit', element: <ProfileEditPage /> }], ['/profiles/default/edit']);
 
@@ -155,3 +155,6 @@ describe('ProfileEditPage', () => {
     expect(mockedArchiveProfile).not.toHaveBeenCalled();
   });
 });
+type GetProfileEditResponse = Awaited<ReturnType<typeof getProfileEdit>>;
+type ValidateProfileUpdateResponse = Awaited<ReturnType<typeof validateProfileUpdate>>;
+type UpdateProfileResponse = Awaited<ReturnType<typeof updateProfile>>;

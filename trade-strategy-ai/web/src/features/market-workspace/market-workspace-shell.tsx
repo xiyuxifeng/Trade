@@ -12,7 +12,6 @@ import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import type { JobRecord } from '@/types/jobs';
 import { MarketWorkspaceSummary } from './market-workspace-summary';
 import { MarketWorkspaceRunners, type MarketWorkspaceRunner } from './market-workspace-runners';
 import { MarketWorkspaceRecentJobs } from './market-workspace-recent-jobs';
@@ -137,25 +136,6 @@ function buildJobParams(jobType: string, form: WorkspaceFormState) {
     force: form.force,
     offline: form.offline,
   };
-}
-
-function formatDate(value: string | null) {
-  if (!value) return '未记录';
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
-function classifyJobError(job: JobRecord) {
-  const error = job.error;
-  const rawType = typeof error === 'string' ? '' : error?.type ?? '';
-  const rawMessage = typeof error === 'string' ? error : error?.message ?? '';
-  const text = `${rawType} ${rawMessage}`.toLowerCase();
-  if (text.includes('permission') || text.includes('config')) return '配置错误';
-  if (text.includes('provider') || text.includes('api') || text.includes('kaipan')) return 'provider 错误';
-  if (text.includes('data') || text.includes('empty') || text.includes('missing')) return '数据错误';
-  return '系统错误';
 }
 
 type WorkspaceFormState = {

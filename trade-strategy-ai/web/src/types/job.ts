@@ -9,7 +9,7 @@ export type StepTimelineItem = {
   finishedAt?: string | null;
   durationMs?: number | null;
   errorSummary?: string | null;
-  details?: Record<string, unknown> | string | null;
+  details?: unknown;
   metadata?: Record<string, unknown>;
   order?: number | null;
 };

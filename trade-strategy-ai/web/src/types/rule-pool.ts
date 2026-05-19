@@ -13,6 +13,18 @@ export type RuleSummaryItem = {
   backtest_samples: number;
   mapped: boolean;
   created_at: string | null;
+  id?: string | null;
+  source_article_ids?: string[];
+  extraction_layer?: Record<string, unknown>;
+  mapped_by?: string | null;
+  mapped_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  backtest_triggered_at?: string | null;
+  used_in_prediction?: boolean;
+  prediction_count?: number;
+  last_used_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type RuleDetailItem = RuleSummaryItem & {

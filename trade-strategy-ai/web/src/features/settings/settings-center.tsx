@@ -26,7 +26,6 @@ import {
   validateSettingsDraft,
 } from '@/lib/api/settings';
 import type { SettingsBackupItem, SettingsConfigResponse, SettingsSectionSummary } from '@/types/settings';
-import { PageHeader } from '@/components/layout/page-header';
 
 type ValueKind = 'json' | 'string' | 'number' | 'boolean' | 'null';
 

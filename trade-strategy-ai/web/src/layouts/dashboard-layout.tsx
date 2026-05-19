@@ -86,7 +86,6 @@ export function DashboardLayout() {
       <div className="dashboard-main">
         <Topbar
           title={currentRoute.label}
-          description={currentRoute.description}
           onMenuClick={() => setMobileNavOpen((current) => !current)}
         />
 

@@ -262,15 +262,15 @@ export function JobDetailPage() {
               </div>
               {configSnapshot?.profile_id && configSnapshot?.config_snapshot_id ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      navigate(
-                        `/profiles/${encodeURIComponent(configSnapshot.profile_id)}/snapshots/${encodeURIComponent(
-                          configSnapshot.config_snapshot_id,
-                        )}`,
-                      )
-                    }
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        navigate(
+                          `/profiles/${encodeURIComponent(configSnapshot.profile_id!)}/snapshots/${encodeURIComponent(
+                            configSnapshot.config_snapshot_id!,
+                          )}`,
+                        )
+                      }
                   >
                     查看 Profile 快照
                   </Button>

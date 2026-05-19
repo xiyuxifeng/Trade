@@ -5,5 +5,5 @@ export type CurrentPrincipal = {
   api_key_label: string | null;
   authenticated: boolean;
   source: string;
-  username: string;
+  username?: string;
 };

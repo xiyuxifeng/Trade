@@ -121,7 +121,7 @@ export function MarketStateCenter() {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="info">{result.source}</Badge>
                 <Badge variant="success">{result.snapshot_path ?? result.market_state_path}</Badge>
-                {result.benchmark_symbol ? <Badge variant="outline">{result.benchmark_symbol}</Badge> : null}
+                {result.benchmark_symbol ? <Badge variant="default">{result.benchmark_symbol}</Badge> : null}
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <SummaryCard

@@ -4,10 +4,10 @@ import { ApiError } from '@/lib/api/http';
 import { StrategiesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
-import { listJobs, createJob } from '@/lib/api/jobs';
+import { listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
-import { getOptimizeVersion, listOptimizeVersions, createOptimizeCandidateVersion } from '@/lib/api/optimize';
+import { getOptimizeVersion, listOptimizeVersions } from '@/lib/api/optimize';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
@@ -37,7 +37,6 @@ vi.mock('@/lib/api/optimize', () => ({
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListJobs = vi.mocked(listJobs);
-const mockedCreateJob = vi.mocked(createJob);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);

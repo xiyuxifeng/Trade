@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/features/auth/auth-context';
@@ -130,6 +130,29 @@ const systemStatus = {
   warnings: [] as string[],
 };
 
+const jobArtifact = {
+  artifact_id: 'artifact-job-1',
+  job_id: 'job-1',
+  workflow_id: null,
+  step_id: null,
+  kind: 'report',
+  title: '回测报告',
+  summary: null,
+  safe_download_url: '/artifacts/artifact-job-1/download',
+  download_token: null,
+  size_bytes: 1024,
+  created_at: '2026-05-10T08:05:00Z',
+  visibility: 'private' as const,
+  metadata: { source: 'web' },
+  storage_ref: {
+    source: 'file' as const,
+    logical_id: 'artifact-job-1',
+    relative_path: 'data/jobs/job-1/result.json',
+    uri: null,
+    metadata: { source: 'web' },
+  },
+};
+
 const job1 = {
   id: 'job-1',
   job_type: 'run-pre-market',
@@ -137,13 +160,7 @@ const job1 = {
   params: { date: '2026-05-10', config_path: 'config/app.yaml' },
   result: null,
   error: null,
-  artifacts: [
-    {
-      kind: 'report',
-      path: 'data/jobs/job-1/result.json',
-      metadata: { source: 'web' },
-    },
-  ],
+  artifacts: [jobArtifact],
   created_by: 'web',
   idempotency_key: null,
   retry_count: 0,

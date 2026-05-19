@@ -6,11 +6,10 @@ import { useAuth } from '@/features/auth/auth-context';
 
 type TopbarProps = {
   title: string;
-  description: string;
   onMenuClick: () => void;
 };
 
-export function Topbar({ title, description, onMenuClick }: TopbarProps) {
+export function Topbar({ title, onMenuClick }: TopbarProps) {
   const { principal, isAuthenticated, handleLogout } = useAuth();
   const navigate = useNavigate();
 

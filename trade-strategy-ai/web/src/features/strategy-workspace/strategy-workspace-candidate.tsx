@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ConfirmDialog, EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
@@ -502,11 +501,8 @@ export function StrategyWorkspaceCandidate({
                 <EmptyState
                   title="暂无相关产物"
                   description="生成候选或审核后，这里会显示对应的产物链接；也可以直接前往产物中心查看。"
-                  action={
-                    <Button onClick={() => navigate('/artifacts')} variant="outline">
-                      前往产物中心
-                    </Button>
-                  }
+                  actionLabel="前往产物中心"
+                  onAction={() => navigate('/artifacts')}
                 />
               )}
             </SectionCard>

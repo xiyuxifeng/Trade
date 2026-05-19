@@ -81,7 +81,10 @@ describe('JobsPage', () => {
     expect(screen.getByText('最近任务')).toBeInTheDocument();
     expect(document.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
 
-    resolveJobs?.(makeListResponse([makeJob()]));
+    if (resolveJobs) {
+      const nextResolve = resolveJobs as (value: ReturnType<typeof makeListResponse>) => void;
+      nextResolve(makeListResponse([makeJob()]));
+    }
     expect(await screen.findByText('job-1')).toBeInTheDocument();
   });
 

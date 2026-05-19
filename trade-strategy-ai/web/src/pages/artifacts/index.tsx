@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
-import { PageHeader } from '@/components/layout/page-header';
 import { ApiError } from '@/lib/api/http';
 import { downloadArtifact, getArtifact, listArtifacts } from '@/lib/api/artifacts';
 import type { ArtifactRecord, ArtifactsListResponse } from '@/types/artifacts';

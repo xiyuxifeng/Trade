@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PageHeader } from '@/components/layout/page-header';
 import { useAuth } from '@/features/auth/auth-context';
 
 export function AdminPage() {

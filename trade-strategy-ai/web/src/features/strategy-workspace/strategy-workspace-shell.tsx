@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -18,7 +17,7 @@ import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { JobRecord } from '@/types/jobs';
 import type { ArtifactRecord } from '@/types/artifacts';
-import type { StrategyVersionDetailItem, StrategyVersionSummaryItem } from '@/types/strategyStudio';
+import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
 import { StrategyWorkspaceActions } from './strategy-workspace-actions';
 import { StrategyWorkspaceArtifacts } from './strategy-workspace-artifacts';
 import { StrategyWorkspaceHistory } from './strategy-workspace-history';
@@ -32,17 +31,21 @@ import {
 
 const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
 
-function statusVariant(status: string) {
-  if (status === 'validated' || status === 'success') return 'success';
-  if (status === 'draft' || status === 'pending') return 'warning';
-  if (status === 'archived' || status === 'invalid_config') return 'destructive';
-  return 'info';
-}
-
-function sortByDateDesc<T extends { created_at?: string | null; strategy_date?: string | null; version_id?: string; id?: string }>(items: T[]) {
+function sortByDateDesc<
+  T extends {
+    created_at?: string | null;
+    strategy_date?: string | null;
+    version_id?: string;
+    id?: string;
+    modified_at?: string | null;
+    name?: string;
+    kind?: string;
+    source?: string;
+  },
+>(items: T[]) {
   return [...items].sort((left, right) => {
-    const leftDate = right.strategy_date ?? right.created_at ?? right.version_id ?? right.id ?? '';
-    const rightDate = left.strategy_date ?? left.created_at ?? left.version_id ?? left.id ?? '';
+    const leftDate = left.strategy_date ?? left.created_at ?? left.modified_at ?? left.version_id ?? left.id ?? '';
+    const rightDate = right.strategy_date ?? right.created_at ?? right.modified_at ?? right.version_id ?? right.id ?? '';
     return String(leftDate).localeCompare(String(rightDate));
   });
 }

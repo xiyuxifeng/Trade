@@ -1,4 +1,3 @@
-import { PageHeader } from '@/components/layout/page-header';
 import { DashboardAlertStrip } from '@/components/dashboard/dashboard-alert-strip';
 import { DashboardQuickLinks, DashboardStatusSummary } from '@/components/dashboard/dashboard-status-summary';
 import { DashboardRecentArtifactsPanel } from '@/components/dashboard/dashboard-recent-artifacts';

@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError } from '@/lib/api/http';
 import { listWorkflows } from '@/lib/api/workflows';
 import type { WorkflowDefinition, WorkflowStep } from '@/types/workflows';
-import { PageHeader } from '@/components/layout/page-header';
 import { getWorkflowPrimaryStep } from './workflow-presets';
 import { WorkflowParameterForm } from './workflow-parameter-form';
 

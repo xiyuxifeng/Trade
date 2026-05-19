@@ -10,7 +10,20 @@ export type ErrorRecoveryCategory =
   | 'job failed'
   | 'network error';
 
-export type ErrorRecoveryPage = 'jobs' | 'job-detail' | 'profiles' | 'profile-detail' | 'market' | 'strategy';
+export type ErrorRecoveryPage =
+  | 'jobs'
+  | 'job-detail'
+  | 'profiles'
+  | 'profile-detail'
+  | 'market'
+  | 'strategy'
+  | 'backtest'
+  | 'backtest-results'
+  | 'backtest-detail'
+  | 'backtest-report'
+  | 'backtest-validation'
+  | 'admin-audit'
+  | 'admin-audit-detail';
 
 export type ErrorRecoveryAction = {
   label: string;
@@ -123,6 +136,12 @@ function getPageRoute(page: ErrorRecoveryPage) {
       return '/jobs';
     case 'job-detail':
       return '/jobs';
+    case 'backtest':
+    case 'backtest-results':
+    case 'backtest-detail':
+    case 'backtest-report':
+    case 'backtest-validation':
+      return '/backtest';
     case 'profiles':
       return '/profiles';
     case 'profile-detail':
@@ -131,6 +150,9 @@ function getPageRoute(page: ErrorRecoveryPage) {
       return '/market';
     case 'strategy':
       return '/strategies';
+    case 'admin-audit':
+    case 'admin-audit-detail':
+      return '/admin';
     default:
       return '/dashboard';
   }
@@ -142,6 +164,12 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
       return '/dashboard';
     case 'job-detail':
       return '/jobs';
+    case 'backtest':
+    case 'backtest-results':
+    case 'backtest-detail':
+    case 'backtest-report':
+    case 'backtest-validation':
+      return '/dashboard';
     case 'profiles':
       return '/dashboard';
     case 'profile-detail':
@@ -149,6 +177,9 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
     case 'market':
       return '/dashboard';
     case 'strategy':
+      return '/dashboard';
+    case 'admin-audit':
+    case 'admin-audit-detail':
       return '/dashboard';
     default:
       return '/dashboard';
@@ -175,14 +206,22 @@ function getMarketStateRoute() {
 }
 
 function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecoveryPage) {
-  const pageTitle = {
+  const pageTitles: Record<ErrorRecoveryPage, string> = {
     jobs: '任务',
     'job-detail': '任务详情',
     profiles: '配置列表',
     'profile-detail': '配置详情',
     market: '市场快照浏览器',
     strategy: '策略工作台',
-  }[page];
+    backtest: '回测中心',
+    'backtest-results': '回测结果',
+    'backtest-detail': '回测详情',
+    'backtest-report': '回测报告',
+    'backtest-validation': '规则验真',
+    'admin-audit': '审计中心',
+    'admin-audit-detail': '审计详情',
+  };
+  const pageTitle = pageTitles[page];
 
   switch (category) {
     case 'validation error':
@@ -318,8 +357,9 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
   const category = classifyCategory(error);
   const titleAndSuggestion = getTitleAndSuggestion(category, page);
   const isApi404 = error instanceof ApiError && error.status === 404;
-  const pageSpecific404 = isApi404 && category === 'data empty'
-    ? {
+  const pageSpecific404: Partial<Record<ErrorRecoveryPage, { title: string; description: string; suggestion: string }>> =
+    isApi404 && category === 'data empty'
+      ? {
         'job-detail': {
           title: '任务不存在',
           description: '系统没有找到该 Job 记录。',
@@ -350,9 +390,45 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           description: '当前策略工作台没有返回可展示的数据。',
           suggestion: '请稍后重试，或切换到 Profile 与 Job 页面继续排查。',
         },
-      }[page]
-    : null;
-  const { title, description, suggestion } = pageSpecific404 ?? titleAndSuggestion;
+        'backtest': {
+          title: '回测中心暂不可用',
+          description: '当前回测中心没有返回可展示的数据。',
+          suggestion: '请稍后重试，或返回工作台查看其他入口。',
+        },
+        'backtest-results': {
+          title: '回测结果暂不可用',
+          description: '当前回测结果没有返回可展示的数据。',
+          suggestion: '请稍后重试，或放宽筛选条件再看一次。',
+        },
+        'backtest-detail': {
+          title: '回测详情暂不可用',
+          description: '当前回测详情没有返回可展示的数据。',
+          suggestion: '请检查 result_id 是否正确，或返回结果列表重新选择。',
+        },
+        'backtest-report': {
+          title: '回测报告暂不可用',
+          description: '当前回测报告没有返回可展示的数据。',
+          suggestion: '请稍后重试，或重新生成回测结果。',
+        },
+        'backtest-validation': {
+          title: '规则验真暂不可用',
+          description: '当前规则验真报告没有返回可展示的数据。',
+          suggestion: '请稍后重试，或先确认回测结果是否存在。',
+        },
+        'admin-audit': {
+          title: '审计中心暂不可用',
+          description: '当前审计中心没有返回可展示的数据。',
+          suggestion: '请稍后重试，或返回工作台查看其他入口。',
+        },
+        'admin-audit-detail': {
+          title: '审计详情暂不可用',
+          description: '当前审计详情没有返回可展示的数据。',
+          suggestion: '请检查审计 ID 是否正确，或返回审计列表重新选择。',
+        },
+      }
+      : {};
+  const pageSpecific404Entry = pageSpecific404[page] ?? null;
+  const { title, description, suggestion } = pageSpecific404Entry ?? titleAndSuggestion;
   const detail = error instanceof ApiError
     ? JSON.stringify(
         {

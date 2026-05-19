@@ -2259,7 +2259,7 @@ UI 关联任务：
 
 ---
 
-### [~] NW-V3-S3-003 P2 Snapshot 文件路径收口评估
+### [ ] NW-V3-S3-003 P2 Snapshot 文件路径收口评估
 
 任务目标：在 `MarketDataStorageService` 已成为结构化数据主读源的前提下，梳理 Market Snapshot 相关文件路径的保留与裁剪边界，避免 DB 与文件层长期双轨。
 

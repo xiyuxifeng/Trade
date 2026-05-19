@@ -44,7 +44,7 @@ class BacktestRequest(BaseModel):
     date_to: date
     strategy_version_id: str | None = None
     symbols: list[str] = Field(default_factory=list)
-    market_regime_version: str | None = None
+    market_regime_version: str | None = "market-regime-v3"
     benchmark_symbol: str | None = None
     mode: Literal["full", "replay", "rule_validation"] = "full"
     use_snapshot_only: bool = True

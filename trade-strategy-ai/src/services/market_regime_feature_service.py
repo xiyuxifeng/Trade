@@ -25,7 +25,7 @@ from src.models.ohlcv_bar import OHLCVBar
 from src.models.market_regime import MarketRegimeFeature
 from src.services.base import BaseService, ServiceResult
 
-DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
+DEFAULT_FEATURE_VERSION = "market-regime-features-v3"
 FULL_MARKET_FEATURE_VERSION = "market-regime-features-v3"
 
 

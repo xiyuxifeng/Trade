@@ -105,7 +105,7 @@ def _build_feature_record(key: str, entry: dict[str, Any]) -> RegimeFeatureRecor
         normalized_value=entry.get("normalized_value") if isinstance(entry, dict) else None,
         source_section=_feature_source_section(entry),
         source_field=_feature_source_field(entry),
-        source_version=str(entry.get("source_version") or entry.get("feature_version") or "market-regime-features-v2") if isinstance(entry, dict) else "market-regime-features-v2",
+        source_version=str(entry.get("source_version") or entry.get("feature_version") or "market-regime-features-v3") if isinstance(entry, dict) else "market-regime-features-v3",
         confidence=_feature_confidence(entry),
         weight=float(entry.get("weight") or 1.0) if isinstance(entry, dict) else 1.0,
         missing_reason=_feature_missing_reason(entry),
@@ -493,7 +493,7 @@ def score_market_regime(
 
     if source_feature_version is None:
         source_candidates = [str(entry.get("source_version")) for entry in (trend_entry, breadth_entry, volatility_entry, liquidity_entry, turnover_entry, theme_entry, limit_up_entry, limit_down_entry) if isinstance(entry, dict) and entry.get("source_version")]
-        source_feature_version = source_candidates[0] if source_candidates else "market-regime-features-v2"
+        source_feature_version = source_candidates[0] if source_candidates else "market-regime-features-v3"
 
     if trade_date is None:
         trade_date = date.today()

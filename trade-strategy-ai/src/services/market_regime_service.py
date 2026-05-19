@@ -15,8 +15,8 @@ from src.models.market_regime_record import MarketRegimeRecord
 from src.services.base import BaseService, ServiceResult
 from src.services.market_regime_rules import score_market_regime
 
-DEFAULT_REGIME_VERSION = "market-regime-v2"
-DEFAULT_FEATURE_VERSION = "market-regime-features-v2"
+DEFAULT_REGIME_VERSION = "market-regime-v3"
+DEFAULT_FEATURE_VERSION = "market-regime-features-v3"
 FULL_MARKET_FEATURE_VERSION = "market-regime-features-v3"
 
 

@@ -91,6 +91,13 @@ class _FakeSession:
     def __init__(self) -> None:
         self.closed = False
 
+    async def scalars(self, stmt):
+        class _Result:
+            def all(self) -> list[object]:
+                return []
+
+        return _Result()
+
     async def __aenter__(self):
         return self
 
@@ -222,5 +229,5 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
     assert reproducibility.payload["request"]["market_regime_version"] == "market-regime-v1"
     assert rule_pool_result.status == "ok"
     assert rule_pool_result.payload["summary"]["total_trades"] == 6
-    assert session_factory.calls == 1
+    assert session_factory.calls == 2
     assert engine.rule_pool_calls[0]["rule_ids"] == ["rule-001"]

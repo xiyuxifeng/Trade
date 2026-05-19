@@ -291,7 +291,7 @@ class BacktestService(BaseService):
             date_to=date_to,
             strategy_version_id=strategy_version_id,
             symbols=symbols or [],
-            market_regime_version=market_regime_version,
+            market_regime_version=market_regime_version or DEFAULT_REGIME_VERSION,
             benchmark_symbol=benchmark_symbol,
             mode=mode,  # type: ignore[arg-type]
             use_snapshot_only=use_snapshot_only,
@@ -316,8 +316,7 @@ class BacktestService(BaseService):
         market_regime_version: str | None,
     ) -> None:
         """在回测前补齐指定版本的 feature / regime。"""
-        if market_regime_version is None or market_regime_version == DEFAULT_REGIME_VERSION:
-            return
+        market_regime_version = market_regime_version or DEFAULT_REGIME_VERSION
 
         feature_version = self._feature_version_for_regime_version(market_regime_version)
         if feature_version is None:
@@ -364,7 +363,7 @@ class BacktestService(BaseService):
         date_to: date,
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
-        market_regime_version: str | None = None,
+        market_regime_version: str | None = DEFAULT_REGIME_VERSION,
         benchmark_symbol: str | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,
@@ -512,7 +511,7 @@ class BacktestService(BaseService):
         date_to: date,
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
-        market_regime_version: str | None = None,
+        market_regime_version: str | None = DEFAULT_REGIME_VERSION,
         benchmark_symbol: str | None = None,
         mode: str = "full",
         config_path: str | Path | None = None,

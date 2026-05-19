@@ -290,6 +290,13 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
             },
         ],
     )
+    await _seed_ohlcv_rows(
+        market_regime_feature_session_factory,
+        rows=[
+            {**row, "symbol": "000001.SZ", "trade_date": row["time"]}
+            for row in _build_ohlcv_rows(date(2026, 5, 16), 60)
+        ],
+    )
 
     service = MarketRegimeFeatureService(
         session_factory=market_regime_feature_session_factory,
@@ -300,9 +307,9 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
 
     assert result.status == "ok"
     assert result.payload["feature"]["snapshot_id"] == "snap-001"
-    assert result.payload["feature"]["feature_version"] == "market-regime-features-v2"
+    assert result.payload["feature"]["feature_version"] == "market-regime-features-v3"
     assert result.payload["feature"]["quality_status"] == "ok"
-    assert result.payload["summary"]["available_feature_count"] == 21
+    assert result.payload["summary"]["available_feature_count"] == 24
     assert result.payload["summary"]["missing_feature_count"] == 0
     assert result.payload["feature_payload_json"]["trend"]["source_section"] == "ohlcv"
     assert result.payload["feature_payload_json"]["trend"]["value"]["ret_20d"] is not None
@@ -311,8 +318,8 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
     assert result.payload["feature_payload_json"]["breadth_up_ratio"]["value"] == pytest.approx(0.62)
     assert result.payload["feature_payload_json"]["turnover_level"]["value"] == "high"
     assert result.payload["warnings"] == []
-    assert result.payload["dataset_id"] == "snap-001:market-regime-features-v2"
-    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v2.json").exists()
+    assert result.payload["dataset_id"] == "snap-001:market-regime-features-v3"
+    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v3.json").exists()
 
 
 @pytest.mark.asyncio()
@@ -569,7 +576,7 @@ async def test_build_market_regime_features_returns_partial_when_db_write_fails(
 
     assert result.status == "partial"
     assert any("database persistence failed" in warning for warning in result.warnings)
-    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-19" / "snap-004" / "market-regime-features-v2.json").exists()
+    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-19" / "snap-004" / "market-regime-features-v3.json").exists()
 
 
 @pytest.mark.asyncio()

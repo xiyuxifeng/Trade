@@ -119,6 +119,15 @@ describe('StrategyWorkspaceShell', () => {
         notes: null,
         released_at: null,
         rules_snapshot: [],
+        regime_selection: {
+          selection_id: 'sel-001',
+          snapshot_id: 'snap-1',
+          market_regime_version: 'market-regime-v3',
+          applicability_profile_version: 'rule-applicability-v1',
+          selected_by: 'web',
+          confidence: 0.92,
+          quality_status: 'ok',
+        },
       },
     } as never);
     mockedListOptimizeVersions.mockResolvedValue({ status: 'success', count: 0, total: 0, skip: 0, limit: 8, items: [] } as never);

@@ -36,6 +36,7 @@ export type StrategyVersionDetailItem = {
   notes: string | null;
   released_at: string | null;
   rules_snapshot: Array<Record<string, unknown>>;
+  regime_selection?: Record<string, unknown> | null;
 };
 
 export type StrategyVersionListResponse = {

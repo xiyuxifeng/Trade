@@ -124,6 +124,7 @@ class StrategyLibraryRepository:
                     for rec in version.recommendations
                 ],
                 "rules_snapshot": version.rules_snapshot,
+                "regime_selection": version.regime_selection,
             },
             notes=version.notes,
             version_type=version.version_type.value,
@@ -157,6 +158,7 @@ class StrategyLibraryRepository:
             notes=orm_obj.notes,
             released_at=orm_obj.released_at,
             rules_snapshot=orm_obj.strategy_payload.get("rules_snapshot", []),
+            regime_selection=orm_obj.strategy_payload.get("regime_selection", {}),
             version_type=_get_version_type(orm_obj),
             parent_version_id=getattr(orm_obj, "parent_version_id", None),
         )
@@ -196,6 +198,7 @@ class StrategyLibraryRepository:
                 for rec in version.recommendations
             ],
             "rules_snapshot": version.rules_snapshot,
+            "regime_selection": version.regime_selection,
         }
         existing.notes = version.notes
         existing.version_type = version.version_type.value

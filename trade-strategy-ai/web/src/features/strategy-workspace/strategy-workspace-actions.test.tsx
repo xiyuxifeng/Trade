@@ -40,6 +40,7 @@ describe('StrategyWorkspaceActions', () => {
               onSubmitted={() => undefined}
               profileId="default"
               profileName="默认配置"
+              snapshotId="snap-1"
               snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"
@@ -60,13 +61,16 @@ describe('StrategyWorkspaceActions', () => {
         expect.objectContaining({
           job_type: 'strategy-build',
           created_by: 'web',
-          params: expect.objectContaining({
-            config_path: 'config/strategy-v3.yaml',
-            trader_id: 'trader_a',
-            strategy_date: '2026-05-16',
-            force: false,
+            params: expect.objectContaining({
+              config_path: 'config/strategy-v3.yaml',
+              trader_id: 'trader_a',
+              strategy_date: '2026-05-16',
+              force: false,
+              snapshot_id: 'snap-1',
+              market_regime_version: 'market-regime-v3',
+              selected_by: 'web',
+            }),
           }),
-        }),
       );
     });
   });
@@ -93,6 +97,7 @@ describe('StrategyWorkspaceActions', () => {
               onSubmitted={() => undefined}
               profileId="default"
               profileName="默认配置"
+              snapshotId="snap-1"
               snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"
@@ -143,6 +148,7 @@ describe('StrategyWorkspaceActions', () => {
               onSubmitted={() => undefined}
               profileId="default"
               profileName="默认配置"
+              snapshotId="snap-1"
               snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"

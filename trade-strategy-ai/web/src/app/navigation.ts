@@ -28,6 +28,7 @@ const formalNavigationGroups: NavGroup[] = [
       { label: '市场数据', path: '/market', description: '市场快照浏览器' },
       { label: '数据集', path: '/market/datasets', description: '市场数据集浏览器' },
       { label: '策略', path: '/strategies', description: '策略版本与正式工作台入口' },
+      { label: '规则选择', path: '/strategies/regime-selection', description: 'Regime-aware 规则选择视图' },
       { label: '回测', path: '/backtest', description: '回测正式工作台' },
       { label: 'Regime 回测', path: '/backtest/regime', description: 'Regime-aware 回测报告' },
       { label: '规则池', path: '/rule-pool', description: '规则池审核中心' },

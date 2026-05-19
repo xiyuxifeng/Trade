@@ -1769,7 +1769,7 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [ ] UI-V3-013 P0 Regime-aware Rule Selection View
+### [x] UI-V3-013 P0 Regime-aware Rule Selection View
 
 任务目标：展示盘前策略运行时为什么选择或跳过某些 rule。
 

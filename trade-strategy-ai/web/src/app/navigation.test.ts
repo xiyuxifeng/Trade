@@ -12,6 +12,7 @@ describe('navigation contract', () => {
       '/market',
       '/market/datasets',
       '/strategies',
+      '/strategies/regime-selection',
       '/backtest',
       '/backtest/regime',
       '/rule-pool',

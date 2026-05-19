@@ -27,6 +27,7 @@ from src.services.market_snapshot_query_service import MarketSnapshotQueryServic
 from src.services.market_regime_service import MarketRegimeService
 from src.services.market_regime_feature_service import MarketRegimeFeatureService
 from src.services.rule_applicability_service import RuleApplicabilityService
+from src.services.regime_rule_selection_service import RegimeRuleSelectionService
 from src.services.optimize_service import OptimizeService
 from src.services.pipeline_application_service import PipelineApplicationService
 from src.services.persona_service import PersonaService
@@ -72,6 +73,7 @@ __all__ = [
     "MarketSnapshotQueryService",
     "MarketRegimeService",
     "MarketRegimeFeatureService",
+    "RegimeRuleSelectionService",
     "RuleApplicabilityService",
     "StrategyService",
     "PersonaService",

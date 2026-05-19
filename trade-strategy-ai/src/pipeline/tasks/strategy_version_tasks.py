@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
 from src.db.session import session_scope
+from src.db.repositories.market_regime_repository import MarketRegimeRepository
+from src.db.repositories.rule_applicability_repository import RuleApplicabilityRepository
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.strategy_library.service import StrategyLibraryService
@@ -42,6 +45,8 @@ async def handle_build_trader_strategy_version(
     trader_id: str | None = details.get("trader_id")
     strategy_date_str: str | None = details.get("strategy_date")
     force: bool = details.get("force", False)
+    regime_selection = details.get("regime_selection")
+    selection_context = details.get("selection_context") or {}
 
     if not trader_id or not strategy_date_str:
         logger.warning(
@@ -146,7 +151,59 @@ async def handle_build_trader_strategy_version(
             strategy_date=strategy_date,
             profile=profile,
             source_articles=articles,
+            regime_selection=regime_selection if isinstance(regime_selection, dict) else None,
         )
+
+        snapshot_id = selection_context.get("snapshot_id")
+        market_regime_version = selection_context.get("market_regime_version") or "market-regime-v3"
+        applicability_profile_version = selection_context.get("applicability_profile_version")
+        selected_by = str(selection_context.get("selected_by") or "web")
+
+        if snapshot_id:
+            from src.services.regime_rule_selection_service import RegimeRuleSelectionService
+
+            market_regime_repo = MarketRegimeRepository()
+            applicability_repo = RuleApplicabilityRepository()
+            selection_service = RegimeRuleSelectionService()
+
+            regime = await market_regime_repo.get_by_snapshot_and_version(
+                session,
+                str(snapshot_id),
+                str(market_regime_version),
+            )
+            if regime is None:
+                logger.warning(
+                    "策略版本构建跳过 regime-aware selection: market regime not found, snapshot_id=%s, regime_version=%s",
+                    snapshot_id,
+                    market_regime_version,
+                )
+            else:
+                profiles = await applicability_repo.list_profiles(
+                    session,
+                    profile_version=str(applicability_profile_version) if applicability_profile_version else None,
+                    limit=None,
+                )
+                selection_result = await selection_service.build_regime_rule_selection(
+                    strategy_version=draft_version,
+                    trader_profile=profile,
+                    market_regime=regime,
+                    applicability_profiles=profiles,
+                    selected_by=selected_by,
+                    applicability_profile_version=str(applicability_profile_version) if applicability_profile_version else None,
+                )
+                selection_payload = selection_result.payload.get("selection") if isinstance(selection_result.payload, dict) else None
+                if isinstance(selection_payload, dict):
+                    draft_version = replace(draft_version, regime_selection=selection_payload)
+                    await service.save_version(session=session, version=draft_version)
+                    logger.info(
+                        "策略版本 regime-aware selection 已保存: trader=%s, date=%s, version=%s, selected=%d, blocked=%d",
+                        trader_id,
+                        strategy_date,
+                        draft_version.version_id,
+                        len(selection_payload.get("selected_rules", [])),
+                        len(selection_payload.get("blocked_rules", [])),
+                    )
+
         logger.info(
             "策略版本草稿已构建: trader=%s, date=%s, version=%s, recommendations=%d",
             trader_id,

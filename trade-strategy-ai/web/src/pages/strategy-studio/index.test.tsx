@@ -189,13 +189,13 @@ describe('StrategyStudioPage', () => {
       expect(mockedListStrategyRules).toHaveBeenCalled();
     });
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Strategy Studio' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: '策略工作室' })).toBeInTheDocument();
     expect(await screen.findByText('trader_a_2026-05-09_released')).toBeInTheDocument();
-    expect(await screen.findByText('rule-1')).toBeInTheDocument();
-    expect(screen.getByText('Candidate generation')).toBeInTheDocument();
-    expect(screen.getByText('Validation advice')).toBeInTheDocument();
+    expect((await screen.findAllByText('rule-1')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { level: 4, name: '候选版本生成' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: '优化建议' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Generate candidate' }));
+    await user.click(screen.getByRole('button', { name: '生成候选版本' }));
     await waitFor(() => {
       expect(mockedCreateCandidateVersion).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -207,12 +207,12 @@ describe('StrategyStudioPage', () => {
       );
     });
 
-    await user.click(screen.getByRole('button', { name: 'Run advice' }));
+    await user.click(screen.getByRole('button', { name: '运行优化建议' }));
     await waitFor(() => {
       expect(mockedAdviseRuleValidations).toHaveBeenCalled();
     });
 
-    await user.click(screen.getByRole('button', { name: 'Submit review' }));
+    await user.click(screen.getByRole('button', { name: '提交审核' }));
     await waitFor(() => {
       expect(mockedReviewStrategyRule).toHaveBeenCalledWith(
         'rule-1',
@@ -224,7 +224,7 @@ describe('StrategyStudioPage', () => {
       );
     });
 
-    await user.click(screen.getByRole('button', { name: 'Batch review' }));
+    await user.click(screen.getByRole('button', { name: '运行批量审核' }));
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalled();
       expect(mockedReviewStrategyRuleBatch).toHaveBeenCalledWith(

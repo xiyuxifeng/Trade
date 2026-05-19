@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Any
 
 
 class StrategyVersionStatus(StrEnum):
@@ -94,3 +95,5 @@ class StrategyVersion:
     # 版本化规则快照（NTL-S4-003）：用于 StrategyAgent 评估的规则集合
     # 每条规则通常包含 rule_id / condition / action / confidence / rule_pool_id 等字段
     rules_snapshot: list[dict] = field(default_factory=list)
+    # Regime-aware Rule Selection 的摘要，作为策略版本的附加事实源
+    regime_selection: dict[str, Any] = field(default_factory=dict)

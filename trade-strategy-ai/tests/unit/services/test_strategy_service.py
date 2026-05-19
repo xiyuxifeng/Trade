@@ -15,6 +15,7 @@ class _FakeStrategyVersion:
     version_type: str = "manual"
     released_at: datetime | None = None
     rules_snapshot: list[dict] | None = None
+    regime_selection: dict | None = None
     recommendations: list[dict] | None = None
     notes: str | None = None
     parent_version_id: str | None = None
@@ -96,6 +97,42 @@ def test_strategy_service_builds_strategy_version(tmp_path: Path) -> None:
     assert calls["build"][0]["trader_id"] == "trader_a"
 
 
+def test_strategy_service_builds_strategy_version_with_regime_selection(tmp_path: Path) -> None:
+    """StrategyService 应透传 regime selection 摘要。"""
+    from src.services.strategy_service import StrategyService
+
+    calls: dict[str, object] = {}
+
+    async def fake_build(details, *, config):
+        calls["build"] = (details, config)
+        return None
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = StrategyService(build_handler=fake_build)
+    result = asyncio.run(
+        service.build_strategy_version(
+            config_path=config_path,
+            trader_id="trader_a",
+            strategy_date="2026-04-23",
+            force=True,
+            snapshot_id="snap-1",
+            market_regime_version="market-regime-v3",
+            source_feature_version="market-regime-features-v3",
+            applicability_profile_version="rule-applicability-v1",
+            selected_by="web",
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.payload["regime_selection"]["snapshot_id"] == "snap-1"
+    assert result.payload["regime_selection"]["market_regime_version"] == "market-regime-v3"
+    assert result.payload["regime_selection"]["selected_by"] == "web"
+    assert calls["build"][0]["regime_selection"]["applicability_profile_version"] == "rule-applicability-v1"
+
+
 def test_strategy_service_lists_versions_and_loads_detail(tmp_path: Path) -> None:
     """StrategyService 应支持列表和详情查询。"""
     from src.services.strategy_service import StrategyService
@@ -109,6 +146,7 @@ def test_strategy_service_lists_versions_and_loads_detail(tmp_path: Path) -> Non
             released_at=None,
             recommendations=[{"symbol": "000001.SZ"}],
             rules_snapshot=[{"rule_id": "r1"}],
+            regime_selection={"selection_id": "sel-001", "snapshot_id": "snap-1"},
             notes="note",
         ),
     ]
@@ -133,6 +171,7 @@ def test_strategy_service_lists_versions_and_loads_detail(tmp_path: Path) -> Non
     assert listed.payload["items"][0]["version_id"] == "trader_a_2026-04-23_draft"
     assert detail.payload["item"]["version_id"] == "trader_a_2026-04-23_draft"
     assert detail.payload["item"]["rules_snapshot"] == [{"rule_id": "r1"}]
+    assert detail.payload["item"]["regime_selection"]["selection_id"] == "sel-001"
     assert download.payload["file_name"] == "strategy_version_trader_a_2026-04-23_draft.json"
     assert download.payload["item"]["notes"] == "note"
 

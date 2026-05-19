@@ -31,6 +31,7 @@ import { SettingsPage } from '@/pages/settings';
 import { SignalsPage } from '@/pages/signals';
 import { KaipanPage } from '@/pages/kaipan';
 import { StrategyStudioPage } from '@/pages/strategy-studio';
+import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
 import { StrategiesPage } from '@/pages/strategies';
 import { LegacyCompatibilityPage } from '@/pages/legacy';
 import { WorkflowsPage } from '@/pages/workflows';
@@ -151,6 +152,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'strategies',
         element: <StrategiesPage />,
+      },
+      {
+        path: 'strategies/regime-selection',
+        element: <RegimeRuleSelectionPage />,
       },
       {
         path: 'snapshots',

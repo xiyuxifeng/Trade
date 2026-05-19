@@ -33,6 +33,7 @@ def _serialize_strategy_version(row: TraderStrategyVersion) -> dict[str, Any]:
         "version_type": getattr(row, "version_type", "manual"),
         "released_at": row.released_at.isoformat() if row.released_at else None,
         "rules_snapshot": strategy_payload.get("rules_snapshot", getattr(row, "rules_snapshot", [])),
+        "regime_selection": strategy_payload.get("regime_selection", getattr(row, "regime_selection", {})),
         "recommendations": strategy_payload.get("recommendations", getattr(row, "recommendations", [])),
         "notes": row.notes,
         "source_article_ids": row.source_article_ids or [],
@@ -62,15 +63,46 @@ class StrategyService(BaseService):
         trader_id: str,
         strategy_date: str,
         force: bool = False,
+        regime_selection: dict[str, Any] | None = None,
+        snapshot_id: str | None = None,
+        market_regime_version: str | None = None,
+        source_feature_version: str | None = None,
+        applicability_profile_version: str | None = None,
+        selected_by: str | None = None,
     ) -> ServiceResult:
         """构建指定交易员的策略版本。"""
         loaded = load_app_config(config_path)
         config_file = Path(config_path).expanduser().resolve()
         base_dir = _project_base_dir(loaded.config_path)
+        regime_selection_payload = regime_selection or {}
+        if not regime_selection_payload and any(
+            value is not None
+            for value in (snapshot_id, market_regime_version, source_feature_version, applicability_profile_version, selected_by)
+        ):
+            regime_selection_payload = {
+                "snapshot_id": snapshot_id,
+                "market_regime_version": market_regime_version,
+                "source_feature_version": source_feature_version,
+                "applicability_profile_version": applicability_profile_version,
+                "selected_by": selected_by,
+            }
         details = {
             "trader_id": trader_id,
             "strategy_date": strategy_date,
             "force": force,
+            "regime_selection": regime_selection_payload or None,
+            "selection_context": {
+                "snapshot_id": snapshot_id,
+                "market_regime_version": market_regime_version,
+                "source_feature_version": source_feature_version,
+                "applicability_profile_version": applicability_profile_version,
+                "selected_by": selected_by,
+            }
+            if any(
+                value is not None
+                for value in (snapshot_id, market_regime_version, source_feature_version, applicability_profile_version, selected_by)
+            )
+            else None,
         }
         await self._build_handler(details, config=loaded.config)
         return ServiceResult(
@@ -82,6 +114,7 @@ class StrategyService(BaseService):
                 "trader_id": trader_id,
                 "strategy_date": strategy_date,
                 "force": force,
+                "regime_selection": regime_selection_payload or None,
                 "status": "draft",
             },
         )

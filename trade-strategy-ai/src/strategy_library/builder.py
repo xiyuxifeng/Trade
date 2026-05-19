@@ -199,6 +199,7 @@ class StrategyVersionBuilder:
         strategy_date: date,
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
+        regime_selection: dict | None = None,
     ) -> StrategyVersion:
         """构建草稿状态的策略版本（manual 类型）。"""
         return self._build(
@@ -211,6 +212,7 @@ class StrategyVersionBuilder:
             parent_version_id=None,
             recommendations=None,
             released_at=None,
+            regime_selection=regime_selection,
         )
 
     def build_released(
@@ -220,6 +222,7 @@ class StrategyVersionBuilder:
         strategy_date: date,
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
+        regime_selection: dict | None = None,
     ) -> StrategyVersion:
         """构建已发布状态的策略版本（manual 类型）。"""
         return self._build(
@@ -232,6 +235,7 @@ class StrategyVersionBuilder:
             parent_version_id=None,
             recommendations=None,
             released_at=datetime.now(UTC),
+            regime_selection=regime_selection,
         )
 
     def build_candidate(
@@ -242,6 +246,7 @@ class StrategyVersionBuilder:
         parent_version_id: str,
         recommendations: list[StrategyRecommendation],
         notes: str | None = None,
+        regime_selection: dict | None = None,
     ) -> StrategyVersion:
         """构建候选优化版本（draft 状态，candidate 类型，S7-003）。
 
@@ -264,6 +269,7 @@ class StrategyVersionBuilder:
             notes=notes,
             released_at=None,
             rules_snapshot=[],
+            regime_selection=regime_selection or {},
         )
 
     def _build(
@@ -278,6 +284,7 @@ class StrategyVersionBuilder:
         parent_version_id: str | None,
         recommendations: list[StrategyRecommendation] | None,
         released_at: datetime | None,
+        regime_selection: dict | None,
     ) -> StrategyVersion:
         """内部构建方法。"""
         # === 1. 按主题偏好过滤和排序文章 ===
@@ -352,4 +359,5 @@ class StrategyVersionBuilder:
             notes=None,
             released_at=released_at,
             rules_snapshot=rules_snapshot,
+            regime_selection=regime_selection or {},
         )

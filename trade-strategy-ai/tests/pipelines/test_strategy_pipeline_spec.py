@@ -20,9 +20,14 @@ def test_strategy_pipeline_spec_exports_core_fields() -> None:
         "position_bias",
     )
     assert "trader_id" in STRATEGY_PIPELINE_SPEC.input_schema["fields"]
+    assert "snapshot_id" in STRATEGY_PIPELINE_SPEC.input_schema["fields"]
+    assert "market_regime_version" in STRATEGY_PIPELINE_SPEC.input_schema["fields"]
+    assert "applicability_profile_version" in STRATEGY_PIPELINE_SPEC.input_schema["fields"]
+    assert "selected_by" in STRATEGY_PIPELINE_SPEC.input_schema["fields"]
     assert "strategy-build" in STRATEGY_PIPELINE_SPEC.job_types
     assert "result-json" in {item.kind for item in STRATEGY_PIPELINE_SPEC.output_artifacts}
     assert "html" in {item.kind for item in STRATEGY_PIPELINE_SPEC.output_artifacts}
+    assert "regime-selection-json" in {item.kind for item in STRATEGY_PIPELINE_SPEC.output_artifacts}
     assert STRATEGY_PIPELINE_SPEC.extensions["strategy_actions"] == (
         "strategy-build",
         "run-pre-market",
@@ -49,7 +54,7 @@ def test_strategy_pipeline_spec_summary_is_catalog_friendly() -> None:
     assert summary["output_artifacts"][1]["kind"] == "html"
     assert summary["output_artifacts"][0]["description"].startswith("策略版本构建与运行")
     assert summary["steps"][0]["job_type"] == "strategy-build"
-    assert summary["steps"][0]["output_artifacts"] == ["result-json"]
+    assert summary["steps"][0]["output_artifacts"] == ["result-json", "regime-selection-json"]
     assert summary["steps"][1]["depends_on"] == ["strategy-build"]
     assert summary["steps"][1]["output_artifacts"] == ["result-json", "html"]
     assert summary["steps"][2]["extensions"]["runtime_support"] == "current"

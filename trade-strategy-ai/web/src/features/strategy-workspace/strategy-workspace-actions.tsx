@@ -41,15 +41,24 @@ const STRATEGY_ACTIONS: StrategyActionConfig[] = [
   },
 ];
 
-function buildStrategyJobParams(action: StrategyActionType, strategyDate: string, traderId: string, configPath: string) {
+function buildStrategyJobParams(
+  action: StrategyActionType,
+  strategyDate: string,
+  traderId: string,
+  configPath: string,
+  snapshotId: string | null,
+) {
   if (action === 'strategy-build') {
-    return {
-      config_path: configPath,
-      trader_id: traderId,
-      strategy_date: strategyDate,
-      force: false,
-    };
-  }
+      return {
+        config_path: configPath,
+        trader_id: traderId,
+        strategy_date: strategyDate,
+        force: false,
+        snapshot_id: snapshotId ?? undefined,
+        market_regime_version: 'market-regime-v3',
+        selected_by: 'web',
+      };
+    }
 
   return {
     config_path: configPath,
@@ -64,6 +73,7 @@ type StrategyWorkspaceActionsProps = {
   configPath: string;
   profileName: string;
   profileId: string;
+  snapshotId: string | null;
   snapshotCapturedAt: string | null;
   disabled?: boolean;
   onSubmitted?: (payload: { jobType: StrategyActionType; jobId: string }) => void;
@@ -75,6 +85,7 @@ export function StrategyWorkspaceActions({
   configPath,
   profileName,
   profileId,
+  snapshotId,
   snapshotCapturedAt,
   disabled = false,
   onSubmitted,
@@ -87,13 +98,13 @@ export function StrategyWorkspaceActions({
   const canSubmit = Boolean(traderId.trim() && strategyDate && configPath && !disabled);
 
   const mutation = useMutation({
-    mutationFn: async (action: StrategyActionConfig) => {
-      return createJob({
-        job_type: action.jobType,
-        created_by: 'web',
-        params: buildStrategyJobParams(action.jobType, strategyDate, traderId.trim(), configPath),
-      });
-    },
+        mutationFn: async (action: StrategyActionConfig) => {
+          return createJob({
+            job_type: action.jobType,
+            created_by: 'web',
+            params: buildStrategyJobParams(action.jobType, strategyDate, traderId.trim(), configPath, snapshotId),
+          });
+        },
     onSuccess: async (result, action) => {
       setSubmissionError(null);
       setSelectedAction(null);
@@ -123,6 +134,7 @@ export function StrategyWorkspaceActions({
     >
       <div className="space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <p>最新 snapshot ID：{snapshotId ?? '未记录'}</p>
           <p>最新 snapshot：{snapshotCapturedAt ? formatWorkspaceTimestamp(snapshotCapturedAt) : '未记录'}</p>
         </div>
 

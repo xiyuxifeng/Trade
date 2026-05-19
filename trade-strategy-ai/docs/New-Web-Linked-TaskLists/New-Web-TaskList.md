@@ -2184,7 +2184,7 @@ UI 关联任务：
 
 ---
 
-### [ ] NW-V3-SX-004 P0 Regime-aware Rule Selection
+### [x] NW-V3-SX-004 P0 Regime-aware Rule Selection
 
 任务目标：盘前策略生成时结合当前 Market Regime 选择适用 rule，避免在不合适市场环境下启用错误规则。
 

@@ -330,6 +330,12 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
             trader_id: str,
             strategy_date: str,
             force: bool = False,
+            regime_selection: dict | None = None,
+            snapshot_id: str | None = None,
+            market_regime_version: str | None = None,
+            source_feature_version: str | None = None,
+            applicability_profile_version: str | None = None,
+            selected_by: str | None = None,
         ) -> Any:
             del force
             return job_runner_module.ServiceResult(
@@ -338,6 +344,14 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
                     "config_path": str(config_path),
                     "trader_id": trader_id,
                     "strategy_date": strategy_date,
+                    "regime_selection": regime_selection
+                    or {
+                        "snapshot_id": snapshot_id,
+                        "market_regime_version": market_regime_version,
+                        "source_feature_version": source_feature_version,
+                        "applicability_profile_version": applicability_profile_version,
+                        "selected_by": selected_by,
+                    },
                     "strategy_version_path": str(tmp_path / "strategy-version.json"),
                 },
                 message="strategy version build completed",
@@ -353,6 +367,11 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
                 "trader_id": "trader-001",
                 "strategy_date": "2026-05-16",
                 "force": False,
+                "snapshot_id": "snap-1",
+                "market_regime_version": "market-regime-v3",
+                "source_feature_version": "market-regime-features-v3",
+                "applicability_profile_version": "rule-applicability-v1",
+                "selected_by": "web",
             },
             created_by="web",
         )
@@ -365,6 +384,8 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
     assert loaded.payload["job"]["status"] == "success"
     assert loaded.payload["job"]["result"]["payload"]["trader_id"] == "trader-001"
     assert loaded.payload["job"]["result"]["payload"]["strategy_date"] == "2026-05-16"
+    assert loaded.payload["job"]["result"]["payload"]["regime_selection"]["snapshot_id"] == "snap-1"
+    assert loaded.payload["job"]["result"]["payload"]["regime_selection"]["selected_by"] == "web"
     asyncio.run(engine.dispose())
 
 

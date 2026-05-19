@@ -57,6 +57,15 @@ const detail = {
   notes: '正式版本说明',
   released_at: '2026-05-16T09:00:00Z',
   rules_snapshot: [],
+  regime_selection: {
+    selection_id: 'sel-001',
+    snapshot_id: 'snap-1',
+    market_regime_version: 'market-regime-v3',
+    applicability_profile_version: 'rule-applicability-v1',
+    selected_by: 'web',
+    confidence: 0.92,
+    quality_status: 'ok',
+  },
 };
 
 const artifacts: ArtifactRecord[] = [
@@ -120,6 +129,8 @@ describe('StrategyWorkspaceArtifacts', () => {
 
     expect(screen.getByText('版本详情与证据包')).toBeInTheDocument();
     expect(screen.getByText('strategy_report.html')).toBeInTheDocument();
+    expect(screen.getByText('Regime-aware selection')).toBeInTheDocument();
+    expect(screen.getByText('sel-001')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /sv-1/ }));
     expect(onSelectVersion).toHaveBeenCalledWith('sv-1');

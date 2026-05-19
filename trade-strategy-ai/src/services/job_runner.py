@@ -227,6 +227,12 @@ class JobRunner(BaseService):
                 trader_id=str(params.get("trader_id") or ""),
                 strategy_date=str(params.get("strategy_date") or date.today().isoformat()),
                 force=_parse_bool(params.get("force"), default=False),
+                regime_selection=params.get("regime_selection"),
+                snapshot_id=params.get("snapshot_id"),
+                market_regime_version=params.get("market_regime_version"),
+                source_feature_version=params.get("source_feature_version"),
+                applicability_profile_version=params.get("applicability_profile_version"),
+                selected_by=params.get("selected_by"),
             )
 
         async def _backtest_run(params: dict[str, Any]) -> ServiceResult:

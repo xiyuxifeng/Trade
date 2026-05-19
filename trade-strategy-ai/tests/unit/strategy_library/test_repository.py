@@ -40,6 +40,11 @@ class TestStrategyLibraryRepository:
             notes="测试版本",
             released_at=datetime(2026, 4, 23, 10, 0, 0),
             rules_snapshot=[{"rule_id": "r1", "condition": "ma5_cross", "rule_pool_id": "pool-r1"}],
+            regime_selection={
+                "selection_id": "sel-001",
+                "snapshot_id": "snap-1",
+                "market_regime_version": "market-regime-v3",
+            },
         )
         orm_obj = StrategyLibraryRepository._to_orm_model(version)
         assert orm_obj.trader_id == "trader-001"
@@ -48,6 +53,7 @@ class TestStrategyLibraryRepository:
         assert len(orm_obj.strategy_payload["recommendations"]) == 1
         assert orm_obj.strategy_payload["recommendations"][0]["symbol"] == "000001"
         assert orm_obj.strategy_payload["rules_snapshot"] == [{"rule_id": "r1", "condition": "ma5_cross", "rule_pool_id": "pool-r1"}]
+        assert orm_obj.strategy_payload["regime_selection"]["selection_id"] == "sel-001"
 
     def test_orm_to_schema_converts_all_fields(self):
         """ORM 到 Schema 的转换包含所有字段。"""
@@ -74,6 +80,11 @@ class TestStrategyLibraryRepository:
                 },
             ],
             "rules_snapshot": [{"rule_id": "r1", "condition": "ma5_cross", "rule_pool_id": "pool-r1"}],
+            "regime_selection": {
+                "selection_id": "sel-001",
+                "snapshot_id": "snap-1",
+                "market_regime_version": "market-regime-v3",
+            },
         }
         schema_obj = StrategyLibraryRepository._from_orm_model(orm_obj)
         assert schema_obj.trader_id == "trader-001"
@@ -83,6 +94,7 @@ class TestStrategyLibraryRepository:
         assert schema_obj.recommendations[0].symbol == "000001"
         assert schema_obj.notes == "测试版本"
         assert schema_obj.rules_snapshot == [{"rule_id": "r1", "condition": "ma5_cross", "rule_pool_id": "pool-r1"}]
+        assert schema_obj.regime_selection["selection_id"] == "sel-001"
 
     @pytest.mark.asyncio
     async def test_get_by_trader_and_date_returns_versions(self):

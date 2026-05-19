@@ -121,6 +121,7 @@ class StrategyLibraryService:
         strategy_date: date,
         profile: TraderProfile,
         source_articles: list[ArticleEvidence],
+        regime_selection: dict | None = None,
     ) -> StrategyVersion:
         """构建草稿版本并持久化。"""
         version = self._builder.build_draft(
@@ -128,6 +129,7 @@ class StrategyLibraryService:
             strategy_date=strategy_date,
             profile=profile,
             source_articles=source_articles,
+            regime_selection=regime_selection,
         )
         await self._repo.save(session=session, version=version)
         logger.info(
@@ -193,6 +195,7 @@ class StrategyLibraryService:
             notes=draft_version.notes,
             released_at=datetime.now(UTC),
             rules_snapshot=draft_version.rules_snapshot,
+            regime_selection=draft_version.regime_selection,
         )
         await self._repo.save(session=session, version=released)
         logger.info(
@@ -242,6 +245,7 @@ class StrategyLibraryService:
             parent_version_id=parent_version_id,
             recommendations=recommendations,
             notes=notes,
+            regime_selection={},
         )
 
         await self._repo.save(session=session, version=candidate)

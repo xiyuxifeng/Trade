@@ -68,6 +68,16 @@ export function StrategyWorkspaceArtifacts({
     [artifacts],
   );
   const selectedVersion = selectedVersionDetail;
+  const regimeSelection = (selectedVersion?.regime_selection ?? {}) as Record<string, unknown>;
+  const regimeSelectionItems = [
+    { label: 'selection_id', value: String(regimeSelection.selection_id ?? '未记录') },
+    { label: 'snapshot_id', value: String(regimeSelection.snapshot_id ?? '未记录') },
+    { label: 'market_regime_version', value: String(regimeSelection.market_regime_version ?? '未记录') },
+    { label: 'applicability_profile_version', value: String(regimeSelection.applicability_profile_version ?? '未记录') },
+    { label: 'selected_by', value: String(regimeSelection.selected_by ?? '未记录') },
+    { label: 'confidence', value: regimeSelection.confidence !== undefined ? String(regimeSelection.confidence) : '未记录' },
+    { label: 'quality_status', value: String(regimeSelection.quality_status ?? '未记录') },
+  ];
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -159,6 +169,29 @@ export function StrategyWorkspaceArtifacts({
                   当前版本没有附加说明。
                 </div>
               )}
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">Regime-aware selection</p>
+                    <p className="mt-1 text-sm text-slate-600">展示构建策略版本时附带的市场状态与规则选择摘要。</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge value={regimeSelection.quality_status ? String(regimeSelection.quality_status) : 'info'} />
+                    <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/strategies/regime-selection?version_id=${selectedVersion.version_id}`)} variant="outline">
+                      查看完整视图
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {regimeSelectionItems.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+                      <p className="mt-2 break-all text-sm font-medium text-slate-950">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">

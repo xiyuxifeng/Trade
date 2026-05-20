@@ -1,4 +1,5 @@
 export type RecoveryBackupItem = {
+  backup_id: string;
   path: string;
   name: string;
   size_bytes: number;
@@ -10,6 +11,14 @@ export type RecoveryBackupItem = {
   artifacts_copied?: boolean;
 };
 
+export type RecoveryBackupTarget = {
+  id: string;
+  label: string;
+  description: string;
+  path: string;
+  mode: 'auto' | 'path';
+};
+
 export type RecoveryBackupsResponse = {
   base_dir: string;
   backup_root: string;
@@ -17,7 +26,16 @@ export type RecoveryBackupsResponse = {
   items: RecoveryBackupItem[];
 };
 
+export type RecoveryBackupTargetsResponse = {
+  base_dir: string;
+  backup_root: string;
+  count: number;
+  items: RecoveryBackupTarget[];
+};
+
 export type RecoveryBackupRequest = {
+  profile_id: string;
+  backup_dir_id?: string;
   backup_dir?: string;
   include_processed?: boolean;
 };
@@ -33,7 +51,9 @@ export type RecoveryBackupResponse = {
 };
 
 export type RecoveryRestoreRequest = {
-  backup_path: string;
+  profile_id: string;
+  backup_id?: string;
+  backup_path?: string;
   include_processed?: boolean;
   confirmed: boolean;
 };

@@ -3,6 +3,7 @@ import type {
   RecoveryBackupRequest,
   RecoveryBackupResponse,
   RecoveryBackupsResponse,
+  RecoveryBackupTargetsResponse,
   RecoveryRestoreRequest,
   RecoveryRestoreResponse,
   RecoveryStaleRequest,
@@ -11,6 +12,10 @@ import type {
 
 export function listRecoveryBackups() {
   return fetchJson<RecoveryBackupsResponse>('/ops/backups');
+}
+
+export function listRecoveryBackupTargets() {
+  return fetchJson<RecoveryBackupTargetsResponse>('/ops/backup-targets');
 }
 
 export function createRecoveryBackup(request: RecoveryBackupRequest) {

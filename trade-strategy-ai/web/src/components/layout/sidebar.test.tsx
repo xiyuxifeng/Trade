@@ -37,5 +37,6 @@ describe('Sidebar', () => {
       'aria-disabled',
       'true',
     );
+    expect(screen.getByRole('link', { name: /系统管理/ })).toHaveAttribute('aria-disabled', 'true');
   });
 });

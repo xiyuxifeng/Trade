@@ -36,6 +36,7 @@ const formalNavigationGroups: NavGroup[] = [
     title: '配置与管理',
     items: [
       { label: '配置管理', path: '/profiles', description: '正式 Profile 配置入口' },
+      { label: '系统管理', path: '/system', description: '系统健康、审计与运维入口', minRole: 'admin' },
       { label: '管理中心', path: '/admin', description: '用户、运维与权限管理入口', minRole: 'admin' },
     ],
   },

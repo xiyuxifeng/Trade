@@ -32,6 +32,7 @@ class _FakeOpsRecoveryService:
                 "count": 1,
                 "items": [
                     {
+                        "backup_id": "20260511-080000",
                         "path": "/project/data/backups/20260511-080000",
                         "name": "20260511-080000",
                         "size_bytes": 4096,
@@ -45,8 +46,42 @@ class _FakeOpsRecoveryService:
             }
         )
 
-    async def create_backup(self, *, include_processed: bool = True, backup_dir: str | None = None) -> Any:
-        self.calls.append({"method": "create_backup", "include_processed": include_processed, "backup_dir": backup_dir})
+    def list_backup_targets(self) -> Any:
+        self.calls.append({"method": "list_backup_targets"})
+        return _result(
+            {
+                "base_dir": "/project",
+                "backup_root": "/project/data/backups",
+                "count": 1,
+                "items": [
+                    {
+                        "id": "default",
+                        "label": "默认备份目录",
+                        "description": "使用系统自动生成的时间戳目录",
+                        "path": "/project/data/backups",
+                        "mode": "auto",
+                    }
+                ],
+            }
+        )
+
+    async def create_backup(
+        self,
+        *,
+        profile_id: str,
+        include_processed: bool = True,
+        backup_dir: str | None = None,
+        backup_dir_id: str | None = None,
+    ) -> Any:
+        self.calls.append(
+            {
+                "method": "create_backup",
+                "profile_id": profile_id,
+                "include_processed": include_processed,
+                "backup_dir": backup_dir,
+                "backup_dir_id": backup_dir_id,
+            }
+        )
         return _result(
             {
                 "backup_dir": "/project/data/backups/20260511-120000",
@@ -60,15 +95,20 @@ class _FakeOpsRecoveryService:
     async def restore_backup(
         self,
         *,
-        backup_path: str,
+        profile_id: str,
+        backup_id: str | None = None,
+        backup_path: str | None = None,
         include_processed: bool = True,
         confirmed: bool = False,
     ) -> Any:
-        if not backup_path.startswith("/project/data/backups/"):
+        target = backup_path or f"/project/data/backups/{backup_id}"
+        if not target.startswith("/project/data/backups/"):
             raise ValueError("backup path must stay within backup root")
         self.calls.append(
             {
                 "method": "restore_backup",
+                "profile_id": profile_id,
+                "backup_id": backup_id,
                 "backup_path": backup_path,
                 "include_processed": include_processed,
                 "confirmed": confirmed,
@@ -78,7 +118,7 @@ class _FakeOpsRecoveryService:
             return _result({"confirmed": confirmed}, status="error", message="confirmation required")
         return _result(
             {
-                "backup_dir": backup_path,
+                "backup_dir": target,
                 "tables": ["jobs", "artifacts"],
                 "row_counts": {"jobs": 1, "artifacts": 2},
                 "include_processed": include_processed,
@@ -142,15 +182,17 @@ async def client() -> AsyncIterator[AsyncClient]:
 async def test_ops_api_supports_list_backup_create_and_restore(client: AsyncClient) -> None:
     """Ops UI API 应支持列出备份、创建备份和恢复备份。"""
     listed = await client.get("/api/ui/v1/ops/backups")
-    created = await client.post("/api/ui/v1/ops/backup", json={"include_processed": True})
+    targets = await client.get("/api/ui/v1/ops/backup-targets")
+    created = await client.post("/api/ui/v1/ops/backup", json={"profile_id": "profile-1", "include_processed": True})
     restore_rejected = await client.post(
         "/api/ui/v1/ops/restore",
-        json={"backup_path": "/project/data/backups/20260511-080000", "include_processed": True},
+        json={"profile_id": "profile-1", "backup_id": "20260511-080000", "include_processed": True},
     )
     restored = await client.post(
         "/api/ui/v1/ops/restore",
         json={
-            "backup_path": "/project/data/backups/20260511-080000",
+            "profile_id": "profile-1",
+            "backup_id": "20260511-080000",
             "include_processed": True,
             "confirmed": True,
         },
@@ -158,6 +200,8 @@ async def test_ops_api_supports_list_backup_create_and_restore(client: AsyncClie
 
     assert listed.status_code == 200
     assert listed.json()["count"] == 1
+    assert targets.status_code == 200
+    assert targets.json()["count"] == 1
     assert created.status_code == 200
     assert created.json()["processed_copied"] is True
     assert restore_rejected.status_code == 400
@@ -192,7 +236,7 @@ async def test_ops_api_rejects_backup_paths_outside_root(client: AsyncClient) ->
     """Ops 恢复入口不应接受备份根目录之外的路径。"""
     response = await client.post(
         "/api/ui/v1/ops/restore",
-        json={"backup_path": "/tmp/outside", "include_processed": True, "confirmed": True},
+        json={"profile_id": "profile-1", "backup_path": "/tmp/outside", "include_processed": True, "confirmed": True},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "backup path must stay within backup root"

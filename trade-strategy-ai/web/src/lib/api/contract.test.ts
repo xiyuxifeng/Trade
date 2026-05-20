@@ -7,6 +7,16 @@ import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
 import { getArticlePipeline, runArticlePipeline } from './pipelines';
 import { listArtifacts, getArtifact, downloadArtifact } from './artifacts';
 import {
+  archiveProfile,
+  getProfile,
+  getProfileEdit,
+  getProfileSnapshot,
+  importProfile,
+  listProfiles,
+  updateProfile,
+  validateProfileUpdate,
+} from './profiles';
+import {
   downloadDailyReportHtml,
   downloadEvaluationHtml,
   getDailyReport,
@@ -14,15 +24,7 @@ import {
   listDailyReports,
   listEvaluationReports,
 } from './reports';
-import {
-  getSettingsConfig,
-  getSettingsSchema,
-  listSettingsBackups,
-  restoreSettingsBackup,
-  saveSettings,
-  validateSettingsDraft,
-} from './settings';
-import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
+import { listRecoveryBackups, listRecoveryBackupTargets, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
 import { listDataAudits } from './data-audits';
 import {
   getMarketDataset,
@@ -69,14 +71,27 @@ describe('UI API client contract', () => {
     await cancelJob('job-1', 'test');
     await createJob({ job_type: 'run-pre-market', params: { date: '2026-05-10' } } as never);
     await listWorkflows();
-    await getWorkflow('install-config');
-    await runWorkflow('install-config', { confirmed: true } as never);
+    await getWorkflow('pipeline');
+    await runWorkflow('pipeline', { confirmed: true } as never);
     await getArticlePipeline();
     await runArticlePipeline({
       params: { config_path: 'config/articles.yaml' },
       created_by: 'web',
       confirmed: false,
     } as never);
+    await listProfiles({ skip: 0, limit: 10 });
+    await getProfile('default');
+    await getProfileEdit('default');
+    await validateProfileUpdate('default', { name: '默认配置', environment: 'production', sections: {} } as never);
+    await updateProfile('default', {
+      name: '默认配置',
+      environment: 'production',
+      sections: {},
+      confirmed: true,
+    } as never);
+    await archiveProfile('default', { archived_by: 'web' });
+    await importProfile({ profile_id: 'default', config_path: 'config/app.yaml', created_by: 'web' });
+    await getProfileSnapshot('default', 'snapshot-1');
     await listArtifacts({ skip: 0, limit: 10 });
     await getArtifact('artifact-1');
     await downloadArtifact('artifact-1');
@@ -86,20 +101,12 @@ describe('UI API client contract', () => {
     await getEvaluationReport('2026-05-10');
     await downloadDailyReportHtml('2026-05-10');
     await downloadEvaluationHtml('2026-05-10');
-    await getSettingsConfig('config/app.yaml');
-    await getSettingsSchema('config/app.yaml');
-    await validateSettingsDraft({ config_path: 'config/app.yaml', draft: {} } as never);
-    await saveSettings({ config_path: 'config/app.yaml', draft: {}, confirmed: true } as never);
-    await listSettingsBackups('config/app.yaml');
-    await restoreSettingsBackup({
-      config_path: 'config/app.yaml',
-      backup_path: 'data/backups/app.yaml',
-      confirmed: true,
-    } as never);
     await listRecoveryBackups();
-    await createRecoveryBackup({ include_processed: true } as never);
+    await listRecoveryBackupTargets();
+    await createRecoveryBackup({ profile_id: 'profile-1', include_processed: true } as never);
     await restoreRecoveryBackup({
-      backup_path: 'data/backups/app.yaml',
+      profile_id: 'profile-1',
+      backup_id: '20260511-080000',
       include_processed: true,
       confirmed: true,
     } as never);
@@ -143,8 +150,16 @@ describe('UI API client contract', () => {
       params: { date: '2026-05-10' },
     });
     expect(findCall('/api/ui/v1/workflows')).toBeTruthy();
-    expect(findCall('/api/ui/v1/workflows/install-config')).toBeTruthy();
-    expectJsonBody('/api/ui/v1/workflows/install-config/run', 'POST', { confirmed: true });
+    expect(findCall('/api/ui/v1/workflows/pipeline')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/workflows/pipeline/run', 'POST', { confirmed: true });
+    expect(findCall('/api/ui/v1/ops/backup-targets')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { profile_id: 'profile-1', include_processed: true });
+    expectJsonBody('/api/ui/v1/ops/restore', 'POST', {
+      profile_id: 'profile-1',
+      backup_id: '20260511-080000',
+      include_processed: true,
+      confirmed: true,
+    });
     expect(findCall('/api/ui/v1/pipelines/article_pipeline')).toBeTruthy();
     expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
       params: { config_path: 'config/articles.yaml' },
@@ -154,26 +169,39 @@ describe('UI API client contract', () => {
     expect(findCall('/api/ui/v1/artifacts?skip=0&limit=10')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1/download')).toBeTruthy();
+    expect(findCall('/api/ui/v1/profiles?skip=0&limit=10')).toBeTruthy();
+    expect(findCall('/api/ui/v1/profiles/default')).toBeTruthy();
+    expect(findCall('/api/ui/v1/profiles/default/edit')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/profiles/default/validate', 'POST', {
+      name: '默认配置',
+      environment: 'production',
+      sections: {},
+    });
+    expectJsonBody('/api/ui/v1/profiles/default', 'PUT', {
+      name: '默认配置',
+      environment: 'production',
+      sections: {},
+      confirmed: true,
+    });
+    expectJsonBody('/api/ui/v1/profiles/default/archive', 'POST', { archived_by: 'web' });
+    expectJsonBody('/api/ui/v1/profiles/import', 'POST', {
+      profile_id: 'default',
+      config_path: 'config/app.yaml',
+      created_by: 'web',
+    });
+    expect(findCall('/api/ui/v1/profiles/default/snapshots/snapshot-1')).toBeTruthy();
     expect(findCall('/reports/daily?skip=0&limit=50')).toBeTruthy();
     expect(findCall('/reports/daily/2026-05-10')).toBeTruthy();
     expect(findCall('/reports/evaluation?skip=0&limit=50')).toBeTruthy();
     expect(findCall('/reports/evaluation/2026-05-10')).toBeTruthy();
     expect(findCall('/reports/daily/2026-05-10/html')).toBeTruthy();
     expect(findCall('/reports/evaluation/2026-05-10/html')).toBeTruthy();
-    expect(findCall('/api/ui/v1/settings/config?config_path=config%2Fapp.yaml')).toBeTruthy();
-    expect(findCall('/api/ui/v1/settings/schema?config_path=config%2Fapp.yaml')).toBeTruthy();
-    expectJsonBody('/api/ui/v1/settings/validate', 'POST', { config_path: 'config/app.yaml', draft: {} });
-    expectJsonBody('/api/ui/v1/settings/save', 'POST', { config_path: 'config/app.yaml', draft: {}, confirmed: true });
-    expect(findCall('/api/ui/v1/settings/backups?config_path=config%2Fapp.yaml')).toBeTruthy();
-    expectJsonBody('/api/ui/v1/settings/restore', 'POST', {
-      config_path: 'config/app.yaml',
-      backup_path: 'data/backups/app.yaml',
-      confirmed: true,
-    });
     expect(findCall('/api/ui/v1/ops/backups')).toBeTruthy();
-    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { include_processed: true });
+    expect(findCall('/api/ui/v1/ops/backup-targets')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { profile_id: 'profile-1', include_processed: true });
     expectJsonBody('/api/ui/v1/ops/restore', 'POST', {
-      backup_path: 'data/backups/app.yaml',
+      profile_id: 'profile-1',
+      backup_id: '20260511-080000',
       include_processed: true,
       confirmed: true,
     });

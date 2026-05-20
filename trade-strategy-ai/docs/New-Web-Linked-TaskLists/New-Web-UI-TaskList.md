@@ -126,7 +126,7 @@ web/src/
     backtest/
     rule-pool/
     admin/
-    settings/
+    system/
   components/
     ui/
     jobs/
@@ -192,8 +192,9 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
    - `/workflows`
    - `/workflows/:workflowId/run`
    - `/articles`
-   - `/artifacts`
-   - `/settings`
+    - `/artifacts`
+   - `/profiles`
+   - `/system`
 2. 未实现页面必须显示明确 placeholder。
 3. `legacy` 入口只允许作为兼容层存在，不得与 canonical 路由并行扩张。
 4. 路由文档必须说明每个 legacy 入口的 canonical 映射和退役阶段。
@@ -317,7 +318,8 @@ UI-V1 只要求支撑 V1 验收，不追求最终视觉设计。
    - Workflows
    - Articles
    - Artifacts
-   - Settings
+   - Profiles
+   - System
 3. 导航项预留 permission 字段。
 4. 当前页面高亮。
 5. Header 展示环境/用户/连接状态占位。
@@ -886,7 +888,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 - Artifacts
 - Profiles
 - Admin
-- Settings
+- System
 
 验收标准：
 
@@ -896,7 +898,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 完成情况：
 
-- 已将正式入口收口为 `Dashboard / Jobs / Workflows / Articles / Market Data / Strategy / Backtest / Rule Pool / Artifacts / Profiles / Admin / Settings`。
+- 已将正式入口收口为 `Dashboard / Jobs / Workflows / Articles / Market Data / Strategy / Backtest / Rule Pool / Artifacts / Profiles / Admin / System`。
 - 已把旧页面收纳进独立的兼容入口分组，保留 V1/V2 历史链接可访问。
 - 已新增 `docs/New-Web-UI-Information-Architecture.md`，并同步更新 `docs/New-Web-UI-Routing.md`。
 - 已补齐 `/backtest`、`/rule-pool`、`/admin` 的正式 placeholder 页面与路由。
@@ -1215,7 +1217,7 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 1. 通用 ErrorState。
 2. 错误详情可折叠。
 3. 用户建议单独展示。
-4. 可跳转 Job Detail / Settings / Profile。
+4. 可跳转 Job Detail / Profile / System。
 
 验收标准：
 

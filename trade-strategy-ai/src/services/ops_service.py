@@ -57,6 +57,39 @@ class OpsRecoveryService(BaseService):
             raise ValueError("backup path must stay within backup root")
         return resolved
 
+    def _backup_targets(self) -> list[dict[str, Any]]:
+        """返回可用于创建备份的白名单目标。"""
+        return [
+            {
+                "id": "default",
+                "label": "默认备份目录",
+                "description": "使用系统自动生成的时间戳目录",
+                "path": str(self._backup_root),
+                "mode": "auto",
+            },
+        ]
+
+    def _resolve_backup_target(self, value: str | None) -> Path | None:
+        """把白名单目标转换为实际目录。"""
+        if value is None or value == "default":
+            return None
+
+        for target in self._backup_targets():
+            if target["id"] == value:
+                target_path = Path(target["path"])
+                if target.get("mode") == "auto":
+                    return None
+                return self._resolve_backup_dir(target_path)
+
+        raise ValueError("backup target is not in whitelist")
+
+    def _resolve_backup_item_dir(self, backup_id: str | None) -> Path:
+        """按备份 ID 解析备份包目录。"""
+        if not backup_id:
+            raise ValueError("backup id is required")
+        resolved = self._resolve_backup_dir(self._backup_root / backup_id)
+        return resolved
+
     def _backup_item(self, backup_dir: Path) -> dict[str, Any] | None:
         """把一个备份目录整理成 UI 可展示的条目。"""
         manifest_path = backup_dir / "manifest.json"
@@ -66,6 +99,7 @@ class OpsRecoveryService(BaseService):
         manifest = read_json(manifest_path)
         stat = backup_dir.stat()
         return {
+            "backup_id": backup_dir.name,
             "path": str(backup_dir),
             "name": backup_dir.name,
             "size_bytes": _dir_size_bytes(backup_dir),
@@ -102,9 +136,32 @@ class OpsRecoveryService(BaseService):
             },
         )
 
-    async def create_backup(self, *, include_processed: bool = True, backup_dir: str | Path | None = None) -> ServiceResult:
+    def list_backup_targets(self) -> ServiceResult:
+        """列出创建备份时允许选择的白名单目录。"""
+        targets = self._backup_targets()
+        return ServiceResult(
+            status="ok",
+            message="backup targets listed",
+            payload={
+                "base_dir": str(self._base_dir),
+                "backup_root": str(self._backup_root),
+                "count": len(targets),
+                "items": targets,
+            },
+        )
+
+    async def create_backup(
+        self,
+        *,
+        profile_id: str,
+        include_processed: bool = True,
+        backup_dir: str | Path | None = None,
+        backup_dir_id: str | None = None,
+    ) -> ServiceResult:
         """创建项目级备份。"""
-        resolved_backup_dir = self._resolve_backup_dir(backup_dir) if backup_dir is not None else None
+        resolved_backup_dir = self._resolve_backup_target(backup_dir_id)
+        if resolved_backup_dir is None and backup_dir is not None:
+            resolved_backup_dir = self._resolve_backup_dir(backup_dir)
         stats: BackupStats = await backup_project_state(
             base_dir=self._base_dir,
             backup_dir=resolved_backup_dir,
@@ -117,6 +174,7 @@ class OpsRecoveryService(BaseService):
         item = self._backup_item(stats.backup_dir)
         payload = asdict(stats)
         payload["backup_dir"] = str(stats.backup_dir)
+        payload["profile_id"] = profile_id
         payload["include_processed"] = include_processed
         payload["backup_item"] = item
         return ServiceResult(status="ok", message="project backup created", payload=payload)
@@ -124,7 +182,9 @@ class OpsRecoveryService(BaseService):
     async def restore_backup(
         self,
         *,
-        backup_path: str | Path,
+        profile_id: str,
+        backup_id: str | None = None,
+        backup_path: str | Path | None = None,
         include_processed: bool = True,
         confirmed: bool = False,
     ) -> ServiceResult:
@@ -132,7 +192,10 @@ class OpsRecoveryService(BaseService):
         if not confirmed:
             return ServiceResult(status="error", message="confirmation required", payload={"confirmed": confirmed})
 
-        resolved_backup_dir = self._resolve_backup_dir(backup_path)
+        if backup_id is None and backup_path is None:
+            return ServiceResult(status="error", message="backup path or id is required", payload={})
+
+        resolved_backup_dir = self._resolve_backup_item_dir(backup_id) if backup_id else self._resolve_backup_dir(backup_path)
         if not resolved_backup_dir.exists():
             return ServiceResult(status="error", message="backup package not found", payload={"backup_path": str(resolved_backup_dir)})
 
@@ -154,6 +217,7 @@ class OpsRecoveryService(BaseService):
 
         payload = asdict(stats)
         payload["backup_dir"] = str(stats.backup_dir)
+        payload["profile_id"] = profile_id
         payload["include_processed"] = include_processed
         payload["backup_item"] = self._backup_item(resolved_backup_dir)
         return ServiceResult(status="ok", message="project backup restored", payload=payload)

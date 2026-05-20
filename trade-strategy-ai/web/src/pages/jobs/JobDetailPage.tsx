@@ -131,6 +131,7 @@ export function JobDetailPage() {
   const timelineItems = useMemo(() => (detail ? buildTimelineItems(detail) : []), [detail]);
   const errorObject = detail?.error ?? null;
   const configSnapshot = detail?.config_snapshot ?? null;
+  const profileSnapshot = detail?.profile_snapshot ?? null;
   const logs = logsQuery.data?.items ?? [];
 
   if (!jobId) {
@@ -262,21 +263,31 @@ export function JobDetailPage() {
               </div>
               {configSnapshot?.profile_id && configSnapshot?.config_snapshot_id ? (
                 <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        navigate(
-                          `/profiles/${encodeURIComponent(configSnapshot.profile_id!)}/snapshots/${encodeURIComponent(
-                            configSnapshot.config_snapshot_id!,
-                          )}`,
-                        )
-                      }
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(
+                        `/profiles/${encodeURIComponent(configSnapshot.profile_id!)}/snapshots/${encodeURIComponent(
+                          configSnapshot.config_snapshot_id!,
+                        )}`,
+                      )
+                    }
                   >
                     查看 Profile 快照
                   </Button>
                 </div>
               ) : null}
               <ConfigSnapshotPanel snapshot={configSnapshot} />
+              {profileSnapshot ? (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Profile 快照 ID" value={profileSnapshot.profile_snapshot_id} />
+                    <Field label="Profile ID" value={profileSnapshot.profile_id} />
+                    <Field label="Profile 快照路径" value={profileSnapshot.snapshot_path} />
+                  </div>
+                  <JsonViewer value={profileSnapshot} title="Profile 快照" />
+                </>
+              ) : null}
             </div>
           </SectionCard>
 

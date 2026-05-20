@@ -26,6 +26,8 @@ export type JobRecord = {
   updated_at: string;
   config_snapshot_path?: string | null;
   config_snapshot?: JobConfigSnapshot | null;
+  profile_snapshot_path?: string | null;
+  profile_snapshot?: JobProfileSnapshot | null;
 };
 
 export type JobAuditEvent = {
@@ -78,6 +80,29 @@ export type JobConfigSnapshot = {
   masked_sections?: string[] | null;
   missing_fields?: string[] | null;
   invalid_fields?: string[] | null;
+};
+
+export type JobProfileSnapshot = {
+  profile_snapshot_id: string;
+  profile_id: string | null;
+  job_id: string | null;
+  source: string;
+  config_path: string;
+  profile_hash: string;
+  name: string;
+  environment: string;
+  version: number;
+  sections: Record<string, unknown>;
+  secret_refs: Record<string, unknown>;
+  validation_status: string;
+  masked_snapshot: Record<string, unknown>;
+  masked_sections: string[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  captured_at: string;
+  snapshot_path: string;
 };
 
 export type JobError = {

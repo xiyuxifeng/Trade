@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api/ui/v1/ops", tags=["ui-ops"])
 class OpsBackupRequest(BaseModel):
     """项目级备份请求。"""
 
+    profile_id: str
+    backup_dir_id: str | None = None
     backup_dir: str | None = None
     include_processed: bool = True
 
@@ -24,7 +26,9 @@ class OpsBackupRequest(BaseModel):
 class OpsRestoreRequest(BaseModel):
     """项目级恢复请求。"""
 
-    backup_path: str
+    profile_id: str
+    backup_id: str | None = None
+    backup_path: str | None = None
     include_processed: bool = True
     confirmed: bool = False
 
@@ -55,6 +59,15 @@ async def list_backups(service: OpsRecoveryService = Depends(get_ops_recovery_se
     return result.payload
 
 
+@router.get("/backup-targets", dependencies=[Depends(verify_api_key)])
+async def list_backup_targets(service: OpsRecoveryService = Depends(get_ops_recovery_service)) -> dict[str, Any]:
+    """列出创建备份时允许选择的白名单目录。"""
+    result = service.list_backup_targets()
+    if result.status != "ok":
+        _raise_service_error(result, default_message="backup target listing failed")
+    return result.payload
+
+
 @router.post("/backup", dependencies=[Depends(verify_api_key)])
 async def create_backup(
     request: OpsBackupRequest,
@@ -63,7 +76,12 @@ async def create_backup(
 ) -> dict[str, Any]:
     """创建项目级备份。"""
     try:
-        result = await service.create_backup(include_processed=request.include_processed, backup_dir=request.backup_dir)
+        result = await service.create_backup(
+            profile_id=request.profile_id,
+            include_processed=request.include_processed,
+            backup_dir=request.backup_dir,
+            backup_dir_id=request.backup_dir_id,
+        )
     except ValueError as exc:
         _handle_value_error(exc)
     if result.status != "ok":
@@ -80,6 +98,8 @@ async def restore_backup(
     """恢复项目级备份。"""
     try:
         result = await service.restore_backup(
+            profile_id=request.profile_id,
+            backup_id=request.backup_id,
             backup_path=request.backup_path,
             include_processed=request.include_processed,
             confirmed=request.confirmed,
@@ -112,6 +132,5 @@ async def recover_stale_jobs(
     if result.status != "ok":
         _raise_service_error(result, default_message="stale recovery failed")
     return result.payload
-
 
 __all__ = ["get_ops_recovery_service", "router"]

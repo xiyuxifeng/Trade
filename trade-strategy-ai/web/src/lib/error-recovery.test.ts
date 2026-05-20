@@ -3,12 +3,12 @@ import { ApiError } from '@/lib/api/http';
 import { buildErrorRecoveryState } from './error-recovery';
 
 describe('buildErrorRecoveryState', () => {
-  it('maps permission denied errors to a settings-focused recovery path', () => {
+  it('maps permission denied errors to a profile-focused recovery path', () => {
     const state = buildErrorRecoveryState(new ApiError(403, 'permission denied'), 'strategy');
 
     expect(state.category).toBe('permission denied');
     expect(state.retryable).toBe(false);
-    expect(state.actions.some((action) => action.to === '/settings')).toBe(true);
+    expect(state.actions.some((action) => action.to === '/profiles')).toBe(true);
     expect(state.actions.some((action) => action.to === '/dashboard')).toBe(true);
   });
 

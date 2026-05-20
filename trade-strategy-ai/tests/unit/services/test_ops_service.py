@@ -33,9 +33,21 @@ def test_ops_recovery_service_lists_manifest_backups(tmp_path: Path) -> None:
 
     assert result.status == "ok"
     assert result.payload["count"] == 1
+    assert result.payload["items"][0]["backup_id"] == "20260511-080000"
     assert result.payload["items"][0]["name"] == "20260511-080000"
     assert result.payload["items"][0]["include_processed"] is True
     assert result.payload["items"][0]["processed_copied"] is True
+
+
+def test_ops_recovery_service_lists_backup_targets(tmp_path: Path) -> None:
+    """OpsRecoveryService 应列出创建备份时允许选择的白名单目录。"""
+    service = OpsRecoveryService(base_dir=tmp_path, backup_root=tmp_path / "data" / "backups")
+    result = service.list_backup_targets()
+
+    assert result.status == "ok"
+    assert result.payload["count"] == 1
+    assert result.payload["items"][0]["id"] == "default"
+    assert result.payload["items"][0]["path"] == str(tmp_path / "data" / "backups")
 
 
 @pytest.mark.asyncio

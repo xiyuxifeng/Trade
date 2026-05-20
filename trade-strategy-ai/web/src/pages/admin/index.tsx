@@ -26,7 +26,7 @@ export function AdminPage() {
       <PageHeader
         kicker="配置与管理"
         title="管理中心"
-        description="将用户管理、审计与配置能力收束到正式入口，避免继续把它们散落在多个临时页面里。"
+        description="将用户管理、审计、系统与配置能力收束到正式入口，避免继续把它们散落在多个临时页面里。"
       />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -35,13 +35,13 @@ export function AdminPage() {
             <Badge variant="info" className="w-fit">
               正式入口
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">管理中心是用户、审计与配置能力的统一门面</CardTitle>
+            <CardTitle className="mt-2 text-slate-950">管理中心是用户、审计、系统与配置能力的统一门面</CardTitle>
             <CardDescription className="text-slate-600">
               当前只负责提供清晰的入口分发，不在这一层堆叠业务逻辑。
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm leading-6 text-slate-600">
-            <p>权限与审计、配置管理都已经收口到管理中心的下层页面。</p>
+            <p>权限与审计、系统管理、配置管理都已经收口到管理中心的下层页面。</p>
             <p className="mt-2">这里只保留最短的路径和最清晰的入口分发。</p>
           </CardContent>
         </Card>
@@ -55,8 +55,14 @@ export function AdminPage() {
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/admin/audit')}>
               权限与审计
             </Button>
-            <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/settings')}>
+            <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/profiles')}>
               配置管理
+            </Button>
+            <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/system')}>
+              系统管理
+            </Button>
+            <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/profiles')}>
+              配置管理工作台
             </Button>
             <Button className="w-full justify-start border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/dashboard')}>
               返回总览

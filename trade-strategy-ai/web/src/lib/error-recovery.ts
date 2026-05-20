@@ -186,10 +186,6 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
   }
 }
 
-function getSettingsRoute() {
-  return '/settings';
-}
-
 function getConfigRoute(page: ErrorRecoveryPage) {
   if (page === 'profiles' || page === 'profile-detail') {
     return '/profiles';
@@ -291,13 +287,13 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
 function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage): ErrorRecoveryAction[] {
   const pageRoute = getPageRoute(page);
   const homeRoute = getPageHomeRoute(page);
-  const settingsRoute = getSettingsRoute();
+  const profilesRoute = '/profiles';
 
   switch (category) {
     case 'permission denied':
       return [
         { label: '返回首页', to: homeRoute },
-        { label: '前往设置', to: settingsRoute },
+        { label: '前往配置管理', to: profilesRoute },
       ];
     case 'config missing':
       return [
@@ -307,7 +303,7 @@ function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage):
     case 'provider unavailable':
       return [
         { label: '返回工作台', to: homeRoute },
-        { label: '前往设置', to: settingsRoute },
+        { label: '前往配置管理', to: profilesRoute },
       ];
     case 'data empty':
       return [
@@ -344,7 +340,7 @@ function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage):
     case 'network error':
       return [
         { label: '返回工作台', to: homeRoute },
-        { label: '前往设置', to: settingsRoute },
+        { label: '前往配置管理', to: profilesRoute },
       ];
     default:
       return [

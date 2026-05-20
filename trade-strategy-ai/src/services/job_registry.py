@@ -240,7 +240,13 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         requires_confirmation=True,
         runnable=False,
         description="执行数据库 schema 迁移。",
-        param_schema=_schema("数据库迁移参数", {"config_path": _path_field("配置文件路径", required=True)}),
+        param_schema=_schema(
+            "数据库迁移参数",
+            {
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
+            },
+        ),
     ),
     _def(
         job_type="init-project",
@@ -288,8 +294,10 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "备份参数",
             {
-                "base_dir": _path_field("项目根目录", required=True),
+                "profile_id": _string("Profile ID"),
+                "base_dir": _path_field("项目根目录", default="trade-strategy-ai"),
                 "backup_dir": _path_field("备份输出目录"),
+                "backup_dir_id": _string("备份目录白名单 ID"),
                 "include_processed": _boolean("是否包含 processed 目录", default=True),
             },
         ),
@@ -310,8 +318,10 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "恢复参数",
             {
-                "base_dir": _path_field("项目根目录", required=True),
-                "backup_dir": _path_field("备份目录", required=True),
+                "profile_id": _string("Profile ID"),
+                "base_dir": _path_field("项目根目录", default="trade-strategy-ai"),
+                "backup_id": _string("备份包 ID"),
+                "backup_dir": _path_field("备份目录"),
                 "include_processed": _boolean("是否恢复 processed 目录", default=True),
                 "force": _boolean("是否强制执行", default=False),
             },

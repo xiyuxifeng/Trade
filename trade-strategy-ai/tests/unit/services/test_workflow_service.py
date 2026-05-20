@@ -47,8 +47,6 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     assert listed.status == "ok"
     workflow_ids = {item["workflow_id"] for item in listed.payload["items"]}
     assert {
-        "install-config",
-        "database",
         "pipeline",
         "pre-market",
         "after-close",
@@ -69,9 +67,6 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     assert step["param_schema"]["description"] == "盘前执行参数"
     assert step["param_schema"]["fields"]["as_of_date"]["type"] == "date"
     assert step["param_schema"]["fields"]["export_html"]["default"] is False
-
-    install = next(item for item in listed.payload["items"] if item["workflow_id"] == "install-config")
-    assert install["steps"][0]["param_schema"]["fields"]["config_path"]["required"] is True
 
     scheduler = next(item for item in listed.payload["items"] if item["workflow_id"] == "scheduler")
     scheduler_step_ids = [step["step_id"] for step in scheduler["steps"]]
@@ -151,15 +146,15 @@ def test_workflow_service_rejects_unconfirmed_high_risk_workflow() -> None:
     service = WorkflowService(workflow_runner=fake_runner)
     result = __import__("asyncio").run(
         service.run_workflow(
-            workflow_id="install-config",
-            params={"config_path": "config/app.yaml"},
+            workflow_id="backtest",
+            params={"trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-16"},
             created_by="web",
         )
     )
 
     assert result.status == "error"
     assert result.message == "confirmation required for high-risk workflow"
-    assert result.payload["workflow_id"] == "install-config"
+    assert result.payload["workflow_id"] == "backtest"
     assert result.payload["requires_confirmation"] is True
     assert fake_runner.calls == []
 
@@ -172,15 +167,15 @@ def test_workflow_service_allows_confirmed_high_risk_workflow() -> None:
     service = WorkflowService(workflow_runner=fake_runner)
     result = __import__("asyncio").run(
         service.run_workflow(
-            workflow_id="install-config",
-            params={"config_path": "config/app.yaml"},
+            workflow_id="backtest",
+            params={"trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-16"},
             created_by="web",
             confirmed=True,
         )
     )
 
     assert result.status == "ok"
-    assert result.payload["workflow"]["workflow_id"] == "install-config"
-    assert result.payload["job"]["job_type"] == "init-project"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "install-config"
+    assert result.payload["workflow"]["workflow_id"] == "backtest"
+    assert result.payload["job"]["job_type"] == "backtest-run"
+    assert fake_runner.calls[0]["workflow"].workflow_id == "backtest"
     assert fake_runner.calls[0]["confirmed"] is True

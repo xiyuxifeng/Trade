@@ -17,9 +17,9 @@ import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
 import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
 import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
+import { SystemPage } from '@/pages/system';
 import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
 import { StrategiesPage } from '@/pages/strategies';
-import { SettingsPage } from '@/pages/settings';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
 import { RulePoolPage } from '@/pages/rule-pool';
@@ -75,9 +75,10 @@ const dashboardLayoutRoutes = [
   { path: 'market/datasets', element: <MarketDatasetPage /> },
   { path: 'strategies', element: <StrategiesPage /> },
   { path: 'strategies/regime-selection', element: <RegimeRuleSelectionPage /> },
+  { path: 'system', element: <SystemPage /> },
   { path: 'admin', element: <AdminPage /> },
   { path: 'admin/audit', element: <AdminAuditPage /> },
-  { path: 'settings', element: <SettingsPage /> },
+  { path: 'settings', element: <Navigate to="/profiles" replace /> },
 ] as const;
 
 export const appRouter = createBrowserRouter([

@@ -115,43 +115,6 @@ def _workflow_step(
 
 DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
     _workflow(
-        "install-config",
-        "安装与配置",
-        "完成项目初始化、数据库迁移和基础数据导入。",
-        "init-project",
-        steps=[
-            _workflow_step(
-                "db-migrate",
-                "数据库迁移",
-                "先完成数据库 schema 迁移。",
-                "db-migrate",
-            ),
-            _workflow_step(
-                "init-project",
-                "初始化项目",
-                "执行初始化并完成最小可运行状态。",
-                "init-project",
-            ),
-            _workflow_step(
-                "seed-data",
-                "导入样例数据",
-                "导入样例数据，便于首次联调。",
-                "seed-data",
-            ),
-        ],
-    ),
-    _workflow(
-        "database",
-        "数据库维护",
-        "聚焦数据库迁移、备份和恢复等操作。",
-        "db-migrate",
-        steps=[
-            _workflow_step("db-migrate", "数据库迁移", "执行数据库 schema 迁移。", "db-migrate"),
-            _workflow_step("backup-data", "数据备份", "备份数据库和处理产物。", "backup-data"),
-            _workflow_step("restore-data", "数据恢复", "从备份包恢复数据库和产物。", "restore-data"),
-        ],
-    ),
-    _workflow(
         "pipeline",
         "数据 Pipeline",
         "串联抓取、清洗、抽取、聚类与回归验证。",

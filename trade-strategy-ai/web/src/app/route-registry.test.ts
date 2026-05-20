@@ -25,11 +25,11 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/profiles/import').path).toBe('/profiles/import');
     expect(resolveRouteByPathname('/profiles/default/edit').path).toBe('/profiles/:profileId/edit');
     expect(resolveRouteByPathname('/profiles/default/snapshots/snapshot-1').path).toBe('/profiles/:profileId/snapshots/:snapshotId');
+    expect(resolveRouteByPathname('/system').path).toBe('/system');
+    expect(resolveRouteByPathname('/system').label).toBe('系统管理');
     expect(resolveRouteByPathname('/admin').path).toBe('/admin');
     expect(resolveRouteByPathname('/admin/audit').path).toBe('/admin/audit');
     expect(resolveRouteByPathname('/admin/audit').label).toBe('权限与审计');
-    expect(resolveRouteByPathname('/settings').path).toBe('/settings');
-    expect(resolveRouteByPathname('/settings').label).toBe('配置管理');
   });
 
 });

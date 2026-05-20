@@ -31,8 +31,9 @@
 | `/rule-pool` | 规则池占位入口。 |
 | `/artifacts` | Artifact Center 入口。 |
 | `/profiles` | Profile 管理入口。 |
+| `/system` | 系统管理入口。 |
 | `/admin` | 管理中心。 |
-| `/settings` | 设置入口。 |
+| `/settings` | 旧设置入口，兼容跳转到 `/profiles`。 |
 
 ## 3. 维护规则
 

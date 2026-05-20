@@ -14,11 +14,13 @@ from sqlalchemy.orm import selectinload
 from src.services.config_service import ConfigService
 from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.config_profile_service import ConfigProfileService
+from src.services.job_registry import get_job_definition
 from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
 from src.services.base import BaseService, ServiceResult
 from src.common.paths import resolve_project_path
 from src.services.runtime_contracts import ArtifactRef, StorageRef
+from src.services.runtime_config import resolve_runtime_config
 from src.services.step_timeline_service import StepTimelineService
 
 
@@ -328,6 +330,13 @@ class JobService(BaseService):
     ) -> JobAuditEvent:
         """写入一条 Job 操作审计。"""
         source = audit_source or {}
+        job_definition = get_job_definition(job.job_type)
+        confirmed = source.get("confirmed") if isinstance(source.get("confirmed"), bool) else None
+        profile_snapshot = self._load_profile_snapshot(job.id) or {}
+        profile_snapshot_id = profile_snapshot.get("profile_snapshot_id")
+        if profile_snapshot_id is None and isinstance(payload, dict):
+            profile_snapshot_id = payload.get("profile_snapshot_id")
+        profile_id = job.params.get("profile_id") if isinstance(job.params, dict) else None
         event = JobAuditEvent(
             job_id=job.id,
             operation=operation,
@@ -336,6 +345,22 @@ class JobService(BaseService):
             params_summary=_sanitize_audit_data(params_summary or {}),
             payload=_sanitize_audit_data({"request_context": source, "details": payload or {}}),
             event_at=event_at or datetime.now(UTC),
+        )
+        event.payload = _sanitize_audit_data(
+            {
+                "request_context": source,
+                "details": payload or {},
+                "audit_fields": {
+                    "actor": actor or job.created_by or "system",
+                    "job_type": job.job_type,
+                    "profile_id": profile_id,
+                    "profile_snapshot_id": profile_snapshot_id,
+                    "operation": operation,
+                    "confirmed": confirmed,
+                    "risk": job_definition.risk.value if job_definition is not None else None,
+                    "created_at": _to_plain(job.created_at),
+                },
+            }
         )
         session.add(event)
         audit_events = job.__dict__.setdefault("audit_events", [])
@@ -367,8 +392,10 @@ class JobService(BaseService):
         session_scope = self._ensure_session_factory()
         config_snapshot_payload: dict[str, Any] | None = None
         profile_snapshot_payload: dict[str, Any] | None = None
-        config_path_value = (params or {}).get("config_path")
-        profile_id_value = (params or {}).get("profile_id")
+        runtime_config = resolve_runtime_config(params)
+        config_path_value = runtime_config.config_path
+        profile_id_value = runtime_config.profile_id
+        profile_snapshot_id_value = runtime_config.profile_snapshot_id
         if idempotency_key:
             async with session_scope() as session:
                 stmt = select(Job).options(selectinload(Job.audit_events)).where(Job.idempotency_key == idempotency_key)
@@ -398,6 +425,8 @@ class JobService(BaseService):
                     warnings=snapshot_result.warnings,
                 )
             profile_snapshot_payload = snapshot_result.payload
+            if profile_snapshot_id_value is not None and profile_snapshot_payload.get("profile_snapshot_id") != profile_snapshot_id_value:
+                profile_snapshot_payload["requested_profile_snapshot_id"] = profile_snapshot_id_value
         elif config_path_value is not None:
             snapshot_result = self._config_snapshot_service.capture_config_snapshot(config_path_value)
             if snapshot_result.status != "ok":
@@ -453,6 +482,9 @@ class JobService(BaseService):
                     "retry_backoff_seconds": retry_backoff_seconds,
                     "timeout_seconds": timeout_seconds,
                     "confirmed": confirmed,
+                    "profile_id": profile_id_value,
+                    "profile_snapshot_id": profile_snapshot_payload.get("profile_snapshot_id") if profile_snapshot_payload else None,
+                    "config_path": config_path_value,
                     "scheduled_at": _to_plain(scheduled_at),
                 },
                 event_at=now,

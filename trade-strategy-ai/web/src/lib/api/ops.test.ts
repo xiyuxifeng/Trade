@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from './http';
-import { listRecoveryBackups, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
+import { listRecoveryBackups, listRecoveryBackupTargets, createRecoveryBackup, restoreRecoveryBackup, recoverStaleJobs } from './ops';
 
 describe('Ops API client contract', () => {
   beforeEach(() => {
@@ -28,9 +28,11 @@ describe('Ops API client contract', () => {
     );
 
     await listRecoveryBackups();
-    await createRecoveryBackup({ include_processed: true });
+    await listRecoveryBackupTargets();
+    await createRecoveryBackup({ profile_id: 'profile-1', include_processed: true });
     await restoreRecoveryBackup({
-      backup_path: '/project/data/backups/20260511-080000',
+      profile_id: 'profile-1',
+      backup_id: '20260511-080000',
       include_processed: true,
       confirmed: true,
     });
@@ -54,9 +56,11 @@ describe('Ops API client contract', () => {
     };
 
     expect(findCall('/api/ui/v1/ops/backups')).toBeTruthy();
-    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { include_processed: true });
+    expect(findCall('/api/ui/v1/ops/backup-targets')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/ops/backup', 'POST', { profile_id: 'profile-1', include_processed: true });
     expectJsonBody('/api/ui/v1/ops/restore', 'POST', {
-      backup_path: '/project/data/backups/20260511-080000',
+      profile_id: 'profile-1',
+      backup_id: '20260511-080000',
       include_processed: true,
       confirmed: true,
     });

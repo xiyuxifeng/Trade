@@ -33,8 +33,8 @@
 - 规则池
 - 产物
 - 配置管理
+- 系统管理
 - 管理中心
-- 设置
 
 ### 2.2 兼容入口
 
@@ -69,8 +69,9 @@
 | `/rule-pool` | 规则池占位入口 | 预留 |
 | `/artifacts` | Artifact Center | 正式 |
 | `/profiles` | Profile 管理入口 | 正式 |
+| `/system` | 系统管理入口 | 正式 |
 | `/admin` | 管理中心 | 正式 |
-| `/settings` | 应用配置入口 | 正式 |
+| `/settings` | 旧设置入口兼容跳转到 `/profiles` | 兼容 |
 
 ## 4. Legacy / Compatibility 路由
 
@@ -94,6 +95,7 @@
 | `/backtests` | 旧回测中心 | V3 |
 | `/users` | 旧用户管理页 | V3 |
 | `/ops` | 旧运维页 | V3 |
+| `/settings` | 旧设置页兼容跳转 | V3 |
 
 ## 5. 信息分组规则
 

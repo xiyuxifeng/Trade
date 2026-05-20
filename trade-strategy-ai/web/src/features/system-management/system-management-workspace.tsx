@@ -184,6 +184,11 @@ export function UserManagementSection() {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-1">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">System Management</p>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950">用户管理</h2>
+        <p className="text-sm leading-6 text-slate-600">添加、删除用户，修改角色、密码和启用状态，不创建 Job。</p>
+      </div>
       {statusMessage ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
       ) : null}
@@ -372,7 +377,7 @@ export function UserManagementSection() {
           </div>
         ) : null}
       </ConfirmDialog>
-    </SectionCard>
+    </div>
   );
 }
 
@@ -730,6 +735,11 @@ export function BackupManagementSection() {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-1">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">System Management</p>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950">数据备份与恢复</h2>
+        <p className="text-sm leading-6 text-slate-600">先创建备份 Job，再从已有备份列表选择目标并发起恢复 Job。</p>
+      </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Button
           variant="outline"
@@ -950,7 +960,14 @@ export function BackupManagementSection() {
           </div>
           <p className="text-sm text-slate-700">Profile：{restoreForm.profile_id || '未选择'}</p>
           <p className="text-sm text-slate-700">include_processed：{restoreForm.include_processed ? 'true' : 'false'}</p>
-          <p className="text-sm text-slate-700">force：{restoreForm.force ? 'true' : 'false'}</p>
+          <label className="flex items-center gap-3 text-sm text-slate-700">
+            <input
+              checked={restoreForm.force}
+              onChange={(event) => setRestoreForm((current) => ({ ...current, force: event.target.checked }))}
+              type="checkbox"
+            />
+            force
+          </label>
         </div>
       </ConfirmDialog>
     </div>

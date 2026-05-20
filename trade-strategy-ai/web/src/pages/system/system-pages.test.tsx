@@ -5,7 +5,6 @@ import { AuditPage } from './AuditPage';
 import { BackupPage } from './BackupPage';
 import { DatabaseMigrationPage } from './DatabaseMigrationPage';
 import { HealthPage } from './HealthPage';
-import { RestorePage } from './RestorePage';
 import { UsersPage } from './UsersPage';
 
 vi.mock('@/features/admin-audit/admin-audit-workspace', () => ({
@@ -48,6 +47,7 @@ describe('system detail pages', () => {
 
     expect(await screen.findByRole('heading', { name: '用户管理' })).toBeInTheDocument();
     expect(screen.getByText('user-section')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回系统管理' })).toBeInTheDocument();
   });
 
   it('renders the health page wrapper', async () => {
@@ -62,6 +62,7 @@ describe('system detail pages', () => {
 
     expect(await screen.findByRole('heading', { name: '系统健康检查' })).toBeInTheDocument();
     expect(screen.getByText('health-section')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回系统管理' })).toBeInTheDocument();
   });
 
   it('renders the migration page wrapper', async () => {
@@ -80,6 +81,7 @@ describe('system detail pages', () => {
 
     expect(await screen.findByRole('heading', { name: '数据库迁移' })).toBeInTheDocument();
     expect(screen.getByText('database-section')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回系统管理' })).toBeInTheDocument();
   });
 
   it('renders the backup page wrapper', async () => {
@@ -92,21 +94,8 @@ describe('system detail pages', () => {
       },
     });
 
-    expect(await screen.findByRole('heading', { name: '数据备份' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '数据备份与恢复' })).toBeInTheDocument();
     expect(screen.getByText('backup-section')).toBeInTheDocument();
-  });
-
-  it('renders the restore page wrapper', async () => {
-    renderWithRouter([{ path: '/system/restore', element: <RestorePage /> }], ['/system/restore'], {
-      initialPrincipal: {
-        role: 'admin',
-        api_key_label: 'Local Admin',
-        authenticated: true,
-        source: 'api_key',
-      },
-    });
-
-    expect(await screen.findByRole('heading', { name: '数据恢复' })).toBeInTheDocument();
-    expect(screen.getByText('backup-section')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回系统管理' })).toBeInTheDocument();
   });
 });

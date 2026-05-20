@@ -34,8 +34,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '用户管理', path: '/system/users', description: '添加、删除、禁用和改密入口', kind: 'canonical' },
   { label: '系统健康检查', path: '/system/health', description: 'API、DB、worker 与存储健康状态', kind: 'canonical' },
   { label: '数据库迁移', path: '/system/db-migrate', description: '数据库迁移高风险操作入口', kind: 'canonical' },
-  { label: '数据备份', path: '/system/backup', description: '受限目录备份入口', kind: 'canonical' },
-  { label: '数据恢复', path: '/system/restore', description: '按备份 ID 恢复入口', kind: 'canonical' },
+  { label: '数据备份与恢复', path: '/system/backup', description: '备份与恢复统一入口', kind: 'canonical' },
 ];
 
 export function resolveRouteByPathname(pathname: string) {

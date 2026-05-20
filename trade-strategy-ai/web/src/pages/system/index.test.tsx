@@ -19,7 +19,6 @@ describe('SystemPage', () => {
     expect(screen.getByRole('button', { name: /用户管理/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /系统健康检查/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /数据库迁移/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /数据备份/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /数据恢复/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /数据备份与恢复/ })).toBeInTheDocument();
   });
 });

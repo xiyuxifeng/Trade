@@ -1,5 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Activity, Shield, Users, Database, HardDrive, ArchiveRestore, type LucideIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Activity, Shield, Users, Database, ArchiveRestore, type LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,18 +44,11 @@ const hubEntries: HubEntry[] = [
     badge: 'Job',
   },
   {
-    title: '数据备份',
-    description: '从白名单目录创建备份 Job。',
+    title: '数据备份与恢复',
+    description: '从白名单目录创建备份，并在同页恢复已有备份。',
     to: '/system/backup',
-    icon: HardDrive,
-    badge: '备份',
-  },
-  {
-    title: '数据恢复',
-    description: '按备份 ID 恢复并进入 Job Detail。',
-    to: '/system/restore',
     icon: ArchiveRestore,
-    badge: '恢复',
+    badge: '备份',
   },
 ];
 
@@ -130,12 +123,6 @@ export function SystemHubPage() {
           <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
             <p>权限与审计、用户管理、系统健康、迁移、备份、恢复都拆成独立页面。</p>
             <p>每个子功能页都保留完整的加载、错误、空态和确认交互。</p>
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Link className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 hover:text-sky-800" to="/profiles">
-                去配置管理
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
           </CardContent>
         </Card>
 

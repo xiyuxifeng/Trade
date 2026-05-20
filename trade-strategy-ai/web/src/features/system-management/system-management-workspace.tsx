@@ -183,197 +183,170 @@ export function UserManagementSection() {
   const users = usersQuery.data ?? [];
 
   return (
-    <SectionCard
-      title="用户管理"
-      description="添加或删除用户，修改用户权限、启用状态和密码。"
-      action={
-        <Button
-          variant="outline"
-          onClick={() => {
-            setEditingUser(null);
-            setForm({
-              username: '',
-              display_name: '',
-              role: 'viewer',
-              password: '',
-              is_active: true,
-            });
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          新建用户
-        </Button>
-      }
-    >
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <StatCard label="用户总数" value={users.length} hint="当前系统中的所有账号" />
-            <StatCard
-              label="管理员"
-              value={users.filter((user) => user.role === 'admin').length}
-              hint="具备高权限管理能力的账号"
-            />
-            <StatCard
-              label="活跃用户"
-              value={users.filter((user) => user.is_active).length}
-              hint="当前未禁用的账号"
-            />
+    <div className="space-y-6">
+      {statusMessage ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
+      ) : null}
+      {errorMessage ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage}</div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <StatCard label="用户总数" value={users.length} hint="当前系统中的所有账号" />
+        <StatCard
+          label="管理员"
+          value={users.filter((user) => user.role === 'admin').length}
+          hint="具备高权限管理能力的账号"
+        />
+        <StatCard
+          label="活跃用户"
+          value={users.filter((user) => user.is_active).length}
+          hint="当前未禁用的账号"
+        />
+      </div>
+
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-slate-950">{editingUser ? '编辑用户' : '新增用户'}</p>
+            <p className="text-sm text-slate-600">保存后会直接写入用户表，不会创建 Job。</p>
           </div>
-
-          {statusMessage ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
+          {editingUser ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingUser(null);
+                setForm({
+                  username: '',
+                  display_name: '',
+                  role: 'viewer',
+                  password: '',
+                  is_active: true,
+                });
+              }}
+            >
+              取消编辑
+            </Button>
           ) : null}
-          {errorMessage ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage}</div>
-          ) : null}
-
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-medium text-slate-950">{editingUser ? '编辑用户' : '新增用户'}</p>
-                <p className="text-sm text-slate-600">保存后会直接写入用户表，不会创建 Job。</p>
-              </div>
-              {editingUser ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setEditingUser(null);
-                    setForm({
-                      username: '',
-                      display_name: '',
-                      role: 'viewer',
-                      password: '',
-                      is_active: true,
-                    });
-                  }}
-                >
-                  取消编辑
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-2 text-sm text-slate-600">
-                <span>用户名</span>
-                <Input
-                  disabled={Boolean(editingUser)}
-                  placeholder="例如 alice"
-                  value={form.username}
-                  onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
-                />
-              </label>
-              <label className="space-y-2 text-sm text-slate-600">
-                <span>显示名称</span>
-                <Input
-                  placeholder="例如 Alice"
-                  value={form.display_name}
-                  onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))}
-                />
-              </label>
-              <label className="space-y-2 text-sm text-slate-600">
-                <span>角色</span>
-                <Select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>
-                  <option value="viewer">viewer</option>
-                  <option value="operator">operator</option>
-                  <option value="admin">admin</option>
-                </Select>
-              </label>
-              <label className="space-y-2 text-sm text-slate-600">
-                <span>密码{editingUser ? '（留空则不修改）' : ''}</span>
-                <Input
-                  type="password"
-                  placeholder="至少 6 位"
-                  value={form.password}
-                  onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                />
-              </label>
-            </div>
-
-            <label className="flex items-center gap-3 text-sm text-slate-700">
-              <input
-                checked={form.is_active}
-                onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
-                type="checkbox"
-              />
-              账号启用
-            </label>
-
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? '保存中' : editingUser ? '保存修改' : '创建用户'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditingUser(null);
-                  setForm({
-                    username: '',
-                    display_name: '',
-                    role: 'viewer',
-                    password: '',
-                    is_active: true,
-                  });
-                }}
-              >
-                重置
-              </Button>
-            </div>
-          </div>
         </div>
 
-        <div className="space-y-3">
-          {users.length ? (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">用户</th>
-                    <th className="px-4 py-3 font-medium">角色</th>
-                    <th className="px-4 py-3 font-medium">状态</th>
-                    <th className="px-4 py-3 font-medium">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr className="border-t border-slate-200" key={user.id}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-950">{user.username}</p>
-                        <p className="text-xs text-slate-500">{user.display_name ?? '未设置显示名称'}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={roleBadge(user.role)}>{user.role}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={user.is_active ? 'success' : 'warning'}>{user.is_active ? 'active' : 'disabled'}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => setEditingUser(user)}
-                          >
-                            编辑
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => setDeleteTarget(user)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            删除
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState title="暂无用户" description="当前系统没有可管理的用户记录。" />
-          )}
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>用户名</span>
+            <Input
+              disabled={Boolean(editingUser)}
+              placeholder="例如 alice"
+              value={form.username}
+              onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>显示名称</span>
+            <Input
+              placeholder="例如 Alice"
+              value={form.display_name}
+              onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>角色</span>
+            <Select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>
+              <option value="viewer">viewer</option>
+              <option value="operator">operator</option>
+              <option value="admin">admin</option>
+            </Select>
+          </label>
+          <label className="space-y-2 text-sm text-slate-600">
+            <span>密码{editingUser ? '（留空则不修改）' : ''}</span>
+            <Input
+              type="password"
+              placeholder="至少 6 位"
+              value={form.password}
+              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+            />
+          </label>
+        </div>
+
+        <label className="flex items-center gap-3 text-sm text-slate-700">
+          <input
+            checked={form.is_active}
+            onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))}
+            type="checkbox"
+          />
+          账号启用
+        </label>
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? '保存中' : editingUser ? '保存修改' : '创建用户'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setEditingUser(null);
+              setForm({
+                username: '',
+                display_name: '',
+                role: 'viewer',
+                password: '',
+                is_active: true,
+              });
+            }}
+          >
+            重置
+          </Button>
         </div>
       </div>
+
+      {users.length ? (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-medium">用户</th>
+                <th className="px-4 py-3 font-medium">角色</th>
+                <th className="px-4 py-3 font-medium">状态</th>
+                <th className="px-4 py-3 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr className="border-t border-slate-200" key={user.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-950">{user.username}</p>
+                    <p className="text-xs text-slate-500">{user.display_name ?? '未设置显示名称'}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={roleBadge(user.role)}>{user.role}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={user.is_active ? 'success' : 'warning'}>{user.is_active ? 'active' : 'disabled'}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setEditingUser(user)}
+                      >
+                        编辑
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setDeleteTarget(user)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        删除
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState title="暂无用户" description="当前系统没有可管理的用户记录。" />
+      )}
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
@@ -649,6 +622,7 @@ export function BackupManagementSection() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [backupConfirmOpen, setBackupConfirmOpen] = useState(false);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
 
   const profiles = profilesQuery.data?.items ?? [];
   const backupTargets = backupTargetsQuery.data?.items ?? [];
@@ -722,6 +696,7 @@ export function BackupManagementSection() {
       setStatusMessage('恢复 Job 已创建');
       setErrorMessage(null);
       setRestoreTarget(null);
+      setRestoreConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       if (data.job?.id) {
         navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
@@ -754,10 +729,8 @@ export function BackupManagementSection() {
   }
 
   return (
-    <SectionCard
-      title="数据备份与恢复"
-      description="通过受限目录创建备份，并使用备份 ID 恢复。这里创建 Job 并跳转 Job Detail。"
-      action={
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button
           variant="outline"
           onClick={() => {
@@ -769,113 +742,167 @@ export function BackupManagementSection() {
           <RefreshCw className="mr-2 h-4 w-4" />
           刷新
         </Button>
-      }
-    >
+      </div>
+
       {statusMessage ? (
-        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
       ) : null}
       {errorMessage ? (
-        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage}</div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage}</div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            <StatCard label="备份包" value={backupsQuery.data?.count ?? 0} hint="可用于恢复的备份目录" />
-            <StatCard label="Profile" value={profiles.length} hint="可选的配置 Profile" />
-            <StatCard label="白名单目录" value={backupTargets.length} hint="允许写入备份的目录" />
-          </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <StatCard label="备份包" value={backupsQuery.data?.count ?? 0} hint="可用于恢复的备份目录" />
+        <StatCard label="Profile" value={profiles.length} hint="可选的配置 Profile" />
+        <StatCard label="白名单目录" value={backupTargets.length} hint="允许写入备份的目录" />
+      </div>
 
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="font-medium text-slate-950">创建备份 Job</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-2 text-sm text-slate-600 md:col-span-2">
-                <span>Profile</span>
-                <Select value={backupForm.profile_id} onChange={(event) => setBackupForm((current) => ({ ...current, profile_id: event.target.value }))}>
-                  {profiles.map((profile: ProfileRecord) => (
-                    <option key={profile.profile_id} value={profile.profile_id}>
-                      {profile.name} ({profile.profile_id})
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className="space-y-2 text-sm text-slate-600 md:col-span-2">
-                <span>备份目录白名单</span>
-                <Select
-                  value={backupForm.backup_dir_id}
-                  onChange={(event) => setBackupForm((current) => ({ ...current, backup_dir_id: event.target.value }))}
-                >
-                  {backupTargets.map((target: RecoveryBackupTarget) => (
-                    <option key={target.id} value={target.id}>
-                      {target.label} ({target.path})
-                    </option>
-                  ))}
-                </Select>
-                <p className="text-xs text-slate-500">不再接受任意绝对路径输入，只能从后端白名单中选择。</p>
-              </label>
-              <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
-                <input
-                  checked={backupForm.include_processed}
-                  onChange={(event) => setBackupForm((current) => ({ ...current, include_processed: event.target.checked }))}
-                  type="checkbox"
-                />
-                include_processed
-              </label>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={() => setBackupConfirmOpen(true)}
-                disabled={createMutation.isPending || !backupForm.profile_id || !backupTargets.length}
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="font-medium text-slate-950">创建备份 Job</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-600 md:col-span-2">
+              <span>Profile</span>
+              <Select value={backupForm.profile_id} onChange={(event) => setBackupForm((current) => ({ ...current, profile_id: event.target.value }))}>
+                {profiles.map((profile: ProfileRecord) => (
+                  <option key={profile.profile_id} value={profile.profile_id}>
+                    {profile.name} ({profile.profile_id})
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="space-y-2 text-sm text-slate-600 md:col-span-2">
+              <span>备份目录白名单</span>
+              <Select
+                value={backupForm.backup_dir_id}
+                onChange={(event) => setBackupForm((current) => ({ ...current, backup_dir_id: event.target.value }))}
               >
-                {createMutation.isPending ? '提交中' : '创建备份 Job'}
-              </Button>
-            </div>
+                {backupTargets.map((target: RecoveryBackupTarget) => (
+                  <option key={target.id} value={target.id}>
+                    {target.label} ({target.path})
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500">不再接受任意绝对路径输入，只能从后端白名单中选择。</p>
+            </label>
+            <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
+              <input
+                checked={backupForm.include_processed}
+                onChange={(event) => setBackupForm((current) => ({ ...current, include_processed: event.target.checked }))}
+                type="checkbox"
+              />
+              include_processed
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => setBackupConfirmOpen(true)}
+              disabled={createMutation.isPending || !backupForm.profile_id || !backupTargets.length}
+            >
+              {createMutation.isPending ? '提交中' : '创建备份 Job'}
+            </Button>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="font-medium text-slate-950">已有备份</p>
-              <p className="text-xs text-slate-500">恢复 Job 使用 backup_id，不直接暴露路径输入。</p>
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-slate-950">恢复备份</p>
+              <p className="text-xs text-slate-500">从下方列表选择一个备份，然后在这里确认恢复参数。</p>
             </div>
-            <div className="space-y-3 p-4">
-              {backupsQuery.data?.items.length ? (
-                backupsQuery.data.items.map((item) => (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={item.backup_id}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-slate-950">{item.name}</p>
-                        <p className="text-xs text-slate-500">{formatTime(item.modified_at)}</p>
-                      </div>
-                      <Badge variant="info">{backupStatusLabel(item)}</Badge>
-                    </div>
-                    <div className="mt-3 grid gap-2 text-sm text-slate-700">
-                      <p>tables: {item.tables.join(', ') || 'n/a'}</p>
-                      <p>rows: {Object.entries(item.row_counts).map(([key, value]) => `${key}=${value}`).join(', ') || 'n/a'}</p>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        onClick={() => {
-                          setRestoreTarget(item);
-                          setRestoreForm((current) => ({
-                            ...current,
-                            profile_id: current.profile_id || backupForm.profile_id || profiles[0]?.profile_id || '',
-                            force: current.force,
-                          }));
-                        }}
-                        variant="outline"
-                      >
-                        恢复
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <EmptyState title="暂无备份" description="当前目录中还没有可恢复的备份包。" />
-              )}
-            </div>
+            <Badge variant={restoreTarget ? 'success' : 'info'}>{restoreTarget ? '已选择备份' : '未选择备份'}</Badge>
           </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-600">
+              <span>Profile</span>
+              <Select
+                value={restoreForm.profile_id}
+                onChange={(event) => setRestoreForm((current) => ({ ...current, profile_id: event.target.value }))}
+              >
+                {profiles.map((profile: ProfileRecord) => (
+                  <option key={profile.profile_id} value={profile.profile_id}>
+                    {profile.name} ({profile.profile_id})
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex items-center gap-3 text-sm text-slate-700">
+              <input
+                checked={restoreForm.include_processed}
+                onChange={(event) => setRestoreForm((current) => ({ ...current, include_processed: event.target.checked }))}
+                type="checkbox"
+              />
+              include_processed
+            </label>
+            <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
+              <input
+                checked={restoreForm.force}
+                onChange={(event) => setRestoreForm((current) => ({ ...current, force: event.target.checked }))}
+                type="checkbox"
+              />
+              force
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">当前恢复目标</p>
+            <p className="mt-2 break-all font-medium text-slate-950">{restoreTarget?.name ?? '请从下方备份列表中点击恢复按钮选择目标'}</p>
+            <p className="mt-1 text-xs text-slate-500">{restoreTarget?.backup_id ?? '未选择 backup_id'}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => setRestoreConfirmOpen(true)}
+              disabled={restoreMutation.isPending || !restoreTarget || !restoreForm.profile_id}
+            >
+              {restoreMutation.isPending ? '提交中' : '创建恢复 Job'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <p className="font-medium text-slate-950">已有备份列表</p>
+          <p className="text-xs text-slate-500">点击恢复会把该备份写入当前恢复目标，并打开确认弹窗。</p>
+        </div>
+        <div className="space-y-3 p-4">
+          {backupsQuery.data?.items.length ? (
+            backupsQuery.data.items.map((item) => (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" key={item.backup_id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-950">{item.name}</p>
+                    <p className="text-xs text-slate-500">{formatTime(item.modified_at)}</p>
+                  </div>
+                  <Badge variant="info">{backupStatusLabel(item)}</Badge>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                  <p>tables: {item.tables.join(', ') || 'n/a'}</p>
+                  <p>rows: {Object.entries(item.row_counts).map(([key, value]) => `${key}=${value}`).join(', ') || 'n/a'}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => {
+                      setRestoreTarget(item);
+                      setRestoreForm((current) => ({
+                        ...current,
+                        profile_id: current.profile_id || backupForm.profile_id || profiles[0]?.profile_id || '',
+                        force: current.force,
+                      }));
+                      setRestoreConfirmOpen(true);
+                    }}
+                    variant="outline"
+                  >
+                    恢复
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyState title="暂无备份" description="当前目录中还没有可恢复的备份包。" />
+          )}
         </div>
       </div>
 
@@ -896,10 +923,11 @@ export function BackupManagementSection() {
       </ConfirmDialog>
 
       <ConfirmDialog
-        open={Boolean(restoreTarget)}
+        open={restoreConfirmOpen}
         onOpenChange={(open) => {
           if (!open) {
             setRestoreTarget(null);
+            setRestoreConfirmOpen(false);
           }
         }}
         title="恢复备份 Job"
@@ -916,39 +944,16 @@ export function BackupManagementSection() {
               <p className="mt-2 break-all text-sm font-medium text-slate-900">{restoreTarget?.backup_id}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile</p>
-              <Select
-                className="mt-2"
-                value={restoreForm.profile_id}
-                onChange={(event) => setRestoreForm((current) => ({ ...current, profile_id: event.target.value }))}
-              >
-                {profiles.map((profile: ProfileRecord) => (
-                  <option key={profile.profile_id} value={profile.profile_id}>
-                    {profile.name} ({profile.profile_id})
-                  </option>
-                ))}
-              </Select>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">恢复说明</p>
+              <p className="mt-2 text-sm text-slate-700">恢复会覆盖当前项目状态，必须先确认。</p>
             </div>
           </div>
-          <label className="flex items-center gap-3 text-sm text-slate-700">
-            <input
-              checked={restoreForm.include_processed}
-              onChange={(event) => setRestoreForm((current) => ({ ...current, include_processed: event.target.checked }))}
-              type="checkbox"
-            />
-            include_processed
-          </label>
-          <label className="flex items-center gap-3 text-sm text-slate-700">
-            <input
-              checked={restoreForm.force}
-              onChange={(event) => setRestoreForm((current) => ({ ...current, force: event.target.checked }))}
-              type="checkbox"
-            />
-            force
-          </label>
+          <p className="text-sm text-slate-700">Profile：{restoreForm.profile_id || '未选择'}</p>
+          <p className="text-sm text-slate-700">include_processed：{restoreForm.include_processed ? 'true' : 'false'}</p>
+          <p className="text-sm text-slate-700">force：{restoreForm.force ? 'true' : 'false'}</p>
         </div>
       </ConfirmDialog>
-    </SectionCard>
+    </div>
   );
 }
 

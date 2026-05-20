@@ -33,7 +33,7 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/system/health').path).toBe('/system/health');
     expect(resolveRouteByPathname('/system/db-migrate').path).toBe('/system/db-migrate');
     expect(resolveRouteByPathname('/system/backup').path).toBe('/system/backup');
-    expect(resolveRouteByPathname('/system/restore').path).toBe('/system/restore');
+    expect(resolveRouteByPathname('/system/backup').label).toBe('数据备份与恢复');
     expect(routeRegistry.some((route) => route.path === '/admin')).toBe(false);
   });
 

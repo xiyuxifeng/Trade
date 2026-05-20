@@ -36,8 +36,7 @@
 | `/system/users` | 用户管理详情页。 |
 | `/system/health` | 系统健康检查详情页。 |
 | `/system/db-migrate` | 数据库迁移详情页。 |
-| `/system/backup` | 数据备份详情页。 |
-| `/system/restore` | 数据恢复详情页。 |
+| `/system/backup` | 数据备份与恢复详情页。 |
 | `/settings` | 旧设置入口，兼容跳转到 `/profiles`。 |
 
 ## 3. 维护规则
@@ -53,6 +52,7 @@
 | --- | --- |
 | `/admin` | 旧管理中心，跳转到 `/system`。 |
 | `/admin/audit` | 旧审计入口，跳转到 `/system/audit`。 |
+| `/system/restore` | 旧数据恢复入口，跳转到 `/system/backup`。 |
 
 ## 5. 关联任务
 

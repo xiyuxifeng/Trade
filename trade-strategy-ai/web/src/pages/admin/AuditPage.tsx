@@ -1,5 +1,5 @@
-import { AdminAuditWorkspace } from '@/features/admin-audit/admin-audit-workspace';
+import { Navigate } from 'react-router-dom';
 
 export function AdminAuditPage() {
-  return <AdminAuditWorkspace />;
+  return <Navigate to="/system/audit" replace />;
 }

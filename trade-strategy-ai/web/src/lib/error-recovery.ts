@@ -152,7 +152,7 @@ function getPageRoute(page: ErrorRecoveryPage) {
       return '/strategies';
     case 'admin-audit':
     case 'admin-audit-detail':
-      return '/admin';
+      return '/system/audit';
     default:
       return '/dashboard';
   }
@@ -214,7 +214,7 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     'backtest-detail': '回测详情',
     'backtest-report': '回测报告',
     'backtest-validation': '规则验真',
-    'admin-audit': '审计中心',
+    'admin-audit': '系统审计',
     'admin-audit-detail': '审计详情',
   };
   const pageTitle = pageTitles[page];
@@ -412,8 +412,8 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请稍后重试，或先确认回测结果是否存在。',
         },
         'admin-audit': {
-          title: '审计中心暂不可用',
-          description: '当前审计中心没有返回可展示的数据。',
+          title: '系统审计暂不可用',
+          description: '当前系统审计没有返回可展示的数据。',
           suggestion: '请稍后重试，或返回工作台查看其他入口。',
         },
         'admin-audit-detail': {

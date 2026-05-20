@@ -73,7 +73,7 @@ function StatCard({ label, value, hint }: { label: string; value: string | numbe
   );
 }
 
-function UserManagementSection() {
+export function UserManagementSection() {
   const queryClient = useQueryClient();
   const usersQuery = useQuery({
     queryKey: ['system-users'],
@@ -403,7 +403,7 @@ function UserManagementSection() {
   );
 }
 
-function AuditSummarySection() {
+export function AuditSummarySection() {
   const jobAuditQuery = useQuery({
     queryKey: ['system-job-audits'],
     queryFn: () => listJobAudits({ skip: 0, limit: 5 }),
@@ -425,9 +425,9 @@ function AuditSummarySection() {
         category="permission denied"
         title="权限与审计加载失败"
         description="审计摘要接口请求失败。"
-        suggestion="请重试或跳转到完整审计中心。"
+        suggestion="请重试或跳转到完整系统审计页。"
         detail={getErrorMessage(jobAuditQuery.error ?? deniedQuery.error)}
-        actions={[{ label: '打开完整审计中心', to: '/admin/audit' }]}
+        actions={[{ label: '打开完整审计页', to: '/system/audit' }]}
         onRetry={() => {
           void jobAuditQuery.refetch();
           void deniedQuery.refetch();
@@ -442,10 +442,10 @@ function AuditSummarySection() {
   return (
     <SectionCard
       title="权限与审计"
-      description="查看最近的 Job 审计和拒绝访问记录。完整明细仍可进入审计中心。"
+      description="查看最近的 Job 审计和拒绝访问记录。完整明细仍可进入系统审计页。"
       action={
-        <Link className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-950" to="/admin/audit">
-          打开完整审计中心
+        <Link className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-950" to="/system/audit">
+          打开完整审计页
           <ArrowRight className="h-4 w-4" />
         </Link>
       }
@@ -508,7 +508,7 @@ function AuditSummarySection() {
   );
 }
 
-function DatabaseMigrationSection() {
+export function DatabaseMigrationSection() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const profilesQuery = useQuery({
@@ -617,7 +617,7 @@ function DatabaseMigrationSection() {
   );
 }
 
-function BackupManagementSection() {
+export function BackupManagementSection() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const profilesQuery = useQuery({
@@ -962,8 +962,8 @@ export function SystemManagementWorkspace() {
         category="permission denied"
         title="没有权限访问系统管理"
         description="系统管理只对 admin 可见。"
-        suggestion="请切换到管理员账号后重试，或返回管理中心。"
-        actions={[{ label: '返回管理中心', to: '/admin' }]}
+        suggestion="请切换到管理员账号后重试，或返回系统管理页。"
+        actions={[{ label: '返回系统管理', to: '/system' }]}
       />
     );
   }

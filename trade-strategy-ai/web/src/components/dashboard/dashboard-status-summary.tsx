@@ -130,7 +130,7 @@ export function DashboardQuickLinks() {
             { label: '配置管理', path: '/profiles' },
             { label: '市场数据', path: '/market' },
             { label: '策略工作台', path: '/strategies' },
-            { label: '管理审计', path: '/admin/audit' },
+            { label: '系统审计', path: '/system/audit' },
             { label: '产物中心', path: '/artifacts' },
           ].map((item) => (
             <Link

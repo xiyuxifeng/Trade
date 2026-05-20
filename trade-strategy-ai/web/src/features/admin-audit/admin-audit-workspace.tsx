@@ -189,10 +189,10 @@ export function AdminAuditWorkspace() {
       <main className="page-stack">
         <ErrorState
           category="permission denied"
-          title="没有权限访问审计中心"
+          title="没有权限访问系统审计"
           description="当前身份需要 admin 权限。"
-          suggestion="请切换到管理员账号后重试，或返回管理中心。"
-          actions={[{ label: '返回管理中心', to: '/admin' }]}
+          suggestion="请切换到管理员账号后重试，或返回系统管理页。"
+          actions={[{ label: '返回系统管理', to: '/system' }]}
         />
       </main>
     );
@@ -221,10 +221,10 @@ export function AdminAuditWorkspace() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          to="/admin"
+          to="/system"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          返回管理中心
+          返回系统管理
         </Link>
         <Button
           variant="outline"

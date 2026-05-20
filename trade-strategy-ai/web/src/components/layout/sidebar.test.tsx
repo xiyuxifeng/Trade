@@ -33,10 +33,7 @@ describe('Sidebar', () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('link', { name: /管理中心/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(screen.queryByRole('link', { name: /管理中心/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /系统管理/ })).toHaveAttribute('aria-disabled', 'true');
   });
 });

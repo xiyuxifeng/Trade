@@ -32,7 +32,12 @@
 | `/artifacts` | Artifact Center 入口。 |
 | `/profiles` | Profile 管理入口。 |
 | `/system` | 系统管理入口。 |
-| `/admin` | 管理中心。 |
+| `/system/audit` | 权限与审计详情页。 |
+| `/system/users` | 用户管理详情页。 |
+| `/system/health` | 系统健康检查详情页。 |
+| `/system/db-migrate` | 数据库迁移详情页。 |
+| `/system/backup` | 数据备份详情页。 |
+| `/system/restore` | 数据恢复详情页。 |
 | `/settings` | 旧设置入口，兼容跳转到 `/profiles`。 |
 
 ## 3. 维护规则
@@ -42,7 +47,14 @@
 - 任何尝试重新引入旧入口，都必须先补充到 TaskList 和验收文档。
 - sidebar / 顶层导航不得展示旧入口或兼容入口分组。
 
-## 4. 关联任务
+## 4. Compatibility 路由
+
+| 兼容路由 | 说明 |
+| --- | --- |
+| `/admin` | 旧管理中心，跳转到 `/system`。 |
+| `/admin/audit` | 旧审计入口，跳转到 `/system/audit`。 |
+
+## 5. 关联任务
 
 - `UI-V1-001` 定义 canonical 路由。
 - `NW-V2-S4-003` 完成路由收口与导航冻结。

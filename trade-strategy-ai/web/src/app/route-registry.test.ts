@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveRouteByPathname } from './route-registry';
+import { routeRegistry, resolveRouteByPathname } from './route-registry';
 
 describe('resolveRouteByPathname', () => {
   it('resolves canonical routes', () => {
@@ -27,9 +27,14 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/profiles/default/snapshots/snapshot-1').path).toBe('/profiles/:profileId/snapshots/:snapshotId');
     expect(resolveRouteByPathname('/system').path).toBe('/system');
     expect(resolveRouteByPathname('/system').label).toBe('系统管理');
-    expect(resolveRouteByPathname('/admin').path).toBe('/admin');
-    expect(resolveRouteByPathname('/admin/audit').path).toBe('/admin/audit');
-    expect(resolveRouteByPathname('/admin/audit').label).toBe('权限与审计');
+    expect(resolveRouteByPathname('/system/audit').path).toBe('/system/audit');
+    expect(resolveRouteByPathname('/system/audit').label).toBe('权限与审计');
+    expect(resolveRouteByPathname('/system/users').path).toBe('/system/users');
+    expect(resolveRouteByPathname('/system/health').path).toBe('/system/health');
+    expect(resolveRouteByPathname('/system/db-migrate').path).toBe('/system/db-migrate');
+    expect(resolveRouteByPathname('/system/backup').path).toBe('/system/backup');
+    expect(resolveRouteByPathname('/system/restore').path).toBe('/system/restore');
+    expect(routeRegistry.some((route) => route.path === '/admin')).toBe(false);
   });
 
 });

@@ -16,7 +16,6 @@ describe('navigation contract', () => {
       '/artifacts',
       '/profiles',
       '/system',
-      '/admin',
     ]);
     expect(mainNavigation.find((item) => item.path === '/rule-pool')?.description).toBe('规则池审核中心');
   });

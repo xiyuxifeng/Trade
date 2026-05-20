@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | UI-V1 | 临时但规范化的验收 UI | 支撑 article_pipeline 和运行底座验收 |
 | UI-V2 | 正式用户工作台 | 建立正式信息架构、Profile UI、Market/Strategy 工作台 |
-| UI-V3 | 完整交付 UI | 补齐 Backtest、Rule Pool、Admin Ops、权限审计、最终体验 |
+| UI-V3 | 完整交付 UI | 补齐 Backtest、Rule Pool、System Ops、权限审计、最终体验 |
 
 ### 0.3 重要原则
 
@@ -125,7 +125,6 @@ web/src/
     strategy/
     backtest/
     rule-pool/
-    admin/
     system/
   components/
     ui/
@@ -887,7 +886,6 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 - Rule Pool，占位
 - Artifacts
 - Profiles
-- Admin
 - System
 
 验收标准：
@@ -898,12 +896,12 @@ UI-V2 从临时验收 UI 升级为正式用户工作台。
 
 完成情况：
 
-- 已将正式入口收口为 `Dashboard / Jobs / Workflows / Articles / Market Data / Strategy / Backtest / Rule Pool / Artifacts / Profiles / Admin / System`。
+- 已将正式入口收口为 `Dashboard / Jobs / Workflows / Articles / Market Data / Strategy / Backtest / Rule Pool / Artifacts / Profiles / System`。
 - 已把旧页面收纳进独立的兼容入口分组，保留 V1/V2 历史链接可访问。
 - 已新增 `docs/New-Web-UI-Information-Architecture.md`，并同步更新 `docs/New-Web-UI-Routing.md`。
-- 已补齐 `/backtest`、`/rule-pool`、`/admin` 的正式 placeholder 页面与路由。
+- 已补齐 `/backtest`、`/rule-pool`、`/system` 的正式 placeholder 页面与路由。
 - 已更新 sidebar、route registry 和布局路由标题逻辑，保持与 `UI-V2-002` 一致的浅色工作台风格。
-- 已通过相关测试：`route-registry`、`sidebar`、`admin`、`backtest`、`rule-pool`。
+- 已通过相关测试：`route-registry`、`sidebar`、`system`、`backtest`、`rule-pool`。
 
 主任务关联：
 
@@ -1510,9 +1508,9 @@ UI-V3 补齐完整交付版本需要的高级业务页面、运维页面、权�
 
 ---
 
-### [x] UI-V3-004 P0 Admin Ops Console
+### [x] UI-V3-004 P0 System Ops Console
 
-任务目标：提供管理员运维入口。
+任务目标：提供系统运维入口。
 
 页面能力：
 

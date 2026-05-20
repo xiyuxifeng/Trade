@@ -34,7 +34,6 @@
 - 产物
 - 配置管理
 - 系统管理
-- 管理中心
 
 ### 2.2 兼容入口
 
@@ -70,7 +69,12 @@
 | `/artifacts` | Artifact Center | 正式 |
 | `/profiles` | Profile 管理入口 | 正式 |
 | `/system` | 系统管理入口 | 正式 |
-| `/admin` | 管理中心 | 正式 |
+| `/system/audit` | 权限与审计详情页 | 正式 |
+| `/system/users` | 用户管理详情页 | 正式 |
+| `/system/health` | 系统健康检查详情页 | 正式 |
+| `/system/db-migrate` | 数据库迁移详情页 | 正式 |
+| `/system/backup` | 数据备份详情页 | 正式 |
+| `/system/restore` | 数据恢复详情页 | 正式 |
 | `/settings` | 旧设置入口兼容跳转到 `/profiles` | 兼容 |
 
 ## 4. Legacy / Compatibility 路由
@@ -95,6 +99,8 @@
 | `/backtests` | 旧回测中心 | V3 |
 | `/users` | 旧用户管理页 | V3 |
 | `/ops` | 旧运维页 | V3 |
+| `/admin` | 旧管理中心页 | V3 |
+| `/admin/audit` | 旧管理中心审计页 | V3 |
 | `/settings` | 旧设置页兼容跳转 | V3 |
 
 ## 5. 信息分组规则

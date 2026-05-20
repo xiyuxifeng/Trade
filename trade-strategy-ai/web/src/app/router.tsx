@@ -10,14 +10,18 @@ import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { MarketDatasetPage } from '@/pages/market/datasets';
 import { MarketPage } from '@/pages/market';
-import { AdminPage } from '@/pages/admin';
-import { AdminAuditPage } from '@/pages/admin/AuditPage';
 import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
 import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
 import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
 import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
+import { AuditPage } from '@/pages/system/AuditPage';
+import { BackupPage } from '@/pages/system/BackupPage';
+import { DatabaseMigrationPage } from '@/pages/system/DatabaseMigrationPage';
+import { HealthPage } from '@/pages/system/HealthPage';
+import { RestorePage } from '@/pages/system/RestorePage';
 import { SystemPage } from '@/pages/system';
+import { UsersPage } from '@/pages/system/UsersPage';
 import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
 import { StrategiesPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
@@ -76,8 +80,14 @@ const dashboardLayoutRoutes = [
   { path: 'strategies', element: <StrategiesPage /> },
   { path: 'strategies/regime-selection', element: <RegimeRuleSelectionPage /> },
   { path: 'system', element: <SystemPage /> },
-  { path: 'admin', element: <AdminPage /> },
-  { path: 'admin/audit', element: <AdminAuditPage /> },
+  { path: 'system/audit', element: <AuditPage /> },
+  { path: 'system/users', element: <UsersPage /> },
+  { path: 'system/health', element: <HealthPage /> },
+  { path: 'system/db-migrate', element: <DatabaseMigrationPage /> },
+  { path: 'system/backup', element: <BackupPage /> },
+  { path: 'system/restore', element: <RestorePage /> },
+  { path: 'admin', element: <Navigate to="/system" replace /> },
+  { path: 'admin/audit', element: <Navigate to="/system/audit" replace /> },
   { path: 'settings', element: <Navigate to="/profiles" replace /> },
 ] as const;
 

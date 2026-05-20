@@ -30,8 +30,12 @@ export const routeRegistry: RouteRecord[] = [
   { label: '配置管理', path: '/profiles/:profileId/snapshots/:snapshotId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '配置管理', path: '/profiles/:profileId', description: '正式 Profile 配置入口', kind: 'canonical' },
   { label: '系统管理', path: '/system', description: '系统健康、审计与运维入口', kind: 'canonical' },
-  { label: '管理中心', path: '/admin', description: '用户、运维与权限管理入口', kind: 'canonical' },
-  { label: '权限与审计', path: '/admin/audit', description: '用户、运维与权限管理入口', kind: 'canonical' },
+  { label: '权限与审计', path: '/system/audit', description: '权限、审计与高风险操作历史', kind: 'canonical' },
+  { label: '用户管理', path: '/system/users', description: '添加、删除、禁用和改密入口', kind: 'canonical' },
+  { label: '系统健康检查', path: '/system/health', description: 'API、DB、worker 与存储健康状态', kind: 'canonical' },
+  { label: '数据库迁移', path: '/system/db-migrate', description: '数据库迁移高风险操作入口', kind: 'canonical' },
+  { label: '数据备份', path: '/system/backup', description: '受限目录备份入口', kind: 'canonical' },
+  { label: '数据恢复', path: '/system/restore', description: '按备份 ID 恢复入口', kind: 'canonical' },
 ];
 
 export function resolveRouteByPathname(pathname: string) {

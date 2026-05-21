@@ -95,9 +95,9 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
         "description": "Article Pipeline 参数",
         "allow_additional_fields": False,
         "fields": {
-            "config_path": {
-                "type": "path",
-                "description": "配置文件路径",
+            "profile_id": {
+                "type": "string",
+                "description": "Profile ID",
                 "required": True,
                 "default": None,
                 "enum": [],
@@ -144,6 +144,13 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
                 "default": None,
                 "enum": [],
             },
+            "retry_failed": {
+                "type": "boolean",
+                "description": "是否重试失败任务",
+                "required": False,
+                "default": False,
+                "enum": [],
+            },
         },
     },
     output_artifacts=(
@@ -163,7 +170,7 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
         ),
     ),
     workflow_id="pipeline",
-    job_types=("crawl", "pipeline-run", "pipeline-step"),
+    job_types=("crawl", "pipeline-run"),
     steps=(
         PipelineStepSpec(
             step_id="crawl",
@@ -180,18 +187,9 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
             depends_on=("crawl",),
             output_artifacts=("result-json", "html"),
         ),
-        PipelineStepSpec(
-            step_id="pipeline-step",
-            title="执行单步",
-            description="支持从指定步骤继续执行或补跑单步。",
-            job_type="pipeline-step",
-            depends_on=("pipeline-run",),
-            output_artifacts=("result-json",),
-            extensions={"resume_mode": True},
-        ),
     ),
     user_visible_success_criteria=(
-        "用户可从 /articles 触发 article_pipeline。",
+        "用户可从 /articles 通过 Profile 触发 article_pipeline。",
         "运行后能进入 Job Detail 查看结果和产物。",
         "输入 schema 可直接驱动 Web 表单。",
         "失败结果可回到 Job Detail 定位。",
@@ -199,11 +197,10 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
     ui_page="/articles",
     ui_task_ids=("UI-V1-010", "UI-V1-007"),
     extensions={
-        "supported_input_modes": ("config_path", "profile"),
+        "supported_input_modes": ("profile",),
         "migration_target": "profile",
-        "ui_note": "Profile 输入是后续迁移目标，当前仍以 config_path 为 canonical 执行入口。",
+        "ui_note": "Profile 输入是 canonical 执行入口。",
     },
 )
 
 ARTICLE_PIPELINE_SPECS: tuple[PipelineSpec, ...] = (ARTICLE_PIPELINE_SPEC,)
-

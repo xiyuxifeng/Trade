@@ -115,20 +115,6 @@ def _workflow_step(
 
 DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
     _workflow(
-        "pipeline",
-        "数据 Pipeline",
-        "串联抓取、清洗、抽取、聚类与回归验证。",
-        "pipeline-run",
-        steps=[
-            _workflow_step("crawl", "抓取文章", "执行文章抓取。", "crawl"),
-            _workflow_step("import-trade-logs", "导入交易记录", "导入交易记录样例或正式数据。", "import-trade-logs"),
-            _workflow_step("pipeline-run", "执行完整链路", "运行完整 pipeline。", "pipeline-run"),
-            _workflow_step("pipeline-step", "执行单步", "从指定步骤继续执行 pipeline。", "pipeline-step"),
-            _workflow_step("clusters-build", "构建画像聚类", "构建 persona clusters。", "clusters-build"),
-            _workflow_step("e2e-regression", "端到端回归", "串起主链路进行回归验证。", "e2e-regression"),
-        ],
-    ),
-    _workflow(
         "pre-market",
         "盘前工作台",
         "完成盘前日报、市场状态和快照相关操作。",

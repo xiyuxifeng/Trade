@@ -10,10 +10,10 @@ def test_article_pipeline_spec_exports_core_fields() -> None:
     assert ARTICLE_PIPELINE_SPEC.ui_page == "/articles"
     assert "UI-V1-010" in ARTICLE_PIPELINE_SPEC.ui_task_ids
     assert "UI-V1-007" in ARTICLE_PIPELINE_SPEC.ui_task_ids
-    assert "config_path" in ARTICLE_PIPELINE_SPEC.input_schema["fields"]
+    assert "profile_id" in ARTICLE_PIPELINE_SPEC.input_schema["fields"]
     assert "result-json" in {item.kind for item in ARTICLE_PIPELINE_SPEC.output_artifacts}
     assert "crawl" in ARTICLE_PIPELINE_SPEC.job_types
-    assert ARTICLE_PIPELINE_SPEC.extensions["supported_input_modes"] == ("config_path", "profile")
+    assert ARTICLE_PIPELINE_SPEC.extensions["supported_input_modes"] == ("profile",)
 
 
 def test_article_pipeline_spec_summary_is_catalog_friendly() -> None:
@@ -29,4 +29,3 @@ def test_article_pipeline_spec_summary_is_catalog_friendly() -> None:
     assert summary["output_artifacts"][0]["kind"] == "result-json"
     assert summary["steps"][1]["job_type"] == "pipeline-run"
     assert summary["steps"][2]["extensions"]["resume_mode"] is True
-

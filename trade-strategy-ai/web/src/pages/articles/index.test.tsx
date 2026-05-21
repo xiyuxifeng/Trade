@@ -1,192 +1,274 @@
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
-import { ArticlesPage } from './index';
+import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { getArticlePipeline, runArticlePipeline } from '@/lib/api/pipelines';
+import { listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
+import { listProfiles } from '@/lib/api/profiles';
+import { runArticlePipeline } from '@/lib/api/pipelines';
+
+vi.mock('@/lib/api/articles', () => ({
+  listArticles: vi.fn(),
+}));
+
+vi.mock('@/lib/api/jobs', () => ({
+  listJobs: vi.fn(),
+}));
+
+vi.mock('@/lib/api/profiles', () => ({
+  listProfiles: vi.fn(),
+}));
 
 vi.mock('@/lib/api/pipelines', () => ({
   getArticlePipeline: vi.fn(),
   runArticlePipeline: vi.fn(),
 }));
 
-vi.mock('@/lib/api/jobs', () => ({
-  cancelJob: vi.fn(),
-  createJob: vi.fn(),
-  getJob: vi.fn(),
-  getJobLogs: vi.fn(),
-  listJobs: vi.fn(),
-}));
-
-const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
-const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
+const mockedListProfiles = vi.mocked(listProfiles);
+const mockedListArticles = vi.mocked(listArticles);
 const mockedListJobs = vi.mocked(listJobs);
+const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
 
-function buildPipelineDetail(overrides?: Partial<Record<string, unknown>>) {
+function buildProfileList() {
   return {
-    pipeline: {
-      pipeline_id: 'article_pipeline',
-      workflow_id: 'pipeline',
-      job_type: 'pipeline-run',
-      title: 'article_pipeline',
-      description: '串联抓取、清洗、抽取、聚类与回归验证。',
-      workflow: {
-        workflow_id: 'pipeline',
-        title: '数据 Pipeline',
-        description: '串联抓取、清洗、抽取、聚类与回归验证。',
-        job_type: 'pipeline-run',
-        permissions: 'operator',
-        job_definition: {
-          job_type: 'pipeline-run',
-          risk: 'medium',
-          requires_confirmation: false,
-          params_schema: {
-            description: 'Pipeline 参数',
-            allow_additional_fields: false,
-            fields: {
-              config_path: {
-                type: 'path',
-                description: '配置文件路径',
-                required: true,
-                enum: [],
-              },
-            },
-          },
-        },
-        steps: [],
-        ...(overrides?.workflow as Record<string, unknown> | undefined),
+    count: 1,
+    total: 1,
+    skip: 0,
+    limit: 100,
+    items: [
+      {
+        profile_id: 'default',
+        name: 'Default Profile',
+        environment: 'production',
+        version: 1,
+        sections: {},
+        secret_refs: {},
+        validation_status: 'validated',
+        created_by: 'web',
+        created_at: '2026-05-10T08:00:00Z',
+        updated_at: '2026-05-10T08:00:00Z',
+        archived_at: null,
       },
-      ...(overrides ?? {}),
-    },
+    ],
   };
 }
 
-function buildRecentJob(status: string) {
+function buildArticleList() {
   return {
-    id: `job-${status}`,
-    job_type: 'pipeline-run',
-    status,
-    params: { config_path: 'config/articles.yaml' },
-    result: null,
-    error: status === 'failed' ? { message: 'boom' } : null,
-    artifacts: [],
-    audit_events: [],
-    created_by: 'web',
-    idempotency_key: null,
-    retry_count: 0,
-    max_retries: 3,
-    retry_backoff_seconds: 0,
-    timeout_seconds: null,
-    cancel_requested: false,
-    cancel_requested_at: null,
-    worker_id: null,
-    lock_token: null,
-    lock_acquired_at: null,
-    heartbeat_at: null,
-    scheduled_at: null,
-    started_at: null,
-    finished_at: null,
-    created_at: '2026-05-10T08:00:00Z',
-    updated_at: '2026-05-10T08:00:00Z',
+    items: [
+      {
+        id: 'article-1',
+        source: 'tgb',
+        source_url: 'https://example.com/article-1',
+        title: 'Article One',
+        author_name: 'Alice',
+        author_id: 'author-1',
+        published_at: '2026-05-10T08:00:00Z',
+        crawled_at: '2026-05-10T09:00:00Z',
+        content_text: 'hello article content',
+        summary: 'summary one',
+        tags: ['trend', 'alpha'],
+        content_hash: 'hash-1',
+        view_count: 10,
+        like_count: 2,
+        bookmark_count: 1,
+        comment_count: 3,
+      },
+    ],
+    total: 1,
+    page: 1,
+    page_size: 10,
+    pages: 1,
+  };
+}
+
+function buildJobList() {
+  return {
+    count: 1,
+    total: 1,
+    skip: 0,
+    limit: 10,
+    items: [
+      {
+        id: 'job-article-1',
+        job_type: 'pipeline-run',
+        status: 'success',
+        params: { profile_id: 'default', from_step: 'process' },
+        result: {
+          workflow_run: {
+            workflow_id: 'article_pipeline',
+            workflow_params: { profile_id: 'default' },
+            run_context: { status: 'success', duration_ms: 1250 },
+            step_results: [
+              { step_name: 'clean' },
+              {
+                step_name: 'process',
+                output_json: {
+                  extracted_concepts: ['macd'],
+                  trading_symbols: ['AAPL'],
+                  strategy_rules: ['rule-1'],
+                  preconditions: ['trend'],
+                  comment_insights: ['bullish'],
+                  sentiment_score: 0.8,
+                  confidence_score: 0.9,
+                },
+              },
+            ],
+          },
+        },
+        error: null,
+        artifacts: [],
+        created_by: 'web',
+        idempotency_key: null,
+        retry_count: 0,
+        max_retries: 0,
+        retry_backoff_seconds: 0,
+        timeout_seconds: null,
+        cancel_requested: false,
+        cancel_requested_at: null,
+        worker_id: null,
+        lock_token: null,
+        lock_acquired_at: null,
+        heartbeat_at: null,
+        scheduled_at: null,
+        started_at: '2026-05-10T08:00:00Z',
+        finished_at: '2026-05-10T08:20:00Z',
+        audit_events: [],
+        created_at: '2026-05-10T08:00:00Z',
+        updated_at: '2026-05-10T08:20:00Z',
+      },
+    ],
   };
 }
 
 describe('ArticlesPage', () => {
-  it('renders the pipeline summary and recent jobs', async () => {
-    mockedGetArticlePipeline.mockResolvedValue(buildPipelineDetail());
-    mockedListJobs.mockResolvedValue({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 5,
-      items: [buildRecentJob('success')],
-    });
-
+  it('renders workspace entry cards that link to article subpages', async () => {
     renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
 
-    expect(await screen.findByText('article_pipeline')).toBeInTheDocument();
-    expect(screen.getAllByText('串联抓取、清洗、抽取、聚类与回归验证。').length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('config_path')).toBeInTheDocument();
-    expect(screen.getByText('最近 article_pipeline jobs')).toBeInTheDocument();
-    expect(screen.getByText('成功')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '文章工作台' })).toBeInTheDocument();
+    expect(screen.getByText('请选择一个入口开始处理文章数据。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '进入抓取与处理' })).toHaveAttribute('href', '/articles/run');
+    expect(screen.getByRole('link', { name: '进入文章列表' })).toHaveAttribute('href', '/articles/list');
+    expect(screen.getByRole('link', { name: '进入数据质量' })).toHaveAttribute('href', '/articles/quality');
+    expect(screen.getByRole('link', { name: '进入最近任务' })).toHaveAttribute('href', '/articles/jobs');
+    expect(screen.getByRole('link', { name: '进入处理结果' })).toHaveAttribute('href', '/articles/results');
+    expect(screen.getByRole('link', { name: '进入高级维护' })).toHaveAttribute('href', '/articles/maintenance');
+    expect(screen.queryByLabelText('config_path')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '运行 article_pipeline' })).not.toBeInTheDocument();
   });
 
-  it('shows validation feedback when the run form is empty', async () => {
+  it('renders a profile-only run form and submits profile_id', async () => {
     const user = userEvent.setup();
-    mockedGetArticlePipeline.mockResolvedValue(buildPipelineDetail());
-    mockedListJobs.mockResolvedValue({
-      count: 0,
-      total: 0,
-      skip: 0,
-      limit: 5,
-      items: [],
-    });
-
-    renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
-
-    expect(await screen.findByText('article_pipeline')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '运行 article_pipeline' }));
-
-    expect(
-      await screen.findByText('请输入 config_path 或 Profile 值。', { selector: '#article-pipeline-value-error' }),
-    ).toBeInTheDocument();
-  });
-
-  it('submits article_pipeline and navigates to the created job detail', async () => {
-    const user = userEvent.setup();
-    mockedGetArticlePipeline.mockResolvedValue(buildPipelineDetail());
-    mockedListJobs.mockResolvedValue({
-      count: 0,
-      total: 0,
-      skip: 0,
-      limit: 5,
-      items: [],
-    });
+    mockedListProfiles.mockResolvedValue(buildProfileList());
     mockedRunArticlePipeline.mockResolvedValue({
-      workflow: { workflow_id: 'pipeline', job_type: 'pipeline-run' },
+      workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
       job: { id: 'job-article-1', job_type: 'pipeline-run', status: 'pending' },
     });
 
-    renderWithRouter(
-      [
-        { path: '/articles', element: <ArticlesPage /> },
-        { path: '/jobs/:jobId', element: <div>job detail page</div> },
-      ],
-      ['/articles'],
-    );
+    renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
 
-    expect(await screen.findByText('article_pipeline')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('config_path'), 'config/articles.yaml');
-    await user.click(screen.getByRole('button', { name: '运行 article_pipeline' }));
+    expect(await screen.findByRole('heading', { name: '抓取与处理' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
+    expect(screen.getByLabelText('Profile')).toHaveValue('default');
+    expect(screen.queryByLabelText('config_path')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '运行抓取与处理' }));
 
     await waitFor(() => {
       expect(mockedRunArticlePipeline).toHaveBeenCalledWith({
-        params: { config_path: 'config/articles.yaml' },
+        params: { profile_id: 'default' },
         created_by: 'web',
         confirmed: false,
       });
     });
+
     expect(await screen.findByText('job detail page')).toBeInTheDocument();
   });
 
-  it('shows an API unavailable state and can retry', async () => {
+  it('renders the article list page with table data and filters', async () => {
+    mockedListArticles.mockResolvedValue(buildArticleList());
+
+    renderWithRouter([{ path: '/articles/list', element: <ArticleListPage /> }], ['/articles/list']);
+
+    expect(await screen.findByRole('heading', { name: '文章列表' })).toBeInTheDocument();
+    expect(await screen.findByText('Article One')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '打开原文' })).toHaveAttribute('href', 'https://example.com/article-1');
+    expect(screen.getByLabelText('Author ID')).toBeInTheDocument();
+    expect(screen.getByLabelText('Source')).toBeInTheDocument();
+    expect(screen.getByLabelText('Trader ID')).toBeInTheDocument();
+  });
+
+  it('renders the recent job page with article pipeline jobs', async () => {
+    mockedListJobs.mockResolvedValue(buildJobList());
+
+    renderWithRouter([{ path: '/articles/jobs', element: <ArticleJobsPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/jobs']);
+
+    expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
+    expect(await screen.findByText('job-article-1')).toBeInTheDocument();
+    expect(screen.getByText(/Profile:\s*default/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '打开 Job Detail' })).toBeInTheDocument();
+  });
+
+  it('renders the quality page with coverage metrics and latest job output', async () => {
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedListJobs.mockResolvedValue(buildJobList());
+
+    renderWithRouter([{ path: '/articles/quality', element: <ArticleQualityPage /> }], ['/articles/quality']);
+
+    expect(await screen.findByRole('heading', { name: '数据质量' })).toBeInTheDocument();
+    expect(await screen.findByText('job-article-1')).toBeInTheDocument();
+    expect(screen.getByText('最近一次文章 Job')).toBeInTheDocument();
+  });
+
+  it('renders the results page with structured process output', async () => {
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedListJobs.mockResolvedValue(buildJobList());
+
+    renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
+
+    expect(await screen.findByRole('heading', { name: '处理结果' })).toBeInTheDocument();
+    expect(await screen.findByText('Article One')).toBeInTheDocument();
+    expect(screen.getByText('Process Output')).toBeInTheDocument();
+    expect(screen.getByText('最新 process 输出')).toBeInTheDocument();
+  });
+
+  it('renders the maintenance page and submits maintenance options', async () => {
     const user = userEvent.setup();
-    mockedGetArticlePipeline.mockRejectedValueOnce(new Error('pipeline api unavailable'));
-    mockedGetArticlePipeline.mockResolvedValue(buildPipelineDetail());
-    mockedListJobs.mockResolvedValue({
-      count: 0,
-      total: 0,
-      skip: 0,
-      limit: 5,
-      items: [],
+    mockedListProfiles.mockResolvedValue(buildProfileList());
+    mockedRunArticlePipeline.mockResolvedValue({
+      workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
+      job: { id: 'job-maintenance-1', job_type: 'pipeline-run', status: 'pending' },
     });
 
-    renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
+    renderWithRouter(
+      [{ path: '/articles/maintenance', element: <ArticleMaintenancePage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }],
+      ['/articles/maintenance'],
+    );
 
-    expect(await screen.findByText('pipeline api unavailable')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '重试' }));
+    expect(await screen.findByRole('heading', { name: '高级维护' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '从指定步骤开始' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /导出/i })).not.toBeInTheDocument();
 
-    expect(await screen.findByText('article_pipeline')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('重建 pending tasks'));
+    await user.click(screen.getByRole('button', { name: '运行维护' }));
+
+    await waitFor(() => {
+      expect(mockedRunArticlePipeline).toHaveBeenCalledWith({
+        params: {
+          profile_id: 'default',
+          from_step: 'process',
+          force: true,
+          skip_crawl: true,
+          use_db: true,
+          rebuild_pending: true,
+        },
+        created_by: 'web',
+        confirmed: false,
+      });
+    });
+
+    expect(await screen.findByText('job detail page')).toBeInTheDocument();
   });
 });

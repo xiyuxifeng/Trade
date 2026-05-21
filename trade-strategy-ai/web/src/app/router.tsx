@@ -1,7 +1,15 @@
 import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
-import { ArticlesPage } from '@/pages/articles';
+import {
+  ArticlesPage,
+  ArticleJobsPage,
+  ArticleListPage,
+  ArticleMaintenancePage,
+  ArticleQualityPage,
+  ArticleResultsPage,
+  ArticleRunPage,
+} from '@/pages/articles';
 import { ArtifactsPage } from '@/pages/artifacts';
 import { BacktestPage } from '@/pages/backtest';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
@@ -70,6 +78,12 @@ const dashboardLayoutRoutes = [
   { path: 'workflows', element: <WorkflowsPage /> },
   { path: 'workflows/:workflowId/run', element: <WorkflowsPage /> },
   { path: 'articles', element: <ArticlesPage /> },
+  { path: 'articles/run', element: <ArticleRunPage /> },
+  { path: 'articles/list', element: <ArticleListPage /> },
+  { path: 'articles/quality', element: <ArticleQualityPage /> },
+  { path: 'articles/jobs', element: <ArticleJobsPage /> },
+  { path: 'articles/results', element: <ArticleResultsPage /> },
+  { path: 'articles/maintenance', element: <ArticleMaintenancePage /> },
   { path: 'backtest', element: <BacktestPage /> },
   { path: 'backtest/regime', element: <RegimeBacktestReportPage /> },
   { path: 'rule-pool', element: <RulePoolPage /> },

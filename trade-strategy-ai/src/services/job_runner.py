@@ -336,6 +336,7 @@ class JobRunner(BaseService):
                 skip_crawl=_parse_bool(params.get("skip_crawl"), default=False),
                 from_step=params.get("from_step"),
                 use_db=_parse_bool(params.get("use_db"), default=False),
+                retry_failed=_parse_bool(params.get("retry_failed"), default=False),
                 new_version=params.get("new_version"),
             )
 
@@ -347,6 +348,7 @@ class JobRunner(BaseService):
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
                 use_db=_parse_bool(params.get("use_db"), default=False),
+                retry_failed=_parse_bool(params.get("retry_failed"), default=False),
                 new_version=params.get("new_version"),
             )
 

@@ -689,26 +689,32 @@ def test_submit_market_job_classifies_external_dependency_failure(tmp_path: Path
 
 def test_run_pending_jobs_once_processes_pending_jobs(tmp_path: Path) -> None:
     """JobRunner 应能轮询并执行 pending Job。"""
+    calls: dict[str, Any] = {}
+
+    async def _pipeline_handler(params: dict[str, Any]) -> Any:
+        calls["pipeline"] = dict(params)
+        return await asyncio.sleep(
+            0,
+            result=ServiceResult(
+                status="ok",
+                payload={
+                    "config_path": params.get("config_path", "config/app.yaml"),
+                    "result": "pipeline ok",
+                },
+                message="pipeline done",
+            ),
+        )
+
     runner, job_service, engine, ServiceResult = _build_job_runner(
         tmp_path,
         handlers={
-            "pipeline-run": lambda params: asyncio.sleep(
-                0,
-                result=ServiceResult(
-                    status="ok",
-                    payload={
-                        "config_path": params.get("config_path", "config/app.yaml"),
-                        "result": "pipeline ok",
-                    },
-                    message="pipeline done",
-                ),
-            ),
+            "pipeline-run": _pipeline_handler,
         },
     )
     created = asyncio.run(
         job_service.create_job(
             job_type="pipeline-run",
-            params={"config_path": "config/app.yaml"},
+            params={"config_path": "config/app.yaml", "retry_failed": True},
             created_by="web",
         )
     )
@@ -719,6 +725,7 @@ def test_run_pending_jobs_once_processes_pending_jobs(tmp_path: Path) -> None:
     assert processed.payload["count"] == 1
     assert processed.payload["items"][0]["job_id"] == job_id
     assert loaded.payload["job"]["status"] == "success"
+    assert calls["pipeline"]["retry_failed"] is True
     asyncio.run(engine.dispose())
 
 

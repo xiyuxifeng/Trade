@@ -66,6 +66,7 @@ def _build_data_pipeline_handlers(
 	max_articles: int | None,
 	force: bool,
 	skip_crawl: bool,
+	retry_failed: bool,
 	audit: AuditService,
 	from_step: str | None = None,
 	use_db: bool = False,
@@ -176,7 +177,12 @@ def _build_data_pipeline_handlers(
 		if _should_skip("process"):
 			context["process_stats"] = ProcessTasksStats()
 			return context["process_stats"]
-		result = await run_process_tasks(config=config, force=force, version=process_version)
+		result = await run_process_tasks(
+			config=config,
+			force=force,
+			retry_failed=retry_failed,
+			version=process_version,
+		)
 		context["process_stats"] = result
 		return result
 
@@ -280,6 +286,7 @@ async def _run_data_pipeline_graph(
 	skip_crawl: bool = False,
 	from_step: str | None = None,
 	use_db: bool = False,
+	retry_failed: bool = False,
 	process_version: str = "v1",
 ) -> tuple[PipelineHealthSnapshot, dict[str, Any]]:
 	"""Run the built-in data pipeline graph and return the snapshot plus context.
@@ -300,6 +307,7 @@ async def _run_data_pipeline_graph(
 		"skip_crawl": skip_crawl,
 		"from_step": from_step,
 		"use_db": use_db,
+		"retry_failed": retry_failed,
 		"audit_service": audit,
 	}
 	registry = PipelineGraphRegistry.default()
@@ -310,6 +318,7 @@ async def _run_data_pipeline_graph(
 			max_articles=max_articles,
 			force=force,
 			skip_crawl=skip_crawl,
+			retry_failed=retry_failed,
 			audit=audit,
 			from_step=from_step,
 			use_db=use_db,
@@ -331,6 +340,7 @@ async def run_pipeline(
 	skip_crawl: bool = False,
 	from_step: str | None = None,
 	use_db: bool = False,
+	retry_failed: bool = False,
 	process_version: str = "v1",
 ) -> PipelineRunResult:
 	_, context = await _run_data_pipeline_graph(
@@ -341,6 +351,7 @@ async def run_pipeline(
 		skip_crawl=skip_crawl,
 		from_step=from_step,
 		use_db=use_db,
+		retry_failed=retry_failed,
 		process_version=process_version,
 	)
 	if context["health_snapshot"].failed_nodes:
@@ -374,6 +385,7 @@ async def run_pipeline_via_registry(
 	skip_crawl: bool = False,
 	from_step: str | None = None,
 	use_db: bool = False,
+	retry_failed: bool = False,
 ) -> PipelineHealthSnapshot:
 	"""Run the built-in data pipeline graph and return its health snapshot."""
 
@@ -385,5 +397,6 @@ async def run_pipeline_via_registry(
 		skip_crawl=skip_crawl,
 		from_step=from_step,
 		use_db=use_db,
+		retry_failed=retry_failed,
 	)
 	return snapshot

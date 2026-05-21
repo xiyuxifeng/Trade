@@ -84,6 +84,7 @@ class PipelineService(BaseService):
         skip_crawl: bool = False,
         from_step: str | None = None,
         use_db: bool = False,
+        retry_failed: bool = False,
         new_version: str | None = None,
     ) -> ServiceResult:
         """执行完整 pipeline。"""
@@ -98,6 +99,7 @@ class PipelineService(BaseService):
             skip_crawl=skip_crawl,
             from_step=from_step,
             use_db=use_db,
+            retry_failed=retry_failed,
             process_version=new_version or "v1",
         )
         return ServiceResult(
@@ -118,6 +120,7 @@ class PipelineService(BaseService):
         max_articles: int | None = None,
         force: bool = False,
         use_db: bool = False,
+        retry_failed: bool = False,
         new_version: str | None = None,
     ) -> ServiceResult:
         """执行 pipeline 的单步或从指定步骤开始的链路。"""
@@ -128,6 +131,7 @@ class PipelineService(BaseService):
             skip_crawl=False,
             from_step=step,
             use_db=use_db,
+            retry_failed=retry_failed,
             new_version=new_version,
         )
 

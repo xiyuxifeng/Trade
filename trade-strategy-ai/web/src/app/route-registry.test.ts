@@ -9,6 +9,12 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/workflows').path).toBe('/workflows');
     expect(resolveRouteByPathname('/workflows/pipeline/run').path).toBe('/workflows/:workflowId/run');
     expect(resolveRouteByPathname('/articles').path).toBe('/articles');
+    expect(resolveRouteByPathname('/articles/run').path).toBe('/articles/run');
+    expect(resolveRouteByPathname('/articles/list').path).toBe('/articles/list');
+    expect(resolveRouteByPathname('/articles/quality').path).toBe('/articles/quality');
+    expect(resolveRouteByPathname('/articles/jobs').path).toBe('/articles/jobs');
+    expect(resolveRouteByPathname('/articles/results').path).toBe('/articles/results');
+    expect(resolveRouteByPathname('/articles/maintenance').path).toBe('/articles/maintenance');
     expect(resolveRouteByPathname('/market').path).toBe('/market');
     expect(resolveRouteByPathname('/market').description).toBe('市场快照浏览器');
     expect(resolveRouteByPathname('/market/datasets').path).toBe('/market/datasets');

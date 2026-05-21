@@ -10,6 +10,7 @@ from src.services.job_registry import get_job_definition
 from src.services.job_service import JobService
 from src.services.workflow_runner import WorkflowRunner
 from src.services.workflow_service import WorkflowDefinition, WorkflowStep
+from src.services.runtime_config import resolve_runtime_config
 
 
 ARTICLE_PIPELINE_ID = "article_pipeline"
@@ -35,12 +36,26 @@ def _workflow_step(step: Any) -> WorkflowStep:
     if job_definition is None:
         raise ValueError(f"unknown job type for article pipeline step: {step.job_type}")
 
+    step_parameters = {
+        "crawl": ["config_path", "max_articles"],
+        "pipeline-run": [
+            "config_path",
+            "max_articles",
+            "force",
+            "skip_crawl",
+            "from_step",
+            "use_db",
+            "new_version",
+            "retry_failed",
+        ],
+    }.get(step.job_type, list(job_definition.param_schema.fields.keys()))
+
     return WorkflowStep(
         step_id=step.step_id,
         title=step.title,
         description=step.description,
         required_job_type=step.job_type,
-        parameters=[],
+        parameters=step_parameters,
         param_schema=job_definition.param_schema.model_dump(mode="json"),
         risk=job_definition.risk.value,
         requires_confirmation=job_definition.requires_confirmation,
@@ -120,9 +135,43 @@ class PipelineApplicationService(BaseService):
         if pipeline_id != ARTICLE_PIPELINE_ID:
             return ServiceResult(status="partial", message="pipeline not found", payload={"pipeline_id": pipeline_id})
 
-        loaded = load_app_config((params or {}).get("config_path", "config/app.yaml"))
+        runtime_config = resolve_runtime_config(params)
         normalized_params = dict(params or {})
+        loaded = load_app_config((params or {}).get("config_path", "config/app.yaml"))
         normalized_params["config_path"] = str(loaded.config_path)
+        normalized_params.pop("profile_id", None)
+
+        if normalized_params.get("cleanup"):
+            normalized_params["from_step"] = "cleanup"
+        if normalized_params.get("rebuild_pending"):
+            normalized_params["from_step"] = "process"
+            normalized_params["force"] = True
+            normalized_params["skip_crawl"] = True
+            normalized_params["use_db"] = True
+            normalized_params.pop("rebuild_pending", None)
+        if normalized_params.get("retry_failed"):
+            normalized_params["from_step"] = "process"
+            normalized_params["force"] = True
+            normalized_params["skip_crawl"] = True
+            normalized_params["use_db"] = True
+
+        normalized_params = {
+            key: value
+            for key, value in normalized_params.items()
+            if key in {
+                "config_path",
+                "max_articles",
+                "force",
+                "skip_crawl",
+                "from_step",
+                "use_db",
+                "new_version",
+                "retry_failed",
+            }
+            and value is not None
+            and key != "cleanup"
+            and key != "rebuild_pending"
+        }
 
         workflow = _build_article_workflow()
         if workflow.requires_confirmation() and not confirmed:
@@ -148,6 +197,8 @@ class PipelineApplicationService(BaseService):
         payload["pipeline"] = self._pipeline_summary()
         payload["params"] = _to_plain(normalized_params)
         payload["config_path"] = str(loaded.config_path)
+        if runtime_config.profile_id is not None:
+            payload["profile_id"] = runtime_config.profile_id
         return ServiceResult(status=result.status, message=result.message, payload=payload)
 
 

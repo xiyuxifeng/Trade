@@ -24,7 +24,7 @@ const formalNavigationGroups: NavGroup[] = [
   {
     title: '业务工作台',
     items: [
-      { label: '文章', path: '/articles', description: '文章处理链路的验收入口' },
+      { label: '文章', path: '/articles', description: '文章工作台入口' },
       { label: '市场数据', path: '/market', description: '市场快照浏览器' },
       { label: '策略', path: '/strategies', description: '策略版本与正式工作台入口' },
       { label: '回测', path: '/backtest', description: '回测正式工作台' },

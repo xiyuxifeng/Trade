@@ -28,18 +28,19 @@ def test_runtime_registry_bridge_normalizes_workflow_definition() -> None:
     from src.services.runtime_registry_bridge import get_workflow_contract, list_workflow_contracts
 
     contracts = list_workflow_contracts()
-    contract = get_workflow_contract("pipeline")
+    contract = get_workflow_contract("pre-market")
 
     assert contracts
     assert contract is not None
-    assert contract["workflow_id"] == "pipeline"
-    assert contract["title"] == "数据 Pipeline"
-    assert contract["job_type"] == "pipeline-run"
+    assert contract["workflow_id"] == "pre-market"
+    assert contract["title"] == "盘前工作台"
+    assert contract["job_type"] == "run-pre-market"
     assert contract["permissions"] == "operator"
-    assert contract["steps"][0]["step_id"] == "crawl"
-    assert contract["steps"][2]["required_job_type"] == "pipeline-run"
+    assert contract["steps"][0]["step_id"] == "run-pre-market"
     assert "job_definition" not in contract
     assert "service_name" not in contract
+
+    assert get_workflow_contract("pipeline") is None
 
 
 def test_runtime_registry_bridge_normalizes_pipeline_definition() -> None:

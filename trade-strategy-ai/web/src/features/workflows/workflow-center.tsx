@@ -170,21 +170,17 @@ export function WorkflowCenter() {
     staleTime: 15_000,
   });
 
-  const workflows = workflowsQuery.data?.items ?? [];
+  const workflows = (workflowsQuery.data?.items ?? []).filter((workflow) => workflow.workflow_id !== 'pipeline');
 
   const selectedWorkflow = useMemo(() => {
     if (!workflows.length) return null;
-    const matched = params.workflowId ? workflows.find((workflow) => workflow.workflow_id === params.workflowId) : null;
-    return matched ?? workflows[0] ?? null;
+    if (params.workflowId) {
+      return workflows.find((workflow) => workflow.workflow_id === params.workflowId) ?? null;
+    }
+    return workflows[0] ?? null;
   }, [params.workflowId, workflows]);
 
-  useEffect(() => {
-    if (!workflows.length || !selectedWorkflow) return;
-    const canonicalPath = `/workflows/${selectedWorkflow.workflow_id}/run`;
-    if (params.workflowId && params.workflowId !== selectedWorkflow.workflow_id) {
-      navigate(canonicalPath, { replace: true });
-    }
-  }, [navigate, params.workflowId, selectedWorkflow, workflows.length]);
+  const workflowNotFound = Boolean(params.workflowId) && !workflowsQuery.isLoading && !workflowsQuery.error && !selectedWorkflow;
 
   useEffect(() => {
     if (!selectedWorkflow) return;
@@ -267,7 +263,14 @@ export function WorkflowCenter() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              {!selectedWorkflow ? (
+              {workflowNotFound ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    该工作流已移除或不可用，请返回工作流目录选择其他流程。
+                  </div>
+                  <Button onClick={() => navigate('/workflows')}>返回工作流目录</Button>
+                </div>
+              ) : !selectedWorkflow ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
                   正在加载工作流定义。
                 </div>

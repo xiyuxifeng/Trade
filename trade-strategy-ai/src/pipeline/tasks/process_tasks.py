@@ -348,6 +348,7 @@ async def run_process_tasks(
     failed_path: Path | None = None,
     dead_path: Path | None = None,
     force: bool = False,
+    retry_failed: bool = False,
     version: str = "v1",
 ) -> ProcessTasksStats:
     start = time.monotonic()
@@ -363,12 +364,6 @@ async def run_process_tasks(
         print(f"[process] force 模式：已从数据库重建 pending_tasks.jsonl（{p_path}）")
 
     all_tasks = _load_tasks(p_path)
-    if not all_tasks:
-        stats.duration_ms = int((time.monotonic() - start) * 1000)
-        return stats
-
-    unique_tasks = _dedup_by_article_id(all_tasks)
-    stats.skipped_dedup = len(all_tasks) - len(unique_tasks)
 
     # Load failed tasks with metadata
     failed_tasks = _load_failed_with_metadata(f_path)
@@ -376,6 +371,21 @@ async def run_process_tasks(
     # TTL cleanup: separate alive from dead
     alive_failed, dead_failed = _cleanup_failed_tasks(failed_tasks)
     stats.dead = len(dead_failed)
+
+    if retry_failed and alive_failed:
+        stats.retried = len(alive_failed)
+        all_tasks.extend(alive_failed)
+        alive_failed = []
+
+    if not all_tasks:
+        if dead_failed:
+            _save_failed_with_metadata(d_path, dead_failed)
+        _save_failed_with_metadata(f_path, alive_failed)
+        stats.duration_ms = int((time.monotonic() - start) * 1000)
+        return stats
+
+    unique_tasks = _dedup_by_article_id(all_tasks)
+    stats.skipped_dedup = len(all_tasks) - len(unique_tasks)
 
     # Save cleaned failed tasks
     _save_failed_with_metadata(f_path, alive_failed)

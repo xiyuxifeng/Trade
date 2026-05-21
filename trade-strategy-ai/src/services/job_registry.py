@@ -395,6 +395,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
                 "from_step": _string("起始步骤"),
                 "use_db": _boolean("是否使用数据库链路", default=False),
                 "new_version": _string("新版本标识"),
+                "retry_failed": _boolean("是否重试失败任务", default=False),
             },
         ),
     ),

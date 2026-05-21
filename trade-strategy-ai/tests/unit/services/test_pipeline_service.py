@@ -73,6 +73,7 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
             skip_crawl=False,
             from_step="clean",
             use_db=True,
+            retry_failed=True,
             new_version="v2",
         )
     )
@@ -94,6 +95,7 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     assert run_result.payload["result"]["name"] == "pipeline"
     assert run_result.payload["result"]["nested"]["value"] == "ok"
     assert pipeline_call["from_step"] == "clean"
+    assert pipeline_call["retry_failed"] is True
     assert step_result.payload["result"]["nested"]["value"] == "ok"
     assert step_call["from_step"] == "store"
 

@@ -47,7 +47,6 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     assert listed.status == "ok"
     workflow_ids = {item["workflow_id"] for item in listed.payload["items"]}
     assert {
-        "pipeline",
         "pre-market",
         "after-close",
         "snapshot",
@@ -60,6 +59,7 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
         "scheduler",
         "report",
     } <= workflow_ids
+    assert "pipeline" not in workflow_ids
 
     pre_market = next(item for item in listed.payload["items"] if item["workflow_id"] == "pre-market")
     step = pre_market["steps"][0]

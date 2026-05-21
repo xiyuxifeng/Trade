@@ -52,6 +52,26 @@ export type PipelineRunRequest = {
   confirmed?: boolean;
 };
 
+export type ArticlePipelineRunParams = {
+  profile_id: string;
+  max_articles?: number;
+  force?: boolean;
+  skip_crawl?: boolean;
+  from_step?: string;
+  use_db?: boolean;
+  new_version?: string;
+  cleanup?: boolean;
+  rebuild_pending?: boolean;
+  retry_failed?: boolean;
+};
+
+export type ArticlePipelineRunRequest = {
+  params: ArticlePipelineRunParams;
+  created_by?: string;
+  idempotency_key?: string | null;
+  confirmed?: boolean;
+};
+
 export type PipelineRunResponse = {
   workflow: {
     workflow_id: string;

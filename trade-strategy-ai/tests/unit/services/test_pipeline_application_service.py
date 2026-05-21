@@ -71,7 +71,7 @@ def test_pipeline_application_service_runs_article_pipeline_through_workflow_run
     result = __import__("asyncio").run(
         service.run_pipeline(
             pipeline_id="article_pipeline",
-            params={"config_path": "config/app.yaml"},
+            params={"profile_id": "default"},
             created_by="web",
             confirmed=True,
         )
@@ -81,8 +81,10 @@ def test_pipeline_application_service_runs_article_pipeline_through_workflow_run
     assert result.payload["pipeline"]["pipeline_id"] == "article_pipeline"
     assert result.payload["job"]["job_type"] == "pipeline-run"
     assert fake_runner.calls[0]["workflow"].workflow_id == "article_pipeline"
+    assert "profile_id" not in fake_runner.calls[0]["params"]
     assert fake_runner.calls[0]["params"]["config_path"].endswith("config/app.yaml")
     assert fake_runner.calls[0]["confirmed"] is True
+    assert result.payload["profile_id"] == "default"
 
 
 def test_pipeline_application_service_rejects_unknown_pipeline() -> None:

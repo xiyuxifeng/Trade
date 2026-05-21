@@ -33,3 +33,9 @@ class ArticleFilter(BaseModel):
     trader_id: str | None = None
     published_after: datetime | None = None
     published_before: datetime | None = None
+
+
+class ArticleFilterOptionsResponse(BaseModel):
+    author_ids: list[str]
+    sources: list[str]
+    trader_ids: list[str]

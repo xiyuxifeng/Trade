@@ -23,7 +23,7 @@ export function DashboardRecentJobsPanel() {
   const visibleJobs = failedJobs.length ? failedJobs : jobs;
 
   return (
-    <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
+    <Card className="flex h-[min(72vh,44rem)] flex-col overflow-hidden border-slate-200 bg-white shadow-sm shadow-slate-200/40">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -39,7 +39,7 @@ export function DashboardRecentJobsPanel() {
           </button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex-1 space-y-3 overflow-y-auto pr-1">
         {isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-20 w-full rounded-2xl" />

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from src.services.config_service import ConfigService
@@ -620,7 +620,15 @@ class JobService(BaseService):
             stmt = (
                 update(Job)
                 .where(Job.id == job_uuid)
-                .where(Job.status.in_([JobStatus.pending.value, JobStatus.failed.value]))
+                .where(
+                    or_(
+                        Job.status == JobStatus.pending.value,
+                        and_(
+                            Job.status == JobStatus.failed.value,
+                            Job.retry_count < Job.max_retries,
+                        ),
+                    )
+                )
                 .where(or_(Job.scheduled_at.is_(None), Job.scheduled_at <= now))
                 .where(Job.cancel_requested.is_(False))
                 .values(
@@ -1109,7 +1117,13 @@ class JobService(BaseService):
         session_scope = self._ensure_session_factory()
         now = datetime.now(UTC)
         conditions = [
-            Job.status.in_([JobStatus.pending.value, JobStatus.failed.value]),
+            or_(
+                Job.status == JobStatus.pending.value,
+                and_(
+                    Job.status == JobStatus.failed.value,
+                    Job.retry_count < Job.max_retries,
+                ),
+            ),
             or_(Job.scheduled_at.is_(None), Job.scheduled_at <= now),
             Job.cancel_requested.is_(False),
         ]

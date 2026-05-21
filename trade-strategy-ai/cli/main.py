@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import UTC, date, datetime, timedelta
 import os
 from pathlib import Path
@@ -54,6 +55,7 @@ from scripts.seed_data import seed_project_data
 
 app = typer.Typer(add_completion=False, help="Dev/debug CLI only. Formal user flows are served by Web.")
 dev_app = typer.Typer(add_completion=False, help="Dev-only debug commands for workflow and migration recovery.")
+logger = logging.getLogger(__name__)
 
 
 _DEFAULT_CONFIG_YAML = """## trade-strategy-ai 配置文件（YAML）
@@ -1150,10 +1152,10 @@ def job_worker_start(
 			if result.status == "error":
 				typer.echo(result.message or "job worker run failed")
 			elif int(result.payload.get("count", 0)) > 0:
-				typer.echo(
-					"Processed jobs: "
-					f"{result.payload.get('count', 0)} "
-					f"{[item['job_id'] for item in result.payload.get('items', [])]}"
+				logger.debug(
+					"Processed jobs: %s %s",
+					result.payload.get("count", 0),
+					[item["job_id"] for item in result.payload.get("items", [])],
 				)
 			await asyncio.sleep(worker_sleep)
 

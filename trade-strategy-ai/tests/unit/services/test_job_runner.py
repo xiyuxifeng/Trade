@@ -317,6 +317,176 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_submit_backup_data_executes_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """backup-data 应走默认 handler 并产出备份结果。"""
+
+    from src.services import job_runner as job_runner_module
+
+    class _FakeOpsRecoveryService:
+        async def create_backup(
+            self,
+            *,
+            profile_id: str,
+            include_processed: bool = True,
+            backup_dir: str | Path | None = None,
+            backup_dir_id: str | None = None,
+        ) -> Any:
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="project backup created",
+                payload={
+                    "backup_dir": str(backup_dir or tmp_path / "data" / "backups" / "20260521-120000"),
+                    "tables": ["jobs", "artifacts"],
+                    "row_counts": {"jobs": 1, "artifacts": 2},
+                    "processed_copied": include_processed,
+                    "artifacts_copied": True,
+                    "profile_id": profile_id,
+                    "include_processed": include_processed,
+                    "backup_item": {
+                        "backup_id": "20260521-120000",
+                        "path": str(backup_dir or tmp_path / "data" / "backups" / "20260521-120000"),
+                        "name": "20260521-120000",
+                    },
+                },
+            )
+
+    monkeypatch.setattr(job_runner_module, "OpsRecoveryService", _FakeOpsRecoveryService)
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+
+    class _FakeConfigProfileService:
+        async def capture_profile_snapshot(
+            self,
+            profile_id: str,
+            *,
+            job_id: str | None = None,
+            source: str = "job",
+            config_path: str | None = None,
+        ) -> Any:
+            del job_id, source, config_path
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="profile snapshot captured",
+                payload={
+                    "profile_id": profile_id,
+                    "profile_snapshot_id": "profile-snapshot-001",
+                    "snapshot_path": str(tmp_path / "profile-snapshot.json"),
+                },
+            )
+
+    job_service._config_profile_service = _FakeConfigProfileService()  # noqa: SLF001
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="backup-data",
+            params={
+                "profile_id": "profile-001",
+                "base_dir": "trade-strategy-ai",
+                "backup_dir_id": "default",
+                "include_processed": True,
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    executed = asyncio.run(runner.execute_job(job_id=job_id))
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert executed.status == "ok"
+    assert executed.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["result"]["payload"]["profile_id"] == "profile-001"
+    assert loaded.payload["job"]["result"]["payload"]["include_processed"] is True
+    assert loaded.payload["job"]["result"]["payload"]["backup_item"]["backup_id"] == "20260521-120000"
+    asyncio.run(engine.dispose())
+
+
+def test_submit_restore_data_executes_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """restore-data 应走默认 handler 并产出恢复结果。"""
+
+    from src.services import job_runner as job_runner_module
+
+    class _FakeOpsRecoveryService:
+        async def restore_backup(
+            self,
+            *,
+            profile_id: str,
+            backup_id: str | None = None,
+            backup_path: str | Path | None = None,
+            include_processed: bool = True,
+            confirmed: bool = False,
+        ) -> Any:
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="project backup restored",
+                payload={
+                    "backup_dir": str(backup_path or tmp_path / "data" / "backups" / (backup_id or "20260521-130000")),
+                    "tables": ["jobs", "artifacts"],
+                    "row_counts": {"jobs": 1, "artifacts": 2},
+                    "processed_restored": include_processed,
+                    "artifacts_restored": True,
+                    "profile_id": profile_id,
+                    "include_processed": include_processed,
+                    "confirmed": confirmed,
+                    "backup_item": {
+                        "backup_id": backup_id or "20260521-130000",
+                        "path": str(backup_path or tmp_path / "data" / "backups" / (backup_id or "20260521-130000")),
+                        "name": backup_id or "20260521-130000",
+                    },
+                },
+            )
+
+    monkeypatch.setattr(job_runner_module, "OpsRecoveryService", _FakeOpsRecoveryService)
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+
+    class _FakeConfigProfileService:
+        async def capture_profile_snapshot(
+            self,
+            profile_id: str,
+            *,
+            job_id: str | None = None,
+            source: str = "job",
+            config_path: str | None = None,
+        ) -> Any:
+            del job_id, source, config_path
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="profile snapshot captured",
+                payload={
+                    "profile_id": profile_id,
+                    "profile_snapshot_id": "profile-snapshot-002",
+                    "snapshot_path": str(tmp_path / "profile-snapshot.json"),
+                },
+            )
+
+    job_service._config_profile_service = _FakeConfigProfileService()  # noqa: SLF001
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="restore-data",
+            params={
+                "profile_id": "profile-001",
+                "base_dir": "trade-strategy-ai",
+                "backup_id": "20260521-130000",
+                "backup_dir": str(tmp_path / "data" / "backups" / "20260521-130000"),
+                "include_processed": True,
+                "force": True,
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+    job_id = created.payload["job"]["id"]
+    executed = asyncio.run(runner.execute_job(job_id=job_id))
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert executed.status == "ok"
+    assert executed.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["result"]["payload"]["profile_id"] == "profile-001"
+    assert loaded.payload["job"]["result"]["payload"]["include_processed"] is True
+    assert loaded.payload["job"]["result"]["payload"]["backup_item"]["backup_id"] == "20260521-130000"
+    asyncio.run(engine.dispose())
+
+
 def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """strategy-build 应走默认 handler 并可通过 Web 提交执行。"""
 

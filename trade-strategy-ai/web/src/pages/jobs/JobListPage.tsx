@@ -72,7 +72,7 @@ export function JobListPage() {
         description="查看最近的任务记录，按状态、任务类型和创建者筛选，并跳转到任务详情。"
       /> */}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+      <section className="space-y-6">
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -176,29 +176,6 @@ export function JobListPage() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>操作说明</CardTitle>
-            <CardDescription>任务列表只负责查看和跳转，不承担执行逻辑。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-700">
-            <ul className="list-disc space-y-2 pl-5 text-slate-600">
-              <li>通过状态、任务类型和创建者过滤任务。</li>
-              <li>点击“查看详情”进入任务详情查看日志、步骤、产物和配置快照。</li>
-              <li>列表页不直接展示文件路径，也不修改任务状态。</li>
-            </ul>
-            {jobsQuery.error ? (
-              <ErrorState
-                {...buildErrorRecoveryState(jobsQuery.error, 'jobs')}
-                className="mt-4"
-                onRetry={() => {
-                  void jobsQuery.refetch();
-                }}
-              />
-            ) : null}
           </CardContent>
         </Card>
       </section>

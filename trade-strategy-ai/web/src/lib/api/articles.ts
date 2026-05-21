@@ -1,5 +1,5 @@
-import { fetchJson } from './http';
-import type { ArticleListResponse } from '@/types/articles';
+import { fetchRootJson } from './http';
+import type { ArticleFilterOptionsResponse, ArticleListResponse } from '@/types/articles';
 
 type ArticleListQuery = {
   page?: number;
@@ -11,6 +11,8 @@ type ArticleListQuery = {
   published_before?: string;
 };
 
+type ArticleFilterOptionsQuery = Omit<ArticleListQuery, 'page' | 'page_size'>;
+
 export function listArticles(query: ArticleListQuery = {}) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
@@ -20,6 +22,17 @@ export function listArticles(query: ArticleListQuery = {}) {
     params.set(key, String(value));
   });
   const suffix = params.toString() ? `?${params.toString()}` : '';
-  return fetchJson<ArticleListResponse>(`/articles${suffix}`);
+  return fetchRootJson<ArticleListResponse>(`/articles${suffix}`);
 }
 
+export function listArticleFilterOptions(query: ArticleFilterOptionsQuery = {}) {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+    params.set(key, String(value));
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchRootJson<ArticleFilterOptionsResponse>(`/articles/filter-options${suffix}`);
+}

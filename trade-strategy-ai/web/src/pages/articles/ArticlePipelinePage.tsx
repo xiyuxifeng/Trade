@@ -11,46 +11,66 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
-import { listArticles } from '@/lib/api/articles';
+import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import { runArticlePipeline } from '@/lib/api/pipelines';
-import type { ArticleListResponse, ArticleRecord } from '@/types/articles';
+import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleRecord } from '@/types/articles';
 import type { JobRecord, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
+import type { ArticlePipelineRunParams } from '@/types/pipeline';
 
 type ArticleJobsResponse = JobsListResponse;
 type MaintenanceMode = 'normal' | 'rebuild_pending' | 'retry_failed' | 'cleanup';
+type StepParamKey = 'force' | 'skip_crawl' | 'use_db' | 'max_articles' | 'new_version';
+type WorkflowRunResult = {
+  workflow_id?: unknown;
+  workflow_params?: Record<string, unknown> | null;
+  run_context?: {
+    status?: unknown;
+    duration_ms?: unknown;
+  } | Record<string, unknown> | null;
+  step_results?: unknown[];
+};
+type JobResultPayload = {
+  workflow_run?: WorkflowRunResult | null;
+};
 
 const workspaceSections = [
   {
     title: '抓取与处理',
-    description: '抓取新文章、抓取并处理、处理已有文章。',
+    description: '文章处理全链路。',
+    purpose: '从 Profile 触发文章抓取、清洗、校验、入库和结果回看的一条完整流程。',
     path: '/articles/run',
   },
   {
     title: '文章列表',
-    description: '查看文章结果、处理状态和基础筛选入口。',
+    description: '文章浏览与筛选。',
+    purpose: '按作者、来源、交易者和日期浏览已抓取文章。',
     path: '/articles/list',
   },
   {
     title: '数据质量',
-    description: '查看清洗、校验与抽取质量的总体入口。',
+    description: '文章数据质量概览。',
+    purpose: '查看摘要、标签、去重和抓取新鲜度等质量信号。',
     path: '/articles/quality',
   },
   {
     title: '最近任务',
-    description: '查看最近的文章相关 Job 与执行状态。',
+    description: '文章任务与进度。',
+    purpose: '查看最近 Job 的状态和执行进度，并跳转到 Job Detail。',
     path: '/articles/jobs',
   },
   {
     title: '处理结果',
-    description: '查看结构化抽取结果与可消费的文章信息。',
+    description: '文章结构化产物。',
+    purpose: '查看最近一次处理的结构化输出和样本结果。',
     path: '/articles/results',
   },
   {
     title: '高级维护',
-    description: '失败恢复、重跑和维护操作入口，支持危险操作收口。',
+    description: '文章维护操作。',
+    purpose: '执行重跑、失败重试和清理操作。',
     path: '/articles/maintenance',
   },
 ] as const;
@@ -61,32 +81,32 @@ const articleSubpages = {
   '/articles/run': {
     title: '抓取与处理',
     description: '抓取新文章、抓取并处理、处理已有文章的入口。',
-    summary: '从 Profile 开始运行文章处理主链路，并跳转到 Job Detail 查看结果。',
+    summary: '从 Profile 触发文章处理全链路，完成抓取、清洗、校验、入库和结果回看。',
   },
   '/articles/list': {
     title: '文章列表',
-    description: '查看已抓取文章、状态和基础筛选条件。',
-    summary: '直接读取文章数据接口，展示可浏览、可筛选的文章结果。',
+    description: '查看已抓取文章结果和基础筛选条件。',
+    summary: '按条件查看已抓取文章结果。',
   },
   '/articles/quality': {
     title: '数据质量',
-    description: '查看清洗、校验和抽取质量的结果概览。',
-    summary: '基于文章列表和最近一次文章 Job 汇总质量信号和验证结果。',
+    description: '查看文章质量信号和结果概览。',
+    summary: '结合文章列表和最近 Job 汇总质量信号。',
   },
   '/articles/jobs': {
     title: '最近任务',
-    description: '查看最近的文章相关 Job 和执行状态。',
-    summary: '仅显示文章工作台相关的 Job，并保留跳转到 Job Detail 的入口。',
+    description: '查看文章相关 Job 和执行进度。',
+    summary: '聚合最近文章 Job 的状态和执行进度。',
   },
   '/articles/results': {
     title: '处理结果',
     description: '查看文章处理后的结构化结果。',
-    summary: '以最近一次文章 Job 的 workflow run 和产物作为结果入口。',
+    summary: '展示最近 Job 的结构化输出与样本文章。',
   },
   '/articles/maintenance': {
     title: '高级维护',
-    description: '失败恢复、重跑和数据修复的维护入口。',
-    summary: '支持普通重跑、process 阶段重建、失败重试和危险清理操作。',
+    description: '失败恢复、重跑和清理的维护入口。',
+    summary: '提供失败恢复、重跑和清理操作。',
   },
 } as const;
 
@@ -129,19 +149,26 @@ function toIsoTimestamp(dateInput: string, endOfDay = false) {
   return `${dateInput}T${endOfDay ? '23:59:59' : '00:00:00'}Z`;
 }
 
+function mergeFilterOptions(values: string[], selected: string) {
+  const merged = new Set(values.map((value) => value.trim()).filter(Boolean));
+  const normalizedSelected = selected.trim();
+  if (normalizedSelected) {
+    merged.add(normalizedSelected);
+  }
+  return Array.from(merged).sort((left, right) => left.localeCompare(right, 'zh-CN'));
+}
+
 function isArticlePipelineJob(job: JobRecord) {
   const params = job.params as Record<string, unknown> | null;
-  const result = job.result as Record<string, unknown> | null;
-  const workflowRun = result && typeof result === 'object' ? (result.workflow_run as Record<string, unknown> | undefined) : undefined;
-  const workflowId = workflowRun && typeof workflowRun === 'object' ? String(workflowRun.workflow_id ?? '') : '';
+  const result = job.result as JobResultPayload | null;
+  const workflowRun = result?.workflow_run ?? undefined;
+  const workflowId = workflowRun ? String(workflowRun.workflow_id ?? '') : '';
   return job.job_type === articlePipelineJobType && (Boolean(params?.profile_id) || workflowId === 'article_pipeline');
 }
 
 function getWorkflowRun(job: JobRecord) {
-  const result = job.result as Record<string, unknown> | null;
-  if (!result || typeof result !== 'object') return null;
-  const workflowRun = result.workflow_run;
-  return workflowRun && typeof workflowRun === 'object' ? (workflowRun as Record<string, unknown>) : null;
+  const result = job.result as JobResultPayload | null;
+  return result?.workflow_run ?? null;
 }
 
 function getWorkflowRunSteps(job: JobRecord) {
@@ -182,6 +209,15 @@ function getJobWorkflowStatus(job: JobRecord) {
   const workflowRun = getWorkflowRun(job);
   const runContext = workflowRun?.run_context as Record<string, unknown> | undefined;
   return typeof runContext?.status === 'string' ? String(runContext.status) : job.status;
+}
+
+function getJobDurationMs(job: JobRecord) {
+  const workflowRun = getWorkflowRun(job);
+  if (!workflowRun) return null;
+  const runContext = workflowRun.run_context;
+  if (!runContext || typeof runContext !== 'object') return null;
+  const durationMs = (runContext as Record<string, unknown>).duration_ms;
+  return typeof durationMs === 'number' ? durationMs : null;
 }
 
 function getJobResultPayload(job: JobRecord) {
@@ -294,26 +330,27 @@ function CheckboxField({
 function WorkspaceCard({
   title,
   description,
+  purpose,
   path,
-  badgeLabel = '可用',
 }: {
   title: string;
   description: string;
+  purpose: string;
   path: string;
-  badgeLabel?: string;
 }) {
   return (
     <Card className="flex h-full flex-col">
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle>{title}</CardTitle>
-            <CardDescription className="mt-2">{description}</CardDescription>
-          </div>
-          <Badge variant="info">{badgeLabel}</Badge>
+        <div className="min-w-0">
+          <CardTitle>{title}</CardTitle>
+          <CardDescription className="mt-2">{description}</CardDescription>
         </div>
       </CardHeader>
-      <CardContent className="mt-auto">
+      <CardContent className="mt-auto space-y-3">
+        <p className="text-sm leading-6 text-slate-600">
+          <span className="font-medium text-slate-900">用途：</span>
+          {purpose}
+        </p>
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-transparent px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50"
           to={path}
@@ -365,10 +402,12 @@ function ArticleLoadingState({ label, description }: { label: string; descriptio
 function ArticleErrorState({
   error,
   onRetry,
+  retryLabel,
   title,
 }: {
   error: unknown;
   onRetry?: () => void;
+  retryLabel?: string;
   title: string;
 }) {
   return (
@@ -377,7 +416,7 @@ function ArticleErrorState({
       title={title}
       description={getErrorMessage(error)}
       suggestion="刷新页面或切换筛选条件后重试。"
-      retryLabel="重试"
+      retryLabel={retryLabel ?? '重试'}
       onRetry={onRetry}
     />
   );
@@ -388,36 +427,23 @@ export function ArticleWorkspacePage() {
     <main className="page-stack">
       <PageHeader kicker="文章" title="文章工作台" description="请选择一个入口开始处理文章数据。" />
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+      <section className="grid gap-6">
         <Card className="border-sky-200 bg-sky-50/70">
           <CardHeader>
             <CardTitle>工作台摘要</CardTitle>
-            <CardDescription>入口迁移已完成，下面的子页面会继续接入真实数据和维护动作。</CardDescription>
+            <CardDescription>工作台只保留三项摘要信息，分别对应入口、页面和输入模型。</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="grid gap-3 md:grid-cols-3">
             <MetricCard label="当前入口" value="文章" />
             <MetricCard label="当前页面" value="工作台首页" />
             <MetricCard label="输入模型" value="Profile" />
-            <MetricCard label="导出入口" value="已隐藏" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>迁移说明</CardTitle>
-            <CardDescription>这里不再直接暴露单一 Pipeline 表单，而是作为文章工作台入口。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
-            <p>1. sidebar 保留“文章”，但工作台内承接抓取、列表、质量、任务、结果和维护。</p>
-            <p>2. 运行入口只保留 Profile，维护入口继续收口到文章模块内。</p>
-            <p>3. DuckDB 导出代码保留，但页面不暴露入口。</p>
           </CardContent>
         </Card>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {workspaceSections.map((section) => (
-          <WorkspaceCard key={section.title} title={section.title} description={section.description} path={section.path} />
+          <WorkspaceCard key={section.title} title={section.title} description={section.description} purpose={section.purpose} path={section.path} />
         ))}
       </section>
     </main>
@@ -487,7 +513,7 @@ export function ArticleRunPage() {
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+      <section className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Profile-only 运行入口</CardTitle>
@@ -567,16 +593,6 @@ export function ArticleRunPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-sky-200 bg-sky-50/70">
-          <CardHeader>
-            <CardTitle>当前状态</CardTitle>
-            <CardDescription>这一步只负责把文章运行入口迁移到 Profile-only，不改变任务链路结构。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <MetricCard label="输入模型" value="Profile" />
-            <MetricCard label="旧参数" value="config_path 已移除" />
-          </CardContent>
-        </Card>
       </section>
     </main>
   );
@@ -611,9 +627,26 @@ export function ArticleListPage() {
     staleTime: 20_000,
   });
 
+  const filterOptionsQuery = useQuery<ArticleFilterOptionsResponse, ApiError>({
+    queryKey: ['articles', 'filter-options', authorId, source, traderId, publishedAfter, publishedBefore],
+    queryFn: () =>
+      listArticleFilterOptions({
+        author_id: authorId || undefined,
+        source: source || undefined,
+        trader_id: traderId || undefined,
+        published_after: toIsoTimestamp(publishedAfter),
+        published_before: toIsoTimestamp(publishedBefore, true),
+      }),
+    staleTime: 20_000,
+  });
+
   const articles = articlesQuery.data?.items ?? [];
   const total = articlesQuery.data?.total ?? 0;
   const pages = articlesQuery.data?.pages ?? 0;
+
+  const authorOptions = useMemo(() => mergeFilterOptions(filterOptionsQuery.data?.author_ids ?? [], authorId), [authorId, filterOptionsQuery.data?.author_ids]);
+  const sourceOptions = useMemo(() => mergeFilterOptions(filterOptionsQuery.data?.sources ?? [], source), [source, filterOptionsQuery.data?.sources]);
+  const traderOptions = useMemo(() => mergeFilterOptions(filterOptionsQuery.data?.trader_ids ?? [], traderId), [traderId, filterOptionsQuery.data?.trader_ids]);
 
   const tableRows = useMemo(() => {
     return articles.map((article) => ({
@@ -635,7 +668,12 @@ export function ArticleListPage() {
   if (articlesQuery.error) {
     return (
       <ArticlePageShell title={articleSubpages['/articles/list'].title} description={articleSubpages['/articles/list'].description} summary={articleSubpages['/articles/list'].summary}>
-        <ArticleErrorState error={articlesQuery.error} title="文章列表加载失败" onRetry={() => void articlesQuery.refetch()} />
+        <ArticleErrorState
+          error={articlesQuery.error}
+          title="文章列表加载失败"
+          retryLabel="返回文章列表"
+          onRetry={() => navigate('/articles/list')}
+        />
       </ArticlePageShell>
     );
   }
@@ -649,19 +687,43 @@ export function ArticleListPage() {
               <label className="text-sm font-medium text-slate-900" htmlFor="article-author-id">
                 Author ID
               </label>
-              <Input id="article-author-id" value={authorId} onChange={(event) => setAuthorId(event.target.value)} placeholder="例如 10461311" />
+              <Select id="article-author-id" value={authorId} onChange={(event) => setAuthorId(event.target.value)}>
+                <option value="">全部作者</option>
+                {filterOptionsQuery.isLoading && authorOptions.length === 0 ? <option value="" disabled>正在加载作者选项...</option> : null}
+                {authorOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="article-source">
                 Source
               </label>
-              <Input id="article-source" value={source} onChange={(event) => setSource(event.target.value)} placeholder="例如 tgb" />
+              <Select id="article-source" value={source} onChange={(event) => setSource(event.target.value)}>
+                <option value="">全部来源</option>
+                {filterOptionsQuery.isLoading && sourceOptions.length === 0 ? <option value="" disabled>正在加载来源选项...</option> : null}
+                {sourceOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="article-trader-id">
                 Trader ID
               </label>
-              <Input id="article-trader-id" value={traderId} onChange={(event) => setTraderId(event.target.value)} placeholder="例如 trader_a" />
+              <Select id="article-trader-id" value={traderId} onChange={(event) => setTraderId(event.target.value)}>
+                <option value="">全部交易者</option>
+                {filterOptionsQuery.isLoading && traderOptions.length === 0 ? <option value="" disabled>正在加载交易者选项...</option> : null}
+                {traderOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="article-published-after">
@@ -720,7 +782,6 @@ export function ArticleListPage() {
                     <th className="px-4 py-3">作者 / Source</th>
                     <th className="px-4 py-3">时间</th>
                     <th className="px-4 py-3">标签 / 互动</th>
-                    <th className="px-4 py-3">结果</th>
                     <th className="px-4 py-3">操作</th>
                   </tr>
                 </thead>
@@ -745,19 +806,15 @@ export function ArticleListPage() {
                           评论 {article.comment_count} · 点赞 {article.like_count} · 收藏 {article.bookmark_count}
                         </p>
                       </td>
-                      <td className="px-4 py-4 text-slate-700">
-                        <p>Hash：{article.content_hash ?? '未记录'}</p>
-                        <p className="mt-1 text-xs text-slate-500">字数：{article.content_text.length}</p>
-                      </td>
                       <td className="px-4 py-4">
                         <a
-                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                          className="inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                           href={article.source_url}
                           rel="noreferrer"
                           target="_blank"
                         >
                           <ExternalLink className="h-4 w-4" />
-                          打开原文
+                          查看
                         </a>
                       </td>
                     </tr>
@@ -875,7 +932,7 @@ export function ArticleJobsPage() {
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <MetricCard label="当前阶段" value={getJobStage(job)} />
                     <MetricCard label="创建时间" value={formatTimestamp(job.created_at)} />
-                    <MetricCard label="耗时" value={formatDuration(job.result ? (job.result as any)?.workflow_run?.run_context?.duration_ms : null)} />
+                    <MetricCard label="耗时" value={formatDuration(getJobDurationMs(job))} />
                     <MetricCard label="工作流状态" value={getJobWorkflowStatus(job)} />
                   </div>
 
@@ -1064,7 +1121,7 @@ export function ArticleResultsPage() {
           )}
         </SectionCard>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <div className="grid gap-6">
           <SectionCard title="最新 process 输出" description="这里直接展示最近一次 process step 的输出结果。">
             {latestJobPayload?.processStep ? <JsonViewer value={latestJobPayload.processStep.output_json ?? {}} title="Process Output" /> : <EmptyState title="暂无 process 输出" description="最近一次文章 Job 未暴露 process step 输出。" />}
           </SectionCard>
@@ -1102,6 +1159,8 @@ export function ArticleMaintenancePage() {
   const navigate = useNavigate();
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [fromStep, setFromStep] = useState<'crawl' | 'clean' | 'validate' | 'store' | 'process' | ''>('');
+  const [maxArticles, setMaxArticles] = useState('');
+  const [newVersion, setNewVersion] = useState('');
   const [force, setForce] = useState(false);
   const [skipCrawl, setSkipCrawl] = useState(false);
   const [useDb, setUseDb] = useState(false);
@@ -1135,6 +1194,18 @@ export function ArticleMaintenancePage() {
     return profiles.find((profile) => profile.profile_id === selectedProfileId) ?? null;
   }, [profiles, selectedProfileId]);
 
+  const visibleStepParams = useMemo<StepParamKey[]>(() => {
+    const supportMap: Record<'crawl' | 'clean' | 'validate' | 'store' | 'process' | '', StepParamKey[]> = {
+      '': ['force', 'skip_crawl', 'use_db', 'max_articles'],
+      crawl: ['force', 'skip_crawl', 'use_db', 'max_articles'],
+      clean: ['force', 'max_articles'],
+      validate: ['force', 'max_articles'],
+      store: ['force', 'skip_crawl', 'use_db'],
+      process: ['force', 'skip_crawl', 'use_db', 'new_version'],
+    } as const;
+    return supportMap[fromStep];
+  }, [fromStep]);
+
   const normalizedMaintenanceMode: MaintenanceMode = cleanup
     ? 'cleanup'
     : rebuildPending
@@ -1145,7 +1216,7 @@ export function ArticleMaintenancePage() {
 
   const runMutation = useMutation({
     mutationFn: async () => {
-      const params: Record<string, unknown> = {
+      const params: ArticlePipelineRunParams = {
         profile_id: selectedProfileId,
       };
 
@@ -1177,9 +1248,18 @@ export function ArticleMaintenancePage() {
       if (useDb && normalizedMaintenanceMode === 'normal') {
         params.use_db = true;
       }
+      if (normalizedMaintenanceMode === 'normal' && visibleStepParams.includes('max_articles') && maxArticles.trim()) {
+        const parsedMaxArticles = Number(maxArticles);
+        if (Number.isFinite(parsedMaxArticles) && parsedMaxArticles > 0) {
+          params.max_articles = Math.floor(parsedMaxArticles);
+        }
+      }
+      if (normalizedMaintenanceMode === 'normal' && visibleStepParams.includes('new_version') && newVersion.trim()) {
+        params.new_version = newVersion.trim();
+      }
 
       return runArticlePipeline({
-        params: params as any,
+        params,
         created_by: 'web',
         confirmed: false,
       });
@@ -1215,11 +1295,11 @@ export function ArticleMaintenancePage() {
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+      <section className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>维护入口</CardTitle>
-            <CardDescription>重跑选项使用 Checkbox，从指定步骤开始使用下拉选择，DuckDB export 不在页面中出现。</CardDescription>
+            <CardDescription>重跑选项使用 Checkbox，并根据所选步骤显示对应参数。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {isLoading ? (
@@ -1281,73 +1361,123 @@ export function ArticleMaintenancePage() {
                   </Select>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <CheckboxField
-                    label="force"
-                    checked={force}
-                    onChange={setForce}
-                    description="忽略已有中间结果，重新执行相关步骤。"
-                    disabled={cleanup || rebuildPending || retryFailed}
-                  />
-                  <CheckboxField
-                    label="skip_crawl"
-                    checked={skipCrawl}
-                    onChange={setSkipCrawl}
-                    description="跳过抓取，只处理已有文章。"
-                    disabled={cleanup || rebuildPending || retryFailed}
-                  />
-                  <CheckboxField
-                    label="use_db"
-                    checked={useDb}
-                    onChange={setUseDb}
-                    description="从 raw_articles / DB 模式读取原始文章。"
-                    disabled={cleanup}
-                  />
-                  <CheckboxField
-                    label="重建 pending tasks"
-                    checked={rebuildPending}
-                    onChange={(value) => {
-                      setRebuildPending(value);
-                      if (value) {
-                        setRetryFailed(false);
-                        setCleanup(false);
-                      }
-                    }}
-                    description="收口为 process 阶段的重建运行。"
-                    disabled={cleanup}
-                  />
-                  <CheckboxField
-                    label="重试 failed tasks"
-                    checked={retryFailed}
-                    onChange={(value) => {
-                      setRetryFailed(value);
-                      if (value) {
-                        setRebuildPending(false);
-                        setCleanup(false);
-                      }
-                    }}
-                    description="收口为 process 阶段的失败重试运行。"
-                    disabled={cleanup}
-                  />
-                  <CheckboxField
-                    label="cleanup"
-                    checked={cleanup}
-                    onChange={(value) => {
-                      setCleanup(value);
-                      if (value) {
-                        setRebuildPending(false);
-                        setRetryFailed(false);
-                      }
-                    }}
-                    description="清理 articles.jsonl、cleaned、validated、pending、failed 和 checkpoint 文件。"
-                  />
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-900">维护模式</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <CheckboxField
+                      label="重建 pending tasks"
+                      checked={rebuildPending}
+                      onChange={(value) => {
+                        setRebuildPending(value);
+                        if (value) {
+                          setRetryFailed(false);
+                          setCleanup(false);
+                        }
+                      }}
+                      description="收口为 process 阶段的重建运行。"
+                      disabled={cleanup}
+                    />
+                    <CheckboxField
+                      label="重试 failed tasks"
+                      checked={retryFailed}
+                      onChange={(value) => {
+                        setRetryFailed(value);
+                        if (value) {
+                          setRebuildPending(false);
+                          setCleanup(false);
+                        }
+                      }}
+                      description="收口为 process 阶段的失败重试运行。"
+                      disabled={cleanup}
+                    />
+                    <CheckboxField
+                      label="cleanup"
+                      checked={cleanup}
+                      onChange={(value) => {
+                        setCleanup(value);
+                        if (value) {
+                          setRebuildPending(false);
+                          setRetryFailed(false);
+                        }
+                      }}
+                      description="清理中间文件。"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                  <p className="font-medium text-slate-900">步骤参数</p>
+                  {fromStep ? (
+                    <p className="mt-2 leading-6">当前只显示 {fromStep} 支持的参数。</p>
+                  ) : (
+                    <p className="mt-2 leading-6">未选择步骤时，显示通用参数。</p>
+                  )}
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {visibleStepParams.includes('force') ? (
+                      <CheckboxField
+                        label="force"
+                        checked={force}
+                        onChange={setForce}
+                        description="忽略已有中间结果，重新执行相关步骤。"
+                        disabled={cleanup || rebuildPending || retryFailed}
+                      />
+                    ) : null}
+                    {visibleStepParams.includes('skip_crawl') ? (
+                      <CheckboxField
+                        label="skip_crawl"
+                        checked={skipCrawl}
+                        onChange={setSkipCrawl}
+                        description="跳过抓取，只处理已有文章。"
+                        disabled={cleanup || rebuildPending || retryFailed}
+                      />
+                    ) : null}
+                    {visibleStepParams.includes('use_db') ? (
+                      <CheckboxField
+                        label="use_db"
+                        checked={useDb}
+                        onChange={setUseDb}
+                        description="从 raw_articles / DB 模式读取原始文章。"
+                        disabled={cleanup}
+                      />
+                    ) : null}
+                    {visibleStepParams.includes('max_articles') ? (
+                      <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                        <label className="text-sm font-medium text-slate-900" htmlFor="article-maintenance-max-articles">
+                          max_articles
+                        </label>
+                        <Input
+                          id="article-maintenance-max-articles"
+                          type="number"
+                          min="1"
+                          value={maxArticles}
+                          onChange={(event) => setMaxArticles(event.target.value)}
+                          placeholder="例如 100"
+                          disabled={cleanup || rebuildPending || retryFailed}
+                        />
+                        <p className="text-xs leading-5 text-slate-500">仅在当前步骤支持时显示。</p>
+                      </div>
+                    ) : null}
+                    {visibleStepParams.includes('new_version') ? (
+                      <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                        <label className="text-sm font-medium text-slate-900" htmlFor="article-maintenance-new-version">
+                          new_version
+                        </label>
+                        <Input
+                          id="article-maintenance-new-version"
+                          value={newVersion}
+                          onChange={(event) => setNewVersion(event.target.value)}
+                          placeholder="例如 v2"
+                          disabled={cleanup || rebuildPending || retryFailed}
+                        />
+                        <p className="text-xs leading-5 text-slate-500">仅在 process 步骤显示。</p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <p className="font-medium text-amber-950">当前维护模式：{modeSummary}</p>
-                  <p className="mt-2 leading-6">
-                    cleanup 会直接收口到危险清理；rebuild pending / retry failed 会在 process 阶段执行，并在后端按现有语义重建或重试。
-                  </p>
+                  <p className="mt-2 leading-6">选择不同步骤后，下面只保留该步骤支持的参数。</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -1362,6 +1492,8 @@ export function ArticleMaintenancePage() {
                     variant="secondary"
                     onClick={() => {
                       setFromStep('');
+                      setMaxArticles('');
+                      setNewVersion('');
                       setForce(false);
                       setSkipCrawl(false);
                       setUseDb(false);
@@ -1380,18 +1512,6 @@ export function ArticleMaintenancePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-sky-200 bg-sky-50/70">
-          <CardHeader>
-            <CardTitle>维护边界</CardTitle>
-            <CardDescription>维护动作仅在文章模块内收口，不暴露 DuckDB export 入口。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <MetricCard label="可执行身份" value="operator / admin" />
-            <MetricCard label="重跑选项" value="Checkbox" />
-            <MetricCard label="from_step" value="下拉选择" />
-            <MetricCard label="导出入口" value="不展示" />
-          </CardContent>
-        </Card>
       </section>
     </main>
   );

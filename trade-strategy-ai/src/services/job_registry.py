@@ -289,7 +289,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="backup",
         requires_confirmation=True,
-        runnable=False,
+        runnable=True,
         description="备份数据库表和 processed 数据目录。",
         param_schema=_schema(
             "备份参数",
@@ -313,7 +313,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="backup",
         requires_confirmation=True,
-        runnable=False,
+        runnable=True,
         description="从备份包恢复数据库和 processed 数据目录。",
         param_schema=_schema(
             "恢复参数",

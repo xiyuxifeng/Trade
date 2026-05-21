@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { SectionCard } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
-import { formatLocalDateInputOffset } from '@/lib/date';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import {
   getMarketRegime,
@@ -55,7 +54,7 @@ function uniqueVersions(items: Array<{ [key: string]: unknown }>, key: string) {
 
 export function MarketSnapshotBrowserShell() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tradeDate = searchParams.get('trade_date') ?? formatLocalDateInputOffset(0);
+  const tradeDate = searchParams.get('trade_date') ?? '';
   const market = searchParams.get('market') ?? 'CN';
   const qualityStatus = searchParams.get('quality_status') ?? '';
   const selectedSnapshotIdParam = searchParams.get('snapshot_id');
@@ -66,7 +65,7 @@ export function MarketSnapshotBrowserShell() {
     queryKey: ['market-snapshots-browser', tradeDate, market, qualityStatus],
     queryFn: () =>
       listMarketSnapshots({
-        tradeDate,
+        tradeDate: tradeDate || undefined,
         market,
         qualityStatus: qualityStatus || undefined,
         limit: 50,
@@ -178,7 +177,9 @@ export function MarketSnapshotBrowserShell() {
   });
 
   const listErrorState = snapshotsQuery.error ? buildErrorRecoveryState(snapshotsQuery.error, 'market') : null;
-  const datasetViewerLink = `/market/datasets?trade_date=${encodeURIComponent(tradeDate)}&market=${encodeURIComponent(market)}`;
+  const datasetViewerLink = tradeDate
+    ? `/market/datasets?trade_date=${encodeURIComponent(tradeDate)}&market=${encodeURIComponent(market)}`
+    : `/market/datasets?market=${encodeURIComponent(market)}`;
 
   const selectedDetail: MarketSnapshotDetailResponse | null = detail;
   const regimeDetail: MarketRegimeDetailResponse | null = regimeDetailQuery.data ?? null;
@@ -279,7 +280,6 @@ export function MarketSnapshotBrowserShell() {
             onReset={() => {
               setSearchParams(
                 buildSearchParams(new URLSearchParams(), {
-                  trade_date: formatLocalDateInputOffset(0),
                   market: 'CN',
                 }),
                 { replace: true },

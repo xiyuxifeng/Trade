@@ -54,6 +54,8 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
 def test_job_registry_marks_only_connected_jobs_runnable() -> None:
     """只有已接通 handler 的 job type 才能进入 runner 白名单。"""
     assert get_runnable_job_types() == [
+        "backup-data",
+        "restore-data",
         "pipeline-run",
         "pipeline-step",
         "run-pre-market",

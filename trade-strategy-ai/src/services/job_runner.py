@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 from uuid import UUID, uuid4
 
 from src.agents.manager_agent.agent import ManagerAgent
+from src.services.ops_service import OpsRecoveryService
 from src.services.backtest_service import BacktestService
 from src.common.config import load_app_config
 from src.services.base import BaseService, ServiceResult
@@ -352,11 +353,42 @@ class JobRunner(BaseService):
                 new_version=params.get("new_version"),
             )
 
+        async def _backup_data(params: dict[str, Any]) -> ServiceResult:
+            service = OpsRecoveryService()
+            profile_id = str(params.get("profile_id") or "").strip()
+            if not profile_id:
+                raise ValueError("missing required param: profile_id")
+            return await service.create_backup(
+                profile_id=profile_id,
+                include_processed=_parse_bool(params.get("include_processed"), default=True),
+                backup_dir=params.get("backup_dir"),
+                backup_dir_id=params.get("backup_dir_id"),
+            )
+
+        async def _restore_data(params: dict[str, Any]) -> ServiceResult:
+            service = OpsRecoveryService()
+            profile_id = str(params.get("profile_id") or "").strip()
+            if not profile_id:
+                raise ValueError("missing required param: profile_id")
+            backup_id = str(params.get("backup_id") or "").strip() or None
+            backup_dir = params.get("backup_dir")
+            if backup_id is None and not backup_dir:
+                raise ValueError("missing required param: backup_id/backup_dir")
+            return await service.restore_backup(
+                profile_id=profile_id,
+                backup_id=backup_id,
+                backup_path=backup_dir,
+                include_processed=_parse_bool(params.get("include_processed"), default=True),
+                confirmed=_parse_bool(params.get("force"), default=False),
+            )
+
         return {
             "run-pre-market": _run_pre_market,
             "run-after-close": _run_after_close,
             "pipeline-run": _pipeline_run,
             "pipeline-step": _pipeline_step,
+            "backup-data": _backup_data,
+            "restore-data": _restore_data,
             "kaipan-fetch": _kaipan_fetch,
             "kaipan-normalize": _kaipan_normalize,
             "kaipan-run": _kaipan_run,

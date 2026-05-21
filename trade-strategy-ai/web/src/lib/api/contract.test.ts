@@ -6,7 +6,7 @@ import { createJob, getJob, getJobLogs, cancelJob, listJobs } from './jobs';
 import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
 import { getArticlePipeline, runArticlePipeline } from './pipelines';
 import { listArtifacts, getArtifact, downloadArtifact } from './artifacts';
-import { listArticles } from './articles';
+import { listArticleFilterOptions, listArticles } from './articles';
 import {
   archiveProfile,
   getProfile,
@@ -78,6 +78,13 @@ describe('UI API client contract', () => {
     await listArticles({
       page: 2,
       page_size: 20,
+      author_id: 'author-1',
+      source: 'tgb',
+      trader_id: 'trader-1',
+      published_after: '2026-05-01T00:00:00Z',
+      published_before: '2026-05-10T23:59:59Z',
+    });
+    await listArticleFilterOptions({
       author_id: 'author-1',
       source: 'tgb',
       trader_id: 'trader-1',
@@ -171,7 +178,8 @@ describe('UI API client contract', () => {
       confirmed: true,
     });
     expect(findCall('/api/ui/v1/pipelines/article_pipeline')).toBeTruthy();
-    expect(findCall('/api/ui/v1/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
+    expect(findCall('/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
+    expect(findCall('/articles/filter-options?author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
       params: { profile_id: 'default' },
       created_by: 'web',

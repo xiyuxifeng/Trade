@@ -45,6 +45,7 @@ async def test_auth_me_returns_role_for_structured_key(client: AsyncClient, monk
         "api_key_label": "Viewer",
         "authenticated": True,
         "source": "api_key",
+        "username": "",
     }
 
 
@@ -63,4 +64,5 @@ async def test_auth_me_returns_anonymous_when_auth_disabled(client: AsyncClient,
         "api_key_label": None,
         "authenticated": False,
         "source": "anonymous",
+        "username": "",
     }

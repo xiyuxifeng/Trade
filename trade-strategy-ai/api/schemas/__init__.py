@@ -1,5 +1,5 @@
 from .common import PaginationParams, paginated_response
-from .article import ArticleResponse, ArticleFilter
+from .article import ArticleResponse, ArticleFilter, ArticleFilterOptionsResponse
 from .workflow import (
     WorkflowRunDetailResponse,
     WorkflowRunListResponse,
@@ -14,7 +14,7 @@ from .market import MarketResponse, MarketFilter
 __all__ = [
     "PaginationParams",
     "paginated_response",
-    "ArticleResponse", "ArticleFilter",
+    "ArticleResponse", "ArticleFilter", "ArticleFilterOptionsResponse",
     "WorkflowRunSummary",
     "WorkflowRunStepSummary",
     "WorkflowRunQueryPage",

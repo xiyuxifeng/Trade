@@ -249,6 +249,63 @@ describe('MarketPage', () => {
     expect(screen.getAllByText('strong_bull').length).toBeGreaterThan(0);
   });
 
+  it('loads market snapshots without forcing today as the default trade date', async () => {
+    mockedListMarketSnapshots.mockResolvedValue({
+      filters: { trade_date: null, market: 'CN', quality_status: '' },
+      page: { total: 1, limit: 50, offset: 0, count: 1 },
+      items: [buildSnapshot('snap-001')],
+    } as never);
+    mockedGetMarketSnapshot.mockResolvedValue({
+      snapshot: buildSnapshot('snap-001'),
+      sections: [buildSection('snap-001')],
+      item_count: 1,
+      quality_report: { status: 'partial', summary: '存在部分缺失' },
+      dataset: {
+        dataset_id: 'snap-001:dataset',
+        storage_ref: {
+          source: 'db',
+          logical_id: 'dataset-001',
+          relative_path: null,
+          uri: null,
+          metadata: { job_id: 'job-001' },
+        },
+      },
+      warnings: [],
+    } as never);
+    mockedListMarketSnapshotSections.mockResolvedValue({
+      snapshot_id: 'snap-001',
+      page: { total: 1, limit: 50, offset: 0, count: 1 },
+      items: [buildSection('snap-001')],
+    } as never);
+    mockedGetMarketSnapshotQuality.mockResolvedValue({
+      quality_report: { status: 'partial', summary: '存在部分缺失' },
+    } as never);
+    mockedListMarketRegimeFeatures.mockResolvedValue({
+      filters: { snapshot_id: 'snap-001' },
+      page: { total: 0, limit: 50, offset: 0, count: 0 },
+      items: [],
+    } as never);
+    mockedListMarketRegimes.mockResolvedValue({
+      filters: { snapshot_id: 'snap-001' },
+      page: { total: 0, limit: 50, offset: 0, count: 0 },
+      items: [],
+    } as never);
+
+    renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
+
+    expect(await screen.findByRole('heading', { name: '筛选条件' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedListMarketSnapshots).toHaveBeenCalledWith({
+        tradeDate: undefined,
+        market: 'CN',
+        qualityStatus: undefined,
+        limit: 50,
+        offset: 0,
+      });
+    });
+    expect(screen.getByRole('link', { name: '查看数据集' })).toHaveAttribute('href', '/market/datasets?market=CN');
+  });
+
   it('shows a shared recovery error when the selected snapshot is missing', async () => {
     mockedListMarketSnapshots.mockResolvedValue({
       filters: { trade_date: '2026-05-16', market: 'CN', quality_status: '' },

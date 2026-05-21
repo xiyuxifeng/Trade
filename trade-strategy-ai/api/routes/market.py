@@ -37,7 +37,8 @@ async def get_latest_market(
     _: str = Depends(verify_api_key),
 ):
     """Get latest market data for a symbol from ohlcv_bars."""
-    async with async_session_factory() as session:
+    session_factory = async_session_factory()
+    async with session_factory() as session:
         query = (
             select(OHLCVBar)
             .where(OHLCVBar.symbol == symbol)
@@ -60,7 +61,8 @@ async def export_market(
     _: str = Depends(verify_api_key),
 ):
     """Export OHLCV data to CSV/JSON/Parquet from ohlcv_bars."""
-    async with async_session_factory() as session:
+    session_factory = async_session_factory()
+    async with session_factory() as session:
         query = select(OHLCVBar)
         count_query = select(func.count(OHLCVBar.id))
 

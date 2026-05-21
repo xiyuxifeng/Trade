@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { listArticles } from '@/lib/api/articles';
+import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import { runArticlePipeline } from '@/lib/api/pipelines';
 
 vi.mock('@/lib/api/articles', () => ({
+  listArticleFilterOptions: vi.fn(),
   listArticles: vi.fn(),
 }));
 
@@ -26,6 +27,7 @@ vi.mock('@/lib/api/pipelines', () => ({
 }));
 
 const mockedListProfiles = vi.mocked(listProfiles);
+const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListJobs = vi.mocked(listJobs);
 const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
@@ -80,6 +82,14 @@ function buildArticleList() {
     page: 1,
     page_size: 10,
     pages: 1,
+  };
+}
+
+function buildArticleFilterOptions() {
+  return {
+    author_ids: ['author-1', 'author-2'],
+    sources: ['tgb', 'xhs'],
+    trader_ids: ['trader_a', 'trader_b'],
   };
 }
 
@@ -148,6 +158,15 @@ describe('ArticlesPage', () => {
 
     expect(await screen.findByRole('heading', { name: '文章工作台' })).toBeInTheDocument();
     expect(screen.getByText('请选择一个入口开始处理文章数据。')).toBeInTheDocument();
+    expect(screen.queryByText('迁移说明')).not.toBeInTheDocument();
+    expect(screen.queryByText('导出入口')).not.toBeInTheDocument();
+    expect(screen.queryByText('当前状态')).not.toBeInTheDocument();
+    expect(screen.queryByText('维护边界')).not.toBeInTheDocument();
+    expect(screen.getByText(/从 Profile 触发文章抓取、清洗、校验、入库和结果回看的一条完整流程。/)).toBeInTheDocument();
+    expect(screen.getByText('文章浏览与筛选。')).toBeInTheDocument();
+    expect(screen.getByText('文章数据质量概览。')).toBeInTheDocument();
+    expect(screen.getByText('文章结构化产物。')).toBeInTheDocument();
+    expect(screen.getByText('文章维护操作。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '进入抓取与处理' })).toHaveAttribute('href', '/articles/run');
     expect(screen.getByRole('link', { name: '进入文章列表' })).toHaveAttribute('href', '/articles/list');
     expect(screen.getByRole('link', { name: '进入数据质量' })).toHaveAttribute('href', '/articles/quality');
@@ -188,15 +207,29 @@ describe('ArticlesPage', () => {
 
   it('renders the article list page with table data and filters', async () => {
     mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedListArticleFilterOptions.mockResolvedValue(buildArticleFilterOptions());
 
     renderWithRouter([{ path: '/articles/list', element: <ArticleListPage /> }], ['/articles/list']);
 
     expect(await screen.findByRole('heading', { name: '文章列表' })).toBeInTheDocument();
     expect(await screen.findByText('Article One')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '打开原文' })).toHaveAttribute('href', 'https://example.com/article-1');
-    expect(screen.getByLabelText('Author ID')).toBeInTheDocument();
-    expect(screen.getByLabelText('Source')).toBeInTheDocument();
-    expect(screen.getByLabelText('Trader ID')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Author ID' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Source' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Trader ID' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Author ID' })).toHaveTextContent('author-1');
+    expect(screen.getByRole('combobox', { name: 'Source' })).toHaveTextContent('tgb');
+    expect(screen.getByRole('combobox', { name: 'Trader ID' })).toHaveTextContent('trader_a');
+    expect(screen.getByRole('link', { name: '查看' })).toHaveAttribute('href', 'https://example.com/article-1');
+  });
+
+  it('shows a return action when the article list fails to load', async () => {
+    mockedListArticles.mockRejectedValueOnce(new Error('load failed'));
+    mockedListArticleFilterOptions.mockResolvedValue(buildArticleFilterOptions());
+
+    renderWithRouter([{ path: '/articles/list', element: <ArticleListPage /> }], ['/articles/list']);
+
+    expect(await screen.findByRole('heading', { name: '文章列表加载失败' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument();
   });
 
   it('renders the recent job page with article pipeline jobs', async () => {
@@ -250,6 +283,11 @@ describe('ArticlesPage', () => {
     expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '从指定步骤开始' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /导出/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Hash：')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '从指定步骤开始' }), 'process');
+    expect(screen.getByLabelText('new_version')).toBeInTheDocument();
+    expect(screen.queryByLabelText('max_articles')).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('重建 pending tasks'));
     await user.click(screen.getByRole('button', { name: '运行维护' }));

@@ -34,7 +34,8 @@ async def list_trades(
     """List trades with pagination and filters."""
     offset = (page - 1) * page_size
 
-    async with async_session_factory() as session:
+    session_factory = async_session_factory()
+    async with session_factory() as session:
         query = select(TradeLog)
         count_query = select(func.count(TradeLog.id))
 
@@ -119,7 +120,8 @@ async def export_trades(
     _: str = Depends(verify_api_key),
 ):
     """Export trades to CSV/JSON/Parquet."""
-    async with async_session_factory() as session:
+    session_factory = async_session_factory()
+    async with session_factory() as session:
         query = select(TradeLog)
         count_query = select(func.count(TradeLog.id))
         query, count_query = _trades_query_filters(

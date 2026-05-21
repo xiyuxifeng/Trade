@@ -25,3 +25,8 @@ export type ArticleListResponse = {
   pages: number;
 };
 
+export type ArticleFilterOptionsResponse = {
+  author_ids: string[];
+  sources: string[];
+  trader_ids: string[];
+};

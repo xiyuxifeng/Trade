@@ -233,8 +233,8 @@ export function JobDetailPage() {
         </div>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <div className="space-y-6">
+      <section className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+        <div className="min-w-0 space-y-6">
           <SectionCard
             title={`${detail.job_type}`}
             description={detail.id}
@@ -294,16 +294,21 @@ export function JobDetailPage() {
           <SectionCard
             title="步骤时间线"
             description="Job 审计事件已归一为步骤时间线，后续 Step Timeline 接入后会直接替换数据源。"
+            className="flex h-[min(72vh,44rem)] flex-col overflow-hidden"
           >
-            <div className="flex items-center justify-between gap-3 pb-3 text-xs text-slate-500">
-              <span>{timelineItems.length} 个步骤</span>
-              <span>{runningRefresh ? '自动刷新中' : '静态展示'}</span>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                <span>{timelineItems.length} 个步骤</span>
+                <span>{runningRefresh ? '自动刷新中' : '静态展示'}</span>
+              </div>
+              <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+                <StepTimeline items={timelineItems} />
+              </div>
             </div>
-            <StepTimeline items={timelineItems} />
           </SectionCard>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <SectionCard
             title="错误"
             description={detail.status === 'failed' || detail.status === 'cancelled' ? '失败或取消时会显示原因和建议。' : '任务正常时此处展示为空态。'}

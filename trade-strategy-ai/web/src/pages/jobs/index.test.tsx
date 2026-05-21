@@ -86,6 +86,7 @@ describe('JobsPage', () => {
       nextResolve(makeListResponse([makeJob()]));
     }
     expect(await screen.findByText('job-1')).toBeInTheDocument();
+    expect(screen.queryByText('操作说明')).not.toBeInTheDocument();
   });
 
   it('renders jobs, applies filters and navigates to the detail page', async () => {
@@ -175,8 +176,8 @@ describe('JobsPage', () => {
   it('shows error state', async () => {
     mockedListJobs.mockRejectedValueOnce(new ApiError(500, 'server exploded'));
     renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?refresh=1']);
-    expect(await screen.findAllByText('上游服务不可用')).toHaveLength(2);
-    expect(screen.getAllByText('稍后重试，或先确认上游服务状态。')).toHaveLength(2);
+    expect(await screen.findByText('上游服务不可用')).toBeInTheDocument();
+    expect(screen.getByText('稍后重试，或先确认上游服务状态。')).toBeInTheDocument();
   });
 
   it('shows permission denied state', async () => {

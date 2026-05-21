@@ -361,3 +361,28 @@ def test_job_timeout_and_recovery(tmp_path: Path) -> None:
     assert loaded.payload["job"]["audit_events"][-1]["actor"] == "web"
 
     asyncio.run(engine.dispose())
+
+
+def test_failed_job_exhausts_retries_and_is_not_listed_again(tmp_path: Path) -> None:
+    """超过最大重试次数后，failed Job 不应再次进入可领取队列。"""
+    service, engine = _build_job_service(tmp_path)
+
+    retryable = asyncio.run(
+        service.create_job(job_type="crawl", params={}, created_by="web", max_retries=1, retry_backoff_seconds=0)
+    )
+    retryable_id = retryable.payload["job"]["id"]
+    first_failed = asyncio.run(service.fail_job(job_id=retryable_id, error="boom"))
+    ready_after_exhaustion = asyncio.run(service.list_ready_jobs(limit=10))
+
+    assert first_failed.payload["job"]["retry_count"] == 1
+    assert first_failed.payload["job"]["scheduled_at"] is None
+    assert ready_after_exhaustion.payload["count"] == 0
+    assert retryable_id not in {item["id"] for item in ready_after_exhaustion.payload["items"]}
+
+    pending = asyncio.run(service.create_job(job_type="crawl", params={}, created_by="web", max_retries=0))
+    pending_id = pending.payload["job"]["id"]
+    ready_pending = asyncio.run(service.list_ready_jobs(limit=10))
+
+    assert pending_id in {item["id"] for item in ready_pending.payload["items"]}
+
+    asyncio.run(engine.dispose())

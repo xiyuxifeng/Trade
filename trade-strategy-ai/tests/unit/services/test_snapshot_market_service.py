@@ -307,7 +307,7 @@ def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:
 
 
 def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Market Snapshot 构建应允许 benchmark_symbol 由 Profile 默认值补齐。"""
+    """Market Snapshot 构建应优先使用 Profile 的 benchmark 默认值。"""
     from src.services import snapshot_service as snapshot_service_module
     from src.services.base import ServiceResult
     from src.services.snapshot_service import SnapshotService
@@ -315,7 +315,7 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
     config_path = tmp_path / "config" / "app.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
-        "timezone: Asia/Shanghai\nmarket_state_benchmark_symbol: 000300.SH\ntraders: []\n",
+        "timezone: Asia/Shanghai\nmarket_state_benchmark_symbol: 510300.SH\ntraders: []\n",
         encoding="utf-8",
     )
 
@@ -329,7 +329,21 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
             calls.update(kwargs)
             return ServiceResult(status="ok", message="market snapshot built", payload={"snapshot_path": "snapshot.json"})
 
+    class _FakeProfile:
+        def __init__(self, profile_id: str, benchmark_symbol: str | None):
+            self.profile_id = profile_id
+            self.sections = {"market_state_benchmark_symbol": benchmark_symbol} if benchmark_symbol else {}
+
+    class _FakeProfileService:
+        async def get_profile(self, profile_id: str):
+            if profile_id == "default":
+                return _FakeProfile(profile_id="default", benchmark_symbol="000300.SH")
+            if profile_id == "missing":
+                return _FakeProfile(profile_id="missing", benchmark_symbol=None)
+            return None
+
     monkeypatch.setattr(snapshot_service_module, "MarketSnapshotService", _FakeMarketSnapshotService)
+    monkeypatch.setattr(snapshot_service_module, "ConfigProfileService", lambda: _FakeProfileService())
 
     service = SnapshotService()
     result = asyncio.run(
@@ -344,3 +358,39 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
     assert calls["benchmark_symbol"] == "000300.SH"
     assert calls["profile_id"] == "default"
     assert calls["trade_date"] == "2026-05-16"
+
+
+def test_snapshot_service_build_market_snapshot_requires_profile_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """当 Web 只传 profile_id 时，Profile 没有 benchmark 默认值应明确报错。"""
+    from src.services import snapshot_service as snapshot_service_module
+    from src.services.snapshot_service import SnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        "timezone: Asia/Shanghai\nmarket_state_benchmark_symbol: 510300.SH\ntraders: []\n",
+        encoding="utf-8",
+    )
+
+    class _FakeProfile:
+        def __init__(self):
+            self.sections = {}
+
+    class _FakeProfileService:
+        async def get_profile(self, profile_id: str):
+            if profile_id == "missing":
+                return _FakeProfile()
+            return None
+
+    monkeypatch.setattr(snapshot_service_module, "ConfigProfileService", lambda: _FakeProfileService())
+
+    service = SnapshotService()
+
+    with pytest.raises(ValueError, match="benchmark_symbol is required"):
+        asyncio.run(
+            service.build_market_snapshot(
+                config_path=config_path,
+                trade_date="2026-05-16",
+                profile_id="missing",
+            )
+        )

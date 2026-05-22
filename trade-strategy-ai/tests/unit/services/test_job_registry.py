@@ -93,13 +93,34 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert confirmed.payload["params"]["config_path"] == "config/app.yaml"
 
     ok = validate_job_submission(
-        job_type="run-pre-market",
-        params={"profile_id": "default", "as_of_date": "2026-05-09", "force": True, "export_html": False},
+        job_type="strategy-build",
+        params={
+            "profile_id": "default",
+            "trader_id": "trader_a",
+            "strategy_date": "2026-05-22",
+            "force": False,
+        },
         created_by="web",
     )
     assert ok.status == "ok"
     assert ok.payload["params"]["profile_id"] == "default"
-    assert ok.payload["params"]["as_of_date"] == "2026-05-09"
+    assert "config_path" not in ok.payload["params"]
+
+    missing_strategy_context = validate_job_submission(
+        job_type="run-pre-market",
+        params={"as_of_date": "2026-05-09", "force": True, "export_html": False},
+        created_by="web",
+    )
+    assert missing_strategy_context.status == "error"
+
+    pre_market = validate_job_submission(
+        job_type="run-pre-market",
+        params={"profile_id": "default", "as_of_date": "2026-05-09", "force": True, "export_html": False},
+        created_by="web",
+    )
+    assert pre_market.status == "ok"
+    assert pre_market.payload["params"]["profile_id"] == "default"
+    assert pre_market.payload["params"]["as_of_date"] == "2026-05-09"
 
     after_close = validate_job_submission(
         job_type="run-after-close",

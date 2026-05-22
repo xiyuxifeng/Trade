@@ -30,7 +30,7 @@ import { HealthPage } from '@/pages/system/HealthPage';
 import { SystemPage } from '@/pages/system';
 import { UsersPage } from '@/pages/system/UsersPage';
 import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
-import { AfterClosePage, PreMarketPage, StrategiesPage } from '@/pages/strategies';
+import { AfterClosePage, CandidatesPage, HistoryPage, PreMarketPage, StrategiesPage, VersionsPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
 import { RulePoolPage } from '@/pages/rule-pool';
@@ -95,6 +95,9 @@ const dashboardLayoutRoutes = [
   { path: 'market', element: <MarketPage /> },
   { path: 'market/datasets', element: <MarketDatasetPage /> },
   { path: 'strategies', element: <StrategiesPage /> },
+  { path: 'strategies/versions', element: <VersionsPage /> },
+  { path: 'strategies/candidates', element: <CandidatesPage /> },
+  { path: 'strategies/history', element: <HistoryPage /> },
   { path: 'strategies/pre-market', element: <PreMarketPage /> },
   { path: 'strategies/after-close', element: <AfterClosePage /> },
   { path: 'strategies/regime-selection', element: <RegimeRuleSelectionPage /> },

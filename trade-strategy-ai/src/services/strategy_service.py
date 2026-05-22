@@ -12,6 +12,7 @@ from src.db.session import session_scope
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.pipeline.tasks.strategy_version_tasks import handle_build_trader_strategy_version
 from src.services.base import BaseService, ServiceResult
+from src.services.runtime_config import resolve_runtime_config
 
 
 def _project_base_dir(config_path: Path) -> Path:
@@ -59,7 +60,8 @@ class StrategyService(BaseService):
     async def build_strategy_version(
         self,
         *,
-        config_path: str | Path,
+        config_path: str | Path | None = None,
+        profile_id: str | None = None,
         trader_id: str,
         strategy_date: str,
         force: bool = False,
@@ -71,8 +73,9 @@ class StrategyService(BaseService):
         selected_by: str | None = None,
     ) -> ServiceResult:
         """构建指定交易员的策略版本。"""
-        loaded = load_app_config(config_path)
-        config_file = Path(config_path).expanduser().resolve()
+        runtime_config = resolve_runtime_config({"profile_id": profile_id, "config_path": config_path})
+        config_file = Path(runtime_config.config_path or "config/app.yaml").expanduser().resolve()
+        loaded = load_app_config(config_file)
         base_dir = _project_base_dir(loaded.config_path)
         regime_selection_payload = regime_selection or {}
         if not regime_selection_payload and any(
@@ -111,6 +114,7 @@ class StrategyService(BaseService):
             payload={
                 "config_path": str(config_file),
                 "base_dir": str(base_dir),
+                "profile_id": runtime_config.profile_id,
                 "trader_id": trader_id,
                 "strategy_date": strategy_date,
                 "force": force,

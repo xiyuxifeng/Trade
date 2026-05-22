@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 describe('StrategyWorkspaceActions', () => {
-  it('opens confirmation and submits strategy-build with the selected config_path', async () => {
+  it('opens confirmation and submits strategy-build with the selected profile_id', async () => {
     const user = userEvent.setup();
 
     mockedCreateJob.mockResolvedValue({
@@ -35,7 +35,6 @@ describe('StrategyWorkspaceActions', () => {
           path: '/',
           element: (
             <StrategyWorkspaceActions
-              configPath="config/strategy-v3.yaml"
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
@@ -61,16 +60,16 @@ describe('StrategyWorkspaceActions', () => {
         expect.objectContaining({
           job_type: 'strategy-build',
           created_by: 'web',
-            params: expect.objectContaining({
-              config_path: 'config/strategy-v3.yaml',
-              trader_id: 'trader_a',
-              strategy_date: '2026-05-16',
-              force: false,
-              snapshot_id: 'snap-1',
-              market_regime_version: 'market-regime-v3',
-              selected_by: 'web',
-            }),
+          params: expect.objectContaining({
+            profile_id: 'default',
+            trader_id: 'trader_a',
+            strategy_date: '2026-05-16',
+            force: false,
+            snapshot_id: 'snap-1',
+            market_regime_version: 'market-regime-v3',
+            selected_by: 'web',
           }),
+        }),
       );
     });
   });
@@ -92,7 +91,6 @@ describe('StrategyWorkspaceActions', () => {
           path: '/',
           element: (
             <StrategyWorkspaceActions
-              configPath="config/strategy-v3.yaml"
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
@@ -143,7 +141,6 @@ describe('StrategyWorkspaceActions', () => {
           path: '/',
           element: (
             <StrategyWorkspaceActions
-              configPath="config/strategy-v3.yaml"
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
@@ -169,7 +166,7 @@ describe('StrategyWorkspaceActions', () => {
         expect.objectContaining({
           job_type: 'run-pre-market',
           params: expect.objectContaining({
-            config_path: 'config/strategy-v3.yaml',
+            profile_id: 'default',
             as_of_date: '2026-05-16',
             force: false,
           }),

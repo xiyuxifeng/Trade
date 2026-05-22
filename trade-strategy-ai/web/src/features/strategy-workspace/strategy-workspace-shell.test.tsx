@@ -48,7 +48,7 @@ beforeEach(() => {
 });
 
 describe('StrategyWorkspaceShell', () => {
-  it('loads the latest profile snapshot config_path and keeps the workspace usable', async () => {
+  it('loads the latest profile snapshot and keeps the workspace usable', async () => {
     mockedListProfiles.mockResolvedValue({
       count: 1,
       total: 1,
@@ -142,7 +142,7 @@ describe('StrategyWorkspaceShell', () => {
     expect(
       screen.getByText('在 Web 中构建策略版本、运行盘前和盘后任务，并通过 Job、Artifact 和 Report 解释结果。'),
     ).toBeInTheDocument();
-    expect((await screen.findAllByText('config/strategy-v3.yaml')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('snap-2')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /盘前运行/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /盘后运行/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '候选版本' })).toBeInTheDocument();

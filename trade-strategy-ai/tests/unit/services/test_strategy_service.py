@@ -97,6 +97,32 @@ def test_strategy_service_builds_strategy_version(tmp_path: Path) -> None:
     assert calls["build"][0]["trader_id"] == "trader_a"
 
 
+def test_strategy_service_builds_strategy_version_from_profile_only() -> None:
+    """StrategyService 应允许 Web 只传 profile_id 而不传 config_path。"""
+    from src.services.strategy_service import StrategyService
+
+    calls: dict[str, object] = {}
+
+    async def fake_build(details, *, config):
+        calls["build"] = (details, config)
+        return None
+
+    service = StrategyService(build_handler=fake_build)
+    result = asyncio.run(
+        service.build_strategy_version(
+            profile_id="default",
+            trader_id="trader_a",
+            strategy_date="2026-04-23",
+            force=False,
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.payload["profile_id"] == "default"
+    assert result.payload["config_path"].endswith("config/app.yaml")
+    assert calls["build"][0]["trader_id"] == "trader_a"
+
+
 def test_strategy_service_builds_strategy_version_with_regime_selection(tmp_path: Path) -> None:
     """StrategyService 应透传 regime selection 摘要。"""
     from src.services.strategy_service import StrategyService

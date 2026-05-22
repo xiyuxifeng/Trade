@@ -205,8 +205,9 @@ export function StrategyRegimeSelectionWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
+        title="Regime-aware 规则选择"
         description="展示盘前策略运行时为什么选择、跳过或阻断某些 rule，并回溯到 market regime 和适用性画像版本。"
-        actionLabel="返回策略工作台"
+        actionLabel="返回策略首页"
         onAction={() => {
           navigate('/strategies');
         }}

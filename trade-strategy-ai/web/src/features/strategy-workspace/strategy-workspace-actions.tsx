@@ -44,23 +44,23 @@ function buildStrategyJobParams(
   action: StrategyActionType,
   strategyDate: string,
   traderId: string,
-  configPath: string,
+  profileId: string,
   snapshotId: string | null,
 ) {
   if (action === 'strategy-build') {
-      return {
-        config_path: configPath,
-        trader_id: traderId,
-        strategy_date: strategyDate,
-        force: false,
-        snapshot_id: snapshotId ?? undefined,
-        market_regime_version: 'market-regime-v3',
-        selected_by: 'web',
-      };
-    }
+    return {
+      profile_id: profileId,
+      trader_id: traderId,
+      strategy_date: strategyDate,
+      force: false,
+      snapshot_id: snapshotId ?? undefined,
+      market_regime_version: 'market-regime-v3',
+      selected_by: 'web',
+    };
+  }
 
   return {
-    config_path: configPath,
+    profile_id: profileId,
     as_of_date: strategyDate,
     force: false,
   };
@@ -69,7 +69,6 @@ function buildStrategyJobParams(
 type StrategyWorkspaceActionsProps = {
   traderId: string;
   strategyDate: string;
-  configPath: string;
   profileName: string;
   profileId: string;
   snapshotId: string | null;
@@ -81,7 +80,6 @@ type StrategyWorkspaceActionsProps = {
 export function StrategyWorkspaceActions({
   traderId,
   strategyDate,
-  configPath,
   profileName,
   profileId,
   snapshotId,
@@ -94,16 +92,16 @@ export function StrategyWorkspaceActions({
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const selectedActionLabel = selectedAction?.label ?? '';
-  const canSubmit = Boolean(traderId.trim() && strategyDate && configPath && !disabled);
+  const canSubmit = Boolean(traderId.trim() && strategyDate && profileId && !disabled);
 
   const mutation = useMutation({
-        mutationFn: async (action: StrategyActionConfig) => {
-          return createJob({
-            job_type: action.jobType,
-            created_by: 'web',
-            params: buildStrategyJobParams(action.jobType, strategyDate, traderId.trim(), configPath, snapshotId),
-          });
-        },
+    mutationFn: async (action: StrategyActionConfig) => {
+      return createJob({
+        job_type: action.jobType,
+        created_by: 'web',
+        params: buildStrategyJobParams(action.jobType, strategyDate, traderId.trim(), profileId, snapshotId),
+      });
+    },
     onSuccess: async (result, action) => {
       setSubmissionError(null);
       setSelectedAction(null);
@@ -120,9 +118,9 @@ export function StrategyWorkspaceActions({
       { label: '交易员', value: traderId.trim() || '未填写' },
       { label: '策略日期', value: strategyDate || '未选择' },
       { label: 'Profile', value: profileName || profileId || '未选择' },
-      { label: '配置路径', value: configPath || '暂无最新 snapshot' },
+      { label: '运行入口', value: profileId ? 'Profile-only' : '未选择' },
     ],
-    [configPath, profileId, profileName, strategyDate, traderId],
+    [profileId, profileName, strategyDate, traderId],
   );
 
   return (
@@ -171,7 +169,7 @@ export function StrategyWorkspaceActions({
 
         {!canSubmit ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            请先选择 trader、日期和带有最新 snapshot 的 profile，再提交正式任务。
+            请先选择 trader、日期和 profile，再提交正式任务。
           </div>
         ) : null}
 

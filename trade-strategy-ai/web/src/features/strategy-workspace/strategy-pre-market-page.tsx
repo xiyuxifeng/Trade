@@ -21,7 +21,6 @@ import { formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strateg
 
 type SubmissionType = 'snapshot-build' | 'run-pre-market';
 
-const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 const DEFAULT_BENCHMARK_NAME = '沪深300';
 
 type SubmissionState = {
@@ -129,7 +128,7 @@ export function StrategyPreMarketPage() {
   const today = useMemo(() => formatLocalDateInputOffset(0), []);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [strategyDate, setStrategyDate] = useState(today);
-  const [benchmarkSymbol, setBenchmarkSymbol] = useState(DEFAULT_BENCHMARK_SYMBOL);
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState('');
   const [snapshotStartDate, setSnapshotStartDate] = useState('');
   const [snapshotEndDate, setSnapshotEndDate] = useState('');
   const [snapshotSlot, setSnapshotSlot] = useState('17-30');
@@ -168,12 +167,13 @@ export function StrategyPreMarketPage() {
   const profileItems = profilesQuery.data?.items ?? [];
   const benchmarkOptions = useMemo(() => {
     const items = benchmarkOptionsQuery.data?.items ?? [];
-    if (items.some((item) => item.symbol === DEFAULT_BENCHMARK_SYMBOL)) {
+    const defaultSymbol = '000300.SH';
+    if (items.some((item) => item.symbol === defaultSymbol)) {
       return items;
     }
     return [
       {
-        symbol: DEFAULT_BENCHMARK_SYMBOL,
+        symbol: defaultSymbol,
         code: '000300',
         market: 'SH',
         name: DEFAULT_BENCHMARK_NAME,
@@ -393,7 +393,7 @@ export function StrategyPreMarketPage() {
             </Badge>
             <CardTitle className="mt-2 text-slate-950">Profile / 策略日期 / Benchmark</CardTitle>
             <CardDescription className="text-slate-600">
-              `benchmark_symbol` 为空时会由后端按 Profile 默认值补齐，Web 不暴露 `config_path`。
+              `benchmark_symbol` 为空时会由后端按 Profile 默认值补齐，Web 只保留 Profile 入口。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -415,13 +415,14 @@ export function StrategyPreMarketPage() {
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark 选择</p>
                 <Select aria-label="Benchmark 选择" value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
+                  <option value="">自动从 Profile 读取</option>
                   {benchmarkOptions.map((item: MarketBenchmarkOption) => (
                     <option key={item.symbol} value={item.symbol}>
                       {item.name} ({item.symbol})
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-slate-500">默认使用沪深300，可切换指数基准。</p>
+                <p className="text-xs text-slate-500">可手动选择指数基准；留空时由后端按 Profile 默认值补齐。</p>
                 {benchmarkOptionsQuery.isError ? (
                   <p className="text-xs text-amber-600">Benchmark 选项加载失败，当前回退到默认沪深300。</p>
                 ) : null}

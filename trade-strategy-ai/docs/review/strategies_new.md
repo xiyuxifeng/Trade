@@ -675,7 +675,7 @@ run-after-close
 - 失败任务跳转到 Job Detail，重试由任务中心承载。
 - 页面必须覆盖 loading / empty / error / retry / success 状态。
 
-### [ ] T4 策略辅助页面与版本构建实现
+### [x] T4 策略辅助页面与版本构建实现
 
 目标：
 

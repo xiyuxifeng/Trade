@@ -11,6 +11,7 @@ from src.pipeline.tasks.snapshot_tasks import (
     handle_strong_symbols_snapshot,
     handle_topic_constituents_snapshot,
 )
+from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 from src.services.market_data_storage_service import MarketDataStorageService
 from src.services.market_snapshot_service import MarketSnapshotService
@@ -59,6 +60,18 @@ class SnapshotService(BaseService):
         """返回 MarketUniverse 快照路径。"""
         return self._backend.base_dir / trade_date / f"{slot}.json"
 
+    async def _resolve_profile_benchmark_symbol(self, profile_id: str) -> str | None:
+        """从 Profile 读取默认基准指数。"""
+        profile = await ConfigProfileService().get_profile(profile_id)
+        if profile is None:
+            raise ValueError(f"profile not found: {profile_id}")
+
+        sections = profile.sections if isinstance(profile.sections, dict) else {}
+        benchmark_symbol = sections.get("market_state_benchmark_symbol")
+        if isinstance(benchmark_symbol, str):
+            benchmark_symbol = benchmark_symbol.strip() or None
+        return benchmark_symbol
+
     async def build_snapshot(
         self,
         *,
@@ -77,7 +90,12 @@ class SnapshotService(BaseService):
         loaded = load_app_config(config_path)
         config_file = Path(config_path).expanduser().resolve()
         base_dir = _project_base_dir(loaded.config_path)
-        resolved_benchmark_symbol = benchmark_symbol or getattr(loaded.config, "market_state_benchmark_symbol", None)
+        if benchmark_symbol:
+            resolved_benchmark_symbol = benchmark_symbol
+        elif profile_id:
+            resolved_benchmark_symbol = await self._resolve_profile_benchmark_symbol(profile_id)
+        else:
+            resolved_benchmark_symbol = getattr(loaded.config, "market_state_benchmark_symbol", None)
         if not resolved_benchmark_symbol:
             raise ValueError("benchmark_symbol is required")
 
@@ -176,7 +194,12 @@ class SnapshotService(BaseService):
     ) -> ServiceResult:
         """构建结构化 Market Snapshot。"""
         loaded = load_app_config(config_path)
-        resolved_benchmark_symbol = benchmark_symbol or getattr(loaded.config, "market_state_benchmark_symbol", None)
+        if benchmark_symbol:
+            resolved_benchmark_symbol = benchmark_symbol
+        elif profile_id:
+            resolved_benchmark_symbol = await self._resolve_profile_benchmark_symbol(profile_id)
+        else:
+            resolved_benchmark_symbol = getattr(loaded.config, "market_state_benchmark_symbol", None)
         if not resolved_benchmark_symbol:
             raise ValueError("benchmark_symbol is required")
         service = MarketSnapshotService(storage_service=MarketDataStorageService())

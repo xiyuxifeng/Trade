@@ -26,7 +26,6 @@ import {
   formatWorkspaceTimestamp,
   isWorkspacePermissionDenied,
   selectLatestProfileSnapshot,
-  selectLatestSnapshotConfigPath,
 } from './strategy-workspace-utils';
 
 const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
@@ -77,7 +76,6 @@ function ProfileDetailState({
   onRetry: () => void;
 }) {
   const snapshot = selectLatestProfileSnapshot(detail);
-  const configPath = selectLatestSnapshotConfigPath(detail);
   const permissionDenied = isWorkspacePermissionDenied(error);
 
   return (
@@ -90,7 +88,7 @@ function ProfileDetailState({
             </Badge>
             <CardTitle className="mt-2 text-slate-950">trader / date / profile</CardTitle>
             <CardDescription className="text-slate-600">
-              选择正式 profile 后，会自动读取最新 snapshot 并带出 config_path。
+              选择正式 profile 后，会自动读取最新 snapshot。
             </CardDescription>
           </div>
         </div>
@@ -113,8 +111,8 @@ function ProfileDetailState({
         ) : detail ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">config_path</p>
-              <p className="mt-2 break-all text-slate-950">{configPath ?? '暂无最新 snapshot'}</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile snapshot</p>
+              <p className="mt-2 break-all text-slate-950">{snapshot?.snapshot_id ?? '暂无最新 snapshot'}</p>
               <p className="mt-3 text-slate-600">
                 最新快照：{snapshot ? `${snapshot.snapshot_id} · ${formatWorkspaceTimestamp(snapshot.captured_at)}` : '暂无'}
               </p>
@@ -128,7 +126,7 @@ function ProfileDetailState({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            选择一个 profile 后，这里会展示最新 snapshot 与 config_path。
+            选择一个 profile 后，这里会展示最新 snapshot。
           </div>
         )}
       </CardContent>
@@ -175,7 +173,6 @@ export function StrategyWorkspaceShell() {
   const selectedProfileDetail =
     selectedProfileDetailRaw?.profile.profile_id === selectedProfileId ? selectedProfileDetailRaw : null;
   const latestSnapshot = selectLatestProfileSnapshot(selectedProfileDetail);
-  const configPath = selectLatestSnapshotConfigPath(selectedProfileDetail) ?? '';
   const profileDetailLoading = profileDetailQuery.isLoading || (profileDetailQuery.isFetching && !selectedProfileDetail);
 
   const jobsQuery = useQuery({
@@ -354,8 +351,7 @@ export function StrategyWorkspaceShell() {
         </Card>
 
         <StrategyWorkspaceActions
-          configPath={configPath}
-          disabled={!configPath || !traderId.trim() || !strategyDate}
+          disabled={!selectedProfileId || !traderId.trim() || !strategyDate}
           onSubmitted={({ jobType, jobId }) => {
             setSubmissionMessage(`已提交 ${jobType}，可打开 Job 详情查看进度。`);
             setSubmissionJobId(jobId);

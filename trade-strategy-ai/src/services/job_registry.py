@@ -624,7 +624,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "策略构建参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
                 "trader_id": _string("交易员 ID", required=True),
                 "strategy_date": _date_field("策略日期", required=True),
                 "snapshot_id": _string("当前 Market Snapshot ID"),
@@ -1013,6 +1014,20 @@ def validate_job_submission(
                 "created_by": created_by,
             },
         )
+
+    if job_type in {"strategy-build", "snapshot-build", "run-pre-market", "run-after-close"}:
+        has_profile_context = bool(normalized.get("profile_id"))
+        has_config_context = bool(normalized.get("config_path"))
+        if not has_profile_context and not has_config_context:
+            return ServiceResult(
+                status="error",
+                message="missing required param: profile_id or config_path",
+                payload={
+                    "job_type": job_type,
+                    "definition": definition.summary(),
+                    "created_by": created_by,
+                },
+            )
 
     return ServiceResult(
         status="ok",

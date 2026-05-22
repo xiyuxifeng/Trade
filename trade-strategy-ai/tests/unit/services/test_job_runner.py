@@ -447,6 +447,43 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     asyncio.run(engine.dispose())
 
 
+def test_snapshot_build_handler_keeps_config_path_only_without_profile_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """仅传 config_path 时，handler 不应擅自注入默认 profile_id。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeSnapshotService:
+        async def build_market_snapshot(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"snapshot_path": str(tmp_path / "snapshot.json"), "result": "snapshot done"},
+                message="snapshot done",
+            )
+
+    monkeypatch.setattr(job_runner_module, "SnapshotService", lambda: _FakeSnapshotService())
+
+    runner, _, engine, _ = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["snapshot-build"]
+    result = asyncio.run(
+        handler(
+            {
+                "config_path": "config/app.yaml",
+                "date": "2026-05-16",
+                "slot": "17-30",
+                "snapshot_type": "all",
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["config_path"] == "config/app.yaml"
+    assert calls["profile_id"] is None
+    assert calls["trade_date"] == "2026-05-16"
+    asyncio.run(engine.dispose())
+
+
 def test_submit_backup_data_executes_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """backup-data 应走默认 handler 并产出备份结果。"""
 
@@ -626,7 +663,8 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
         async def build_strategy_version(
             self,
             *,
-            config_path: str | Path,
+            config_path: str | Path | None = None,
+            profile_id: str | None = None,
             trader_id: str,
             strategy_date: str,
             force: bool = False,
@@ -641,7 +679,8 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
             return job_runner_module.ServiceResult(
                 status="ok",
                 payload={
-                    "config_path": str(config_path),
+                    "config_path": str(config_path) if config_path is not None else None,
+                    "profile_id": profile_id,
                     "trader_id": trader_id,
                     "strategy_date": strategy_date,
                     "regime_selection": regime_selection
@@ -663,7 +702,7 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
         runner.submit_job(
             job_type="strategy-build",
             params={
-                "config_path": "config/app.yaml",
+                "profile_id": "default",
                 "trader_id": "trader-001",
                 "strategy_date": "2026-05-16",
                 "force": False,
@@ -684,6 +723,7 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
     assert loaded.payload["job"]["status"] == "success"
     assert loaded.payload["job"]["result"]["payload"]["trader_id"] == "trader-001"
     assert loaded.payload["job"]["result"]["payload"]["strategy_date"] == "2026-05-16"
+    assert loaded.payload["job"]["result"]["payload"]["profile_id"] == "default"
     assert loaded.payload["job"]["result"]["payload"]["regime_selection"]["snapshot_id"] == "snap-1"
     assert loaded.payload["job"]["result"]["payload"]["regime_selection"]["selected_by"] == "web"
     asyncio.run(engine.dispose())

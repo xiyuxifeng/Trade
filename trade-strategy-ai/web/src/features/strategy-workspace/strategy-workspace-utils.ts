@@ -9,10 +9,6 @@ export function selectLatestProfileSnapshot(detail: ProfileDetailResponse | null
   return sortSnapshotsByCapturedAt(detail?.snapshots ?? [])[0] ?? null;
 }
 
-export function selectLatestSnapshotConfigPath(detail: ProfileDetailResponse | null) {
-  return selectLatestProfileSnapshot(detail)?.config_path ?? null;
-}
-
 export function formatWorkspaceTimestamp(value: string | null | undefined) {
   if (!value) {
     return '未记录';

@@ -422,6 +422,7 @@ export function RulePoolReviewWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
+        title="规则池审核中心"
         description="查看规则列表、回测证据与审计轨迹，并在 Web 中完成批准或拒绝。"
         actionLabel="刷新"
         onAction={() => void rulesQuery.refetch()}

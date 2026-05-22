@@ -11,12 +11,12 @@ const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-aft
 
 function describeStrategyJob(job: JobRecord) {
   const params = job.params ?? {};
+  const profileId = typeof params.profile_id === 'string' ? params.profile_id : null;
   const traderId = typeof params.trader_id === 'string' ? params.trader_id : null;
   const strategyDate = typeof params.strategy_date === 'string' ? params.strategy_date : null;
   const asOfDate = typeof params.as_of_date === 'string' ? params.as_of_date : null;
-  const configPath = typeof params.config_path === 'string' ? params.config_path : null;
 
-  return [traderId ? `trader ${traderId}` : null, strategyDate ? `strategy ${strategyDate}` : asOfDate ? `as_of ${asOfDate}` : null, configPath ? configPath : null]
+  return [profileId ? `profile ${profileId}` : null, traderId ? `trader ${traderId}` : null, strategyDate ? `strategy ${strategyDate}` : asOfDate ? `as_of ${asOfDate}` : null]
     .filter(Boolean)
     .join(' · ');
 }

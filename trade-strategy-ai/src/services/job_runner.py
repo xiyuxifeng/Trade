@@ -211,7 +211,7 @@ class JobRunner(BaseService):
                 benchmark_symbol=params.get("benchmark_symbol"),
                 trade_date=str(trade_date),
                 slot=str(params.get("slot") or "17-30"),
-                profile_id=params.get("profile_id") or "default",
+                profile_id=params.get("profile_id"),
                 market=str(params.get("market") or "CN"),
                 force=_parse_bool(params.get("force"), default=False),
                 offline=_parse_bool(params.get("offline"), default=False),
@@ -221,7 +221,8 @@ class JobRunner(BaseService):
         async def _strategy_build(params: dict[str, Any]) -> ServiceResult:
             service = StrategyService()
             return await service.build_strategy_version(
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=params.get("config_path"),
+                profile_id=params.get("profile_id"),
                 trader_id=str(params.get("trader_id") or ""),
                 strategy_date=str(params.get("strategy_date") or date.today().isoformat()),
                 force=_parse_bool(params.get("force"), default=False),

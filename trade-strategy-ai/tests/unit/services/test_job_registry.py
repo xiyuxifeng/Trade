@@ -94,11 +94,21 @@ def test_validate_job_submission_enforces_schema() -> None:
 
     ok = validate_job_submission(
         job_type="run-pre-market",
-        params={"config_path": "config/app.yaml", "force": True, "export_html": False},
+        params={"profile_id": "default", "as_of_date": "2026-05-09", "force": True, "export_html": False},
         created_by="web",
     )
     assert ok.status == "ok"
-    assert ok.payload["params"]["config_path"] == "config/app.yaml"
+    assert ok.payload["params"]["profile_id"] == "default"
+    assert ok.payload["params"]["as_of_date"] == "2026-05-09"
+
+    after_close = validate_job_submission(
+        job_type="run-after-close",
+        params={"profile_id": "default", "as_of_date": "2026-05-09", "force": False, "export_html": True},
+        created_by="web",
+    )
+    assert after_close.status == "ok"
+    assert after_close.payload["params"]["profile_id"] == "default"
+    assert after_close.payload["params"]["as_of_date"] == "2026-05-09"
 
     backtest = validate_job_submission(
         job_type="backtest-run",
@@ -140,11 +150,12 @@ def test_validate_job_submission_enforces_schema() -> None:
 
     snapshot = validate_job_submission(
         job_type="snapshot-build",
-        params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "date": "2026-05-09"},
+        params={"profile_id": "default", "date": "2026-05-09", "snapshot_type": "all"},
         created_by="web",
     )
     assert snapshot.status == "ok"
-    assert snapshot.payload["params"]["benchmark_symbol"] == "000300.SH"
+    assert snapshot.payload["params"]["profile_id"] == "default"
+    assert snapshot.payload["params"]["date"] == "2026-05-09"
 
 
 def test_job_definition_lookup_exposes_metadata() -> None:

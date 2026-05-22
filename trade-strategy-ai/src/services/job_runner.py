@@ -206,12 +206,9 @@ class JobRunner(BaseService):
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
             trade_date = params.get("trade_date") or params.get("date") or date.today().isoformat()
-            benchmark_symbol = params.get("benchmark_symbol")
-            if not benchmark_symbol:
-                raise ValueError("missing required param: benchmark_symbol")
             return await service.build_market_snapshot(
                 config_path=params.get("config_path", "config/app.yaml"),
-                benchmark_symbol=benchmark_symbol,
+                benchmark_symbol=params.get("benchmark_symbol"),
                 trade_date=str(trade_date),
                 slot=str(params.get("slot") or "17-30"),
                 profile_id=params.get("profile_id") or "default",

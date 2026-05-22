@@ -500,7 +500,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "盘前执行参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
+                "benchmark_symbol": _string("基准指数代码"),
                 "as_of_date": _date_field("执行日期"),
                 "force": _boolean("是否强制执行", default=False),
                 "export_html": _boolean("是否导出 HTML", default=False),
@@ -523,7 +525,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "盘后执行参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
                 "as_of_date": _date_field("执行日期"),
                 "force": _boolean("是否强制执行", default=False),
                 "export_html": _boolean("是否导出 HTML", default=False),
@@ -592,8 +595,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "快照构建参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
-                "benchmark_symbol": _string("基准指数代码", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
+                "benchmark_symbol": _string("基准指数代码"),
                 "date": _date_field("单日快照日期"),
                 "start_date": _date_field("区间开始日期"),
                 "end_date": _date_field("区间结束日期"),

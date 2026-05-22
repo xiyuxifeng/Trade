@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,12 +20,41 @@ const PAGE_SIZE = 20;
 export function JobListPage() {
   const navigate = useNavigate();
   const { canAccess, isAuthenticated, principal } = useAuth();
-  const [status, setStatus] = useState('');
-  const [jobType, setJobType] = useState('');
-  const [createdBy, setCreatedBy] = useState('');
-  const [page, setPage] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const status = searchParams.get('status') ?? '';
+  const jobType = searchParams.get('job_type') ?? '';
+  const createdBy = searchParams.get('created_by') ?? '';
+  const pageParam = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam - 1 : 0;
 
   const canViewJobs = isAuthenticated && canAccess('viewer');
+
+  function updateFilters(next: { status?: string; jobType?: string; createdBy?: string; page?: number }) {
+    const params = new URLSearchParams(searchParams);
+
+    if (next.status !== undefined) {
+      if (next.status) params.set('status', next.status);
+      else params.delete('status');
+    }
+
+    if (next.jobType !== undefined) {
+      if (next.jobType) params.set('job_type', next.jobType);
+      else params.delete('job_type');
+    }
+
+    if (next.createdBy !== undefined) {
+      if (next.createdBy) params.set('created_by', next.createdBy);
+      else params.delete('created_by');
+    }
+
+    if (next.page !== undefined) {
+      if (next.page > 0) params.set('page', String(next.page + 1));
+      else params.delete('page');
+    }
+
+    setSearchParams(params, { replace: true });
+  }
 
   const jobsQuery = useQuery<JobsListResponse, ApiError>({
     queryKey: ['jobs', { status, jobType, createdBy, page }],
@@ -91,23 +120,20 @@ export function JobListPage() {
                 placeholder="按创建者过滤"
                 value={createdBy}
                 onChange={(event) => {
-                  setPage(0);
-                  setCreatedBy(event.target.value);
+                  updateFilters({ createdBy: event.target.value, page: 0 });
                 }}
               />
               <Input
                 placeholder="按任务类型过滤"
                 value={jobType}
                 onChange={(event) => {
-                  setPage(0);
-                  setJobType(event.target.value);
+                  updateFilters({ jobType: event.target.value, page: 0 });
                 }}
               />
               <Select
                 value={status}
                 onChange={(event) => {
-                  setPage(0);
-                  setStatus(event.target.value);
+                  updateFilters({ status: event.target.value, page: 0 });
                 }}
               >
                 <option value="">所有状态</option>
@@ -164,12 +190,12 @@ export function JobListPage() {
                 每页显示 {PAGE_SIZE} 条，当前第 {currentPage} 页，共 {total} 条。
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0}>
+                <Button variant="outline" onClick={() => updateFilters({ page: Math.max(0, page - 1) })} disabled={page === 0}>
                   上一页
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => updateFilters({ page: page + 1 })}
                   disabled={(page + 1) * PAGE_SIZE >= total}
                 >
                   下一页

@@ -317,6 +317,136 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """盘前运行 handler 应允许仅通过 Profile 提交。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeRunService:
+        def __init__(self, manager):
+            self.manager = manager
+
+        async def run_pre_market(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"html_path": str(tmp_path / "report.html"), "result": "pre market done"},
+                message="pre market done",
+            )
+
+    def _fake_build_manager(self, *, config_path):
+        calls["config_path"] = config_path
+        return object(), tmp_path
+
+    monkeypatch.setattr(job_runner_module, "RunService", _FakeRunService)
+    monkeypatch.setattr(job_runner_module.JobRunner, "_build_manager", _fake_build_manager, raising=False)
+
+    runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["run-pre-market"]
+    result = asyncio.run(
+        handler(
+            {
+                "profile_id": "default",
+                "as_of_date": "2026-05-16",
+                "force": True,
+                "export_html": False,
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["config_path"] == "config/app.yaml"
+    assert calls["as_of_date"].isoformat() == "2026-05-16"
+    assert calls["force"] is True
+    assert calls["export_html"] is False
+    asyncio.run(engine.dispose())
+
+
+def test_run_after_close_handler_accepts_profile_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """盘后运行 handler 应允许仅通过 Profile 提交。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeRunService:
+        def __init__(self, manager):
+            self.manager = manager
+
+        async def run_after_close(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"html_path": str(tmp_path / "evaluation.html"), "result": "after close done"},
+                message="after close done",
+            )
+
+    def _fake_build_manager(self, *, config_path):
+        calls["config_path"] = config_path
+        return object(), tmp_path
+
+    monkeypatch.setattr(job_runner_module, "RunService", _FakeRunService)
+    monkeypatch.setattr(job_runner_module.JobRunner, "_build_manager", _fake_build_manager, raising=False)
+
+    runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["run-after-close"]
+    result = asyncio.run(
+        handler(
+            {
+                "profile_id": "default",
+                "as_of_date": "2026-05-16",
+                "force": True,
+                "export_html": True,
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["config_path"] == "config/app.yaml"
+    assert calls["as_of_date"].isoformat() == "2026-05-16"
+    assert calls["force"] is True
+    assert calls["export_html"] is True
+    asyncio.run(engine.dispose())
+
+
+def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """快照构建 handler 应允许 benchmark_symbol 由配置回填。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeSnapshotService:
+        async def build_market_snapshot(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"snapshot_path": str(tmp_path / "snapshot.json"), "result": "snapshot done"},
+                message="snapshot done",
+            )
+
+    monkeypatch.setattr(job_runner_module, "SnapshotService", lambda: _FakeSnapshotService())
+
+    runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["snapshot-build"]
+    result = asyncio.run(
+        handler(
+            {
+                "profile_id": "default",
+                "date": "2026-05-16",
+                "slot": "17-30",
+                "snapshot_type": "all",
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["config_path"] == "config/app.yaml"
+    assert calls["benchmark_symbol"] is None
+    assert calls["profile_id"] == "default"
+    assert calls["trade_date"] == "2026-05-16"
+    asyncio.run(engine.dispose())
+
+
 def test_submit_backup_data_executes_default_handler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """backup-data 应走默认 handler 并产出备份结果。"""
 

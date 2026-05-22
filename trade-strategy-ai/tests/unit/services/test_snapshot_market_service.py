@@ -304,3 +304,43 @@ def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:
     assert result.payload["success_count"] == 2
     assert result.warnings == ["constituents failed"]
     assert any(item["status"] == "error" for item in result.payload["results"])
+
+
+def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Market Snapshot 构建应允许 benchmark_symbol 由 Profile 默认值补齐。"""
+    from src.services import snapshot_service as snapshot_service_module
+    from src.services.base import ServiceResult
+    from src.services.snapshot_service import SnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        "timezone: Asia/Shanghai\nmarket_state_benchmark_symbol: 000300.SH\ntraders: []\n",
+        encoding="utf-8",
+    )
+
+    calls: dict[str, object] = {}
+
+    class _FakeMarketSnapshotService:
+        def __init__(self, storage_service=None):
+            self.storage_service = storage_service
+
+        async def build_market_snapshot(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(status="ok", message="market snapshot built", payload={"snapshot_path": "snapshot.json"})
+
+    monkeypatch.setattr(snapshot_service_module, "MarketSnapshotService", _FakeMarketSnapshotService)
+
+    service = SnapshotService()
+    result = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            trade_date="2026-05-16",
+            profile_id="default",
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["benchmark_symbol"] == "000300.SH"
+    assert calls["profile_id"] == "default"
+    assert calls["trade_date"] == "2026-05-16"

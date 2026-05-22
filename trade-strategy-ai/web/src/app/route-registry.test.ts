@@ -20,6 +20,11 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/market/datasets').path).toBe('/market/datasets');
     expect(resolveRouteByPathname('/market/datasets').description).toBe('市场数据集浏览器');
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
+    expect(resolveRouteByPathname('/strategies').description).toBe('策略状态摘要与工作台入口');
+    expect(resolveRouteByPathname('/strategies/pre-market').path).toBe('/strategies/pre-market');
+    expect(resolveRouteByPathname('/strategies/pre-market').description).toBe('盘前准备入口');
+    expect(resolveRouteByPathname('/strategies/after-close').path).toBe('/strategies/after-close');
+    expect(resolveRouteByPathname('/strategies/after-close').description).toBe('盘后复盘入口');
     expect(resolveRouteByPathname('/strategies/regime-selection').path).toBe('/strategies/regime-selection');
     expect(resolveRouteByPathname('/backtest').path).toBe('/backtest');
     expect(resolveRouteByPathname('/backtest/regime').path).toBe('/backtest/regime');

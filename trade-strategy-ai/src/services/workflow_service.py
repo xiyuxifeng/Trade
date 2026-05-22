@@ -115,26 +115,6 @@ def _workflow_step(
 
 DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
     _workflow(
-        "pre-market",
-        "盘前工作台",
-        "完成盘前日报、市场状态和快照相关操作。",
-        "run-pre-market",
-        steps=[
-            _workflow_step("run-pre-market", "执行盘前日报", "生成盘前日报和可选 HTML。", "run-pre-market"),
-            _workflow_step("market-state-build", "构建市场状态", "先准备市场状态数据。", "market-state-build"),
-            _workflow_step("snapshot-build", "构建候选池快照", "生成盘前/盘后需要的快照。", "snapshot-build"),
-        ],
-    ),
-    _workflow(
-        "after-close",
-        "盘后工作台",
-        "完成盘后考核、归因与结果归档。",
-        "run-after-close",
-        steps=[
-            _workflow_step("run-after-close", "执行盘后考核", "生成盘后考核和可选 HTML。", "run-after-close"),
-        ],
-    ),
-    _workflow(
         "snapshot",
         "快照中心",
         "构建候选池快照，供盘前盘后和回测使用。",

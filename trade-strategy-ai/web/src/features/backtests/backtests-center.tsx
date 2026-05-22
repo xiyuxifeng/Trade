@@ -1,3 +1,10 @@
+/**
+ * Deprecated legacy backtest workspace implementation.
+ *
+ * This file is intentionally kept for reference and should not be wired into
+ * routes or page exports. The active backtest workspace is
+ * `web/src/features/backtest/backtest-center.tsx`.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

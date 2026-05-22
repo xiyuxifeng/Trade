@@ -145,6 +145,34 @@ describe('JobsPage', () => {
     expect(await screen.findByText('job detail page')).toBeInTheDocument();
   });
 
+  it('initializes filters from query params and keeps the list aligned', async () => {
+    mockedListJobs.mockResolvedValueOnce(
+      makeListResponse([makeJob({ id: 'job-query-1', job_type: 'run-pre-market', status: 'failed', created_by: 'web' })], {
+        count: 1,
+        total: 1,
+        skip: 20,
+        limit: 20,
+      }),
+    );
+
+    renderWithRouter([{ path: '/jobs', element: <JobsPage /> }], ['/jobs?status=failed&job_type=run-pre-market&created_by=web&page=2']);
+
+    expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveValue('failed');
+    expect(screen.getByPlaceholderText('按任务类型过滤')).toHaveValue('run-pre-market');
+    expect(screen.getByPlaceholderText('按创建者过滤')).toHaveValue('web');
+    await waitFor(() => {
+      expect(mockedListJobs).toHaveBeenLastCalledWith({
+        status: 'failed',
+        job_type: 'run-pre-market',
+        created_by: 'web',
+        skip: 20,
+        limit: 20,
+      });
+    });
+    expect(await screen.findByText('job-query-1')).toBeInTheDocument();
+  });
+
   it('paginates the job list', async () => {
     const user = userEvent.setup();
     mockedListJobs.mockResolvedValue(

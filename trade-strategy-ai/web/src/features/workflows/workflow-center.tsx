@@ -170,7 +170,8 @@ export function WorkflowCenter() {
     staleTime: 15_000,
   });
 
-  const workflows = (workflowsQuery.data?.items ?? []).filter((workflow) => workflow.workflow_id !== 'pipeline');
+  const removedWorkflowIds = new Set(['pipeline', 'pre-market', 'after-close']);
+  const workflows = (workflowsQuery.data?.items ?? []).filter((workflow) => !removedWorkflowIds.has(workflow.workflow_id));
 
   const selectedWorkflow = useMemo(() => {
     if (!workflows.length) return null;

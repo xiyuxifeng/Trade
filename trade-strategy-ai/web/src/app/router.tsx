@@ -30,7 +30,7 @@ import { HealthPage } from '@/pages/system/HealthPage';
 import { SystemPage } from '@/pages/system';
 import { UsersPage } from '@/pages/system/UsersPage';
 import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
-import { StrategiesPage } from '@/pages/strategies';
+import { AfterClosePage, PreMarketPage, StrategiesPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
 import { RulePoolPage } from '@/pages/rule-pool';
@@ -76,6 +76,10 @@ const dashboardLayoutRoutes = [
   { path: 'profiles/:profileId/edit', element: <ProfileEditPage /> },
   { path: 'profiles/:profileId/snapshots/:snapshotId', element: <ProfileSnapshotPage /> },
   { path: 'workflows', element: <WorkflowsPage /> },
+  { path: 'workflows/pre-market', element: <Navigate to="/strategies/pre-market" replace /> },
+  { path: 'workflows/pre-market/run', element: <Navigate to="/strategies/pre-market" replace /> },
+  { path: 'workflows/after-close', element: <Navigate to="/strategies/after-close" replace /> },
+  { path: 'workflows/after-close/run', element: <Navigate to="/strategies/after-close" replace /> },
   { path: 'workflows/:workflowId/run', element: <WorkflowsPage /> },
   { path: 'articles', element: <ArticlesPage /> },
   { path: 'articles/run', element: <ArticleRunPage /> },
@@ -91,6 +95,8 @@ const dashboardLayoutRoutes = [
   { path: 'market', element: <MarketPage /> },
   { path: 'market/datasets', element: <MarketDatasetPage /> },
   { path: 'strategies', element: <StrategiesPage /> },
+  { path: 'strategies/pre-market', element: <PreMarketPage /> },
+  { path: 'strategies/after-close', element: <AfterClosePage /> },
   { path: 'strategies/regime-selection', element: <RegimeRuleSelectionPage /> },
   { path: 'system', element: <SystemPage /> },
   { path: 'system/audit', element: <AuditPage /> },

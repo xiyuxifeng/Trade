@@ -47,8 +47,6 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     assert listed.status == "ok"
     workflow_ids = {item["workflow_id"] for item in listed.payload["items"]}
     assert {
-        "pre-market",
-        "after-close",
         "snapshot",
         "ohlcv",
         "strategy",
@@ -59,14 +57,9 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
         "scheduler",
         "report",
     } <= workflow_ids
+    assert "pre-market" not in workflow_ids
+    assert "after-close" not in workflow_ids
     assert "pipeline" not in workflow_ids
-
-    pre_market = next(item for item in listed.payload["items"] if item["workflow_id"] == "pre-market")
-    step = pre_market["steps"][0]
-    assert "param_schema" in step
-    assert step["param_schema"]["description"] == "盘前执行参数"
-    assert step["param_schema"]["fields"]["as_of_date"]["type"] == "date"
-    assert step["param_schema"]["fields"]["export_html"]["default"] is False
 
     scheduler = next(item for item in listed.payload["items"] if item["workflow_id"] == "scheduler")
     scheduler_step_ids = [step["step_id"] for step in scheduler["steps"]]
@@ -97,16 +90,20 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
     service = WorkflowService(workflow_runner=fake_runner)
     result = __import__("asyncio").run(
         service.run_workflow(
-            workflow_id="pre-market",
-            params={"config_path": "config/app.yaml"},
+            workflow_id="strategy",
+            params={
+                "config_path": "config/app.yaml",
+                "trader_id": "trader_a",
+                "strategy_date": "2026-05-16",
+            },
             created_by="web",
         )
     )
 
     assert result.status == "ok"
-    assert result.payload["workflow"]["workflow_id"] == "pre-market"
-    assert result.payload["job"]["job_type"] == "run-pre-market"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "pre-market"
+    assert result.payload["workflow"]["workflow_id"] == "strategy"
+    assert result.payload["job"]["job_type"] == "strategy-build"
+    assert fake_runner.calls[0]["workflow"].workflow_id == "strategy"
     assert fake_runner.calls[0]["params"]["config_path"] == "config/app.yaml"
     assert fake_runner.calls[0]["confirmed"] is False
 

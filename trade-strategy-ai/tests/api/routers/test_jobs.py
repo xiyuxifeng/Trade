@@ -69,3 +69,24 @@ async def test_validate_job_submission_accepts_strategy_build(client: AsyncClien
     assert response.status_code == 200
     data = response.json()
     assert data["params"]["trader_id"] == "trader-001"
+
+
+@pytest.mark.asyncio
+async def test_validate_job_submission_accepts_after_close_profile_only(client: AsyncClient) -> None:
+    """提交校验接口应接受 profile-only 的盘后运行。"""
+    response = await client.post(
+        "/api/ui/v1/jobs/validate",
+        json={
+            "job_type": "run-after-close",
+            "params": {
+                "profile_id": "default",
+                "as_of_date": "2026-05-16",
+                "force": False,
+                "export_html": True,
+            },
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["params"]["profile_id"] == "default"
+    assert data["params"]["as_of_date"] == "2026-05-16"

@@ -14,15 +14,10 @@ import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
 import type { ArtifactRecord } from '@/types/artifacts';
-import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
 import { StrategyWorkspaceActions } from '@/features/strategy-workspace';
 import { StrategyWorkspaceArtifacts } from '@/features/strategy-workspace';
-import {
-  formatWorkspaceTimestamp,
-  isWorkspacePermissionDenied,
-  selectLatestProfileSnapshot,
-} from '@/features/strategy-workspace';
+import { isWorkspacePermissionDenied, selectLatestProfileSnapshot } from '@/features/strategy-workspace';
 
 function sortByDateDesc<T extends { created_at?: string | null; strategy_date?: string | null; version_id?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
@@ -46,70 +41,6 @@ function SummaryTile({ label, value }: { label: string; value: string | number }
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
       <p className="mt-2 break-all text-sm font-medium text-slate-950">{value}</p>
     </div>
-  );
-}
-
-function ProfileRuntimeCard({
-  profile,
-  detail,
-  isLoading,
-  error,
-  onRetry,
-}: {
-  profile: ProfileRecord | null;
-  detail: ProfileDetailResponse | null;
-  isLoading: boolean;
-  error: unknown;
-  onRetry: () => void;
-}) {
-  const snapshot = selectLatestProfileSnapshot(detail);
-  const permissionDenied = isWorkspacePermissionDenied(error);
-
-  return (
-    <Card className="border-slate-200 bg-white shadow-sm">
-      <CardHeader>
-        <Badge variant="info" className="w-fit">
-          运行上下文
-        </Badge>
-        <CardTitle className="mt-2 text-slate-950">Profile / Trader / Date</CardTitle>
-        <CardDescription className="text-slate-600">策略版本构建只使用 Profile，不再暴露旧路径参数。</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryTile label="Profile" value={profile ? `${profile.name} · ${profile.profile_id}` : '未选择'} />
-          <SummaryTile label="环境" value={profile?.environment ?? '未选择'} />
-          <SummaryTile label="版本" value={profile?.version ?? '未选择'} />
-          <SummaryTile label="最新快照" value={snapshot?.snapshot_id ?? '暂无'} />
-        </div>
-
-        {isLoading ? (
-          <LoadingState label="正在加载 Profile 详情" description="稍后会显示最新 snapshot 与关联信息。" />
-        ) : error ? (
-          <ErrorState
-            {...buildErrorRecoveryState(error, 'strategy')}
-            onRetry={permissionDenied ? undefined : onRetry}
-          />
-        ) : detail ? (
-          <div className="grid gap-3 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile snapshot</p>
-              <p className="mt-2 break-all text-slate-950">{snapshot?.snapshot_id ?? '暂无最新 snapshot'}</p>
-              <p className="mt-3 text-slate-600">
-                最新快照：{snapshot ? `${snapshot.snapshot_id} · ${formatWorkspaceTimestamp(snapshot.captured_at)}` : '暂无'}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">说明</p>
-              <p className="mt-2 leading-6 text-slate-700">
-                这里展示的是策略构建所使用的 Profile 上下文，前端不再接触旧路径参数。
-              </p>
-            </div>
-          </div>
-        ) : (
-          <EmptyState title="请选择一个 profile。" description="选定 profile 后，页面会展示最新 snapshot 与构建入口。" />
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -143,11 +74,6 @@ export function StrategyVersionsPage() {
     }
   }, [profileItems, selectedProfileId]);
 
-  const selectedProfile = useMemo(
-    () => profileItems.find((item) => item.profile_id === selectedProfileId) ?? null,
-    [profileItems, selectedProfileId],
-  );
-
   const profileDetailQuery = useQuery({
     queryKey: ['strategy-versions-page', 'profile-detail', selectedProfileId],
     queryFn: () => getProfile(selectedProfileId),
@@ -159,7 +85,6 @@ export function StrategyVersionsPage() {
   const selectedProfileDetail =
     selectedProfileDetailRaw?.profile.profile_id === selectedProfileId ? selectedProfileDetailRaw : null;
   const latestSnapshot = selectLatestProfileSnapshot(selectedProfileDetail);
-  const profileDetailLoading = profileDetailQuery.isLoading || (profileDetailQuery.isFetching && !selectedProfileDetail);
 
   const versionsQuery = useQuery({
     queryKey: ['strategy-versions-page', 'versions', traderId, strategyDate],
@@ -311,7 +236,7 @@ export function StrategyVersionsPage() {
         </section>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
@@ -363,7 +288,6 @@ export function StrategyVersionsPage() {
             </div>
           </CardContent>
         </Card>
-
         <StrategyWorkspaceActions
           disabled={!selectedProfileId || !traderId.trim() || !strategyDate}
           onSubmitted={({ jobType, jobId }) => {
@@ -374,38 +298,38 @@ export function StrategyVersionsPage() {
             void artifactsQuery.refetch();
           }}
           profileId={selectedProfileId}
-          profileName={selectedProfile?.name ?? ''}
           snapshotId={latestSnapshot?.snapshot_id ?? null}
-          snapshotCapturedAt={latestSnapshot?.captured_at ?? null}
           strategyDate={strategyDate}
           traderId={traderId}
         />
       </section>
 
-      <StrategyWorkspaceArtifacts
-        artifacts={strategyArtifacts}
-        artifactsError={artifactsQuery.error}
-        isArtifactsLoading={artifactsQuery.isLoading}
-        isVersionDetailLoading={versionDetailQuery.isLoading || versionDetailQuery.isFetching}
-        isVersionsLoading={versionsQuery.isLoading}
-        onRetryArtifacts={() => {
-          void artifactsQuery.refetch();
-        }}
-        onRetryVersionDetail={() => {
-          void versionDetailQuery.refetch();
-        }}
-        onRetryVersions={() => {
-          void versionsQuery.refetch();
-        }}
-        onSelectVersion={(versionId) => {
-          setSelectedVersionId(versionId);
-        }}
-        selectedVersionDetail={selectedVersionDetail}
-        selectedVersionId={selectedVersionIdResolved}
-        versionDetailError={versionDetailQuery.error}
-        versions={versionItems}
-        versionsError={versionsQuery.error}
-      />
+      <section>
+        <StrategyWorkspaceArtifacts
+          artifacts={strategyArtifacts}
+          artifactsError={artifactsQuery.error}
+          isArtifactsLoading={artifactsQuery.isLoading}
+          isVersionDetailLoading={versionDetailQuery.isLoading || versionDetailQuery.isFetching}
+          isVersionsLoading={versionsQuery.isLoading}
+          onRetryArtifacts={() => {
+            void artifactsQuery.refetch();
+          }}
+          onRetryVersionDetail={() => {
+            void versionDetailQuery.refetch();
+          }}
+          onRetryVersions={() => {
+            void versionsQuery.refetch();
+          }}
+          onSelectVersion={(versionId) => {
+            setSelectedVersionId(versionId);
+          }}
+          selectedVersionDetail={selectedVersionDetail}
+          selectedVersionId={selectedVersionIdResolved}
+          versionDetailError={versionDetailQuery.error}
+          versions={versionItems}
+          versionsError={versionsQuery.error}
+        />
+      </section>
     </main>
   );
 }

@@ -170,7 +170,8 @@ export function WorkflowCenter() {
     staleTime: 15_000,
   });
 
-  const removedWorkflowIds = new Set(['pipeline', 'pre-market', 'after-close']);
+  // Legacy workflow entries are hidden here because strategy now uses the sidebar canonical pages.
+  const removedWorkflowIds = new Set(['pipeline', 'pre-market', 'after-close', 'strategy']);
   const workflows = (workflowsQuery.data?.items ?? []).filter((workflow) => !removedWorkflowIds.has(workflow.workflow_id));
 
   const selectedWorkflow = useMemo(() => {

@@ -4,10 +4,8 @@ import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { formatWorkspaceTimestamp } from './strategy-workspace-utils';
+import { formatWorkspaceTimestamp, isStrategyWorkspaceJobType } from './strategy-workspace-utils';
 import type { JobRecord } from '@/types/jobs';
-
-const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
 
 function describeStrategyJob(job: JobRecord) {
   const params = job.params ?? {};
@@ -33,7 +31,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
   const strategyJobs = useMemo(
     () =>
       [...jobs]
-        .filter((job) => STRATEGY_JOB_TYPES.has(job.job_type))
+        .filter((job) => isStrategyWorkspaceJobType(job.job_type))
         .sort((left, right) => right.created_at.localeCompare(left.created_at)),
     [jobs],
   );
@@ -41,7 +39,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
   return (
     <SectionCard
       title="策略任务历史"
-      description="仅展示 `strategy-build`、`run-pre-market` 和 `run-after-close`。"
+      description="仅展示策略工作台相关 Job，包括 `snapshot-build`、`strategy-build`、`run-pre-market` 和 `run-after-close`。"
       action={
         <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetry} variant="outline">
           刷新
@@ -81,7 +79,10 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
           ))}
         </div>
       ) : (
-        <EmptyState title="暂无策略任务。" description="提交 `strategy-build`、`run-pre-market` 或 `run-after-close` 后，这里会展示最近执行记录。" />
+        <EmptyState
+          title="暂无策略任务。"
+          description="提交 `snapshot-build`、`strategy-build`、`run-pre-market` 或 `run-after-close` 后，这里会展示最近执行记录。"
+        />
       )}
     </SectionCard>
   );

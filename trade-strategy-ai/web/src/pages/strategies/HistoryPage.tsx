@@ -14,8 +14,7 @@ import { StrategyWorkspaceHistory } from '@/features/strategy-workspace';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { isWorkspacePermissionDenied } from '@/features/strategy-workspace';
 import type { JobRecord } from '@/types/jobs';
-
-const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
+import { isStrategyWorkspaceJobType } from '@/features/strategy-workspace/strategy-workspace-utils';
 
 function sortJobsByCreatedAtDesc(items: JobRecord[]) {
   return [...items].sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -63,7 +62,7 @@ export function StrategyHistoryPage() {
   });
 
   const strategyJobs = useMemo(
-    () => sortJobsByCreatedAtDesc((jobsQuery.data?.items ?? []).filter((job) => STRATEGY_JOB_TYPES.has(job.job_type))),
+    () => sortJobsByCreatedAtDesc((jobsQuery.data?.items ?? []).filter((job) => isStrategyWorkspaceJobType(job.job_type))),
     [jobsQuery.data?.items],
   );
 
@@ -87,11 +86,11 @@ export function StrategyHistoryPage() {
         <PageHeader
           kicker="策略"
           title="运行历史"
-          description="筛选策略相关 Job 的运行历史，并跳转到任务中心查看详情。"
+          description="筛选策略工作台相关 Job 的运行历史，并跳转到任务中心查看详情。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
-        <LoadingState label="正在加载策略历史" description="稍后会展示策略构建、盘前和盘后任务。" />
+        <LoadingState label="正在加载策略历史" description="稍后会展示策略构建、快照、盘前和盘后任务。" />
       </main>
     );
   }
@@ -102,7 +101,7 @@ export function StrategyHistoryPage() {
         <PageHeader
           kicker="策略"
           title="运行历史"
-          description="筛选策略相关 Job 的运行历史，并跳转到任务中心查看详情。"
+          description="筛选策略工作台相关 Job 的运行历史，并跳转到任务中心查看详情。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
@@ -120,13 +119,13 @@ export function StrategyHistoryPage() {
         <PageHeader
           kicker="策略"
           title="运行历史"
-          description="筛选策略相关 Job 的运行历史，并跳转到任务中心查看详情。"
+          description="筛选策略工作台相关 Job 的运行历史，并跳转到任务中心查看详情。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
         <EmptyState
           title="暂无策略运行历史。"
-          description="提交 strategy-build、run-pre-market 或 run-after-close 后，这里会出现历史记录。"
+          description="提交 snapshot-build、strategy-build、run-pre-market 或 run-after-close 后，这里会出现历史记录。"
           actionLabel="进入任务中心"
           onAction={() => navigate('/jobs')}
         />
@@ -136,13 +135,13 @@ export function StrategyHistoryPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
-        kicker="策略"
-        title="运行历史"
-        description="筛选策略相关 Job 的运行历史，并跳转到任务中心查看详情。"
-        actionLabel="返回策略首页"
-        onAction={() => navigate('/strategies')}
-      />
+        <PageHeader
+          kicker="策略"
+          title="运行历史"
+          description="筛选策略工作台相关 Job 的运行历史，并跳转到任务中心查看详情。"
+          actionLabel="返回策略首页"
+          onAction={() => navigate('/strategies')}
+        />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">
@@ -169,6 +168,7 @@ export function StrategyHistoryPage() {
                 <span className="text-sm font-medium text-slate-700">类型</span>
                 <Select className="border-slate-200 bg-white text-slate-900" onChange={(event) => setJobTypeFilter(event.target.value)} value={jobTypeFilter}>
                   <option value="">全部</option>
+                  <option value="snapshot-build">snapshot-build</option>
                   <option value="strategy-build">strategy-build</option>
                   <option value="run-pre-market">run-pre-market</option>
                   <option value="run-after-close">run-after-close</option>

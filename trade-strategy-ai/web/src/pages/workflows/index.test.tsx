@@ -97,6 +97,32 @@ describe('WorkflowsPage', () => {
             },
           ],
         },
+        {
+          workflow_id: 'strategy',
+          title: '策略版本',
+          description: '按交易员和日期构建策略版本。',
+          job_type: 'strategy-build',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'strategy-build',
+            title: '构建策略版本',
+            description: '生成交易员策略版本。',
+            summary: '构建策略版本',
+            permission: 'operator',
+            risk: 'medium',
+            can_retry: true,
+            can_run_concurrently: false,
+            concurrency_group: 'strategy-build',
+            requires_confirmation: false,
+            runnable: true,
+            params_schema: {
+              description: '策略构建参数',
+              allow_additional_fields: false,
+              fields: {},
+            },
+          },
+          steps: [],
+        },
       ],
     });
 
@@ -111,13 +137,14 @@ describe('WorkflowsPage', () => {
     expect(await screen.findByText('工作流目录')).toBeInTheDocument();
     expect(await screen.findByText('工作流摘要')).toBeInTheDocument();
     expect(screen.queryByText('数据 Pipeline')).not.toBeInTheDocument();
+    expect(screen.queryByText('策略版本')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/workflows');
     });
   });
 
-  it('shows removed workflow state for old data pipeline deep links', async () => {
+  it('shows removed workflow state for old strategy deep links', async () => {
     mockedListWorkflows.mockResolvedValue({
       count: 1,
       items: [
@@ -163,11 +190,11 @@ describe('WorkflowsPage', () => {
         { path: '/workflows/:workflowId', element: <WorkflowsPage /> },
         { path: '/workflows/:workflowId/run', element: <WorkflowsPage /> },
       ],
-      ['/workflows/pipeline/run'],
+      ['/workflows/strategy/run'],
     );
 
     expect(await screen.findByText('该工作流已移除或不可用，请返回工作流目录选择其他流程。')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '运行入口' })).not.toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/workflows/pipeline/run');
+    expect(router.state.location.pathname).toBe('/workflows/strategy/run');
   });
 });

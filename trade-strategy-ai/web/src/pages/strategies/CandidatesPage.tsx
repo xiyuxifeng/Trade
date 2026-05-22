@@ -12,14 +12,9 @@ import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
-import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
 import { StrategyWorkspaceCandidate } from '@/features/strategy-workspace';
-import {
-  formatWorkspaceTimestamp,
-  isWorkspacePermissionDenied,
-  selectLatestProfileSnapshot,
-} from '@/features/strategy-workspace';
+import { isWorkspacePermissionDenied, selectLatestProfileSnapshot } from '@/features/strategy-workspace';
 
 function sortByDateDesc<T extends { created_at?: string | null; strategy_date?: string | null; version_id?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
@@ -35,70 +30,6 @@ function SummaryTile({ label, value }: { label: string; value: string | number }
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
       <p className="mt-2 break-all text-sm font-medium text-slate-950">{value}</p>
     </div>
-  );
-}
-
-function ProfileRuntimeCard({
-  profile,
-  detail,
-  isLoading,
-  error,
-  onRetry,
-}: {
-  profile: ProfileRecord | null;
-  detail: ProfileDetailResponse | null;
-  isLoading: boolean;
-  error: unknown;
-  onRetry: () => void;
-}) {
-  const snapshot = selectLatestProfileSnapshot(detail);
-  const permissionDenied = isWorkspacePermissionDenied(error);
-
-  return (
-    <Card className="border-slate-200 bg-white shadow-sm">
-      <CardHeader>
-        <Badge variant="info" className="w-fit">
-          运行上下文
-        </Badge>
-        <CardTitle className="mt-2 text-slate-950">Profile / Trader / Date</CardTitle>
-        <CardDescription className="text-slate-600">候选版本生成与审核只使用 Profile，不再暴露旧路径参数。</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryTile label="Profile" value={profile ? `${profile.name} · ${profile.profile_id}` : '未选择'} />
-          <SummaryTile label="环境" value={profile?.environment ?? '未选择'} />
-          <SummaryTile label="版本" value={profile?.version ?? '未选择'} />
-          <SummaryTile label="最新快照" value={snapshot?.snapshot_id ?? '暂无'} />
-        </div>
-
-        {isLoading ? (
-          <LoadingState label="正在加载 Profile 详情" description="稍后会显示最新 snapshot 与关联信息。" />
-        ) : error ? (
-          <ErrorState
-            {...buildErrorRecoveryState(error, 'strategy')}
-            onRetry={permissionDenied ? undefined : onRetry}
-          />
-        ) : detail ? (
-          <div className="grid gap-3 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile snapshot</p>
-              <p className="mt-2 break-all text-slate-950">{snapshot?.snapshot_id ?? '暂无最新 snapshot'}</p>
-              <p className="mt-3 text-slate-600">
-                最新快照：{snapshot ? `${snapshot.snapshot_id} · ${formatWorkspaceTimestamp(snapshot.captured_at)}` : '暂无'}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">说明</p>
-              <p className="mt-2 leading-6 text-slate-700">
-                这里展示候选版本生成所依赖的 Profile 上下文，前端不会再传旧路径参数。
-              </p>
-            </div>
-          </div>
-        ) : (
-          <EmptyState title="请选择一个 profile。" description="选定 profile 后，页面会展示最新 snapshot 与候选生成入口。" />
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -130,11 +61,6 @@ export function StrategyCandidatesPage() {
     }
   }, [profileItems, selectedProfileId]);
 
-  const selectedProfile = useMemo(
-    () => profileItems.find((item) => item.profile_id === selectedProfileId) ?? null,
-    [profileItems, selectedProfileId],
-  );
-
   const profileDetailQuery = useQuery({
     queryKey: ['strategy-candidates-page', 'profile-detail', selectedProfileId],
     queryFn: () => getProfile(selectedProfileId),
@@ -146,7 +72,6 @@ export function StrategyCandidatesPage() {
   const selectedProfileDetail =
     selectedProfileDetailRaw?.profile.profile_id === selectedProfileId ? selectedProfileDetailRaw : null;
   const latestSnapshot = selectLatestProfileSnapshot(selectedProfileDetail);
-  const profileDetailLoading = profileDetailQuery.isLoading || (profileDetailQuery.isFetching && !selectedProfileDetail);
 
   const versionsQuery = useQuery({
     queryKey: ['strategy-candidates-page', 'versions', traderId, strategyDate],
@@ -185,8 +110,7 @@ export function StrategyCandidatesPage() {
   });
 
   const selectedVersionDetail = versionDetailQuery.data?.item ?? null;
-  const profileError = profilesQuery.error ?? profileDetailQuery.error;
-  const pageError = profileError ?? versionsQuery.error ?? versionDetailQuery.error;
+  const pageError = profilesQuery.error ?? profileDetailQuery.error ?? versionsQuery.error ?? versionDetailQuery.error;
   const permissionDenied = isWorkspacePermissionDenied(pageError);
 
   if (profilesQuery.isLoading) {
@@ -262,7 +186,7 @@ export function StrategyCandidatesPage() {
       />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Card className="border-slate-200 bg-white shadow-sm">
+        <Card className="border-slate-200 bg-white shadow-sm xl:col-span-2">
           <CardHeader>
             <Badge variant="info" className="w-fit">
               运行参数
@@ -271,7 +195,7 @@ export function StrategyCandidatesPage() {
             <CardDescription className="text-slate-600">候选版本页面只使用 Profile、交易员和策略日期。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Trader ID</span>
                 <Input
@@ -304,26 +228,12 @@ export function StrategyCandidatesPage() {
                   ))}
                 </Select>
               </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
               <SummaryTile label="版本数" value={versionItems.length} />
               <SummaryTile label="最新版本" value={versionItems[0]?.version_id ?? '暂无'} />
               <SummaryTile label="最新快照" value={latestSnapshot?.snapshot_id ?? '暂无'} />
             </div>
           </CardContent>
         </Card>
-
-        <ProfileRuntimeCard
-          detail={selectedProfileDetail}
-          error={profileError}
-          isLoading={profileDetailLoading}
-          onRetry={() => {
-            void profilesQuery.refetch();
-            void profileDetailQuery.refetch();
-          }}
-          profile={selectedProfile}
-        />
       </section>
 
       <StrategyWorkspaceCandidate

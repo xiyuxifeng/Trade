@@ -38,9 +38,7 @@ describe('StrategyWorkspaceActions', () => {
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
-              profileName="默认配置"
               snapshotId="snap-1"
-              snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"
             />
@@ -94,9 +92,7 @@ describe('StrategyWorkspaceActions', () => {
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
-              profileName="默认配置"
               snapshotId="snap-1"
-              snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"
             />
@@ -144,9 +140,7 @@ describe('StrategyWorkspaceActions', () => {
               disabled={false}
               onSubmitted={() => undefined}
               profileId="default"
-              profileName="默认配置"
               snapshotId="snap-1"
-              snapshotCapturedAt="2026-05-16T08:00:00Z"
               strategyDate="2026-05-16"
               traderId="trader_a"
             />

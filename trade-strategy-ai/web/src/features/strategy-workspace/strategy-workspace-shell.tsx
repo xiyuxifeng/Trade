@@ -25,10 +25,9 @@ import { StrategyWorkspaceCandidate } from './strategy-workspace-candidate';
 import {
   formatWorkspaceTimestamp,
   isWorkspacePermissionDenied,
+  isStrategyWorkspaceJobType,
   selectLatestProfileSnapshot,
 } from './strategy-workspace-utils';
-
-const STRATEGY_JOB_TYPES = new Set(['strategy-build', 'run-pre-market', 'run-after-close']);
 
 function sortByDateDesc<
   T extends {
@@ -183,7 +182,7 @@ export function StrategyWorkspaceShell() {
 
   const strategyJobs = useMemo(
     () =>
-      sortByDateDesc((jobsQuery.data?.items ?? []).filter((job) => STRATEGY_JOB_TYPES.has(job.job_type))) as JobRecord[],
+      sortByDateDesc((jobsQuery.data?.items ?? []).filter((job) => isStrategyWorkspaceJobType(job.job_type))) as JobRecord[],
     [jobsQuery.data?.items],
   );
 
@@ -360,9 +359,7 @@ export function StrategyWorkspaceShell() {
             void artifactsQuery.refetch();
           }}
           profileId={selectedProfileId}
-          profileName={selectedProfile?.name ?? ''}
           snapshotId={latestSnapshot?.snapshot_id ?? null}
-          snapshotCapturedAt={latestSnapshot?.captured_at ?? null}
           strategyDate={strategyDate}
           traderId={traderId}
         />

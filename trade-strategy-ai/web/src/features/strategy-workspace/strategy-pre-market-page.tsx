@@ -445,6 +445,9 @@ export function StrategyPreMarketPage() {
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近任务</p>
                 <p className="mt-2 text-3xl font-semibold text-slate-950">{jobs.length}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">失败任务 {failedJobCount} 个，详情仍以任务中心为准。</p>
+                <p className="mt-3 break-all text-xs text-slate-500">
+                  {latestJob ? `${latestJob.job_type} · ${latestJob.status} · ${latestJob.id}` : '暂无最近任务'}
+                </p>
               </div>
             </div>
           </CardContent>

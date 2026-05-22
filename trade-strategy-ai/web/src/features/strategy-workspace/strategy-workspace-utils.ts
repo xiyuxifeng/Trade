@@ -1,6 +1,13 @@
 import { ApiError } from '@/lib/api/http';
 import type { ProfileDetailResponse, ProfileSnapshotRecord } from '@/types/profile';
 
+export const STRATEGY_WORKSPACE_JOB_TYPES = ['snapshot-build', 'strategy-build', 'run-pre-market', 'run-after-close'] as const;
+export type StrategyWorkspaceJobType = (typeof STRATEGY_WORKSPACE_JOB_TYPES)[number];
+
+export function isStrategyWorkspaceJobType(jobType: string): jobType is StrategyWorkspaceJobType {
+  return (STRATEGY_WORKSPACE_JOB_TYPES as readonly string[]).includes(jobType);
+}
+
 export function sortSnapshotsByCapturedAt(snapshots: ProfileSnapshotRecord[]) {
   return [...snapshots].sort((left, right) => right.captured_at.localeCompare(left.captured_at));
 }

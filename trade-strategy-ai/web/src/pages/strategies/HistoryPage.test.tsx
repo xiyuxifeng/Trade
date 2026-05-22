@@ -26,6 +26,33 @@ describe('HistoryPage', () => {
       limit: 200,
       items: [
         {
+          id: 'job-snapshot-1',
+          job_type: 'snapshot-build',
+          status: 'success',
+          params: { profile_id: 'default', date: '2026-05-16' },
+          result: null,
+          error: null,
+          artifacts: [],
+          created_by: 'web',
+          idempotency_key: null,
+          retry_count: 0,
+          max_retries: 3,
+          retry_backoff_seconds: 0,
+          timeout_seconds: null,
+          cancel_requested: false,
+          cancel_requested_at: null,
+          worker_id: null,
+          lock_token: null,
+          lock_acquired_at: null,
+          heartbeat_at: null,
+          scheduled_at: null,
+          started_at: '2026-05-15T02:00:00Z',
+          finished_at: '2026-05-15T02:05:00Z',
+          audit_events: [],
+          created_at: '2026-05-15T02:00:00Z',
+          updated_at: '2026-05-15T02:05:00Z',
+        },
+        {
           id: 'job-build-1',
           job_type: 'strategy-build',
           status: 'success',
@@ -118,6 +145,7 @@ describe('HistoryPage', () => {
     expect(screen.getByRole('combobox', { name: '状态' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: '类型' })).toHaveValue('');
     expect(screen.getByRole('button', { name: /job-build-1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /job-snapshot-1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /job-pre-1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /job-post-1/ })).toBeInTheDocument();
 

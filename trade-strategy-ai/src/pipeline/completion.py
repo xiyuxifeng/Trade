@@ -27,6 +27,8 @@ async def run_incremental_data_completion(*, config: AppConfig, as_of_date: date
 
     as_of_date_str = as_of_date.isoformat()
 
+    failures: list[str] = []
+
     # 1. 补全 OHLCV 数据（增量模式：只抓取当日）
     try:
         _logger.info("正在补全 OHLCV 行情数据...")
@@ -35,9 +37,9 @@ async def run_incremental_data_completion(*, config: AppConfig, as_of_date: date
             config=config,
         )
         _logger.info("OHLCV 行情数据补全完成。")
-    except Exception:
+    except Exception as exc:
         _logger.error("补全 OHLCV 数据时出错", exc_info=True)
-        # 记录错误但继续后续流程
+        failures.append(f"OHLCV: {exc}")
 
     # 2. 补全市场快照数据（注意：snapshot tasks 期望 trade_date 字段）
     snapshot_args = {"trade_date": as_of_date_str, "force": force}
@@ -52,8 +54,11 @@ async def run_incremental_data_completion(*, config: AppConfig, as_of_date: date
             _logger.info(f"正在生成 {name}...")
             await handler(snapshot_args, config=config)
             _logger.info(f"{name} 生成完成。")
-        except Exception:
+        except Exception as exc:
             _logger.error(f"生成 {name} 时出错", exc_info=True)
-            # 记录错误但继续后续流程
+            failures.append(f"{name}: {exc}")
 
     _logger.info("盘后增量数据补全流程结束。")
+
+    if failures:
+        raise RuntimeError(f"盘后增量数据补全失败: {'; '.join(failures)}")

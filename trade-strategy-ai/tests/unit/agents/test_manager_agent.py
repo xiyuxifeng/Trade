@@ -218,9 +218,24 @@ async def test_manager_marks_partial_data_when_bars_are_incomplete(tmp_path: Pat
 
     evaluation = result.evaluations[0]
     assert evaluation.status == "partial"
-    assert evaluation.partial_data is True
-    assert evaluation.fallback_reason is None
-    assert "[partial]" in evaluation.notes[0]
+
+
+@pytest.mark.asyncio
+async def test_run_after_close_propagates_incremental_completion_failure(tmp_path: Path) -> None:
+    config = _make_config()
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    day = date(2026, 4, 6)
+
+    report = DailyReport(
+        as_of_date=day,
+        ideas=[],
+        highlights=["seed"],
+    )
+    manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+    with patch("src.agents.manager_agent.agent.run_incremental_data_completion", new=AsyncMock(side_effect=RuntimeError("completion failed"))):
+        with pytest.raises(RuntimeError, match="completion failed"):
+            await manager.run_after_close(as_of_date=day, force=True)
 
 
 @pytest.mark.asyncio

@@ -111,6 +111,34 @@ function formatPercent(value: number | null | undefined) {
   return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
+function describeJobError(error: JobRecord['error']) {
+  if (!error) {
+    return '未提供错误信息';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  const parts: string[] = [];
+  if (typeof error.message === 'string' && error.message.trim()) {
+    parts.push(error.message.trim());
+  }
+  if (typeof error.code === 'string' && error.code.trim()) {
+    parts.push(`code=${error.code.trim()}`);
+  }
+  if (typeof error.detail === 'string' && error.detail.trim()) {
+    parts.push(error.detail.trim());
+  } else if (error.detail && typeof error.detail === 'object') {
+    parts.push(JSON.stringify(error.detail));
+  }
+
+  if (!parts.length && typeof error.retryable === 'boolean') {
+    parts.push(error.retryable ? 'retryable=true' : 'retryable=false');
+  }
+
+  return parts.length ? parts.join(' · ') : '未提供错误信息';
+}
+
 function summarizeJob(job: JobRecord) {
   const profileId = jobProfileId(job);
   const asOfDate = jobAsOfDate(job);
@@ -226,12 +254,6 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
           title="暂无盘后结果。"
           description="提交 run-after-close 后，这里会展示最近结果、归因、表现和产物。"
         />
-        <Link
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-          to="/jobs?job_type=run-after-close"
-        >
-          查看任务列表
-        </Link>
       </div>
     );
   }
@@ -240,8 +262,16 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
     <div className="space-y-4">
       {failed ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
-          <p className="font-medium">最近盘后 Job 已失败。</p>
-          <p className="mt-1">重试和日志查看仍然回到任务列表处理，失败记录可直接进入任务详情。</p>
+          <p className="font-medium">盘后任务失败</p>
+          <p className="mt-1 break-words text-rose-800">原因：{describeJobError(latestJob.error)}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs/${encodeURIComponent(latestJob.id)}`}>
+              打开任务详情
+            </Link>
+            <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs?job_type=run-after-close`}>
+              查看任务列表
+            </Link>
+          </div>
         </div>
       ) : null}
 
@@ -403,12 +433,6 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   </Link>
                   <Link
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-                    to="/jobs?job_type=run-after-close"
-                  >
-                    进入任务列表
-                  </Link>
-                  <Link
-                    className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
                     to={`/artifacts?jobId=${encodeURIComponent(latestJob.id)}`}
                   >
                     前往产物中心
@@ -437,12 +461,6 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
             title="暂无可展示的盘后结果。"
             description="最近盘后 Job 还没有写入结构化 result，或当前 Profile 下暂时没有可用记录。"
           />
-          <Link
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-            to="/jobs?job_type=run-after-close"
-          >
-                    查看任务列表
-          </Link>
         </div>
       )}
     </div>
@@ -619,14 +637,6 @@ function StrategyAfterCloseBody() {
         <SectionCard
           title="盘后执行"
           description="选择 Profile 和执行日期，提交 run-after-close，运行结果会回到任务详情。"
-          action={
-            <Link
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-              to="/jobs?job_type=run-after-close"
-            >
-              进入任务列表
-            </Link>
-          }
         >
           <form
             className="space-y-4"
@@ -716,15 +726,7 @@ function StrategyAfterCloseBody() {
 
       <SectionCard
         title="最近盘后任务"
-        description="失败任务可以直接进入任务详情，重试仍然回到任务列表。"
-        action={
-          <Link
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-            to="/jobs?job_type=run-after-close"
-          >
-            进入任务列表
-          </Link>
-        }
+        description="失败任务可以直接进入任务详情。"
       >
         {visibleJobs.length ? (
           <StrategyWorkspaceHistory jobs={visibleJobs} isLoading={false} error={null} onRetry={() => void jobsQuery.refetch()} />
@@ -732,10 +734,6 @@ function StrategyAfterCloseBody() {
           <EmptyState
             title="暂无盘后任务。"
             description="提交 run-after-close 后，这里会显示最近执行记录。"
-            actionLabel="查看任务列表"
-            onAction={() => {
-              navigate('/jobs?job_type=run-after-close');
-            }}
           />
         )}
       </SectionCard>

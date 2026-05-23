@@ -445,7 +445,7 @@ describe('Strategy lifecycle pages', () => {
     expect(screen.getByRole('button', { name: /返回策略工作台/ })).toBeInTheDocument();
 
     if (initialPath === '/strategies/pre-market') {
-      expect(await screen.findByRole('link', { name: /进入任务列表/ })).toHaveAttribute('href', '/jobs');
+      expect(await screen.findByRole('button', { name: '提交盘前运行' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /查看 snapshot-build/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
       expect(screen.getByRole('link', { name: /查看 run-pre-market/ })).toHaveAttribute('href', '/jobs?job_type=run-pre-market');
       expect(
@@ -513,5 +513,61 @@ describe('Strategy lifecycle pages', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(expectedPath);
     });
+  });
+
+  it('shows the latest after-close job failure reason inline', async () => {
+    mockedListJobs.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 20,
+      items: [
+        {
+          id: 'run-after-close-failed-1',
+          job_type: 'run-after-close',
+          status: 'failed',
+          params: {
+            profile_id: 'default',
+            as_of_date: '2026-05-21',
+            force: false,
+            export_html: false,
+          },
+          result: null,
+          error: {
+            type: 'system_error',
+            message: '盘后增量数据补全失败',
+            detail: 'OHLCV: fetch failed',
+            retryable: false,
+          },
+          artifacts: [],
+          created_by: 'web',
+          idempotency_key: null,
+          retry_count: 0,
+          max_retries: 0,
+          retry_backoff_seconds: 0,
+          timeout_seconds: null,
+          cancel_requested: false,
+          cancel_requested_at: null,
+          worker_id: null,
+          lock_token: null,
+          lock_acquired_at: null,
+          heartbeat_at: null,
+          scheduled_at: null,
+          started_at: '2026-05-21T08:00:00Z',
+          finished_at: '2026-05-21T08:40:00Z',
+          audit_events: [],
+          created_at: '2026-05-21T08:00:00Z',
+          updated_at: '2026-05-21T08:40:00Z',
+        },
+      ],
+    } as never);
+
+    renderWithRouter([{ path: '/strategies/after-close', element: <AfterClosePage /> }], ['/strategies/after-close']);
+
+    expect(await screen.findByRole('heading', { name: '盘后复盘' })).toBeInTheDocument();
+    expect(await screen.findByText('盘后任务失败')).toBeInTheDocument();
+    expect(screen.getByText(/原因：盘后增量数据补全失败/)).toBeInTheDocument();
+    expect(screen.getByText(/OHLCV: fetch failed/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '打开任务详情' })).toHaveAttribute('href', '/jobs/run-after-close-failed-1');
   });
 });

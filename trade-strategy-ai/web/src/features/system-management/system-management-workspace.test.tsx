@@ -322,6 +322,12 @@ describe('SystemManagementWorkspace', () => {
     );
 
     expect(await screen.findByText('用户管理')).toBeInTheDocument();
+    expect(screen.getByLabelText('用户名')).toHaveValue('');
+    expect(screen.getByLabelText('用户名')).toHaveAttribute('autocomplete', 'off');
+    expect(screen.getByLabelText('显示名称')).toHaveValue('');
+    expect(screen.getByLabelText('显示名称')).toHaveAttribute('autocomplete', 'off');
+    expect(screen.getByLabelText('密码')).toHaveValue('');
+    expect(screen.getByLabelText('密码')).toHaveAttribute('autocomplete', 'new-password');
 
     await user.type(screen.getByLabelText('用户名'), 'new-user');
     await user.type(screen.getByLabelText('显示名称'), 'New User');

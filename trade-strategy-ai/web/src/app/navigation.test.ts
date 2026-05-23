@@ -7,7 +7,6 @@ describe('navigation contract', () => {
     expect(mainNavigation.map((item) => item.path)).toEqual([
       '/dashboard',
       '/jobs',
-      '/workflows',
       '/articles',
       '/market',
       '/strategies',

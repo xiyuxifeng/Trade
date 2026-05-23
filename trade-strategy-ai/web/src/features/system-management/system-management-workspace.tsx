@@ -40,6 +40,14 @@ type RestoreFormState = {
   force: boolean;
 };
 
+const blankUserForm = {
+  username: '',
+  display_name: '',
+  role: 'viewer',
+  password: '',
+  is_active: true,
+} satisfies UserFormState;
+
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
@@ -84,13 +92,7 @@ export function UserManagementSection() {
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [form, setForm] = useState<UserFormState>({
-    username: '',
-    display_name: '',
-    role: 'viewer',
-    password: '',
-    is_active: true,
-  });
+  const [form, setForm] = useState<UserFormState>(blankUserForm);
 
   useEffect(() => {
     if (!editingUser) {
@@ -134,13 +136,7 @@ export function UserManagementSection() {
       setStatusMessage(editingUser ? '用户已更新' : '用户已创建');
       setErrorMessage(null);
       setEditingUser(null);
-      setForm({
-        username: '',
-        display_name: '',
-        role: 'viewer',
-        password: '',
-        is_active: true,
-      });
+      setForm(blankUserForm);
       await queryClient.invalidateQueries({ queryKey: ['system-users'] });
     },
     onError: (error: unknown) => {
@@ -221,13 +217,7 @@ export function UserManagementSection() {
               variant="outline"
               onClick={() => {
                 setEditingUser(null);
-                setForm({
-                  username: '',
-                  display_name: '',
-                  role: 'viewer',
-                  password: '',
-                  is_active: true,
-                });
+                setForm(blankUserForm);
               }}
             >
               取消编辑
@@ -240,6 +230,7 @@ export function UserManagementSection() {
             <span>用户名</span>
             <Input
               disabled={Boolean(editingUser)}
+              autoComplete="off"
               placeholder="例如 alice"
               value={form.username}
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
@@ -248,6 +239,7 @@ export function UserManagementSection() {
           <label className="space-y-2 text-sm text-slate-600">
             <span>显示名称</span>
             <Input
+              autoComplete="off"
               placeholder="例如 Alice"
               value={form.display_name}
               onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))}
@@ -265,6 +257,7 @@ export function UserManagementSection() {
             <span>密码{editingUser ? '（留空则不修改）' : ''}</span>
             <Input
               type="password"
+              autoComplete="new-password"
               placeholder="至少 6 位"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}

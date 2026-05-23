@@ -13,6 +13,7 @@ type MarketDatasetViewerFiltersProps = {
   datasetType: string;
   qualityStatus: string;
   onChange: (patch: MarketDatasetViewerFilterPatch) => void;
+  onSearch: () => void;
   onReset: () => void;
 };
 
@@ -37,12 +38,13 @@ export function MarketDatasetViewerFilters({
   datasetType,
   qualityStatus,
   onChange,
+  onSearch,
   onReset,
 }: MarketDatasetViewerFiltersProps) {
   return (
     <SectionCard
       title="数据集筛选"
-      description="按 trade_date、market、dataset_type 和质量状态筛选数据集目录。"
+      description="按 trade_date、market、dataset_type 和质量状态筛选数据集目录，点击搜索后才会生效。"
       className="border-slate-200 bg-white"
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -97,7 +99,14 @@ export function MarketDatasetViewerFilters({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-sky-500 px-4 text-sm font-medium text-white transition-colors hover:bg-sky-600"
+          type="button"
+          onClick={onSearch}
+        >
+          搜索
+        </button>
         <button
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           type="button"

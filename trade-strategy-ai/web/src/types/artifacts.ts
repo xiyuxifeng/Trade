@@ -30,3 +30,11 @@ export type ArtifactsListResponse = {
   limit: number;
   items: ArtifactRecord[];
 };
+
+export type ArtifactFilterOptionsResponse = {
+  status: string;
+  kinds: string[];
+  sources: string[];
+  job_types: string[];
+  job_ids: string[];
+};

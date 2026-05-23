@@ -115,101 +115,12 @@ def _workflow_step(
 
 DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
     _workflow(
-        "snapshot",
-        "快照中心",
-        "构建候选池快照，供盘前盘后和回测使用。",
-        "snapshot-build",
-        steps=[
-            _workflow_step("snapshot-build", "构建快照", "支持单日与区间快照构建。", "snapshot-build"),
-        ],
-    ),
-    _workflow(
         "ohlcv",
         "OHLCV 行情",
         "抓取和回灌日线 OHLCV 数据。",
         "ohlcv-crawl",
         steps=[
             _workflow_step("ohlcv-crawl", "抓取 OHLCV", "抓取日线行情并写入数据库。", "ohlcv-crawl"),
-        ],
-    ),
-    _workflow(
-        "strategy",
-        "策略版本",
-        "按交易员和日期构建策略版本。",
-        "strategy-build",
-        steps=[
-            _workflow_step("strategy-build", "构建策略版本", "生成交易员策略版本。", "strategy-build"),
-        ],
-    ),
-    _workflow(
-        "backtest",
-        "回测中心",
-        "执行回测、规则验真和可复现性检查。",
-        "backtest-run",
-        steps=[
-            _workflow_step("backtest-run", "执行回测", "执行离线回测。", "backtest-run"),
-            _workflow_step("backtest-validate-rules", "规则验真", "执行规则验真并生成报告。", "backtest-validate-rules"),
-            _workflow_step(
-                "backtest-reproducibility-check",
-                "可复现性检查",
-                "重复运行回测并比对 fingerprint。",
-                "backtest-reproducibility-check",
-            ),
-        ],
-    ),
-    _workflow(
-        "optimize",
-        "优化中心",
-        "基于验真和回测结果生成候选版本。",
-        "optimize-create-candidate",
-        steps=[
-            _workflow_step(
-                "optimize-create-candidate",
-                "生成候选版本",
-                "从规则调整生成候选策略版本。",
-                "optimize-create-candidate",
-            ),
-        ],
-    ),
-    _workflow(
-        "optimize-rule-pool",
-        "优化与规则池",
-        "串联候选创建、规则池回测和候选 / 规则审核。",
-        "optimize-create-candidate",
-        steps=[
-            _workflow_step(
-                "optimize-create-candidate",
-                "生成候选版本",
-                "从规则调整生成候选策略版本。",
-                "optimize-create-candidate",
-            ),
-            _workflow_step(
-                "rule-pool-backtest",
-                "规则池回测",
-                "对规则池候选进行回测并回写结果。",
-                "rule-pool-backtest",
-            ),
-            _workflow_step(
-                "candidate-review",
-                "候选版本审核",
-                "对候选版本执行人工审核。",
-                "candidate-review",
-            ),
-            _workflow_step(
-                "rule-review",
-                "规则审核",
-                "对规则池条目执行批准或拒绝审核。",
-                "rule-review",
-            ),
-        ],
-    ),
-    _workflow(
-        "rule-pool",
-        "规则池管理",
-        "围绕规则池回测和审核流程组织操作。",
-        "rule-pool-backtest",
-        steps=[
-            _workflow_step("rule-pool-backtest", "规则池回测", "对规则池进行回测并回写结果。", "rule-pool-backtest"),
         ],
     ),
     _workflow(
@@ -224,17 +135,6 @@ DEFAULT_WORKFLOWS: tuple[WorkflowDefinition, ...] = (
             _workflow_step("ohlcv-crawl", "抓取 OHLCV", "抓取日线行情并写入数据库。", "ohlcv-crawl"),
             _workflow_step("market-state-build", "构建市场状态", "先准备市场状态数据。", "market-state-build"),
             _workflow_step("snapshot-build", "构建候选池快照", "生成盘前/盘后需要的快照。", "snapshot-build"),
-        ],
-    ),
-    _workflow(
-        "report",
-        "报表与回顾",
-        "汇总盘前盘后报表与回测回顾结果。",
-        "run-after-close",
-        steps=[
-            _workflow_step("run-pre-market", "盘前报表", "回顾盘前日报结果。", "run-pre-market"),
-            _workflow_step("run-after-close", "盘后报表", "回顾盘后考核结果。", "run-after-close"),
-            _workflow_step("e2e-regression", "回归报表", "查看端到端回归结果。", "e2e-regression"),
         ],
     ),
 )

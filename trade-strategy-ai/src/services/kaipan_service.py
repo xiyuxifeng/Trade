@@ -5,6 +5,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -47,6 +48,11 @@ class KaipanService(BaseService):
 
 	service_name = "kaipan"
 	_ALLOWED_SLOTS = ("09-25", "17-30")
+	_scheduler_lock = Lock()
+	_scheduler: BackgroundScheduler | None = None
+	_scheduler_pre_market: str | None = None
+	_scheduler_post_close: str | None = None
+	_scheduler_config_path: Path | None = None
 
 	def __init__(
 		self,
@@ -135,6 +141,40 @@ class KaipanService(BaseService):
 			]
 		return []
 
+	@classmethod
+	def _scheduler_snapshot(cls) -> dict[str, Any]:
+		"""读取当前 scheduler 的内存状态。"""
+		with cls._scheduler_lock:
+			scheduler = cls._scheduler
+			started = bool(scheduler is not None and getattr(scheduler, "running", False))
+			if not started and scheduler is not None:
+				cls._scheduler = None
+				cls._scheduler_pre_market = None
+				cls._scheduler_post_close = None
+				cls._scheduler_config_path = None
+			return {
+				"started": started,
+				"pre_market": cls._scheduler_pre_market,
+				"post_close": cls._scheduler_post_close,
+				"config_path": str(cls._scheduler_config_path) if cls._scheduler_config_path is not None else None,
+			}
+
+	@classmethod
+	def _clear_scheduler(cls) -> None:
+		"""清空 scheduler 内存状态。"""
+		with cls._scheduler_lock:
+			scheduler = cls._scheduler
+			if scheduler is not None:
+				try:
+					if getattr(scheduler, "running", False):
+						scheduler.shutdown(wait=False)
+				finally:
+					pass
+			cls._scheduler = None
+			cls._scheduler_pre_market = None
+			cls._scheduler_post_close = None
+			cls._scheduler_config_path = None
+
 	def fetch(
 		self,
 		*,
@@ -213,6 +253,7 @@ class KaipanService(BaseService):
 		"""查看最近一次抓取状态。"""
 		runtime = self._load_runtime(config_path)
 		raw_base = runtime["raw_dir"]
+		scheduler_state = self._scheduler_snapshot()
 		if not raw_base.exists():
 			return ServiceResult(
 				status="partial",
@@ -222,6 +263,9 @@ class KaipanService(BaseService):
 					"base_dir": str(runtime["base_dir"]),
 					"raw_base": str(raw_base),
 					"latest_slot": None,
+					"scheduler_started": scheduler_state["started"],
+					"scheduler_pre_market": scheduler_state["pre_market"],
+					"scheduler_post_close": scheduler_state["post_close"],
 				},
 			)
 
@@ -247,6 +291,9 @@ class KaipanService(BaseService):
 				"base_dir": str(runtime["base_dir"]),
 				"raw_base": str(raw_base),
 				"latest_slot": latest,
+				"scheduler_started": scheduler_state["started"],
+				"scheduler_pre_market": scheduler_state["pre_market"],
+				"scheduler_post_close": scheduler_state["post_close"],
 			},
 		)
 
@@ -262,6 +309,7 @@ class KaipanService(BaseService):
 		cfg = runtime["config"].kaipan
 		pre_market = cfg.fetch_schedule.get("pre_market", "9:25")
 		post_close = cfg.fetch_schedule.get("post_close", "17:30")
+		scheduler_state = self._scheduler_snapshot()
 
 		if not start_scheduler:
 			return ServiceResult(
@@ -273,6 +321,20 @@ class KaipanService(BaseService):
 					"pre_market": pre_market,
 					"post_close": post_close,
 					"data_root": str(runtime["data_root"]),
+					"scheduler_started": scheduler_state["started"],
+				},
+			)
+
+		if scheduler_state["started"]:
+			return ServiceResult(
+				status="partial",
+				message="kaipan scheduler already running",
+				payload={
+					"config_path": str(runtime["config_path"]),
+					"base_dir": str(runtime["base_dir"]),
+					"pre_market": scheduler_state["pre_market"] or pre_market,
+					"post_close": scheduler_state["post_close"] or post_close,
+					"started": True,
 				},
 			)
 
@@ -286,6 +348,12 @@ class KaipanService(BaseService):
 		scheduler.add_job(_run_fetch, CronTrigger(hour=pre_hour, minute=pre_min, second=0), args=["09-25"], id="pre_market", replace_existing=True)
 		scheduler.add_job(_run_fetch, CronTrigger(hour=post_hour, minute=post_min, second=0), args=["17-30"], id="post_close", replace_existing=True)
 		scheduler.start()
+		cls = type(self)
+		with cls._scheduler_lock:
+			cls._scheduler = scheduler
+			cls._scheduler_pre_market = pre_market
+			cls._scheduler_post_close = post_close
+			cls._scheduler_config_path = runtime["config_path"]
 
 		if block:
 			signal.signal(signal.SIGINT, lambda *_: scheduler.shutdown())
@@ -301,5 +369,35 @@ class KaipanService(BaseService):
 				"pre_market": pre_market,
 				"post_close": post_close,
 				"started": True,
+				"scheduler_started": True,
+			},
+		)
+
+	def stop(self, *, config_path: str | Path) -> ServiceResult:
+		"""停止当前 Kaipan 调度器。"""
+		runtime = self._load_runtime(config_path)
+		scheduler_state = self._scheduler_snapshot()
+		if not scheduler_state["started"]:
+			return ServiceResult(
+				status="partial",
+				message="kaipan scheduler is not running",
+				payload={
+					"config_path": str(runtime["config_path"]),
+					"base_dir": str(runtime["base_dir"]),
+					"started": False,
+					"pre_market": scheduler_state["pre_market"],
+					"post_close": scheduler_state["post_close"],
+				},
+			)
+		self._clear_scheduler()
+		return ServiceResult(
+			status="ok",
+			message="kaipan scheduler stopped",
+			payload={
+				"config_path": str(runtime["config_path"]),
+				"base_dir": str(runtime["base_dir"]),
+				"started": False,
+				"pre_market": scheduler_state["pre_market"],
+				"post_close": scheduler_state["post_close"],
 			},
 		)

@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { ApiError } from '@/lib/api/http';
 import { createJob } from '@/lib/api/jobs';
@@ -89,6 +90,7 @@ function sortResultsDesc(items: BacktestListItem[]) {
 
 function toJobSubmission(form: BacktestJobFormState): BacktestJobSubmission {
   return {
+    profileId: form.profileId,
     traderId: form.traderId,
     dateFrom: form.dateFrom,
     dateTo: form.dateTo,
@@ -103,6 +105,7 @@ function toJobSubmission(form: BacktestJobFormState): BacktestJobSubmission {
 }
 
 type BacktestJobFormState = {
+  profileId: string;
   traderId: string;
   dateFrom: string;
   dateTo: string;
@@ -342,6 +345,7 @@ export function BacktestsCenter() {
 
   async function submitJob(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
     const submission = toJobSubmission({
+      profileId: '',
       traderId,
       dateFrom,
       dateTo,
@@ -439,7 +443,13 @@ export function BacktestsCenter() {
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-2 text-sm text-slate-300">
                   <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
-                  <Input value={traderId} onChange={(event) => setTraderId(event.target.value)} placeholder="trader_a" />
+                  <TraderIdSelect
+                    ariaLabel="交易员 ID"
+                    className="border-slate-700 bg-slate-950 text-slate-100"
+                    onChange={setTraderId}
+                    source="all"
+                    value={traderId}
+                  />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
                   <span className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本</span>

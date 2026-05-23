@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard } from '@/components/kit';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import { ApiError } from '@/lib/api/http';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { downloadBacktestReport, getBacktestResult, listBacktestResults } from '@/lib/api/backtests';
@@ -318,12 +319,12 @@ export function RegimeBacktestReportWorkspace() {
           <div className="grid gap-4">
             <label className="space-y-2 text-sm text-slate-700">
               <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
-              <Input
-                aria-label="交易员 ID"
+              <TraderIdSelect
+                ariaLabel="交易员 ID"
                 className="border-slate-200 bg-white text-slate-900"
+                onChange={(traderId) => setFilters((current) => ({ ...current, traderId }))}
+                source="backtest"
                 value={filters.traderId}
-                onChange={(event) => setFilters((current) => ({ ...current, traderId: event.target.value }))}
-                placeholder="可选"
               />
             </label>
             <div className="grid gap-4 md:grid-cols-2">

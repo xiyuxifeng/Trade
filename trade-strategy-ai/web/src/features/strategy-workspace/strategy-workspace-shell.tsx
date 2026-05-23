@@ -22,6 +22,7 @@ import { StrategyWorkspaceActions } from './strategy-workspace-actions';
 import { StrategyWorkspaceArtifacts } from './strategy-workspace-artifacts';
 import { StrategyWorkspaceHistory } from './strategy-workspace-history';
 import { StrategyWorkspaceCandidate } from './strategy-workspace-candidate';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import {
   formatWorkspaceTimestamp,
   isWorkspacePermissionDenied,
@@ -254,7 +255,7 @@ export function StrategyWorkspaceShell() {
       </div>
 
       <PageHeader
-        description="在 Web 中构建策略版本、运行盘前和盘后任务，并通过 Job、Artifact 和 Report 解释结果。"
+        description="在 Web 中构建策略版本、运行盘前和盘后任务，并通过任务详情、产物和报告追踪结果。"
       />
 
       {submissionMessage ? (
@@ -262,7 +263,7 @@ export function StrategyWorkspaceShell() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">{submissionMessage}</p>
-              <p className="mt-1 text-sm text-sky-700">任务已通过 Job Center 创建，不需要 CLI。</p>
+              <p className="mt-1 text-sm text-sky-700">任务已提交，可直接打开任务详情查看进度。</p>
             </div>
             {submissionJobId ? (
               <button
@@ -303,10 +304,11 @@ export function StrategyWorkspaceShell() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="space-y-2">
                     <span className="text-sm font-medium text-slate-700">Trader ID</span>
-                    <Input
-                      className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-                      onChange={(event) => setTraderId(event.target.value)}
-                      placeholder="例如 trader_a"
+                    <TraderIdSelect
+                      ariaLabel="Trader ID"
+                      className="border-slate-200 bg-white text-slate-900"
+                      onChange={setTraderId}
+                      source="strategy"
                       value={traderId}
                     />
                   </label>

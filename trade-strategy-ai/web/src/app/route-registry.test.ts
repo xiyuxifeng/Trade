@@ -16,9 +16,13 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/articles/results').path).toBe('/articles/results');
     expect(resolveRouteByPathname('/articles/maintenance').path).toBe('/articles/maintenance');
     expect(resolveRouteByPathname('/market').path).toBe('/market');
-    expect(resolveRouteByPathname('/market').description).toBe('市场快照浏览器');
+    expect(resolveRouteByPathname('/market').description).toBe('市场数据总览与入口');
+    expect(resolveRouteByPathname('/market/snapshots').path).toBe('/market/snapshots');
+    expect(resolveRouteByPathname('/market/snapshots').description).toBe('市场快照浏览器');
     expect(resolveRouteByPathname('/market/datasets').path).toBe('/market/datasets');
     expect(resolveRouteByPathname('/market/datasets').description).toBe('市场数据集浏览器');
+    expect(resolveRouteByPathname('/market/kaipan').path).toBe('/market/kaipan');
+    expect(resolveRouteByPathname('/market/ohlcv').path).toBe('/market/ohlcv');
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
     expect(resolveRouteByPathname('/strategies').description).toBe('策略状态摘要与工作台入口');
     expect(resolveRouteByPathname('/strategies/versions').path).toBe('/strategies/versions');
@@ -34,6 +38,8 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/backtest/regime').path).toBe('/backtest/regime');
     expect(resolveRouteByPathname('/rule-pool').path).toBe('/rule-pool');
     expect(resolveRouteByPathname('/rule-pool').description).toBe('规则池审核中心');
+    expect(resolveRouteByPathname('/rule-pool/rule-1').path).toBe('/rule-pool/:ruleId');
+    expect(resolveRouteByPathname('/rule-pool/rule-1').description).toBe('规则池详情与审核');
     expect(resolveRouteByPathname('/artifacts').path).toBe('/artifacts');
     expect(resolveRouteByPathname('/profiles').path).toBe('/profiles');
     expect(resolveRouteByPathname('/profiles/default').path).toBe('/profiles/:profileId');

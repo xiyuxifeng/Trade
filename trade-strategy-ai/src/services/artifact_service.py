@@ -329,6 +329,13 @@ class ArtifactService(BaseService):
             if metadata:
                 record.job_type = metadata.get("job_type")
 
+    async def _records_with_job_metadata(self) -> list[ArtifactRecord]:
+        """返回已经补齐 job 元数据的产物记录。"""
+        records = self._scan_files()
+        job_ids = {record.job_id for record in records if record.job_id}
+        self._apply_job_metadata(records, await self._job_metadata_by_id(job_ids))
+        return records
+
     def _preview_path(self, path: Path, kind: str) -> str | None:
         """为可预览文件生成文本预览。"""
         if not path.exists() or not path.is_file():
@@ -373,8 +380,7 @@ class ArtifactService(BaseService):
         limit: int = 50,
     ) -> ServiceResult:
         """列出可用产物。"""
-        records = self._scan_files()
-        self._apply_job_metadata(records, await self._job_metadata_by_id({record.job_id for record in records if record.job_id}))
+        records = await self._records_with_job_metadata()
         if kind is not None:
             records = [item for item in records if item.kind == kind]
         if source is not None:
@@ -402,6 +408,39 @@ class ArtifactService(BaseService):
                 "skip": skip,
                 "limit": limit,
                 "items": items,
+                },
+            )
+
+    async def list_filter_options(self) -> ServiceResult:
+        """列出产物筛选下拉选项。"""
+        records = await self._records_with_job_metadata()
+
+        job_id_latest_modified: dict[str, str] = {}
+        for record in records:
+            if not record.job_id:
+                continue
+            current_modified = record.modified_at or ""
+            previous_modified = job_id_latest_modified.get(record.job_id)
+            if previous_modified is None or current_modified > previous_modified:
+                job_id_latest_modified[record.job_id] = current_modified
+
+        job_ids = [
+            job_id
+            for job_id, _ in sorted(
+                job_id_latest_modified.items(),
+                key=lambda item: (item[1], item[0]),
+                reverse=True,
+            )
+        ]
+
+        return ServiceResult(
+            status="ok",
+            message="artifact filter options listed",
+            payload={
+                "kinds": sorted({record.kind for record in records if record.kind}),
+                "sources": sorted({record.source for record in records if record.source}),
+                "job_types": sorted({record.job_type for record in records if record.job_type}),
+                "job_ids": job_ids,
             },
         )
 

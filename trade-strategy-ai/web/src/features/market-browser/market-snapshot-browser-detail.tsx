@@ -71,10 +71,18 @@ export function MarketSnapshotBrowserDetail({
   onRetry,
   tradeDate,
 }: MarketSnapshotBrowserDetailProps) {
+  const datasetId = readAnyString([detail?.dataset], ['dataset_id']);
   const sourceJobId = readAnyString(
     [detail?.dataset, detail?.quality_report, regimeFeatureDetail?.feature_payload_json, regimeFeatureDetail?.summary_json],
     ['storage_ref', 'metadata', 'job_id'],
   );
+  const relatedDataLink = datasetId
+    ? `/market/datasets?trade_date=${encodeURIComponent(selectedSnapshot?.trade_date ?? tradeDate)}&market=${encodeURIComponent(
+        selectedSnapshot?.market ?? 'CN',
+      )}&dataset_id=${encodeURIComponent(datasetId)}`
+    : `/market/datasets?trade_date=${encodeURIComponent(selectedSnapshot?.trade_date ?? tradeDate)}&market=${encodeURIComponent(
+        selectedSnapshot?.market ?? 'CN',
+      )}`;
   const fallbackArtifactLink = `/artifacts?jobType=snapshot-build&date=${tradeDate}&source=market-snapshot-browser`;
   const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : fallbackArtifactLink;
   const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : '/jobs';
@@ -94,14 +102,6 @@ export function MarketSnapshotBrowserDetail({
       title="快照详情"
       description={snapshotId ? '右侧保持当前快照详情，切换列表筛选后如果快照仍然存在会继续保留。' : '请选择一个 snapshot 查看详情。'}
       className="border-slate-200 bg-white"
-      action={
-        <Link
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          to={artifactLink}
-        >
-          前往产物中心
-        </Link>
-      }
     >
       {isLoading ? (
         <LoadingState label="正在加载快照详情" description="包括 snapshot、sections、quality report 和 regime features。" />
@@ -129,9 +129,13 @@ export function MarketSnapshotBrowserDetail({
                 <StatusBadge value={selectedSnapshot.quality_status} />
               </div>
               <p className="mt-3 text-sm leading-6 text-slate-700">{qualitySummary}</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                 <Link className="text-sky-700 hover:underline" to={jobLink}>
                   前往 Job 详情
+                </Link>
+                <span className="text-slate-400">·</span>
+                <Link className="text-sky-700 hover:underline" to={relatedDataLink}>
+                  查看相关数据
                 </Link>
                 <span className="text-slate-400">·</span>
                 <Link className="text-sky-700 hover:underline" to={artifactLink}>

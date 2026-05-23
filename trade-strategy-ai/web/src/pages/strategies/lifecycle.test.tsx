@@ -445,7 +445,7 @@ describe('Strategy lifecycle pages', () => {
     expect(screen.getByRole('button', { name: /返回策略工作台/ })).toBeInTheDocument();
 
     if (initialPath === '/strategies/pre-market') {
-      expect(await screen.findByRole('link', { name: /进入任务中心/ })).toHaveAttribute('href', '/jobs');
+      expect(await screen.findByRole('link', { name: /进入任务列表/ })).toHaveAttribute('href', '/jobs');
       expect(screen.getByRole('link', { name: /查看 snapshot-build/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
       expect(screen.getByRole('link', { name: /查看 run-pre-market/ })).toHaveAttribute('href', '/jobs?job_type=run-pre-market');
       expect(
@@ -464,7 +464,7 @@ describe('Strategy lifecycle pages', () => {
       expect(screen.getByText('产物与来源')).toBeInTheDocument();
       expect(screen.getByText('entry_timing_poor')).toBeInTheDocument();
       expect(screen.getAllByText('evaluation_2026-05-21.html').length).toBeGreaterThan(0);
-      expect(screen.getByRole('link', { name: '查看 Job Detail' })).toHaveAttribute('href', '/jobs/run-after-close-1');
+      expect(screen.getByRole('link', { name: '查看任务详情' })).toHaveAttribute('href', '/jobs/run-after-close-1');
 
       fireEvent.change(screen.getByLabelText('执行日期'), { target: { value: '2026-05-22' } });
       fireEvent.click(screen.getByLabelText('force'));

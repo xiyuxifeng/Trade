@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/layout/page-header';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
@@ -205,8 +206,8 @@ export function StrategyRegimeSelectionWorkspace() {
   return (
     <main className="page-stack">
       <PageHeader
-        title="Regime-aware 规则选择"
-        description="展示盘前策略运行时为什么选择、跳过或阻断某些 rule，并回溯到 market regime 和适用性画像版本。"
+        title="规则选择"
+        description="用于在策略构建前查看规则为什么被选中、跳过或阻断，并回溯到 market regime 和适用性画像版本。"
         actionLabel="返回策略首页"
         onAction={() => {
           navigate('/strategies');
@@ -222,7 +223,13 @@ export function StrategyRegimeSelectionWorkspace() {
           <CardContent className="space-y-4">
             <label className="space-y-2 text-sm text-slate-700">
               <span>交易员 ID</span>
-              <Input aria-label="Trader ID" value={traderId} onChange={(event) => setTraderId(event.target.value)} />
+              <TraderIdSelect
+                ariaLabel="Trader ID"
+                className="border-slate-200 bg-white text-slate-900"
+                onChange={setTraderId}
+                source="strategy"
+                value={traderId}
+              />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               <span>策略日期</span>

@@ -86,6 +86,7 @@ export type BacktestResultResponse = {
 };
 
 export type BacktestJobSubmission = {
+  profileId: string;
   traderId: string;
   dateFrom: string;
   dateTo: string;
@@ -93,7 +94,7 @@ export type BacktestJobSubmission = {
   benchmarkSymbol?: string;
   marketRegimeVersion?: string;
   mode: 'full' | 'replay' | 'rule_validation';
-  configPath: string;
+  configPath?: string;
   symbols: string[];
   useSnapshotOnly: boolean;
   scoringProfile: string;

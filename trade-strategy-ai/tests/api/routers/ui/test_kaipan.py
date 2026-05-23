@@ -49,6 +49,9 @@ class _FakeKaipanService:
                 "base_dir": "/tmp/project",
                 "raw_base": "/tmp/project/data/processed/kaipan/raw",
                 "latest_slot": "2026-05-09_17-30",
+                "scheduler_started": False,
+                "scheduler_pre_market": "9:25",
+                "scheduler_post_close": "17:30",
             },
         )
 
@@ -96,6 +99,21 @@ class _FakeKaipanService:
                 "pre_market": "9:25",
                 "post_close": "17:30",
                 "started": start_scheduler,
+                "scheduler_started": start_scheduler,
+            },
+        )
+
+    def stop(self, *, config_path: str) -> ServiceResult:
+        self.calls.append({"action": "stop", "config_path": config_path})
+        return ServiceResult(
+            status="ok",
+            message="kaipan scheduler stopped",
+            payload={
+                "config_path": config_path,
+                "base_dir": "/tmp/project",
+                "started": False,
+                "pre_market": "9:25",
+                "post_close": "17:30",
             },
         )
 
@@ -144,7 +162,17 @@ async def test_kaipan_normalize_returns_results(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_kaipan_run_returns_payload(client: AsyncClient) -> None:
     """run 接口应返回计划或启动状态。"""
-    response = await client.post("/api/ui/v1/kaipan/run", json={"start_scheduler": False})
+    response = await client.post("/api/ui/v1/kaipan/run", json={"start_scheduler": True, "block": False})
     assert response.status_code == 200
     payload = response.json()
     assert "started" in payload or "pre_market" in payload
+    assert payload["scheduler_started"] is True
+
+
+@pytest.mark.asyncio
+async def test_kaipan_stop_returns_payload(client: AsyncClient) -> None:
+    """stop 接口应返回停止状态。"""
+    response = await client.post("/api/ui/v1/kaipan/stop")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["started"] is False

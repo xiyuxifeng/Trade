@@ -31,6 +31,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/optimize/filter-active-traders": {"post"},
         "/api/ui/v1/optimize/create-candidate": {"post"},
         "/api/ui/v1/rule-pool": {"get"},
+        "/api/ui/v1/rule-pool/filter-options": {"get"},
         "/api/ui/v1/rule-pool/{rule_id}": {"get"},
         "/api/ui/v1/rule-pool/{rule_id}/review": {"post"},
         "/api/ui/v1/rule-pool/review-batch": {"post"},
@@ -51,6 +52,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/pipelines/article_pipeline": {"get"},
         "/api/ui/v1/pipelines/article_pipeline/run": {"post"},
         "/api/ui/v1/artifacts": {"get"},
+        "/api/ui/v1/artifacts/filter-options": {"get"},
         "/api/ui/v1/artifacts/{artifact_id}": {"get"},
         "/api/ui/v1/artifacts/{artifact_id}/download": {"get"},
         "/reports/daily": {"get"},
@@ -94,6 +96,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         ("/api/ui/v1/jobs/{job_id}/cancel", "post"): "#/components/schemas/JobCancelRequest",
         ("/api/ui/v1/optimize/create-candidate", "post"): "#/components/schemas/CandidateCreateRequest",
         ("/api/ui/v1/optimize/filter-active-traders", "post"): "#/components/schemas/ActiveTraderFilterRequest",
+        ("/api/ui/v1/rule-pool/filter-options", "get"): None,
         ("/api/ui/v1/rule-pool/{rule_id}/review", "post"): "#/components/schemas/RulePoolReviewRequest",
         ("/api/ui/v1/rule-pool/review-batch", "post"): "#/components/schemas/RulePoolBatchReviewRequest",
         ("/api/ui/v1/workflows/{workflow_id}/run", "post"): "#/components/schemas/WorkflowRunRequest",
@@ -110,9 +113,13 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
     }
 
     for (path, method), schema_ref in expected_request_refs.items():
+        if schema_ref is None:
+            continue
         assert paths[path][method]["requestBody"]["content"]["application/json"]["schema"]["$ref"] == schema_ref
 
     expected_response_refs = {
+        ("/api/ui/v1/artifacts/filter-options", "get"): "#/components/schemas/ArtifactFilterOptionsResponse",
+        ("/api/ui/v1/rule-pool/filter-options", "get"): "#/components/schemas/RulePoolFilterOptionsResponse",
         ("/reports/daily", "get"): "#/components/schemas/DailyReportListResponse",
         ("/reports/daily/{date_str}", "get"): "#/components/schemas/DailyReportResponse",
         ("/reports/evaluation", "get"): "#/components/schemas/EvaluationListResponse",

@@ -4,6 +4,7 @@ import {
   getRuleApplicabilityProfile,
   getRulePoolRule,
   listRuleApplicabilityProfiles,
+  listRulePoolFilterOptions,
   listRulePool,
   reviewRuleApplicabilityProfile,
   reviewRulePoolBatch,
@@ -57,6 +58,18 @@ describe('rule pool api client', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({
+          status: 'success',
+          review_statuses: ['pending', 'approved'],
+          mapping_statuses: ['mapped', 'unmapped'],
+          source_types: ['standalone'],
+          rule_types: ['breakout'],
+          instrument_focuses: ['stock'],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({ status: 'success', item: { profile_id: 'profile-1', rule_id: 'rule-1' } }),
       });
 
@@ -69,6 +82,7 @@ describe('rule pool api client', () => {
     await reviewRulePoolBatch({ decision: 'reject', status: 'pending', limit: 25, force: true, reviewed_by: 'web' });
     await listRuleApplicabilityProfiles('rule-1', { skip: 0, limit: 20 });
     await getRuleApplicabilityProfile('rule-1', 'profile-1');
+    await listRulePoolFilterOptions();
     await generateRuleApplicabilityProfile('rule-1', { source_backtest_id: 'backtest-1', profile_version: 'rule-applicability-v1' });
     await reviewRuleApplicabilityProfile('rule-1', 'profile-1', { review_status: 'active', reviewed_by: 'web' });
 
@@ -78,7 +92,8 @@ describe('rule pool api client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/ui/v1/rule-pool/review-batch', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/ui/v1/rule-pool/rule-1/applicability-profiles?skip=0&limit=20', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/ui/v1/rule-pool/rule-1/applicability-profiles/profile-1', expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/ui/v1/rule-pool/rule-1/applicability-profiles/generate', expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/ui/v1/rule-pool/rule-1/applicability-profiles/profile-1/review', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/ui/v1/rule-pool/filter-options', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/ui/v1/rule-pool/rule-1/applicability-profiles/generate', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(9, '/api/ui/v1/rule-pool/rule-1/applicability-profiles/profile-1/review', expect.any(Object));
   });
 });

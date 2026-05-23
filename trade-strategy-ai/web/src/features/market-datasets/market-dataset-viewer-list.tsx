@@ -68,7 +68,7 @@ export function MarketDatasetViewerList({
       ) : errorState ? (
         <ErrorState {...errorState} onRetry={errorState.retryable ? onRetry : undefined} />
       ) : datasets.length ? (
-        <div className="space-y-3">
+        <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
           {datasets.map((dataset) => (
             <DatasetCard
               key={dataset.dataset_id}

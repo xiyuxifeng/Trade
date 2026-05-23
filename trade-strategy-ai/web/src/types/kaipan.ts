@@ -17,6 +17,9 @@ export type KaipanStatusResponse = {
   base_dir: string;
   raw_base: string;
   latest_slot: string | null;
+  scheduler_started?: boolean;
+  scheduler_pre_market?: string | null;
+  scheduler_post_close?: string | null;
 };
 
 export type KaipanNormalizeRequest = {
@@ -43,4 +46,13 @@ export type KaipanRunResponse = {
   pre_market: string;
   post_close: string;
   started?: boolean;
+  scheduler_started?: boolean;
+};
+
+export type KaipanStopResponse = {
+  config_path: string;
+  base_dir: string;
+  started: boolean;
+  pre_market?: string | null;
+  post_close?: string | null;
 };

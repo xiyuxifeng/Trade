@@ -1,4 +1,4 @@
-import type { ArtifactsListResponse } from '@/types/artifacts';
+import type { ArtifactFilterOptionsResponse, ArtifactsListResponse } from '@/types/artifacts';
 import { fetchBlob, fetchJson } from './http';
 
 type ArtifactsQuery = {
@@ -22,6 +22,10 @@ export function listArtifacts(query: ArtifactsQuery = {}) {
   });
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return fetchJson<ArtifactsListResponse>(`/artifacts${suffix}`);
+}
+
+export function listArtifactFilterOptions() {
+  return fetchJson<ArtifactFilterOptionsResponse>('/artifacts/filter-options');
 }
 
 export function getArtifact(artifactId: string) {

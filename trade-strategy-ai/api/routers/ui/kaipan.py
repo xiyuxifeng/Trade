@@ -23,7 +23,7 @@ class KaipanNormalizeRequest(BaseModel):
 class KaipanRunRequest(BaseModel):
     """Kaipan 调度请求体。"""
 
-    start_scheduler: bool = False
+    start_scheduler: bool = True
     block: bool = False
 
 
@@ -76,4 +76,11 @@ async def run_kaipan(
         start_scheduler=request.start_scheduler,
         block=request.block,
     )
+    return result.payload
+
+
+@router.post("/kaipan/stop", dependencies=[Depends(verify_api_key)])
+async def stop_kaipan(service: KaipanService = Depends(get_kaipan_service)):
+    """停止 Kaipan 调度器。"""
+    result = service.stop(config_path=_config_path())
     return result.payload

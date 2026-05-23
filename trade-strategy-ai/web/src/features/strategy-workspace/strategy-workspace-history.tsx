@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
@@ -41,9 +41,17 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
       title="策略任务历史"
       description="仅展示策略工作台相关 Job，包括 `snapshot-build`、`strategy-build`、`run-pre-market` 和 `run-after-close`。"
       action={
-        <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetry} variant="outline">
-          刷新
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+            to="/jobs"
+          >
+            打开任务列表
+          </Link>
+          <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetry} variant="outline">
+            刷新
+          </Button>
+        </div>
       }
     >
       {isLoading ? (

@@ -117,6 +117,17 @@ class RuleApplicabilityReviewRequest(BaseModel):
     reviewed_by: str = "web"
 
 
+class RulePoolFilterOptionsResponse(BaseModel):
+    """规则池筛选选项响应。"""
+
+    status: str = "success"
+    review_statuses: list[str] = Field(default_factory=list)
+    mapping_statuses: list[str] = Field(default_factory=list)
+    source_types: list[str] = Field(default_factory=list)
+    rule_types: list[str] = Field(default_factory=list)
+    instrument_focuses: list[str] = Field(default_factory=list)
+
+
 def get_rule_applicability_service() -> RuleApplicabilityService:
     """获取 Rule 适用性画像服务实例。"""
     return RuleApplicabilityService()
@@ -181,6 +192,25 @@ async def list_rules(
     items = [_serialize_rule_summary(row) for row in rows]
     paginated = items[skip : skip + limit]
     return RulePoolListResponse(count=len(paginated), total=len(items), skip=skip, limit=limit, items=paginated)
+
+
+@router.get("/filter-options", response_model=RulePoolFilterOptionsResponse)
+async def list_filter_options(
+    rule_pool_service=Depends(get_rule_pool_service),
+    _: str = Depends(verify_api_key),
+) -> RulePoolFilterOptionsResponse:
+    """列出规则池筛选下拉选项。"""
+    result = await rule_pool_service.list_filter_options()
+    if result.status != "ok":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.message or "rule pool filter options failed")
+    payload = result.payload or {}
+    return RulePoolFilterOptionsResponse(
+        review_statuses=list(payload.get("review_statuses", [])),
+        mapping_statuses=list(payload.get("mapping_statuses", [])),
+        source_types=list(payload.get("source_types", [])),
+        rule_types=list(payload.get("rule_types", [])),
+        instrument_focuses=list(payload.get("instrument_focuses", [])),
+    )
 
 
 @router.get("/{rule_id}", response_model=RulePoolDetailResponse)

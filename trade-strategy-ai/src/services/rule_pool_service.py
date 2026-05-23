@@ -4,9 +4,12 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any, Callable
 
+from sqlalchemy import select
+
 from src.services.base import BaseService, ServiceResult
 from src.rule_pool.repository import RulePoolRepository
-from src.rule_pool.schemas import MappingStatus, ReviewStatus
+from src.rule_pool.models import RulePool
+from src.rule_pool.schemas import MappingStatus, ReviewStatus, RuleSourceType
 
 
 def _to_plain(value: Any) -> Any:
@@ -48,6 +51,53 @@ class RulePoolService(BaseService):
 
         self._session_scope_factory = session_scope
         return session_scope
+
+    @staticmethod
+    def _merge_with_defaults(values: list[str], defaults: list[str]) -> list[str]:
+        """将数据库结果与默认枚举值合并，保持去重与稳定顺序。"""
+        merged: list[str] = []
+        for item in [*defaults, *values]:
+            if item and item not in merged:
+                merged.append(item)
+        return merged
+
+    @staticmethod
+    def _unique_preserve_order(values: list[str]) -> list[str]:
+        """对数据库查询结果做稳定去重，避免下拉选项重复。"""
+        unique: list[str] = []
+        for item in values:
+            if item and item not in unique:
+                unique.append(item)
+        return unique
+
+    async def list_filter_options(self) -> ServiceResult:
+        """列出规则池筛选下拉选项。"""
+        session_scope = self._ensure_session_factory()
+        async with session_scope() as session:
+            review_statuses = list(
+                (await session.execute(select(RulePool.review_status).distinct().order_by(RulePool.review_status.asc()))).scalars().all()
+            )
+            mapping_statuses = list(
+                (await session.execute(select(RulePool.mapping_status).distinct().order_by(RulePool.mapping_status.asc()))).scalars().all()
+            )
+            source_types = list(
+                (await session.execute(select(RulePool.source_type).distinct().order_by(RulePool.source_type.asc()))).scalars().all()
+            )
+            rule_types = list(
+                (await session.execute(select(RulePool.rule_type).distinct().order_by(RulePool.rule_type.asc()))).scalars().all()
+            )
+            instrument_focuses = list(
+                (await session.execute(select(RulePool.instrument_focus).distinct().order_by(RulePool.instrument_focus.asc()))).scalars().all()
+            )
+
+        payload = {
+            "review_statuses": self._merge_with_defaults(review_statuses, [item.value for item in ReviewStatus]),
+            "mapping_statuses": self._merge_with_defaults(mapping_statuses, [item.value for item in MappingStatus]),
+            "source_types": self._merge_with_defaults(source_types, [item.value for item in RuleSourceType]),
+            "rule_types": self._unique_preserve_order([str(item) for item in rule_types if item]),
+            "instrument_focuses": self._unique_preserve_order([str(item) for item in instrument_focuses if item]),
+        }
+        return ServiceResult(status="ok", message="rule pool filter options loaded", payload=payload)
 
     async def list_rules(
         self,

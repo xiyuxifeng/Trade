@@ -82,6 +82,17 @@ class _FakeArtifactService:
             }
         )
 
+    async def list_filter_options(self) -> Any:
+        self.filter_options_called = True
+        return _result(
+            {
+                "kinds": ["html", "json"],
+                "sources": ["jobs", "processed"],
+                "job_types": ["run-pre-market", "strategy-build"],
+                "job_ids": ["job-2", "job-1"],
+            }
+        )
+
     def is_download_path_allowed(self, path: Path) -> bool:
         return path.resolve().is_relative_to(self.artifact_path.parent.resolve())
 
@@ -176,6 +187,27 @@ async def test_list_get_and_download_artifacts(client: AsyncClient) -> None:
     downloaded = await client.get("/api/ui/v1/artifacts/artifact-1/download")
     assert downloaded.status_code == 200
     assert downloaded.text.startswith("<html>")
+
+
+@pytest.mark.asyncio
+async def test_list_artifact_filter_options(tmp_path: Path) -> None:
+    """Artifact UI API 应支持筛选选项。"""
+    artifact_path = tmp_path / "artifact.html"
+    artifact_path.write_text("<html><body>artifact</body></html>", encoding="utf-8")
+    fake_service = _FakeArtifactService(artifact_path=artifact_path)
+
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_artifact_service] = lambda: fake_service
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/api/ui/v1/artifacts/filter-options")
+        assert response.status_code == 200
+        assert response.json()["job_ids"] == ["job-2", "job-1"]
+        assert fake_service.filter_options_called is True
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio

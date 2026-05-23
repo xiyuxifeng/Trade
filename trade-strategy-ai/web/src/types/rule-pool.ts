@@ -92,6 +92,15 @@ export type RulePoolListResponse = {
   items: RuleSummaryItem[];
 };
 
+export type RulePoolFilterOptionsResponse = {
+  status: string;
+  review_statuses: string[];
+  mapping_statuses: string[];
+  source_types: string[];
+  rule_types: string[];
+  instrument_focuses: string[];
+};
+
 export type RulePoolDetailResponse = {
   status: string;
   item: RuleDetailItem;

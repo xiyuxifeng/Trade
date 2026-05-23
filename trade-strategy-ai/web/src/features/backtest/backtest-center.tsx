@@ -14,6 +14,7 @@ import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
 import { JsonViewer } from '@/components/kit';
 import { PageHeader } from '@/components/layout/page-header';
 import { ErrorState } from '@/components/state/ErrorState';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
@@ -28,15 +29,19 @@ import {
   listBacktestResults,
 } from '@/lib/api/backtests';
 import { listBenchmarkOptions } from '@/lib/api/market';
+import { getProfile, listProfiles } from '@/lib/api/profiles';
+import { listStrategyVersions } from '@/lib/api/strategyStudio';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
 import type { MarketBenchmarkOption } from '@/types/market';
 import type { JobRecord, JobSubmissionRequest } from '@/types/jobs';
+import type { ProfileRecord, ProfileDetailResponse } from '@/types/profile';
+import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
+import { selectLatestProfileSnapshot } from '@/features/strategy-workspace/strategy-workspace-utils';
 
-const DEFAULT_CONFIG_PATH = 'config/app.yaml';
-const DEFAULT_SCORING_PROFILE = 'stage5';
 const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 
 type BacktestFormState = {
+  profileId: string;
   traderId: string;
   dateFrom: string;
   dateTo: string;
@@ -99,16 +104,17 @@ function getResultPayload(job: JobRecord | null | undefined) {
 
 function buildSubmission(form: BacktestFormState): BacktestJobSubmission {
   return {
+    profileId: form.profileId,
     traderId: form.traderId.trim(),
     dateFrom: form.dateFrom,
     dateTo: form.dateTo,
     strategyVersionId: form.strategyVersionId.trim(),
     benchmarkSymbol: form.benchmarkSymbol,
     mode: form.mode,
-    configPath: form.configPath.trim(),
+    configPath: form.configPath.trim() || undefined,
     symbols: splitSymbols(form.symbols),
     useSnapshotOnly: form.useSnapshotOnly,
-    scoringProfile: form.scoringProfile.trim() || DEFAULT_SCORING_PROFILE,
+    scoringProfile: form.scoringProfile.trim() || 'stage5',
   };
 }
 
@@ -184,6 +190,7 @@ export function BacktestCenter() {
   const canViewBacktest = canAccess('viewer');
 
   const [form, setForm] = useState<BacktestFormState>({
+    profileId: '',
     traderId: '',
     dateFrom: defaultStart,
     dateTo: today,
@@ -191,9 +198,9 @@ export function BacktestCenter() {
     symbols: '',
     benchmarkSymbol: DEFAULT_BENCHMARK_SYMBOL,
     mode: 'full',
-    configPath: DEFAULT_CONFIG_PATH,
+    configPath: '',
     useSnapshotOnly: true,
-    scoringProfile: DEFAULT_SCORING_PROFILE,
+    scoringProfile: '',
   });
   const [resultQuery, setResultQuery] = useState<BacktestQueryState>({
     traderId: '',
@@ -205,6 +212,20 @@ export function BacktestCenter() {
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [lastJob, setLastJob] = useState<JobRecord | null>(null);
+
+  const profilesQuery = useQuery({
+    queryKey: ['backtest-center', 'profiles'],
+    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
+    enabled: canViewBacktest,
+    staleTime: 60_000,
+  });
+
+  const strategyVersionsQuery = useQuery({
+    queryKey: ['backtest-center', 'strategy-versions'],
+    queryFn: () => listStrategyVersions({ skip: 0, limit: 100 }),
+    enabled: canViewBacktest,
+    staleTime: 60_000,
+  });
 
   const resultsQuery = useQuery<BacktestResultsResponse, ApiError>({
     queryKey: ['backtest-center', 'results', resultQuery],
@@ -221,6 +242,12 @@ export function BacktestCenter() {
   });
 
   const results = useMemo(() => resultsQuery.data?.items ?? [], [resultsQuery.data?.items]);
+  const profileItems = profilesQuery.data?.items ?? [];
+  const strategyVersionItems = strategyVersionsQuery.data?.items ?? [];
+  const filteredVersionItems = useMemo(
+    () => strategyVersionItems.filter((item) => !form.traderId || item.trader_id === form.traderId),
+    [form.traderId, strategyVersionItems],
+  );
 
   useEffect(() => {
     if (!results.length) {
@@ -236,6 +263,49 @@ export function BacktestCenter() {
     () => results.find((item) => item.result_id === selectedResultId) ?? null,
     [results, selectedResultId],
   );
+
+  useEffect(() => {
+    if (!profileItems.length) {
+      return;
+    }
+    if (!form.profileId || !profileItems.some((item) => item.profile_id === form.profileId)) {
+      setForm((current) => ({ ...current, profileId: profileItems[0].profile_id }));
+    }
+  }, [form.profileId, profileItems]);
+
+  useEffect(() => {
+    if (!filteredVersionItems.length) {
+      if (form.strategyVersionId) {
+        setForm((current) => ({ ...current, strategyVersionId: '' }));
+      }
+      return;
+    }
+    if (!form.strategyVersionId || !filteredVersionItems.some((item) => item.version_id === form.strategyVersionId)) {
+      setForm((current) => ({ ...current, strategyVersionId: filteredVersionItems[0].version_id }));
+    }
+  }, [filteredVersionItems, form.strategyVersionId]);
+
+  const selectedProfileDetailQuery = useQuery<ProfileDetailResponse, ApiError>({
+    queryKey: ['backtest-center', 'profile-detail', form.profileId],
+    queryFn: () => getProfile(form.profileId),
+    enabled: Boolean(form.profileId) && canViewBacktest,
+    staleTime: 10_000,
+  });
+
+  const selectedProfileSnapshot = useMemo(
+    () => selectLatestProfileSnapshot(selectedProfileDetailQuery.data ?? null),
+    [selectedProfileDetailQuery.data],
+  );
+  const resolvedProfileConfigPath = selectedProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
+
+  useEffect(() => {
+    setForm((current) => {
+      if (current.configPath === resolvedProfileConfigPath) {
+        return current;
+      }
+      return { ...current, configPath: resolvedProfileConfigPath };
+    });
+  }, [resolvedProfileConfigPath]);
 
   const detailQuery = useQuery({
     queryKey: ['backtest-center', 'detail', selectedResultId],
@@ -288,6 +358,9 @@ export function BacktestCenter() {
   const fingerprint = getFingerprint(lastJob);
   const resultPayload = getResultPayload(lastJob);
   const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
+  const profileConfigPathHint = selectedProfileSnapshot
+    ? `已从最新快照解析配置路径：${selectedProfileSnapshot.config_path || 'config/app.yaml'}`
+    : '配置路径将从所选 Profile 的最新快照自动解析。';
 
   if (!canViewBacktest) {
     return (
@@ -351,24 +424,54 @@ export function BacktestCenter() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
-                <Input
-                  aria-label="交易员 ID"
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile</span>
+                <Select
+                  aria-label="Profile"
                   className="border-slate-200 bg-white text-slate-900"
+                  value={form.profileId}
+                  onChange={(event) => setForm((current) => ({ ...current, profileId: event.target.value }))}
+                  disabled={profilesQuery.isLoading || profileItems.length === 0}
+                >
+                  {profileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+                  {profileItems.map((profile: ProfileRecord) => (
+                    <option key={profile.profile_id} value={profile.profile_id}>
+                      {profile.name} ({profile.profile_id})
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-slate-500">{profileConfigPathHint}</p>
+                {profilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
+                {selectedProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，当前使用默认配置路径。</p> : null}
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
+                <TraderIdSelect
+                  ariaLabel="交易员 ID"
+                  className="border-slate-200 bg-white text-slate-900"
+                  onChange={(traderId) => setForm((current) => ({ ...current, traderId }))}
+                  source="strategy"
                   value={form.traderId}
-                  onChange={(event) => setForm((current) => ({ ...current, traderId: event.target.value }))}
-                  placeholder="trader_a"
                 />
+                <p className="text-xs text-slate-500">来源于策略版本全量交易员集合，不再依赖当前页已加载的数据。</p>
+                {strategyVersionsQuery.isError ? <p className="text-xs text-rose-600">策略版本列表加载失败，请稍后重试。</p> : null}
               </label>
               <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本 ID</span>
-                <Input
+                <Select
                   aria-label="策略版本 ID"
                   className="border-slate-200 bg-white text-slate-900"
                   value={form.strategyVersionId}
                   onChange={(event) => setForm((current) => ({ ...current, strategyVersionId: event.target.value }))}
-                  placeholder="sv-001"
-                />
+                  disabled={strategyVersionsQuery.isLoading || filteredVersionItems.length === 0}
+                >
+                  {filteredVersionItems.length === 0 ? <option value="">暂无可用策略版本</option> : null}
+                  {filteredVersionItems.map((item: StrategyVersionSummaryItem) => (
+                    <option key={item.version_id} value={item.version_id}>
+                      {item.version_id}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-slate-500">仅显示当前交易员下的版本。</p>
               </label>
               <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">开始日期</span>
@@ -434,37 +537,19 @@ export function BacktestCenter() {
                   <option value="rule_validation">规则验真</option>
                 </Select>
               </label>
-              <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">配置路径</span>
-                <Input
-                  aria-label="配置路径"
-                  className="border-slate-200 bg-white text-slate-900"
-                  value={form.configPath}
-                  onChange={(event) => setForm((current) => ({ ...current, configPath: event.target.value }))}
-                />
-              </label>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <input
-                  aria-label="仅使用快照数据"
-                  checked={form.useSnapshotOnly}
-                  className="h-4 w-4 accent-sky-500"
-                  type="checkbox"
-                  onChange={(event) => setForm((current) => ({ ...current, useSnapshotOnly: event.target.checked }))}
-                />
-                <span className="text-sm text-slate-700">仅使用快照数据</span>
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">评分配置</span>
-                <Input
-                  aria-label="评分配置"
-                  className="border-slate-200 bg-white text-slate-900"
-                  value={form.scoringProfile}
-                  onChange={(event) => setForm((current) => ({ ...current, scoringProfile: event.target.value }))}
-                />
-              </label>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">评分口径</p>
+                <p className="mt-2 text-sm font-medium text-slate-900">统一回测评分口径</p>
+                <p className="mt-1 text-xs text-slate-500">按 MFE / MAE / return_pct 计算，并包含 T+1 与涨跌停约束。当前为固定口径，不提供切换。</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">快照模式</p>
+                <p className="mt-2 text-sm font-medium text-slate-900">仅使用快照数据</p>
+                <p className="mt-1 text-xs text-slate-500">该回测当前固定使用快照链路，不再提供切换。</p>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">

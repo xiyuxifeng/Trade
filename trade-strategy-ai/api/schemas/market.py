@@ -296,3 +296,36 @@ class MarketBenchmarkOptionListResponse(BaseModel):
 
     count: int
     items: list[MarketBenchmarkOption] = Field(default_factory=list)
+
+
+class OhlcvSchedulerStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    config_path: str
+    base_dir: str
+    latest_trade_date: str | None = None
+    latest_record_count: int = 0
+    scheduler_started: bool = False
+    scheduler_pre_market: str | None = None
+    scheduler_post_close: str | None = None
+
+
+class OhlcvSchedulerRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    config_path: str
+    base_dir: str
+    pre_market: str
+    post_close: str
+    started: bool = False
+    scheduler_started: bool = False
+
+
+class OhlcvSchedulerStopResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    config_path: str
+    base_dir: str
+    started: bool = False
+    pre_market: str | None = None
+    post_close: str | None = None

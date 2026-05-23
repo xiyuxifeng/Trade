@@ -112,8 +112,8 @@ export function StrategyWorkspaceActions({
   return (
     <SectionCard
       title="策略提交入口"
-      description="所有动作都通过 Job Center 提交，不扩张 CLI 入口。候选版本在下方候选区生成与审核。"
-      action={<Badge variant="info" className="w-fit">正式动作</Badge>}
+      description="所有动作都通过正式任务提交，结果会在任务详情、产物和报告中追踪。候选版本在下方候选区生成与审核。"
+      action={<Badge variant="info" className="w-fit">流程动作</Badge>}
     >
       <div className="space-y-4">
         <div className="grid gap-3">
@@ -143,7 +143,7 @@ export function StrategyWorkspaceActions({
           <ErrorState
             category="job failed"
             title="策略任务提交失败"
-            description="提交到 Job Center 时返回了错误。"
+            description="提交执行任务时返回了错误。"
             suggestion="请先查看错误详情，再确认是否重新提交。"
             detail={submissionError}
             actions={[
@@ -158,7 +158,7 @@ export function StrategyWorkspaceActions({
           open={Boolean(selectedAction)}
           onOpenChange={(open) => !open && setSelectedAction(null)}
           title={selectedAction?.confirmTitle ?? '确认策略任务'}
-          description="本操作会通过正式 Job 提交到后端，执行后可在 Job Center、Artifact Center 和 Report Center 查看结果。"
+          description="本操作会通过正式任务提交到后端，执行后可在任务详情、产物和报告中查看结果。"
           confirmLabel={mutation.isPending ? '提交中' : '确认提交'}
           confirmDisabled={mutation.isPending || !selectedAction || !canSubmit}
           cancelLabel="取消"

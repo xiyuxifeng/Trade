@@ -102,3 +102,42 @@ def test_artifact_service_filters_by_job_type_and_date(tmp_path: Path, monkeypat
 
     date_filtered = asyncio.run(service.list_artifacts(date="2026-05-15"))
     assert [item["name"] for item in date_filtered.payload["items"]] == ["report.json"]
+
+
+def test_artifact_service_lists_filter_options(tmp_path: Path, monkeypatch) -> None:
+    """ArtifactService 应可返回产物筛选下拉选项。"""
+    from src.services.artifact_service import ArtifactService
+    from src.services import artifact_service as artifact_service_module
+
+    jobs_root = tmp_path / "data" / "jobs"
+    first_job_dir = jobs_root / "job-123"
+    first_job_dir.mkdir(parents=True, exist_ok=True)
+    first_file = first_job_dir / "strategy.json"
+    first_file.write_text('{"name": "strategy"}', encoding="utf-8")
+
+    second_job_dir = jobs_root / "job-456"
+    second_job_dir.mkdir(parents=True, exist_ok=True)
+    second_file = second_job_dir / "report.json"
+    second_file.write_text('{"name": "report"}', encoding="utf-8")
+
+    processed_root = tmp_path / "data" / "processed"
+    processed_root.mkdir(parents=True, exist_ok=True)
+    (processed_root / "summary.html").write_text("<html></html>", encoding="utf-8")
+
+    service = ArtifactService(roots=[jobs_root, processed_root])
+
+    async def fake_job_metadata(self, job_ids):
+        return {
+            "job-123": {"job_type": "strategy-build"},
+            "job-456": {"job_type": "run-pre-market"},
+        }
+
+    monkeypatch.setattr(artifact_service_module.ArtifactService, "_job_metadata_by_id", fake_job_metadata, raising=False)
+
+    listed = asyncio.run(service.list_filter_options())
+
+    assert listed.status == "ok"
+    assert listed.payload["kinds"] == ["html", "json"]
+    assert listed.payload["sources"] == ["jobs", "processed"]
+    assert listed.payload["job_types"] == ["run-pre-market", "strategy-build"]
+    assert listed.payload["job_ids"] == ["job-456", "job-123"]

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -18,6 +19,7 @@ import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
 import { StrategyWorkspaceActions } from '@/features/strategy-workspace';
 import { StrategyWorkspaceArtifacts } from '@/features/strategy-workspace';
 import { isWorkspacePermissionDenied, selectLatestProfileSnapshot } from '@/features/strategy-workspace';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 
 function sortByDateDesc<T extends { created_at?: string | null; strategy_date?: string | null; version_id?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
@@ -47,6 +49,9 @@ function SummaryTile({ label, value }: { label: string; value: string | number }
 export function StrategyVersionsPage() {
   const navigate = useNavigate();
   const today = useMemo(() => formatLocalDateInputOffset(0), []);
+  const [draftTraderId, setDraftTraderId] = useState('trader_a');
+  const [draftStrategyDate, setDraftStrategyDate] = useState(today);
+  const [draftSelectedProfileId, setDraftSelectedProfileId] = useState('');
   const [traderId, setTraderId] = useState('trader_a');
   const [strategyDate, setStrategyDate] = useState(today);
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -63,16 +68,36 @@ export function StrategyVersionsPage() {
   const profileItems = profilesQuery.data?.items ?? [];
 
   useEffect(() => {
-    if (!selectedProfileId && profileItems.length > 0) {
-      setSelectedProfileId(profileItems[0].profile_id);
+    if (!draftSelectedProfileId && profileItems.length > 0) {
+      const firstProfileId = profileItems[0].profile_id;
+      setDraftSelectedProfileId(firstProfileId);
+      setSelectedProfileId(firstProfileId);
     }
-  }, [profileItems, selectedProfileId]);
+  }, [draftSelectedProfileId, profileItems]);
 
   useEffect(() => {
-    if (selectedProfileId && !profileItems.some((item) => item.profile_id === selectedProfileId)) {
-      setSelectedProfileId(profileItems[0]?.profile_id ?? '');
+    if (draftSelectedProfileId && !profileItems.some((item) => item.profile_id === draftSelectedProfileId)) {
+      const firstProfileId = profileItems[0]?.profile_id ?? '';
+      setDraftSelectedProfileId(firstProfileId);
+      setSelectedProfileId(firstProfileId);
     }
-  }, [profileItems, selectedProfileId]);
+  }, [draftSelectedProfileId, profileItems]);
+
+  const handleSearch = () => {
+    setTraderId(draftTraderId);
+    setStrategyDate(draftStrategyDate);
+    setSelectedProfileId(draftSelectedProfileId);
+  };
+
+  const handleReset = () => {
+    const firstProfileId = profileItems[0]?.profile_id ?? '';
+    setDraftTraderId('trader_a');
+    setDraftStrategyDate(today);
+    setDraftSelectedProfileId(firstProfileId);
+    setTraderId('trader_a');
+    setStrategyDate(today);
+    setSelectedProfileId(firstProfileId);
+  };
 
   const profileDetailQuery = useQuery({
     queryKey: ['strategy-versions-page', 'profile-detail', selectedProfileId],
@@ -149,7 +174,7 @@ export function StrategyVersionsPage() {
         <PageHeader
           kicker="策略"
           title="策略版本"
-          description="构建和查看策略版本，只保留 Profile 入口。"
+          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
@@ -164,7 +189,7 @@ export function StrategyVersionsPage() {
         <PageHeader
           kicker="策略"
           title="策略版本"
-          description="构建和查看策略版本，只保留 Profile 入口。"
+          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
@@ -192,7 +217,7 @@ export function StrategyVersionsPage() {
         <PageHeader
           kicker="策略"
           title="策略版本"
-          description="构建和查看策略版本，只保留 Profile 入口。"
+          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
           actionLabel="返回策略首页"
           onAction={() => navigate('/strategies')}
         />
@@ -211,7 +236,7 @@ export function StrategyVersionsPage() {
       <PageHeader
         kicker="策略"
         title="策略版本"
-        description="构建和查看策略版本，只保留 Profile 入口。"
+        description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
         actionLabel="返回策略首页"
         onAction={() => navigate('/strategies')}
       />
@@ -221,7 +246,7 @@ export function StrategyVersionsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium">{submissionMessage}</p>
-              <p className="mt-1 text-sm text-sky-700">任务已通过 Job Center 创建，不再经过 CLI。</p>
+              <p className="mt-1 text-sm text-sky-700">任务已提交，可直接打开任务详情查看进度。</p>
             </div>
             {submissionJobId ? (
               <button
@@ -229,14 +254,14 @@ export function StrategyVersionsPage() {
                 onClick={() => navigate(`/jobs/${submissionJobId}`)}
                 type="button"
               >
-                打开 Job 详情
+                打开任务详情
               </button>
             ) : null}
           </div>
         </section>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <section className="grid gap-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
@@ -249,28 +274,29 @@ export function StrategyVersionsPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Trader ID</span>
-                <Input
-                  className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-                  onChange={(event) => setTraderId(event.target.value)}
-                  placeholder="例如 trader_a"
-                  value={traderId}
+                <TraderIdSelect
+                  ariaLabel="Trader ID"
+                  className="border-slate-200 bg-white text-slate-900"
+                  onChange={setDraftTraderId}
+                  source="strategy"
+                  value={draftTraderId}
                 />
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">策略日期</span>
                 <Input
                   className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-                  onChange={(event) => setStrategyDate(event.target.value)}
+                  onChange={(event) => setDraftStrategyDate(event.target.value)}
                   type="date"
-                  value={strategyDate}
+                  value={draftStrategyDate}
                 />
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Profile</span>
                 <Select
                   className="border-slate-200 bg-white text-slate-900"
-                  onChange={(event) => setSelectedProfileId(event.target.value)}
-                  value={selectedProfileId}
+                  onChange={(event) => setDraftSelectedProfileId(event.target.value)}
+                  value={draftSelectedProfileId}
                 >
                   {profileItems.map((profile) => (
                     <option key={profile.profile_id} value={profile.profile_id}>
@@ -286,23 +312,33 @@ export function StrategyVersionsPage() {
               <SummaryTile label="最新版本" value={versionItems[0]?.version_id ?? '暂无'} />
               <SummaryTile label="最新快照" value={latestSnapshot?.snapshot_id ?? '暂无'} />
             </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={handleSearch} type="button">
+                搜索
+              </Button>
+              <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={handleReset} type="button" variant="outline">
+                重置
+              </Button>
+            </div>
           </CardContent>
         </Card>
-        <StrategyWorkspaceActions
-          disabled={!selectedProfileId || !traderId.trim() || !strategyDate}
-          onSubmitted={({ jobType, jobId }) => {
-            setSubmissionMessage(`已提交 ${jobType}，可打开 Job 详情查看进度。`);
-            setSubmissionJobId(jobId);
-            void versionsQuery.refetch();
-            void versionDetailQuery.refetch();
-            void artifactsQuery.refetch();
-          }}
-          profileId={selectedProfileId}
-          snapshotId={latestSnapshot?.snapshot_id ?? null}
-          strategyDate={strategyDate}
-          traderId={traderId}
-        />
       </section>
+
+      <StrategyWorkspaceActions
+        disabled={!selectedProfileId || !traderId.trim() || !strategyDate}
+        onSubmitted={({ jobType, jobId }) => {
+          setSubmissionMessage(`已提交 ${jobType}，可打开任务详情查看进度。`);
+          setSubmissionJobId(jobId);
+          void versionsQuery.refetch();
+          void versionDetailQuery.refetch();
+          void artifactsQuery.refetch();
+        }}
+        profileId={selectedProfileId}
+        snapshotId={latestSnapshot?.snapshot_id ?? null}
+        strategyDate={strategyDate}
+        traderId={traderId}
+      />
 
       <section>
         <StrategyWorkspaceArtifacts

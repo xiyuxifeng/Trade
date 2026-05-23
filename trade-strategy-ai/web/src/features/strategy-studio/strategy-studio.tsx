@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { PageHeader } from '@/components/layout/page-header';
+import { TraderIdSelect } from '@/components/inputs/trader-id-select';
 import { ApiError } from '@/lib/api/http';
 import {
   adviseRuleValidations,
@@ -491,7 +492,13 @@ export function StrategyStudio() {
             <div className="grid gap-3">
               <label className="space-y-2 text-sm text-slate-300">
                 <span>交易员 ID</span>
-                <Input aria-label="Trader ID" value={traderId} onChange={(event) => setTraderId(event.target.value)} />
+                <TraderIdSelect
+                  ariaLabel="Trader ID"
+                  className="border-slate-700 bg-slate-950 text-slate-100"
+                  onChange={setTraderId}
+                  source="strategy"
+                  value={traderId}
+                />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
                 <span>策略日期</span>

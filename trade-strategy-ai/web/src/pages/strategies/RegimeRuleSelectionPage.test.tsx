@@ -3,14 +3,20 @@ import { screen, waitFor } from '@testing-library/react';
 import { RegimeRuleSelectionPage } from './RegimeRuleSelectionPage';
 import { renderWithRouter } from '@/test/test-utils';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
+import { listTraderOptions } from '@/lib/api/traders';
 
 vi.mock('@/lib/api/strategyStudio', () => ({
   getStrategyVersion: vi.fn(),
   listStrategyVersions: vi.fn(),
 }));
 
+vi.mock('@/lib/api/traders', () => ({
+  listTraderOptions: vi.fn(),
+}));
+
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
+const mockedListTraderOptions = vi.mocked(listTraderOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -43,6 +49,11 @@ describe('RegimeRuleSelectionPage', () => {
         },
       ],
     });
+    mockedListTraderOptions.mockResolvedValue({
+      status: 'success',
+      count: 2,
+      items: ['trader_a', 'trader_b'],
+    } as never);
     mockedGetStrategyVersion.mockResolvedValue({
       status: 'success',
       item: {
@@ -127,6 +138,7 @@ describe('RegimeRuleSelectionPage', () => {
     await waitFor(() => {
       expect(mockedListStrategyVersions).toHaveBeenCalled();
       expect(mockedGetStrategyVersion).toHaveBeenCalled();
+      expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
     });
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Regime-aware 规则选择' })).toBeInTheDocument();

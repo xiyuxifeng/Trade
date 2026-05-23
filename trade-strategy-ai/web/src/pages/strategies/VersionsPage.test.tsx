@@ -7,6 +7,7 @@ import { listProfiles, getProfile } from '@/lib/api/profiles';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { listStrategyVersions, getStrategyVersion } from '@/lib/api/strategyStudio';
 import { createJob } from '@/lib/api/jobs';
+import { listTraderOptions } from '@/lib/api/traders';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
@@ -26,12 +27,17 @@ vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
 }));
 
+vi.mock('@/lib/api/traders', () => ({
+  listTraderOptions: vi.fn(),
+}));
+
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
 const mockedCreateJob = vi.mocked(createJob);
+const mockedListTraderOptions = vi.mocked(listTraderOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -154,6 +160,11 @@ describe('VersionsPage', () => {
       },
     } as never);
     mockedListArtifacts.mockResolvedValue({ count: 0, total: 0, skip: 0, limit: 24, items: [] } as never);
+    mockedListTraderOptions.mockResolvedValue({
+      status: 'success',
+      count: 2,
+      items: ['trader_a', 'trader_b'],
+    } as never);
     mockedCreateJob.mockResolvedValue({
       created: true,
       job: { id: 'job-build-1' },
@@ -168,11 +179,15 @@ describe('VersionsPage', () => {
 
     expect(await screen.findByRole('heading', { name: '策略版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '返回策略首页' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '搜索' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
     expect((await screen.findAllByText('trader_a_2026-05-16_released')).length).toBeGreaterThan(0);
     expect(screen.getByText('latest released version')).toBeInTheDocument();
+    expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
 
     fireEvent.change(screen.getByLabelText('策略日期'), { target: { value: '2026-05-16' } });
+    await user.click(screen.getByRole('button', { name: '搜索' }));
     await user.click(screen.getByRole('button', { name: /构建策略版本/ }));
     await user.click(screen.getByRole('button', { name: '确认提交' }));
 

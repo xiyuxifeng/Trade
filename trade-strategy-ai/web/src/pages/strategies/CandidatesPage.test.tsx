@@ -7,6 +7,7 @@ import { listProfiles, getProfile } from '@/lib/api/profiles';
 import { listStrategyVersions, getStrategyVersion } from '@/lib/api/strategyStudio';
 import { listOptimizeVersions, getOptimizeVersion, createOptimizeCandidateVersion } from '@/lib/api/optimize';
 import { listArtifacts } from '@/lib/api/artifacts';
+import { listTraderOptions } from '@/lib/api/traders';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
@@ -28,6 +29,10 @@ vi.mock('@/lib/api/artifacts', () => ({
   listArtifacts: vi.fn(),
 }));
 
+vi.mock('@/lib/api/traders', () => ({
+  listTraderOptions: vi.fn(),
+}));
+
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
@@ -36,6 +41,7 @@ const mockedListOptimizeVersions = vi.mocked(listOptimizeVersions);
 const mockedGetOptimizeVersion = vi.mocked(getOptimizeVersion);
 const mockedCreateOptimizeCandidateVersion = vi.mocked(createOptimizeCandidateVersion);
 const mockedListArtifacts = vi.mocked(listArtifacts);
+const mockedListTraderOptions = vi.mocked(listTraderOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -174,6 +180,11 @@ describe('CandidatesPage', () => {
     } as never);
     mockedGetOptimizeVersion.mockResolvedValue({ status: 'success', item: null } as never);
     mockedListArtifacts.mockResolvedValue({ count: 0, total: 0, skip: 0, limit: 12, items: [] } as never);
+    mockedListTraderOptions.mockResolvedValue({
+      status: 'success',
+      count: 2,
+      items: ['trader_a', 'trader_b'],
+    } as never);
     mockedCreateOptimizeCandidateVersion.mockResolvedValue({
       status: 'success',
       item: {
@@ -198,7 +209,11 @@ describe('CandidatesPage', () => {
     expect(screen.getByRole('button', { name: '返回策略首页' })).toBeInTheDocument();
     expect(await screen.findByText('trader_a_2026-05-16_released')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '生成候选版本' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '搜索' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
+    expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
 
+    await user.click(screen.getByRole('button', { name: '搜索' }));
     await user.click(screen.getByRole('button', { name: '生成候选版本' }));
     await user.click(screen.getByRole('button', { name: '确认生成' }));
 

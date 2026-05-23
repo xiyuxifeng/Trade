@@ -315,6 +315,20 @@ class ConfigProfileService(BaseService):
         records.sort(key=lambda item: str(item.get("captured_at") or item.get("updated_at") or item.get("snapshot_id") or ""))
         return records
 
+    async def resolve_profile_config_path(self, profile_id: str) -> Path | None:
+        """解析 Profile 最新可用的配置路径。"""
+        profile = await self.get_profile(profile_id)
+        if profile is None:
+            return None
+
+        snapshots = await self.list_profile_snapshots(profile_id)
+        for snapshot in reversed(snapshots):
+            config_path = str(snapshot.get("config_path") or "").strip()
+            if config_path:
+                return resolve_project_path(config_path)
+
+        return resolve_project_path("config/app.yaml")
+
     async def list_profile_linked_jobs(self, profile_id: str) -> list[dict[str, Any]]:
         """列出与 Profile 关联的 Job。"""
         from src.services.job_service import JobService

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from '@/lib/api/http';
-import { kaipanFetch, kaipanNormalize, kaipanRun, kaipanStatus } from './kaipan';
+import { kaipanFetch, kaipanNormalize, kaipanRun, kaipanStatus, kaipanStop } from './kaipan';
 
 describe('kaipan api', () => {
   beforeEach(() => {
@@ -13,7 +13,7 @@ describe('kaipan api', () => {
     window.localStorage.setItem(API_KEY_STORAGE_KEY, 'demo-key');
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ latest_slot: '2026-05-09_17-30' }),
+      json: async () => ({ latest_slot: '2026-05-09_17-30', scheduler_started: true }),
     } as Response);
 
     await kaipanStatus();
@@ -59,5 +59,19 @@ describe('kaipan api', () => {
     expect(normalizeInit?.method).toBe('POST');
     expect(runUrl).toBe('/api/ui/v1/kaipan/run');
     expect(runInit?.method).toBe('POST');
+  });
+
+  it('posts stop request', async () => {
+    window.localStorage.setItem(API_KEY_STORAGE_KEY, 'demo-key');
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ started: false }),
+    } as Response);
+
+    await kaipanStop();
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/kaipan/stop');
+    expect(init?.method).toBe('POST');
   });
 });

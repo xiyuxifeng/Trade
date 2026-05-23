@@ -1,5 +1,3 @@
-import { SectionCard } from '@/components/kit';
-
 type MarketWorkspaceSummaryProps = {
   taskCount: number;
   recentJobCount: number;
@@ -7,11 +5,12 @@ type MarketWorkspaceSummaryProps = {
   artifactCount: number;
 };
 
-function StatCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <SectionCard title={label} description={hint}>
-      <p className="text-2xl font-semibold text-slate-950">{value}</p>
-    </SectionCard>
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-slate-950">{value}</p>
+    </div>
   );
 }
 
@@ -22,11 +21,11 @@ export function MarketWorkspaceSummary({
   artifactCount,
 }: MarketWorkspaceSummaryProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <StatCard label="可运行任务" value={taskCount} hint="当前可在 Web 中直接提交的市场任务" />
-      <StatCard label="最近任务" value={recentJobCount} hint="最近采样到的市场相关 Job" />
-      <StatCard label="重点告警" value={failedJobCount} hint="最近失败的市场任务" />
-      <StatCard label="最近产物" value={artifactCount} hint="可用于复盘的市场产物" />
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <StatCard label="可运行任务" value={taskCount} />
+      <StatCard label="最近任务" value={recentJobCount} />
+      <StatCard label="重点告警" value={failedJobCount} />
+      <StatCard label="最近产物" value={artifactCount} />
     </section>
   );
 }

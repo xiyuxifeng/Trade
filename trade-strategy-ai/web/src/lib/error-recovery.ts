@@ -16,6 +16,9 @@ export type ErrorRecoveryPage =
   | 'profiles'
   | 'profile-detail'
   | 'market'
+  | 'artifacts'
+  | 'artifact-detail'
+  | 'artifact-filter-options'
   | 'strategy'
   | 'backtest'
   | 'backtest-results'
@@ -148,6 +151,10 @@ function getPageRoute(page: ErrorRecoveryPage) {
       return '/profiles';
     case 'market':
       return '/market';
+    case 'artifacts':
+    case 'artifact-detail':
+    case 'artifact-filter-options':
+      return '/artifacts';
     case 'strategy':
       return '/strategies';
     case 'admin-audit':
@@ -176,6 +183,10 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
       return '/profiles';
     case 'market':
       return '/dashboard';
+    case 'artifacts':
+    case 'artifact-detail':
+    case 'artifact-filter-options':
+      return '/dashboard';
     case 'strategy':
       return '/dashboard';
     case 'admin-audit':
@@ -197,10 +208,6 @@ function getArtifactsRoute() {
   return '/artifacts';
 }
 
-function getMarketStateRoute() {
-  return '/market';
-}
-
 function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecoveryPage) {
   const pageTitles: Record<ErrorRecoveryPage, string> = {
     jobs: '任务',
@@ -208,6 +215,9 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     profiles: '配置列表',
     'profile-detail': '配置详情',
     market: '市场快照浏览器',
+    artifacts: '产物中心',
+    'artifact-detail': '产物详情',
+    'artifact-filter-options': '产物筛选',
     strategy: '策略工作台',
     backtest: '回测中心',
     'backtest-results': '回测结果',
@@ -306,22 +316,7 @@ function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage):
         { label: '前往配置管理', to: profilesRoute },
       ];
     case 'data empty':
-      return [
-        { label: '返回当前页面', to: pageRoute },
-        {
-          label: '查看相关数据',
-          to:
-            page === 'market'
-              ? getMarketStateRoute()
-              : page === 'strategy'
-                ? '/artifacts'
-                : page === 'profiles'
-                  ? '/profiles/import'
-                  : page === 'job-detail'
-                    ? '/artifacts'
-                    : '/dashboard',
-        },
-      ];
+      return [];
     case 'artifact missing':
       return [
         { label: '打开产物中心', to: getArtifactsRoute() },
@@ -380,6 +375,16 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           title: '快照不存在',
           description: '系统没有找到该 Market Snapshot。',
           suggestion: '请检查 snapshot_id 是否正确，或返回列表重新筛选。',
+        },
+        artifacts: {
+          title: '产物列表暂不可用',
+          description: '当前产物中心没有返回可展示的数据。',
+          suggestion: '请稍后重试，或调整筛选条件后再看一次。',
+        },
+        'artifact-detail': {
+          title: '产物详情暂不可用',
+          description: '当前产物详情没有返回可展示的数据。',
+          suggestion: '请检查 artifact_id 是否正确，或返回产物列表重新选择。',
         },
         strategy: {
           title: '策略工作台暂不可用',

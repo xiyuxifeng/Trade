@@ -144,6 +144,18 @@ class _FakeRulePoolService:
             },
         )
 
+    async def list_filter_options(self) -> Any:
+        return SimpleNamespace(
+            status='ok',
+            payload={
+                'review_statuses': ['pending', 'approved', 'rejected'],
+                'mapping_statuses': ['mapped', 'unmapped'],
+                'source_types': ['standalone', 'derived', 'experience'],
+                'rule_types': ['breakout', 'pullback'],
+                'instrument_focuses': ['mixed', 'stock'],
+            },
+        )
+
 
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
@@ -184,6 +196,10 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 @pytest.mark.asyncio
 async def test_canonical_rule_pool_router_covers_list_detail_and_review_actions(client: AsyncClient) -> None:
+    options = await client.get('/api/ui/v1/rule-pool/filter-options')
+    assert options.status_code == 200
+    assert options.json()['review_statuses'] == ['pending', 'approved', 'rejected']
+
     rules = await client.get(
         '/api/ui/v1/rule-pool',
         params={

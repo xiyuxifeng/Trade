@@ -4,6 +4,7 @@ import type { JobRecord } from '@/types/jobs';
 type MarketWorkspaceRecentJobsProps = {
   jobs: JobRecord[];
   loading: boolean;
+  compact?: boolean;
 };
 
 function formatDate(value: string | null) {
@@ -14,7 +15,7 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-export function MarketWorkspaceRecentJobs({ jobs, loading }: MarketWorkspaceRecentJobsProps) {
+export function MarketWorkspaceRecentJobs({ jobs, loading, compact = false }: MarketWorkspaceRecentJobsProps) {
   return (
     <SectionCard
       title="最近任务"
@@ -27,25 +28,25 @@ export function MarketWorkspaceRecentJobs({ jobs, loading }: MarketWorkspaceRece
           查看任务中心
         </a>
       }
-    >
+      >
       {loading ? (
         <LoadingState label="正在加载最近任务" description="稍后会显示最近提交的市场任务和执行结果。" />
       ) : jobs.length ? (
-        <div className="space-y-3">
+        <div className={compact ? 'max-h-72 space-y-2 overflow-auto pr-1' : 'space-y-3'}>
           {jobs.map((job) => (
-            <div key={job.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div key={job.id} className={compact ? 'rounded-2xl border border-slate-200 bg-slate-50 p-3' : 'rounded-2xl border border-slate-200 bg-slate-50 p-4'}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-slate-900">{job.job_type}</p>
-                  <p className="mt-1 text-sm text-slate-500">{formatDate(job.created_at)}</p>
+                  <p className={compact ? 'text-sm font-medium text-slate-900' : 'font-medium text-slate-900'}>{job.job_type}</p>
+                  <p className={compact ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-sm text-slate-500'}>{formatDate(job.created_at)}</p>
                 </div>
                 <StatusBadge value={job.status} />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <a className="text-sm font-medium text-sky-700 hover:text-sky-800" href={`/jobs/${job.id}`}>
+              <div className={compact ? 'mt-2 flex flex-wrap items-center gap-2' : 'mt-3 flex flex-wrap items-center gap-3'}>
+                <a className={compact ? 'text-xs font-medium text-sky-700 hover:text-sky-800' : 'text-sm font-medium text-sky-700 hover:text-sky-800'} href={`/jobs/${job.id}`}>
                   打开 Job 详情
                 </a>
-                <span className="text-xs text-slate-400">创建者：{job.created_by}</span>
+                <span className={compact ? 'text-[11px] text-slate-400' : 'text-xs text-slate-400'}>创建者：{job.created_by}</span>
               </div>
             </div>
           ))}

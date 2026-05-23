@@ -4,6 +4,7 @@ import type { ArtifactRecord } from '@/types/artifacts';
 type MarketWorkspaceArtifactsProps = {
   artifacts: ArtifactRecord[];
   loading: boolean;
+  compact?: boolean;
 };
 
 function formatDate(value: string | null) {
@@ -14,7 +15,7 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-export function MarketWorkspaceArtifacts({ artifacts, loading }: MarketWorkspaceArtifactsProps) {
+export function MarketWorkspaceArtifacts({ artifacts, loading, compact = false }: MarketWorkspaceArtifactsProps) {
   return (
     <SectionCard
       title="最近产物"
@@ -24,19 +25,19 @@ export function MarketWorkspaceArtifacts({ artifacts, loading }: MarketWorkspace
       {loading ? (
         <LoadingState label="正在加载最近产物" description="稍后会显示市场链路生成的快照、报告和导出文件。" />
       ) : artifacts.length ? (
-        <div className="space-y-3">
+        <div className={compact ? 'max-h-72 space-y-2 overflow-auto pr-1' : 'space-y-3'}>
           {artifacts.map((artifact) => (
-            <div key={artifact.artifact_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div key={artifact.artifact_id} className={compact ? 'rounded-2xl border border-slate-200 bg-slate-50 p-3' : 'rounded-2xl border border-slate-200 bg-slate-50 p-4'}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-slate-900">{artifact.name}</p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className={compact ? 'text-sm font-medium text-slate-900' : 'font-medium text-slate-900'}>{artifact.name}</p>
+                  <p className={compact ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-sm text-slate-500'}>
                     {artifact.kind} · {artifact.source} · {formatDate(artifact.modified_at)}
                   </p>
                 </div>
                 <StatusBadge value={artifact.exists ? 'success' : 'failed'} label={artifact.exists ? '可用' : '缺失'} />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              <div className={compact ? 'mt-2 flex flex-wrap items-center gap-2 text-xs' : 'mt-3 flex flex-wrap items-center gap-3 text-sm'}>
                 <span className="text-slate-500">Job：{artifact.job_id ?? '未关联'}</span>
                 <a className="font-medium text-sky-700 hover:text-sky-800" href="/artifacts">
                   打开产物中心

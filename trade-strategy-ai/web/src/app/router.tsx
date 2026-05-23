@@ -10,7 +10,7 @@ import {
   ArticleResultsPage,
   ArticleRunPage,
 } from '@/pages/articles';
-import { ArtifactsPage } from '@/pages/artifacts';
+import { ArtifactDetailPage, ArtifactsPage } from '@/pages/artifacts';
 import { BacktestPage } from '@/pages/backtest';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { DashboardPage } from '@/pages/dashboard';
@@ -18,6 +18,9 @@ import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { MarketDatasetPage } from '@/pages/market/datasets';
 import { MarketPage } from '@/pages/market';
+import { MarketSnapshotsPage } from '@/pages/market/snapshots';
+import { MarketKaipanPage } from '@/pages/market/kaipan';
+import { MarketOhlcvPage } from '@/pages/market/ohlcv';
 import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
 import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
@@ -33,7 +36,7 @@ import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionP
 import { AfterClosePage, CandidatesPage, HistoryPage, PreMarketPage, StrategiesPage, VersionsPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
-import { RulePoolPage } from '@/pages/rule-pool';
+import { RulePoolDetailPage, RulePoolPage } from '@/pages/rule-pool';
 import { useAuth } from '@/features/auth/auth-context';
 
 function RootRedirect() {
@@ -91,9 +94,14 @@ const dashboardLayoutRoutes = [
   { path: 'backtest', element: <BacktestPage /> },
   { path: 'backtest/regime', element: <RegimeBacktestReportPage /> },
   { path: 'rule-pool', element: <RulePoolPage /> },
+  { path: 'rule-pool/:ruleId', element: <RulePoolDetailPage /> },
   { path: 'artifacts', element: <ArtifactsPage /> },
+  { path: 'artifacts/:artifactId', element: <ArtifactDetailPage /> },
   { path: 'market', element: <MarketPage /> },
+  { path: 'market/snapshots', element: <MarketSnapshotsPage /> },
   { path: 'market/datasets', element: <MarketDatasetPage /> },
+  { path: 'market/kaipan', element: <MarketKaipanPage /> },
+  { path: 'market/ohlcv', element: <MarketOhlcvPage /> },
   { path: 'strategies', element: <StrategiesPage /> },
   { path: 'strategies/versions', element: <VersionsPage /> },
   { path: 'strategies/candidates', element: <CandidatesPage /> },

@@ -26,9 +26,6 @@ describe('buildErrorRecoveryState', () => {
     const state = buildErrorRecoveryState(new ApiError(404, 'no market data'), 'market');
 
     expect(state.category).toBe('data empty');
-    expect(state.actions).toEqual([
-      { label: '返回当前页面', to: '/market' },
-      { label: '查看相关数据', to: '/market' },
-    ]);
+    expect(state.actions).toEqual([]);
   });
 });

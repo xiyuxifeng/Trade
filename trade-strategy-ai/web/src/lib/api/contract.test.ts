@@ -5,7 +5,7 @@ import { getSystemStatus } from './system';
 import { createJob, getJob, getJobLogs, cancelJob, listJobs } from './jobs';
 import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
 import { getArticlePipeline, runArticlePipeline } from './pipelines';
-import { listArtifacts, getArtifact, downloadArtifact } from './artifacts';
+import { listArtifacts, listArtifactFilterOptions, getArtifact, downloadArtifact } from './artifacts';
 import { listArticleFilterOptions, listArticles } from './articles';
 import {
   archiveProfile,
@@ -33,10 +33,13 @@ import {
   getMarketSnapshotQuality,
   getMarketSnapshotSection,
   getOhlcv,
+  getOhlcvSchedulerStatus,
   listMarketDatasets,
   listMarketSnapshotSections,
   listMarketSnapshots,
   listSymbols,
+  runOhlcvScheduler,
+  stopOhlcvScheduler,
 } from './market';
 
 describe('UI API client contract', () => {
@@ -110,6 +113,7 @@ describe('UI API client contract', () => {
     await importProfile({ profile_id: 'default', config_path: 'config/app.yaml', created_by: 'web' });
     await getProfileSnapshot('default', 'snapshot-1');
     await listArtifacts({ skip: 0, limit: 10 });
+    await listArtifactFilterOptions();
     await getArtifact('artifact-1');
     await downloadArtifact('artifact-1');
     await listDailyReports();
@@ -131,6 +135,9 @@ describe('UI API client contract', () => {
     await listDataAudits({ entity_type: 'backup', limit: 10 });
     await listSymbols('000001', 50);
     await getOhlcv('000001.SZ', '2026-05-01', '2026-05-10');
+    await getOhlcvSchedulerStatus('config/app.yaml');
+    await runOhlcvScheduler('config/app.yaml');
+    await stopOhlcvScheduler('config/app.yaml');
     await listMarketSnapshots({ tradeDate: '2026-05-16', market: 'cn', limit: 10, offset: 0 });
     await getMarketSnapshot('snapshot-001');
     await listMarketSnapshotSections('snapshot-001', 20, 0);
@@ -178,6 +185,9 @@ describe('UI API client contract', () => {
       confirmed: true,
     });
     expect(findCall('/api/ui/v1/pipelines/article_pipeline')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/ohlcv/status?config_path=config%2Fapp.yaml')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/ohlcv/run?config_path=config%2Fapp.yaml', 'POST')).toBeTruthy();
+    expect(findCall('/api/ui/v1/market/ohlcv/stop?config_path=config%2Fapp.yaml', 'POST')).toBeTruthy();
     expect(findCall('/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expect(findCall('/articles/filter-options?author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
@@ -186,6 +196,7 @@ describe('UI API client contract', () => {
       confirmed: false,
     });
     expect(findCall('/api/ui/v1/artifacts?skip=0&limit=10')).toBeTruthy();
+    expect(findCall('/api/ui/v1/artifacts/filter-options')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/artifact-1/download')).toBeTruthy();
     expect(findCall('/api/ui/v1/profiles?skip=0&limit=10')).toBeTruthy();

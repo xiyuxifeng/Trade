@@ -230,7 +230,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
           to="/jobs?job_type=run-after-close"
         >
-          查看任务中心
+          查看任务列表
         </Link>
       </div>
     );
@@ -241,7 +241,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
       {failed ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
           <p className="font-medium">最近盘后 Job 已失败。</p>
-          <p className="mt-1">重试和日志查看仍然回到任务中心处理，失败记录可直接进入 Job Detail。</p>
+          <p className="mt-1">重试和日志查看仍然回到任务列表处理，失败记录可直接进入任务详情。</p>
         </div>
       ) : null}
 
@@ -399,13 +399,13 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
                     to={`/jobs/${encodeURIComponent(latestJob.id)}`}
                   >
-                    查看 Job Detail
+                    查看任务详情
                   </Link>
                   <Link
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
                     to="/jobs?job_type=run-after-close"
                   >
-                    进入任务中心
+                    进入任务列表
                   </Link>
                   <Link
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
@@ -441,7 +441,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
             className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
             to="/jobs?job_type=run-after-close"
           >
-            查看任务中心
+                    查看任务列表
           </Link>
         </div>
       )}
@@ -475,11 +475,6 @@ function StrategyAfterCloseBody() {
   });
 
   const profileItems = profilesQuery.data?.items ?? [];
-  const selectedProfile = useMemo(
-    () => profileItems.find((item) => item.profile_id === formState.profileId) ?? null,
-    [formState.profileId, profileItems],
-  );
-
   useEffect(() => {
     if (!formState.profileId && profileItems.length > 0) {
       setFormState((current) => ({ ...current, profileId: profileItems[0].profile_id }));
@@ -495,7 +490,6 @@ function StrategyAfterCloseBody() {
     [formState.profileId, jobsQuery.data?.items],
   );
   const latestJob = visibleJobs[0] ?? null;
-  const failedJobCount = visibleJobs.filter((job) => job.status === 'failed').length;
   const queryError = profilesQuery.error ?? jobsQuery.error;
   const permissionDenied = isWorkspacePermissionDenied(queryError);
   const isLoading = profilesQuery.isLoading || jobsQuery.isLoading;
@@ -553,7 +547,7 @@ function StrategyAfterCloseBody() {
           {...buildErrorRecoveryState(queryError, 'strategy')}
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), jobsQuery.refetch()])}
           actions={[
-            { label: '查看任务中心', to: '/jobs?job_type=run-after-close' },
+            { label: '查看任务列表', to: '/jobs?job_type=run-after-close' },
             { label: '前往配置管理', to: '/profiles' },
           ]}
         />
@@ -604,11 +598,11 @@ function StrategyAfterCloseBody() {
             Job {submissionState.jobId} · {formatWorkspaceTimestamp(submissionState.submittedAt)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link className="text-sm font-medium text-emerald-700 hover:underline" to={`/jobs/${encodeURIComponent(submissionState.jobId)}`}>
-              打开 Job Detail
+              <Link className="text-sm font-medium text-emerald-700 hover:underline" to={`/jobs/${encodeURIComponent(submissionState.jobId)}`}>
+              打开任务详情
             </Link>
             <Link className="text-sm font-medium text-emerald-700 hover:underline" to="/jobs?job_type=run-after-close">
-              查看任务中心
+              查看任务列表
             </Link>
           </div>
         </div>
@@ -624,13 +618,13 @@ function StrategyAfterCloseBody() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <SectionCard
           title="盘后执行"
-          description="选择 Profile 和执行日期，提交 run-after-close，运行结果会回到 Job Center。"
+          description="选择 Profile 和执行日期，提交 run-after-close，运行结果会回到任务详情。"
           action={
             <Link
               className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
               to="/jobs?job_type=run-after-close"
             >
-              进入任务中心
+              进入任务列表
             </Link>
           }
         >
@@ -697,17 +691,6 @@ function StrategyAfterCloseBody() {
               </label>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
-              <SummaryTile
-                label="Profile"
-                value={selectedProfile ? `${selectedProfile.name} · ${selectedProfile.profile_id}` : formState.profileId || '未选择'}
-                detail={selectedProfile ? `版本 v${selectedProfile.version} · ${selectedProfile.environment}` : '请选择可用 Profile'}
-              />
-              <SummaryTile label="执行日期" value={formState.asOfDate} detail="将作为 run-after-close 的 as_of_date。" />
-              <SummaryTile label="最近盘后 Job" value={latestJob ? latestJob.id : '暂无'} detail={latestJob ? latestJob.job_type : '等待提交'} />
-              <SummaryTile label="失败任务" value={failedJobCount} detail="失败记录可跳转到 Job Detail 查看日志并重试。" />
-            </div>
-
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={submissionMutation.isPending || !formState.profileId}>
                 {submissionMutation.isPending ? '提交中' : '提交盘后复盘'}
@@ -733,13 +716,13 @@ function StrategyAfterCloseBody() {
 
       <SectionCard
         title="最近盘后任务"
-        description="失败任务可以直接进入 Job Detail，重试仍然回到任务中心。"
+        description="失败任务可以直接进入任务详情，重试仍然回到任务列表。"
         action={
           <Link
             className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
             to="/jobs?job_type=run-after-close"
           >
-            进入任务中心
+            进入任务列表
           </Link>
         }
       >
@@ -749,7 +732,7 @@ function StrategyAfterCloseBody() {
           <EmptyState
             title="暂无盘后任务。"
             description="提交 run-after-close 后，这里会显示最近执行记录。"
-            actionLabel="查看任务中心"
+            actionLabel="查看任务列表"
             onAction={() => {
               navigate('/jobs?job_type=run-after-close');
             }}

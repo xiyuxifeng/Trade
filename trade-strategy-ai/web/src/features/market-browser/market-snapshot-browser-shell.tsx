@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SectionCard } from '@/components/kit';
+import { PageHeader } from '@/components/layout/page-header';
 import { ErrorState } from '@/components/state/ErrorState';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import {
@@ -53,21 +54,31 @@ function uniqueVersions(items: Array<{ [key: string]: unknown }>, key: string) {
 }
 
 export function MarketSnapshotBrowserShell() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tradeDate = searchParams.get('trade_date') ?? '';
-  const market = searchParams.get('market') ?? 'CN';
-  const qualityStatus = searchParams.get('quality_status') ?? '';
+  const appliedTradeDate = searchParams.get('trade_date') ?? '';
+  const appliedMarket = searchParams.get('market') ?? 'CN';
+  const appliedQualityStatus = searchParams.get('quality_status') ?? '';
+  const [draftTradeDate, setDraftTradeDate] = useState(appliedTradeDate);
+  const [draftMarket, setDraftMarket] = useState(appliedMarket);
+  const [draftQualityStatus, setDraftQualityStatus] = useState(appliedQualityStatus);
   const selectedSnapshotIdParam = searchParams.get('snapshot_id');
   const selectedRegimeVersionParam = searchParams.get('regime_version');
   const selectedFeatureVersionParam = searchParams.get('feature_version');
 
+  useEffect(() => {
+    setDraftTradeDate(appliedTradeDate);
+    setDraftMarket(appliedMarket);
+    setDraftQualityStatus(appliedQualityStatus);
+  }, [appliedTradeDate, appliedMarket, appliedQualityStatus]);
+
   const snapshotsQuery = useQuery({
-    queryKey: ['market-snapshots-browser', tradeDate, market, qualityStatus],
+    queryKey: ['market-snapshots-browser', appliedTradeDate, appliedMarket, appliedQualityStatus],
     queryFn: () =>
       listMarketSnapshots({
-        tradeDate: tradeDate || undefined,
-        market,
-        qualityStatus: qualityStatus || undefined,
+        tradeDate: appliedTradeDate || undefined,
+        market: appliedMarket,
+        qualityStatus: appliedQualityStatus || undefined,
         limit: 50,
         offset: 0,
       }),
@@ -116,12 +127,12 @@ export function MarketSnapshotBrowserShell() {
   });
 
   const regimeFeaturesQuery = useQuery({
-    queryKey: ['market-regime-features-browser', selectedSnapshotId, tradeDate, market],
+    queryKey: ['market-regime-features-browser', selectedSnapshotId, appliedTradeDate, appliedMarket],
     queryFn: () =>
       listMarketRegimeFeatures({
         snapshotId: selectedSnapshotId ?? undefined,
-        tradeDate,
-        market,
+        tradeDate: appliedTradeDate,
+        market: appliedMarket,
         limit: 20,
         offset: 0,
       }),
@@ -130,12 +141,12 @@ export function MarketSnapshotBrowserShell() {
   });
 
   const regimeListQuery = useQuery({
-    queryKey: ['market-regimes-browser', selectedSnapshotId, tradeDate, market],
+    queryKey: ['market-regimes-browser', selectedSnapshotId, appliedTradeDate, appliedMarket],
     queryFn: () =>
       listMarketRegimes({
         snapshotId: selectedSnapshotId ?? undefined,
-        tradeDate,
-        market,
+        tradeDate: appliedTradeDate,
+        market: appliedMarket,
         limit: 20,
         offset: 0,
       }),
@@ -177,9 +188,14 @@ export function MarketSnapshotBrowserShell() {
   });
 
   const listErrorState = snapshotsQuery.error ? buildErrorRecoveryState(snapshotsQuery.error, 'market') : null;
-  const datasetViewerLink = tradeDate
-    ? `/market/datasets?trade_date=${encodeURIComponent(tradeDate)}&market=${encodeURIComponent(market)}`
-    : `/market/datasets?market=${encodeURIComponent(market)}`;
+  const datasetViewerLink = appliedTradeDate
+    ? `/market/datasets?trade_date=${encodeURIComponent(appliedTradeDate)}&market=${encodeURIComponent(appliedMarket)}`
+    : `/market/datasets?market=${encodeURIComponent(appliedMarket)}`;
+  const artifactCenterLink = appliedTradeDate
+    ? `/artifacts?jobType=snapshot-build&date=${encodeURIComponent(appliedTradeDate)}&source=market-snapshot-browser`
+    : '/artifacts?jobType=snapshot-build&source=market-snapshot-browser';
+  const snapshotBuildLink = '/strategies/pre-market';
+  const snapshotJobLink = '/jobs?job_type=snapshot-build';
 
   const selectedDetail: MarketSnapshotDetailResponse | null = detail;
   const regimeDetail: MarketRegimeDetailResponse | null = regimeDetailQuery.data ?? null;
@@ -187,124 +203,165 @@ export function MarketSnapshotBrowserShell() {
 
   return (
     <main className="page-stack">
-      {/* <PageHeader
+      <PageHeader
         kicker="市场数据"
-        title="Market Snapshot Browser"
-        description="在 Web 中浏览 Market Snapshot，查看 sections、质量报告和派生特征，而不是切换到调试式任务页。"
-      /> */}
+        title="市场快照"
+        description="浏览快照、查看质量报告和派生特征，并直接跳转到快照构建任务与数据集。"
+        actionLabel="返回市场数据"
+        onAction={() => navigate('/market')}
+      />
 
-      <div className="flex justify-start">
-        <Link
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-          to={datasetViewerLink}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
+        <SectionCard
+          title="快照入口"
+          description="市场数据是快照的正式主入口，盘前准备仅保留快捷构建入口。"
+          className="border-slate-200 bg-white"
         >
-          查看数据集
-        </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+              to={snapshotBuildLink}
+            >
+              <span>构建快照</span>
+            </Link>
+            <Link
+              className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+              to={snapshotJobLink}
+            >
+              <span>查看 snapshot-build</span>
+              <span className="mt-1 text-xs font-normal text-slate-500">任务列表</span>
+            </Link>
+            <Link
+              className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+              to={artifactCenterLink}
+            >
+              <span>查看快照产物</span>
+            </Link>
+            <Link
+              className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+              to={datasetViewerLink}
+            >
+              <span>查看数据集</span>
+            </Link>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="版本切换"
+          description="选择当前 snapshot 的特征版本和规则版本。"
+          className="border-slate-200 bg-white"
+        >
+          <div className="grid gap-4">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">feature_version</span>
+              <select
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
+                value={selectedFeatureVersion ?? ''}
+                onChange={(event) => {
+                  setSearchParams(
+                    buildSearchParams(searchParams, {
+                      feature_version: event.target.value,
+                    }),
+                    { replace: true },
+                  );
+                }}
+              >
+                {featureVersions.length ? (
+                  featureVersions.map((version) => (
+                    <option key={version} value={version}>
+                      {version}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">暂无可用版本</option>
+                )}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">regime_version</span>
+              <select
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
+                value={selectedRegimeVersion ?? ''}
+                onChange={(event) => {
+                  setSearchParams(
+                    buildSearchParams(searchParams, {
+                      regime_version: event.target.value,
+                    }),
+                    { replace: true },
+                  );
+                }}
+              >
+                {regimeVersions.length ? (
+                  regimeVersions.map((version) => (
+                    <option key={version} value={version}>
+                      {version}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">暂无可用版本</option>
+                )}
+              </select>
+            </label>
+          </div>
+        </SectionCard>
       </div>
 
-      <SectionCard
-        title="版本切换"
-        description="通过 URL 和下拉框切换 Market Regime Features 与 Market Regime 版本，默认展示当前可用最新版本。"
-        className="border-slate-200 bg-white"
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">feature_version</span>
-            <select
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
-              value={selectedFeatureVersion ?? ''}
-              onChange={(event) => {
-                setSearchParams(
-                  buildSearchParams(searchParams, {
-                    feature_version: event.target.value,
-                  }),
-                  { replace: true },
-                );
-              }}
-            >
-              {featureVersions.length ? (
-                featureVersions.map((version) => (
-                  <option key={version} value={version}>
-                    {version}
-                  </option>
-                ))
-              ) : (
-                <option value="">暂无可用版本</option>
-              )}
-            </select>
-          </label>
-          <label className="space-y-2">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">regime_version</span>
-            <select
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
-              value={selectedRegimeVersion ?? ''}
-              onChange={(event) => {
-                setSearchParams(
-                  buildSearchParams(searchParams, {
-                    regime_version: event.target.value,
-                  }),
-                  { replace: true },
-                );
-              }}
-            >
-              {regimeVersions.length ? (
-                regimeVersions.map((version) => (
-                  <option key={version} value={version}>
-                    {version}
-                  </option>
-                ))
-              ) : (
-                <option value="">暂无可用版本</option>
-              )}
-            </select>
-          </label>
-        </div>
-      </SectionCard>
+      <MarketSnapshotBrowserFilters
+        tradeDate={draftTradeDate}
+        market={draftMarket}
+        qualityStatus={draftQualityStatus}
+        onChange={(patch) => {
+          if (patch.tradeDate !== undefined) {
+            setDraftTradeDate(patch.tradeDate);
+          }
+          if (patch.market !== undefined) {
+            setDraftMarket(patch.market);
+          }
+          if (patch.qualityStatus !== undefined) {
+            setDraftQualityStatus(patch.qualityStatus);
+          }
+        }}
+        onSearch={() => {
+          setSearchParams(
+            buildSearchParams(searchParams, {
+              trade_date: draftTradeDate || undefined,
+              market: draftMarket || undefined,
+              quality_status: draftQualityStatus || undefined,
+              snapshot_id: undefined,
+              regime_version: undefined,
+              feature_version: undefined,
+            }),
+            { replace: true },
+          );
+        }}
+        onReset={() => {
+          setDraftTradeDate('');
+          setDraftMarket('CN');
+          setDraftQualityStatus('');
+          setSearchParams(
+            buildSearchParams(new URLSearchParams(), {
+              market: 'CN',
+            }),
+            { replace: true },
+          );
+        }}
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <div className="space-y-4">
-          <MarketSnapshotBrowserFilters
-            tradeDate={tradeDate}
-            market={market}
-            qualityStatus={qualityStatus}
-            onChange={(patch) => {
-              setSearchParams(
-                buildSearchParams(searchParams, {
-                  trade_date: patch.tradeDate ?? tradeDate,
-                  market: patch.market ?? market,
-                  quality_status: patch.qualityStatus ?? qualityStatus,
-                }),
-                { replace: true },
-              );
-            }}
-            onReset={() => {
-              setSearchParams(
-                buildSearchParams(new URLSearchParams(), {
-                  market: 'CN',
-                }),
-                { replace: true },
-              );
-            }}
-          />
-
-          <MarketSnapshotBrowserList
-            snapshots={snapshots}
-            selectedSnapshotId={selectedSnapshotId}
-            isLoading={snapshotsQuery.isLoading}
-            errorState={listErrorState ? <ErrorState {...listErrorState} onRetry={() => void snapshotsQuery.refetch()} /> : null}
-            onSelectSnapshot={(snapshotId) => {
-              setSearchParams(
-                buildSearchParams(searchParams, {
-                  snapshot_id: snapshotId,
-                }),
-                { replace: true },
-              );
-            }}
-            onRetry={() => {
-              void snapshotsQuery.refetch();
-            }}
-          />
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <MarketSnapshotBrowserList
+          snapshots={snapshots}
+          selectedSnapshotId={selectedSnapshotId}
+          isLoading={snapshotsQuery.isLoading}
+          errorState={listErrorState ? <ErrorState {...listErrorState} onRetry={() => void snapshotsQuery.refetch()} /> : null}
+          onSelectSnapshot={(snapshotId) => {
+            setSearchParams(
+              buildSearchParams(searchParams, {
+                snapshot_id: snapshotId,
+              }),
+              { replace: true },
+            );
+          }}
+        />
 
         <MarketSnapshotBrowserDetail
           snapshotId={selectedSnapshotId}
@@ -334,7 +391,7 @@ export function MarketSnapshotBrowserShell() {
             void regimeFeaturesQuery.refetch();
             void regimeFeatureDetailQuery.refetch();
           }}
-          tradeDate={tradeDate}
+          tradeDate={appliedTradeDate}
         />
       </div>
     </main>

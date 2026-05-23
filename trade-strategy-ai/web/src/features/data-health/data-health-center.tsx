@@ -13,40 +13,60 @@ function getErrorMessage(error: unknown) {
   return 'Dashboard 报告加载失败';
 }
 
-function SummaryCard({ title, value, accent = 'text-slate-950' }: { title: string; value: string | number; accent?: string }) {
+function SummaryCard({
+  title,
+  value,
+  valueClassName = 'text-slate-950',
+}: {
+  title: string;
+  value: string | number;
+  valueClassName?: string;
+}) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{title}</p>
-      <p className={`mt-2 text-2xl font-semibold ${accent}`}>{value}</p>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{title}</p>
+      <p className={`mt-1 font-semibold ${valueClassName}`}>{value}</p>
     </div>
   );
+}
+
+function formatRelativeHtmlPath(htmlPath: string | null | undefined) {
+  const rawPath = htmlPath?.trim();
+  if (!rawPath) {
+    return 'n/a';
+  }
+  const relativePath = rawPath.split('trade-strategy-ai/').pop();
+  return relativePath ?? rawPath;
 }
 
 function ReportPanel({ report }: { report: DashboardReportResponse | null }) {
   if (!report) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
         页面加载后会自动构建 dashboard report。
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="success">{report.critical_alerts} critical alerts</Badge>
         <Badge variant="info">exit {report.exit_code}</Badge>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <SummaryCard title="HTML path" value={report.html_path ?? 'n/a'} accent="text-sky-700" />
-        <SummaryCard title="Report keys" value={Object.keys(report.report).length} accent="text-emerald-700" />
+      <div className="space-y-3">
+        <SummaryCard title="HTML path" value={formatRelativeHtmlPath(report.html_path)} valueClassName="break-words font-mono text-sm text-sky-700" />
+        <SummaryCard title="Report keys" value={Object.keys(report.report).length} valueClassName="text-xl text-emerald-700" />
       </div>
-      <pre
-        className="max-h-[24rem] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700"
-        data-testid="data-health-json"
-      >
-        {JSON.stringify(report, null, 2)}
-      </pre>
+      <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">查看原始 JSON</summary>
+        <pre
+          className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700"
+          data-testid="data-health-json"
+        >
+          {JSON.stringify(report, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
@@ -76,7 +96,7 @@ export function DataHealthCenter() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-600">
               {reportQuery.isLoading ? '正在加载 dashboard...' : '报告只读展示，不在前端执行任何写入。'}

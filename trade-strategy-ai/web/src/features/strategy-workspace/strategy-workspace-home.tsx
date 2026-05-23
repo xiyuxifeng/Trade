@@ -73,9 +73,23 @@ function JobSummaryRow({
   );
 }
 
+function FlowLinkTile({ item }: { item: QuickLink }) {
+  return (
+    <Link
+      className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
+      to={item.to}
+    >
+      <p className="text-sm font-medium text-slate-950">{item.label}</p>
+      <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
+    </Link>
+  );
+}
+
 export function StrategyWorkspaceHomePage() {
   const navigate = useNavigate();
   const today = formatLocalDateInputOffset(0);
+  const pageDescription =
+    '策略工作台用于管理每日策略运行、策略版本构建和策略优化。日常使用优先进入盘前准备和盘后复盘；当 Profile、规则池、市场状态或候选版本变化时，再构建新的策略版本。';
 
   const profilesQuery = useQuery({
     queryKey: ['strategy-home', 'profiles'],
@@ -187,23 +201,26 @@ export function StrategyWorkspaceHomePage() {
     (strategyBuildFailedJobsQuery.data?.total ?? 0);
   const latestFailedJob = sortJobsByCreatedAtDesc(failedJobs)[0] ?? null;
 
-  const quickLinks: QuickLink[] = [
+  const todayRunLinks: QuickLink[] = [
     { label: '盘前准备', to: '/strategies/pre-market', description: '构建候选池快照并运行盘前' },
     { label: '盘后复盘', to: '/strategies/after-close', description: '查看盘后结果、归因和产物' },
-    { label: '构建策略版本', to: '/strategies/versions', description: '提交 strategy-build 并查看版本结果' },
-    { label: '候选版本', to: '/strategies/candidates', description: '生成与审核候选版本' },
-    { label: '规则选择', to: '/strategies/regime-selection', description: '查看策略规则选择与适用性' },
-    { label: '运行历史', to: '/strategies/history', description: '查看最近策略执行历史' },
   ];
+
+  const strategyBuildLinks: QuickLink[] = [
+    { label: '规则选择', to: '/strategies/regime-selection', description: '根据当前 Market Regime 选择适用规则' },
+    { label: '构建策略版本', to: '/strategies/versions', description: '提交 strategy-build 并查看版本结果' },
+  ];
+
+  const strategyOptimizationLinks: QuickLink[] = [
+    { label: '候选版本', to: '/strategies/candidates', description: '生成与审核候选版本' },
+  ];
+
+  const traceLinks: QuickLink[] = [{ label: '运行历史', to: '/strategies/history', description: '查看最近策略执行历史' }];
 
   if (isLoading) {
     return (
       <main className="page-stack">
-        <PageHeader
-          kicker="策略"
-          title="策略工作台"
-          description="策略首页只展示状态摘要和入口，不承担任务中心职责。"
-        />
+        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
         <LoadingState label="正在加载策略摘要" description="正在读取 Profile、策略版本和最近任务。" />
       </main>
     );
@@ -212,11 +229,7 @@ export function StrategyWorkspaceHomePage() {
   if (queryError) {
     return (
       <main className="page-stack">
-        <PageHeader
-          kicker="策略"
-          title="策略工作台"
-          description="策略首页只展示状态摘要和入口，不承担任务中心职责。"
-        />
+        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
         <ErrorState
           {...buildErrorRecoveryState(queryError, 'strategy')}
           onRetry={permissionDenied ? undefined : () => {
@@ -239,11 +252,7 @@ export function StrategyWorkspaceHomePage() {
   if (profileCount === 0) {
     return (
       <main className="page-stack">
-        <PageHeader
-          kicker="策略"
-          title="策略工作台"
-          description="策略首页只展示状态摘要和入口，不承担任务中心职责。"
-        />
+        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
         <EmptyState
           title="暂无可用 Profile。"
           description="请先导入或创建正式 Profile，再返回策略首页查看摘要与入口。"
@@ -256,21 +265,17 @@ export function StrategyWorkspaceHomePage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
-        kicker="策略"
-        title="策略工作台"
-        description="策略首页只展示状态摘要和入口，不承担任务中心职责。"
-      />
+      <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
 
       <section className="grid gap-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              今日策略状态
+              今日运行
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">Profile / 日期 / 关键状态</CardTitle>
+            <CardTitle className="mt-2 text-slate-950">日常使用从这里开始</CardTitle>
             <CardDescription className="text-slate-600">
-              首页只做状态摘要，所有执行动作都进入对应工作台。
+              日常使用从这里开始；不一定每天都需要重新构建策略版本。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -288,30 +293,9 @@ export function StrategyWorkspaceHomePage() {
               />
               <SummaryTile label="失败任务总数" value={String(failedJobCount)} />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <CardHeader>
-            <Badge variant="info" className="w-fit">
-              快捷入口
-            </Badge>
-            <CardTitle className="mt-2 text-slate-950">工作台入口</CardTitle>
-            <CardDescription className="text-slate-600">
-              这些入口会把用户带到对应的策略子页面。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {quickLinks.map((item) => (
-                <Link
-                  key={item.label}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
-                  to={item.to}
-                >
-                  <p className="text-sm font-medium text-slate-950">{item.label}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
-                </Link>
+            <div className="grid gap-3 md:grid-cols-2">
+              {todayRunLinks.map((item) => (
+                <FlowLinkTile key={item.label} item={item} />
               ))}
             </div>
           </CardContent>
@@ -320,44 +304,89 @@ export function StrategyWorkspaceHomePage() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              任务中心摘要
+              策略构建
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">最近关键 Job</CardTitle>
+            <CardTitle className="mt-2 text-slate-950">规则选择 / 构建策略版本</CardTitle>
             <CardDescription className="text-slate-600">
-              这里只展示策略工作台相关的最新 Job 摘要和失败情况。
+              当规则、Profile、Snapshot 或 Market Regime 变化时使用。
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <JobSummaryRow
-              emptyLabel="尚无 snapshot-build 任务。"
-              href="/jobs?job_type=snapshot-build"
-              job={latestSnapshotBuildJob}
-              label="最新 snapshot-build Job"
-            />
-            <JobSummaryRow
-              emptyLabel="尚无盘前任务。"
-              href="/jobs?job_type=run-pre-market"
-              job={latestPreMarketJob}
-              label="最新盘前 Job"
-            />
-            <JobSummaryRow
-              emptyLabel="尚无盘后任务。"
-              href="/jobs?job_type=run-after-close"
-              job={latestAfterCloseJob}
-              label="最新盘后 Job"
-            />
-            <JobSummaryRow
-              emptyLabel="尚无 strategy-build 任务。"
-              href="/jobs?job_type=strategy-build"
-              job={latestStrategyBuildJob}
-              label="最新 strategy-build Job"
-            />
-            <JobSummaryRow
-              emptyLabel="暂无失败任务。"
-              href="/strategies/history?status=failed"
-              job={latestFailedJob}
-              label={`最近失败任务（${failedJobCount}）`}
-            />
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              {strategyBuildLinks.map((item) => (
+                <FlowLinkTile key={item.label} item={item} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardHeader>
+            <Badge variant="info" className="w-fit">
+              策略优化
+            </Badge>
+            <CardTitle className="mt-2 text-slate-950">候选版本</CardTitle>
+            <CardDescription className="text-slate-600">
+              候选版本审核通过后会成为 released 策略版本，用于后续构建和运行选择。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              {strategyOptimizationLinks.map((item) => (
+                <FlowLinkTile key={item.label} item={item} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardHeader>
+            <Badge variant="info" className="w-fit">
+              追踪与排查
+            </Badge>
+            <CardTitle className="mt-2 text-slate-950">运行历史</CardTitle>
+            <CardDescription className="text-slate-600">
+              查看 strategy-build、run-pre-market、run-after-close 等任务，作为排查入口。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              {traceLinks.map((item) => (
+                <FlowLinkTile key={item.label} item={item} />
+              ))}
+            </div>
+            <div className="space-y-3">
+              <JobSummaryRow
+                emptyLabel="尚无 snapshot-build 任务。"
+                href="/jobs?job_type=snapshot-build"
+                job={latestSnapshotBuildJob}
+                label="最新 snapshot-build Job"
+              />
+              <JobSummaryRow
+                emptyLabel="尚无盘前任务。"
+                href="/jobs?job_type=run-pre-market"
+                job={latestPreMarketJob}
+                label="最新盘前 Job"
+              />
+              <JobSummaryRow
+                emptyLabel="尚无盘后任务。"
+                href="/jobs?job_type=run-after-close"
+                job={latestAfterCloseJob}
+                label="最新盘后 Job"
+              />
+              <JobSummaryRow
+                emptyLabel="尚无 strategy-build 任务。"
+                href="/jobs?job_type=strategy-build"
+                job={latestStrategyBuildJob}
+                label="最新 strategy-build Job"
+              />
+              <JobSummaryRow
+                emptyLabel="暂无失败任务。"
+                href="/strategies/history?status=failed"
+                job={latestFailedJob}
+                label={`最近失败任务（${failedJobCount}）`}
+              />
+            </div>
           </CardContent>
         </Card>
       </section>

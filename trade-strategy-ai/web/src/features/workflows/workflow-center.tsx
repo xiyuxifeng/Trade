@@ -170,8 +170,18 @@ export function WorkflowCenter() {
     staleTime: 15_000,
   });
 
-  // Legacy workflow entries are hidden here because strategy now uses the sidebar canonical pages.
-  const removedWorkflowIds = new Set(['pipeline', 'pre-market', 'after-close', 'strategy']);
+  // Legacy workflow entries are hidden here because strategy and rule-pool now use the sidebar canonical pages.
+  const removedWorkflowIds = new Set([
+    'snapshot',
+    'pipeline',
+    'pre-market',
+    'after-close',
+    'strategy',
+    'optimize',
+    'backtest',
+    'optimize-rule-pool',
+    'rule-pool',
+  ]);
   const workflows = (workflowsQuery.data?.items ?? []).filter((workflow) => !removedWorkflowIds.has(workflow.workflow_id));
 
   const selectedWorkflow = useMemo(() => {

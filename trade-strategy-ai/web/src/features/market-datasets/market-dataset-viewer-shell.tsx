@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ErrorState, PageHeader } from '@/components/kit';
@@ -40,32 +40,18 @@ function resolveSelectedDatasetId(datasetId: string | null, datasets: MarketData
   return datasets[0]?.dataset_id ?? null;
 }
 
-function buildCatalogPatch(
-  patch: {
-    tradeDate?: string;
-    market?: string;
-    datasetType?: string;
-    qualityStatus?: string;
-  },
-  extra?: Record<string, string | null | undefined>,
-) {
-  return {
-    trade_date: patch.tradeDate,
-    market: patch.market,
-    dataset_type: patch.datasetType,
-    quality_status: patch.qualityStatus,
-    ...extra,
-  };
-}
-
 export function MarketDatasetViewerShell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsString = searchParams.toString();
 
-  const tradeDate = searchParams.get('trade_date') ?? formatLocalDateInputOffset(0);
-  const market = searchParams.get('market') ?? 'CN';
-  const datasetType = searchParams.get('dataset_type') ?? '';
-  const qualityStatus = searchParams.get('quality_status') ?? '';
+  const appliedTradeDate = searchParams.get('trade_date') ?? formatLocalDateInputOffset(0);
+  const appliedMarket = searchParams.get('market') ?? 'CN';
+  const appliedDatasetType = searchParams.get('dataset_type') ?? '';
+  const appliedQualityStatus = searchParams.get('quality_status') ?? '';
+  const [draftTradeDate, setDraftTradeDate] = useState(appliedTradeDate);
+  const [draftMarket, setDraftMarket] = useState(appliedMarket);
+  const [draftDatasetType, setDraftDatasetType] = useState(appliedDatasetType);
+  const [draftQualityStatus, setDraftQualityStatus] = useState(appliedQualityStatus);
   const symbol = searchParams.get('symbol') ?? '';
   const section = searchParams.get('section') ?? '';
   const datasetIdParam = searchParams.get('dataset_id');
@@ -75,14 +61,21 @@ export function MarketDatasetViewerShell() {
   const offsetState = parsePositiveInteger(rawOffset, 0, 0);
   const invalidQueryState = !limitState.valid || !offsetState.valid ? buildInvalidDatasetQueryState(`limit=${rawLimit ?? ''}, offset=${rawOffset ?? ''}`) : null;
 
+  useEffect(() => {
+    setDraftTradeDate(appliedTradeDate);
+    setDraftMarket(appliedMarket);
+    setDraftDatasetType(appliedDatasetType);
+    setDraftQualityStatus(appliedQualityStatus);
+  }, [appliedDatasetType, appliedMarket, appliedQualityStatus, appliedTradeDate]);
+
   const listQuery = useQuery({
-    queryKey: ['market-datasets-browser', tradeDate, market, datasetType, qualityStatus],
+    queryKey: ['market-datasets-browser', appliedTradeDate, appliedMarket, appliedDatasetType, appliedQualityStatus],
     queryFn: () =>
       listMarketDatasets({
-        tradeDate: tradeDate || undefined,
-        market: market || undefined,
-        datasetType: datasetType || undefined,
-        qualityStatus: qualityStatus || undefined,
+        tradeDate: appliedTradeDate || undefined,
+        market: appliedMarket || undefined,
+        datasetType: appliedDatasetType || undefined,
+        qualityStatus: appliedQualityStatus || undefined,
         limit: 20,
         offset: 0,
       }),
@@ -146,33 +139,50 @@ export function MarketDatasetViewerShell() {
       </div>
 
       {invalidQueryState ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
-          <div className="space-y-4">
-            <MarketDatasetViewerFilters
-              tradeDate={tradeDate}
-              market={market}
-              datasetType={datasetType}
-              qualityStatus={qualityStatus}
-              onChange={(patch) => {
-                updateQueryState({
-                  ...buildCatalogPatch(patch),
-                  offset: '0',
-                });
-              }}
-              onReset={() => {
-                updateQueryState({
-                  trade_date: formatLocalDateInputOffset(0),
-                  market: 'CN',
-                  dataset_type: null,
-                  quality_status: null,
-                  dataset_id: null,
-                  symbol: null,
-                  section: null,
-                  limit: '20',
-                  offset: '0',
-                });
-              }}
-            />
+        <div className="space-y-4">
+          <MarketDatasetViewerFilters
+            tradeDate={draftTradeDate}
+            market={draftMarket}
+            datasetType={draftDatasetType}
+            qualityStatus={draftQualityStatus}
+            onChange={(patch) => {
+              if (patch.tradeDate !== undefined) setDraftTradeDate(patch.tradeDate);
+              if (patch.market !== undefined) setDraftMarket(patch.market);
+              if (patch.datasetType !== undefined) setDraftDatasetType(patch.datasetType);
+              if (patch.qualityStatus !== undefined) setDraftQualityStatus(patch.qualityStatus);
+            }}
+            onSearch={() => {
+              updateQueryState({
+                trade_date: draftTradeDate || undefined,
+                market: draftMarket || undefined,
+                dataset_type: draftDatasetType || undefined,
+                quality_status: draftQualityStatus || undefined,
+                dataset_id: null,
+                symbol: null,
+                section: null,
+                offset: '0',
+              });
+            }}
+            onReset={() => {
+              setDraftTradeDate(formatLocalDateInputOffset(0));
+              setDraftMarket('CN');
+              setDraftDatasetType('');
+              setDraftQualityStatus('');
+              updateQueryState({
+                trade_date: formatLocalDateInputOffset(0),
+                market: 'CN',
+                dataset_type: null,
+                quality_status: null,
+                dataset_id: null,
+                symbol: null,
+                section: null,
+                limit: '20',
+                offset: '0',
+              });
+            }}
+          />
+          <ErrorState {...invalidQueryState} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
             <MarketDatasetViewerList
               datasets={[]}
               selectedDatasetId={null}
@@ -181,49 +191,60 @@ export function MarketDatasetViewerShell() {
               onSelectDataset={() => undefined}
               onRetry={() => undefined}
             />
-          </div>
-          <div className="space-y-4">
-            <ErrorState {...invalidQueryState} />
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Link className="text-sky-700 hover:underline" to="/market">
-                返回市场数据
-              </Link>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Link className="text-sky-700 hover:underline" to="/market">
+                  返回市场数据
+                </Link>
+              </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
-          <div className="space-y-4">
-            <MarketDatasetViewerFilters
-              tradeDate={tradeDate}
-              market={market}
-              datasetType={datasetType}
-              qualityStatus={qualityStatus}
-              onChange={(patch) => {
-                updateQueryState({
-                  ...buildCatalogPatch(patch, {
-                    dataset_id: null,
-                    symbol: null,
-                    section: null,
-                    offset: '0',
-                  }),
-                });
-              }}
-              onReset={() => {
-                updateQueryState({
-                  trade_date: formatLocalDateInputOffset(0),
-                  market: 'CN',
-                  dataset_type: null,
-                  quality_status: null,
-                  dataset_id: null,
-                  symbol: null,
-                  section: null,
-                  limit: '20',
-                  offset: '0',
-                });
-              }}
-            />
+        <div className="space-y-4">
+          <MarketDatasetViewerFilters
+            tradeDate={draftTradeDate}
+            market={draftMarket}
+            datasetType={draftDatasetType}
+            qualityStatus={draftQualityStatus}
+            onChange={(patch) => {
+              if (patch.tradeDate !== undefined) setDraftTradeDate(patch.tradeDate);
+              if (patch.market !== undefined) setDraftMarket(patch.market);
+              if (patch.datasetType !== undefined) setDraftDatasetType(patch.datasetType);
+              if (patch.qualityStatus !== undefined) setDraftQualityStatus(patch.qualityStatus);
+            }}
+            onSearch={() => {
+              updateQueryState({
+                trade_date: draftTradeDate || undefined,
+                market: draftMarket || undefined,
+                dataset_type: draftDatasetType || undefined,
+                quality_status: draftQualityStatus || undefined,
+                dataset_id: null,
+                symbol: null,
+                section: null,
+                offset: '0',
+              });
+            }}
+            onReset={() => {
+              setDraftTradeDate(formatLocalDateInputOffset(0));
+              setDraftMarket('CN');
+              setDraftDatasetType('');
+              setDraftQualityStatus('');
+              updateQueryState({
+                trade_date: formatLocalDateInputOffset(0),
+                market: 'CN',
+                dataset_type: null,
+                quality_status: null,
+                dataset_id: null,
+                symbol: null,
+                section: null,
+                limit: '20',
+                offset: '0',
+              });
+            }}
+          />
 
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <MarketDatasetViewerList
               datasets={datasets}
               selectedDatasetId={selectedDatasetId}
@@ -242,47 +263,47 @@ export function MarketDatasetViewerShell() {
                 void listQuery.refetch();
               }}
             />
-          </div>
 
-          <MarketDatasetViewerDetail
-            selectedDataset={selectedDataset}
-            detail={detail}
-            errorState={detailErrorState}
-            isLoading={detailQuery.isLoading}
-            onRetry={() => {
-              void detailQuery.refetch();
-            }}
-            symbol={symbol}
-            section={section}
-            offset={offsetState.value}
-            limit={limitState.value}
-            canPrev={canPrev}
-            canNext={canNext}
-            onChangeSymbol={(nextSymbol) => {
-              updateQueryState({
-                symbol: nextSymbol,
-                offset: '0',
-              });
-            }}
-            onChangeSection={(nextSection) => {
-              updateQueryState({
-                section: nextSection,
-                offset: '0',
-              });
-            }}
-            onPrevPage={() => {
-              if (!canPrev) return;
-              updateQueryState({
-                offset: String(Math.max(0, offsetState.value - limitState.value)),
-              });
-            }}
-            onNextPage={() => {
-              if (!canNext) return;
-              updateQueryState({
-                offset: String(offsetState.value + limitState.value),
-              });
-            }}
-          />
+            <MarketDatasetViewerDetail
+              selectedDataset={selectedDataset}
+              detail={detail}
+              errorState={detailErrorState}
+              isLoading={detailQuery.isLoading}
+              onRetry={() => {
+                void detailQuery.refetch();
+              }}
+              symbol={symbol}
+              section={section}
+              offset={offsetState.value}
+              limit={limitState.value}
+              canPrev={canPrev}
+              canNext={canNext}
+              onChangeSymbol={(nextSymbol) => {
+                updateQueryState({
+                  symbol: nextSymbol,
+                  offset: '0',
+                });
+              }}
+              onChangeSection={(nextSection) => {
+                updateQueryState({
+                  section: nextSection,
+                  offset: '0',
+                });
+              }}
+              onPrevPage={() => {
+                if (!canPrev) return;
+                updateQueryState({
+                  offset: String(Math.max(0, offsetState.value - limitState.value)),
+                });
+              }}
+              onNextPage={() => {
+                if (!canNext) return;
+                updateQueryState({
+                  offset: String(offsetState.value + limitState.value),
+                });
+              }}
+            />
+          </div>
         </div>
       )}
     </main>

@@ -7,6 +7,7 @@ import { listJobs, createJob } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
 import { getOptimizeVersion, listOptimizeVersions } from '@/lib/api/optimize';
+import { listTraderOptions } from '@/lib/api/traders';
 
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
@@ -33,6 +34,10 @@ vi.mock('@/lib/api/optimize', () => ({
   createOptimizeCandidateVersion: vi.fn(),
 }));
 
+vi.mock('@/lib/api/traders', () => ({
+  listTraderOptions: vi.fn(),
+}));
+
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListJobs = vi.mocked(listJobs);
@@ -42,6 +47,7 @@ const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
 const mockedListOptimizeVersions = vi.mocked(listOptimizeVersions);
 const mockedGetOptimizeVersion = vi.mocked(getOptimizeVersion);
+const mockedListTraderOptions = vi.mocked(listTraderOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -132,6 +138,11 @@ describe('StrategyWorkspaceShell', () => {
     } as never);
     mockedListOptimizeVersions.mockResolvedValue({ status: 'success', count: 0, total: 0, skip: 0, limit: 8, items: [] } as never);
     mockedGetOptimizeVersion.mockResolvedValue({ status: 'success', item: null } as never);
+    mockedListTraderOptions.mockResolvedValue({
+      status: 'success',
+      count: 2,
+      items: ['trader_a', 'trader_b'],
+    } as never);
 
     renderWithRouter([{ path: '/strategies', element: <StrategyWorkspaceShell /> }], ['/strategies']);
 
@@ -147,6 +158,7 @@ describe('StrategyWorkspaceShell', () => {
     expect(screen.getByRole('button', { name: /盘后运行/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '候选版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '生成候选版本' })).toBeInTheDocument();
+    expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
     expect(mockedCreateJob).not.toHaveBeenCalled();
   });
 });

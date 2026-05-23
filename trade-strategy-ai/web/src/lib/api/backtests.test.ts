@@ -88,50 +88,51 @@ describe('backtests api client', () => {
 
   it('builds canonical backtest job params for all backtest job types', () => {
     const submission = {
+      profileId: 'default',
       traderId: 'trader_a',
       dateFrom: '2026-05-01',
       dateTo: '2026-05-05',
       strategyVersionId: 'sv-1',
       benchmarkSymbol: '000300.SH',
       mode: 'full' as const,
-      configPath: 'config/app.yaml',
+      configPath: undefined,
       symbols: ['000001.SZ'],
       useSnapshotOnly: true,
       scoringProfile: 'stage5',
     };
 
     expect(buildBacktestRunParams(submission)).toEqual({
+      profile_id: 'default',
       trader_id: 'trader_a',
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
       benchmark_symbol: '000300.SH',
       mode: 'full',
-      config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],
       use_snapshot_only: true,
       scoring_profile: 'stage5',
     });
     expect(buildBacktestValidateRulesParams(submission)).toEqual({
+      profile_id: 'default',
       trader_id: 'trader_a',
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
       benchmark_symbol: '000300.SH',
       mode: 'full',
-      config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],
       use_snapshot_only: true,
       scoring_profile: 'stage5',
     });
     expect(buildBacktestReproducibilityParams(submission)).toEqual({
+      profile_id: 'default',
       trader_id: 'trader_a',
       date_from: '2026-05-01',
       date_to: '2026-05-05',
       strategy_version_id: 'sv-1',
       benchmark_symbol: '000300.SH',
       mode: 'full',
-      config_path: 'config/app.yaml',
       symbols: ['000001.SZ'],
       use_snapshot_only: true,
       scoring_profile: 'stage5',

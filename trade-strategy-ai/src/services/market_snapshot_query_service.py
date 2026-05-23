@@ -267,19 +267,6 @@ class MarketSnapshotQueryService(BaseService):
                 filtered.append(snapshot)
 
             total = len(filtered)
-            if total == 0:
-                return self._empty_data(
-                    message="market snapshot list is empty",
-                    detail="no snapshots matched the query",
-                    metadata={
-                        "trade_date": normalized_trade_date.isoformat() if normalized_trade_date else None,
-                        "market": market,
-                        "section": section,
-                        "symbol": symbol,
-                        "topic": topic,
-                        "quality_status": quality_status,
-                    },
-                )
             page_items = filtered[offset : offset + limit]
             return ServiceResult(
                 status="ok",

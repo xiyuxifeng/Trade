@@ -144,6 +144,8 @@ describe('HistoryPage', () => {
     expect(await screen.findByRole('combobox', { name: '状态' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: '状态' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: '类型' })).toHaveValue('');
+    expect(screen.getByRole('button', { name: '搜索' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /job-build-1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /job-snapshot-1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /job-pre-1/ })).toBeInTheDocument();
@@ -151,8 +153,19 @@ describe('HistoryPage', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: '状态' }), 'failed');
 
+    expect(screen.getByRole('button', { name: /job-build-1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /job-post-1/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '搜索' }));
+
     expect(screen.getByRole('button', { name: /job-pre-1/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job-build-1/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job-post-1/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '重置' }));
+    await user.click(screen.getByRole('button', { name: '搜索' }));
+
+    expect(screen.getByRole('button', { name: /job-build-1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /job-post-1/ })).toBeInTheDocument();
   });
 });

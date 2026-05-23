@@ -5,6 +5,7 @@ import type {
   RuleApplicabilityListResponse,
   RuleApplicabilityReviewRequest,
   RulePoolBatchReviewRequest,
+  RulePoolFilterOptionsResponse,
   RulePoolDetailResponse,
   RulePoolListResponse,
   RulePoolQuery,
@@ -25,6 +26,10 @@ function buildQueryString(params: Record<string, string | number | boolean | und
 export function listRulePool(query: RulePoolQuery = {}) {
   const suffix = buildQueryString(query);
   return fetchJson<RulePoolListResponse>(`/rule-pool${suffix ? `?${suffix}` : ''}`);
+}
+
+export function listRulePoolFilterOptions() {
+  return fetchJson<RulePoolFilterOptionsResponse>('/rule-pool/filter-options');
 }
 
 export function getRulePoolRule(ruleId: string) {

@@ -186,9 +186,6 @@ export function StrategyPreMarketPage() {
     () => sortJobsByCreatedAtDesc([...(snapshotJobsQuery.data?.items ?? []), ...(runJobsQuery.data?.items ?? [])]),
     [runJobsQuery.data?.items, snapshotJobsQuery.data?.items],
   );
-  const latestJob = jobs[0] ?? null;
-  const failedJobCount = jobs.filter((job) => job.status === 'failed').length;
-
   useEffect(() => {
     if (!selectedProfileId && profileItems.length > 0) {
       setSelectedProfileId(profileItems[0].profile_id);
@@ -198,11 +195,6 @@ export function StrategyPreMarketPage() {
       setSelectedProfileId(profileItems[0]?.profile_id ?? '');
     }
   }, [profileItems, selectedProfileId]);
-
-  const selectedProfile = useMemo(
-    () => profileItems.find((profile) => profile.profile_id === selectedProfileId) ?? null,
-    [profileItems, selectedProfileId],
-  );
 
   const loading = profilesQuery.isLoading || snapshotJobsQuery.isLoading || runJobsQuery.isLoading;
   const error = profilesQuery.error ?? snapshotJobsQuery.error ?? runJobsQuery.error;
@@ -285,7 +277,7 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="策略"
           title="盘前准备"
-          description="盘前准备页通过 Profile 与任务中心承接正式提交。"
+          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
           actionLabel="返回策略工作台"
           onAction={() => {
             navigate('/strategies');
@@ -302,7 +294,7 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="策略"
           title="盘前准备"
-          description="盘前准备页通过 Profile 与任务中心承接正式提交。"
+          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
           actionLabel="返回策略工作台"
           onAction={() => {
             navigate('/strategies');
@@ -312,7 +304,7 @@ export function StrategyPreMarketPage() {
           {...buildErrorRecoveryState(error, 'strategy')}
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), snapshotJobsQuery.refetch(), runJobsQuery.refetch()])}
           actions={[
-            { label: '查看任务中心', to: '/jobs' },
+            { label: '查看任务列表', to: '/jobs' },
             { label: '前往配置管理', to: '/profiles' },
           ]}
         />
@@ -326,7 +318,7 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="策略"
           title="盘前准备"
-          description="盘前准备页通过 Profile 与任务中心承接正式提交。"
+          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
           actionLabel="返回策略工作台"
           onAction={() => {
             navigate('/strategies');
@@ -347,7 +339,7 @@ export function StrategyPreMarketPage() {
       <PageHeader
         kicker="策略"
         title="盘前准备"
-        description="盘前准备页通过 Profile 与任务中心承接正式提交。"
+        description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
         actionLabel="返回策略工作台"
         onAction={() => {
           navigate('/strategies');
@@ -358,7 +350,7 @@ export function StrategyPreMarketPage() {
         <ErrorState
           category="job failed"
           title="盘前任务提交失败"
-          description="提交到 Job Center 时返回了错误。"
+          description="提交执行任务时返回了错误。"
           suggestion="请先查看错误详情，再确认是否重新提交。"
           detail={submissionError}
           actions={[
@@ -376,10 +368,10 @@ export function StrategyPreMarketPage() {
           <p className="mt-1 break-all">Job ID: {submissionState.jobId}</p>
           <div className="mt-3 flex flex-wrap gap-3">
             <Link className="font-medium text-emerald-900 underline underline-offset-4" to={`/jobs/${submissionState.jobId}`}>
-              查看 Job Detail
+              查看任务详情
             </Link>
             <Link className="font-medium text-emerald-900 underline underline-offset-4" to="/jobs">
-              进入任务中心
+              进入任务列表
             </Link>
           </div>
         </div>
@@ -429,41 +421,20 @@ export function StrategyPreMarketPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">当前 Profile</p>
-                <p className="mt-2 break-all text-base font-semibold text-slate-950">
-                  {selectedProfile ? `${selectedProfile.name} · ${selectedProfile.profile_id}` : '未选择'}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {selectedProfile
-                    ? `${selectedProfile.environment} · v${selectedProfile.version} · ${selectedProfile.validation_status}`
-                    : '请选择一个可用 Profile。'}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近任务</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">{jobs.length}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">失败任务 {failedJobCount} 个，详情仍以任务中心为准。</p>
-                <p className="mt-3 break-all text-xs text-slate-500">
-                  {latestJob ? `${latestJob.job_type} · ${latestJob.status} · ${latestJob.id}` : '暂无最近任务'}
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              快捷入口
+              流程入口
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">任务中心与工作台</CardTitle>
-            <CardDescription className="text-slate-600">执行结果、日志、产物和失败重试都在 Job Center 查看。</CardDescription>
+            <CardTitle className="mt-2 text-slate-950">快照构建与 Job 工作台</CardTitle>
+            <CardDescription className="text-slate-600">执行结果、日志、产物和失败重试都在任务列表和任务详情查看。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <Link className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" to="/jobs">
-              <p className="text-sm font-medium text-slate-950">进入任务中心</p>
+              <p className="text-sm font-medium text-slate-950">进入任务列表</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">查看所有任务、日志、产物与重试。</p>
             </Link>
             <Link
@@ -596,7 +567,7 @@ export function StrategyPreMarketPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              提交后会生成盘前日报结果，执行状态、日志与产物继续在任务中心和 Job Detail 中查看。
+              提交后会生成盘前日报结果，执行状态、日志与产物继续在任务列表和任务详情中查看。
             </div>
 
             <Button
@@ -612,8 +583,7 @@ export function StrategyPreMarketPage() {
 
       <SectionCard
         title="最近任务"
-        description="这里只展示与盘前相关的最近任务，详细日志、产物和失败重试都以任务中心为准。"
-        action={<Badge className="w-fit" variant="info">{`失败 ${failedJobCount}`}</Badge>}
+        description="这里只展示与盘前相关的最近任务，详细日志、产物和失败重试都以任务列表为准。"
       >
         {jobs.length ? (
           <div className="grid gap-3">
@@ -646,7 +616,7 @@ export function StrategyPreMarketPage() {
           <EmptyState
             title="暂无盘前任务。"
             description="提交 snapshot-build 或 run-pre-market 后，这里会显示最近任务。"
-            actionLabel="查看任务中心"
+            actionLabel="查看任务列表"
             onAction={() => {
               navigate('/jobs');
             }}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from src.alerting.models import AlertEvent, AlertLevel
 from src.pipeline.dashboard_models import DashboardReport
@@ -71,8 +72,10 @@ def test_kaipan_service_fetch_normalize_status_and_run(tmp_path: Path) -> None:
 	assert normalizer.calls[0] == ("2026-04-23", ("09-25",))
 	assert normalize_result.payload["slots"] == ["17-30"]
 	assert status_result.status == "partial"
+	assert status_result.payload["scheduler_started"] is False
 	assert run_plan.payload["pre_market"] == "9:25"
 	assert run_plan.payload["post_close"] == "17:30"
+	assert run_plan.payload["scheduler_started"] is False
 
 
 def test_kaipan_service_fetch_includes_10_5_capabilities(tmp_path: Path) -> None:
@@ -136,6 +139,52 @@ def test_kaipan_service_status_uses_latest_trade_date_and_slot(tmp_path: Path) -
 
 	assert result.status == "ok"
 	assert result.payload["latest_slot"] == "2026-04-24_17-30"
+
+
+def test_kaipan_service_can_start_and_stop_scheduler(tmp_path: Path, monkeypatch) -> None:
+	"""KaipanService 应能启动并停止 scheduler。"""
+	from src.services import kaipan_service as kaipan_service_module
+
+	config_path = tmp_path / "config" / "app.yaml"
+	_write_kaipan_config(config_path)
+
+	class _FakeThread:
+		def join(self) -> None:
+			return None
+
+	class _FakeScheduler:
+		def __init__(self) -> None:
+			self.running = False
+			self._thread = _FakeThread()
+			self.jobs: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+		def add_job(self, *args, **kwargs) -> None:
+			self.jobs.append((args, kwargs))
+
+		def start(self) -> None:
+			self.running = True
+
+		def shutdown(self, wait: bool = False) -> None:
+			del wait
+			self.running = False
+
+	service = kaipan_service_module.KaipanService(
+		provider_factory=lambda **kwargs: _FakeProvider(calls=[]),
+		normalizer_factory=lambda **kwargs: _FakeNormalizer(),
+	)
+	monkeypatch.setattr(kaipan_service_module, "BackgroundScheduler", _FakeScheduler)
+
+	run_result = service.run(config_path=config_path, start_scheduler=True)
+	status_running = service.status(config_path=config_path)
+	stop_result = service.stop(config_path=config_path)
+	status_stopped = service.status(config_path=config_path)
+
+	assert run_result.status == "ok"
+	assert run_result.payload["started"] is True
+	assert status_running.payload["scheduler_started"] is True
+	assert stop_result.status == "ok"
+	assert stop_result.payload["started"] is False
+	assert status_stopped.payload["scheduler_started"] is False
 
 
 def test_dashboard_service_build_report(tmp_path: Path) -> None:

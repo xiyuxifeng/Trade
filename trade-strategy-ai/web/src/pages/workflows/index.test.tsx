@@ -17,6 +17,32 @@ describe('WorkflowsPage', () => {
       count: 1,
       items: [
         {
+          workflow_id: 'snapshot',
+          title: '快照中心',
+          description: '构建候选池快照，供盘前盘后和回测使用。',
+          job_type: 'snapshot-build',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'snapshot-build',
+            title: '构建快照',
+            description: '构建候选池快照。',
+            summary: '构建快照',
+            permission: 'operator',
+            risk: 'medium',
+            can_retry: true,
+            can_run_concurrently: false,
+            concurrency_group: 'snapshot',
+            requires_confirmation: false,
+            runnable: true,
+            params_schema: {
+              description: '快照构建参数',
+              allow_additional_fields: false,
+              fields: {},
+            },
+          },
+          steps: [],
+        },
+        {
           workflow_id: 'pipeline',
           title: '数据 Pipeline',
           description: '串联抓取、清洗、抽取、聚类与回归验证。',
@@ -123,6 +149,84 @@ describe('WorkflowsPage', () => {
           },
           steps: [],
         },
+        {
+          workflow_id: 'optimize',
+          title: '优化中心',
+          description: '基于验真和回测结果生成候选版本。',
+          job_type: 'optimize-create-candidate',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'optimize-create-candidate',
+            title: '生成候选版本',
+            description: '从规则调整生成候选策略版本。',
+            summary: '生成候选版本',
+            permission: 'operator',
+            risk: 'medium',
+            can_retry: true,
+            can_run_concurrently: false,
+            concurrency_group: 'optimize',
+            requires_confirmation: false,
+            runnable: true,
+            params_schema: {
+              description: '候选版本参数',
+              allow_additional_fields: false,
+              fields: {},
+            },
+          },
+          steps: [],
+        },
+        {
+          workflow_id: 'optimize-rule-pool',
+          title: '优化与规则池',
+          description: '串联候选创建、规则池回测和候选 / 规则审核。',
+          job_type: 'optimize-create-candidate',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'optimize-create-candidate',
+            title: '生成候选版本',
+            description: '从规则调整生成候选策略版本。',
+            summary: '生成候选版本',
+            permission: 'operator',
+            risk: 'medium',
+            can_retry: true,
+            can_run_concurrently: false,
+            concurrency_group: 'optimize',
+            requires_confirmation: false,
+            runnable: true,
+            params_schema: {
+              description: '候选版本参数',
+              allow_additional_fields: false,
+              fields: {},
+            },
+          },
+          steps: [],
+        },
+        {
+          workflow_id: 'rule-pool',
+          title: '规则池管理',
+          description: '围绕规则池回测和审核流程组织操作。',
+          job_type: 'rule-pool-backtest',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'rule-pool-backtest',
+            title: '规则池回测',
+            description: '对规则池进行回测并回写结果。',
+            summary: '规则池回测',
+            permission: 'operator',
+            risk: 'medium',
+            can_retry: true,
+            can_run_concurrently: false,
+            concurrency_group: 'rule-pool-backtest',
+            requires_confirmation: false,
+            runnable: true,
+            params_schema: {
+              description: '规则池回测参数',
+              allow_additional_fields: false,
+              fields: {},
+            },
+          },
+          steps: [],
+        },
       ],
     });
 
@@ -136,8 +240,12 @@ describe('WorkflowsPage', () => {
 
     expect(await screen.findByText('工作流目录')).toBeInTheDocument();
     expect(await screen.findByText('工作流摘要')).toBeInTheDocument();
+    expect(screen.queryByText('快照中心')).not.toBeInTheDocument();
     expect(screen.queryByText('数据 Pipeline')).not.toBeInTheDocument();
     expect(screen.queryByText('策略版本')).not.toBeInTheDocument();
+    expect(screen.queryByText('优化中心')).not.toBeInTheDocument();
+    expect(screen.queryByText('优化与规则池')).not.toBeInTheDocument();
+    expect(screen.queryByText('规则池管理')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/workflows');
@@ -196,5 +304,59 @@ describe('WorkflowsPage', () => {
     expect(await screen.findByText('该工作流已移除或不可用，请返回工作流目录选择其他流程。')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '运行入口' })).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/workflows/strategy/run');
+  });
+
+  it('shows removed workflow state for old backtest deep links', async () => {
+    mockedListWorkflows.mockResolvedValue({
+      count: 1,
+      items: [
+        {
+          workflow_id: 'install-config',
+          title: '安装与配置',
+          description: '完成项目初始化、数据库迁移和基础数据导入。',
+          job_type: 'init-project',
+          permissions: 'operator',
+          job_definition: {
+            job_type: 'init-project',
+            title: '初始化项目',
+            description: '执行初始化并完成最小可运行状态。',
+            summary: '初始化项目',
+            permission: 'operator',
+            risk: 'high',
+            can_retry: false,
+            can_run_concurrently: false,
+            concurrency_group: 'project-init',
+            requires_confirmation: true,
+            runnable: true,
+            params_schema: {
+              description: '初始化项目参数',
+              allow_additional_fields: false,
+              fields: {
+                config_path: {
+                  type: 'path',
+                  description: '配置文件路径',
+                  required: true,
+                  enum: [],
+                },
+              },
+            },
+          },
+          steps: [],
+        },
+      ],
+    });
+
+    const { router } = renderWithRouter(
+      [
+        { path: '/workflows', element: <WorkflowsPage /> },
+        { path: '/workflows/:workflowId', element: <WorkflowsPage /> },
+        { path: '/workflows/:workflowId/run', element: <WorkflowsPage /> },
+      ],
+      ['/workflows/backtest/run'],
+    );
+
+    expect(await screen.findByText('该工作流已移除或不可用，请返回工作流目录选择其他流程。')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: '运行入口' })).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/workflows/backtest/run');
   });
 });

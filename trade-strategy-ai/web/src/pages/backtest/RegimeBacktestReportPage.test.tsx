@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react';
 import { RegimeBacktestReportPage } from './RegimeBacktestReportPage';
 import { renderWithRouter } from '@/test/test-utils';
 import { downloadBacktestReport, getBacktestResult, listBacktestResults } from '@/lib/api/backtests';
+import { listTraderOptions } from '@/lib/api/traders';
 
 vi.mock('@/lib/api/backtests', () => ({
   downloadBacktestReport: vi.fn(),
@@ -10,9 +11,14 @@ vi.mock('@/lib/api/backtests', () => ({
   listBacktestResults: vi.fn(),
 }));
 
+vi.mock('@/lib/api/traders', () => ({
+  listTraderOptions: vi.fn(),
+}));
+
 const mockedDownloadBacktestReport = vi.mocked(downloadBacktestReport);
 const mockedGetBacktestResult = vi.mocked(getBacktestResult);
 const mockedListBacktestResults = vi.mocked(listBacktestResults);
+const mockedListTraderOptions = vi.mocked(listTraderOptions);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -46,6 +52,11 @@ describe('RegimeBacktestReportPage', () => {
         },
       ],
     });
+    mockedListTraderOptions.mockResolvedValue({
+      status: 'success',
+      count: 2,
+      items: ['trader_a', 'trader_b'],
+    } as never);
     mockedGetBacktestResult.mockResolvedValue({
       status: 'success',
       item: {
@@ -111,6 +122,7 @@ describe('RegimeBacktestReportPage', () => {
     expect(screen.getByText('market-regime-features-v3')).toBeInTheDocument();
     expect((await screen.findAllByText('trend_up')).length).toBeGreaterThan(0);
     expect(screen.getByText('rule_001')).toBeInTheDocument();
+    expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'backtest' });
     expect(mockedDownloadBacktestReport).toHaveBeenCalledWith('result-1');
   });
 });

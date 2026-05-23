@@ -245,7 +245,7 @@ export function StrategyWorkspaceCandidate({
 
   if (queryError) {
     return (
-      <SectionCard title="候选版本" description="查看候选版本、提交审核并追踪父版本。">
+      <SectionCard title="候选版本" description="查看候选版本、提交审核并追踪父版本与审计记录。">
         <ErrorState
           {...buildErrorRecoveryState(queryError, 'strategy')}
           onRetry={
@@ -264,7 +264,7 @@ export function StrategyWorkspaceCandidate({
   return (
     <SectionCard
       title="候选版本"
-      description="在正式工作台中生成候选版本、比较父版本并提交审核 Job。"
+      description="在正式工作台中生成候选版本、比较父版本并提交审核任务。"
       action={<Badge variant="info">{candidateVersionItems.length} 个候选</Badge>}
     >
       <div className="space-y-4">
@@ -279,72 +279,7 @@ export function StrategyWorkspaceCandidate({
           </div>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <MiniStat label="正式版本" value={selectedVersion?.version_id ?? '未选择'} />
-                <MiniStat label="父版本" value={selectedVersion?.parent_version_id ?? '无'} />
-                <MiniStat label="规则快照" value={selectedVersion?.rules_snapshot.length ?? 0} />
-                <MiniStat label="证据引用" value={selectedVersion?.evidence_refs.length ?? 0} />
-              </div>
-              <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">候选备注</p>
-                  <Textarea
-                    aria-label="候选备注"
-                    className="mt-2 min-h-32 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-                    placeholder="补充候选版本说明"
-                    value={candidateNotes}
-                    onChange={(event) => setCandidateNotes(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-3">
-                  <JsonViewer value={adjustments} title="调整预览" />
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">证据引用</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedVersion?.evidence_refs.length ? (
-                        selectedVersion.evidence_refs.map((ref) => <Badge key={ref} variant="info">{ref}</Badge>)
-                      ) : (
-                        <span className="text-sm text-slate-600">暂无证据引用</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button
-                  disabled={!selectedVersion || createCandidateMutation.isPending}
-                  onClick={() => setPendingAction('create')}
-                >
-                  生成候选版本
-                </Button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-950">正式版本对比</p>
-                  <p className="mt-1 text-sm text-slate-600">将当前选中的正式版本作为父版本，候选变更可回溯。</p>
-                </div>
-                <StatusBadge value={selectedVersion?.status ?? 'draft'} />
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <MiniStat label="策略日期" value={selectedVersion?.strategy_date ?? '未选择'} />
-                <MiniStat label="推荐数量" value={selectedVersion?.recommendations.length ?? 0} />
-              </div>
-              <div className="mt-4">
-                {selectedVersion ? (
-                  <JsonViewer value={selectedVersion.recommendations} title="推荐明细" />
-                ) : (
-                  <EmptyState title="请选择正式版本" description="在版本列表中选一个正式版本后，这里会显示对比数据。" />
-                )}
-              </div>
-            </div>
-          </div>
-
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -378,74 +313,6 @@ export function StrategyWorkspaceCandidate({
                 <EmptyState
                   title="暂无候选版本"
                   description="先选择一个正式版本并生成候选，候选列表会在这里出现。"
-                />
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-950">候选详情与审核</p>
-                  <p className="mt-1 text-sm text-slate-600">候选版本来源、父版本和审核动作都在这里确认。</p>
-                </div>
-                {selectedCandidateDetail ? <StatusBadge value={selectedCandidateDetail.status} /> : null}
-              </div>
-
-              {candidateDetailQuery.isLoading ? (
-                <LoadingState label="正在加载候选详情" description="会读取候选版本和父版本追溯信息。" />
-              ) : selectedCandidateDetail ? (
-                <div className="mt-4 space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <MiniStat label="候选版本" value={selectedCandidateDetail.version_id} />
-                    <MiniStat label="父版本" value={selectedCandidateDetail.parent_version_id ?? 'n/a'} />
-                    <MiniStat label="版本类型" value={selectedCandidateDetail.version_type} />
-                    <MiniStat label="发布时间" value={formatTimestamp(selectedCandidateDetail.released_at)} />
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <MiniStat label="推荐数" value={selectedCandidateDetail.recommendations.length} />
-                    <MiniStat label="证据引用" value={selectedCandidateDetail.evidence_refs.length} />
-                  </div>
-
-                  <JsonViewer value={selectedCandidateDetail.recommendations} title="候选推荐" />
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">候选证据</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedCandidateDetail.evidence_refs.length ? (
-                        selectedCandidateDetail.evidence_refs.map((ref) => <Badge key={ref} variant="info">{ref}</Badge>)
-                      ) : (
-                        <span className="text-sm text-slate-600">暂无证据引用</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Button
-                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
-                      onClick={() => setPendingAction('submit')}
-                    >
-                      提交审核
-                    </Button>
-                    <Button
-                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
-                      onClick={() => setPendingAction('approve')}
-                    >
-                      批准
-                    </Button>
-                    <Button
-                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
-                      onClick={() => setPendingAction('reject')}
-                      variant="destructive"
-                    >
-                      拒绝
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState
-                  title="选择一个候选版本"
-                  description="生成候选后，这里会显示候选版本、父版本和审核动作。"
                 />
               )}
             </div>
@@ -507,6 +374,153 @@ export function StrategyWorkspaceCandidate({
               )}
             </SectionCard>
           </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-950">候选生成与对比</p>
+                  <p className="mt-1 text-sm text-slate-600">先确认生成参数，再把正式版本和候选版本放在一起核对。</p>
+                </div>
+                <StatusBadge value={selectedVersion?.status ?? 'draft'} />
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MiniStat label="正式版本" value={selectedVersion?.version_id ?? '未选择'} />
+                <MiniStat label="父版本" value={selectedVersion?.parent_version_id ?? '无'} />
+                <MiniStat label="规则快照" value={selectedVersion?.rules_snapshot.length ?? 0} />
+                <MiniStat label="证据引用" value={selectedVersion?.evidence_refs.length ?? 0} />
+              </div>
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">候选备注</p>
+                  <Textarea
+                    aria-label="候选备注"
+                    className="mt-2 min-h-32 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                    placeholder="补充候选版本说明"
+                    value={candidateNotes}
+                    onChange={(event) => setCandidateNotes(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-3">
+                  <JsonViewer value={adjustments} title="调整预览" />
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">证据引用</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedVersion?.evidence_refs.length ? (
+                        selectedVersion.evidence_refs.map((ref) => (
+                          <Badge key={ref} variant="info">
+                            {ref}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-slate-600">暂无证据引用</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button
+                  disabled={!selectedVersion || createCandidateMutation.isPending}
+                  onClick={() => setPendingAction('create')}
+                >
+                  生成候选版本
+                </Button>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">正式版本对比</p>
+                    <p className="mt-1 text-sm text-slate-600">将当前选中的正式版本作为父版本，候选变更可回溯。</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <MiniStat label="策略日期" value={selectedVersion?.strategy_date ?? '未选择'} />
+                  <MiniStat label="推荐数量" value={selectedVersion?.recommendations.length ?? 0} />
+                </div>
+                <div className="mt-4">
+                  {selectedVersion ? (
+                    <JsonViewer value={selectedVersion.recommendations} title="推荐明细" />
+                  ) : (
+                    <EmptyState title="请选择正式版本" description="在版本列表中选一个正式版本后，这里会显示对比数据。" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-950">候选详情与审核</p>
+                  <p className="mt-1 text-sm text-slate-600">候选版本来源、父版本和审核动作都在这里确认。</p>
+                </div>
+                {selectedCandidateDetail ? <StatusBadge value={selectedCandidateDetail.status} /> : null}
+              </div>
+
+              {candidateDetailQuery.isLoading ? (
+                <LoadingState label="正在加载候选详情" description="会读取候选版本和父版本追溯信息。" />
+              ) : selectedCandidateDetail ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <MiniStat label="候选版本" value={selectedCandidateDetail.version_id} />
+                    <MiniStat label="父版本" value={selectedCandidateDetail.parent_version_id ?? 'n/a'} />
+                    <MiniStat label="版本类型" value={selectedCandidateDetail.version_type} />
+                    <MiniStat label="发布时间" value={formatTimestamp(selectedCandidateDetail.released_at)} />
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <MiniStat label="推荐数" value={selectedCandidateDetail.recommendations.length} />
+                    <MiniStat label="证据引用" value={selectedCandidateDetail.evidence_refs.length} />
+                  </div>
+
+                  <JsonViewer value={selectedCandidateDetail.recommendations} title="候选推荐" />
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">候选证据</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedCandidateDetail.evidence_refs.length ? (
+                        selectedCandidateDetail.evidence_refs.map((ref) => (
+                          <Badge key={ref} variant="info">
+                            {ref}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-slate-600">暂无证据引用</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Button
+                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
+                      onClick={() => setPendingAction('submit')}
+                    >
+                      提交审核
+                    </Button>
+                    <Button
+                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
+                      onClick={() => setPendingAction('approve')}
+                    >
+                      批准
+                    </Button>
+                    <Button
+                      disabled={!selectedCandidateIdResolved || reviewMutation.isPending}
+                      onClick={() => setPendingAction('reject')}
+                      variant="destructive"
+                    >
+                      拒绝
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  title="选择一个候选版本"
+                  description="生成候选后，这里会显示候选版本、父版本和审核动作。"
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         <ConfirmDialog
@@ -523,7 +537,7 @@ export function StrategyWorkspaceCandidate({
                     ? '确认拒绝候选'
                     : '确认候选操作'
           }
-          description="这是正式写操作，会记录到 Job Center 和审计轨迹。"
+          description="这是正式写操作，会记录到任务轨迹和审计记录。"
           confirmLabel={
             createCandidateMutation.isPending || reviewMutation.isPending
               ? '提交中'
@@ -555,7 +569,7 @@ export function StrategyWorkspaceCandidate({
               候选版本：<span className="font-medium text-slate-950">{selectedCandidateIdResolved ?? '未生成'}</span>
             </p>
             <p className="text-sm leading-6 text-slate-600">
-              这会通过 Job Center 记录审计；候选版本生成和候选审核都保留追溯链。
+              这会通过正式任务记录审计；候选版本生成和候选审核都保留追溯链。
             </p>
           </div>
         </ConfirmDialog>

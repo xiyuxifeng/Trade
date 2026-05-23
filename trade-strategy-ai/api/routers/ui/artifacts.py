@@ -5,12 +5,23 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from api.dependencies import verify_api_key
 from src.services.artifact_service import ArtifactService
 
 
 router = APIRouter(prefix="/api/ui/v1/artifacts", tags=["ui-artifacts"])
+
+
+class ArtifactFilterOptionsResponse(BaseModel):
+    """产物筛选选项响应。"""
+
+    status: str = "success"
+    kinds: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    job_types: list[str] = Field(default_factory=list)
+    job_ids: list[str] = Field(default_factory=list)
 
 
 def get_artifact_service() -> ArtifactService:
@@ -45,6 +56,24 @@ async def list_artifacts(
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "artifact listing failed")
     return result.payload
+
+
+@router.get("/filter-options", response_model=ArtifactFilterOptionsResponse)
+async def list_artifact_filter_options(
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    _: str = Depends(verify_api_key),
+) -> ArtifactFilterOptionsResponse:
+    """列出产物筛选选项。"""
+    result = await artifact_service.list_filter_options()
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "artifact filter options failed")
+    payload = result.payload or {}
+    return ArtifactFilterOptionsResponse(
+        kinds=list(payload.get("kinds", [])),
+        sources=list(payload.get("sources", [])),
+        job_types=list(payload.get("job_types", [])),
+        job_ids=list(payload.get("job_ids", [])),
+    )
 
 
 @router.get("/{artifact_id}")

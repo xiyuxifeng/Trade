@@ -39,33 +39,41 @@ export function downloadBacktestValidationReport(resultId: string) {
 }
 
 export function buildBacktestRunParams(submission: BacktestJobSubmission): Record<string, unknown> {
-  return {
+  const params: Record<string, unknown> = {
+    profile_id: submission.profileId || undefined,
     trader_id: submission.traderId,
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
     benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
-    config_path: submission.configPath,
     symbols: submission.symbols,
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
   };
+  if (submission.configPath) {
+    params.config_path = submission.configPath;
+  }
+  return params;
 }
 
 export function buildBacktestValidateRulesParams(submission: BacktestJobSubmission): Record<string, unknown> {
-  return {
+  const params: Record<string, unknown> = {
+    profile_id: submission.profileId || undefined,
     trader_id: submission.traderId,
     date_from: submission.dateFrom,
     date_to: submission.dateTo,
     strategy_version_id: submission.strategyVersionId || undefined,
     benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
-    config_path: submission.configPath,
     symbols: submission.symbols,
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
   };
+  if (submission.configPath) {
+    params.config_path = submission.configPath;
+  }
+  return params;
 }
 
 export function buildBacktestReproducibilityParams(submission: BacktestJobSubmission): Record<string, unknown> {

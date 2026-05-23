@@ -47,16 +47,14 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     assert listed.status == "ok"
     workflow_ids = {item["workflow_id"] for item in listed.payload["items"]}
     assert {
-        "snapshot",
         "ohlcv",
-        "strategy",
-        "backtest",
-        "optimize",
-        "optimize-rule-pool",
-        "rule-pool",
         "scheduler",
-        "report",
     } <= workflow_ids
+    assert "snapshot" not in workflow_ids
+    assert "backtest" not in workflow_ids
+    assert "optimize" not in workflow_ids
+    assert "optimize-rule-pool" not in workflow_ids
+    assert "rule-pool" not in workflow_ids
     assert "pre-market" not in workflow_ids
     assert "after-close" not in workflow_ids
     assert "pipeline" not in workflow_ids
@@ -72,15 +70,6 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
         "snapshot-build",
     ]
 
-    optimize_rule_pool = next(item for item in listed.payload["items"] if item["workflow_id"] == "optimize-rule-pool")
-    assert [step["step_id"] for step in optimize_rule_pool["steps"]] == [
-        "optimize-create-candidate",
-        "rule-pool-backtest",
-        "candidate-review",
-        "rule-review",
-    ]
-    assert optimize_rule_pool["steps"][0]["param_schema"]["fields"]["adjustments_path"]["required"] is True
-
 
 def test_workflow_service_runs_workflow_through_job_service() -> None:
     """WorkflowService 应将工作流运行委托给 WorkflowRunner。"""
@@ -90,20 +79,24 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
     service = WorkflowService(workflow_runner=fake_runner)
     result = __import__("asyncio").run(
         service.run_workflow(
-            workflow_id="strategy",
+            workflow_id="scheduler",
             params={
                 "config_path": "config/app.yaml",
-                "trader_id": "trader_a",
-                "strategy_date": "2026-05-16",
+                "trade_date": "2026-05-16",
+                "slot": "17-30",
+                "symbols": ["000001.SZ"],
+                "date": "2026-05-16",
+                "as_of": "2026-05-16",
+                "snapshot_type": "all",
             },
             created_by="web",
         )
     )
 
     assert result.status == "ok"
-    assert result.payload["workflow"]["workflow_id"] == "strategy"
-    assert result.payload["job"]["job_type"] == "strategy-build"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "strategy"
+    assert result.payload["workflow"]["workflow_id"] == "scheduler"
+    assert result.payload["job"]["job_type"] == "kaipan-run"
+    assert fake_runner.calls[0]["workflow"].workflow_id == "scheduler"
     assert fake_runner.calls[0]["params"]["config_path"] == "config/app.yaml"
     assert fake_runner.calls[0]["confirmed"] is False
 
@@ -135,8 +128,8 @@ def test_workflow_service_accepts_market_scheduler_params() -> None:
     assert fake_runner.calls[0]["params"]["symbols"] == ["000001.SZ"]
 
 
-def test_workflow_service_rejects_unconfirmed_high_risk_workflow() -> None:
-    """高风险工作流未确认时不应创建 Job。"""
+def test_workflow_service_reports_removed_backtest_workflow() -> None:
+    """已移除的 backtest 工作流应返回不可用状态。"""
     from src.services import WorkflowService
 
     fake_runner = _FakeWorkflowRunner(calls=[])
@@ -144,35 +137,12 @@ def test_workflow_service_rejects_unconfirmed_high_risk_workflow() -> None:
     result = __import__("asyncio").run(
         service.run_workflow(
             workflow_id="backtest",
-            params={"trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-16"},
+            params={"profile_id": "default", "trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-16"},
             created_by="web",
         )
     )
 
-    assert result.status == "error"
-    assert result.message == "confirmation required for high-risk workflow"
+    assert result.status == "partial"
+    assert result.message == "workflow not found"
     assert result.payload["workflow_id"] == "backtest"
-    assert result.payload["requires_confirmation"] is True
     assert fake_runner.calls == []
-
-
-def test_workflow_service_allows_confirmed_high_risk_workflow() -> None:
-    """高风险工作流确认后应允许创建 Job。"""
-    from src.services import WorkflowService
-
-    fake_runner = _FakeWorkflowRunner(calls=[])
-    service = WorkflowService(workflow_runner=fake_runner)
-    result = __import__("asyncio").run(
-        service.run_workflow(
-            workflow_id="backtest",
-            params={"trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-16"},
-            created_by="web",
-            confirmed=True,
-        )
-    )
-
-    assert result.status == "ok"
-    assert result.payload["workflow"]["workflow_id"] == "backtest"
-    assert result.payload["job"]["job_type"] == "backtest-run"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "backtest"
-    assert fake_runner.calls[0]["confirmed"] is True

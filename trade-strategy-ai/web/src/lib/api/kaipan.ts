@@ -6,6 +6,7 @@ import type {
   KaipanNormalizeResponse,
   KaipanRunRequest,
   KaipanRunResponse,
+  KaipanStopResponse,
   KaipanStatusResponse,
 } from '@/types/kaipan';
 
@@ -44,5 +45,11 @@ export function kaipanRun(payload: KaipanRunRequest) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export function kaipanStop() {
+  return fetchJson<KaipanStopResponse>('/kaipan/stop', {
+    method: 'POST',
   });
 }

@@ -1,1 +1,1 @@
-export { RulePoolPage } from '@/features/rule-pool';
+export { RulePoolPage, RulePoolDetailPage } from '@/features/rule-pool';

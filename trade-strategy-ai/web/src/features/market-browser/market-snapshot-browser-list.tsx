@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import { SectionCard, StatusBadge } from '@/components/kit';
 import { EmptyState, LoadingState } from '@/components/kit';
 import type { MarketSnapshotListItem } from '@/types/market';
@@ -10,7 +9,6 @@ type MarketSnapshotBrowserListProps = {
   isLoading: boolean;
   errorState: ReactNode | null;
   onSelectSnapshot: (snapshotId: string) => void;
-  onRetry?: () => void;
 };
 
 function formatTimestamp(value: string | null) {
@@ -36,27 +34,19 @@ export function MarketSnapshotBrowserList({
   isLoading,
   errorState,
   onSelectSnapshot,
-  onRetry,
 }: MarketSnapshotBrowserListProps) {
   return (
     <SectionCard
       title="Snapshot 列表"
       description="选择一个快照在右侧查看质量、sections 和派生特征。"
       className="border-slate-200 bg-white"
-      action={
-        onRetry ? (
-          <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetry}>
-            刷新
-          </Button>
-        ) : null
-      }
     >
       {isLoading ? (
         <LoadingState label="正在加载快照列表" description="请稍候，列表数据正在从数据库查询。" />
       ) : errorState ? (
         errorState
       ) : snapshots.length ? (
-        <div className="space-y-3">
+        <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
           {snapshots.map((snapshot) => {
             const selected = snapshot.snapshot_id === selectedSnapshotId;
             return (
@@ -95,8 +85,6 @@ export function MarketSnapshotBrowserList({
         <EmptyState
           title="没有可展示的快照"
           description="当前筛选条件下没有找到 snapshot。请调整 trade_date、market 或 quality_status。"
-          actionLabel="重置筛选"
-          onAction={onRetry}
         />
       )}
     </SectionCard>

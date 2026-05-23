@@ -8,6 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from api.dependencies import verify_api_key
 from api.schemas.market import (
     MarketBenchmarkOptionListResponse,
+    OhlcvSchedulerRunResponse,
+    OhlcvSchedulerStatusResponse,
+    OhlcvSchedulerStopResponse,
     MarketRegimeDetailResponse,
     MarketRegimeListResponse,
     MarketDatasetDetailResponse,
@@ -21,6 +24,7 @@ from api.schemas.market import (
     MarketSnapshotSectionResponse,
 )
 from src.market_data.stock_info_service import COMMON_MARKET_INDICES, list_index_stock_infos
+from src.services.config_profile_service import ConfigProfileService
 from src.services import MarketRegimeFeatureService, MarketRegimeService, MarketService, MarketSnapshotQueryService
 
 
@@ -55,6 +59,23 @@ def _structured_error(error_type: str, message: str, detail: str | None = None, 
         "detail": detail,
         "metadata": metadata or {},
     }
+
+
+async def _resolve_profile_config_path(profile_id: str | None, config_path: str) -> str:
+    """优先按 Profile 解析配置路径，找不到时返回明确错误。"""
+    if not profile_id:
+        return config_path
+    resolved = await ConfigProfileService().resolve_profile_config_path(profile_id)
+    if resolved is None:
+        raise HTTPException(
+            status_code=404,
+            detail=_structured_error(
+                "profile_not_found",
+                f"profile not found: {profile_id}",
+                metadata={"profile_id": profile_id},
+            ),
+        )
+    return str(resolved)
 
 
 def _raise_query_error(result: Any) -> None:
@@ -140,6 +161,49 @@ async def get_ohlcv(
     result = await market_service.get_ohlcv(symbol=symbol, start_date=start_date, end_date=end_date)
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "ohlcv query failed")
+    return result.payload
+
+
+@router.get("/ohlcv/status", response_model=OhlcvSchedulerStatusResponse)
+async def get_ohlcv_status(
+    profile_id: str | None = Query(default=None),
+    config_path: str = Query(default="config/app.yaml"),
+    market_service: MarketService = Depends(get_market_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查看 OHLCV 调度器状态。"""
+    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    result = await market_service.ohlcv_scheduler_status(config_path=resolved_config_path)
+    if result.status not in {"ok", "partial"}:
+        raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler status failed")
+    return result.payload
+
+
+@router.post("/ohlcv/run", response_model=OhlcvSchedulerRunResponse, dependencies=[Depends(verify_api_key)])
+async def run_ohlcv_scheduler(
+    profile_id: str | None = Query(default=None),
+    config_path: str = Query(default="config/app.yaml"),
+    market_service: MarketService = Depends(get_market_service),
+) -> dict[str, Any]:
+    """启动 OHLCV 调度器。"""
+    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    result = market_service.run_ohlcv_scheduler(config_path=resolved_config_path, start_scheduler=True, block=False)
+    if result.status not in {"ok", "partial"}:
+        raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler start failed")
+    return result.payload
+
+
+@router.post("/ohlcv/stop", response_model=OhlcvSchedulerStopResponse, dependencies=[Depends(verify_api_key)])
+async def stop_ohlcv_scheduler(
+    profile_id: str | None = Query(default=None),
+    config_path: str = Query(default="config/app.yaml"),
+    market_service: MarketService = Depends(get_market_service),
+) -> dict[str, Any]:
+    """停止 OHLCV 调度器。"""
+    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    result = market_service.stop_ohlcv_scheduler(config_path=resolved_config_path)
+    if result.status not in {"ok", "partial"}:
+        raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler stop failed")
     return result.payload
 
 

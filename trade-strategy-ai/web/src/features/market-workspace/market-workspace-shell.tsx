@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,13 +10,20 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
-import { listBenchmarkOptions } from '@/lib/api/market';
+import { getOhlcvSchedulerStatus, listBenchmarkOptions, runOhlcvScheduler, stopOhlcvScheduler } from '@/lib/api/market';
+import { getProfile, listProfiles } from '@/lib/api/profiles';
+import { kaipanRun, kaipanStatus, kaipanStop } from '@/lib/api/kaipan';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { MarketWorkspaceSummary } from './market-workspace-summary';
 import { MarketWorkspaceRunners, type MarketWorkspaceRunner } from './market-workspace-runners';
 import { MarketWorkspaceRecentJobs } from './market-workspace-recent-jobs';
 import { MarketWorkspaceErrors } from './market-workspace-errors';
 import { MarketWorkspaceArtifacts } from './market-workspace-artifacts';
+import { DataHealthCenter } from '@/features/data-health';
+import { selectLatestProfileSnapshot } from '@/features/strategy-workspace/strategy-workspace-utils';
+import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
+import type { KaipanStatusResponse } from '@/types/kaipan';
+import type { OhlcvSchedulerStatusResponse } from '@/types/market';
 
 const RUNTIME_JOB_TYPES = new Set([
   'kaipan-fetch',
@@ -66,7 +73,13 @@ const RUNNERS: MarketWorkspaceRunner[] = [
   },
 ];
 
-function buildJobParams(jobType: string, form: WorkspaceFormState) {
+type MarketWorkspaceMode = 'all' | 'kaipan' | 'ohlcv';
+
+type MarketWorkspaceShellProps = {
+  mode?: MarketWorkspaceMode;
+};
+
+function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketWorkspaceMode) {
   const symbols = form.symbols
     .split(/[\n,]/)
     .map((item) => item.trim())
@@ -79,38 +92,55 @@ function buildJobParams(jobType: string, form: WorkspaceFormState) {
   };
 
   if (jobType === 'kaipan-fetch' || jobType === 'kaipan-normalize') {
-    return base;
+    return mode === 'kaipan'
+      ? {
+          profile_id: form.kaipanProfileId,
+          trade_date: form.tradeDate,
+          slot: form.slot,
+        }
+      : base;
   }
 
   if (jobType === 'kaipan-run') {
-    return {
-      ...base,
-      mode: form.mode,
-      symbols,
-      start_date: form.startDate,
-      end_date: form.endDate,
-      limit: form.limit,
-      date: form.snapshotDate,
-      as_of: form.asOf,
-      dest: form.dest,
-      from_akshare: form.fromAkshare,
-      cache_csv: form.cacheCsv,
-      snapshot_type: form.snapshotType,
-      force: form.force,
-      offline: form.offline,
-      start_scheduler: form.startScheduler,
-      block: form.block,
-    };
+    return mode === 'kaipan'
+      ? {
+          profile_id: form.kaipanProfileId,
+          start_scheduler: true,
+          block: false,
+        }
+      : {
+          config_path: form.configPath,
+          trade_date: form.tradeDate,
+          slot: form.slot,
+          mode: form.mode,
+          symbols,
+          start_date: form.startDate,
+          end_date: form.endDate,
+          limit: form.limit,
+        };
   }
 
   if (jobType === 'ohlcv-crawl') {
+    if (mode === 'ohlcv') {
+      const params: Record<string, unknown> = {
+        profile_id: form.ohlcvProfileId,
+        mode: form.mode,
+        symbols,
+        start_date: form.startDate,
+        end_date: form.endDate,
+      };
+      if (form.limit !== '') {
+        params.limit = form.limit;
+      }
+      return params;
+    }
     return {
       config_path: form.configPath,
       mode: form.mode,
       symbols,
       start_date: form.startDate,
       end_date: form.endDate,
-      limit: form.limit,
+      limit: form.limit === '' ? undefined : form.limit,
     };
   }
 
@@ -140,6 +170,8 @@ function buildJobParams(jobType: string, form: WorkspaceFormState) {
 
 type WorkspaceFormState = {
   configPath: string;
+  ohlcvProfileId: string;
+  kaipanProfileId: string;
   tradeDate: string;
   slot: string;
   mode: string;
@@ -149,20 +181,32 @@ type WorkspaceFormState = {
   asOf: string;
   dest: string;
   symbols: string;
-  limit: number;
+  limit: number | '';
   snapshotType: string;
   force: boolean;
   offline: boolean;
   fromAkshare: boolean;
   cacheCsv: boolean;
   benchmarkSymbol: string;
-  startScheduler: boolean;
-  block: boolean;
 };
 
 export function MarketWorkspaceShell() {
+  return <MarketWorkspaceShellInner mode="all" />;
+}
+
+export function MarketKaipanWorkspaceShell() {
+  return <MarketWorkspaceShellInner mode="kaipan" />;
+}
+
+export function MarketOhlcvWorkspaceShell() {
+  return <MarketWorkspaceShellInner mode="ohlcv" />;
+}
+
+function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) {
   const [form, setForm] = useState<WorkspaceFormState>({
     configPath: 'config/app.yaml',
+    ohlcvProfileId: '',
+    kaipanProfileId: '',
     tradeDate: formatLocalDateInputOffset(0),
     slot: '17-30',
     mode: 'incremental',
@@ -172,19 +216,18 @@ export function MarketWorkspaceShell() {
     asOf: formatLocalDateInputOffset(0),
     dest: 'data/processed/persona/market_state.json',
     symbols: '',
-    limit: 100,
+    limit: '',
     snapshotType: 'all',
     force: false,
     offline: false,
     fromAkshare: false,
     cacheCsv: true,
     benchmarkSymbol: '000300.SH',
-    startScheduler: false,
-    block: false,
   });
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
   const [submissionJobId, setSubmissionJobId] = useState<string | null>(null);
   const [submittingJobType, setSubmittingJobType] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const benchmarkOptionsQuery = useQuery({
     queryKey: ['market-workspace-benchmark-options'],
@@ -192,6 +235,88 @@ export function MarketWorkspaceShell() {
     staleTime: 30_000,
   });
   const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
+
+  const kaipanProfilesQuery = useQuery({
+    queryKey: ['market-workspace', 'kaipan-profiles'],
+    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
+    enabled: mode === 'kaipan',
+    staleTime: 30_000,
+  });
+  const kaipanProfileItems = kaipanProfilesQuery.data?.items ?? [];
+
+  useEffect(() => {
+    if (mode !== 'kaipan' || !kaipanProfileItems.length) {
+      return;
+    }
+    if (!form.kaipanProfileId || !kaipanProfileItems.some((item: ProfileRecord) => item.profile_id === form.kaipanProfileId)) {
+      setForm((current) => ({ ...current, kaipanProfileId: kaipanProfileItems[0].profile_id }));
+    }
+  }, [form.kaipanProfileId, kaipanProfileItems, mode]);
+
+  const selectedKaipanProfileDetailQuery = useQuery<ProfileDetailResponse, Error>({
+    queryKey: ['market-workspace', 'kaipan-profile-detail', form.kaipanProfileId],
+    queryFn: () => getProfile(form.kaipanProfileId),
+    enabled: mode === 'kaipan' && Boolean(form.kaipanProfileId),
+    staleTime: 30_000,
+  });
+
+  const selectedKaipanProfileSnapshot = useMemo(
+    () => selectLatestProfileSnapshot(selectedKaipanProfileDetailQuery.data ?? null),
+    [selectedKaipanProfileDetailQuery.data],
+  );
+  const resolvedKaipanConfigPath = selectedKaipanProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
+  const ohlcvProfilesQuery = useQuery({
+    queryKey: ['market-workspace', 'ohlcv-profiles'],
+    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
+    enabled: mode === 'ohlcv',
+    staleTime: 30_000,
+  });
+  const ohlcvProfileItems = ohlcvProfilesQuery.data?.items ?? [];
+  useEffect(() => {
+    if (mode !== 'ohlcv' || !ohlcvProfileItems.length) {
+      return;
+    }
+    if (!form.ohlcvProfileId || !ohlcvProfileItems.some((item: ProfileRecord) => item.profile_id === form.ohlcvProfileId)) {
+      setForm((current) => ({ ...current, ohlcvProfileId: ohlcvProfileItems[0].profile_id }));
+    }
+  }, [form.ohlcvProfileId, mode, ohlcvProfileItems]);
+  const selectedOhlcvProfileDetailQuery = useQuery<ProfileDetailResponse, Error>({
+    queryKey: ['market-workspace', 'ohlcv-profile-detail', form.ohlcvProfileId],
+    queryFn: () => getProfile(form.ohlcvProfileId),
+    enabled: mode === 'ohlcv' && Boolean(form.ohlcvProfileId),
+    staleTime: 30_000,
+  });
+  const selectedOhlcvProfileSnapshot = useMemo(
+    () => selectLatestProfileSnapshot(selectedOhlcvProfileDetailQuery.data ?? null),
+    [selectedOhlcvProfileDetailQuery.data],
+  );
+  const resolvedOhlcvConfigPath = selectedOhlcvProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
+  const [kaipanSchedulerStartedOverride, setKaipanSchedulerStartedOverride] = useState<boolean | null>(null);
+  const kaipanSchedulerQuery = useQuery<KaipanStatusResponse>({
+    queryKey: ['market-workspace', 'kaipan-status'],
+    queryFn: () => kaipanStatus(),
+    enabled: mode === 'kaipan',
+    staleTime: 10_000,
+  });
+  const kaipanSchedulerStarted = kaipanSchedulerStartedOverride ?? kaipanSchedulerQuery.data?.scheduler_started ?? false;
+  const kaipanSchedulerScheduleLabel = useMemo(() => {
+    const preMarket = kaipanSchedulerQuery.data?.scheduler_pre_market ?? '9:25';
+    const postClose = kaipanSchedulerQuery.data?.scheduler_post_close ?? '17:30';
+    return `${preMarket} / ${postClose}`;
+  }, [kaipanSchedulerQuery.data?.scheduler_post_close, kaipanSchedulerQuery.data?.scheduler_pre_market]);
+  const [ohlcvSchedulerStartedOverride, setOhlcvSchedulerStartedOverride] = useState<boolean | null>(null);
+  const ohlcvSchedulerQuery = useQuery<OhlcvSchedulerStatusResponse>({
+    queryKey: ['market-workspace', 'ohlcv-status', form.ohlcvProfileId],
+    queryFn: () => getOhlcvSchedulerStatus(form.ohlcvProfileId, resolvedOhlcvConfigPath),
+    enabled: mode === 'ohlcv',
+    staleTime: 10_000,
+  });
+  const ohlcvSchedulerStarted = ohlcvSchedulerStartedOverride ?? ohlcvSchedulerQuery.data?.scheduler_started ?? false;
+  const ohlcvSchedulerScheduleLabel = useMemo(() => {
+    const preMarket = ohlcvSchedulerQuery.data?.scheduler_pre_market ?? '9:25';
+    const postClose = ohlcvSchedulerQuery.data?.scheduler_post_close ?? '17:30';
+    return `${preMarket} / ${postClose}`;
+  }, [ohlcvSchedulerQuery.data?.scheduler_post_close, ohlcvSchedulerQuery.data?.scheduler_pre_market]);
 
   const jobsQuery = useQuery({
     queryKey: ['market-workspace-jobs'],
@@ -211,21 +336,85 @@ export function MarketWorkspaceShell() {
       return createJob({
         job_type: jobType,
         created_by: 'web',
-        params: buildJobParams(jobType, form),
+        params: buildJobParams(jobType, form, mode),
       });
     },
     onSuccess: (result, jobType) => {
       setSubmissionJobId(result.job.id);
-      setSubmissionMessage(`已提交 ${jobType}，可打开 Job 详情查看进度。`);
+      setSubmissionMessage(`任务已生成：${jobType}，可打开 Job 详情查看进度。`);
     },
     onSettled: () => {
       setSubmittingJobType(null);
     },
   });
 
+  const schedulerToggleMutation = useMutation({
+    mutationFn: async () => {
+      if (kaipanSchedulerStarted) {
+        return kaipanStop();
+      }
+      return kaipanRun({ start_scheduler: true, block: false });
+    },
+    onSuccess: (result) => {
+      const started = Boolean(result.started ?? result.scheduler_started);
+      setKaipanSchedulerStartedOverride(started);
+      void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'kaipan-status'] });
+      if (!started) {
+        setSubmissionMessage('Kaipan 调度器已停止。');
+        setSubmissionJobId(null);
+        return;
+      }
+      setSubmissionMessage(`Kaipan 调度器已启动，定时 ${result.pre_market} / ${result.post_close}。`);
+      setSubmissionJobId(null);
+    },
+  });
+  const ohlcvSchedulerToggleMutation = useMutation({
+    mutationFn: async () => {
+      if (ohlcvSchedulerStarted) {
+        return stopOhlcvScheduler(form.ohlcvProfileId, resolvedOhlcvConfigPath);
+      }
+      return runOhlcvScheduler(form.ohlcvProfileId, resolvedOhlcvConfigPath);
+    },
+    onSuccess: (result) => {
+      const started = Boolean(result.started);
+      setOhlcvSchedulerStartedOverride(started);
+      void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'ohlcv-status', form.ohlcvProfileId] });
+      if (!started) {
+        setSubmissionMessage('OHLCV 调度器已停止。');
+        setSubmissionJobId(null);
+        return;
+      }
+      setSubmissionMessage(`OHLCV 调度器已启动，定时 ${result.pre_market} / ${result.post_close}。`);
+      setSubmissionJobId(null);
+    },
+  });
+
+  const visibleRunnerTypes = useMemo(() => {
+    if (mode === 'kaipan') {
+      return new Set(['kaipan-fetch', 'kaipan-normalize', 'kaipan-run']);
+    }
+    if (mode === 'ohlcv') {
+      return new Set(['ohlcv-crawl']);
+    }
+    return RUNTIME_JOB_TYPES;
+  }, [mode]);
+
+  const visibleRunners = useMemo(() => {
+    const scheduleLabel = kaipanSchedulerScheduleLabel;
+    const schedulerStateLabel = kaipanSchedulerStarted ? '已启动' : '未启动';
+    return RUNNERS.filter((runner) => visibleRunnerTypes.has(runner.jobType)).map((runner) =>
+      runner.jobType === 'kaipan-run'
+        ? {
+            ...runner,
+            description: `调度时间：${scheduleLabel}，当前状态：${schedulerStateLabel}。`,
+          }
+        : runner,
+    );
+  }, [kaipanSchedulerScheduleLabel, kaipanSchedulerStarted, visibleRunnerTypes]);
+
   const marketJobs = useMemo(
-    () => (jobsQuery.data?.items ?? []).filter((job) => RUNTIME_JOB_TYPES.has(job.job_type)),
-    [jobsQuery.data?.items],
+    () => (jobsQuery.data?.items ?? []).filter((job) => visibleRunnerTypes.has(job.job_type)),
+    [jobsQuery.data?.items, visibleRunnerTypes],
   );
   const failedJobs = useMemo(() => marketJobs.filter((job) => job.status === 'failed'), [marketJobs]);
   const artifacts = artifactsQuery.data?.items ?? [];
@@ -240,8 +429,14 @@ export function MarketWorkspaceShell() {
     <main className="page-stack">
       <PageHeader
         kicker="市场数据"
-        title="市场数据工作台"
-        description="在 Web 中运行和查看市场数据链路，保持与正式交付版一致的浅色中文工作台风格。"
+        title={mode === 'kaipan' ? 'Kaipan 数据' : mode === 'ohlcv' ? 'OHLCV 行情' : '市场数据工作台'}
+        description={
+          mode === 'kaipan'
+            ? '抓取、归一化并检查 Kaipan 数据健康状况。'
+            : mode === 'ohlcv'
+              ? '抓取和回灌 OHLCV 行情，并查看最近任务与调度状态。'
+              : '在 Web 中运行和查看市场数据链路，保持与正式交付版一致的浅色中文工作台风格。'
+        }
       />
 
       {submissionMessage ? (
@@ -249,8 +444,16 @@ export function MarketWorkspaceShell() {
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
               <p className="font-medium">{submissionMessage}</p>
-              <p className="text-sm text-sky-700">任务已通过 Job Center 创建，不需要 CLI。</p>
-            </div>
+                <p className="text-sm text-sky-700">
+                  {submissionJobId
+                    ? '任务已通过 Job Center 创建，不需要 CLI。'
+                    : mode === 'kaipan'
+                      ? '调度器由当前后台进程管理，不依赖 Job Center。'
+                      : mode === 'ohlcv'
+                        ? 'OHLCV 调度器由当前后台进程管理，不依赖 Job Center。'
+                      : '操作已完成。'}
+                </p>
+              </div>
             <div className="flex flex-wrap gap-2">
               {submissionJobId ? (
                 <a
@@ -269,7 +472,7 @@ export function MarketWorkspaceShell() {
       ) : null}
 
       <MarketWorkspaceSummary
-        taskCount={RUNNERS.length}
+        taskCount={visibleRunners.length}
         recentJobCount={marketJobs.length}
         failedJobCount={failedJobs.length}
         artifactCount={artifacts.length}
@@ -278,114 +481,262 @@ export function MarketWorkspaceShell() {
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
           <CardHeader>
-            <CardTitle className="text-slate-900">运行参数</CardTitle>
-            <CardDescription className="text-slate-500">这些参数会被运行按钮复用，提交时仍走 Job Center。</CardDescription>
+            <CardTitle className="text-slate-900">
+              {mode === 'kaipan' ? '任务参数' : mode === 'ohlcv' ? '抓取参数' : '运行参数'}
+            </CardTitle>
+            <CardDescription className="text-slate-500">
+              {mode === 'kaipan'
+                ? '只保留 Kaipan 抓取和归一化需要的参数。'
+                : mode === 'ohlcv'
+                  ? '保留 OHLCV 抓取和回灌需要的参数。'
+                  : '这些参数会被运行按钮复用，提交时仍走 Job Center。'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">配置路径</span>
-              <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">交易日期</span>
-              <Input type="date" value={form.tradeDate} onChange={(event) => updateForm({ tradeDate: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">时间槽</span>
-              <Select value={form.slot} onChange={(event) => updateForm({ slot: event.target.value })}>
-                <option value="all">all</option>
-                <option value="09-25">09-25</option>
-                <option value="17-30">17-30</option>
-              </Select>
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">抓取模式</span>
-              <Select value={form.mode} onChange={(event) => updateForm({ mode: event.target.value })}>
-                <option value="incremental">incremental</option>
-                <option value="full">full</option>
-              </Select>
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">快照日期</span>
-              <Input type="date" value={form.snapshotDate} onChange={(event) => updateForm({ snapshotDate: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">市场状态日期</span>
-              <Input type="date" value={form.asOf} onChange={(event) => updateForm({ asOf: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">基准指数</span>
-              <Select value={form.benchmarkSymbol} onChange={(event) => updateForm({ benchmarkSymbol: event.target.value })}>
-                {benchmarkOptions.length === 0 ? (
-                  <option value={form.benchmarkSymbol}>{form.benchmarkSymbol}</option>
+            {mode === 'kaipan' || mode === 'all' ? (
+              <>
+                {mode === 'kaipan' ? (
+                  <label className="space-y-2" htmlFor="kaipan-profile">
+                    <span className="text-sm font-medium text-slate-700">Profile</span>
+                    <Select
+                      id="kaipan-profile"
+                      value={form.kaipanProfileId}
+                      onChange={(event) => updateForm({ kaipanProfileId: event.target.value })}
+                      disabled={kaipanProfilesQuery.isLoading}
+                    >
+                      {kaipanProfileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+                      {kaipanProfileItems.map((profile: ProfileRecord) => (
+                        <option key={profile.profile_id} value={profile.profile_id}>
+                          {profile.name} ({profile.profile_id})
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      配置路径将从所选 Profile 的最新快照自动解析：{selectedKaipanProfileSnapshot?.config_path ?? resolvedKaipanConfigPath}
+                    </p>
+                    {kaipanProfilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
+                    {selectedKaipanProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
+                  </label>
                 ) : (
-                  benchmarkOptions.map((item) => (
-                    <option key={item.symbol} value={item.symbol}>
-                      {item.name} ({item.symbol})
-                    </option>
-                  ))
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-700">配置路径</span>
+                    <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
+                  </label>
                 )}
-              </Select>
-            </label>
-            <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-medium text-slate-700">标的列表（逗号或换行分隔）</span>
-              <Textarea
-                value={form.symbols}
-                onChange={(event) => updateForm({ symbols: event.target.value })}
-                placeholder="000001.SZ, 600000.SH"
-                rows={3}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">开始日期</span>
-              <Input type="date" value={form.startDate} onChange={(event) => updateForm({ startDate: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">结束日期</span>
-              <Input type="date" value={form.endDate} onChange={(event) => updateForm({ endDate: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">输出路径</span>
-              <Input value={form.dest} onChange={(event) => updateForm({ dest: event.target.value })} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">抓取上限</span>
-              <Input
-                type="number"
-                min={1}
-                max={500}
-                value={form.limit}
-                onChange={(event) => updateForm({ limit: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.force} onChange={(event) => updateForm({ force: event.target.checked })} />
-              强制执行
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.offline} onChange={(event) => updateForm({ offline: event.target.checked })} />
-              离线模式
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.fromAkshare} onChange={(event) => updateForm({ fromAkshare: event.target.checked })} />
-              从 AkShare 构建
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.cacheCsv} onChange={(event) => updateForm({ cacheCsv: event.target.checked })} />
-              缓存 CSV
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.startScheduler} onChange={(event) => updateForm({ startScheduler: event.target.checked })} />
-              启动调度器
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-              <input type="checkbox" checked={form.block} onChange={(event) => updateForm({ block: event.target.checked })} />
-              阻塞运行
-            </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">交易日期</span>
+                  <Input type="date" value={form.tradeDate} onChange={(event) => updateForm({ tradeDate: event.target.value })} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">时间槽</span>
+                  <Select value={form.slot} onChange={(event) => updateForm({ slot: event.target.value })}>
+                    <option value="all">all</option>
+                    <option value="09-25">09-25</option>
+                    <option value="17-30">17-30</option>
+                  </Select>
+                </label>
+                {mode === 'kaipan' ? (
+                  <p className="md:col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
+                    Kaipan 调度器按配置中的时间自动运行：{kaipanSchedulerScheduleLabel}。当前状态：{kaipanSchedulerStarted ? '已启动' : '未启动'}。
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+            {mode === 'ohlcv' || mode === 'all' ? (
+              <>
+                {mode === 'ohlcv' ? (
+                  <label className="space-y-2" htmlFor="ohlcv-profile">
+                    <span className="text-sm font-medium text-slate-700">Profile</span>
+                    <Select
+                      id="ohlcv-profile"
+                      value={form.ohlcvProfileId}
+                      onChange={(event) => updateForm({ ohlcvProfileId: event.target.value })}
+                      disabled={ohlcvProfilesQuery.isLoading}
+                    >
+                      {ohlcvProfileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+                      {ohlcvProfileItems.map((profile: ProfileRecord) => (
+                        <option key={profile.profile_id} value={profile.profile_id}>
+                          {profile.name} ({profile.profile_id})
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      配置路径将从所选 Profile 的最新快照自动解析：{selectedOhlcvProfileSnapshot?.config_path ?? resolvedOhlcvConfigPath}
+                    </p>
+                    {ohlcvProfilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
+                    {selectedOhlcvProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
+                  </label>
+                ) : (
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-700">配置路径</span>
+                    <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
+                  </label>
+                )}
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">任务模式</span>
+                  <Select value={form.mode} onChange={(event) => updateForm({ mode: event.target.value })}>
+                    <option value="incremental">增量</option>
+                    <option value="full">区间回灌</option>
+                  </Select>
+                </label>
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-sm font-medium text-slate-700">标的列表（逗号或换行分隔）</span>
+                  <Textarea
+                    value={form.symbols}
+                    onChange={(event) => updateForm({ symbols: event.target.value })}
+                    placeholder="000001.SZ, 600000.SH"
+                    rows={3}
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">开始日期</span>
+                  <Input type="date" value={form.startDate} onChange={(event) => updateForm({ startDate: event.target.value })} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">结束日期</span>
+                  <Input type="date" value={form.endDate} onChange={(event) => updateForm({ endDate: event.target.value })} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">抓取上限</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={form.limit}
+                    onChange={(event) => updateForm({ limit: event.target.value === '' ? '' : Number(event.target.value) || 1 })}
+                  />
+                  <p className="text-xs text-slate-500">留空表示全量抓取。</p>
+                </label>
+              </>
+            ) : null}
+            {mode === 'all' ? (
+              <>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">快照日期</span>
+                  <Input type="date" value={form.snapshotDate} onChange={(event) => updateForm({ snapshotDate: event.target.value })} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">市场状态日期</span>
+                  <Input type="date" value={form.asOf} onChange={(event) => updateForm({ asOf: event.target.value })} />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">基准指数</span>
+                  <Select value={form.benchmarkSymbol} onChange={(event) => updateForm({ benchmarkSymbol: event.target.value })}>
+                    {benchmarkOptions.length === 0 ? (
+                      <option value={form.benchmarkSymbol}>{form.benchmarkSymbol}</option>
+                    ) : (
+                      benchmarkOptions.map((item) => (
+                        <option key={item.symbol} value={item.symbol}>
+                          {item.name} ({item.symbol})
+                        </option>
+                      ))
+                    )}
+                  </Select>
+                </label>
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-sm font-medium text-slate-700">输出路径</span>
+                  <Input value={form.dest} onChange={(event) => updateForm({ dest: event.target.value })} />
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={form.force} onChange={(event) => updateForm({ force: event.target.checked })} />
+                  强制执行
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={form.offline} onChange={(event) => updateForm({ offline: event.target.checked })} />
+                  离线模式
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={form.fromAkshare} onChange={(event) => updateForm({ fromAkshare: event.target.checked })} />
+                  从 AkShare 构建
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={form.cacheCsv} onChange={(event) => updateForm({ cacheCsv: event.target.checked })} />
+                  缓存 CSV
+                </label>
+              </>
+            ) : null}
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
+        {mode === 'ohlcv' ? (
+          <div className="space-y-4">
+            <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+              <CardHeader>
+                <CardTitle className="text-slate-900">OHLCV 抓取</CardTitle>
+                <CardDescription className="text-slate-500">
+                  直接使用左侧抓取参数提交 `ohlcv-crawl`，手动抓取与定时调度互不干扰。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
+                  当前抓取模式：{form.mode === 'incremental' ? '增量' : '区间回灌'}，标的数：
+                  {form.symbols.trim() ? form.symbols.split(/[\n,]/).map((item) => item.trim()).filter(Boolean).length : 0}，时间范围：
+                  {form.startDate} ~ {form.endDate}。
+                </div>
+                <Button
+                  className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400"
+                  disabled={submittingJobType === 'ohlcv-crawl'}
+                  onClick={() => {
+                    setSubmissionMessage(null);
+                    runMutation.mutate('ohlcv-crawl');
+                  }}
+                >
+                  {submittingJobType === 'ohlcv-crawl' ? '提交中' : '运行 OHLCV 抓取'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+              <CardHeader>
+                <CardTitle className="text-slate-900">OHLCV 调度器</CardTitle>
+                <CardDescription className="text-slate-500">
+                  OHLCV 调度器按配置中的时间自动运行：{ohlcvSchedulerScheduleLabel}。当前状态：{ohlcvSchedulerStarted ? '已启动' : '未启动'}。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
+                  调度器会在盘前和盘后按配置时间自动执行增量抓取，手动抓取仍然保留为独立入口。最近数据：
+                  {ohlcvSchedulerQuery.data?.latest_trade_date ?? '暂无'}，记录数：{ohlcvSchedulerQuery.data?.latest_record_count ?? 0}。
+                </p>
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    ohlcvSchedulerToggleMutation.mutate();
+                  }}
+                  disabled={ohlcvSchedulerToggleMutation.isPending}
+                >
+                  {ohlcvSchedulerToggleMutation.isPending ? '处理中' : ohlcvSchedulerStarted ? '停止调度器' : '启动调度器'}
+                </Button>
+              </CardContent>
+              {ohlcvSchedulerQuery.isError ? <p className="px-6 pb-4 text-xs text-rose-600">OHLCV 调度器状态加载失败，请稍后重试。</p> : null}
+            </Card>
+          </div>
+        ) : (
+          <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+            <CardHeader>
+              <CardTitle className="text-slate-900">流程入口</CardTitle>
+              <CardDescription className="text-slate-500">不改变主流程，只提供常用页面跳转。</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/snapshots">
+                <p className="text-sm font-medium text-slate-950">市场快照</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">查看快照浏览和构建入口。</p>
+              </a>
+              <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/datasets">
+                <p className="text-sm font-medium text-slate-950">市场数据集</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">查看数据集浏览和详情。</p>
+              </a>
+              <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/kaipan">
+                <p className="text-sm font-medium text-slate-950">Kaipan 数据</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">进入 Kaipan 抓取与调度页面。</p>
+              </a>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      {mode === 'ohlcv' ? (
+        <section className="space-y-4">
           {jobsError ? (
             <ErrorState
               {...jobsError}
@@ -396,6 +747,7 @@ export function MarketWorkspaceShell() {
           ) : (
             <MarketWorkspaceErrors failedJobs={failedJobs.slice(0, 3)} />
           )}
+          <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} compact />
           {artifactsError ? (
             <ErrorState
               {...artifactsError}
@@ -404,69 +756,94 @@ export function MarketWorkspaceShell() {
               }}
             />
           ) : (
-            <MarketWorkspaceArtifacts artifacts={artifacts.slice(0, 6)} loading={artifactsQuery.isLoading} />
+            <MarketWorkspaceArtifacts artifacts={artifacts.slice(0, 6)} loading={artifactsQuery.isLoading} compact />
           )}
-        </div>
-      </section>
-
-      <MarketWorkspaceRunners
-        runners={RUNNERS}
-        submittingJobType={submittingJobType}
-        onRun={(jobType) => {
-          setSubmissionMessage(null);
-          runMutation.mutate(jobType);
-        }}
-      />
-
-      {jobsError ? (
-        <ErrorState
-          {...jobsError}
-          onRetry={() => {
-            void jobsQuery.refetch();
-          }}
-          className="mt-2"
-        />
+        </section>
       ) : (
-        <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} />
+        <>
+          <MarketWorkspaceRunners
+            runners={visibleRunners}
+            submittingJobType={submittingJobType}
+            kaipanSchedulerControlEnabled={mode === 'kaipan'}
+            kaipanSchedulerStarted={kaipanSchedulerStarted}
+            kaipanSchedulerToggling={schedulerToggleMutation.isPending}
+            onKaipanSchedulerToggle={mode === 'kaipan' ? () => schedulerToggleMutation.mutate() : undefined}
+            onRun={(jobType) => {
+              setSubmissionMessage(null);
+              runMutation.mutate(jobType);
+            }}
+          />
+
+          {jobsError ? (
+            <ErrorState
+              {...jobsError}
+              onRetry={() => {
+                void jobsQuery.refetch();
+              }}
+              className="mt-2"
+            />
+          ) : (
+            <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} />
+          )}
+
+          {mode === 'kaipan' ? (
+            <section className="grid gap-4 xl:grid-cols-2">
+              <DataHealthCenter />
+              {artifactsError ? (
+                <ErrorState
+                  {...artifactsError}
+                  onRetry={() => {
+                    void artifactsQuery.refetch();
+                  }}
+                />
+              ) : (
+                <MarketWorkspaceArtifacts artifacts={artifacts.slice(0, 6)} loading={artifactsQuery.isLoading} compact />
+              )}
+            </section>
+          ) : null}
+        </>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
-          <CardHeader>
-            <CardTitle className="text-slate-900">快捷入口</CardTitle>
-            <CardDescription className="text-slate-500">不改变主流程，只提供常用页面跳转。</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            {[
-              { label: '任务中心', href: '/jobs' },
-              { label: '市场总览', href: '/market' },
-              { label: '数据集', href: '/market/datasets' },
-              { label: '策略工作台', href: '/strategies' },
-              { label: '产物中心', href: '/artifacts' },
-            ].map((item) => (
-              <a
-                key={item.href}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                href={item.href}
-              >
-                {item.label}
-              </a>
-            ))}
-          </CardContent>
-        </Card>
+      {mode === 'all' ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+            <CardHeader>
+              <CardTitle className="text-slate-900">快捷入口</CardTitle>
+              <CardDescription className="text-slate-500">不改变主流程，只提供常用页面跳转。</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3">
+              {[
+                { label: '市场快照', href: '/market/snapshots' },
+                { label: '数据集', href: '/market/datasets' },
+                { label: 'Kaipan 数据', href: '/market/kaipan' },
+                { label: 'OHLCV 行情', href: '/market/ohlcv' },
+                { label: '策略工作台', href: '/strategies' },
+                { label: '产物中心', href: '/artifacts' },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  href={item.href}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </CardContent>
+          </Card>
 
-        <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
-          <CardHeader>
-            <CardTitle className="text-slate-900">工作台说明</CardTitle>
-            <CardDescription className="text-slate-500">市场数据工作台只负责提交和复盘，不承担 provider 实现。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-slate-600">
-            <p>1. 通过 Job Center 提交任务，避免 CLI 和 UI 之间出现两套正式入口。</p>
-            <p>2. 最近任务和产物都可以直接跳转到 Job / Artifact 详情页。</p>
-            <p>3. 失败时优先看配置、provider、数据和系统分类。</p>
-          </CardContent>
-        </Card>
-      </section>
+          <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+            <CardHeader>
+              <CardTitle className="text-slate-900">工作台说明</CardTitle>
+              <CardDescription className="text-slate-500">市场数据工作台只负责提交和复盘，不承担 provider 实现。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-slate-600">
+              <p>1. 通过 Job Center 提交任务，避免 CLI 和 UI 之间出现两套正式入口。</p>
+              <p>2. 最近任务和产物都可以直接跳转到 Job / Artifact 详情页。</p>
+              <p>3. 失败时优先看配置、provider、数据和系统分类。</p>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
     </main>
   );
 }

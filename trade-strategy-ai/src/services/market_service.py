@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import asyncio
+import signal
 from dataclasses import asdict, is_dataclass
 from datetime import date
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable
 
-from sqlalchemy import select
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy import func, select
 
 from src.common.config import load_app_config
 from src.db.session import get_session_factory
 from src.market_data.ohlcv_service import OHLCVService
 from src.models.ohlcv_bar import OHLCVBar
+from src.models.stock_info import StockInfo
+from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 
 
@@ -40,6 +47,11 @@ class MarketService(BaseService):
     """OHLCV 抓取与行情查询的共享服务。"""
 
     service_name = "market"
+    _scheduler_lock = Lock()
+    _scheduler: BackgroundScheduler | None = None
+    _scheduler_pre_market: str | None = None
+    _scheduler_post_close: str | None = None
+    _scheduler_config_path: Path | None = None
 
     def __init__(
         self,
@@ -75,28 +87,103 @@ class MarketService(BaseService):
             return self._session_factory
         return get_session_factory
 
+    async def _resolve_config_path(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> Path | None:
+        """优先按 Profile 解析配置路径，兼容旧的 config_path 入口。"""
+        if profile_id is not None and str(profile_id).strip():
+            resolved = await ConfigProfileService().resolve_profile_config_path(str(profile_id).strip())
+            if resolved is None:
+                raise ValueError(f"profile not found: {profile_id}")
+            return resolved
+        if config_path is not None:
+            return Path(config_path)
+        return Path("config/app.yaml")
+
+    @classmethod
+    def _scheduler_snapshot(cls) -> dict[str, Any]:
+        """返回当前 OHLCV 调度器状态。"""
+        with cls._scheduler_lock:
+            started = cls._scheduler is not None and cls._scheduler.running
+            if not started:
+                cls._scheduler = None
+                cls._scheduler_pre_market = None
+                cls._scheduler_post_close = None
+                cls._scheduler_config_path = None
+            return {
+                "started": started,
+                "pre_market": cls._scheduler_pre_market,
+                "post_close": cls._scheduler_post_close,
+                "config_path": str(cls._scheduler_config_path) if cls._scheduler_config_path else None,
+            }
+
+    @classmethod
+    def _clear_scheduler(cls) -> None:
+        """清理当前 OHLCV 调度器状态。"""
+        with cls._scheduler_lock:
+            scheduler = cls._scheduler
+            cls._scheduler = None
+            cls._scheduler_pre_market = None
+            cls._scheduler_post_close = None
+            cls._scheduler_config_path = None
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
+
+    async def _run_ohlcv_incremental_crawl(self, *, config_path: str | Path) -> dict[str, int]:
+        """执行 OHLCV 增量抓取，供调度器复用。"""
+        service = self._create_ohlcv_service(config_path)
+        session_factory = self._get_session_factory()()
+        async with session_factory.begin() as session:
+            stmt = (
+                select(StockInfo.symbol, StockInfo.security_type)
+                .where(StockInfo.security_type.in_(["stock", "index"]))
+                .order_by(StockInfo.symbol.asc())
+            )
+            result = await session.execute(stmt)
+            rows = result.all()
+
+        symbols = [row[0] for row in rows]
+        market_kind_by_symbol = {row[0]: row[1] for row in rows}
+        if not symbols:
+            return {}
+        return await service.crawl_bars(
+            symbols=symbols,
+            start_date=date.today(),
+            end_date=date.today(),
+            market_kind_by_symbol=market_kind_by_symbol,
+        )
+
     async def crawl_ohlcv(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         mode: str = "incremental",
         symbols: list[str] | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
-        limit: int = 100,
+        limit: int | None = None,
     ) -> ServiceResult:
         """抓取 OHLCV 日线。"""
-        loaded = load_app_config(config_path)
+        resolved_config_path = await self._resolve_config_path(profile_id=profile_id, config_path=config_path)
+        if resolved_config_path is None:
+            raise ValueError("missing required param: profile_id or config_path")
+        loaded = load_app_config(resolved_config_path)
         base_dir = _project_base_dir(loaded.config_path)
-        service = self._create_ohlcv_service(config_path)
+        service = self._create_ohlcv_service(resolved_config_path)
 
         if symbols is None:
             raise ValueError("symbols must be provided for the web service wrapper")
 
+        crawl_symbols = symbols if limit is None else symbols[:limit]
+
         if mode == "full":
-            results = await service.crawl_bars(symbols=symbols[:limit], start_date=start_date, end_date=end_date)
+            results = await service.crawl_bars(symbols=crawl_symbols, start_date=start_date, end_date=end_date)
         elif mode == "incremental":
-            results = await service.crawl_bars(symbols=symbols[:limit], start_date=start_date, end_date=end_date)
+            results = await service.crawl_bars(symbols=crawl_symbols, start_date=start_date, end_date=end_date)
         else:
             raise ValueError("mode must be full or incremental")
 
@@ -105,6 +192,7 @@ class MarketService(BaseService):
             message="ohlcv crawl completed",
             payload={
                 "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
                 "base_dir": str(base_dir),
                 "mode": mode,
                 "results": results,
@@ -195,5 +283,147 @@ class MarketService(BaseService):
                 "end_date": end_date.isoformat(),
                 "count": len(items),
                 "items": items,
+            },
+        )
+
+    async def ohlcv_scheduler_status(self, *, config_path: str | Path) -> ServiceResult:
+        """查看 OHLCV 调度器状态和最新行情日期。"""
+        loaded = load_app_config(config_path)
+        base_dir = _project_base_dir(loaded.config_path)
+        scheduler_state = self._scheduler_snapshot()
+        session_factory = self._get_session_factory()()
+        async with session_factory.begin() as session:
+            latest_trade_date = await session.scalar(select(func.max(OHLCVBar.trade_date)))
+            latest_record_count = 0
+            if latest_trade_date is not None:
+                latest_record_count = await session.scalar(
+                    select(func.count()).select_from(OHLCVBar).where(OHLCVBar.trade_date == latest_trade_date)
+                )
+
+        if latest_trade_date is None:
+            return ServiceResult(
+                status="partial",
+                message="no ohlcv data yet",
+                payload={
+                    "config_path": str(loaded.config_path),
+                    "base_dir": str(base_dir),
+                    "latest_trade_date": None,
+                    "latest_record_count": 0,
+                    "scheduler_started": scheduler_state["started"],
+                    "scheduler_pre_market": scheduler_state["pre_market"],
+                    "scheduler_post_close": scheduler_state["post_close"],
+                },
+            )
+
+        return ServiceResult(
+            status="ok",
+            message="ohlcv status fetched",
+            payload={
+                "config_path": str(loaded.config_path),
+                "base_dir": str(base_dir),
+                "latest_trade_date": latest_trade_date.isoformat(),
+                "latest_record_count": int(latest_record_count or 0),
+                "scheduler_started": scheduler_state["started"],
+                "scheduler_pre_market": scheduler_state["pre_market"],
+                "scheduler_post_close": scheduler_state["post_close"],
+            },
+        )
+
+    def run_ohlcv_scheduler(self, *, config_path: str | Path, start_scheduler: bool = False, block: bool = False) -> ServiceResult:
+        """构建 OHLCV 调度计划或启动调度器。"""
+        loaded = load_app_config(config_path)
+        cfg = loaded.config.kaipan
+        pre_market = cfg.fetch_schedule.get("pre_market", "9:25")
+        post_close = cfg.fetch_schedule.get("post_close", "17:30")
+        scheduler_state = self._scheduler_snapshot()
+
+        if not start_scheduler:
+            return ServiceResult(
+                status="ok",
+                message="ohlcv scheduler plan prepared",
+                payload={
+                    "config_path": str(loaded.config_path),
+                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "pre_market": pre_market,
+                    "post_close": post_close,
+                    "scheduler_started": scheduler_state["started"],
+                },
+            )
+
+        if scheduler_state["started"]:
+            return ServiceResult(
+                status="partial",
+                message="ohlcv scheduler already running",
+                payload={
+                    "config_path": str(loaded.config_path),
+                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "pre_market": scheduler_state["pre_market"] or pre_market,
+                    "post_close": scheduler_state["post_close"] or post_close,
+                    "started": True,
+                    "scheduler_started": True,
+                },
+            )
+
+        def _run_crawl() -> None:
+            asyncio.run(self._run_ohlcv_incremental_crawl(config_path=loaded.config_path))
+
+        scheduler = BackgroundScheduler()
+        pre_hour, pre_min = map(int, pre_market.split(":"))
+        post_hour, post_min = map(int, post_close.split(":"))
+        scheduler.add_job(_run_crawl, CronTrigger(hour=pre_hour, minute=pre_min, second=0), id="pre_market", replace_existing=True)
+        scheduler.add_job(_run_crawl, CronTrigger(hour=post_hour, minute=post_min, second=0), id="post_close", replace_existing=True)
+        scheduler.start()
+
+        cls = type(self)
+        with cls._scheduler_lock:
+            cls._scheduler = scheduler
+            cls._scheduler_pre_market = pre_market
+            cls._scheduler_post_close = post_close
+            cls._scheduler_config_path = loaded.config_path
+
+        if block:
+            signal.signal(signal.SIGINT, lambda *_: scheduler.shutdown())
+            signal.signal(signal.SIGTERM, lambda *_: scheduler.shutdown())
+            scheduler._thread.join()
+
+        return ServiceResult(
+            status="ok",
+            message="ohlcv scheduler started",
+            payload={
+                "config_path": str(loaded.config_path),
+                "base_dir": str(_project_base_dir(loaded.config_path)),
+                "pre_market": pre_market,
+                "post_close": post_close,
+                "started": True,
+                "scheduler_started": True,
+            },
+        )
+
+    def stop_ohlcv_scheduler(self, *, config_path: str | Path) -> ServiceResult:
+        """停止当前 OHLCV 调度器。"""
+        loaded = load_app_config(config_path)
+        scheduler_state = self._scheduler_snapshot()
+        if not scheduler_state["started"]:
+            return ServiceResult(
+                status="partial",
+                message="ohlcv scheduler is not running",
+                payload={
+                    "config_path": str(loaded.config_path),
+                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "started": False,
+                    "pre_market": scheduler_state["pre_market"],
+                    "post_close": scheduler_state["post_close"],
+                },
+            )
+        self._clear_scheduler()
+        return ServiceResult(
+            status="ok",
+            message="ohlcv scheduler stopped",
+            payload={
+                "config_path": str(loaded.config_path),
+                "base_dir": str(_project_base_dir(loaded.config_path)),
+                "started": False,
+                "pre_market": scheduler_state["pre_market"],
+                "post_close": scheduler_state["post_close"],
             },
         )

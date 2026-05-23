@@ -134,6 +134,7 @@ def test_validate_job_submission_enforces_schema() -> None:
     backtest = validate_job_submission(
         job_type="backtest-run",
         params={
+            "profile_id": "default",
             "trader_id": "trader_a",
             "date_from": "2026-04-01",
             "date_to": "2026-04-03",
@@ -142,6 +143,7 @@ def test_validate_job_submission_enforces_schema() -> None:
         created_by="web",
     )
     assert backtest.status == "ok"
+    assert backtest.payload["params"]["profile_id"] == "default"
     assert backtest.payload["params"]["symbols"] == ["000001.SZ"]
 
     rule_pool = validate_job_submission(
@@ -155,11 +157,13 @@ def test_validate_job_submission_enforces_schema() -> None:
 
     market = validate_job_submission(
         job_type="ohlcv-crawl",
-        params={"config_path": "config/app.yaml", "symbols": ["000001.SZ"]},
+        params={"profile_id": "default", "symbols": ["000001.SZ"]},
         created_by="web",
     )
     assert market.status == "ok"
     assert market.payload["params"]["symbols"] == ["000001.SZ"]
+    assert market.payload["params"]["profile_id"] == "default"
+    assert "config_path" not in market.payload["params"]
 
     market_state = validate_job_submission(
         job_type="market-state-build",
@@ -168,6 +172,15 @@ def test_validate_job_submission_enforces_schema() -> None:
     )
     assert market_state.status == "ok"
     assert market_state.payload["params"]["benchmark_symbol"] == "000300.SH"
+
+    kaipan = validate_job_submission(
+        job_type="kaipan-run",
+        params={"profile_id": "default", "trade_date": "2026-05-09", "slot": "17-30"},
+        created_by="web",
+    )
+    assert kaipan.status == "ok"
+    assert kaipan.payload["params"]["profile_id"] == "default"
+    assert "config_path" not in kaipan.payload["params"]
 
     snapshot = validate_job_submission(
         job_type="snapshot-build",

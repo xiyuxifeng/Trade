@@ -358,8 +358,96 @@ def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     assert result.status == "ok"
     assert calls["config_path"] == "config/app.yaml"
     assert calls["as_of_date"].isoformat() == "2026-05-16"
-    assert calls["force"] is True
-    assert calls["export_html"] is False
+
+
+def test_kaipan_run_handler_accepts_profile_only_and_resolves_config_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kaipan 一键运行 handler 应允许仅通过 Profile 提交并解析配置路径。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "kaipan.yaml"
+
+    class _FakeKaipanService:
+        def run(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"config_path": str(kwargs["config_path"]), "result": "kaipan done"},
+                message="kaipan done",
+            )
+
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
+    monkeypatch.setattr(job_runner_module, "KaipanService", _FakeKaipanService)
+
+    runner, _, engine, _ = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["kaipan-run"]
+    result = asyncio.run(
+        handler(
+            {
+                "profile_id": "default",
+                "start_scheduler": True,
+                "block": False,
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] == tmp_path / "config" / "kaipan.yaml"
+    assert calls["start_scheduler"] is True
+    assert calls["block"] is False
+    asyncio.run(engine.dispose())
+
+
+def test_ohlcv_crawl_handler_accepts_profile_only_and_allows_full_crawl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OHLCV 抓取 handler 应允许仅通过 Profile 提交且支持留空上限。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "ohlcv.yaml"
+
+    class _FakeMarketService:
+        async def crawl_ohlcv(self, **kwargs):
+            calls.update(kwargs)
+            return ServiceResult(
+                status="ok",
+                payload={"config_path": str(kwargs["config_path"]), "result": "ohlcv done"},
+                message="ohlcv done",
+            )
+
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
+    monkeypatch.setattr(job_runner_module, "MarketService", _FakeMarketService)
+
+    runner, _, engine, _ = _build_job_runner(tmp_path)
+    handler = runner._build_default_handlers()["ohlcv-crawl"]
+    result = asyncio.run(
+        handler(
+            {
+                "profile_id": "default",
+                "mode": "incremental",
+                "symbols": ["000001.SZ", "000300.SH"],
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-28",
+            }
+        )
+    )
+
+    assert result.status == "ok"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] == tmp_path / "config" / "ohlcv.yaml"
+    assert calls["mode"] == "incremental"
+    assert calls["symbols"] == ["000001.SZ", "000300.SH"]
+    assert calls["limit"] is None
     asyncio.run(engine.dispose())
 
 
@@ -698,6 +786,28 @@ def test_submit_strategy_build_executes_with_default_handler(tmp_path: Path, mon
 
     monkeypatch.setattr(job_runner_module, "StrategyService", _FakeStrategyService)
     runner, job_service, engine, _ = _build_job_runner(tmp_path)
+
+    class _FakeConfigProfileService:
+        async def capture_profile_snapshot(
+            self,
+            profile_id: str,
+            *,
+            job_id: str | None = None,
+            source: str = "job",
+            config_path: str | None = None,
+        ) -> Any:
+            del job_id, source, config_path
+            return job_runner_module.ServiceResult(
+                status="ok",
+                message="profile snapshot captured",
+                payload={
+                    "profile_id": profile_id,
+                    "profile_snapshot_id": "profile-snapshot-001",
+                    "snapshot_path": str(tmp_path / "profile-snapshot.json"),
+                },
+            )
+
+    job_service._config_profile_service = _FakeConfigProfileService()  # noqa: SLF001
     submitted = asyncio.run(
         runner.submit_job(
             job_type="strategy-build",

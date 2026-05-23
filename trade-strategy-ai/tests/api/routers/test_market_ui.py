@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock
 
@@ -39,6 +40,42 @@ class _FakeMarketService:
                         "volume": 1000,
                     }
                 ],
+            }
+        )
+
+    async def ohlcv_scheduler_status(self, **_: Any) -> Any:
+        return _result(
+            {
+                "config_path": "config/app.yaml",
+                "base_dir": "/tmp/trade-strategy-ai",
+                "latest_trade_date": "2026-05-16",
+                "latest_record_count": 12,
+                "scheduler_started": False,
+                "scheduler_pre_market": "9:25",
+                "scheduler_post_close": "17:30",
+            }
+        )
+
+    def run_ohlcv_scheduler(self, **_: Any) -> Any:
+        return _result(
+            {
+                "config_path": "config/app.yaml",
+                "base_dir": "/tmp/trade-strategy-ai",
+                "pre_market": "9:25",
+                "post_close": "17:30",
+                "started": True,
+                "scheduler_started": True,
+            }
+        )
+
+    def stop_ohlcv_scheduler(self, **_: Any) -> Any:
+        return _result(
+            {
+                "config_path": "config/app.yaml",
+                "base_dir": "/tmp/trade-strategy-ai",
+                "started": False,
+                "pre_market": "9:25",
+                "post_close": "17:30",
             }
         )
 
@@ -308,6 +345,29 @@ async def test_list_symbols_and_ohlcv(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ohlcv_scheduler_endpoints(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
+    """Market OHLCV scheduler API 应支持状态、启动和停止。"""
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        del self
+        assert profile_id == "default"
+        return Path("config/ohlcv.yaml")
+
+    monkeypatch.setattr(market_ui.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
+
+    status = await client.get("/api/ui/v1/market/ohlcv/status", params={"profile_id": "default"})
+    assert status.status_code == 200
+    assert status.json()["latest_trade_date"] == "2026-05-16"
+
+    started = await client.post("/api/ui/v1/market/ohlcv/run", params={"profile_id": "default"})
+    assert started.status_code == 200
+    assert started.json()["scheduler_started"] is True
+
+    stopped = await client.post("/api/ui/v1/market/ohlcv/stop", params={"profile_id": "default"})
+    assert stopped.status_code == 200
+    assert stopped.json()["started"] is False
+
+
+@pytest.mark.asyncio
 async def test_list_benchmark_options_honors_limit(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
     """benchmark 选项接口应尊重 limit。"""
     monkeypatch.setattr(market_ui, "list_index_stock_infos", AsyncMock(return_value=[]))
@@ -350,6 +410,33 @@ async def test_market_snapshot_query_endpoints(client: AsyncClient) -> None:
     quality = await client.get("/api/ui/v1/market/snapshots/snap-001/quality")
     assert quality.status_code == 200
     assert quality.json()["quality_report"]["overall_status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_market_snapshot_list_endpoint_returns_empty_page_for_no_match(client: AsyncClient) -> None:
+    """Market snapshot 列表在无结果时应返回空页而不是 404。"""
+
+    class _EmptySnapshotQueryService(_FakeMarketSnapshotQueryService):
+        async def list_snapshots(self, **_: Any) -> Any:
+            return _result(
+                {
+                    "filters": {"trade_date": "2026-05-18", "market": "CN"},
+                    "page": {"total": 0, "limit": 50, "offset": 0, "count": 0},
+                    "items": [],
+                }
+            )
+
+    empty_service = _EmptySnapshotQueryService()
+    app.dependency_overrides[get_market_snapshot_query_service] = lambda: empty_service
+    try:
+        response = await client.get("/api/ui/v1/market/snapshots", params={"trade_date": "2026-05-18", "market": "CN"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["page"]["total"] == 0
+        assert payload["page"]["count"] == 0
+        assert payload["items"] == []
+    finally:
+        app.dependency_overrides[get_market_snapshot_query_service] = lambda: _FakeMarketSnapshotQueryService()
 
 
 @pytest.mark.asyncio

@@ -654,12 +654,13 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "OHLCV 抓取参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID（优先）"),
+                "config_path": _path_field("配置文件路径"),
                 "mode": _string("抓取模式", default="incremental"),
                 "symbols": _array_field("标的列表", required=True),
                 "start_date": _date_field("开始日期"),
                 "end_date": _date_field("结束日期"),
-                "limit": _integer("最多抓取标的数", default=100),
+                "limit": _integer("最多抓取标的数（留空表示全量）"),
             },
         ),
     ),
@@ -679,6 +680,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "回测参数",
             {
+                "profile_id": _string("Profile ID"),
                 "trader_id": _string("交易员 ID", required=True),
                 "date_from": _date_field("开始日期", required=True),
                 "date_to": _date_field("结束日期", required=True),
@@ -707,6 +709,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "规则验真参数",
             {
+                "profile_id": _string("Profile ID"),
                 "trader_id": _string("交易员 ID", required=True),
                 "date_from": _date_field("开始日期", required=True),
                 "date_to": _date_field("结束日期", required=True),
@@ -735,6 +738,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "可复现性检查参数",
             {
+                "profile_id": _string("Profile ID"),
                 "trader_id": _string("交易员 ID", required=True),
                 "date_from": _date_field("开始日期", required=True),
                 "date_to": _date_field("结束日期", required=True),
@@ -860,7 +864,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "Kaipan 抓取参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
                 "trade_date": _date_field("交易日期"),
                 "slot": _string("时间槽", default="all"),
             },
@@ -882,7 +887,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "Kaipan 归一化参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
                 "trade_date": _date_field("交易日期"),
                 "slot": _string("时间槽", default="all"),
             },
@@ -904,7 +910,8 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "Kaipan 运行参数",
             {
-                "config_path": _path_field("配置文件路径", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
                 "trade_date": _date_field("交易日期"),
                 "slot": _string("时间槽", default="all"),
                 "mode": _string("抓取模式", default="incremental"),
@@ -1015,7 +1022,19 @@ def validate_job_submission(
             },
         )
 
-    if job_type in {"strategy-build", "snapshot-build", "run-pre-market", "run-after-close"}:
+    if job_type in {
+        "strategy-build",
+        "snapshot-build",
+        "run-pre-market",
+        "run-after-close",
+        "backtest-run",
+        "backtest-validate-rules",
+        "backtest-reproducibility-check",
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "kaipan-run",
+        "ohlcv-crawl",
+    }:
         has_profile_context = bool(normalized.get("profile_id"))
         has_config_context = bool(normalized.get("config_path"))
         if not has_profile_context and not has_config_context:

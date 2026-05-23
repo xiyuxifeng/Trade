@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -79,9 +80,10 @@ def test_snapshot_service_build_and_query(tmp_path: Path) -> None:
     assert deleted is True
 
 
-def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path) -> None:
+def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """MarketService 应支持 OHLCV 抓取和查询。"""
     from src.services.market_service import MarketService
+    from src.services.config_profile_service import ConfigProfileService
 
     config_path = tmp_path / "config" / "app.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,15 +108,21 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path) -> None:
 
             return pd.DataFrame([{"date": start_date, "close": 10.5}])
 
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        del self, profile_id
+        return config_path
+
+    monkeypatch.setattr(ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path)
     service = MarketService(ohlcv_service=_FakeOhlcv())
 
     crawl_result = asyncio.run(
         service.crawl_ohlcv(
-            config_path=config_path,
+            profile_id="default",
             mode="full",
-            symbols=["000001.SZ"],
+            symbols=["000001.SZ", "000300.SH"],
             start_date=date(2026, 4, 1),
             end_date=date(2026, 4, 28),
+            limit=None,
         )
     )
     latest = asyncio.run(service.get_latest_close("000001.SZ"))
@@ -122,9 +130,11 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path) -> None:
     bars_df = asyncio.run(service.get_bars_as_df("000001.SZ", date(2026, 4, 1), date(2026, 4, 28)))
 
     assert crawl_result.payload["results"]["000001.SZ"] == 2
+    assert crawl_result.payload["profile_id"] == "default"
     assert latest.payload["close"] == 10.5
     assert bars.payload["count"] == 1
     assert bars_df.payload["rows"] == 1
+    assert service._ohlcv_service.crawl_calls[0][0] == ("000001.SZ", "000300.SH")
 
 
 def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_path: Path) -> None:
@@ -266,6 +276,107 @@ def test_market_service_rejects_invalid_mode_and_missing_symbols(tmp_path: Path)
                 symbols=None,
             )
         )
+
+
+def test_market_service_ohlcv_scheduler_status_and_toggle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """MarketService 应支持 OHLCV 调度器状态、启动与停止。"""
+    from src.services import market_service as market_service_module
+    from src.services.market_service import MarketService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    class _FakeOhlcv:
+        def __init__(self) -> None:
+            self.crawl_calls: list[tuple[tuple[str, ...], date | None, date | None, dict[str, str] | None]] = []
+
+        async def crawl_bars(self, symbols, start_date=None, end_date=None, market_kind_by_symbol=None):
+            self.crawl_calls.append((tuple(symbols), start_date, end_date, market_kind_by_symbol))
+            return {"000001.SZ": 2, "000300.SH": 1}
+
+    class _FakeExecResult:
+        def __init__(self, rows=None):
+            self._rows = rows or []
+
+        def all(self):
+            return self._rows
+
+    class _FakeSession:
+        async def scalar(self, stmt):
+            text = str(stmt).lower()
+            if "max(" in text:
+                return date(2026, 4, 30)
+            if "count(" in text:
+                return 12
+            return None
+
+        async def execute(self, stmt):
+            text = str(stmt).lower()
+            if "stock_info" in text:
+                return _FakeExecResult([("000001.SZ", "stock"), ("000300.SH", "index")])
+            return _FakeExecResult([])
+
+    class _FakeSessionFactory:
+        @asynccontextmanager
+        async def begin(self):
+            yield _FakeSession()
+
+        def __call__(self):
+            return self
+
+    class _FakeScheduler:
+        def __init__(self) -> None:
+            self.jobs: list[dict[str, object]] = []
+            self.running = False
+            self._thread = SimpleNamespace(join=lambda: None)
+
+        def add_job(self, func, trigger, args=None, id=None, replace_existing=False):
+            self.jobs.append({
+                "func": func,
+                "trigger": trigger,
+                "args": tuple(args or []),
+                "id": id,
+                "replace_existing": replace_existing,
+            })
+
+        def start(self):
+            self.running = True
+
+        def shutdown(self, wait=False):
+            self.running = False
+
+    MarketService._clear_scheduler()
+    monkeypatch.setattr(market_service_module, "BackgroundScheduler", _FakeScheduler)
+    fake_ohlcv = _FakeOhlcv()
+    service = MarketService(ohlcv_service=fake_ohlcv, session_factory=_FakeSessionFactory())
+
+    try:
+        status = asyncio.run(service.ohlcv_scheduler_status(config_path=config_path))
+        assert status.status == "ok"
+        assert status.payload["latest_trade_date"] == "2026-04-30"
+        assert status.payload["latest_record_count"] == 12
+
+        started = service.run_ohlcv_scheduler(config_path=config_path, start_scheduler=True, block=False)
+        assert started.status == "ok"
+        assert started.payload["scheduler_started"] is True
+        assert started.payload["pre_market"] == "9:25"
+        assert started.payload["post_close"] == "17:30"
+        assert MarketService._scheduler is not None
+        assert MarketService._scheduler.running is True
+        assert len(MarketService._scheduler.jobs) == 2
+        MarketService._scheduler.jobs[0]["func"]()
+        assert fake_ohlcv.crawl_calls[0][0] == ("000001.SZ", "000300.SH")
+        assert fake_ohlcv.crawl_calls[0][1] == date.today()
+        assert fake_ohlcv.crawl_calls[0][2] == date.today()
+        assert fake_ohlcv.crawl_calls[0][3] == {"000001.SZ": "stock", "000300.SH": "index"}
+
+        stopped = service.stop_ohlcv_scheduler(config_path=config_path)
+        assert stopped.status == "ok"
+        assert stopped.payload["started"] is False
+        assert MarketService._scheduler is None
+    finally:
+        MarketService._clear_scheduler()
 
 
 def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:

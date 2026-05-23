@@ -21,6 +21,33 @@ export type OhlcvResponse = {
   items: OhlcvRow[];
 };
 
+export type OhlcvSchedulerStatusResponse = {
+  config_path: string;
+  base_dir: string;
+  latest_trade_date?: string | null;
+  latest_record_count?: number;
+  scheduler_started?: boolean;
+  scheduler_pre_market?: string | null;
+  scheduler_post_close?: string | null;
+};
+
+export type OhlcvSchedulerRunResponse = {
+  config_path: string;
+  base_dir: string;
+  pre_market: string;
+  post_close: string;
+  started?: boolean;
+  scheduler_started?: boolean;
+};
+
+export type OhlcvSchedulerStopResponse = {
+  config_path: string;
+  base_dir: string;
+  started?: boolean;
+  pre_market?: string | null;
+  post_close?: string | null;
+};
+
 export type MarketQueryPage = {
   total: number;
   limit: number;

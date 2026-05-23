@@ -12,6 +12,9 @@ import type {
   MarketSnapshotQualityResponse,
   MarketSnapshotSectionListResponse,
   MarketSnapshotSectionResponse,
+  OhlcvSchedulerRunResponse,
+  OhlcvSchedulerStatusResponse,
+  OhlcvSchedulerStopResponse,
   OhlcvResponse,
   SymbolListResponse,
 } from '@/types/market';
@@ -49,6 +52,25 @@ export function getOhlcv(symbol: string, startDate: string, endDate: string) {
     end_date: endDate,
   });
   return fetchJson<OhlcvResponse>(`/market/ohlcv?${params.toString()}`);
+}
+
+export function getOhlcvSchedulerStatus(profileId?: string, configPath = 'config/app.yaml') {
+  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+  return fetchJson<OhlcvSchedulerStatusResponse>(`/market/ohlcv/status${query ? `?${query}` : ''}`);
+}
+
+export function runOhlcvScheduler(profileId?: string, configPath = 'config/app.yaml') {
+  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+  return fetchJson<OhlcvSchedulerRunResponse>(`/market/ohlcv/run${query ? `?${query}` : ''}`, {
+    method: 'POST',
+  });
+}
+
+export function stopOhlcvScheduler(profileId?: string, configPath = 'config/app.yaml') {
+  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+  return fetchJson<OhlcvSchedulerStopResponse>(`/market/ohlcv/stop${query ? `?${query}` : ''}`, {
+    method: 'POST',
+  });
 }
 
 export function listMarketSnapshots(params: {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.dependencies import verify_api_key
 from src.common.paths import resolve_project_path
+from src.db.session import get_session_factory
 from src.services.signal_service import SignalService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-signals"])
@@ -20,7 +22,7 @@ def _config_path() -> Path:
 
 def get_signal_service() -> SignalService:
     """构建信号查询服务。"""
-    return SignalService()
+    return SignalService(session_factory=get_session_factory())
 
 
 def _summarize_context(context: Any) -> str:
@@ -53,7 +55,7 @@ async def list_signals(
     service: SignalService = Depends(get_signal_service),
 ):
     """列出已生成的信号版本，补充可读的上下文摘要。"""
-    result = service.list_signals(config_path=_config_path(), symbol=symbol, since=since, limit=limit)
+    result = await asyncio.to_thread(service.list_signals, config_path=_config_path(), symbol=symbol, since=since, limit=limit)
     payload = dict(result.payload)
     payload["signals"] = [
         {**item, "context_summary": _summarize_context(item.get("context"))}

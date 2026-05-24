@@ -4,23 +4,46 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from src.strategy.types import PriceSpec, Signal, SignalContext, SignalSide, SynthesisMode
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 @dataclass
-class _FakeVersionedSignal:
-	signal: Signal
-	context: SignalContext
+class _FakeDbSignal:
+	signal_id: str
+	symbol: str
+	side: str
+	confidence: float
+	created_at: datetime
+	trader_id: str | None
+	strategy_version_id: str | None
+	signal_metadata: dict[str, object]
 
 
-class _FakeVersioning:
-	def __init__(self, versions: list[_FakeVersionedSignal]) -> None:
-		self.versions = versions
-		self.calls: list[tuple[str | None, datetime | None, int]] = []
+class _FakeDbRepo:
+	def __init__(self, rows: list[_FakeDbSignal]) -> None:
+		self.rows = rows
+		self.calls: list[dict[str, object]] = []
 
-	def list_versions(self, symbol=None, since=None, limit=100):
-		self.calls.append((symbol, since, limit))
-		return self.versions
+	async def list_signals(self, session, *, symbol=None, since=None, limit=100, offset=0):
+		self.calls.append(
+			{
+				"session": session,
+				"symbol": symbol,
+				"since": since,
+				"limit": limit,
+				"offset": offset,
+			}
+		)
+		return self.rows
+
+
+class _FakeDbSessionScope:
+	async def __aenter__(self):
+		return object()
+
+	async def __aexit__(self, exc_type, exc, tb):
+		return None
 
 
 def _write_basic_config(config_path: Path) -> None:
@@ -43,37 +66,80 @@ traders:
 
 
 def test_signal_service_list_signals(tmp_path: Path) -> None:
-	"""SignalService 应支持信号版本列表查询。"""
+	"""SignalService 应支持信号列表查询。"""
+	from src.services.signal_service import SignalService
+
+	config_path = tmp_path / "config" / "app.yaml"
+	_write_basic_config(config_path)
+	service = SignalService(
+		session_factory=lambda: _FakeDbSessionScope(),
+		signal_repository=_FakeDbRepo(
+			[
+				_FakeDbSignal(
+					signal_id="signal-db-1",
+					symbol="000001.SZ",
+					side="buy",
+					confidence=0.88,
+					created_at=datetime(2026, 4, 23, 9, 30, tzinfo=UTC),
+					trader_id="trader_a",
+					strategy_version_id="version-1",
+					signal_metadata={
+						"trader_id": "trader_a",
+						"context": {"trend": "up", "score": 0.88},
+						"summary": "trend up",
+					},
+				)
+			]
+		),
+	)
+
+	result = service.list_signals(config_path=config_path, symbol="000001.SZ", since=date(2026, 4, 22), limit=20)
+
+	assert result.status == "ok"
+	assert result.payload["source"] == "database"
+	assert result.payload["count"] == 1
+	assert result.payload["signals"][0]["signal_id"] == "signal-db-1"
+	assert result.payload["signals"][0]["trader_id"] == "trader_a"
+	assert result.payload["signals"][0]["context"]["trend"] == "up"
+
+
+def test_signal_service_list_signals_prefers_database(tmp_path: Path) -> None:
+	"""SignalService 应优先读取数据库中的信号。"""
 	from src.services.signal_service import SignalService
 
 	config_path = tmp_path / "config" / "app.yaml"
 	_write_basic_config(config_path)
 
-	signal = Signal(
-		signal_id="idea_20260423_0001",
-		symbol="000001.SZ",
-		side=SignalSide.BUY,
-		confidence=0.88,
-		timestamp=datetime(2026, 4, 23, 9, 30, tzinfo=UTC),
-		triggered_rules=["rule_a"],
-		synthesis_mode=SynthesisMode.WEIGHTED_SCORE,
-		entry_price=PriceSpec(type="limit", value=10.2),
-		metadata={"trader_id": "trader_a"},
+	service = SignalService(
+		session_factory=lambda: _FakeDbSessionScope(),
+		signal_repository=_FakeDbRepo(
+			[
+				_FakeDbSignal(
+					signal_id="signal-db-1",
+					symbol="000001.SZ",
+					side="BUY",
+					confidence=0.77,
+					created_at=datetime(2026, 4, 23, 9, 30, tzinfo=UTC),
+					trader_id="trader_db",
+					strategy_version_id="version-db",
+					signal_metadata={
+						"trader_id": "trader_db",
+						"summary": "db trend up",
+						"context": {"trend": "up", "score": 0.77},
+					},
+				)
+			]
+		),
 	)
-	context = SignalContext(
-		features_snapshot={"ma20": 10.0},
-		market_state={"regime": "trend_up"},
-		rules_snapshot=[{"rule_id": "rule_a"}],
-		timestamp=datetime(2026, 4, 23, 9, 30, tzinfo=UTC),
-	)
-	service = SignalService(versioning=_FakeVersioning([_FakeVersionedSignal(signal=signal, context=context)]))
 
 	result = service.list_signals(config_path=config_path, symbol="000001.SZ", since=date(2026, 4, 22), limit=20)
 
 	assert result.status == "ok"
+	assert result.payload["source"] == "database"
 	assert result.payload["count"] == 1
-	assert result.payload["signals"][0]["signal_id"] == "idea_20260423_0001"
-	assert result.payload["signals"][0]["trader_id"] == "trader_a"
+	assert result.payload["signals"][0]["signal_id"] == "signal-db-1"
+	assert result.payload["signals"][0]["trader_id"] == "trader_db"
+	assert result.payload["signals"][0]["context"]["trend"] == "up"
 
 
 def test_persona_service_build_sample_clusters(tmp_path: Path) -> None:

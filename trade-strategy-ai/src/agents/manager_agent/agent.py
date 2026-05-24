@@ -9,7 +9,7 @@
 当前 Phase 0 职责：
 - pre-market: 协调 TraderAgent 生成交易想法，输出 DailyReport
 - after-close: 协调 DataAgent 获取最新价，输出 EvaluationResult
-- 信号版本: 委托 SignalVersioning 记录，不自己管理存储格式
+- 信号: 由数据库统一持久化，不再走文件版本链
 - AgentTask: 仅做记录，不做任务消化
 
 后续演进方向：
@@ -64,9 +64,9 @@ from src.db.session import get_session_factory
 from src.market_universe import build_topic_tags
 from src.market_universe.snapshot_service import SnapshotService
 from src.pipeline.completion import run_incremental_data_completion
+from src.db.repositories import SignalRepository
 from src.evaluation.evaluation_context_service import EvaluationContextService
 from src.strategy_library.service import StrategyLibraryService
-from src.strategy.signal_version import SignalVersioning
 from src.strategy.types import (
     PriceSpec,
     PositionSize,
@@ -93,7 +93,7 @@ class ManagerAgent:
     - 委托 TraderAgent 生成交易想法
     - 委托 StrategyAgent/RiskAgent 评估信号
     - 委托 TraderMemoryStore 写记忆
-    - 委托 SignalVersioning 记录信号版本
+    - 委托数据库仓储记录信号
     - 仅做流程编排，不承担具体业务判断
     """
 
@@ -112,10 +112,7 @@ class ManagerAgent:
         self.strategy_agent = StrategyAgent()
         self.risk_agent = RiskAgent()
 
-        # 信号版本控制 - 记录所有生成的交易想法
-        self.signal_versioning = SignalVersioning(
-            storage_path=self.output_dir / "signals"
-        )
+        self.signal_repository = SignalRepository()
 
         # Stage 4 新增 service（NTL-S4-006）
         self.strategy_library_service = StrategyLibraryService()
@@ -123,7 +120,7 @@ class ManagerAgent:
         self.evaluation_context_service = EvaluationContextService(
             data_agent=self.data_agent,
             strategy_library_service=self.strategy_library_service,
-            signal_versioning=self.signal_versioning,
+            signal_repository=self.signal_repository,
         )
 
         self._persona_router: PersonaRouter | None = None
@@ -259,11 +256,6 @@ class ManagerAgent:
     def _append_task(self, task: AgentTask) -> None:
         append_jsonl(self.tasks_path, task.model_dump())
 
-    def _load_signal_context(self, idea_id: UUID) -> SignalContext | None:
-        """从 signal_versioning 加载 SignalContext。"""
-        signal_with_ctx = self.signal_versioning.get_version(f"idea_{idea_id}")
-        return signal_with_ctx.context if signal_with_ctx else None
-
     async def _fetch_full_market_data(
         self,
         symbols: list[str],
@@ -311,6 +303,16 @@ class ManagerAgent:
             write_json(index_path, index)
 
         return path
+
+    async def _persist_signal(
+        self,
+        *,
+        signal: Signal,
+        context: SignalContext,
+    ) -> None:
+        """将信号持久化到数据库。"""
+        async with session_scope() as session:
+            await self.signal_repository.upsert_signal(session, signal, context=context)
 
     async def _generate_evidence_pack(
         self,
@@ -410,7 +412,7 @@ class ManagerAgent:
             details=review_details.model_dump(),
         )
 
-    def _record_ideas_as_signals(
+    async def _record_ideas_as_signals(
         self,
         ideas: list["TradeIdea"],
         as_of_date: date,
@@ -421,8 +423,21 @@ class ManagerAgent:
         P4-025: 信号输出持久化存储
         """
         for idea in ideas:
-            # 构建信号 ID：idea_{idea_id}
-            signal_id = f"idea_{idea.idea_id}"
+            # 构建信号 ID：直接使用 TradeIdea.idea_id，保证与 signals 表 UUID 主键对齐
+            signal_id = str(idea.idea_id)
+
+            # 构建上下文（NTL-S4-004: 扩展版本/快照/主题追溯字段）
+            # NTL-S4-TD003: market_universe 已透传到此处，进行序列化
+            universe_dict: dict[str, object] | None = asdict(market_universe) if market_universe else None
+            context = SignalContext(
+                features_snapshot={},
+                market_state={},
+                rules_snapshot=[],
+                timestamp=datetime.combine(as_of_date, datetime.min.time()),
+                strategy_version_id=idea.strategy_version_id,
+                market_universe_snapshot=universe_dict,
+                topic_source_ids=idea.source_topic_ids,
+            )
 
             # 将 TradeIdea 映射为 Signal
             # side 字段：使用 idea.side（buy/hold/sell），映射到 SignalSide 枚举
@@ -460,24 +475,11 @@ class ManagerAgent:
                     "as_of_date": as_of_date.isoformat(),
                     "source_topic_ids": idea.source_topic_ids,
                     "evidence_refs": idea.evidence_refs,
+                    "context": context,
                 },
             )
 
-            # 构建上下文（NTL-S4-004: 扩展版本/快照/主题追溯字段）
-            # NTL-S4-TD003: market_universe 已透传到此处，进行序列化
-            universe_dict: dict[str, object] | None = asdict(market_universe) if market_universe else None
-            context = SignalContext(
-                features_snapshot={},
-                market_state={},
-                rules_snapshot=[],
-                timestamp=datetime.combine(as_of_date, datetime.min.time()),
-                strategy_version_id=idea.strategy_version_id,
-                market_universe_snapshot=universe_dict,
-                topic_source_ids=idea.source_topic_ids,
-            )
-
-            # 记录信号版本
-            self.signal_versioning.record(signal=signal, context=context)
+            await self._persist_signal(signal=signal, context=context)
 
         self.logger.info(f"Recorded {len(ideas)} ideas as signal versions")
 
@@ -630,7 +632,7 @@ class ManagerAgent:
 
         # P4-025: 记录信号版本到持久化存储
         # NTL-S4-TD003: 透传 market_universe 以便填充 SignalContext.market_universe_snapshot
-        self._record_ideas_as_signals(ideas=ideas, as_of_date=as_of_date, market_universe=market_universe)
+        await self._record_ideas_as_signals(ideas=ideas, as_of_date=as_of_date, market_universe=market_universe)
 
         write_json(report_path, report.model_dump())
         return report
@@ -722,14 +724,13 @@ class ManagerAgent:
 
         # 4. 存储
         if not final_signal.side == SignalSide.HOLD and final_signal.side != "HOLD":
-            # 记录到 SignalVersioning
             context = SignalContext(
                 features_snapshot={},
                 market_state=market_data,
                 rules_snapshot=[],
                 timestamp=datetime.now(timezone.utc)
             )
-            self.signal_versioning.record(signal=final_signal, context=context)
+            await self._persist_signal(signal=final_signal, context=context)
 
         return final_signal
 

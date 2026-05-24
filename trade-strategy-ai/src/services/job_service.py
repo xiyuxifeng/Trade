@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import json
 import hashlib
 from dataclasses import asdict, is_dataclass
@@ -14,9 +15,11 @@ from sqlalchemy.orm import selectinload
 from src.services.config_service import ConfigService
 from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.config_profile_service import ConfigProfileService
+from src.db.repositories import BacktestResultRunRepository
 from src.services.job_registry import get_job_definition
 from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
+from src.models.backtest_result_run import BacktestResultRun
 from src.services.base import BaseService, ServiceResult
 from src.common.paths import resolve_project_path
 from src.services.runtime_contracts import ArtifactRef, StorageRef
@@ -83,6 +86,17 @@ def _sanitize_result_payload_for_output(payload: dict[str, Any]) -> dict[str, An
         return value
 
     return _sanitize(_to_plain(payload))
+
+
+def _parse_optional_date(value: Any) -> date | None:
+    """将可选日期参数统一解析为 date。"""
+    if value in {None, ""}:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    return None
 
 
 class JobService(BaseService):
@@ -257,6 +271,76 @@ class JobService(BaseService):
         if not snapshot_path.exists():
             return None
         return json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+    def _build_backtest_result_run(self, job: Job, result_payload: dict[str, Any]) -> BacktestResultRun | None:
+        """把 backtest job 结果整理为摘要主表记录。"""
+        if job.job_type not in {"backtest-run", "rule-pool-backtest"}:
+            return None
+
+        request = result_payload.get("request")
+        if not isinstance(request, dict):
+            request = {}
+        backtest_result = result_payload.get("result")
+        if not isinstance(backtest_result, dict):
+            backtest_result = {}
+        summary = result_payload.get("summary")
+        if not isinstance(summary, dict):
+            summary = backtest_result.get("summary")
+        if not isinstance(summary, dict):
+            summary = {}
+
+        date_from = _parse_optional_date(request.get("date_from") or job.params.get("date_from"))
+        date_to = _parse_optional_date(request.get("date_to") or job.params.get("date_to"))
+        trader_id = str(request.get("trader_id") or job.params.get("trader_id") or "").strip()
+        if date_from is None or date_to is None or not trader_id:
+            return None
+
+        return BacktestResultRun(
+            result_run_id=str(job.id),
+            source_job_id=str(job.id),
+            job_type=job.job_type,
+            request_trader_id=trader_id,
+            strategy_version_id=str(request.get("strategy_version_id") or job.params.get("strategy_version_id") or "") or None,
+            request_date_from=date_from,
+            request_date_to=date_to,
+            benchmark_symbol=str(request.get("benchmark_symbol") or backtest_result.get("benchmark_symbol") or job.params.get("benchmark_symbol") or "") or None,
+            regime_version=str(request.get("market_regime_version") or backtest_result.get("regime_version") or job.params.get("market_regime_version") or "") or None,
+            source_feature_version=str(request.get("source_feature_version") or backtest_result.get("source_feature_version") or job.params.get("source_feature_version") or "") or None,
+            mode=str(request.get("mode") or job.params.get("mode") or "") or None,
+            scoring_profile=str(request.get("scoring_profile") or job.params.get("scoring_profile") or "") or None,
+            result_version=str(backtest_result.get("result_version") or result_payload.get("result_version") or "1.0"),
+            status=str(job.status),
+            quality_status=str(result_payload.get("quality_status") or summary.get("quality_status") or job.status),
+            total_days=summary.get("total_days"),
+            total_trades=summary.get("total_trades"),
+            valid_trades=summary.get("valid_trades"),
+            skipped_trades=summary.get("skipped_trades"),
+            win_rate=summary.get("win_rate"),
+            avg_return_pct=summary.get("avg_return_pct"),
+            summary_json=summary,
+            regime_metrics_json=backtest_result.get("regime_metrics") or [],
+            rule_regime_metrics_json=backtest_result.get("rule_regime_metrics") or {},
+            fingerprint=str(result_payload.get("fingerprint") or "") or None,
+            storage_ref={
+                "source": "file",
+                "logical_id": str(job.id),
+                "relative_path": f"{job.id}/result.json",
+            },
+            artifact_ref={
+                "artifact_type": "backtest-result-json",
+                "job_id": str(job.id),
+                "relative_path": f"{job.id}/result.json",
+            },
+        )
+
+    async def _persist_backtest_result_run(self, session: Any, job: Job) -> None:
+        """把 backtest job 的结果摘要写入数据库。"""
+        result_payload = job.result if isinstance(job.result, dict) else {}
+        run = self._build_backtest_result_run(job, result_payload)
+        if run is None:
+            return
+        repository = BacktestResultRunRepository()
+        await repository.upsert_run(session, run)
 
     def _job_path_payload(self, job_id: UUID) -> dict[str, Any]:
         """构造 Job 文件路径返回结构。"""
@@ -727,6 +811,8 @@ class JobService(BaseService):
                 job.result = result or {}
                 job.error = None
                 operation = "complete"
+            if job.status == JobStatus.success.value:
+                await self._persist_backtest_result_run(session, job)
             job.finished_at = now
             job.cancel_requested = False
             job.cancel_requested_at = job.cancel_requested_at or None

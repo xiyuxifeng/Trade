@@ -4,7 +4,7 @@
 - 只读历史快照和历史策略版本，不调用实时 provider
 - 提供 market_context 加载（market_universe 从快照文件，ohlcv/indicators 从 DB）
 - 提供 strategy_version 加载
-- 支持 compatibility_fallback（SignalVersioning/EvidencePack）
+- 支持 compatibility_fallback（EvidencePack）
 """
 
 from __future__ import annotations
@@ -192,7 +192,7 @@ class SnapshotLoader:
         2. ohlcv_1d bars（从 DB ohlcv_bars 表）
         3. indicators（从 DB indicators 表，首次计算并缓存）
         4. market_regime（按 trade_date + regime_version 读取，若提供）
-        4. 兜底：EvidencePack / SignalVersioning
+        4. 兜底：EvidencePack
 
         Args:
             trade_date: 交易日期
@@ -227,7 +227,7 @@ class SnapshotLoader:
         # 3.5. 加载指定版本的 Market Regime（若提供）
         market_regime = await self._load_market_regime_from_db(trade_date, regime_version)
 
-        # 4. 兜底：EvidencePack
+        # 4. 兜底：EvidencePack（仅在快照缺失时用于兼容补洞）
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
             logger.info(

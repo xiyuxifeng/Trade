@@ -16,6 +16,7 @@ from src.models import (  # noqa: F401
     blog_article,
     crawl_state,
     data_audit_event,
+    backtest_result_run,
     evidence_pack,
     hot_topics_snapshot,
     ohlcv_bar,
@@ -31,6 +32,7 @@ from src.models import (  # noqa: F401
     strong_symbols_snapshot,
     topic_constituents_snapshot,
     trader_strategy_version,
+    strategy_regime_selection,
     trade_log,
     user,
 )

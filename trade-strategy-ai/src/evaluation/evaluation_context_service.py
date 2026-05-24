@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.common.logger import get_logger
 from src.db.session import session_scope
+from src.db.repositories import SignalRepository
 from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.risk.account_service import build_account_snapshot
 from src.risk.types import AccountSnapshot
@@ -35,16 +36,24 @@ class EvaluationContextService:
         *,
         data_agent: "DataAgent",
         strategy_library_service: StrategyLibraryService,
-        signal_versioning: "SignalVersioning",
+        signal_repository: SignalRepository | None = None,
     ) -> None:
         self.data_agent = data_agent
         self.strategy_library_service = strategy_library_service
-        self.signal_versioning = signal_versioning
+        self.signal_repository = signal_repository or SignalRepository()
 
-    def _load_signal_context(self, idea_id) -> object | None:
+    async def _load_signal_context(self, idea_id) -> object | None:
         """从信号版本存储中读取交易想法上下文。"""
-        signal_with_ctx = self.signal_versioning.get_version(f"idea_{idea_id}")
-        return signal_with_ctx.context if signal_with_ctx else None
+        async with session_scope() as session:
+            signal = await self.signal_repository.get_by_signal_id(session, idea_id)
+        if signal is None:
+            return None
+        metadata = signal.signal_metadata or {}
+        if isinstance(metadata, dict):
+            context = metadata.get("context")
+            if context is not None:
+                return context
+        return None
 
     async def _fetch_full_market_data(self, symbols: list[str]) -> dict[str, Any]:
         """拉取用于 EvidencePack 的完整市场数据。"""
@@ -82,7 +91,7 @@ class EvaluationContextService:
     ) -> EvidencePack:
         """为单条 TradeIdea 组装 EvidencePack。"""
         _ = daily_report
-        signal_context = self._load_signal_context(idea.idea_id)
+        signal_context = await self._load_signal_context(idea.idea_id)
         raw_market_data = await self._fetch_full_market_data([idea.symbol])
         ohlcv_1d = raw_market_data.get("ohlcv_1d", {}) or {}
         bars = ohlcv_1d.get(idea.symbol, [])

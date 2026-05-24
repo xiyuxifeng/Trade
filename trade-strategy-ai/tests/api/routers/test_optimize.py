@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
@@ -176,7 +177,7 @@ class _FakeStrategyService:
         )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     version_rows = [
         _build_version_row(

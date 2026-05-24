@@ -1,41 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
+import asyncio
 from datetime import date, datetime
-from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from src.common.config import load_app_config
-from src.common.utils import ensure_dir
+from src.db.session import session_scope
+from src.db.repositories import SignalRepository
 from src.services.base import BaseService, ServiceResult
-from src.strategy.signal_version import SignalVersioning
-
-
-def _project_base_dir(config_path: Path) -> Path:
-	"""根据配置文件路径推导项目根目录。"""
-	if config_path.parent.name == "config":
-		return config_path.parent.parent
-	return config_path.parent
-
-
-def _to_plain(value: Any) -> Any:
-	"""把 dataclass / Pydantic / 容器值转成可序列化结构。"""
-	if hasattr(value, "model_dump"):
-		return _to_plain(value.model_dump())
-	if is_dataclass(value):
-		return {k: _to_plain(v) for k, v in asdict(value).items()}
-	if isinstance(value, dict):
-		return {k: _to_plain(v) for k, v in value.items()}
-	if isinstance(value, (list, tuple)):
-		return [_to_plain(item) for item in value]
-	if isinstance(value, Enum):
-		return value.value
-	if isinstance(value, (datetime, date)):
-		return value.isoformat()
-	if isinstance(value, Path):
-		return str(value)
-	return value
 
 
 class SignalService(BaseService):
@@ -43,16 +15,80 @@ class SignalService(BaseService):
 
 	service_name = "signal"
 
-	def __init__(self, *, versioning: SignalVersioning | None = None) -> None:
-		self._versioning = versioning
+	def __init__(
+		self,
+		*,
+		session_factory: Callable[[], Any] | None = None,
+		signal_repository: SignalRepository | None = None,
+	) -> None:
+		self._session_factory = session_factory or session_scope
+		self._signal_repository = signal_repository or SignalRepository()
 
-	def _create_versioning(self, *, config_path: str | Path) -> tuple[SignalVersioning, Path, Path]:
-		"""根据配置创建 SignalVersioning。"""
-		loaded = load_app_config(config_path)
-		base_dir = _project_base_dir(loaded.config_path)
-		output_dir = ensure_dir(base_dir / loaded.config.storage.output_dir)
-		versioning = self._versioning or SignalVersioning(storage_path=output_dir / "signals")
-		return versioning, loaded.config_path, base_dir
+	def _signal_context(self, signal: Any) -> dict[str, Any]:
+		"""从 DB 信号记录构造 UI 需要的上下文摘要。"""
+		metadata = signal.signal_metadata or {}
+		if isinstance(metadata, dict):
+			context = metadata.get("context")
+			if isinstance(context, dict):
+				return context
+			if isinstance(context, list):
+				return {"summary": context[:3]}
+
+			context_summary: dict[str, Any] = {}
+			for key in ("trend", "signal", "bias", "score", "summary"):
+				if metadata.get(key) not in (None, ""):
+					context_summary[key] = metadata[key]
+			if context_summary:
+				return context_summary
+
+		return {
+			"signal": signal.side,
+			"score": signal.confidence,
+			"summary": metadata.get("rationale") or metadata.get("summary") or metadata.get("rejection_reason") or metadata.get("degradation_reason"),
+		}
+
+	def _signal_payload(self, signal: Any) -> dict[str, Any]:
+		"""把 DB 信号记录转成 UI payload。"""
+		metadata = signal.signal_metadata or {}
+		return {
+			"signal_id": signal.signal_id,
+			"symbol": signal.symbol,
+			"side": signal.side,
+			"confidence": signal.confidence,
+			"timestamp": signal.created_at.isoformat() if signal.created_at else None,
+			"trader_id": signal.trader_id or metadata.get("trader_id"),
+			"strategy_version_id": signal.strategy_version_id,
+			"context": self._signal_context(signal),
+		}
+
+	def _list_db_signals(
+		self,
+		*,
+		symbol: str | None,
+		since_dt: datetime | None,
+		limit: int,
+	) -> list[Any]:
+		"""同步入口中执行 DB 查询。"""
+		if self._session_factory is None:
+			return []
+		if hasattr(self._signal_repository, "list_signals_sync"):
+			return self._signal_repository.list_signals_sync(
+				self._session_factory,
+				symbol=symbol,
+				since=since_dt,
+				limit=limit,
+			)
+
+		async def _run() -> list[Any]:
+			async with self._session_factory() as session:
+				return await self._signal_repository.list_signals(
+					session,
+					symbol=symbol,
+					since=since_dt,
+					limit=limit,
+				)
+
+		return asyncio.run(_run())
 
 	def list_signals(
 		self,
@@ -63,7 +99,7 @@ class SignalService(BaseService):
 		limit: int = 100,
 	) -> ServiceResult:
 		"""列出已存储的信号版本。"""
-		versioning, loaded_config_path, base_dir = self._create_versioning(config_path=config_path)
+		del config_path
 		since_dt: datetime | None
 		if since is None:
 			since_dt = None
@@ -74,26 +110,13 @@ class SignalService(BaseService):
 		else:
 			since_dt = datetime.fromisoformat(since)
 
-		versions = versioning.list_versions(symbol=symbol, since=since_dt, limit=limit)
-		signals = [
-			{
-				"signal_id": item.signal.signal_id,
-				"symbol": item.signal.symbol,
-				"side": _to_plain(item.signal.side),
-				"confidence": item.signal.confidence,
-				"timestamp": item.signal.timestamp.isoformat(),
-				"trader_id": item.signal.metadata.get("trader_id"),
-				"strategy_version_id": item.signal.strategy_version_id,
-				"context": _to_plain(item.context),
-			}
-			for item in versions
-		]
+		rows = self._list_db_signals(symbol=symbol, since_dt=since_dt, limit=limit)
+		signals = [self._signal_payload(row) for row in rows]
 		return ServiceResult(
 			status="ok",
 			message="signals listed" if signals else "no signals found",
 			payload={
-				"config_path": str(loaded_config_path),
-				"base_dir": str(base_dir),
+				"source": "database",
 				"count": len(signals),
 				"signals": signals,
 			},

@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models.config_profile import ConfigProfile
+from src.models.backtest_result_run import BacktestResultRun
 from src.models.job import Job
 from src.models.job_audit_event import JobAuditEvent
 from src.common.paths import project_root
@@ -42,6 +44,39 @@ def _build_job_service(tmp_path: Path, *, config_profile_service=None):
         session_scope_factory=_session_scope,
         job_base_dir=tmp_path / "jobs",
         config_profile_service=config_profile_service,
+    )
+    return service, engine
+
+
+def _build_backtest_job_service(tmp_path: Path):
+    """创建一个可用于回测摘要落库的临时 JobService。"""
+    from src.services.job_service import JobService
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'backtest_jobs.db'}")
+
+    async def _init_schema() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Job.__table__.create)
+            await conn.run_sync(JobAuditEvent.__table__.create)
+            await conn.run_sync(BacktestResultRun.__table__.create)
+
+    asyncio.run(_init_schema())
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    service = JobService(
+        session_scope_factory=_session_scope,
+        job_base_dir=tmp_path / "jobs",
     )
     return service, engine
 
@@ -158,6 +193,112 @@ def test_job_state_transitions_and_cancel(tmp_path: Path) -> None:
     assert cancelled.payload["job"]["cancel_requested_at"] is not None
     assert cancelled.payload["job"]["created_by"] == "web"
     assert len(cancelled.payload["job"]["audit_events"]) >= 2
+
+    asyncio.run(engine.dispose())
+
+
+def test_complete_backtest_job_persists_summary_run(tmp_path: Path) -> None:
+    """完成回测 Job 时应同步落库 backtest_result_runs。"""
+    from src.db.repositories import BacktestResultRunRepository
+
+    service, engine = _build_backtest_job_service(tmp_path)
+
+    created = asyncio.run(
+        service.create_job(
+            job_type="backtest-run",
+            params={
+                "trader_id": "trader_a",
+                "date_from": "2026-05-01",
+                "date_to": "2026-05-05",
+            },
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    result_payload = {
+        "request": {
+            "trader_id": "trader_a",
+            "date_from": "2026-05-01",
+            "date_to": "2026-05-05",
+            "benchmark_symbol": "000300.SH",
+            "market_regime_version": "market-regime-v3",
+            "source_feature_version": "market-regime-features-v3",
+            "mode": "full",
+            "scoring_profile": "stage5",
+            "strategy_version_id": "sv-1",
+        },
+        "result": {
+            "benchmark_symbol": "000300.SH",
+            "regime_version": "market-regime-v3",
+            "source_feature_version": "market-regime-features-v3",
+            "regime_metrics": [{"regime_version": "market-regime-v3"}],
+            "rule_regime_metrics": {"rule-1": {"score": 0.9}},
+            "summary": {
+                "total_days": 5,
+                "total_trades": 3,
+                "valid_trades": 2,
+                "skipped_trades": 1,
+                "win_rate": 0.67,
+                "avg_return_pct": 0.12,
+            },
+        },
+        "summary": {
+            "total_days": 5,
+            "total_trades": 3,
+            "valid_trades": 2,
+            "skipped_trades": 1,
+            "win_rate": 0.67,
+            "avg_return_pct": 0.12,
+        },
+        "fingerprint": "fp-1",
+    }
+
+    completed = asyncio.run(service.complete_job(job_id=job_id, result=result_payload))
+    assert completed.payload["job"]["status"] == "success"
+
+    async def _assert_run() -> None:
+        session_scope = service._ensure_session_factory()
+        async with session_scope() as session:
+            repo = BacktestResultRunRepository()
+            run = await repo.get_by_source_job_id(session, job_id)
+            assert run is not None
+            assert run.request_trader_id == "trader_a"
+            assert run.strategy_version_id == "sv-1"
+            assert run.summary_json["total_days"] == 5
+            assert run.fingerprint == "fp-1"
+
+    asyncio.run(_assert_run())
+    asyncio.run(engine.dispose())
+
+
+def test_complete_backtest_job_raises_when_summary_persistence_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """回测摘要落库失败时不应静默成功。"""
+    service, engine = _build_backtest_job_service(tmp_path)
+
+    created = asyncio.run(
+        service.create_job(
+            job_type="backtest-run",
+            params={
+                "trader_id": "trader_a",
+                "date_from": "2026-05-01",
+                "date_to": "2026-05-05",
+            },
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001, ANN002
+        raise RuntimeError("summary persistence boom")
+
+    monkeypatch.setattr("src.services.job_service.BacktestResultRunRepository.upsert_run", _boom)
+
+    with pytest.raises(RuntimeError, match="summary persistence boom"):
+        asyncio.run(service.complete_job(job_id=job_id, result={"ok": True}))
+
+    loaded = asyncio.run(service.get_job(job_id))
+    assert loaded.payload["job"]["status"] == "pending"
 
     asyncio.run(engine.dispose())
 

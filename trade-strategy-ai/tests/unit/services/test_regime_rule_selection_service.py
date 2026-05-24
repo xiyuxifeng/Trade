@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 def _build_strategy_version():
@@ -242,10 +246,39 @@ def _build_applicability_profiles():
     ]
 
 
-def test_build_regime_rule_selection_prefers_applicable_and_excludes_blocked(tmp_path: Path) -> None:
+def _build_regime_rule_selection_service(tmp_path: Path):
+    from src.models.strategy_regime_selection import RegimeRuleSelection, StrategyRegimeSelection
     from src.services.regime_rule_selection_service import RegimeRuleSelectionService
 
-    service = RegimeRuleSelectionService(artifact_root=tmp_path)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'regime_selection.db'}")
+
+    async def _init_schema() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(StrategyRegimeSelection.__table__.create)
+            await conn.run_sync(RegimeRuleSelection.__table__.create)
+
+    asyncio.run(_init_schema())
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    return RegimeRuleSelectionService(artifact_root=tmp_path), engine, _session_scope
+
+
+def test_build_regime_rule_selection_prefers_applicable_and_excludes_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service, engine, session_scope = _build_regime_rule_selection_service(tmp_path)
+    from src.services import regime_rule_selection_service as module
+
+    monkeypatch.setattr(module, "session_scope", session_scope)
     result = asyncio.run(
         service.build_regime_rule_selection(
             strategy_version=_build_strategy_version(),
@@ -263,10 +296,10 @@ def test_build_regime_rule_selection_prefers_applicable_and_excludes_blocked(tmp
     assert any(item["rule_id"] == "rule_blocked" for item in selection["blocked_rules"])
     assert selection["snapshot_id"] == "snap-1"
     assert selection["market_regime_version"] == "market-regime-v3"
+    asyncio.run(engine.dispose())
 
 
-def test_build_regime_rule_selection_handles_weak_bear_profile_mix(tmp_path: Path) -> None:
-    from src.services.regime_rule_selection_service import RegimeRuleSelectionService
+def test_build_regime_rule_selection_handles_weak_bear_profile_mix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityRegimeRecord
 
     profiles = [
@@ -357,7 +390,10 @@ def test_build_regime_rule_selection_handles_weak_bear_profile_mix(tmp_path: Pat
         ),
     ]
 
-    service = RegimeRuleSelectionService(artifact_root=tmp_path)
+    service, engine, session_scope = _build_regime_rule_selection_service(tmp_path)
+    from src.services import regime_rule_selection_service as module
+
+    monkeypatch.setattr(module, "session_scope", session_scope)
     result = asyncio.run(
         service.build_regime_rule_selection(
             strategy_version=_build_strategy_version(),
@@ -372,12 +408,14 @@ def test_build_regime_rule_selection_handles_weak_bear_profile_mix(tmp_path: Pat
     assert any(item["rule_id"] == "rule_blocked" for item in selection["blocked_rules"])
     assert any(item["rule_id"] == "rule_neutral" for item in selection["selected_rules"])
     assert any(item["decision"] == "skipped" for item in selection["skipped_rules"] + selection["selected_rules"])
+    asyncio.run(engine.dispose())
 
 
-def test_build_regime_rule_selection_marks_theme_hot_neutral_as_low_weight_fallback(tmp_path: Path) -> None:
-    from src.services.regime_rule_selection_service import RegimeRuleSelectionService
+def test_build_regime_rule_selection_marks_theme_hot_neutral_as_low_weight_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service, engine, session_scope = _build_regime_rule_selection_service(tmp_path)
+    from src.services import regime_rule_selection_service as module
 
-    service = RegimeRuleSelectionService(artifact_root=tmp_path)
+    monkeypatch.setattr(module, "session_scope", session_scope)
     result = asyncio.run(
         service.build_regime_rule_selection(
             strategy_version=_build_strategy_version(),
@@ -391,3 +429,67 @@ def test_build_regime_rule_selection_marks_theme_hot_neutral_as_low_weight_fallb
     selection = result.payload["selection"]
     assert selection["quality_status"] in {"ok", "partial"}
     assert any(item["decision"] == "neutral" for item in selection["selected_rules"] + selection["skipped_rules"])
+    asyncio.run(engine.dispose())
+
+
+def test_build_regime_rule_selection_persists_summary_and_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regime-aware selection 完成后应同步落库摘要和规则明细。"""
+    from src.db.repositories import RegimeRuleSelectionRepository, StrategyRegimeSelectionRepository
+    from src.services.regime_rule_selection_service import RegimeRuleSelectionService
+    service, engine, session_scope = _build_regime_rule_selection_service(tmp_path)
+    monkeypatch.setattr("src.services.regime_rule_selection_service.session_scope", session_scope)
+    result = asyncio.run(
+        service.build_regime_rule_selection(
+            strategy_version=_build_strategy_version(),
+            trader_profile=_build_trader_profile(),
+            market_regime=_build_market_regime(),
+            applicability_profiles=_build_applicability_profiles(),
+            selected_by="web",
+        )
+    )
+
+    assert result.status == "ok"
+
+    async def _assert_rows() -> None:
+        async with session_scope() as session:
+            selection_repo = StrategyRegimeSelectionRepository()
+            rule_repo = RegimeRuleSelectionRepository()
+            summary = await selection_repo.get_by_selection_id(session, result.payload["selection"]["selection_id"])
+            assert summary is not None
+            assert summary.strategy_version_id == "sv-1"
+            assert summary.selected_rule_count == len(result.payload["selection"]["selected_rules"])
+            rules = await rule_repo.list_by_selection_id(session, result.payload["selection"]["selection_id"])
+            assert len(rules) == len(result.payload["selection"]["selected_rules"]) + len(result.payload["selection"]["skipped_rules"]) + len(result.payload["selection"]["blocked_rules"])
+
+    asyncio.run(_assert_rows())
+    asyncio.run(engine.dispose())
+
+
+def test_build_regime_rule_selection_marks_partial_when_persistence_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """摘要落库失败时不应返回 ok。"""
+    service, engine, session_scope = _build_regime_rule_selection_service(tmp_path)
+    monkeypatch.setattr("src.services.regime_rule_selection_service.session_scope", session_scope)
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001, ANN002
+        raise RuntimeError("selection persistence boom")
+
+    monkeypatch.setattr(
+        "src.services.regime_rule_selection_service.StrategyRegimeSelectionRepository.upsert_selection",
+        _boom,
+    )
+
+    result = asyncio.run(
+        service.build_regime_rule_selection(
+            strategy_version=_build_strategy_version(),
+            trader_profile=_build_trader_profile(),
+            market_regime=_build_market_regime(),
+            applicability_profiles=_build_applicability_profiles(),
+            selected_by="web",
+        )
+    )
+
+    assert result.status == "partial"
+    assert any("selection persistence boom" in warning for warning in result.warnings)
+    assert any("selection persistence boom" in warning for warning in result.payload["warnings"])
+    assert Path(result.payload["artifact_path"]).suffix == ".json"
+    asyncio.run(engine.dispose())

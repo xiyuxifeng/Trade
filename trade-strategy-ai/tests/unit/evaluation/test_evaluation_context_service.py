@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -14,19 +13,14 @@ from src.schemas.contracts import DailyReport, DataResponseStatus, TradeEntry, T
 from src.strategy_library.schemas import StrategyVersion, StrategyVersionStatus, StrategyVersionType
 
 
-@dataclass
-class _FakeSignalVersion:
-    context: object
-
-
-class _FakeSignalVersioning:
+class _FakeSignalRepository:
     def __init__(self, context: object) -> None:
         self._context = context
-        self.requests: list[str] = []
+        self.requests: list[object] = []
 
-    def get_version(self, version_id: str) -> _FakeSignalVersion | None:
-        self.requests.append(version_id)
-        return _FakeSignalVersion(context=self._context)
+    async def get_by_signal_id(self, session: object, signal_id: object):
+        self.requests.append((session, signal_id))
+        return SimpleNamespace(signal_metadata={"context": self._context})
 
 
 class _FakeDataAgent:
@@ -100,11 +94,11 @@ async def test_generate_evidence_pack_uses_signal_context_market_data_and_strate
 
     data_agent = _FakeDataAgent()
     strategy_service = _FakeStrategyLibraryService(strategy_version)
-    signal_versioning = _FakeSignalVersioning(signal_context)
+    signal_repository = _FakeSignalRepository(signal_context)
     service = EvaluationContextService(
         data_agent=data_agent,
         strategy_library_service=strategy_service,
-        signal_versioning=signal_versioning,
+        signal_repository=signal_repository,
     )
 
     monkeypatch.setattr(mod, "session_scope", _fake_session_scope)
@@ -156,7 +150,7 @@ async def test_get_account_snapshot_uses_trade_idea_trader_id(monkeypatch: pytes
                 rules_snapshot=[],
             )
         ),
-        signal_versioning=_FakeSignalVersioning(SimpleNamespace()),
+        signal_repository=_FakeSignalRepository(SimpleNamespace()),
     )
 
     snapshot = await service.get_account_snapshot(trade_idea=_make_trade_idea())

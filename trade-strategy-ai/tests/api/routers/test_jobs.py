@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
 from api.dependencies import verify_api_key
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
     app.dependency_overrides[verify_api_key] = lambda: "test-key"

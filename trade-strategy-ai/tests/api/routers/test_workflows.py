@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
@@ -212,7 +213,7 @@ def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok")
     return SimpleNamespace(status=status, message=message, payload=payload)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
     global _workflow_service_spy

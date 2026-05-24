@@ -11,6 +11,7 @@ from src.common.paths import resolve_project_path
 from src.db.repositories import RuleApplicabilityRepository
 from src.models.rule_applicability import RuleApplicabilityProfile
 from src.services.base import BaseService, ServiceResult
+from src.services.job_service import JobService
 
 DEFAULT_PROFILE_VERSION = "rule-applicability-v1"
 DEFAULT_MIN_SAMPLE_COUNT = 5
@@ -190,33 +191,24 @@ def _build_market_conditions(entries: list[dict[str, Any]], *, kind: str) -> dic
     }
 
 
-def _resolve_backtest_result_file(source_backtest_id: str) -> Path | None:
-    """按回测结果 ID 查找文件。"""
-    candidates = [
-        resolve_project_path("data/backtest/results"),
-        resolve_project_path("data/processed/backtest"),
-        resolve_project_path("data/jobs"),
-    ]
-    for results_dir in candidates:
-        if not results_dir.exists():
-            continue
-        if results_dir.name == "jobs":
-            job_result = results_dir / source_backtest_id / "result.json"
-            if job_result.exists():
-                return job_result
-            continue
-        candidate = results_dir / f"{source_backtest_id}.json"
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def _load_backtest_result_payload(source_backtest_id: str) -> dict[str, Any]:
-    """加载回测结果 JSON。"""
-    result_file = _resolve_backtest_result_file(source_backtest_id)
-    if result_file is None:
+async def _load_backtest_result_payload(source_backtest_id: str) -> dict[str, Any]:
+    """从 Job DB 读取回测结果。"""
+    job_result = await JobService().get_job(source_backtest_id)
+    if job_result.status != "ok":
         raise FileNotFoundError(source_backtest_id)
-    return json.loads(result_file.read_text(encoding="utf-8"))
+    job = job_result.payload.get("job")
+    if not isinstance(job, dict):
+        raise FileNotFoundError(source_backtest_id)
+    result = job.get("result")
+    if not isinstance(result, dict):
+        raise FileNotFoundError(source_backtest_id)
+    payload = result.get("payload")
+    if isinstance(payload, dict):
+        nested_result = payload.get("result")
+        if isinstance(nested_result, dict):
+            return nested_result
+        return payload
+    return result
 
 
 class RuleApplicabilityService(BaseService):
@@ -397,7 +389,9 @@ class RuleApplicabilityService(BaseService):
             )
 
         try:
-            loaded_result = _coerce_backtest_result(backtest_result if backtest_result is not None else _load_backtest_result_payload(source_backtest_id))
+            loaded_result = _coerce_backtest_result(
+                backtest_result if backtest_result is not None else await _load_backtest_result_payload(source_backtest_id)
+            )
         except FileNotFoundError:
             return self._error(
                 status="error",

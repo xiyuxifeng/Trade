@@ -16,8 +16,10 @@ from src.models.market_data_snapshot_item import MarketSnapshotItem
 from src.models.market_dataset import MarketDataset
 from src.models.market_data_quality_report import MarketDataQualityReport
 from src.models.market_regime_record import MarketRegimeRecord, RegimeEvidenceRecord, RegimeFeatureRecord, RegimeLabelRecord
+from src.models.backtest_result_run import BacktestResultRun
 from src.models.market_regime import MarketRegimeFeature
 from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityRegimeRecord
+from src.models.strategy_regime_selection import StrategyRegimeSelection, RegimeRuleSelection
 from src.models.raw_article import RawArticle
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
@@ -54,9 +56,12 @@ __all__ = [
     "RegimeEvidenceRecord",
     "RegimeFeatureRecord",
     "RegimeLabelRecord",
+    "BacktestResultRun",
     "MarketRegimeFeature",
     "RuleApplicabilityProfile",
     "RuleApplicabilityRegimeRecord",
+    "StrategyRegimeSelection",
+    "RegimeRuleSelection",
     "Job",
     "JobStatus",
     "JobAuditEvent",

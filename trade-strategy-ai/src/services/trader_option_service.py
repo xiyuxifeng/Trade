@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Callable
 
 from sqlalchemy import select
@@ -9,45 +7,60 @@ from sqlalchemy import select
 from src.db.session import session_scope
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.services.base import BaseService, ServiceResult
-
-
-def _get_backtest_result_dirs() -> list[Path]:
-    """获取回测结果目录。"""
-    from src.common.paths import resolve_project_path
-
-    return [
-        resolve_project_path("data/backtest/results"),
-        resolve_project_path("data/processed/backtest"),
-        resolve_project_path("data/jobs"),
-    ]
+from src.services.job_service import JobService
 
 
 def _extract_backtest_trader_id(data: dict[str, Any]) -> str | None:
     """从回测结果 payload 中提取 trader_id。"""
+    result = data.get("result")
+    if isinstance(result, dict):
+        payload = result.get("payload")
+        if isinstance(payload, dict):
+            request = payload.get("request")
+            if isinstance(request, dict):
+                trader_id = request.get("trader_id")
+                if isinstance(trader_id, str) and trader_id.strip():
+                    return trader_id.strip()
+
+    payload = data.get("payload")
+    if isinstance(payload, dict):
+        request = payload.get("request")
+        if isinstance(request, dict):
+            trader_id = request.get("trader_id")
+            if isinstance(trader_id, str) and trader_id.strip():
+                return trader_id.strip()
+
     trader_id = data.get("trader_id") or data.get("request_trader_id")
     if isinstance(trader_id, str) and trader_id.strip():
         return trader_id.strip()
     return None
 
 
-def _iter_backtest_result_files() -> list[Path]:
-    """列出所有可用的回测结果文件。"""
-    files: list[Path] = []
-    for results_dir in _get_backtest_result_dirs():
-        if not results_dir.exists():
-            continue
-        if results_dir.name == "jobs":
-            for job_dir in results_dir.iterdir():
-                if not job_dir.is_dir():
+async def _load_backtest_trader_ids() -> list[str]:
+    """从 jobs 表提取回测 trader_id。"""
+    job_service = JobService()
+    trader_ids: set[str] = set()
+    for job_type in ("backtest-run", "rule-pool-backtest"):
+        skip = 0
+        page_size = 500
+        total: int | None = None
+        while True:
+            result = await job_service.list_jobs(status="success", job_type=job_type, skip=skip, limit=page_size)
+            if result.status != "ok":
+                break
+            items = result.payload.get("items", [])
+            if total is None:
+                total = int(result.payload.get("total") or len(items) or 0)
+            for item in items:
+                if not isinstance(item, dict):
                     continue
-                result_file = job_dir / "result.json"
-                report_file = job_dir / "backtest_report.md"
-                csv_file = job_dir / "backtest_records.csv"
-                if result_file.exists() and (report_file.exists() or csv_file.exists()):
-                    files.append(result_file)
-            continue
-        files.extend(sorted(results_dir.glob("*.json")))
-    return files
+                trader_id = _extract_backtest_trader_id(item)
+                if trader_id:
+                    trader_ids.add(trader_id)
+            skip += len(items)
+            if not items or (total is not None and skip >= total):
+                break
+    return sorted(trader_ids)
 
 
 class TraderOptionService(BaseService):
@@ -72,14 +85,8 @@ class TraderOptionService(BaseService):
                         trader_ids.add(trader_id.strip())
 
         if source in {"all", "backtest"}:
-            for result_file in _iter_backtest_result_files():
-                try:
-                    data = json.loads(result_file.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                trader_id = _extract_backtest_trader_id(data)
-                if trader_id:
-                    trader_ids.add(trader_id)
+            for trader_id in await _load_backtest_trader_ids():
+                trader_ids.add(trader_id)
 
         items = sorted(trader_ids)
         return ServiceResult(

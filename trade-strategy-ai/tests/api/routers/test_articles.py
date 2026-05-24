@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -17,7 +18,7 @@ from api.routes import articles as article_routes
 from src.models.blog_article import BlogArticle
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建测试客户端。"""
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
@@ -29,7 +30,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         app.dependency_overrides.clear()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def article_session_factory(tmp_path) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     """创建文章路由测试用的临时数据库。"""
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'articles.db'}")

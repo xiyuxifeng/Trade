@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
@@ -86,7 +87,7 @@ class _FakeSetupService:
         )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带有 fake service 的测试客户端。"""
     app.dependency_overrides.clear()

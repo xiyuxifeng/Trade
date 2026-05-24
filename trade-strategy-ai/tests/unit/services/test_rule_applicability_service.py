@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
@@ -152,5 +153,58 @@ async def test_build_rule_applicability_profile_rejects_missing_rule_metrics(tmp
 
     assert result.status == "error"
     assert result.payload["error"]["type"] == "missing_rule_metrics"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_build_rule_applicability_profile_prefers_job_db_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RuleApplicabilityService 应优先从 Job DB 读取回测结果。"""
+    from src.services import rule_applicability_service as mod
+    from src.services.rule_applicability_service import RuleApplicabilityService
+
+    session_scope, engine = await _build_session_factory(tmp_path)
+    service = RuleApplicabilityService(session_scope_factory=session_scope, artifact_root=tmp_path / "artifacts")
+
+    class _FakeJobService:
+        async def get_job(self, job_id: str):
+            assert job_id == "job-123"
+            return type(
+                "Result",
+                (),
+                {
+                    "status": "ok",
+                    "payload": {
+                        "job": {
+                            "result": {
+                                "status": "ok",
+                                "payload": {
+                                    "result": asdict(_build_backtest_result()),
+                                    "summary": {"total_days": 8},
+                                    "request": {
+                                        "trader_id": "trader-a",
+                                        "date_from": "2026-05-01",
+                                        "date_to": "2026-05-08",
+                                    },
+                                },
+                            }
+                        }
+                    },
+                },
+            )()
+
+    monkeypatch.setattr(mod, "JobService", lambda: _FakeJobService())
+
+    result = await service.build_profile(
+        rule_id="rule-001",
+        source_backtest_id="job-123",
+        profile_version="rule-applicability-v1",
+        min_sample_count=10,
+    )
+
+    assert result.status == "ok"
+    assert result.payload["profile"]["source_backtest_id"] == "job-123"
+    assert result.payload["profile"]["rule_id"] == "rule-001"
+    assert result.payload["profile"]["confidence"] > 0.0
 
     await engine.dispose()

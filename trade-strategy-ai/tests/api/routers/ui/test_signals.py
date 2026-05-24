@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import verify_api_key
@@ -57,7 +58,7 @@ class _FakeSignalService:
         )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     fake_service = _FakeSignalService()
     app.dependency_overrides.clear()

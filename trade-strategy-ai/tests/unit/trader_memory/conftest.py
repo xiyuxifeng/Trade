@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
+import pytest_asyncio
 
 from src.trader_memory.service import TraderMemoryStore
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def _truncate_table():
     """每个测试前清空表。
 
@@ -30,7 +31,7 @@ async def _truncate_table():
     yield  # 测试在这里执行
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def store() -> TraderMemoryStore:
     """TraderMemoryStore 实例，共享同一 session_factory。"""
     return TraderMemoryStore()
@@ -40,7 +41,7 @@ async def store() -> TraderMemoryStore:
 # 用于在不需要真实数据库连接的测试中替代 _truncate_table
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 @asynccontextmanager
 async def mock_session_scope():
     """

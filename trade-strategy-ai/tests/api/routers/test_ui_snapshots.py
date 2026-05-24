@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import verify_api_key
@@ -82,7 +83,7 @@ def _build_snapshot(trade_date: str, *, slot: str = "17-30") -> MarketUniverse:
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
     fake_service = _FakeSnapshotService()

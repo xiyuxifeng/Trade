@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import json
 from collections import Counter, defaultdict
 from dataclasses import asdict, is_dataclass
@@ -10,6 +11,9 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from src.common.paths import resolve_project_path
+from src.db.repositories import RegimeRuleSelectionRepository, StrategyRegimeSelectionRepository
+from src.db.session import session_scope
+from src.models.strategy_regime_selection import RegimeRuleSelection, StrategyRegimeSelection
 from src.models.market_regime_record import MarketRegimeRecord
 from src.models.regime_rule_selection import RegimeRuleSelectionRecord, RegimeRuleSelectionResult
 from src.models.rule_applicability import RuleApplicabilityProfile
@@ -199,6 +203,9 @@ def _selection_priority(decision: str) -> int:
     }.get(decision, 0)
 
 
+logger = logging.getLogger(__name__)
+
+
 class RegimeRuleSelectionService(BaseService):
     """Regime-aware rule selection 服务。"""
 
@@ -233,6 +240,62 @@ class RegimeRuleSelectionService(BaseService):
             "artifact_root": str(self._artifact_root.name or "strategy_regime_selection"),
             "relative_path": str(relative),
         }
+
+    async def _persist_selection(
+        self,
+        *,
+        selection: RegimeRuleSelectionResult,
+        artifact_path: Path,
+    ) -> None:
+        """把 selection 主表与规则明细写入数据库。"""
+        selection_repo = StrategyRegimeSelectionRepository()
+        rule_repo = RegimeRuleSelectionRepository()
+        summary_row = StrategyRegimeSelection(
+            selection_id=selection.selection_id,
+            strategy_version_id=selection.strategy_version_id,
+            snapshot_id=selection.snapshot_id,
+            market_regime_version=selection.market_regime_version,
+            source_feature_version=selection.source_feature_version,
+            applicability_profile_version=selection.applicability_profile_version,
+            selected_rule_count=len(selection.selected_rules),
+            skipped_rule_count=len(selection.skipped_rules),
+            blocked_rule_count=len(selection.blocked_rules),
+            confidence=selection.confidence,
+            quality_status=selection.quality_status,
+            selection_reason=selection.selection_reason,
+            evidence_json=selection.evidence,
+            override_json=selection.override or {},
+            selected_by=selection.selected_by,
+            storage_ref={
+                "source": "file",
+                "logical_id": selection.selection_id,
+                "relative_path": str(artifact_path.relative_to(self._artifact_root)),
+            },
+            artifact_ref=self._artifact_ref(artifact_path),
+        )
+        rule_rows: list[RegimeRuleSelection] = []
+        for item in [*selection.selected_rules, *selection.skipped_rules, *selection.blocked_rules]:
+            rule_rows.append(
+                RegimeRuleSelection(
+                    item_id=f"{selection.selection_id}:{item.rule_id}",
+                    selection_id=selection.selection_id,
+                    rule_id=item.rule_id,
+                    decision=item.decision,
+                    score=item.score,
+                    reason=item.reason,
+                    evidence_json=item.evidence,
+                    regime_version=item.regime_version or selection.market_regime_version,
+                    applicability_profile_version=item.applicability_profile_version,
+                    sample_count=item.sample_count,
+                    profile_confidence=item.profile_confidence,
+                    override_applied=item.override_applied,
+                    rule_applicability_profile_id=item.rule_applicability_profile_id,
+                )
+            )
+
+        async with session_scope() as session:
+            await selection_repo.upsert_selection(session, summary_row)
+            await rule_repo.replace_for_selection(session, selection_id=selection.selection_id, items=rule_rows)
 
     async def build_regime_rule_selection(
         self,
@@ -450,13 +513,21 @@ class RegimeRuleSelectionService(BaseService):
         }
         artifact_path.write_text(json.dumps(_to_plain(artifact_payload), ensure_ascii=False, indent=2), encoding="utf-8")
 
+        persistence_warning: str | None = None
+        try:
+            await self._persist_selection(selection=selection, artifact_path=artifact_path)
+        except Exception as exc:  # noqa: BLE001
+            persistence_warning = f"regime selection persistence failed for {selection.selection_id}: {exc}"
+            logger.warning("%s", persistence_warning)
+            warnings = [*warnings, persistence_warning]
+
         payload = {
             "selection": selection.to_dict(),
             "artifact_ref": self._artifact_ref(artifact_path),
             "artifact_path": self._artifact_ref(artifact_path)["relative_path"],
             "warnings": warnings,
         }
-        status = "ok" if quality_status == "ok" and not warnings else "partial"
+        status = "ok" if quality_status == "ok" and not warnings and persistence_warning is None else "partial"
         return ServiceResult(
             status=status,  # type: ignore[arg-type]
             message="regime-aware rule selection completed",

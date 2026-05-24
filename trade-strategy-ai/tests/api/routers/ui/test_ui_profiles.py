@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any, AsyncIterator
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
@@ -240,7 +241,7 @@ def _linked_job(job_id: str) -> dict[str, Any]:
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建 profile 路由测试客户端。"""
     app.dependency_overrides.clear()

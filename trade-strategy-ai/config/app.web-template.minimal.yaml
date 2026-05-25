@@ -1,0 +1,153 @@
+# Web 配置模板 - 最小可用版
+#
+# 适合：
+# - 快速导入一个可用 Profile
+# - 先把最关键字段填好，再逐步补充其他配置
+#
+# 说明：
+# - 这里保留了导入 Profile 所需的主要 section
+# - 大部分字段使用默认值
+# - 敏感字段优先使用环境变量占位
+
+database:
+  # 数据库连接串
+  url: ${DATABASE_URL}
+  echo: false
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 1800
+
+# 时区会影响调度、回测和时间展示
+timezone: Asia/Shanghai
+
+# 默认使用手动/交互模式
+run_mode: interactive
+
+# 不启用定时调度，避免导入后立刻触发任务
+schedule:
+  enable: false
+  pre_market_time: "08:30"
+  after_close_time: "15:30"
+
+# 回测的基础约束
+evaluation:
+  min_expected_return: 0.0
+  loss_trigger: true
+  trade_constraint:
+    t_plus_one: true
+    limit_up_pct: null
+    limit_down_pct: null
+    board_type: "auto"
+
+# 数据源先保留 mock，后续再切换真实行情源
+data:
+  providers: ["mock"]
+  mock_prices:
+    000001.SZ: 10.0
+    510300.SH: 3.5
+  market_universe_snapshot_dir: data/market_universe/snapshots
+
+# 抓取来源保留一个最小可运行示例
+crawl:
+  auth:
+    tgb.cn:
+      mode: cookie
+      cookie: ${TGB_COOKIE}
+  sources:
+    - source: tgb
+      site: tgb.cn
+      trader_id: javxsp
+      author_id: "10461311"
+      author_name: javxsp
+      list_url: https://www.tgb.cn/user/blog/moreTopic
+      enabled: true
+      render_js: false
+  throttling:
+    min_interval_seconds: 1.0
+    max_interval_seconds: 5.0
+    backoff_seconds: [5, 15, 30]
+
+# 默认输出目录
+storage:
+  output_dir: data/processed/phase0
+
+# LLM 先给一个基础可用值
+llm:
+  provider: "qwen"
+  model: ["qwen3-8b"]
+  url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: ${DASHSCOPE_API_KEY}
+
+# Persona 先保持可用默认值
+persona:
+  enable: true
+  objective: "return_max"
+  clusters_path: data/processed/persona/clusters.sample.json
+  top_k: 2
+  market_state_path: null
+  market_state_benchmark_symbol: "510300.SH"
+  market_state_benchmark_csv: null
+
+# Step 4 默认开启
+stage4:
+  enable: true
+  market_universe_slot: "09-25"
+  allow_phase0_fallback: true
+
+# 交易员列表最小版可先为空
+traders: []
+
+# API 服务端口和鉴权
+api:
+  host: "0.0.0.0"
+  port: 8000
+  timeout_seconds: 300
+  auth:
+    enabled: false
+    api_keys: []
+
+# Kaipan 是回测/行情链路里最常用的上游配置
+kaipan:
+  data_dir: data/kaipan
+  schema_dir: src/providers/kaipan_schema
+  token: ${KAIPAN_TOKEN}
+  user_id: ${KAIPAN_USER_ID}
+  default_headers:
+    Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+    User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)
+    Connection: Keep-Alive
+    Accept-Encoding: gzip
+  fetch_schedule:
+    pre_market: "9:25"
+    post_close: "17:30"
+  trading_calendar:
+    source: akshare
+  min_request_interval_seconds: 1.0
+  max_retries: 3
+  retry_backoff_seconds: [1.0, 2.0, 4.0]
+  retry_status_codes: [403, 429, 500, 502, 503, 504]
+
+# AkShare 保持默认值
+akshare:
+  min_request_interval_seconds: 1.0
+  max_retries: 2
+  retry_backoff_seconds: [1.0, 3.0]
+  fallback_enabled: true
+
+# 最小版默认不启用告警
+alerting:
+  enabled: false
+  channel: "dingtalk"
+  aggregation:
+    window_minutes: 60
+    max_count: 100
+  dingtalk:
+    webhook_url: ${DINGTALK_WEBHOOK_URL}
+    secret: ${DINGTALK_SECRET}
+  feishu:
+    webhook_url: ${FEISHU_WEBHOOK_URL}
+  wecom:
+    webhook_url: ${WECOM_WEBHOOK_URL}
+  min_level: "WARNING"
+  console_output: true

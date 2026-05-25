@@ -24,12 +24,40 @@ class _FakeProvider:
 
 
 class _FakeNormalizer:
+	DATASETS = (
+		"hot_topics",
+		"topic_constituents",
+		"strong_symbols",
+		"market_sentiment",
+		"market_index",
+		"sharp_withdrawal",
+		"sector_ranking",
+		"market_context",
+		"market_stock_zd_num",
+		"zhang_ting_expression",
+		"daily_limit_index",
+		"weight_performance",
+		"get_feng_k_list",
+	)
+
 	def __init__(self) -> None:
 		self.calls: list[tuple[str, tuple[str, ...]]] = []
 
-	def normalize_date(self, trade_date: str, slots: tuple[str, ...] = ("09-25", "17-30")) -> dict[str, dict[str, object]]:
+	def normalize_date(
+		self,
+		trade_date: str,
+		slots: tuple[str, ...] = ("09-25", "17-30"),
+		progress_callback=None,
+	) -> dict[str, dict[str, object]]:
 		self.calls.append((trade_date, slots))
-		return {slot: {"hot_topics": {"slot": slot}} for slot in slots}
+		results = {}
+		for slot in slots:
+			results[slot] = {}
+			for dataset in self.DATASETS:
+				results[slot][dataset] = {"slot": slot}
+				if progress_callback is not None:
+					progress_callback({"trade_date": trade_date, "slot": slot, "dataset": dataset, "status": "success"})
+		return results
 
 
 def _write_kaipan_config(config_path: Path) -> None:
@@ -76,6 +104,48 @@ def test_kaipan_service_fetch_normalize_status_and_run(tmp_path: Path) -> None:
 	assert run_plan.payload["pre_market"] == "9:25"
 	assert run_plan.payload["post_close"] == "17:30"
 	assert run_plan.payload["scheduler_started"] is False
+
+
+def test_kaipan_service_supports_date_range_progress(tmp_path: Path) -> None:
+	"""KaipanService 应按交易日期范围输出进度回调。"""
+	from src.services.kaipan_service import KaipanService
+
+	config_path = tmp_path / "config" / "app.yaml"
+	_write_kaipan_config(config_path)
+	provider = _FakeProvider(calls=[])
+	normalizer = _FakeNormalizer()
+	service = KaipanService(
+		provider_factory=lambda **kwargs: provider,
+		normalizer_factory=lambda **kwargs: normalizer,
+	)
+
+	fetch_progress: list[dict[str, object]] = []
+	normalize_progress: list[dict[str, object]] = []
+	fetch_result = service.fetch(
+		config_path=config_path,
+		start_date="2026-04-23",
+		end_date="2026-04-24",
+		slot="09-25",
+		progress_callback=fetch_progress.append,
+	)
+	normalize_result = service.normalize(
+		config_path=config_path,
+		start_date="2026-04-23",
+		end_date="2026-04-24",
+		slot="09-25",
+		progress_callback=normalize_progress.append,
+	)
+
+	assert fetch_result.status == "ok"
+	assert fetch_result.payload["trade_dates"] == ["2026-04-23", "2026-04-24"]
+	assert fetch_result.payload["date_results"]["2026-04-23"]["slot_results"]["09-25"]["fetchers"][0] == "market_sentiment"
+	assert fetch_progress[0]["current_trade_date"] == "2026-04-23"
+	assert fetch_progress[-1]["current"] == fetch_progress[-1]["total"]
+	assert normalize_result.status == "ok"
+	assert normalize_result.payload["trade_dates"] == ["2026-04-23", "2026-04-24"]
+	assert normalize_result.payload["date_results"]["2026-04-23"]["09-25"]["hot_topics"]["slot"] == "09-25"
+	assert normalize_progress[0]["stage"] == "normalize"
+	assert normalize_progress[-1]["current"] == normalize_progress[-1]["total"]
 
 
 def test_kaipan_service_fetch_includes_10_5_capabilities(tmp_path: Path) -> None:

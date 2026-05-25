@@ -38,13 +38,13 @@ const RUNNERS: MarketWorkspaceRunner[] = [
   {
     jobType: 'kaipan-fetch',
     title: 'Kaipan 抓取',
-    description: '抓取指定交易日的 Kaipan 原始数据。',
+    description: '抓取指定交易日期范围的 Kaipan 原始数据。',
     badge: '抓取',
   },
   {
     jobType: 'kaipan-normalize',
     title: 'Kaipan 归一化',
-    description: '把抓取结果整理成统一的市场数据输入。',
+    description: '把抓取结果整理成统一的市场数据输入，并显示单日/范围进度。',
     badge: '清洗',
   },
   {
@@ -95,7 +95,8 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
     return mode === 'kaipan'
       ? {
           profile_id: form.kaipanProfileId,
-          trade_date: form.tradeDate,
+          start_date: form.startDate,
+          end_date: form.endDate,
           slot: form.slot,
         }
       : base;
@@ -322,6 +323,10 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     queryKey: ['market-workspace-jobs'],
     queryFn: () => listJobs({ limit: 20 }),
     staleTime: 30_000,
+    refetchInterval: (query) => {
+      const items = (query.state.data?.items ?? []) as Array<{ status?: string }>;
+      return items.some((item) => item.status === 'running' || item.status === 'pending') ? 5000 : false;
+    },
   });
 
   const artifactsQuery = useQuery({
@@ -486,7 +491,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             </CardTitle>
             <CardDescription className="text-slate-500">
               {mode === 'kaipan'
-                ? '只保留 Kaipan 抓取和归一化需要的参数。'
+                ? '只保留 Kaipan 抓取和归一化需要的参数，使用交易日期范围和 slot 提交。'
                 : mode === 'ohlcv'
                   ? '保留 OHLCV 抓取和回灌需要的参数。'
                   : '这些参数会被运行按钮复用，提交时仍走 Job Center。'}
@@ -523,23 +528,44 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                     <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
                   </label>
                 )}
-                <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">交易日期</span>
-                  <Input type="date" value={form.tradeDate} onChange={(event) => updateForm({ tradeDate: event.target.value })} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">时间槽</span>
-                  <Select value={form.slot} onChange={(event) => updateForm({ slot: event.target.value })}>
-                    <option value="all">all</option>
-                    <option value="09-25">09-25</option>
-                    <option value="17-30">17-30</option>
-                  </Select>
-                </label>
                 {mode === 'kaipan' ? (
-                  <p className="md:col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
-                    Kaipan 调度器按配置中的时间自动运行：{kaipanSchedulerScheduleLabel}。当前状态：{kaipanSchedulerStarted ? '已启动' : '未启动'}。
-                  </p>
-                ) : null}
+                  <>
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">开始日期</span>
+                      <Input type="date" value={form.startDate} onChange={(event) => updateForm({ startDate: event.target.value })} />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">结束日期</span>
+                      <Input type="date" value={form.endDate} onChange={(event) => updateForm({ endDate: event.target.value })} />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">时间槽</span>
+                      <Select value={form.slot} onChange={(event) => updateForm({ slot: event.target.value })}>
+                        <option value="all">all</option>
+                        <option value="09-25">09-25</option>
+                        <option value="17-30">17-30</option>
+                      </Select>
+                    </label>
+                    <p className="md:col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
+                      Kaipan 以交易日期范围运行进度，范围按交易日展开；如果开始日期和结束日期相同，就只会处理当天。当前调度器状态：{kaipanSchedulerStarted ? '已启动' : '未启动'}，时间：{kaipanSchedulerScheduleLabel}。
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">交易日期</span>
+                      <Input type="date" value={form.tradeDate} onChange={(event) => updateForm({ tradeDate: event.target.value })} />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">时间槽</span>
+                      <Select value={form.slot} onChange={(event) => updateForm({ slot: event.target.value })}>
+                        <option value="all">all</option>
+                        <option value="09-25">09-25</option>
+                        <option value="17-30">17-30</option>
+                      </Select>
+                    </label>
+                  </>
+                )}
               </>
             ) : null}
             {mode === 'ohlcv' || mode === 'all' ? (

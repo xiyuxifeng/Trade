@@ -64,6 +64,41 @@ class MarketService(BaseService):
         self._ohlcv_service_factory = ohlcv_service_factory
         self._session_factory = session_factory
 
+    def _progress_payload(
+        self,
+        *,
+        job_type: str,
+        stage: str,
+        current: int,
+        total: int,
+        current_step: str,
+        current_fetcher: str | None = None,
+        current_trade_date: str | None = None,
+        status: str = "running",
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        """构造结构化进度载荷。"""
+        percent = round((current / total) * 100, 2) if total else 0.0
+        payload: dict[str, Any] = {
+            "job_type": job_type,
+            "stage": stage,
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "remaining": max(total - current, 0),
+            "current_step": current_step,
+            "current_fetcher": current_fetcher,
+            "current_trade_date": current_trade_date,
+            "status": status,
+            "error": error,
+        }
+        return payload
+
+    def _emit_progress(self, progress_callback: Callable[[dict[str, Any]], None] | None, payload: dict[str, Any]) -> None:
+        """安全触发进度回调。"""
+        if progress_callback is not None:
+            progress_callback(payload)
+
     def _create_ohlcv_service(self, config_path: str | Path) -> OHLCVService:
         """根据配置创建 OHLCVService。"""
         if self._ohlcv_service is not None:
@@ -166,6 +201,7 @@ class MarketService(BaseService):
         start_date: date | None = None,
         end_date: date | None = None,
         limit: int | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """抓取 OHLCV 日线。"""
         resolved_config_path = await self._resolve_config_path(profile_id=profile_id, config_path=config_path)
@@ -179,13 +215,42 @@ class MarketService(BaseService):
             raise ValueError("symbols must be provided for the web service wrapper")
 
         crawl_symbols = symbols if limit is None else symbols[:limit]
+        total = len(crawl_symbols)
 
-        if mode == "full":
-            results = await service.crawl_bars(symbols=crawl_symbols, start_date=start_date, end_date=end_date)
-        elif mode == "incremental":
-            results = await service.crawl_bars(symbols=crawl_symbols, start_date=start_date, end_date=end_date)
-        else:
+        crawl_kwargs = {
+            "symbols": crawl_symbols,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        if progress_callback is not None:
+            crawl_kwargs["progress_callback"] = progress_callback
+
+        if mode not in {"full", "incremental"}:
             raise ValueError("mode must be full or incremental")
+        try:
+            results = await service.crawl_bars(**crawl_kwargs)
+        except TypeError as exc:
+            if "progress_callback" not in str(exc):
+                raise
+            crawl_kwargs.pop("progress_callback", None)
+            results = await service.crawl_bars(**crawl_kwargs)
+
+        if progress_callback is not None and total > 0:
+            completed = sum(1 for count in results.values() if count > 0)
+            self._emit_progress(
+                progress_callback,
+                self._progress_payload(
+                    job_type="ohlcv-crawl",
+                    stage="crawl",
+                    current=total,
+                    total=total,
+                    current_step=f"crawl:{crawl_symbols[-1]}",
+                    current_fetcher=crawl_symbols[-1],
+                    current_trade_date=start_date.isoformat() if start_date else None,
+                    status="success" if completed == total else "partial",
+                    error=None if completed == total else "some symbols failed",
+                ),
+            )
 
         return ServiceResult(
             status="ok",

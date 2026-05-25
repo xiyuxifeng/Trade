@@ -350,6 +350,9 @@ async def run_process_tasks(
     force: bool = False,
     retry_failed: bool = False,
     version: str = "v1",
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    overall_current: int | None = None,
+    overall_total: int | None = None,
 ) -> ProcessTasksStats:
     start = time.monotonic()
     stats = ProcessTasksStats()
@@ -386,6 +389,7 @@ async def run_process_tasks(
 
     unique_tasks = _dedup_by_article_id(all_tasks)
     stats.skipped_dedup = len(all_tasks) - len(unique_tasks)
+    total = len(unique_tasks)
 
     # Save cleaned failed tasks
     _save_failed_with_metadata(f_path, alive_failed)
@@ -398,12 +402,54 @@ async def run_process_tasks(
 
     handlers = _create_handlers(config, force=force, version=version)
 
-    for task in unique_tasks:
+    for index, task in enumerate(unique_tasks, start=1):
         task_id = task.get("task_id")
         if task_id in failed_ids:
+            if progress_callback is not None and total > 0:
+                details = task.get("details", {})
+                progress_callback(
+                    {
+                        "job_type": "pipeline-run",
+                        "stage": "process",
+                        "current": overall_current if overall_current is not None else index,
+                        "total": overall_total if overall_total is not None else total,
+                        "percent": round(((overall_current if overall_current is not None else index) / (overall_total if overall_total else total)) * 100, 2) if (overall_total or total) else 0.0,
+                        "remaining": max((overall_total if overall_total is not None else total) - (overall_current if overall_current is not None else index), 0),
+                        "current_step": f"process:{details.get('article_id') or task_id or task.get('type')}",
+                        "current_trade_date": None,
+                        "current_dataset": task.get("type"),
+                        "status": "skipped",
+                        "error": None,
+                        "sub_current": index,
+                        "sub_total": total,
+                        "sub_percent": round((index / total) * 100, 2) if total else 0.0,
+                        "sub_remaining": max(total - index, 0),
+                    }
+                )
             continue
 
         success, skipped = await _process_one(task, handlers)
+        if progress_callback is not None and total > 0:
+            details = task.get("details", {})
+            progress_callback(
+                {
+                    "job_type": "pipeline-run",
+                    "stage": "process",
+                    "current": overall_current if overall_current is not None else index,
+                    "total": overall_total if overall_total is not None else total,
+                    "percent": round(((overall_current if overall_current is not None else index) / (overall_total if overall_total else total)) * 100, 2) if (overall_total or total) else 0.0,
+                    "remaining": max((overall_total if overall_total is not None else total) - (overall_current if overall_current is not None else index), 0),
+                    "current_step": f"process:{details.get('article_id') or task_id or task.get('type')}",
+                    "current_trade_date": None,
+                    "current_dataset": task.get("type"),
+                    "status": "success" if success and not skipped else ("skipped" if skipped else "error"),
+                    "error": None if success else "task failed",
+                    "sub_current": index,
+                    "sub_total": total,
+                    "sub_percent": round((index / total) * 100, 2) if total else 0.0,
+                    "sub_remaining": max(total - index, 0),
+                }
+            )
         if success:
             if not skipped:
                 stats.processed += 1

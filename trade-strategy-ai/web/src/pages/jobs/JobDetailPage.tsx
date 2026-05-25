@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { JsonViewer, LoadingState, LogViewer, SectionCard, StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
+import { JobProgress } from '@/components/jobs/JobProgress';
 import { useAuth } from '@/features/auth/auth-context';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
@@ -256,6 +257,12 @@ export function JobDetailPage() {
                 <JsonViewer value={detail.params} title="参数" />
                 <JsonViewer value={detail.result} title="执行结果" />
               </div>
+              {detail.progress ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">执行进度</p>
+                  <JobProgress progress={detail.progress} className="mt-3" />
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="快照 ID" value={configSnapshot?.config_snapshot_id} />
                 <Field label="快照哈希" value={configSnapshot?.config_hash} />

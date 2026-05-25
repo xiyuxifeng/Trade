@@ -85,6 +85,7 @@ class SnapshotService(BaseService):
         snapshot_type: str = "all",
         force: bool = False,
         offline: bool = False,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """构建候选池快照。"""
         loaded = load_app_config(config_path)
@@ -119,9 +120,12 @@ class SnapshotService(BaseService):
         snapshot_paths: list[str] = []
         success_count = 0
         failure_count = 0
+        total_steps = len(trade_dates) * len(types_to_build)
+        current_step = 0
 
         for trade_date in trade_dates:
             for stype in types_to_build:
+                current_step += 1
                 details = {
                     "trade_date": trade_date,
                     "slot": slot,
@@ -140,6 +144,22 @@ class SnapshotService(BaseService):
                         snapshot_paths.append(snapshot_path)
                     success_count += 1
                     results.append({"trade_date": trade_date, "type": stype, "status": "ok"})
+                    if progress_callback is not None:
+                        progress_callback(
+                            {
+                                "job_type": "snapshot-build",
+                                "stage": "snapshot",
+                                "current": current_step,
+                                "total": total_steps,
+                                "percent": round((current_step / total_steps) * 100, 2) if total_steps else 0.0,
+                                "remaining": max(total_steps - current_step, 0),
+                                "current_step": f"snapshot:{stype}",
+                                "current_trade_date": trade_date,
+                                "current_dataset": stype,
+                                "status": "success",
+                                "updated_at": None,
+                            }
+                        )
                 except Exception as exc:  # noqa: BLE001
                     failure_count += 1
                     results.append(
@@ -150,6 +170,23 @@ class SnapshotService(BaseService):
                             "error": str(exc),
                         }
                     )
+                    if progress_callback is not None:
+                        progress_callback(
+                            {
+                                "job_type": "snapshot-build",
+                                "stage": "snapshot",
+                                "current": current_step,
+                                "total": total_steps,
+                                "percent": round((current_step / total_steps) * 100, 2) if total_steps else 0.0,
+                                "remaining": max(total_steps - current_step, 0),
+                                "current_step": f"snapshot:{stype}",
+                                "current_trade_date": trade_date,
+                                "current_dataset": stype,
+                                "status": "error",
+                                "error": str(exc),
+                                "updated_at": None,
+                            }
+                        )
 
         return ServiceResult(
             status="ok" if failure_count == 0 else "partial",

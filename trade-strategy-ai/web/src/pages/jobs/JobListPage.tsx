@@ -68,6 +68,10 @@ export function JobListPage() {
       }),
     enabled: canViewJobs,
     staleTime: 10_000,
+    refetchInterval: (query) => {
+      const items = (query.state.data?.items ?? []) as Array<{ status?: string }>;
+      return items.some((item) => item.status === 'running' || item.status === 'pending') ? 5000 : false;
+    },
   });
 
   const jobs = jobsQuery.data?.items ?? [];

@@ -1,5 +1,7 @@
 export type KaipanFetchRequest = {
   trade_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   slot?: string;
 };
 
@@ -24,6 +26,8 @@ export type KaipanStatusResponse = {
 
 export type KaipanNormalizeRequest = {
   trade_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   slot?: string;
 };
 

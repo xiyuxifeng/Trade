@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { JobRecord } from '@/types/jobs';
+import { JobProgress } from './JobProgress';
 
 function statusVariant(status: string) {
   if (status === 'success') return 'success';
@@ -44,6 +45,7 @@ export function JobTable({
             <TableHead>Job ID</TableHead>
             <TableHead>任务类型</TableHead>
             <TableHead>状态</TableHead>
+            <TableHead>进度</TableHead>
             <TableHead>创建者</TableHead>
             <TableHead>创建时间</TableHead>
             <TableHead>开始时间</TableHead>
@@ -61,6 +63,9 @@ export function JobTable({
               <TableCell>{job.job_type}</TableCell>
               <TableCell>
                 <Badge variant={statusVariant(job.status)}>{getStatusLabel(job.status)}</Badge>
+              </TableCell>
+              <TableCell className="min-w-[220px] align-top">
+                {job.progress ? <JobProgress progress={job.progress} compact /> : <span className="text-sm text-slate-400">未记录</span>}
               </TableCell>
               <TableCell>{job.created_by}</TableCell>
               <TableCell>{formatTimestamp(job.created_at)}</TableCell>

@@ -5,6 +5,7 @@ import json
 import os
 import socket
 from contextlib import suppress
+from contextvars import ContextVar
 from datetime import UTC, date, datetime
 from collections import defaultdict
 from pathlib import Path
@@ -32,6 +33,12 @@ from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
 from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
+
+
+_KAIPAN_PROGRESS_REPORTER: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar(
+    "kaipan_progress_reporter",
+    default=None,
+)
 
 
 def _to_plain(value: Any) -> Any:
@@ -141,6 +148,46 @@ class JobRunner(BaseService):
         self._job_type_limits = {**get_job_type_limits(), **(job_type_limits or {})}
         self._handlers = handlers or {}
 
+    def _create_progress_tracker(
+        self,
+        *,
+        job_id: str | UUID,
+    ) -> tuple[Callable[[dict[str, Any]], None], Callable[[], Awaitable[None]]]:
+        """创建按顺序写入 Job progress 的回调与收尾器。"""
+        progress_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        update_failed = False
+
+        async def _drain() -> None:
+            nonlocal update_failed
+            while True:
+                item = await progress_queue.get()
+                try:
+                    if item is None:
+                        return
+                    if update_failed:
+                        continue
+                    result = await self._job_service.update_job_progress(job_id=job_id, progress=item)
+                    if result.status != "ok":
+                        update_failed = True
+                except Exception:
+                    update_failed = True
+                finally:
+                    progress_queue.task_done()
+
+        consumer_task = asyncio.create_task(_drain())
+
+        def _report(progress: dict[str, Any]) -> None:
+            if not update_failed:
+                progress_queue.put_nowait(progress)
+
+        async def _finish() -> None:
+            progress_queue.put_nowait(None)
+            await progress_queue.join()
+            with suppress(Exception):
+                await consumer_task
+
+        return _report, _finish
+
     def supported_job_types(self) -> list[str]:
         """返回当前 Runner 支持的 job type 白名单。"""
         return get_runnable_job_types()
@@ -178,7 +225,10 @@ class JobRunner(BaseService):
             return service.fetch(
                 config_path=config_path,
                 trade_date=params.get("trade_date"),
+                start_date=params.get("start_date"),
+                end_date=params.get("end_date"),
                 slot=params.get("slot", "all"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _kaipan_normalize(params: dict[str, Any]) -> ServiceResult:
@@ -189,7 +239,10 @@ class JobRunner(BaseService):
             return service.normalize(
                 config_path=config_path,
                 trade_date=params.get("trade_date"),
+                start_date=params.get("start_date"),
+                end_date=params.get("end_date"),
                 slot=params.get("slot", "all"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _kaipan_run(params: dict[str, Any]) -> ServiceResult:
@@ -217,6 +270,7 @@ class JobRunner(BaseService):
                 start_date=_parse_optional_date(params.get("start_date")),
                 end_date=_parse_optional_date(params.get("end_date")),
                 limit=limit,
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _market_state_build(params: dict[str, Any]) -> ServiceResult:
@@ -235,17 +289,18 @@ class JobRunner(BaseService):
 
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
-            trade_date = params.get("trade_date") or params.get("date") or date.today().isoformat()
-            return await service.build_market_snapshot(
+            return await service.build_snapshot(
                 config_path=params.get("config_path", "config/app.yaml"),
                 benchmark_symbol=params.get("benchmark_symbol"),
-                trade_date=str(trade_date),
+                date=str(params.get("date") or params.get("trade_date") or date.today().isoformat()) if params.get("start_date") is None else None,
+                start_date=str(params.get("start_date")) if params.get("start_date") else None,
+                end_date=str(params.get("end_date")) if params.get("end_date") else None,
                 slot=str(params.get("slot") or "17-30"),
                 profile_id=params.get("profile_id"),
-                market=str(params.get("market") or "CN"),
                 force=_parse_bool(params.get("force"), default=False),
                 offline=_parse_bool(params.get("offline"), default=False),
                 snapshot_type=str(params.get("snapshot_type") or "all"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _strategy_build(params: dict[str, Any]) -> ServiceResult:
@@ -281,6 +336,7 @@ class JobRunner(BaseService):
                 config_path=config_path,
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
                 scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _backtest_validate_rules(params: dict[str, Any]) -> ServiceResult:
@@ -345,6 +401,7 @@ class JobRunner(BaseService):
                 min_confidence=float(params.get("min_confidence") or 0.5),
                 market_regime_version=params.get("market_regime_version") or "market-regime-v3",
                 config_path=params.get("config_path", "config/app.yaml"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
@@ -376,6 +433,7 @@ class JobRunner(BaseService):
                 use_db=_parse_bool(params.get("use_db"), default=False),
                 retry_failed=_parse_bool(params.get("retry_failed"), default=False),
                 new_version=params.get("new_version"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _pipeline_step(params: dict[str, Any]) -> ServiceResult:
@@ -388,6 +446,7 @@ class JobRunner(BaseService):
                 use_db=_parse_bool(params.get("use_db"), default=False),
                 retry_failed=_parse_bool(params.get("retry_failed"), default=False),
                 new_version=params.get("new_version"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _backup_data(params: dict[str, Any]) -> ServiceResult:
@@ -587,8 +646,26 @@ class JobRunner(BaseService):
         )
 
         params = dict(job_payload.get("params") or {})
+        progress_reporter: Callable[[dict[str, Any]], None] | None = None
+        progress_finish: Callable[[], Awaitable[None]] | None = None
+        progress_token = None
+        if job_payload["job_type"] in {
+            "kaipan-fetch",
+            "kaipan-normalize",
+            "ohlcv-crawl",
+            "snapshot-build",
+            "pipeline-run",
+            "pipeline-step",
+            "backtest-run",
+            "rule-pool-backtest",
+        }:
+            progress_reporter, progress_finish = self._create_progress_tracker(job_id=job_id)
+            progress_token = _KAIPAN_PROGRESS_REPORTER.set(progress_reporter)
+
         try:
             result = await handler(params)
+            if progress_finish is not None:
+                await progress_finish()
             result_payload = _to_plain(result.model_dump(mode="json"))
             public_result_payload = _sanitize_result_payload_for_output(result_payload)
             result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
@@ -641,6 +718,9 @@ class JobRunner(BaseService):
                 },
             )
         except Exception as exc:  # noqa: BLE001
+            if progress_finish is not None:
+                with suppress(Exception):
+                    await progress_finish()
             await self._job_service.append_log(job_id=job_id, line=f"[runner] failed: {exc}")
             error_type, error_code, retryable = self._classify_error(
                 job_type=job_payload["job_type"],
@@ -656,6 +736,8 @@ class JobRunner(BaseService):
                 payload={"job": failed.payload.get("job"), "error": str(exc)},
             )
         finally:
+            if progress_token is not None:
+                _KAIPAN_PROGRESS_REPORTER.reset(progress_token)
             heartbeat_task.cancel()
             with suppress(asyncio.CancelledError):
                 await heartbeat_task

@@ -35,6 +35,7 @@ class _FakeJobService:
             "params": kwargs.get("params", {}),
             "result": None,
             "error": None,
+            "progress": None,
             "artifacts": [],
             "created_by": kwargs.get("created_by") or "system",
             "idempotency_key": kwargs.get("idempotency_key"),
@@ -213,14 +214,17 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     assert _job_service_spy.create_calls[0]["confirmed"] is False
     assert _job_service_spy.create_calls[0]["audit_source"]["channel"] == "ui"
     assert _job_service_spy.create_calls[0]["audit_source"]["path"] == "/api/ui/v1/jobs"
+    assert created.json()["job"]["progress"] is None
 
     listed = await client.get("/api/ui/v1/jobs")
     assert listed.status_code == 200
     assert listed.json()["items"][0]["id"] == job_id
+    assert listed.json()["items"][0]["progress"] is None
 
     detail = await client.get(f"/api/ui/v1/jobs/{job_id}")
     assert detail.status_code == 200
     assert detail.json()["job"]["id"] == job_id
+    assert detail.json()["job"]["progress"] is None
 
     logs = await client.get(f"/api/ui/v1/jobs/{job_id}/logs")
     assert logs.status_code == 200

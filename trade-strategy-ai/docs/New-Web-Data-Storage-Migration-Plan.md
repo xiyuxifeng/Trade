@@ -660,16 +660,11 @@
 | 目录 | 删除原因 |
 | --- | --- |
 | `data/` | 交付目标要求不保留任何数据残留，整个数据目录都应清空 |
-| `.pytest_cache/` | 测试缓存，不属于工程代码 |
-| `__pycache__/`（所有递归层级） | Python 字节码缓存，不属于工程代码 |
-| `.mypy_cache/` | 静态检查缓存，不属于工程代码 |
-| `.ruff_cache/` | 代码检查缓存，不属于工程代码 |
 
 ### 13.2 必须删除的文件
 
 | 文件 | 删除原因 |
 | --- | --- |
-| `.DS_Store`（全仓库范围） | macOS 元数据文件，不属于交付内容 |
 | `data/backtest/trading_calendar.json` | 属于数据，不属于代码-only 交付 |
 | `data/config_snapshots/*.json` | 数据快照，不应随代码交付 |
 | `data/profile_snapshots/*.json` | 运行快照，不应随代码交付 |

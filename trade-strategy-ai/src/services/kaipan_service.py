@@ -48,6 +48,7 @@ class KaipanService(BaseService):
 
 	service_name = "kaipan"
 	_ALLOWED_SLOTS = ("09-25", "17-30")
+	_NORMALIZE_DATASETS = KaipanNormalizer.DEFAULT_DATASETS
 	_scheduler_lock = Lock()
 	_scheduler: BackgroundScheduler | None = None
 	_scheduler_pre_market: str | None = None
@@ -141,6 +142,88 @@ class KaipanService(BaseService):
 			]
 		return []
 
+	def _resolve_trade_dates(
+		self,
+		*,
+		trade_date: str | date | None = None,
+		start_date: str | date | None = None,
+		end_date: str | date | None = None,
+	) -> list[date]:
+		"""把单日或区间参数统一展开为交易日列表。"""
+		from src.backtest.engine import iter_trade_dates
+
+		def _parse(value: str | date | None) -> date | None:
+			if value is None:
+				return None
+			if isinstance(value, date):
+				return value
+			return date.fromisoformat(value)
+
+		start = _parse(start_date)
+		end = _parse(end_date)
+		if start is None and end is None:
+			effective = _parse(trade_date) or date.today()
+			start = effective
+			end = effective
+		elif start is None:
+			start = end or _parse(trade_date) or date.today()
+		elif end is None:
+			end = start
+
+		if start > end:
+			raise ValueError("start_date must be before or equal to end_date")
+
+		trade_dates = iter_trade_dates(start, end)
+		if not trade_dates:
+			raise ValueError("no trade dates in range")
+		return trade_dates
+
+	def _progress_payload(
+		self,
+		*,
+		job_type: str,
+		stage: str,
+		current: int,
+		total: int,
+		current_trade_date: str,
+		current_slot: str | None = None,
+		current_fetcher: str | None = None,
+		current_dataset: str | None = None,
+		status: str | None = None,
+		error: str | None = None,
+	) -> dict[str, Any]:
+		"""构造统一的 Job progress payload。"""
+		percent = round((current / total) * 100, 2) if total else 0.0
+		payload: dict[str, Any] = {
+			"job_type": job_type,
+			"stage": stage,
+			"current": current,
+			"total": total,
+			"percent": percent,
+			"remaining": max(total - current, 0),
+			"current_trade_date": current_trade_date,
+			"current_slot": current_slot,
+			"current_fetcher": current_fetcher,
+			"current_dataset": current_dataset,
+			"updated_at": datetime.now().isoformat(),
+		}
+		if current_fetcher is not None:
+			payload["current_step"] = f"{stage}:{current_fetcher}"
+		elif current_dataset is not None:
+			payload["current_step"] = f"{stage}:{current_dataset}"
+		else:
+			payload["current_step"] = stage
+		if status is not None:
+			payload["status"] = status
+		if error is not None:
+			payload["error"] = error
+		return payload
+
+	def _emit_progress(self, progress_callback: Callable[[dict[str, Any]], None] | None, payload: dict[str, Any]) -> None:
+		"""把进度事件发送给上层回调。"""
+		if progress_callback is not None:
+			progress_callback(payload)
+
 	@classmethod
 	def _scheduler_snapshot(cls) -> dict[str, Any]:
 		"""读取当前 scheduler 的内存状态。"""
@@ -180,44 +263,106 @@ class KaipanService(BaseService):
 		*,
 		config_path: str | Path,
 		trade_date: str | date | None = None,
+		start_date: str | date | None = None,
+		end_date: str | date | None = None,
 		slot: str = "all",
+		progress_callback: Callable[[dict[str, Any]], None] | None = None,
 	) -> ServiceResult:
-		"""抓取指定交易日的数据并执行标准化。"""
+		"""抓取指定交易日或区间的数据并执行标准化。"""
 		runtime = self._load_runtime(config_path)
-		td = date.today() if trade_date is None else date.fromisoformat(trade_date) if isinstance(trade_date, str) else trade_date
 		try:
 			slots_to_fetch = self._expand_slots(slot)
+			trade_dates = self._resolve_trade_dates(trade_date=trade_date, start_date=start_date, end_date=end_date)
 		except ValueError as exc:
 			return ServiceResult(status="error", message=str(exc), payload={"config_path": str(runtime["config_path"])})
 		provider = self._create_provider(runtime)
 		normalizer = self._create_normalizer(runtime)
+		total_steps = sum(
+			len(self._fetchers_for_slot(provider, current_slot)) + len(self._NORMALIZE_DATASETS)
+			for _trade_day in trade_dates
+			for current_slot in slots_to_fetch
+		)
+		current_step = 0
+		date_results: dict[str, dict[str, Any]] = {}
 
-		slot_results: dict[str, dict[str, Any]] = {}
-		for current_slot in slots_to_fetch:
-			fetchers = self._fetchers_for_slot(provider, current_slot)
-			slot_results[current_slot] = {
-				"fetchers": [name for name, _ in fetchers],
-				"success": [],
-				"failed": [],
+		for trade_day in trade_dates:
+			trade_day_key = trade_day.isoformat()
+			day_slot_results: dict[str, Any] = {}
+			day_normalize_results: dict[str, Any] = {}
+			date_results[trade_day_key] = {
+				"slot_results": day_slot_results,
+				"normalize_results": day_normalize_results,
 			}
-			for name, fetcher in fetchers:
-				try:
-					fetcher(trade_date=td, slot=current_slot)
-					slot_results[current_slot]["success"].append(name)
-				except Exception as exc:  # noqa: BLE001
-					slot_results[current_slot]["failed"].append({"dataset": name, "error": str(exc)})
 
-		normalize_results = normalizer.normalize_date(td.isoformat(), slots=tuple(slots_to_fetch))
+			for current_slot in slots_to_fetch:
+				fetchers = self._fetchers_for_slot(provider, current_slot)
+				day_slot_results[current_slot] = {
+					"fetchers": [name for name, _ in fetchers],
+					"success": [],
+					"failed": [],
+				}
+				for name, fetcher in fetchers:
+					status = "success"
+					error_message: str | None = None
+					try:
+						fetcher(trade_date=trade_day, slot=current_slot)
+						day_slot_results[current_slot]["success"].append(name)
+					except Exception as exc:  # noqa: BLE001
+						status = "error"
+						error_message = str(exc)
+						day_slot_results[current_slot]["failed"].append({"dataset": name, "error": error_message})
+					current_step += 1
+					self._emit_progress(
+						progress_callback,
+						self._progress_payload(
+							job_type="kaipan-fetch",
+							stage="fetch",
+							current=current_step,
+							total=total_steps,
+							current_trade_date=trade_day_key,
+							current_slot=current_slot,
+							current_fetcher=name,
+							status=status,
+							error=error_message,
+						),
+					)
+
+				def _on_normalize_step(step_payload: dict[str, Any]) -> None:
+					nonlocal current_step
+					current_step += 1
+					dataset_name = step_payload.get("dataset")
+					self._emit_progress(
+						progress_callback,
+						self._progress_payload(
+							job_type="kaipan-fetch",
+							stage="normalize",
+							current=current_step,
+							total=total_steps,
+							current_trade_date=str(step_payload.get("trade_date") or trade_day_key),
+							current_slot=str(step_payload.get("slot") or current_slot),
+							current_dataset=str(dataset_name) if dataset_name else None,
+							status=str(step_payload.get("status") or "unknown"),
+							error=str(step_payload["error"]) if step_payload.get("error") else None,
+						),
+					)
+
+				normalize_results = normalizer.normalize_date(trade_day_key, slots=(current_slot,), progress_callback=_on_normalize_step)
+				day_normalize_results[current_slot] = normalize_results.get(current_slot, {})
+
 		return ServiceResult(
 			status="ok",
 			message="kaipan fetch completed",
 			payload={
 				"config_path": str(runtime["config_path"]),
 				"base_dir": str(runtime["base_dir"]),
-				"trade_date": td.isoformat(),
+				"trade_date": trade_dates[0].isoformat() if len(trade_dates) == 1 else None,
+				"start_date": trade_dates[0].isoformat(),
+				"end_date": trade_dates[-1].isoformat(),
+				"trade_dates": [trade_day.isoformat() for trade_day in trade_dates],
 				"slots": slots_to_fetch,
-				"slot_results": slot_results,
-				"normalize_results": _to_plain(normalize_results),
+				"date_results": _to_plain(date_results),
+				"slot_results": _to_plain(date_results[trade_dates[0].isoformat()]["slot_results"]) if len(trade_dates) == 1 else None,
+				"normalize_results": _to_plain(date_results[trade_dates[0].isoformat()]["normalize_results"]) if len(trade_dates) == 1 else None,
 			},
 		)
 
@@ -226,26 +371,57 @@ class KaipanService(BaseService):
 		*,
 		config_path: str | Path,
 		trade_date: str | date | None = None,
+		start_date: str | date | None = None,
+		end_date: str | date | None = None,
 		slot: str = "all",
+		progress_callback: Callable[[dict[str, Any]], None] | None = None,
 	) -> ServiceResult:
-		"""仅执行 normalize。"""
+		"""仅执行 normalize，可覆盖单日或区间。"""
 		runtime = self._load_runtime(config_path)
-		td = date.today() if trade_date is None else date.fromisoformat(trade_date) if isinstance(trade_date, str) else trade_date
 		try:
 			slots = tuple(self._expand_slots(slot))
+			trade_dates = self._resolve_trade_dates(trade_date=trade_date, start_date=start_date, end_date=end_date)
 		except ValueError as exc:
 			return ServiceResult(status="error", message=str(exc), payload={"config_path": str(runtime["config_path"])})
 		normalizer = self._create_normalizer(runtime)
-		results = normalizer.normalize_date(td.isoformat(), slots=slots)
+		total_steps = len(self._NORMALIZE_DATASETS) * len(slots) * len(trade_dates)
+		current_step = 0
+		date_results: dict[str, dict[str, Any]] = {}
+
+		def _on_normalize_step(step_payload: dict[str, Any]) -> None:
+			nonlocal current_step
+			current_step += 1
+			self._emit_progress(
+				progress_callback,
+				self._progress_payload(
+					job_type="kaipan-normalize",
+					stage="normalize",
+					current=current_step,
+					total=total_steps,
+					current_trade_date=str(step_payload.get("trade_date") or ""),
+					current_slot=str(step_payload.get("slot") or ""),
+					current_dataset=str(step_payload.get("dataset")) if step_payload.get("dataset") else None,
+					status=str(step_payload.get("status") or "unknown"),
+					error=str(step_payload["error"]) if step_payload.get("error") else None,
+				),
+			)
+
+		for trade_day in trade_dates:
+			trade_day_key = trade_day.isoformat()
+			date_results[trade_day_key] = normalizer.normalize_date(trade_day_key, slots=slots, progress_callback=_on_normalize_step)
 		return ServiceResult(
 			status="ok",
 			message="kaipan normalize completed",
 			payload={
 				"config_path": str(runtime["config_path"]),
 				"base_dir": str(runtime["base_dir"]),
-				"trade_date": td.isoformat(),
+				"trade_date": trade_dates[0].isoformat() if len(trade_dates) == 1 else None,
+				"start_date": trade_dates[0].isoformat(),
+				"end_date": trade_dates[-1].isoformat(),
+				"trade_dates": [trade_day.isoformat() for trade_day in trade_dates],
 				"slots": list(slots),
-				"results": _to_plain(results),
+				"date_results": _to_plain(date_results),
+				"results": _to_plain(date_results[trade_dates[0].isoformat()]) if len(trade_dates) == 1 else None,
 			},
 		)
 

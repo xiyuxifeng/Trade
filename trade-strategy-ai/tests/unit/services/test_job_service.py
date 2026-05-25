@@ -137,12 +137,50 @@ def test_create_get_list_job(tmp_path: Path) -> None:
     assert created.status == "ok"
     assert created.payload["created"] is True
     assert created.payload["job"]["created_by"] == "web"
+    assert created.payload["job"]["progress"] is None
     assert loaded.payload["job"]["job_type"] == "backtest-run"
+    assert loaded.payload["job"]["progress"] is None
     assert loaded.payload["job"]["audit_events"][0]["operation"] == "create"
     assert loaded.payload["job"]["audit_events"][0]["actor"] == "web"
     assert loaded.payload["job"]["audit_events"][0]["params_summary"]["trader_id"] == "trader_a"
     assert listed.payload["count"] == 1
     assert listed.payload["items"][0]["id"] == job_id
+    assert listed.payload["items"][0]["progress"] is None
+
+    asyncio.run(engine.dispose())
+
+
+def test_update_job_progress_persists_and_serializes(tmp_path: Path) -> None:
+    """JobService 应支持写入并读取结构化进度。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="kaipan-fetch", params={}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+
+    progress = {
+        "current": 1,
+        "total": 3,
+        "percent": 33.3,
+        "remaining": 2,
+        "current_trade_date": "2026-05-20",
+        "current_slot": "09-25",
+        "current_fetcher": "market_sentiment",
+    }
+    updated = asyncio.run(service.update_job_progress(job_id=job_id, progress=progress))
+    loaded = asyncio.run(service.get_job(job_id))
+    listed = asyncio.run(service.list_jobs())
+
+    assert updated.status == "ok"
+    assert updated.payload["job"]["progress"]["current"] == progress["current"]
+    assert updated.payload["job"]["progress"]["total"] == progress["total"]
+    assert updated.payload["job"]["progress"]["percent"] == progress["percent"]
+    assert updated.payload["job"]["progress"]["remaining"] == progress["remaining"]
+    assert updated.payload["job"]["progress"]["current_trade_date"] == progress["current_trade_date"]
+    assert updated.payload["job"]["progress"]["current_slot"] == progress["current_slot"]
+    assert updated.payload["job"]["progress"]["current_fetcher"] == progress["current_fetcher"]
+    assert updated.payload["job"]["progress"]["updated_at"] is not None
+    assert loaded.payload["job"]["progress"] == updated.payload["job"]["progress"]
+    assert listed.payload["items"][0]["progress"] == updated.payload["job"]["progress"]
 
     asyncio.run(engine.dispose())
 

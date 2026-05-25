@@ -26,6 +26,22 @@ describe('JobDetailPage', () => {
         params: { config_path: '/Users/example/project/config/app.yaml', force: true },
         result: { message: 'ok' },
         error: null,
+        progress: {
+          job_type: 'kaipan-fetch',
+          stage: 'normalize',
+          current: 2,
+          total: 4,
+          percent: 50,
+          remaining: 2,
+          current_trade_date: '2026-05-09',
+          current_slot: '09-25',
+          current_fetcher: null,
+          current_dataset: 'hot_topics',
+          current_step: 'normalize:hot_topics',
+          status: 'success',
+          error: null,
+          updated_at: '2026-05-09T08:01:00Z',
+        },
         artifacts: [
           {
             artifact_id: 'artifact-1',
@@ -116,6 +132,9 @@ describe('JobDetailPage', () => {
 
     expect(await screen.findByText('执行报告')).toBeInTheDocument();
     expect(screen.getByText('成功')).toBeInTheDocument();
+    expect(screen.getByText('执行进度')).toBeInTheDocument();
+    expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
+    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
   });

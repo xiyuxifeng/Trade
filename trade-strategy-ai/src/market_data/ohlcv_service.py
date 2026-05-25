@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 from sqlalchemy import select
@@ -48,6 +48,7 @@ class OHLCVService:
         start_date: date | None = None,
         end_date: date | None = None,
         market_kind_by_symbol: dict[str, str] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, int]:
         """抓取并存储 ohlcv 数据。
 
@@ -70,8 +71,9 @@ class OHLCVService:
         )
         results: dict[str, int] = {}
         kind_map = market_kind_by_symbol or {}
+        total = len(symbols)
 
-        for symbol in symbols:
+        for index, symbol in enumerate(symbols, start=1):
             try:
                 market_kind = kind_map.get(symbol)
                 if not market_kind:
@@ -88,6 +90,22 @@ class OHLCVService:
             except Exception as e:
                 logger.warning(f"抓取失败: {symbol}, error={e}")
                 results[symbol] = 0
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "ohlcv-crawl",
+                        "stage": "crawl",
+                        "current": index,
+                        "total": total,
+                        "percent": round((index / total) * 100, 2) if total else 0.0,
+                        "remaining": max(total - index, 0),
+                        "current_step": f"crawl:{symbol}",
+                        "current_fetcher": symbol,
+                        "current_trade_date": start_date.isoformat() if start_date else None,
+                        "status": "success" if results.get(symbol, 0) > 0 else "partial",
+                        "error": None if results.get(symbol, 0) > 0 else f"failed to crawl {symbol}",
+                    }
+                )
 
         return results
 

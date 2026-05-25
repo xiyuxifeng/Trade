@@ -86,6 +86,7 @@ class PipelineService(BaseService):
         use_db: bool = False,
         retry_failed: bool = False,
         new_version: str | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """执行完整 pipeline。"""
         loaded = load_app_config(config_path)
@@ -101,6 +102,7 @@ class PipelineService(BaseService):
             use_db=use_db,
             retry_failed=retry_failed,
             process_version=new_version or "v1",
+            progress_callback=progress_callback,
         )
         return ServiceResult(
             status="ok",
@@ -122,6 +124,7 @@ class PipelineService(BaseService):
         use_db: bool = False,
         retry_failed: bool = False,
         new_version: str | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """执行 pipeline 的单步或从指定步骤开始的链路。"""
         return await self.run_pipeline(
@@ -133,6 +136,7 @@ class PipelineService(BaseService):
             use_db=use_db,
             retry_failed=retry_failed,
             new_version=new_version,
+            progress_callback=progress_callback,
         )
 
     async def build_clusters(

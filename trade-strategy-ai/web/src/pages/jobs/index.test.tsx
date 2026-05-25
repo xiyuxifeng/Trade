@@ -98,6 +98,22 @@ describe('JobsPage', () => {
           job_type: 'pipeline-run',
           status: 'success',
           created_by: 'alice',
+          progress: {
+            job_type: 'kaipan-fetch',
+            stage: 'normalize',
+            current: 2,
+            total: 4,
+            percent: 50,
+            remaining: 2,
+            current_trade_date: '2026-05-09',
+            current_slot: '09-25',
+            current_fetcher: null,
+            current_dataset: 'hot_topics',
+            current_step: 'normalize:hot_topics',
+            status: 'success',
+            error: null,
+            updated_at: '2026-05-09T08:01:00Z',
+          },
         }),
       ],
       { count: 1, total: 1, skip: 0, limit: 20 },
@@ -129,6 +145,8 @@ describe('JobsPage', () => {
     expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
     expect(await screen.findByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('pipeline-run')).toBeInTheDocument();
+    expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
+    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
 
     await user.selectOptions(screen.getByRole('combobox'), 'failed');
     await waitFor(() => {

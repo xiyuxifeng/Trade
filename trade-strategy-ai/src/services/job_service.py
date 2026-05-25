@@ -368,6 +368,7 @@ class JobService(BaseService):
             "params": _to_plain(job.params),
             "result": _to_plain(job.result),
             "error": _to_plain(job.error),
+            "progress": _to_plain(job.progress),
             "artifacts": artifacts,
             "created_by": job.created_by,
             "idempotency_key": job.idempotency_key,
@@ -1023,6 +1024,36 @@ class JobService(BaseService):
             )
 
         return ServiceResult(status="ok", message="job heartbeat updated", payload={"job": self._serialize_job(job)})
+
+    async def update_job_progress(
+        self,
+        *,
+        job_id: str | UUID,
+        progress: dict[str, Any] | None,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """更新 Job 的结构化进度。"""
+        session_scope = self._ensure_session_factory()
+        now = datetime.now(UTC)
+        normalized_progress = None if progress is None else {**progress, "updated_at": now.isoformat()}
+        async with session_scope() as session:
+            job = await self._load_job(session, job_id)
+            if job is None:
+                return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            job.progress = normalized_progress
+            await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="progress",
+                actor=job.created_by,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"progress": _to_plain(normalized_progress)},
+                event_at=now,
+            )
+
+        return ServiceResult(status="ok", message="job progress updated", payload={"job": self._serialize_job(job)})
 
     async def bind_artifact(
         self,

@@ -1109,7 +1109,11 @@ class BacktestEngine:
         self.strategy_loader = strategy_loader
         self.scoring_func = scoring_func
 
-    async def run(self, request: BacktestRequest) -> BacktestResult:
+    async def run(
+        self,
+        request: BacktestRequest,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> BacktestResult:
         """异步运行回测。
 
         Args:
@@ -1128,9 +1132,24 @@ class BacktestEngine:
         trade_dates = iter_trade_dates(request.date_from, request.date_to)
         records: list[BacktestTradeRecord] = []
 
-        for trade_date in trade_dates:
+        total_days = len(trade_dates)
+        for index, trade_date in enumerate(trade_dates, start=1):
             day_records = await self._process_single_day(trade_date, request)
             records.extend(day_records)
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "backtest-run",
+                        "stage": "backtest",
+                        "current": index,
+                        "total": total_days,
+                        "percent": round((index / total_days) * 100, 2) if total_days else 0.0,
+                        "remaining": max(total_days - index, 0),
+                        "current_step": f"backtest:{trade_date.isoformat()}",
+                        "current_trade_date": trade_date.isoformat(),
+                        "status": "success",
+                    }
+                )
 
         summary = self._build_summary(records, len(trade_dates))
         logger.info(
@@ -1152,7 +1171,11 @@ class BacktestEngine:
             summary=summary,
         )
 
-    def run_sync(self, request: BacktestRequest) -> BacktestResult:
+    def run_sync(
+        self,
+        request: BacktestRequest,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> BacktestResult:
         """同步运行回测（内部调用 async run）。
 
         Args:
@@ -1162,11 +1185,11 @@ class BacktestEngine:
             BacktestResult
         """
         try:
-            return asyncio.run(self.run(request))
+            return asyncio.run(self.run(request, progress_callback=progress_callback))
         except RuntimeError:
             # 已有 event loop（如 Jupyter / pytest-asyncio）时使用现有 loop
             loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self.run(request))
+            return loop.run_until_complete(self.run(request, progress_callback=progress_callback))
 
     async def _process_single_day(
         self, trade_date: date, request: BacktestRequest
@@ -1440,6 +1463,7 @@ class BacktestEngine:
         end_date: date = None,
         min_confidence: float = 0.5,
         market_regime_version: str | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> BacktestResult:
         """
         对规则池中的规则进行回测
@@ -1519,11 +1543,17 @@ class BacktestEngine:
         rule_results: list[RuleBacktestResult] = []
         all_records: list[BacktestTradeRecord] = []
 
-        for rule in rules:
+        trade_dates = iter_trade_dates(start_date, end_date)
+        total_steps = len(rules) * max(len(trade_dates), 1)
+
+        for rule_index, rule in enumerate(rules, start=1):
             result = await self._backtest_single_rule(
                 rule, start_date, end_date,
                 session=session, forward_bars=forward_bars,
                 market_regime_version=market_regime_version,
+                progress_callback=progress_callback,
+                progress_offset=(rule_index - 1) * len(trade_dates),
+                progress_total=total_steps,
             )
             rule_results.append(result)
 
@@ -1575,6 +1605,9 @@ class BacktestEngine:
         session: AsyncSession | None = None,
         forward_bars: dict[str, list[dict[str, Any]]] | None = None,
         market_regime_version: str | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        progress_offset: int = 0,
+        progress_total: int | None = None,
     ) -> RuleBacktestResult:
         """
         对单条规则执行真实回测
@@ -1648,7 +1681,8 @@ class BacktestEngine:
         # 确定加载策略：loader 可用时走 loader，否则从预加载的 bars 派生基础 OHLCV 指标
         use_loader = self.loader is not None
 
-        for trade_date in trade_dates:
+        total_days = len(trade_dates)
+        for day_index, trade_date in enumerate(trade_dates, start=1):
             trade_date_str = trade_date.isoformat()
             market_regime_obj: Any = None
 
@@ -1704,10 +1738,27 @@ class BacktestEngine:
                     t1_ret = _calc_t1_return_from_bars(
                         forward_bars.get(symbol, []), trade_date_str
                     )
-                    if t1_ret is not None:
-                        hit_returns.append(t1_ret)
-                        regime_label = _resolve_regime_label(market_regime_obj) if use_loader else "unknown"
-                        regime_returns[regime_label].append(t1_ret)
+                if t1_ret is not None:
+                    hit_returns.append(t1_ret)
+                    regime_label = _resolve_regime_label(market_regime_obj) if use_loader else "unknown"
+                    regime_returns[regime_label].append(t1_ret)
+
+            if progress_callback is not None and progress_total:
+                completed = progress_offset + day_index
+                progress_callback(
+                    {
+                        "job_type": "rule-pool-backtest",
+                        "stage": "rule_pool_backtest",
+                        "current": completed,
+                        "total": progress_total,
+                        "percent": round((completed / progress_total) * 100, 2) if progress_total else 0.0,
+                        "remaining": max(progress_total - completed, 0),
+                        "current_step": f"{rule.rule_id}:{trade_date_str}",
+                        "current_trade_date": trade_date_str,
+                        "current_dataset": rule.rule_id,
+                        "status": "running",
+                    }
+                )
 
         # 计算统计指标
         hit_rate = hit_count / total_checks if total_checks > 0 else 0.0

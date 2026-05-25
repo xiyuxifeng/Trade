@@ -5,6 +5,7 @@ export type JobRecord = {
   params: Record<string, unknown>;
   result: Record<string, unknown> | null;
   error: JobError | string | null;
+  progress?: JobProgress | null;
   artifacts: JobArtifactRef[];
   created_by: string;
   idempotency_key: string | null;
@@ -28,6 +29,27 @@ export type JobRecord = {
   config_snapshot?: JobConfigSnapshot | null;
   profile_snapshot_path?: string | null;
   profile_snapshot?: JobProfileSnapshot | null;
+};
+
+export type JobProgress = {
+  job_type: string;
+  stage: string;
+  current: number;
+  total: number;
+  percent: number;
+  remaining: number;
+  sub_current?: number | null;
+  sub_total?: number | null;
+  sub_percent?: number | null;
+  sub_remaining?: number | null;
+  current_trade_date: string | null;
+  current_slot: string | null;
+  current_fetcher: string | null;
+  current_dataset: string | null;
+  current_step?: string | null;
+  status?: string | null;
+  error?: string | null;
+  updated_at: string | null;
 };
 
 export type JobAuditEvent = {

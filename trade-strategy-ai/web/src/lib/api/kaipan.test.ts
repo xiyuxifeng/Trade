@@ -31,10 +31,10 @@ describe('kaipan api', () => {
       json: async () => ({ slot_results: {} }),
     } as Response);
 
-    await kaipanFetch({ slot: 'all' });
+    await kaipanFetch({ start_date: '2026-05-01', end_date: '2026-05-09', slot: 'all' });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
-    expect(url).toBe('/api/ui/v1/kaipan/fetch?slot=all');
+    expect(url).toBe('/api/ui/v1/kaipan/fetch?start_date=2026-05-01&end_date=2026-05-09&slot=all');
     expect(init?.method).toBe('POST');
   });
 
@@ -50,7 +50,7 @@ describe('kaipan api', () => {
         json: async () => ({ started: false }),
       } as Response);
 
-    await kaipanNormalize({ slot: 'all' });
+    await kaipanNormalize({ start_date: '2026-05-01', end_date: '2026-05-09', slot: 'all' });
     await kaipanRun({ start_scheduler: false });
 
     const [normalizeUrl, normalizeInit] = vi.mocked(fetch).mock.calls[0] ?? [];

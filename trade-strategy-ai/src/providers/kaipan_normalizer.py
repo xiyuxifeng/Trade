@@ -21,6 +21,22 @@ class KaipanNormalizer:
     读取 YAML 映射文件，将 raw JSON 转换为标准化快照 JSON。
     """
 
+    DEFAULT_DATASETS = (
+        "hot_topics",
+        "topic_constituents",
+        "strong_symbols",
+        "market_sentiment",
+        "market_index",
+        "sharp_withdrawal",
+        "sector_ranking",
+        "market_context",
+        "market_stock_zd_num",
+        "zhang_ting_expression",
+        "daily_limit_index",
+        "weight_performance",
+        "get_feng_k_list",
+    )
+
     def __init__(self, schema_dir: str | Path, snapshots_dir: str | Path) -> None:
         self.schema_dir = resolve_project_path(schema_dir)
         self.snapshots_dir = resolve_project_path(snapshots_dir)
@@ -210,7 +226,12 @@ class KaipanNormalizer:
     def normalize_get_feng_k_list(self, raw_path: Path, slot: str) -> dict[str, Any]:
         return self.normalize("get_feng_k_list", raw_path, slot)
 
-    def normalize_date(self, trade_date: str, slots: tuple[str, ...] = ("09-25", "17-30")) -> dict[str, dict[str, Any]]:
+    def normalize_date(
+        self,
+        trade_date: str,
+        slots: tuple[str, ...] = ("09-25", "17-30"),
+        progress_callback: Any | None = None,
+    ) -> dict[str, dict[str, Any]]:
         """批量转换某交易日全部时间槽的 snapshots。
 
         Args:
@@ -220,32 +241,29 @@ class KaipanNormalizer:
         results = {}
         for slot in slots:
             results[slot] = {}
-            for dataset in (
-                "hot_topics",
-                "topic_constituents",
-                "strong_symbols",
-                "market_sentiment",
-                "market_index",
-                "sharp_withdrawal",
-                "sector_ranking",
-                "market_context",
-                "market_stock_zd_num",
-                "zhang_ting_expression",
-                "daily_limit_index",
-                "weight_performance",
-                "get_feng_k_list",
-            ):
+            for dataset in self.DEFAULT_DATASETS:
                 raw_file = (
                     resolve_project_path("data/kaipan/raw")
                     / dataset
                     / f"{trade_date}_{slot}"
                     / f"{dataset}.json"
                 )
+                step_payload: dict[str, Any] = {
+                    "trade_date": trade_date,
+                    "slot": slot,
+                    "dataset": dataset,
+                }
                 if raw_file.exists():
                     try:
                         results[slot][dataset] = self.normalize(dataset, raw_file, slot)
+                        step_payload["status"] = "success"
                     except Exception as e:
                         results[slot][dataset] = {"_error": str(e)}
+                        step_payload["status"] = "error"
+                        step_payload["error"] = str(e)
                 else:
                     results[slot][dataset] = None  # 明确标记为不存在
+                    step_payload["status"] = "missing"
+                if progress_callback is not None:
+                    progress_callback(step_payload)
         return results

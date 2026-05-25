@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, is_dataclass
-from typing import Any
+from typing import Any, Callable
 from pathlib import Path
 
 from src.audit.service import AuditService, default_dataset_version
@@ -71,6 +71,7 @@ def _build_data_pipeline_handlers(
 	from_step: str | None = None,
 	use_db: bool = False,
 	process_version: str = "v1",
+	progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
 	"""Create node handlers for the built-in data pipeline graph.
 
@@ -91,11 +92,42 @@ def _build_data_pipeline_handlers(
 		current_index = STEP_ORDER.index(step_name)
 		return current_index < from_index
 
+	active_steps = [step for step in STEP_ORDER if not _should_skip(step)]
+	active_total = len(active_steps)
+	active_index_by_step = {step: index + 1 for index, step in enumerate(active_steps)}
+
+	def _emit_progress(step_name: str, *, status: str = "running", current: int | None = None, total: int | None = None, error: str | None = None, current_step: str | None = None, current_dataset: str | None = None, current_trade_date: str | None = None) -> None:
+		if progress_callback is None:
+			return
+		step_total = total if total is not None else active_total
+		step_current = current if current is not None else active_index_by_step.get(step_name, 0)
+		percent = round((step_current / step_total) * 100, 2) if step_total else 0.0
+		progress_callback(
+			{
+				"job_type": "pipeline-run",
+				"stage": step_name,
+				"current": step_current,
+				"total": step_total,
+				"percent": percent,
+				"remaining": max(step_total - step_current, 0),
+				"current_step": current_step or step_name,
+				"current_trade_date": current_trade_date,
+				"current_dataset": current_dataset,
+				"status": status,
+				"error": error,
+			}
+		)
+
 	def _crawl(context: dict[str, Any]) -> CrawlResult:
-		if skip_crawl or _should_skip("crawl"):
+		if _should_skip("crawl"):
+			result = CrawlResult(outputs=[])
+		elif skip_crawl:
+			_emit_progress("crawl", status="success")
 			result = CrawlResult(outputs=[])
 		else:
+			_emit_progress("crawl", status="running")
 			result = run_crawl_task(config=config, base_dir=base_dir, max_articles=max_articles, use_db=use_db)
+			_emit_progress("crawl", status="success")
 		context["crawl_result"] = result
 		return result
 
@@ -119,6 +151,7 @@ def _build_data_pipeline_handlers(
 						cleaned.append(cleaned_path)
 			context["clean_result"] = CleanResult(cleaned_paths=cleaned, stats_path=out_dir / "clean_stats.json")
 			return context["clean_result"]
+		_emit_progress("clean", status="running")
 		if use_db:
 			# 数据库模式：从 raw_articles 表读取并清洗
 			result = await run_clean_from_db_task(
@@ -132,6 +165,7 @@ def _build_data_pipeline_handlers(
 			crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
 			result = run_clean_task(base_dir=base_dir, input_paths=crawl_paths, force=force, max_articles=max_articles)
 		context["clean_result"] = result
+		_emit_progress("clean", status="success")
 		return result
 
 	def _validate(context: dict[str, Any]) -> ValidateResult:
@@ -141,15 +175,18 @@ def _build_data_pipeline_handlers(
 				context["validate_result"] = ValidateResult(validated_paths=clean_result.cleaned_paths, report_path=clean_result.stats_path.parent / "validation_report.json")
 				return context["validate_result"]
 			raise ValueError("Cannot skip validate: clean_result not available")
+		_emit_progress("validate", status="running")
 		clean_result = context["clean_result"]
 		result = run_validate_task(base_dir=base_dir, input_paths=clean_result.cleaned_paths, force=force)
 		context["validate_result"] = result
+		_emit_progress("validate", status="success")
 		return result
 
 	async def _store(context: dict[str, Any]) -> StoreStats:
 		if _should_skip("store"):
 			context["store_stats"] = StoreStats()
 			return context["store_stats"]
+		_emit_progress("store", status="running")
 		validate_result = context["validate_result"]
 		result = await store_articles_jsonl_to_db(base_dir=base_dir, jsonl_paths=validate_result.validated_paths)
 		context["store_stats"] = result
@@ -162,6 +199,7 @@ def _build_data_pipeline_handlers(
 			payload=_store_stats_payload(result),
 			source="pipeline",
 		)
+		_emit_progress("store", status="success")
 		return result
 
 	async def _stock_info_update(context: dict[str, Any]) -> StockInfoUpdateResult:
@@ -169,8 +207,10 @@ def _build_data_pipeline_handlers(
 			# 返回空的 result，后续步骤可继续
 			from src.pipeline.tasks.stock_info_task import StockInfoUpdateResult
 			return StockInfoUpdateResult(updated=False)
+		_emit_progress("stock_info_update", status="running")
 		result = await run_stock_info_update(base_dir=base_dir, force=force)
 		context["stock_info_result"] = result
+		_emit_progress("stock_info_update", status="success")
 		return result
 
 	async def _process(context: dict[str, Any]) -> ProcessTasksStats:
@@ -182,6 +222,9 @@ def _build_data_pipeline_handlers(
 			force=force,
 			retry_failed=retry_failed,
 			version=process_version,
+			progress_callback=progress_callback,
+			overall_current=active_index_by_step["process"],
+			overall_total=active_total,
 		)
 		context["process_stats"] = result
 		return result
@@ -190,8 +233,10 @@ def _build_data_pipeline_handlers(
 		if _should_skip("export"):
 			context["export_result"] = ExportResult(stats=ExportStats(), duckdb_path=DUCKDB_PATH)
 			return context["export_result"]
+		_emit_progress("export", status="running")
 		result = await run_export_task()
 		context["export_result"] = result
+		_emit_progress("export", status="success")
 		return result
 
 	def _cleanup(context: dict[str, Any]) -> dict[str, Any]:
@@ -199,6 +244,7 @@ def _build_data_pipeline_handlers(
 		if _should_skip("cleanup"):
 			context["cleanup_result"] = {"cleaned": [], "errors": []}
 			return context["cleanup_result"]
+		_emit_progress("cleanup", status="running")
 
 		cleaned: list[str] = []
 		errors: list[str] = []
@@ -263,6 +309,7 @@ def _build_data_pipeline_handlers(
 
 		result = {"cleaned": cleaned, "errors": errors}
 		context["cleanup_result"] = result
+		_emit_progress("cleanup", status="success")
 		return result
 
 	return {
@@ -288,6 +335,7 @@ async def _run_data_pipeline_graph(
 	use_db: bool = False,
 	retry_failed: bool = False,
 	process_version: str = "v1",
+	progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[PipelineHealthSnapshot, dict[str, Any]]:
 	"""Run the built-in data pipeline graph and return the snapshot plus context.
 
@@ -323,6 +371,7 @@ async def _run_data_pipeline_graph(
 			from_step=from_step,
 			use_db=use_db,
 			process_version=process_version,
+			progress_callback=progress_callback,
 		),
 		registry=registry,
 	)
@@ -342,6 +391,7 @@ async def run_pipeline(
 	use_db: bool = False,
 	retry_failed: bool = False,
 	process_version: str = "v1",
+	progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> PipelineRunResult:
 	_, context = await _run_data_pipeline_graph(
 		config=config,
@@ -353,6 +403,7 @@ async def run_pipeline(
 		use_db=use_db,
 		retry_failed=retry_failed,
 		process_version=process_version,
+		progress_callback=progress_callback,
 	)
 	if context["health_snapshot"].failed_nodes:
 		raise RuntimeError("; ".join(context["health_snapshot"].error_summaries) or "pipeline graph failed")

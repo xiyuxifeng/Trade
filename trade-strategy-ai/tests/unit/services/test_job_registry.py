@@ -182,6 +182,33 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert kaipan.payload["params"]["profile_id"] == "default"
     assert "config_path" not in kaipan.payload["params"]
 
+    kaipan_fetch = validate_job_submission(
+        job_type="kaipan-fetch",
+        params={
+            "profile_id": "default",
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-03",
+            "slot": "09-25",
+        },
+        created_by="web",
+    )
+    assert kaipan_fetch.status == "ok"
+    assert kaipan_fetch.payload["params"]["start_date"] == "2026-05-01"
+    assert kaipan_fetch.payload["params"]["end_date"] == "2026-05-03"
+
+    kaipan_normalize = validate_job_submission(
+        job_type="kaipan-normalize",
+        params={
+            "profile_id": "default",
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-03",
+            "slot": "17-30",
+        },
+        created_by="web",
+    )
+    assert kaipan_normalize.status == "ok"
+    assert kaipan_normalize.payload["params"]["start_date"] == "2026-05-01"
+
     snapshot = validate_job_submission(
         job_type="snapshot-build",
         params={"profile_id": "default", "date": "2026-05-09", "snapshot_type": "all"},

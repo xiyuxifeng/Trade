@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.models.backtest_result_run import BacktestResultRun
 from src.models.job import Job
 from src.models.job_audit_event import JobAuditEvent
 from src.services.base import ServiceResult
@@ -26,6 +27,34 @@ class _FakeBacktestService:
 
     def run_backtest(self, **kwargs):
         self.run_calls.append(kwargs)
+        progress_callback = kwargs.get("progress_callback")
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "job_type": "backtest-run",
+                    "stage": "backtest",
+                    "current": 1,
+                    "total": 2,
+                    "percent": 50.0,
+                    "remaining": 1,
+                    "current_step": "backtest:2026-04-01",
+                    "current_trade_date": "2026-04-01",
+                    "status": "running",
+                }
+            )
+            progress_callback(
+                {
+                    "job_type": "backtest-run",
+                    "stage": "backtest",
+                    "current": 2,
+                    "total": 2,
+                    "percent": 100.0,
+                    "remaining": 0,
+                    "current_step": "backtest:2026-04-02",
+                    "current_trade_date": "2026-04-02",
+                    "status": "success",
+                }
+            )
         return ServiceResult(
             status="ok",
             message="backtest completed",
@@ -145,6 +174,36 @@ class _FakeBacktestService:
 
     async def run_rule_pool_backtest(self, **kwargs):
         self.rule_pool_calls.append(kwargs)
+        progress_callback = kwargs.get("progress_callback")
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "job_type": "rule-pool-backtest",
+                    "stage": "rule_pool_backtest",
+                    "current": 1,
+                    "total": 2,
+                    "percent": 50.0,
+                    "remaining": 1,
+                    "current_step": "rule-001:2026-04-01",
+                    "current_trade_date": "2026-04-01",
+                    "current_dataset": "rule-001",
+                    "status": "running",
+                }
+            )
+            progress_callback(
+                {
+                    "job_type": "rule-pool-backtest",
+                    "stage": "rule_pool_backtest",
+                    "current": 2,
+                    "total": 2,
+                    "percent": 100.0,
+                    "remaining": 0,
+                    "current_step": "rule-001:2026-04-02",
+                    "current_trade_date": "2026-04-02",
+                    "current_dataset": "rule-001",
+                    "status": "success",
+                }
+            )
         return ServiceResult(
             status="ok",
             message="rule pool backtest completed",
@@ -242,6 +301,7 @@ def _build_job_runner(
         async with engine.begin() as conn:
             await conn.run_sync(Job.__table__.create)
             await conn.run_sync(JobAuditEvent.__table__.create)
+            await conn.run_sync(BacktestResultRun.__table__.create)
 
     asyncio.run(_init_schema())
 
@@ -258,6 +318,41 @@ def _build_job_runner(
                 raise
 
     job_service = JobService(session_scope_factory=_session_scope, job_base_dir=tmp_path / "jobs")
+
+    class _FakeConfigSnapshotService:
+        def capture_config_snapshot(self, config_path):
+            return ServiceResult(
+                status="ok",
+                message="config snapshot captured",
+                payload={
+                    "config_path": str(config_path),
+                    "config_snapshot_id": "config-snapshot-001",
+                    "snapshot_path": str(tmp_path / "config-snapshot.json"),
+                },
+            )
+
+    class _FakeConfigProfileService:
+        async def capture_profile_snapshot(
+            self,
+            profile_id: str,
+            *,
+            job_id: str | None = None,
+            source: str = "job",
+            config_path: str | None = None,
+        ) -> Any:
+            del job_id, source, config_path
+            return ServiceResult(
+                status="ok",
+                message="profile snapshot captured",
+                payload={
+                    "profile_id": profile_id,
+                    "profile_snapshot_id": "profile-snapshot-001",
+                    "snapshot_path": str(tmp_path / "profile-snapshot.json"),
+                },
+            )
+
+    job_service._config_snapshot_service = _FakeConfigSnapshotService()  # noqa: SLF001
+    job_service._config_profile_service = _FakeConfigProfileService()  # noqa: SLF001
     runner = JobRunner(
         job_service=job_service,
         handlers=handlers or {},
@@ -404,6 +499,106 @@ def test_kaipan_run_handler_accepts_profile_only_and_resolves_config_path(
     asyncio.run(engine.dispose())
 
 
+def test_kaipan_fetch_job_writes_progress_to_job_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kaipan 抓取 Job 执行时应把结构化进度写回 Job 记录。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "kaipan.yaml"
+
+    class _FakeKaipanService:
+        def fetch(self, **kwargs):
+            calls.update(kwargs)
+            progress_callback = kwargs.get("progress_callback")
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "kaipan-fetch",
+                        "stage": "fetch",
+                        "current": 1,
+                        "total": 2,
+                        "percent": 50.0,
+                        "remaining": 1,
+                        "current_trade_date": "2026-05-01",
+                        "current_slot": "09-25",
+                        "current_fetcher": "market_sentiment",
+                        "current_dataset": None,
+                        "current_step": "fetch:market_sentiment",
+                        "status": "success",
+                        "updated_at": "2026-05-25T00:00:00Z",
+                    }
+                )
+                progress_callback(
+                    {
+                        "job_type": "kaipan-fetch",
+                        "stage": "normalize",
+                        "current": 2,
+                        "total": 2,
+                        "percent": 100.0,
+                        "remaining": 0,
+                        "current_trade_date": "2026-05-01",
+                        "current_slot": "09-25",
+                        "current_fetcher": None,
+                        "current_dataset": "hot_topics",
+                        "current_step": "normalize:hot_topics",
+                        "status": "success",
+                        "updated_at": "2026-05-25T00:00:01Z",
+                    }
+                )
+            return ServiceResult(
+                status="ok",
+                payload={
+                    "config_path": str(kwargs["config_path"]),
+                    "base_dir": str(tmp_path),
+                    "trade_date": "2026-05-01",
+                    "start_date": kwargs.get("start_date"),
+                    "end_date": kwargs.get("end_date"),
+                    "trade_dates": ["2026-05-01"],
+                    "slots": [kwargs.get("slot", "all")],
+                    "date_results": {},
+                    "slot_results": {},
+                    "normalize_results": {},
+                },
+                message="kaipan done",
+            )
+
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
+    monkeypatch.setattr(job_runner_module, "KaipanService", _FakeKaipanService)
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="kaipan-fetch",
+            params={
+                "profile_id": "default",
+                "start_date": "2026-05-01",
+                "end_date": "2026-05-01",
+                "slot": "09-25",
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls["profile_id"] == "default"
+    assert calls["start_date"] == "2026-05-01"
+    assert calls["end_date"] == "2026-05-01"
+    assert calls["slot"] == "09-25"
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["progress"]["current"] == 2
+    assert loaded.payload["job"]["progress"]["current_step"] == "normalize:hot_topics"
+    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+
+    asyncio.run(engine.dispose())
+
+
 def test_ohlcv_crawl_handler_accepts_profile_only_and_allows_full_crawl(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -504,7 +699,7 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     calls: dict[str, Any] = {}
 
     class _FakeSnapshotService:
-        async def build_market_snapshot(self, **kwargs):
+        async def build_snapshot(self, **kwargs):
             calls.update(kwargs)
             return ServiceResult(
                 status="ok",
@@ -531,7 +726,7 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     assert calls["config_path"] == "config/app.yaml"
     assert calls["benchmark_symbol"] is None
     assert calls["profile_id"] == "default"
-    assert calls["trade_date"] == "2026-05-16"
+    assert calls["date"] == "2026-05-16"
     asyncio.run(engine.dispose())
 
 
@@ -542,7 +737,7 @@ def test_snapshot_build_handler_keeps_config_path_only_without_profile_id(tmp_pa
     calls: dict[str, Any] = {}
 
     class _FakeSnapshotService:
-        async def build_market_snapshot(self, **kwargs):
+        async def build_snapshot(self, **kwargs):
             calls.update(kwargs)
             return ServiceResult(
                 status="ok",
@@ -568,7 +763,254 @@ def test_snapshot_build_handler_keeps_config_path_only_without_profile_id(tmp_pa
     assert result.status == "ok"
     assert calls["config_path"] == "config/app.yaml"
     assert calls["profile_id"] is None
-    assert calls["trade_date"] == "2026-05-16"
+    assert calls["date"] == "2026-05-16"
+    asyncio.run(engine.dispose())
+
+
+def test_submit_ohlcv_crawl_writes_progress_to_job_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ohlcv-crawl 执行时应把 symbol 级进度写回 Job 记录。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeMarketService:
+        async def crawl_ohlcv(self, **kwargs):
+            calls.update(kwargs)
+            progress_callback = kwargs.get("progress_callback")
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "ohlcv-crawl",
+                        "stage": "crawl",
+                        "current": 1,
+                        "total": 2,
+                        "percent": 50.0,
+                        "remaining": 1,
+                        "current_step": "crawl:000001.SZ",
+                        "current_fetcher": "000001.SZ",
+                        "status": "running",
+                    }
+                )
+                progress_callback(
+                    {
+                        "job_type": "ohlcv-crawl",
+                        "stage": "crawl",
+                        "current": 2,
+                        "total": 2,
+                        "percent": 100.0,
+                        "remaining": 0,
+                        "current_step": "crawl:000300.SH",
+                        "current_fetcher": "000300.SH",
+                        "status": "success",
+                    }
+                )
+            return ServiceResult(status="ok", payload={"results": {"000001.SZ": 1, "000300.SH": 1}}, message="ohlcv done")
+
+    monkeypatch.setattr(job_runner_module, "MarketService", lambda: _FakeMarketService())
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="ohlcv-crawl",
+            params={
+                "config_path": "config/app.yaml",
+                "symbols": ["000001.SZ", "000300.SH"],
+                "mode": "full",
+                "start_date": "2026-05-01",
+                "end_date": "2026-05-02",
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls["symbols"] == ["000001.SZ", "000300.SH"]
+    assert loaded.payload["job"]["progress"]["current"] == 2
+    assert loaded.payload["job"]["progress"]["current_step"] == "crawl:000300.SH"
+    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    asyncio.run(engine.dispose())
+
+
+def test_submit_snapshot_build_writes_progress_to_job_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """snapshot-build 执行时应把日期 x 快照类型进度写回 Job 记录。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakeSnapshotService:
+        async def build_snapshot(self, **kwargs):
+            calls.update(kwargs)
+            progress_callback = kwargs.get("progress_callback")
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "snapshot-build",
+                        "stage": "snapshot",
+                        "current": 1,
+                        "total": 4,
+                        "percent": 25.0,
+                        "remaining": 3,
+                        "current_step": "snapshot:hot_topics",
+                        "current_trade_date": "2026-05-01",
+                        "current_dataset": "hot_topics",
+                        "status": "running",
+                    }
+                )
+                progress_callback(
+                    {
+                        "job_type": "snapshot-build",
+                        "stage": "snapshot",
+                        "current": 4,
+                        "total": 4,
+                        "percent": 100.0,
+                        "remaining": 0,
+                        "current_step": "snapshot:strong_symbols",
+                        "current_trade_date": "2026-05-02",
+                        "current_dataset": "strong_symbols",
+                        "status": "success",
+                    }
+                )
+            return ServiceResult(status="ok", payload={"snapshot_paths": [str(tmp_path / "snapshot.json")]}, message="snapshot done")
+
+    monkeypatch.setattr(job_runner_module, "SnapshotService", lambda: _FakeSnapshotService())
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="snapshot-build",
+            params={
+                "config_path": "config/app.yaml",
+                "benchmark_symbol": "000300.SH",
+                "start_date": "2026-05-01",
+                "end_date": "2026-05-02",
+                "slot": "17-30",
+                "snapshot_type": "all",
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls["start_date"] == "2026-05-01"
+    assert calls["end_date"] == "2026-05-02"
+    assert loaded.payload["job"]["progress"]["current"] == 4
+    assert loaded.payload["job"]["progress"]["current_step"] == "snapshot:strong_symbols"
+    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    asyncio.run(engine.dispose())
+
+
+def test_submit_pipeline_run_writes_progress_to_job_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """pipeline-run 执行时应把步骤与文章进度写回 Job 记录。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: dict[str, Any] = {}
+
+    class _FakePipelineService:
+        async def run_pipeline(self, **kwargs):
+            calls.update(kwargs)
+            progress_callback = kwargs.get("progress_callback")
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "pipeline-run",
+                        "stage": "crawl",
+                        "current": 1,
+                        "total": 3,
+                        "percent": 33.33,
+                        "remaining": 2,
+                        "current_step": "crawl",
+                        "status": "running",
+                    }
+                )
+                progress_callback(
+                    {
+                        "job_type": "pipeline-run",
+                        "stage": "process",
+                        "current": 3,
+                        "total": 3,
+                        "percent": 100.0,
+                        "remaining": 0,
+                        "current_step": "process:article-003",
+                        "current_dataset": "article_metadata_extracted",
+                        "status": "success",
+                    }
+                )
+            return ServiceResult(status="ok", payload={"result": "pipeline ok"}, message="pipeline done")
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    runner._pipeline_service_factory = lambda: _FakePipelineService()  # noqa: SLF001
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="pipeline-run",
+            params={"config_path": "config/app.yaml", "max_articles": 10, "retry_failed": True},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls["retry_failed"] is True
+    assert loaded.payload["job"]["progress"]["current"] == 3
+    assert loaded.payload["job"]["progress"]["current_step"] == "process:article-003"
+    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    asyncio.run(engine.dispose())
+
+
+def test_submit_backtest_jobs_write_progress_to_job_record(tmp_path: Path) -> None:
+    """backtest-run 与 rule-pool-backtest 执行时应把日期级进度写回 Job 记录。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, job_service, engine, _ = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+
+    backtest_submitted = asyncio.run(
+        runner.submit_job(
+            job_type="backtest-run",
+            params={
+                "config_path": "config/app.yaml",
+                "trader_id": "trader-a",
+                "date_from": "2026-04-01",
+                "date_to": "2026-04-02",
+                "mode": "full",
+                "use_snapshot_only": True,
+                "scoring_profile": "stage5",
+            },
+            created_by="web",
+        )
+    )
+    backtest_job_id = backtest_submitted.payload["execution"]["job"]["id"]
+    backtest_loaded = asyncio.run(job_service.get_job(backtest_job_id))
+
+    rule_pool_submitted = asyncio.run(
+        runner.submit_job(
+            job_type="rule-pool-backtest",
+            params={
+                "config_path": "config/app.yaml",
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-02",
+                "min_confidence": 0.6,
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+    rule_pool_job_id = rule_pool_submitted.payload["execution"]["job"]["id"]
+    rule_pool_loaded = asyncio.run(job_service.get_job(rule_pool_job_id))
+
+    assert backtest_submitted.status == "ok"
+    assert backtest_loaded.payload["job"]["progress"]["current"] == 2
+    assert backtest_loaded.payload["job"]["progress"]["current_step"] == "backtest:2026-04-02"
+    assert backtest_loaded.payload["job"]["progress"]["percent"] == 100.0
+    assert rule_pool_submitted.status == "ok"
+    assert rule_pool_loaded.payload["job"]["progress"]["current"] == 2
+    assert rule_pool_loaded.payload["job"]["progress"]["current_step"] == "rule-001:2026-04-02"
+    assert rule_pool_loaded.payload["job"]["progress"]["percent"] == 100.0
     asyncio.run(engine.dispose())
 
 

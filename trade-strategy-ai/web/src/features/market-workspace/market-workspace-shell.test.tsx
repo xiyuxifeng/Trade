@@ -70,7 +70,31 @@ describe('MarketWorkspaceShell', () => {
       total: 1,
       skip: 0,
       limit: 12,
-      items: [],
+      items: [
+        {
+          id: 'job-kaipan-progress',
+          job_type: 'kaipan-fetch',
+          status: 'running',
+          created_by: 'web',
+          created_at: '2026-05-25T08:00:00Z',
+          progress: {
+            job_type: 'kaipan-fetch',
+            stage: 'normalize',
+            current: 2,
+            total: 4,
+            percent: 50,
+            remaining: 2,
+            current_trade_date: '2026-05-25',
+            current_slot: '17-30',
+            current_fetcher: null,
+            current_dataset: 'hot_topics',
+            current_step: 'normalize:hot_topics',
+            status: 'success',
+            error: null,
+            updated_at: '2026-05-25T08:05:00Z',
+          },
+        },
+      ],
     } as never);
     mockedListArtifacts.mockResolvedValue({
       count: 0,
@@ -131,7 +155,31 @@ describe('MarketWorkspaceShell', () => {
       total: 1,
       skip: 0,
       limit: 12,
-      items: [],
+      items: [
+        {
+          id: 'job-kaipan-progress',
+          job_type: 'kaipan-fetch',
+          status: 'running',
+          created_by: 'web',
+          created_at: '2026-05-25T08:00:00Z',
+          progress: {
+            job_type: 'kaipan-fetch',
+            stage: 'normalize',
+            current: 2,
+            total: 4,
+            percent: 50,
+            remaining: 2,
+            current_trade_date: '2026-05-25',
+            current_slot: '17-30',
+            current_fetcher: null,
+            current_dataset: 'hot_topics',
+            current_step: 'normalize:hot_topics',
+            status: 'success',
+            error: null,
+            updated_at: '2026-05-25T08:05:00Z',
+          },
+        },
+      ],
     } as never);
     mockedListArtifacts.mockResolvedValue({
       count: 0,
@@ -238,7 +286,27 @@ describe('MarketWorkspaceShell', () => {
     expect(screen.getByRole('heading', { name: 'Dashboard report' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '最近产物' })).toBeInTheDocument();
     expect(await screen.findByRole('combobox', { name: /Profile/ })).toHaveValue('default');
+    expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('结束日期')).toBeInTheDocument();
+    expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
+    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '启动调度器' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '运行Kaipan 抓取' }));
+
+    await waitFor(() => {
+      expect(mockedCreateJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          job_type: 'kaipan-fetch',
+          params: expect.objectContaining({
+            profile_id: 'default',
+            start_date: expect.any(String),
+            end_date: expect.any(String),
+            slot: '17-30',
+          }),
+        }),
+      );
+    });
 
     await user.click(screen.getByRole('button', { name: '启动调度器' }));
 

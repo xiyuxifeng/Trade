@@ -369,6 +369,7 @@ class BacktestService(BaseService):
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """运行离线回测。"""
         request = self._build_request(
@@ -388,7 +389,12 @@ class BacktestService(BaseService):
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
         )
-        result = engine.run_sync(request)
+        try:
+            result = engine.run_sync(request, progress_callback=progress_callback)
+        except TypeError as exc:
+            if "progress_callback" not in str(exc):
+                raise
+            result = engine.run_sync(request)
         fingerprint = fingerprint_result(result)
         return ServiceResult(
             status="ok",
@@ -576,6 +582,7 @@ class BacktestService(BaseService):
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """对规则池中的规则执行回测。"""
         self._ensure_session_scope_factory()
@@ -600,6 +607,7 @@ class BacktestService(BaseService):
                     end_date=end_date,
                     min_confidence=min_confidence,
                     market_regime_version=market_regime_version,
+                    progress_callback=progress_callback,
                 )
         except Exception as e:
             logger = __import__("logging").getLogger(__name__)

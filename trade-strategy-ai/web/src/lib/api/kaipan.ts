@@ -13,6 +13,8 @@ import type {
 function buildQueryString(params: KaipanFetchRequest) {
   const query = new URLSearchParams();
   if (params.trade_date) query.set('trade_date', params.trade_date);
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date) query.set('end_date', params.end_date);
   if (params.slot) query.set('slot', params.slot);
   return query.toString();
 }

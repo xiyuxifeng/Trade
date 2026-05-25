@@ -1,4 +1,5 @@
 import { SectionCard, StatusBadge, LoadingState, EmptyState } from '@/components/kit';
+import { JobProgress } from '@/components/jobs/JobProgress';
 import type { JobRecord } from '@/types/jobs';
 
 type MarketWorkspaceRecentJobsProps = {
@@ -42,6 +43,7 @@ export function MarketWorkspaceRecentJobs({ jobs, loading, compact = false }: Ma
                 </div>
                 <StatusBadge value={job.status} />
               </div>
+              {job.progress ? <JobProgress progress={job.progress} compact className={compact ? 'mt-2' : 'mt-3'} /> : null}
               <div className={compact ? 'mt-2 flex flex-wrap items-center gap-2' : 'mt-3 flex flex-wrap items-center gap-3'}>
                 <a className={compact ? 'text-xs font-medium text-sky-700 hover:text-sky-800' : 'text-sm font-medium text-sky-700 hover:text-sky-800'} href={`/jobs/${job.id}`}>
                   打开 Job 详情

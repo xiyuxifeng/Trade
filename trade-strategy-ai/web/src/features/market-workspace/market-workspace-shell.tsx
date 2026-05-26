@@ -79,6 +79,97 @@ type MarketWorkspaceShellProps = {
   mode?: MarketWorkspaceMode;
 };
 
+type MarketWorkspaceModeConfig = {
+  title: string;
+  description: string;
+  paramsTitle: string;
+  paramsDescription: string;
+  jobFilter: Set<string>;
+  submissionHint: string;
+  showQuickLinks: boolean;
+  showDataHealthCenter: boolean;
+  showOhlcvCards: boolean;
+};
+
+const MARKET_WORKSPACE_MODE_CONFIG: Record<MarketWorkspaceMode, MarketWorkspaceModeConfig> = {
+  all: {
+    title: '市场数据工作台',
+    description: '在 Web 中运行和查看市场数据链路，保持与正式交付版一致的浅色中文工作台风格。',
+    paramsTitle: '运行参数',
+    paramsDescription: '这些参数会被运行按钮复用，提交时仍走 Job Center。',
+    jobFilter: RUNTIME_JOB_TYPES,
+    submissionHint: '操作已完成。',
+    showQuickLinks: true,
+    showDataHealthCenter: false,
+    showOhlcvCards: false,
+  },
+  kaipan: {
+    title: 'Kaipan 数据',
+    description: '抓取、归一化并检查 Kaipan 数据健康状况。',
+    paramsTitle: '任务参数',
+    paramsDescription: '只保留 Kaipan 抓取和归一化需要的参数，使用交易日期范围和 slot 提交。',
+    jobFilter: new Set(['kaipan-fetch', 'kaipan-normalize', 'kaipan-run']),
+    submissionHint: '调度器由当前后台进程管理，不依赖 Job Center。',
+    showQuickLinks: false,
+    showDataHealthCenter: true,
+    showOhlcvCards: false,
+  },
+  ohlcv: {
+    title: 'OHLCV 行情',
+    description: '抓取和回灌 OHLCV 行情，并查看最近任务与调度状态。',
+    paramsTitle: '抓取参数',
+    paramsDescription: '保留 OHLCV 抓取和回灌需要的参数。',
+    jobFilter: new Set(['ohlcv-crawl']),
+    submissionHint: 'OHLCV 调度器由当前后台进程管理，不依赖 Job Center。',
+    showQuickLinks: false,
+    showDataHealthCenter: false,
+    showOhlcvCards: true,
+  },
+};
+
+function ProfileField({
+  id,
+  label,
+  profileId,
+  onChange,
+  loading,
+  items,
+  selectedSnapshotConfigPath,
+  fallbackConfigPath,
+  profileListError,
+  profileDetailError,
+}: {
+  id: string;
+  label: string;
+  profileId: string;
+  onChange: (value: string) => void;
+  loading: boolean;
+  items: ProfileRecord[];
+  selectedSnapshotConfigPath: string | null | undefined;
+  fallbackConfigPath: string;
+  profileListError: boolean;
+  profileDetailError: boolean;
+}) {
+  return (
+    <label className="space-y-2" htmlFor={id}>
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <Select id={id} value={profileId} onChange={(event) => onChange(event.target.value)} disabled={loading}>
+        {items.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+        {items.map((profile) => (
+          <option key={profile.profile_id} value={profile.profile_id}>
+            {profile.name} ({profile.profile_id})
+          </option>
+        ))}
+      </Select>
+      <p className="text-xs text-slate-500">
+        配置路径将从所选 Profile 的最新快照自动解析：{selectedSnapshotConfigPath ?? fallbackConfigPath}
+      </p>
+      {profileListError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
+      {profileDetailError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
+    </label>
+  );
+}
+
 function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketWorkspaceMode) {
   const symbols = form.symbols
     .split(/[\n,]/)
@@ -204,6 +295,7 @@ export function MarketOhlcvWorkspaceShell() {
 }
 
 function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) {
+  const modeConfig = MARKET_WORKSPACE_MODE_CONFIG[mode];
   const [form, setForm] = useState<WorkspaceFormState>({
     configPath: 'config/app.yaml',
     ohlcvProfileId: '',
@@ -394,15 +486,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     },
   });
 
-  const visibleRunnerTypes = useMemo(() => {
-    if (mode === 'kaipan') {
-      return new Set(['kaipan-fetch', 'kaipan-normalize', 'kaipan-run']);
-    }
-    if (mode === 'ohlcv') {
-      return new Set(['ohlcv-crawl']);
-    }
-    return RUNTIME_JOB_TYPES;
-  }, [mode]);
+  const visibleRunnerTypes = useMemo(() => modeConfig.jobFilter, [modeConfig.jobFilter]);
 
   const visibleRunners = useMemo(() => {
     const scheduleLabel = kaipanSchedulerScheduleLabel;
@@ -432,33 +516,15 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
 
   return (
     <main className="page-stack">
-      <PageHeader
-        kicker="市场数据"
-        title={mode === 'kaipan' ? 'Kaipan 数据' : mode === 'ohlcv' ? 'OHLCV 行情' : '市场数据工作台'}
-        description={
-          mode === 'kaipan'
-            ? '抓取、归一化并检查 Kaipan 数据健康状况。'
-            : mode === 'ohlcv'
-              ? '抓取和回灌 OHLCV 行情，并查看最近任务与调度状态。'
-              : '在 Web 中运行和查看市场数据链路，保持与正式交付版一致的浅色中文工作台风格。'
-        }
-      />
+      <PageHeader kicker="市场数据" title={modeConfig.title} description={modeConfig.description} />
 
       {submissionMessage ? (
         <Card className="border-sky-200 bg-sky-50 text-sky-900 shadow-sm">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
               <p className="font-medium">{submissionMessage}</p>
-                <p className="text-sm text-sky-700">
-                  {submissionJobId
-                    ? '任务已通过 Job Center 创建，不需要 CLI。'
-                    : mode === 'kaipan'
-                      ? '调度器由当前后台进程管理，不依赖 Job Center。'
-                      : mode === 'ohlcv'
-                        ? 'OHLCV 调度器由当前后台进程管理，不依赖 Job Center。'
-                      : '操作已完成。'}
-                </p>
-              </div>
+              <p className="text-sm text-sky-700">{submissionJobId ? '任务已通过 Job Center 创建，不需要 CLI。' : modeConfig.submissionHint}</p>
+            </div>
             <div className="flex flex-wrap gap-2">
               {submissionJobId ? (
                 <a
@@ -486,42 +552,25 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
           <CardHeader>
-            <CardTitle className="text-slate-900">
-              {mode === 'kaipan' ? '任务参数' : mode === 'ohlcv' ? '抓取参数' : '运行参数'}
-            </CardTitle>
-            <CardDescription className="text-slate-500">
-              {mode === 'kaipan'
-                ? '只保留 Kaipan 抓取和归一化需要的参数，使用交易日期范围和 slot 提交。'
-                : mode === 'ohlcv'
-                  ? '保留 OHLCV 抓取和回灌需要的参数。'
-                  : '这些参数会被运行按钮复用，提交时仍走 Job Center。'}
-            </CardDescription>
+            <CardTitle className="text-slate-900">{modeConfig.paramsTitle}</CardTitle>
+            <CardDescription className="text-slate-500">{modeConfig.paramsDescription}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             {mode === 'kaipan' || mode === 'all' ? (
               <>
                 {mode === 'kaipan' ? (
-                  <label className="space-y-2" htmlFor="kaipan-profile">
-                    <span className="text-sm font-medium text-slate-700">Profile</span>
-                    <Select
-                      id="kaipan-profile"
-                      value={form.kaipanProfileId}
-                      onChange={(event) => updateForm({ kaipanProfileId: event.target.value })}
-                      disabled={kaipanProfilesQuery.isLoading}
-                    >
-                      {kaipanProfileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
-                      {kaipanProfileItems.map((profile: ProfileRecord) => (
-                        <option key={profile.profile_id} value={profile.profile_id}>
-                          {profile.name} ({profile.profile_id})
-                        </option>
-                      ))}
-                    </Select>
-                    <p className="text-xs text-slate-500">
-                      配置路径将从所选 Profile 的最新快照自动解析：{selectedKaipanProfileSnapshot?.config_path ?? resolvedKaipanConfigPath}
-                    </p>
-                    {kaipanProfilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
-                    {selectedKaipanProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
-                  </label>
+                  <ProfileField
+                    id="kaipan-profile"
+                    label="Profile"
+                    profileId={form.kaipanProfileId}
+                    onChange={(value) => updateForm({ kaipanProfileId: value })}
+                    loading={kaipanProfilesQuery.isLoading}
+                    items={kaipanProfileItems}
+                    selectedSnapshotConfigPath={selectedKaipanProfileSnapshot?.config_path}
+                    fallbackConfigPath={resolvedKaipanConfigPath}
+                    profileListError={kaipanProfilesQuery.isError}
+                    profileDetailError={selectedKaipanProfileDetailQuery.isError}
+                  />
                 ) : (
                   <label className="space-y-2">
                     <span className="text-sm font-medium text-slate-700">配置路径</span>
@@ -571,27 +620,18 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             {mode === 'ohlcv' || mode === 'all' ? (
               <>
                 {mode === 'ohlcv' ? (
-                  <label className="space-y-2" htmlFor="ohlcv-profile">
-                    <span className="text-sm font-medium text-slate-700">Profile</span>
-                    <Select
-                      id="ohlcv-profile"
-                      value={form.ohlcvProfileId}
-                      onChange={(event) => updateForm({ ohlcvProfileId: event.target.value })}
-                      disabled={ohlcvProfilesQuery.isLoading}
-                    >
-                      {ohlcvProfileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
-                      {ohlcvProfileItems.map((profile: ProfileRecord) => (
-                        <option key={profile.profile_id} value={profile.profile_id}>
-                          {profile.name} ({profile.profile_id})
-                        </option>
-                      ))}
-                    </Select>
-                    <p className="text-xs text-slate-500">
-                      配置路径将从所选 Profile 的最新快照自动解析：{selectedOhlcvProfileSnapshot?.config_path ?? resolvedOhlcvConfigPath}
-                    </p>
-                    {ohlcvProfilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
-                    {selectedOhlcvProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
-                  </label>
+                  <ProfileField
+                    id="ohlcv-profile"
+                    label="Profile"
+                    profileId={form.ohlcvProfileId}
+                    onChange={(value) => updateForm({ ohlcvProfileId: value })}
+                    loading={ohlcvProfilesQuery.isLoading}
+                    items={ohlcvProfileItems}
+                    selectedSnapshotConfigPath={selectedOhlcvProfileSnapshot?.config_path}
+                    fallbackConfigPath={resolvedOhlcvConfigPath}
+                    profileListError={ohlcvProfilesQuery.isError}
+                    profileDetailError={selectedOhlcvProfileDetailQuery.isError}
+                  />
                 ) : (
                   <label className="space-y-2">
                     <span className="text-sm font-medium text-slate-700">配置路径</span>
@@ -684,7 +724,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
           </CardContent>
         </Card>
 
-        {mode === 'ohlcv' ? (
+        {modeConfig.showOhlcvCards ? (
           <div className="space-y-4">
             <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
               <CardHeader>
@@ -761,7 +801,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
         )}
       </section>
 
-      {mode === 'ohlcv' ? (
+      {modeConfig.showOhlcvCards ? (
         <section className="space-y-4">
           {jobsError ? (
             <ErrorState
@@ -812,7 +852,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             <MarketWorkspaceRecentJobs jobs={marketJobs.slice(0, 8)} loading={jobsQuery.isLoading} />
           )}
 
-          {mode === 'kaipan' ? (
+          {modeConfig.showDataHealthCenter ? (
             <section className="grid gap-4 xl:grid-cols-2">
               <DataHealthCenter />
               {artifactsError ? (
@@ -830,7 +870,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
         </>
       )}
 
-      {mode === 'all' ? (
+      {modeConfig.showQuickLinks ? (
         <section className="grid gap-4 md:grid-cols-2">
           <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
             <CardHeader>

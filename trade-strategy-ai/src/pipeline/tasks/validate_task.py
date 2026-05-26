@@ -5,11 +5,35 @@ from dataclasses import dataclass
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from src.common.utils import ensure_dir, write_json
 from src.models.blog_article import BlogArticle
 from src.pipeline.validation import DataValidator, ValidationSeverity
+
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+def _emit_progress(
+	*, progress_callback: ProgressCallback | None, status: str, current: int, total: int, current_step: str, current_dataset: str | None = None
+) -> None:
+	if progress_callback is None:
+		return
+	percent = round((current / total) * 100, 2) if total else 0.0
+	progress_callback(
+		{
+			"job_type": "validate",
+			"stage": "validate",
+			"status": status,
+			"current": current,
+			"total": total,
+			"percent": percent,
+			"remaining": max(total - current, 0),
+			"current_step": current_step,
+			"current_dataset": current_dataset,
+		}
+	)
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -71,7 +95,14 @@ def _to_blog_article(record: dict[str, Any]) -> BlogArticle:
 	)
 
 
-def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = False, max_articles: int | None = None) -> ValidateResult:
+def run_validate_task(
+	*,
+	base_dir: Path,
+	input_paths: list[Path],
+	force: bool = False,
+	max_articles: int | None = None,
+	progress_callback: ProgressCallback | None = None,
+) -> ValidateResult:
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "validate")
 	report: dict[str, Any] = {
 		"files": [],
@@ -81,16 +112,25 @@ def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = 
 
 	validator = DataValidator()
 
-	for p in input_paths:
+	for index, p in enumerate(input_paths, start=1):
 		if not p.exists():
 			continue
 		out_path = out_dir / (p.stem + ".validated.jsonl")
 		if out_path.exists() and not force:
 			validated_paths.append(out_path)
+			_emit_progress(
+				progress_callback=progress_callback,
+				status="success",
+				current=index,
+				total=len(input_paths),
+				current_step=str(p.name),
+				current_dataset=str(out_path.name),
+			)
 			continue
 		if out_path.exists():
 			out_path.unlink()
 
+		records = list(_iter_jsonl(p))
 		file_stats: dict[str, Any] = {
 			"input_path": str(p),
 			"output_path": str(out_path),
@@ -99,11 +139,19 @@ def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = 
 			"issues": [],
 		}
 
-		for rec in _iter_jsonl(p):
+		for index, rec in enumerate(records, start=1):
 			if max_articles is not None and file_stats["records"] >= max_articles:
 				break
 			file_stats["records"] += 1
 			report["summary"]["records"] += 1
+			_emit_progress(
+				progress_callback=progress_callback,
+				status="running",
+				current=index,
+				total=len(records),
+				current_step=str(p.name),
+				current_dataset=str(out_path.name),
+			)
 
 			article = _to_blog_article(rec)
 			vr = validator.validate_article(article)
@@ -146,6 +194,14 @@ def run_validate_task(*, base_dir: Path, input_paths: list[Path], force: bool = 
 
 		report["files"].append(file_stats)
 		validated_paths.append(out_path)
+		_emit_progress(
+			progress_callback=progress_callback,
+			status="success",
+			current=index,
+			total=len(input_paths),
+			current_step=str(p.name),
+			current_dataset=str(out_path.name),
+		)
 
 	report_path = out_dir / "validation_report.json"
 	write_json(report_path, report)

@@ -848,6 +848,104 @@ Artifact 类型至少支持：
 
 ---
 
+### [x] UI-V1-012 P0 Article Pipeline Step Builder
+
+任务目标：把文章工作台的抓取与处理页改成 step 选择 + 动态参数表单，让用户可以为不同 step 生成对应 Job。
+
+允许修改：
+
+- `web/src/pages/articles/ArticlePipelinePage.tsx`
+- `web/src/pages/articles/index.tsx`
+- `web/src/lib/api/pipelines.ts`
+- `web/src/types/pipeline.ts`
+- `web/src/lib/api/contract.test.ts`
+- `web/src/pages/articles/index.test.tsx`
+- `web/src/pages/articles/ArticlePipelinePage.test.tsx`
+
+禁止修改：
+
+- 不允许把 step 参数写死成单一 `pipeline-run` 表单。
+- 不允许前端自己推断不存在的 step。
+- 不允许绕过 API 直接触发后端内部函数。
+
+页面能力：
+
+1. 展示 `article_pipeline` 的 step 下拉，包含 `crawl / clean / validate / store / process`。
+2. 选择 step 后显示该 step 对应的参数 schema。
+3. 页面统一使用 Profile，不再展示 `config_path`。
+4. 每个 step 都能填写 `Force`。
+5. `crawl / clean / validate / store / process` 步骤都支持增量/Force。
+6. 提交后跳转到 Job Detail，并可通过 Job 进度观察执行状态。
+
+状态要求：
+
+- loading
+- error
+- empty steps
+- validation error
+- success
+
+验收标准：
+
+- 用户可以切换不同 step 并提交 Job。
+- 不同 step 的参数表单不会错位。
+- `Force` 在页面上可见且与后端 contract 对齐。
+- Profile 选择与后端 contract 对齐，页面不再暴露 `config_path`。
+
+主任务关联：
+
+- `NW-V1-S5-001`
+
+---
+
+### [x] UI-V1-013 P0 Article Pipeline Scheduler Panel
+
+任务目标：在文章工作台增加 `pipeline-run` 专用 Schedule 面板，支持启动、停止和状态查看。
+
+允许修改：
+
+- `web/src/pages/articles/ArticlePipelinePage.tsx`
+- `web/src/components/articles/*`
+- `web/src/lib/api/pipelines.ts`
+- `web/src/types/pipeline.ts`
+- `web/src/pages/articles/ArticlePipelinePage.test.tsx`
+
+禁止修改：
+
+- 不允许把 schedule 做成 step 级别。
+- 不允许把 schedule 状态仅保存在前端。
+- 不允许让页面直接判断当天是否完成。
+
+页面能力：
+
+1. 设置调度时间。
+2. 统一使用 Profile，不再展示 `config_path`。
+3. 启动 schedule。
+4. 停止 schedule。
+5. 查看当前 schedule 状态。
+6. 当天已完成且未勾选 `Force` 时展示已完成提示。
+
+状态要求：
+
+- loading
+- error
+- stopped
+- running
+- already completed
+- force rerun
+
+验收标准：
+
+- 用户可在页面上启动和停止日程。
+- 状态刷新后能看到当前调度运行态。
+- 重复触发当天任务时有明确提示。
+
+主任务关联：
+
+- `NW-V1-S5-002`
+
+---
+
 # UI-V2：正式用户工作台
 
 ## UI-V2 目标

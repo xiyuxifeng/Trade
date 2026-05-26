@@ -27,5 +27,4 @@ def test_article_pipeline_spec_summary_is_catalog_friendly() -> None:
     assert summary["ui_page"] == "/articles"
     assert "UI-V1-010" in summary["ui_task_ids"]
     assert summary["output_artifacts"][0]["kind"] == "result-json"
-    assert summary["steps"][1]["job_type"] == "pipeline-run"
-    assert summary["steps"][2]["extensions"]["resume_mode"] is True
+    assert [step["job_type"] for step in summary["steps"]] == ["crawl", "clean", "validate", "store", "process"]

@@ -12,6 +12,8 @@ class CrawlResult:
 	outputs: list[str]
 
 
-def run_crawl_task(*, config: AppConfig, base_dir: Path, max_articles: int | None = None, use_db: bool = False) -> CrawlResult:
-	outputs = run_crawl(config, base_dir=base_dir, max_articles=max_articles, use_db=use_db)
+def run_crawl_task(
+	*, config: AppConfig, base_dir: Path, max_articles: int | None = None, use_db: bool = False, force: bool = False
+) -> CrawlResult:
+	outputs = run_crawl(config, base_dir=base_dir, max_articles=max_articles, use_db=use_db, force=force)
 	return CrawlResult(outputs=outputs)

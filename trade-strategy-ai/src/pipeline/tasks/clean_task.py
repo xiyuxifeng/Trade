@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import select
 
@@ -14,6 +14,30 @@ from src.db.session import session_scope
 from src.models.blog_article import BlogArticle
 from src.models.raw_article import RawArticle
 from src.pipeline.validation import DataValidator
+
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+def _emit_progress(
+	*, progress_callback: ProgressCallback | None, status: str, current: int, total: int, current_step: str, current_dataset: str | None = None
+) -> None:
+	if progress_callback is None:
+		return
+	percent = round((current / total) * 100, 2) if total else 0.0
+	progress_callback(
+		{
+			"job_type": "clean",
+			"stage": "clean",
+			"status": status,
+			"current": current,
+			"total": total,
+			"percent": percent,
+			"remaining": max(total - current, 0),
+			"current_step": current_step,
+			"current_dataset": current_dataset,
+		}
+	)
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -77,7 +101,12 @@ class CleanResult:
 
 
 def clean_articles_jsonl(
-	*, input_path: Path, output_path: Path, remove_duplicates: bool = False, max_articles: int | None = None
+	*,
+	input_path: Path,
+	output_path: Path,
+	remove_duplicates: bool = False,
+	max_articles: int | None = None,
+	progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
 	total = 0
 	total_comments = 0
@@ -124,7 +153,15 @@ def clean_articles_jsonl(
 		records = records[:max_articles]
 
 	# Process each record
-	for rec in records:
+	for index, rec in enumerate(records, start=1):
+		_emit_progress(
+			progress_callback=progress_callback,
+			status="running",
+			current=index,
+			total=len(records),
+			current_step=str(input_path.name),
+			current_dataset=str(output_path.name),
+		)
 		total += 1
 		comments = rec.get("comments") or rec.get("comments_payload") or []
 		if not isinstance(comments, list):
@@ -145,6 +182,15 @@ def clean_articles_jsonl(
 		cleaned.pop("comments", None)
 		_append_jsonl(output_path, cleaned)
 
+	_emit_progress(
+		progress_callback=progress_callback,
+		status="success",
+		current=len(records),
+		total=len(records),
+		current_step=str(input_path.name),
+		current_dataset=str(output_path.name),
+	)
+
 	return {
 		"input_path": str(input_path),
 		"output_path": str(output_path),
@@ -157,22 +203,50 @@ def clean_articles_jsonl(
 
 
 def run_clean_task(
-	*, base_dir: Path, input_paths: list[Path], force: bool = False, remove_duplicates: bool = False, max_articles: int | None = None
+	*,
+	base_dir: Path,
+	input_paths: list[Path],
+	force: bool = False,
+	remove_duplicates: bool = False,
+	max_articles: int | None = None,
+	progress_callback: ProgressCallback | None = None,
 ) -> CleanResult:
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
 	stats: dict[str, Any] = {"files": [], "remove_duplicates": remove_duplicates, "max_articles": max_articles}
 	cleaned_paths: list[Path] = []
 
-	for p in input_paths:
+	for index, p in enumerate(input_paths, start=1):
 		if not p.exists():
 			continue
 		out_path = out_dir / (p.parent.name + ".articles.cleaned.jsonl")
 		if out_path.exists() and not force:
 			cleaned_paths.append(out_path)
+			_emit_progress(
+				progress_callback=progress_callback,
+				status="success",
+				current=index,
+				total=len(input_paths),
+				current_step=str(p.name),
+				current_dataset=str(out_path.name),
+			)
 			continue
-		file_stats = clean_articles_jsonl(input_path=p, output_path=out_path, remove_duplicates=remove_duplicates, max_articles=max_articles)
+		file_stats = clean_articles_jsonl(
+			input_path=p,
+			output_path=out_path,
+			remove_duplicates=remove_duplicates,
+			max_articles=max_articles,
+			progress_callback=progress_callback,
+		)
 		stats["files"].append(file_stats)
 		cleaned_paths.append(out_path)
+		_emit_progress(
+			progress_callback=progress_callback,
+			status="success",
+			current=index,
+			total=len(input_paths),
+			current_step=str(p.name),
+			current_dataset=str(out_path.name),
+		)
 
 	stats_path = out_dir / "clean_stats.json"
 	write_json(stats_path, stats)
@@ -183,7 +257,13 @@ def run_clean_task(
 
 
 async def _clean_raw_articles_from_db(
-	*, output_path: Path, source: str | None = None, author_id: str | None = None, remove_duplicates: bool = False, max_articles: int | None = None
+	*,
+	output_path: Path,
+	source: str | None = None,
+	author_id: str | None = None,
+	remove_duplicates: bool = False,
+	max_articles: int | None = None,
+	progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
 	"""从数据库读取 raw_articles，清洗后写入 JSONL 文件。"""
 	total = 0
@@ -235,7 +315,16 @@ async def _clean_raw_articles_from_db(
 		unique_records = unique_records[:max_articles]
 
 	# Process each record
-	for rec in unique_records:
+	total_records = len(unique_records)
+	for index, rec in enumerate(unique_records, start=1):
+		_emit_progress(
+			progress_callback=progress_callback,
+			status="running",
+			current=index,
+			total=total_records,
+			current_step="db-clean",
+			current_dataset=str(output_path.name),
+		)
 		comments = rec.get("comments") or rec.get("comments_payload") or []
 		if not isinstance(comments, list):
 			comments = []
@@ -255,6 +344,15 @@ async def _clean_raw_articles_from_db(
 		cleaned.pop("comments", None)
 		_append_jsonl(output_path, cleaned)
 
+	_emit_progress(
+		progress_callback=progress_callback,
+		status="success",
+		current=total_records,
+		total=total_records,
+		current_step="db-clean",
+		current_dataset=str(output_path.name),
+	)
+
 	return {
 		"input_source": "raw_articles_db",
 		"output_path": str(output_path),
@@ -267,7 +365,14 @@ async def _clean_raw_articles_from_db(
 
 
 async def run_clean_from_db_task(
-	*, base_dir: Path, source: str | None = None, author_id: str | None = None, force: bool = False, remove_duplicates: bool = False, max_articles: int | None = None
+	*,
+	base_dir: Path,
+	source: str | None = None,
+	author_id: str | None = None,
+	force: bool = False,
+	remove_duplicates: bool = False,
+	max_articles: int | None = None,
+	progress_callback: ProgressCallback | None = None,
 ) -> CleanResult:
 	"""从数据库 raw_articles 读取并清洗，输出到 JSONL 文件。"""
 	out_dir = ensure_dir(base_dir / "data" / "processed" / "pipeline" / "clean")
@@ -292,6 +397,7 @@ async def run_clean_from_db_task(
 		author_id=author_id,
 		remove_duplicates=remove_duplicates,
 		max_articles=max_articles,
+		progress_callback=progress_callback,
 	)
 	stats["files"].append(file_stats)
 

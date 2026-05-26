@@ -6,7 +6,15 @@ import { renderWithRouter } from '@/test/test-utils';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
-import { runArticlePipeline } from '@/lib/api/pipelines';
+import {
+  getArticlePipeline,
+  getArticlePipelineScheduleStatus,
+  runArticlePipeline,
+  runArticlePipelineStep,
+  startArticlePipelineSchedule,
+  stopArticlePipelineSchedule,
+} from '@/lib/api/pipelines';
+import type { PipelineDetailResponse } from '@/types/pipeline';
 
 vi.mock('@/lib/api/articles', () => ({
   listArticleFilterOptions: vi.fn(),
@@ -23,14 +31,23 @@ vi.mock('@/lib/api/profiles', () => ({
 
 vi.mock('@/lib/api/pipelines', () => ({
   getArticlePipeline: vi.fn(),
+  getArticlePipelineScheduleStatus: vi.fn(),
   runArticlePipeline: vi.fn(),
+  runArticlePipelineStep: vi.fn(),
+  startArticlePipelineSchedule: vi.fn(),
+  stopArticlePipelineSchedule: vi.fn(),
 }));
 
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListJobs = vi.mocked(listJobs);
+const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
+const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
 const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
+const mockedRunArticlePipelineStep = vi.mocked(runArticlePipelineStep);
+const mockedStartArticlePipelineSchedule = vi.mocked(startArticlePipelineSchedule);
+const mockedStopArticlePipelineSchedule = vi.mocked(stopArticlePipelineSchedule);
 
 function buildProfileList() {
   return {
@@ -54,6 +71,193 @@ function buildProfileList() {
       },
     ],
   };
+}
+
+function buildArticlePipelineDetail() {
+  return {
+    pipeline: {
+      pipeline_id: 'article_pipeline',
+      workflow_id: 'article_pipeline',
+      job_type: 'pipeline-run',
+      title: 'article_pipeline',
+      description: '通过 Workflow/Job 体系运行文章处理主链路。',
+      workflow: {
+        workflow_id: 'article_pipeline',
+        title: '文章处理链路',
+        description: '把文章抓取、清洗、处理和回归验收收敛为第一条可交付业务切片。',
+        job_type: 'pipeline-run',
+        permissions: 'operator',
+        steps: [
+          {
+            step_id: 'crawl',
+            title: '抓取文章',
+            description: '抓取并整理文章原始数据。',
+            required_job_type: 'crawl',
+            parameters: ['profile_id', 'max_articles', 'force'],
+            param_schema: {
+              description: '抓取参数',
+              allow_additional_fields: false,
+              fields: {
+                max_articles: {
+                  type: 'integer',
+                  description: '最多文章数',
+                  required: false,
+                  default: null,
+                  enum: [],
+                },
+                force: {
+                  type: 'boolean',
+                  description: '是否强制执行',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+              },
+            },
+            risk: 'low',
+            requires_confirmation: false,
+          },
+          {
+            step_id: 'clean',
+            title: '清洗文章',
+            description: '对抓取结果做清洗、去重和格式归一化。',
+            required_job_type: 'clean',
+            parameters: ['profile_id', 'max_articles', 'force', 'use_db'],
+            param_schema: {
+              description: '清洗参数',
+              allow_additional_fields: false,
+              fields: {
+                max_articles: {
+                  type: 'integer',
+                  description: '最多处理文章数',
+                  required: false,
+                  default: null,
+                  enum: [],
+                },
+                force: {
+                  type: 'boolean',
+                  description: '是否强制执行',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+                use_db: {
+                  type: 'boolean',
+                  description: '是否使用数据库链路',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+              },
+            },
+            risk: 'medium',
+            requires_confirmation: false,
+          },
+          {
+            step_id: 'validate',
+            title: '校验文章',
+            description: '对清洗后的文章进行质量校验和可抽取性标记。',
+            required_job_type: 'validate',
+            parameters: ['profile_id', 'max_articles', 'force'],
+            param_schema: {
+              description: '校验参数',
+              allow_additional_fields: false,
+              fields: {
+                max_articles: {
+                  type: 'integer',
+                  description: '最多处理文章数',
+                  required: false,
+                  default: null,
+                  enum: [],
+                },
+                force: {
+                  type: 'boolean',
+                  description: '是否强制执行',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+              },
+            },
+            risk: 'medium',
+            requires_confirmation: false,
+          },
+          {
+            step_id: 'store',
+            title: '入库文章',
+            description: '将校验后的文章写入数据库并生成后续处理任务。',
+            required_job_type: 'store',
+            parameters: ['profile_id', 'force', 'use_db'],
+            param_schema: {
+              description: '入库参数',
+              allow_additional_fields: false,
+              fields: {
+                force: {
+                  type: 'boolean',
+                  description: '是否强制执行',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+                use_db: {
+                  type: 'boolean',
+                  description: '是否使用数据库链路',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+              },
+            },
+            risk: 'medium',
+            requires_confirmation: false,
+          },
+          {
+            step_id: 'process',
+            title: '处理文章任务',
+            description: '消费待处理任务并生成结构化结果。',
+            required_job_type: 'process',
+            parameters: ['profile_id', 'force', 'retry_failed', 'new_version', 'use_db'],
+            param_schema: {
+              description: '处理参数',
+              allow_additional_fields: false,
+              fields: {
+                force: {
+                  type: 'boolean',
+                  description: '是否强制执行',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+                retry_failed: {
+                  type: 'boolean',
+                  description: '是否重试失败任务',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+                new_version: {
+                  type: 'string',
+                  description: '新版本标识',
+                  required: false,
+                  default: '',
+                  enum: [],
+                },
+                use_db: {
+                  type: 'boolean',
+                  description: '是否使用数据库链路',
+                  required: false,
+                  default: false,
+                  enum: [],
+                },
+              },
+            },
+            risk: 'medium',
+            requires_confirmation: false,
+          },
+        ],
+      },
+    },
+  } as PipelineDetailResponse;
 }
 
 function buildArticleList() {
@@ -177,12 +381,19 @@ describe('ArticlesPage', () => {
     expect(screen.queryByRole('button', { name: '运行 article_pipeline' })).not.toBeInTheDocument();
   });
 
-  it('renders a profile-only run form and submits profile_id', async () => {
+  it('renders step-based run form and submits selected step params', async () => {
     const user = userEvent.setup();
     mockedListProfiles.mockResolvedValue(buildProfileList());
-    mockedRunArticlePipeline.mockResolvedValue({
-      workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
-      job: { id: 'job-article-1', job_type: 'pipeline-run', status: 'pending' },
+    mockedGetArticlePipeline.mockResolvedValue(buildArticlePipelineDetail());
+    mockedGetArticlePipelineScheduleStatus.mockResolvedValue({
+      scheduler_started: false,
+      schedule_time: null,
+      force: false,
+      profile_id: null,
+    });
+    mockedRunArticlePipelineStep.mockResolvedValue({
+      workflow: { workflow_id: 'article_pipeline', job_type: 'clean' },
+      job: { id: 'job-article-1', job_type: 'clean', status: 'pending' },
     });
 
     renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
@@ -190,19 +401,98 @@ describe('ArticlesPage', () => {
     expect(await screen.findByRole('heading', { name: '抓取与处理' })).toBeInTheDocument();
     expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
     expect(screen.getByLabelText('Profile')).toHaveValue('default');
+    expect(await screen.findByLabelText('Step')).toBeInTheDocument();
     expect(screen.queryByLabelText('config_path')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('profile_id')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('use_db')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '运行抓取与处理' }));
+    await user.selectOptions(screen.getByLabelText('Step'), 'clean');
+    expect(screen.queryByLabelText('use_db')).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('force'));
+
+    await user.click(screen.getByRole('button', { name: '运行步骤 Job' }));
 
     await waitFor(() => {
-      expect(mockedRunArticlePipeline).toHaveBeenCalledWith({
-        params: { profile_id: 'default' },
+      expect(mockedRunArticlePipelineStep).toHaveBeenCalledWith('clean', {
+        params: expect.objectContaining({
+          profile_id: 'default',
+          force: true,
+          use_db: true,
+        }),
         created_by: 'web',
         confirmed: false,
       });
     });
 
     expect(await screen.findByText('job detail page')).toBeInTheDocument();
+  });
+
+  it('starts and stops the article pipeline schedule', async () => {
+    const user = userEvent.setup();
+    mockedListProfiles.mockResolvedValue(buildProfileList());
+    mockedGetArticlePipeline.mockResolvedValue(buildArticlePipelineDetail());
+    mockedGetArticlePipelineScheduleStatus
+      .mockResolvedValueOnce({
+        scheduler_started: false,
+        schedule_time: null,
+        force: false,
+        profile_id: null,
+      })
+      .mockResolvedValueOnce({
+        scheduler_started: true,
+        schedule_time: '07:30',
+        force: true,
+        profile_id: 'default',
+      })
+      .mockResolvedValueOnce({
+        scheduler_started: false,
+        schedule_time: '07:30',
+        force: true,
+        profile_id: 'default',
+      });
+    mockedStartArticlePipelineSchedule.mockResolvedValue({
+      scheduler_started: true,
+      schedule_time: '07:30',
+      force: true,
+      profile_id: 'default',
+    });
+    mockedStopArticlePipelineSchedule.mockResolvedValue({
+      scheduler_started: false,
+      schedule_time: '07:30',
+      force: true,
+      profile_id: 'default',
+    });
+
+    renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }], ['/articles/run']);
+
+    expect(await screen.findByRole('heading', { name: '抓取与处理' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '启动定时任务' })).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('触发时间'));
+    await user.type(screen.getByLabelText('触发时间'), '07:30');
+    await user.click(screen.getByLabelText('Force'));
+    await user.click(screen.getByRole('button', { name: '启动定时任务' }));
+
+    await waitFor(() => {
+      expect(mockedStartArticlePipelineSchedule).toHaveBeenCalledWith({
+        profile_id: 'default',
+        schedule_time: '07:30',
+        force: true,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '停止定时任务' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: '停止定时任务' }));
+
+    await waitFor(() => {
+      expect(mockedStopArticlePipelineSchedule).toHaveBeenCalledWith({
+        profile_id: 'default',
+      });
+    });
   });
 
   it('renders the article list page with table data and filters', async () => {

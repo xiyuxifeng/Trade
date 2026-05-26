@@ -61,10 +61,10 @@ class PipelineService(BaseService):
         self._write_trader_profiles_runner = write_trader_profiles_runner
         self._manager_factory = manager_factory
 
-    def crawl(self, *, config_path: str | Path, max_articles: int | None = None) -> ServiceResult:
+    def crawl(self, *, config_path: str | Path, max_articles: int | None = None, force: bool = False) -> ServiceResult:
         """执行文章抓取。"""
         loaded = load_app_config(config_path)
-        lines = self._crawl_runner(config_path=loaded.config_path, max_articles=max_articles)
+        lines = self._crawl_runner(config_path=loaded.config_path, max_articles=max_articles, force=force)
         return ServiceResult(
             status="ok",
             message="crawl completed",
@@ -72,6 +72,7 @@ class PipelineService(BaseService):
                 "config_path": str(loaded.config_path),
                 "line_count": len(lines),
                 "lines": lines,
+                "force": force,
             },
         )
 

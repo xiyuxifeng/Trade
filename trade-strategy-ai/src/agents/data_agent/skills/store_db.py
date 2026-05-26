@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 from sqlalchemy import select
@@ -16,6 +16,36 @@ from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.schemas.contracts import AgentTask
+
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+def _emit_progress(
+	progress_callback: ProgressCallback | None,
+	*,
+	status: str,
+	current: int,
+	total: int,
+	current_step: str,
+	current_dataset: str | None = None,
+) -> None:
+	if progress_callback is None:
+		return
+	percent = round((current / total) * 100, 2) if total else 0.0
+	progress_callback(
+		{
+			"job_type": "store",
+			"stage": "store",
+			"status": status,
+			"current": current,
+			"total": total,
+			"percent": percent,
+			"remaining": max(total - current, 0),
+			"current_step": current_step,
+			"current_dataset": current_dataset,
+		}
+	)
 
 
 @dataclass(slots=True)
@@ -165,19 +195,33 @@ async def store_articles_jsonl_to_db(
 	jsonl_paths: Iterable[Path],
 	pending_tasks_path: Path | None = None,
 	limit: int | None = None,
+	force: bool = False,
+	progress_callback: ProgressCallback | None = None,
 ) -> StoreStats:
 	stats = StoreStats()
 	pending_path = pending_tasks_path or default_pending_tasks_path(base_dir=base_dir)
 	ensure_dir(pending_path.parent)
+	if force and pending_path.exists():
+		pending_path.unlink()
 
 	async with session_scope() as session:
-		for path in jsonl_paths:
+		paths = [path for path in jsonl_paths if path.exists()]
+		for file_index, path in enumerate(paths, start=1):
 			if not path.exists():
 				continue
-			for payload in iter_jsonl(path):
+			payloads = list(iter_jsonl(path))
+			for record_index, payload in enumerate(payloads, start=1):
 				stats.read_records += 1
 				if limit is not None and stats.read_records > limit:
 					return stats
+				_emit_progress(
+					progress_callback,
+					status="running",
+					current=record_index,
+					total=len(payloads),
+					current_step=str(path.name),
+					current_dataset=str(pending_path.name),
+				)
 
 				article_id, inserted, updated = await upsert_article_from_payload(session, payload)
 				if inserted:
@@ -220,4 +264,12 @@ async def store_articles_jsonl_to_db(
 					)
 					append_jsonl(pending_path, task.model_dump())
 					stats.generated_tasks += 1
+			_emit_progress(
+				progress_callback,
+				status="success",
+				current=file_index,
+				total=len(paths),
+				current_step=str(path.name),
+				current_dataset=str(pending_path.name),
+			)
 		return stats

@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.data_agent.sites import AuthProvider, TgbCrawler
@@ -98,7 +98,25 @@ def should_stop_incremental_scan(
     return False
 
 
-def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = None, use_db: bool = False) -> list[str]:
+def _reset_file_crawl_state(*, base_dir: Path, source_cfg: CrawlSourceConfig) -> None:
+    """强制重跑时清理本地抓取状态和产物。"""
+    state_dir = base_dir / "data" / "processed" / "crawl" / source_cfg.source / source_cfg.author_id
+    state_path = state_dir / "state.json"
+    articles_path = state_dir / "articles.jsonl"
+    if state_path.exists():
+        state_path.unlink()
+    if articles_path.exists():
+        articles_path.unlink()
+
+
+def run_crawl(
+    config: AppConfig,
+    *,
+    base_dir: Path,
+    max_articles: int | None = None,
+    use_db: bool = False,
+    force: bool = False,
+) -> list[str]:
     """Run the configured crawl sources.
 
     Args:
@@ -113,12 +131,12 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
             loop = asyncio.get_running_loop()
         except RuntimeError:
             # 没有运行中的事件循环，可以安全使用 asyncio.run()
-            return asyncio.run(run_crawl_to_db(config, max_articles=max_articles))
+            return asyncio.run(run_crawl_to_db(config, max_articles=max_articles, force=force))
         else:
             # 已在事件循环中，创建新任务
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, run_crawl_to_db(config, max_articles=max_articles))
+                future = pool.submit(asyncio.run, run_crawl_to_db(config, max_articles=max_articles, force=force))
                 return future.result()
 
     results: list[str] = []
@@ -129,6 +147,8 @@ def run_crawl(config: AppConfig, *, base_dir: Path, max_articles: int | None = N
         ensure_dir(state_dir)
         state_path = state_dir / "state.json"
         articles_path = state_dir / "articles.jsonl"
+        if force:
+            _reset_file_crawl_state(base_dir=base_dir, source_cfg=source_cfg)
         state = load_state(state_path)
         index = ExistingArticleIndex(
             seen_urls=set(state.get("seen_urls", [])),
@@ -498,7 +518,7 @@ async def crawl_source_to_db(
     return written
 
 
-async def run_crawl_to_db(config: AppConfig, *, max_articles: int | None = None) -> list[str]:
+async def run_crawl_to_db(config: AppConfig, *, max_articles: int | None = None, force: bool = False) -> list[str]:
     """Run the configured crawl sources and write directly to database."""
     results: list[str] = []
     for source_cfg in config.crawl.sources:
@@ -510,7 +530,17 @@ async def run_crawl_to_db(config: AppConfig, *, max_articles: int | None = None)
 
         # 从数据库加载状态
         async with session_scope() as session:
-            state_dict = await load_crawl_state_from_db(session, source_cfg.source, source_cfg.author_id)
+            if force:
+                await session.execute(
+                    delete(RawArticle).where(RawArticle.source == source_cfg.source, RawArticle.author_id == source_cfg.author_id)
+                )
+                await session.execute(
+                    delete(CrawlState).where(CrawlState.source == source_cfg.source, CrawlState.author_id == source_cfg.author_id)
+                )
+                await session.flush()
+                state_dict = {}
+            else:
+                state_dict = await load_crawl_state_from_db(session, source_cfg.source, source_cfg.author_id)
 
         index = ExistingArticleIndex(
             seen_urls=set(state_dict.get("seen_urls", [])),

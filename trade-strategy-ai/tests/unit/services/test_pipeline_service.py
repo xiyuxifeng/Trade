@@ -51,8 +51,8 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
 
     calls: dict[str, object] = {}
 
-    def fake_crawl(*, config_path: Path, max_articles: int | None = None):
-        calls["crawl"] = (config_path, max_articles)
+    def fake_crawl(*, config_path: Path, max_articles: int | None = None, force: bool = False):
+        calls["crawl"] = (config_path, max_articles, force)
         return ["line-1", "line-2"]
 
     async def fake_pipeline(**kwargs):
@@ -83,7 +83,7 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
             step="store",
             config_path=config_path,
             max_articles=3,
-            force=False,
+            force=True,
             use_db=False,
             new_version="v3",
         )
@@ -91,13 +91,14 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     step_call = dict(calls["pipeline"])
 
     assert crawl_result.payload["lines"] == ["line-1", "line-2"]
-    assert calls["crawl"] == (tmp_path / "config" / "app.yaml", 12)
+    assert calls["crawl"] == (tmp_path / "config" / "app.yaml", 12, False)
     assert run_result.payload["result"]["name"] == "pipeline"
     assert run_result.payload["result"]["nested"]["value"] == "ok"
     assert pipeline_call["from_step"] == "clean"
     assert pipeline_call["retry_failed"] is True
     assert step_result.payload["result"]["nested"]["value"] == "ok"
     assert step_call["from_step"] == "store"
+    assert step_call["force"] is True
 
 
 def test_pipeline_service_runs_clusters_build(tmp_path: Path) -> None:

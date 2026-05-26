@@ -14,11 +14,19 @@ import { ApiError } from '@/lib/api/http';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
-import { runArticlePipeline } from '@/lib/api/pipelines';
+import {
+  getArticlePipeline,
+  getArticlePipelineScheduleStatus,
+  runArticlePipeline,
+  runArticlePipelineStep,
+  startArticlePipelineSchedule,
+  stopArticlePipelineSchedule,
+} from '@/lib/api/pipelines';
 import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleRecord } from '@/types/articles';
 import type { JobRecord, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
-import type { ArticlePipelineRunParams } from '@/types/pipeline';
+import type { ArticlePipelineRunParams, ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
+import type { WorkflowParamField, WorkflowStep } from '@/types/workflows';
 
 type ArticleJobsResponse = JobsListResponse;
 type MaintenanceMode = 'normal' | 'rebuild_pending' | 'retry_failed' | 'cleanup';
@@ -114,6 +122,77 @@ function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return '请求失败';
+}
+
+function createStepDefaults(step: WorkflowStep | null) {
+  const defaults: Record<string, string | boolean> = {};
+  const fields = step?.param_schema.fields ?? {};
+
+  Object.entries(fields).forEach(([name, field]) => {
+    if (name === 'profile_id' || name === 'config_path' || name === 'use_db') {
+      return;
+    }
+    const defaultValue = field.default;
+    if (field.type === 'boolean') {
+      defaults[name] = typeof defaultValue === 'boolean' ? defaultValue : false;
+      return;
+    }
+    if (field.type === 'number' || field.type === 'integer') {
+      defaults[name] = typeof defaultValue === 'number' ? String(defaultValue) : '';
+      return;
+    }
+    if (typeof defaultValue === 'string') {
+      defaults[name] = defaultValue;
+      return;
+    }
+    if (defaultValue !== undefined && defaultValue !== null) {
+      defaults[name] = String(defaultValue);
+      return;
+    }
+    defaults[name] = '';
+  });
+
+  return defaults;
+}
+
+function buildStepParams(step: WorkflowStep | null, values: Record<string, string | boolean>, profileId: string) {
+  const params: Record<string, unknown> = {};
+  const fields = step?.param_schema.fields ?? {};
+
+  Object.entries(fields).forEach(([name, field]) => {
+    if (name === 'profile_id' || name === 'config_path' || name === 'use_db') {
+      return;
+    }
+    const rawValue = values[name];
+
+    if (field.type === 'boolean') {
+      params[name] = Boolean(rawValue);
+      return;
+    }
+
+    if (field.type === 'number' || field.type === 'integer') {
+      const numericValue = typeof rawValue === 'string' ? Number(rawValue.trim()) : Number(rawValue);
+      if (Number.isFinite(numericValue) && String(rawValue).trim() !== '') {
+        params[name] = field.type === 'integer' ? Math.trunc(numericValue) : numericValue;
+      }
+      return;
+    }
+
+    if (typeof rawValue === 'string' && rawValue.trim()) {
+      params[name] = rawValue.trim();
+      return;
+    }
+  });
+
+  if (profileId.trim()) {
+    params.profile_id = profileId.trim();
+  }
+
+  if ('use_db' in fields) {
+    params.use_db = true;
+  }
+
+  return params;
 }
 
 function formatTimestamp(value: string | null | undefined) {
@@ -310,20 +389,21 @@ function CheckboxField({
   disabled?: boolean;
 }) {
   return (
-    <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${disabled ? 'border-slate-200 bg-slate-50 opacity-60' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
-      <input
-        aria-label={label}
-        checked={checked}
-        className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        type="checkbox"
-      />
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-900">{label}</p>
-        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
-      </div>
-    </label>
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-slate-900">{label}</label>
+      <label className={`flex h-10 cursor-pointer items-center gap-3 rounded-xl border px-3 transition-colors ${disabled ? 'border-slate-200 bg-slate-50 opacity-60' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+        <input
+          aria-label={label}
+          checked={checked}
+          className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span className="text-sm font-medium text-slate-900">{checked ? '开启' : '关闭'}</span>
+      </label>
+      <p className="text-xs leading-6 text-slate-500">{description}</p>
+    </div>
   );
 }
 
@@ -454,6 +534,10 @@ export function ArticleRunPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [selectedStepId, setSelectedStepId] = useState('');
+  const [stepValues, setStepValues] = useState<Record<string, string | boolean>>({});
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduleForce, setScheduleForce] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [submittedJobId, setSubmittedJobId] = useState<string | null>(null);
 
@@ -463,13 +547,33 @@ export function ArticleRunPage() {
     staleTime: 30_000,
   });
 
+  const pipelineQuery = useQuery<PipelineDetailResponse, ApiError>({
+    queryKey: ['article-pipeline', 'detail'],
+    queryFn: getArticlePipeline,
+    staleTime: 30_000,
+  });
+
+  const scheduleStatusQuery = useQuery<ArticlePipelineScheduleState, ApiError>({
+    queryKey: ['article-pipeline', 'schedule', 'status'],
+    queryFn: getArticlePipelineScheduleStatus,
+    staleTime: 10_000,
+  });
+
   const profiles = profilesQuery.data?.items ?? [];
+  const workflow = pipelineQuery.data?.pipeline.workflow ?? null;
+  const steps = workflow?.steps ?? [];
 
   useEffect(() => {
     if (!selectedProfileId && profiles.length > 0) {
       setSelectedProfileId(profiles[0].profile_id);
     }
   }, [profiles, selectedProfileId]);
+
+  useEffect(() => {
+    if (!selectedStepId && steps.length > 0) {
+      setSelectedStepId(steps[0].step_id);
+    }
+  }, [steps, selectedStepId]);
 
   useEffect(() => {
     if (submittedJobId) {
@@ -481,12 +585,25 @@ export function ArticleRunPage() {
     return profiles.find((profile) => profile.profile_id === selectedProfileId) ?? null;
   }, [profiles, selectedProfileId]);
 
+  const selectedStep = useMemo<WorkflowStep | null>(() => {
+    return steps.find((step) => step.step_id === selectedStepId) ?? steps[0] ?? null;
+  }, [selectedStepId, steps]);
+
+  useEffect(() => {
+    if (!selectedStep) {
+      return;
+    }
+    setStepValues(createStepDefaults(selectedStep));
+  }, [selectedStep]);
+
   const runMutation = useMutation({
     mutationFn: async () => {
-      return runArticlePipeline({
-        params: {
-          profile_id: selectedProfileId,
-        },
+      if (!selectedStep) {
+        throw new Error('未选择步骤');
+      }
+
+      return runArticlePipelineStep(selectedStep.step_id, {
+        params: buildStepParams(selectedStep, stepValues, selectedProfileId),
         created_by: 'web',
         confirmed: false,
       });
@@ -501,23 +618,139 @@ export function ArticleRunPage() {
     },
   });
 
-  const isLoading = profilesQuery.isLoading;
-  const loadError = profilesQuery.error;
-  const canSubmit = Boolean(selectedProfileId) && !isLoading && !loadError;
+  const startScheduleMutation = useMutation({
+    mutationFn: async () => {
+      return startArticlePipelineSchedule({
+        schedule_time: scheduleTime.trim(),
+        profile_id: selectedProfileId,
+        force: scheduleForce,
+      });
+    },
+    onSuccess: async () => {
+      setMessage('定时任务已启动，后续会按设置时间执行 pipeline-run。');
+      await Promise.all([
+        scheduleStatusQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+      ]);
+    },
+    onError: (error: unknown) => {
+      setMessage(getErrorMessage(error));
+    },
+  });
+
+  const stopScheduleMutation = useMutation({
+    mutationFn: async () => {
+      return stopArticlePipelineSchedule({
+        profile_id: selectedProfileId,
+      });
+    },
+    onSuccess: async () => {
+      setMessage('定时任务已停止。');
+      await scheduleStatusQuery.refetch();
+    },
+    onError: (error: unknown) => {
+      setMessage(getErrorMessage(error));
+    },
+  });
+
+  const isLoading = profilesQuery.isLoading || pipelineQuery.isLoading;
+  const loadError = profilesQuery.error ?? pipelineQuery.error;
+  const canSubmit = Boolean(selectedProfileId) && Boolean(selectedStep) && !isLoading && !loadError;
+  const scheduleState = scheduleStatusQuery.data ?? null;
+  const scheduleActive = Boolean(scheduleState?.scheduler_started);
+
+  const selectedStepFields = Object.entries(selectedStep?.param_schema.fields ?? {}).filter(
+    ([name]) => name !== 'profile_id' && name !== 'config_path' && name !== 'use_db',
+  );
+  const selectedStepDescription = selectedStep?.description ?? '请选择一个 step。';
+  const selectedStepJobType = selectedStep?.required_job_type ?? articlePipelineJobType;
+  const scheduleDisabled = !selectedProfileId || !scheduleTime.trim() || isLoading || !!loadError || startScheduleMutation.isPending;
+  const scheduleStopDisabled = !scheduleActive || stopScheduleMutation.isPending;
+
+  function renderStepField(name: string, field: WorkflowParamField) {
+    const fieldId = `article-run-${selectedStep?.step_id ?? 'step'}-${name}`;
+    const value = stepValues[name];
+
+    if (field.enum && field.enum.length > 0) {
+      return (
+        <div key={name} className="space-y-2">
+          <label className="text-sm font-medium text-slate-900" htmlFor={fieldId}>
+            {name}
+          </label>
+          <Select
+            id={fieldId}
+            value={typeof value === 'string' ? value : ''}
+            onChange={(event) =>
+              setStepValues((current) => ({
+                ...current,
+                [name]: event.target.value,
+              }))
+            }
+          >
+            <option value="">请选择</option>
+            {field.enum.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </Select>
+          {field.description ? <p className="text-xs leading-6 text-slate-500">{field.description}</p> : null}
+        </div>
+      );
+    }
+
+    if (field.type === 'boolean') {
+      return (
+        <CheckboxField
+          key={name}
+          label={name}
+          checked={Boolean(value)}
+          onChange={(checked) =>
+            setStepValues((current) => ({
+              ...current,
+              [name]: checked,
+            }))
+          }
+          description={field.description || '布尔参数。'}
+        />
+      );
+    }
+
+    return (
+      <div key={name} className="space-y-2">
+        <label className="text-sm font-medium text-slate-900" htmlFor={fieldId}>
+          {name}
+        </label>
+        <Input
+          id={fieldId}
+          type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) =>
+            setStepValues((current) => ({
+              ...current,
+              [name]: event.target.value,
+            }))
+          }
+          placeholder={field.description || name}
+        />
+        {field.description ? <p className="text-xs leading-6 text-slate-500">{field.description}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <main className="page-stack">
-      <PageHeader kicker="文章" title="抓取与处理" description="只保留 Profile 选择，不再要求填写 config_path。" actionLabel="返回文章工作台" onAction={() => navigate('/articles')} />
+      <PageHeader kicker="文章" title="抓取与处理" description="按 step 生成 job，支持 Force、增量处理和每日定时调度。" actionLabel="返回文章工作台" onAction={() => navigate('/articles')} />
 
       {message ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div>
       ) : null}
 
-      <section className="grid gap-6">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Profile-only 运行入口</CardTitle>
-            <CardDescription>运行入口只暴露 Profile 选择，并沿用现有 article_pipeline 路径。</CardDescription>
+            <CardTitle>步骤运行</CardTitle>
+            <CardDescription>先选 step，再按 schema 填参数。勾选 Force 时会删除旧数据并重新开始。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
@@ -529,9 +762,14 @@ export function ArticleRunPage() {
             ) : loadError ? (
               <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-900">
                 <p>{getErrorMessage(loadError)}</p>
-                <Button size="sm" variant="outline" onClick={() => profilesQuery.refetch()}>
-                  重试
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => profilesQuery.refetch()}>
+                    重试 Profile
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => pipelineQuery.refetch()}>
+                    重试 Pipeline
+                  </Button>
+                </div>
               </div>
             ) : profiles.length === 0 ? (
               <EmptyState
@@ -542,16 +780,12 @@ export function ArticleRunPage() {
               />
             ) : (
               <>
-                <div className="grid gap-3">
+                <div className="grid gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-900" htmlFor="article-run-profile">
                       Profile
                     </label>
-                    <Select
-                      id="article-run-profile"
-                      value={selectedProfileId}
-                      onChange={(event) => setSelectedProfileId(event.target.value)}
-                    >
+                    <Select id="article-run-profile" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
                       {profiles.map((profile) => (
                         <option key={profile.profile_id} value={profile.profile_id}>
                           {profile.profile_id} · {profile.name}
@@ -560,20 +794,56 @@ export function ArticleRunPage() {
                     </Select>
                     <p className="text-xs text-slate-500">当前选择：{selectedProfile?.environment ?? '未选择'}</p>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-900" htmlFor="article-run-step">
+                      Step
+                    </label>
+                    <Select id="article-run-step" value={selectedStepId} onChange={(event) => setSelectedStepId(event.target.value)}>
+                      {steps.map((step) => (
+                        <option key={step.step_id} value={step.step_id}>
+                          {step.step_id} · {step.title}
+                        </option>
+                      ))}
+                    </Select>
+                    {selectedStep ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="info">{selectedStepJobType}</Badge>
+                          <Badge variant="default">{selectedStep.step_id}</Badge>
+                        </div>
+                        <p className="mt-3 font-medium text-slate-900">{selectedStep.title}</p>
+                        <p className="mt-2 leading-6">{selectedStepDescription}</p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">步骤参数</p>
+                      <p className="mt-1 text-sm text-slate-600">不同 step 会展示不同参数，Force 会在后端重置旧状态。</p>
+                    </div>
+                    <Badge variant={selectedStep ? 'success' : 'default'}>{selectedStep ? '已选择 step' : '请选择 step'}</Badge>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    {selectedStepFields.map(([name, field]) => renderStepField(name, field))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
                   <p className="font-medium text-slate-900">运行说明</p>
-                  <ul className="mt-2 space-y-2">
-                    <li>提交后会把 `profile_id` 传给后端，由后端统一解析运行上下文。</li>
-                    <li>页面不再显示 `config_path` 输入框或参数类型切换。</li>
-                    <li>运行完成后会跳转到 Job Detail 查看进度与日志。</li>
+                  <ul className="mt-2 space-y-2 leading-6">
+                    <li>Step job 会按照当前选择的参数直接生成对应 Job，不再默认走全量 pipeline-run。</li>
+                    <li>Force 勾选后会删除旧数据重新开始；不勾选时只处理上次基础上未完成的数据。</li>
+                    <li>运行成功后会跳转到 Job Detail，方便继续查看执行进度和结果。</li>
                   </ul>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => runMutation.mutate()} disabled={!canSubmit || runMutation.isPending}>
-                    {runMutation.isPending ? '提交中' : '运行抓取与处理'}
+                    {runMutation.isPending ? '提交中' : '运行步骤 Job'}
                   </Button>
                   <Button
                     variant="secondary"
@@ -581,11 +851,95 @@ export function ArticleRunPage() {
                       if (profiles.length > 0) {
                         setSelectedProfileId(profiles[0].profile_id);
                       }
+                      if (steps.length > 0) {
+                        setSelectedStepId(steps[0].step_id);
+                      }
                       setMessage(null);
                     }}
                     disabled={isLoading || loadError != null}
                   >
                     重置
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>定时调度</CardTitle>
+            <CardDescription>仅支持 pipeline-run 全量处理，按时间自动抓取当天数据，并支持 start/stop。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {scheduleStatusQuery.isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ) : scheduleStatusQuery.error ? (
+              <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-900">
+                <p>{getErrorMessage(scheduleStatusQuery.error)}</p>
+                <Button size="sm" variant="outline" onClick={() => scheduleStatusQuery.refetch()}>
+                  重试
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">当前状态</p>
+                      <p className="mt-1 text-xs text-slate-500">定时任务只作用于 pipeline-run 全量处理。</p>
+                    </div>
+                    <Badge variant={scheduleActive ? 'success' : 'default'}>{scheduleActive ? '运行中' : '已停止'}</Badge>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-slate-700">
+                    <p>调度时间：{scheduleState?.schedule_time ?? scheduleTime}</p>
+                    <p>Force：{scheduleState?.force ? '开启' : '关闭'}</p>
+                    <p>Profile：{scheduleState?.profile_id ?? selectedProfileId ?? '未选择'}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-900" htmlFor="article-schedule-time">
+                    触发时间
+                  </label>
+                  <Input
+                    id="article-schedule-time"
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(event) => setScheduleTime(event.target.value)}
+                  />
+                  <p className="text-xs text-slate-500">启动后会在每天该时间自动执行当天的 pipeline-run。</p>
+                </div>
+
+                <CheckboxField
+                  label="Force"
+                  checked={scheduleForce}
+                  onChange={setScheduleForce}
+                  description="勾选后，如果当天已存在成功记录，也会重新执行当天数据。"
+                />
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                  <p className="font-medium text-slate-900">启动说明</p>
+                  <ul className="mt-2 space-y-2 leading-6">
+                    <li>只处理当天数据；如果当天已经完成且未勾选 Force，则会返回已完成。</li>
+                    <li>启动和停止都基于当前 Profile，便于单 Profile 场景下切换。</li>
+                    <li>当前实现是进程内调度，页面刷新后可以重新查询状态。</li>
+                  </ul>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={() => startScheduleMutation.mutate()} disabled={scheduleDisabled}>
+                    {startScheduleMutation.isPending ? '启动中' : scheduleActive ? '重新启动' : '启动定时任务'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => stopScheduleMutation.mutate()} disabled={scheduleStopDisabled}>
+                    {stopScheduleMutation.isPending ? '停止中' : '停止定时任务'}
+                  </Button>
+                  <Button variant="outline" onClick={() => scheduleStatusQuery.refetch()}>
+                    刷新状态
                   </Button>
                 </div>
               </>

@@ -34,8 +34,9 @@ crawl:
 
     calls: list[str] = []
 
-    def fake_run_crawl(*, config_path: Path, max_articles: int | None = None) -> list[str]:
+    def fake_run_crawl(*, config_path: Path, max_articles: int | None = None, force: bool = False) -> list[str]:
         del max_articles
+        del force
         calls.append(str(config_path))
         return ["tgb:10461311", "tgb:10461312"]
 

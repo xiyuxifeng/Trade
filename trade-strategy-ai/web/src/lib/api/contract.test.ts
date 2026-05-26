@@ -4,7 +4,14 @@ import { getCurrentPrincipal } from './auth';
 import { getSystemStatus } from './system';
 import { createJob, getJob, getJobLogs, cancelJob, listJobs } from './jobs';
 import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
-import { getArticlePipeline, runArticlePipeline } from './pipelines';
+import {
+  getArticlePipeline,
+  getArticlePipelineScheduleStatus,
+  runArticlePipeline,
+  runArticlePipelineStep,
+  startArticlePipelineSchedule,
+  stopArticlePipelineSchedule,
+} from './pipelines';
 import { listArtifacts, listArtifactFilterOptions, getArtifact, downloadArtifact } from './artifacts';
 import { listArticleFilterOptions, listArticles } from './articles';
 import {
@@ -78,6 +85,7 @@ describe('UI API client contract', () => {
     await getWorkflow('pipeline');
     await runWorkflow('pipeline', { confirmed: true } as never);
     await getArticlePipeline();
+    await getArticlePipelineScheduleStatus();
     await listArticles({
       page: 2,
       page_size: 20,
@@ -98,6 +106,19 @@ describe('UI API client contract', () => {
       params: { profile_id: 'default' },
       created_by: 'web',
       confirmed: false,
+    } as never);
+    await runArticlePipelineStep('crawl', {
+      params: { profile_id: 'default', force: false },
+      created_by: 'web',
+      confirmed: false,
+    } as never);
+    await startArticlePipelineSchedule({
+      profile_id: 'default',
+      schedule_time: '07:30',
+      force: true,
+    } as never);
+    await stopArticlePipelineSchedule({
+      profile_id: 'default',
     } as never);
     await listProfiles({ skip: 0, limit: 10 });
     await getProfile('default');
@@ -185,15 +206,29 @@ describe('UI API client contract', () => {
       confirmed: true,
     });
     expect(findCall('/api/ui/v1/pipelines/article_pipeline')).toBeTruthy();
-    expect(findCall('/api/ui/v1/market/ohlcv/status?config_path=config%2Fapp.yaml')).toBeTruthy();
-    expect(findCall('/api/ui/v1/market/ohlcv/run?config_path=config%2Fapp.yaml', 'POST')).toBeTruthy();
-    expect(findCall('/api/ui/v1/market/ohlcv/stop?config_path=config%2Fapp.yaml', 'POST')).toBeTruthy();
+    expect(findCall('/api/ui/v1/pipelines/article_pipeline/schedule/status')).toBeTruthy();
+    expect(calls.some((call) => call.url.startsWith('/api/ui/v1/market/ohlcv/status'))).toBe(true);
+    expect(calls.some((call) => call.url.startsWith('/api/ui/v1/market/ohlcv/run') && call.method === 'POST')).toBe(true);
+    expect(calls.some((call) => call.url.startsWith('/api/ui/v1/market/ohlcv/stop') && call.method === 'POST')).toBe(true);
     expect(findCall('/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expect(findCall('/articles/filter-options?author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
       params: { profile_id: 'default' },
       created_by: 'web',
       confirmed: false,
+    });
+    expectJsonBody('/api/ui/v1/pipelines/article_pipeline/steps/crawl/run', 'POST', {
+      params: { profile_id: 'default', force: false },
+      created_by: 'web',
+      confirmed: false,
+    });
+    expectJsonBody('/api/ui/v1/pipelines/article_pipeline/schedule/start', 'POST', {
+      profile_id: 'default',
+      schedule_time: '07:30',
+      force: true,
+    });
+    expectJsonBody('/api/ui/v1/pipelines/article_pipeline/schedule/stop', 'POST', {
+      profile_id: 'default',
     });
     expect(findCall('/api/ui/v1/artifacts?skip=0&limit=10')).toBeTruthy();
     expect(findCall('/api/ui/v1/artifacts/filter-options')).toBeTruthy();

@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import socket
+from dataclasses import asdict, is_dataclass
 from contextlib import suppress
 from contextvars import ContextVar
 from datetime import UTC, date, datetime
@@ -19,6 +20,11 @@ from src.common.config import load_app_config
 from src.services.base import BaseService, ServiceResult
 from src.services.config_profile_service import ConfigProfileService
 from src.services.kaipan_service import KaipanService
+from src.pipeline.dag import discover_crawl_jsonl_paths
+from src.pipeline.tasks.clean_task import run_clean_from_db_task, run_clean_task
+from src.pipeline.tasks.process_tasks import run_process_tasks
+from src.pipeline.tasks.validate_task import run_validate_task
+from src.agents.data_agent.skills.store_db import default_pending_tasks_path, store_articles_jsonl_to_db
 from src.services.job_registry import (
     get_job_definition,
     get_job_type_limits,
@@ -45,6 +51,8 @@ def _to_plain(value: Any) -> Any:
     """把服务返回值转成可写入 JSON 的结构。"""
     if hasattr(value, "model_dump"):
         return _to_plain(value.model_dump())
+    if is_dataclass(value):
+        return {k: _to_plain(v) for k, v in asdict(value).items()}
     if isinstance(value, dict):
         return {k: _to_plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -77,6 +85,15 @@ def _sanitize_result_payload_for_output(payload: dict[str, Any]) -> dict[str, An
         return value
 
     return _sanitize(_to_plain(payload))
+
+
+def _strip_keys_recursive(value: Any, keys: set[str]) -> Any:
+    """递归删除字典结构中的指定键。"""
+    if isinstance(value, dict):
+        return {item_key: _strip_keys_recursive(item_value, keys) for item_key, item_value in value.items() if item_key not in keys}
+    if isinstance(value, list):
+        return [_strip_keys_recursive(item, keys) for item in value]
+    return value
 
 
 def _parse_date(value: Any) -> date:
@@ -216,6 +233,118 @@ class JobRunner(BaseService):
 
     def _build_default_handlers(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[ServiceResult]]]:
         """构建默认的 Job 处理器集合。"""
+
+        async def _crawl(params: dict[str, Any]) -> ServiceResult:
+            service = self._pipeline_service_factory()
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
+            return service.crawl(
+                config_path=config_path,
+                max_articles=params.get("max_articles"),
+                force=_parse_bool(params.get("force"), default=False),
+            )
+
+        async def _article_pipeline_context(params: dict[str, Any]) -> tuple[Any, Path, Path]:
+            """按 Profile 或 config_path 解析 article pipeline 的运行上下文。"""
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
+            loaded = load_app_config(config_path)
+            base_dir = _project_base_dir(Path(loaded.config_path))
+            return loaded.config, base_dir, Path(loaded.config_path)
+
+        def _raise_missing_step(step_name: str) -> None:
+            raise ValueError(f"请先执行 {step_name}")
+
+        def _check_required_files(paths: list[Path], *, missing_step: str) -> None:
+            if not paths or not all(path.exists() for path in paths):
+                _raise_missing_step(missing_step)
+
+        async def _clean(params: dict[str, Any]) -> ServiceResult:
+            config, base_dir, _loaded_path = await _article_pipeline_context(params)
+            force = _parse_bool(params.get("force"), default=False)
+            use_db = _parse_bool(params.get("use_db"), default=False)
+            max_articles = params.get("max_articles")
+            progress_callback = _KAIPAN_PROGRESS_REPORTER.get()
+            if use_db:
+                result = await run_clean_from_db_task(
+                    base_dir=base_dir,
+                    force=force,
+                    max_articles=max_articles if isinstance(max_articles, int) else None,
+                    progress_callback=progress_callback,
+                )
+            else:
+                crawl_paths = discover_crawl_jsonl_paths(base_dir=base_dir, config=config)
+                _check_required_files(crawl_paths, missing_step="crawl")
+                result = run_clean_task(
+                    base_dir=base_dir,
+                    input_paths=crawl_paths,
+                    force=force,
+                    max_articles=max_articles if isinstance(max_articles, int) else None,
+                    progress_callback=progress_callback,
+                )
+            return ServiceResult(status="ok", message="clean completed", payload={"result": _to_plain(result)})
+
+        async def _validate(params: dict[str, Any]) -> ServiceResult:
+            _config, base_dir, _loaded_path = await _article_pipeline_context(params)
+            force = _parse_bool(params.get("force"), default=False)
+            max_articles = params.get("max_articles")
+            validate_dir = base_dir / "data" / "processed" / "pipeline" / "validate"
+            clean_dir = base_dir / "data" / "processed" / "pipeline" / "clean"
+            clean_paths = sorted(clean_dir.glob("*.articles.cleaned.jsonl"))
+            _check_required_files(clean_paths, missing_step="clean")
+            result = run_validate_task(
+                base_dir=base_dir,
+                input_paths=clean_paths,
+                force=force,
+                max_articles=max_articles if isinstance(max_articles, int) else None,
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+            )
+            return ServiceResult(status="ok", message="validate completed", payload={"result": _to_plain(result), "validate_dir": str(validate_dir)})
+
+        async def _store(params: dict[str, Any]) -> ServiceResult:
+            _config, base_dir, _loaded_path = await _article_pipeline_context(params)
+            force = _parse_bool(params.get("force"), default=False)
+            validate_dir = base_dir / "data" / "processed" / "pipeline" / "validate"
+            validated_paths = sorted(validate_dir.glob("*.validated.jsonl"))
+            _check_required_files(validated_paths, missing_step="validate")
+            result = await store_articles_jsonl_to_db(
+                base_dir=base_dir,
+                jsonl_paths=validated_paths,
+                pending_tasks_path=default_pending_tasks_path(base_dir=base_dir),
+                force=force,
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+            )
+            return ServiceResult(status="ok", message="store completed", payload={"result": _to_plain(result)})
+
+        async def _process(params: dict[str, Any]) -> ServiceResult:
+            config, base_dir, _loaded_path = await _article_pipeline_context(params)
+            force = _parse_bool(params.get("force"), default=False)
+            retry_failed = _parse_bool(params.get("retry_failed"), default=False)
+            version = str(params.get("new_version") or "v1")
+            if force:
+                pipeline_dir = base_dir / "data" / "processed" / "pipeline"
+                for relative in [
+                    "pending_tasks.jsonl",
+                    "failed_tasks.jsonl",
+                    "dead_tasks.jsonl",
+                    "llm_checkpoint.jsonl",
+                ]:
+                    target = pipeline_dir / relative
+                    if target.exists():
+                        target.unlink()
+            pending_path = default_pending_tasks_path(base_dir=base_dir)
+            if not pending_path.exists() and not force:
+                _raise_missing_step("store")
+            result = await run_process_tasks(
+                config=config,
+                force=force,
+                retry_failed=retry_failed,
+                version=version,
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+            )
+            return ServiceResult(status="ok", message="process completed", payload={"result": _to_plain(result)})
 
         async def _kaipan_fetch(params: dict[str, Any]) -> ServiceResult:
             service = KaipanService()
@@ -424,8 +553,11 @@ class JobRunner(BaseService):
 
         async def _pipeline_run(params: dict[str, Any]) -> ServiceResult:
             service = self._pipeline_service_factory()
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
             return await service.run_pipeline(
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
                 skip_crawl=_parse_bool(params.get("skip_crawl"), default=False),
@@ -438,9 +570,12 @@ class JobRunner(BaseService):
 
         async def _pipeline_step(params: dict[str, Any]) -> ServiceResult:
             service = self._pipeline_service_factory()
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
             return await service.run_pipeline_step(
                 step=params.get("step", "crawl"),
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
                 use_db=_parse_bool(params.get("use_db"), default=False),
@@ -479,6 +614,11 @@ class JobRunner(BaseService):
             )
 
         return {
+            "crawl": _crawl,
+            "clean": _clean,
+            "validate": _validate,
+            "store": _store,
+            "process": _process,
             "run-pre-market": _run_pre_market,
             "run-after-close": _run_after_close,
             "pipeline-run": _pipeline_run,
@@ -654,6 +794,10 @@ class JobRunner(BaseService):
             "kaipan-normalize",
             "ohlcv-crawl",
             "snapshot-build",
+            "clean",
+            "validate",
+            "store",
+            "process",
             "pipeline-run",
             "pipeline-step",
             "backtest-run",
@@ -667,6 +811,10 @@ class JobRunner(BaseService):
             if progress_finish is not None:
                 await progress_finish()
             result_payload = _to_plain(result.model_dump(mode="json"))
+            if job_payload["job_type"] in {"crawl", "clean", "validate", "store", "process", "pipeline-run", "pipeline-step"}:
+                has_profile_context = bool(params.get("profile_id")) and not bool(params.get("config_path"))
+                if has_profile_context:
+                    result_payload = _strip_keys_recursive(result_payload, {"config_path"})
             public_result_payload = _sanitize_result_payload_for_output(result_payload)
             result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
             await self._job_service.bind_artifact(

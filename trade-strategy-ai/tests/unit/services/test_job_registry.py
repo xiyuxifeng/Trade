@@ -22,6 +22,10 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
         "backup-data",
         "restore-data",
         "crawl",
+        "clean",
+        "validate",
+        "store",
+        "process",
         "import-trade-logs",
         "pipeline-run",
         "pipeline-step",
@@ -56,6 +60,11 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
     assert get_runnable_job_types() == [
         "backup-data",
         "restore-data",
+        "crawl",
+        "clean",
+        "validate",
+        "store",
+        "process",
         "pipeline-run",
         "pipeline-step",
         "run-pre-market",
@@ -165,6 +174,14 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert market.payload["params"]["profile_id"] == "default"
     assert "config_path" not in market.payload["params"]
 
+    crawl = validate_job_submission(
+        job_type="crawl",
+        params={"config_path": "config/app.yaml", "max_articles": 20, "force": True},
+        created_by="web",
+    )
+    assert crawl.status == "ok"
+    assert crawl.payload["params"]["force"] is True
+
     market_state = validate_job_submission(
         job_type="market-state-build",
         params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "as_of": "2026-05-09"},
@@ -225,7 +242,7 @@ def test_job_definition_lookup_exposes_metadata() -> None:
     assert definition is not None
     assert definition.permission.value == "operator"
     assert definition.risk.value == "medium"
-    assert definition.param_schema.fields["config_path"].required is True
+    assert definition.param_schema.fields["config_path"].required is False
 
 
 def test_job_param_schema_enum_validation() -> None:

@@ -1,3 +1,5 @@
+import type { WorkflowStep } from './workflows';
+
 export type PipelineParamsSchemaField = {
   type: string;
   description?: string;
@@ -21,7 +23,7 @@ export type PipelineWorkflowDefinition = {
       fields?: Record<string, PipelineParamsSchemaField>;
     };
   };
-  steps: unknown[];
+  steps: WorkflowStep[];
 };
 
 export type PipelineSummary = {
@@ -70,6 +72,26 @@ export type ArticlePipelineRunRequest = {
   created_by?: string;
   idempotency_key?: string | null;
   confirmed?: boolean;
+};
+
+export type ArticlePipelineStepRunRequest = {
+  params: Record<string, unknown>;
+  created_by?: string;
+  idempotency_key?: string | null;
+  confirmed?: boolean;
+};
+
+export type ArticlePipelineScheduleRequest = {
+  profile_id?: string;
+  schedule_time?: string;
+  force?: boolean;
+};
+
+export type ArticlePipelineScheduleState = {
+  scheduler_started: boolean;
+  schedule_time: string | null;
+  force: boolean;
+  profile_id: string | null;
 };
 
 export type PipelineRunResponse = {

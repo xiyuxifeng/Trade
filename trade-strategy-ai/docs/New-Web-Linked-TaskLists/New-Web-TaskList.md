@@ -981,6 +981,96 @@ UI 关联任务：
 
 ---
 
+## Stage V1-S5：article_pipeline 步骤化运行与日程控制
+
+### [x] NW-V1-S5-001 P0 article_pipeline 步骤选择、增量处理与 Force 语义
+
+任务目标：把文章工作台从单一 `pipeline-run` 入口扩展为可按步骤创建 Job 的运行入口，并为 `crawl / clean / validate / store / process` 提供增量/Force 语义。
+
+允许修改：
+
+- `src/pipelines/article_pipeline_spec.py`
+- `src/services/pipeline_application_service.py`
+- `src/services/job_registry.py`
+- `src/services/job_runner.py`
+- `src/services/pipeline_service.py`
+- `src/agents/data_agent/skills/crawl_blog.py`
+- `src/pipeline/tasks/crawl_task.py`
+- `tests/pipelines/test_article_pipeline_spec.py`
+- `tests/unit/services/test_pipeline_application_service.py`
+- `tests/unit/services/test_job_registry.py`
+- `tests/unit/services/test_job_runner.py`
+- `tests/unit/services/test_pipeline_service.py`
+- `tests/unit/agents/data_agent/skills/test_crawl_blog.py`
+- `tests/unit/pipeline/tasks/test_crawl_task.py`
+
+禁止修改：
+
+- 不要把前端表单逻辑塞进后端 service。
+- 不要为 step 跑通而新造一套和 Job Center 并行的事实源。
+- 不要把 `Force` 语义做成仅前端文案。
+
+实现要求：
+
+1. `article_pipeline` 的 step 列表必须能被 UI 读取并渲染为下拉选项。
+2. `crawl / clean / validate / store / process` 都能作为独立 Job 创建。
+3. 每个 step 都支持 `force` 参数，且 Job 进度会持续更新。
+4. `force=false` 时走增量路径，`force=true` 时清理旧状态后重新开始。
+5. `pipeline-run` 仍保留全量处理语义，作为独立全量入口与日程执行目标。
+
+验收标准：
+
+- 用户能在 UI 上切换 step 并提交对应 Job。
+- `crawl / clean / validate / store / process` 的参数校验、默认值和执行语义一致。
+- step Job 的进度更新与 `Force` 语义在单测中可验证。
+- 不破坏现有 `pipeline-run` 兼容入口。
+
+UI 关联任务：
+
+- `UI-V1-012 Article Pipeline Step Builder`
+
+---
+
+### [x] NW-V1-S5-002 P0 article_pipeline 日程任务（仅 pipeline-run）
+
+任务目标：为文章工作台新增一个仅支持 `pipeline-run` 的日程任务，支持启动、停止与当天完成判定；Web 侧统一使用 Profile，`config_path` 仅保留 CLI / 开发兼容入口。
+
+允许修改：
+
+- `src/services/pipeline_application_service.py`
+- `src/services/article_pipeline_schedule_service.py`
+- `api/routers/ui/pipelines.py`
+- `api/app.py`
+- `tests/unit/services/test_article_pipeline_schedule_service.py`
+- `tests/api/routers/test_pipelines.py`
+
+禁止修改：
+
+- 不要把 schedule 扩展到 step 级别。
+- 不要把调度状态写死在前端 local state。
+- 不要把已有完成数据的判断交给 UI 猜测。
+
+实现要求：
+
+1. 提供 `start / stop / status` 接口。
+2. 支持设置调度时间。
+3. 调度触发时只运行当天的 `pipeline-run` 全量处理。
+4. 同一天已有完成记录且未勾选 `Force` 时，返回“已完成”而不是重复执行。
+5. `Force=true` 时允许重新执行当天任务。
+
+验收标准：
+
+- UI 能启动和停止调度。
+- 调度状态可以刷新查看。
+- 重复启动同一天任务时有明确的已完成提示。
+- 停止后不会再继续触发当天任务。
+
+UI 关联任务：
+
+- `UI-V1-013 Article Pipeline Scheduler Panel`
+
+---
+
 # V2：正式 Profile + 正式 Web 工作台 + Market/Strategy
 
 ## V2 交付目标

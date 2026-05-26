@@ -121,46 +121,93 @@ class OHLCVService:
         return "stock"
 
     async def _upsert_bars(self, symbol: str, df: pd.DataFrame) -> int:
-        """批量 upsert bars 到数据库"""
+        """批量 upsert bars 到数据库。
+
+        先按 symbol 一次性加载目标区间内已有记录，再在内存中区分
+        更新与新增，避免逐行 `SELECT + UPDATE/INSERT` 带来的放大开销。
+        """
         if df is None or df.empty:
             return 0
 
+        records = df.to_dict(orient="records")
+
+        def _normalize_trade_date(value: Any) -> date | None:
+            """把 DataFrame 里的日期值统一成 Python `date`。"""
+            if value is None or value == "" or pd.isna(value):
+                return None
+            if isinstance(value, date):
+                return value
+            if hasattr(value, "date"):
+                normalized = value.date()
+                if isinstance(normalized, date):
+                    return normalized
+            parsed = pd.to_datetime(value, errors="coerce")
+            if pd.isna(parsed):
+                return None
+            return parsed.date()
+
+        def _to_float(value: Any, *, default: float = 0.0) -> float:
+            """把数值列统一转成 float，空值回退到默认值。"""
+            if value is None or value == "" or pd.isna(value):
+                return default
+            return float(value)
+
+        trade_dates = [normalized for row in records if (normalized := _normalize_trade_date(row.get("date"))) is not None]
+        if not trade_dates:
+            return 0
+
+        min_trade_date = min(trade_dates)
+        max_trade_date = max(trade_dates)
+
         async with self._factory() as session:
+            stmt = select(OHLCVBar).where(
+                OHLCVBar.symbol == symbol,
+                OHLCVBar.trade_date >= min_trade_date,
+                OHLCVBar.trade_date <= max_trade_date,
+            )
+            existing_rows = await session.scalars(stmt)
+            existing_by_trade_date = {row.trade_date: row for row in existing_rows.all()}
+
+            new_rows: list[OHLCVBar] = []
             count = 0
-            for _, row in df.iterrows():
-                trade_date = row.get("date")
+            for row in records:
+                trade_date = _normalize_trade_date(row.get("date"))
                 if trade_date is None:
                     continue
 
-                # 检查是否已存在
-                stmt = select(OHLCVBar).where(
-                    OHLCVBar.symbol == symbol,
-                    OHLCVBar.trade_date == trade_date,
-                )
-                existing = await session.scalar(stmt)
+                open_value = _to_float(row.get("open"))
+                high_value = _to_float(row.get("high"))
+                low_value = _to_float(row.get("low"))
+                close_value = _to_float(row.get("close"))
+                volume_value = _to_float(row.get("volume"))
+                turnover_raw = row.get("turnover")
+                turnover_value = None if turnover_raw is None or turnover_raw == "" or pd.isna(turnover_raw) else float(turnover_raw)
 
-                if existing:
-                    # 更新
-                    existing.open = float(row.get("open", 0))
-                    existing.high = float(row.get("high", 0))
-                    existing.low = float(row.get("low", 0))
-                    existing.close = float(row.get("close", 0))
-                    existing.volume = float(row.get("volume", 0))
-                    existing.turnover = float(row.get("turnover")) if row.get("turnover") else None
+                existing = existing_by_trade_date.get(trade_date)
+                if existing is not None:
+                    existing.open = open_value
+                    existing.high = high_value
+                    existing.low = low_value
+                    existing.close = close_value
+                    existing.volume = volume_value
+                    existing.turnover = turnover_value
                 else:
-                    # 插入
-                    bar = OHLCVBar(
-                        symbol=symbol,
-                        trade_date=trade_date,
-                        open=float(row.get("open", 0)),
-                        high=float(row.get("high", 0)),
-                        low=float(row.get("low", 0)),
-                        close=float(row.get("close", 0)),
-                        volume=float(row.get("volume", 0)),
-                        turnover=float(row.get("turnover")) if row.get("turnover") else None,
+                    new_rows.append(
+                        OHLCVBar(
+                            symbol=symbol,
+                            trade_date=trade_date,
+                            open=open_value,
+                            high=high_value,
+                            low=low_value,
+                            close=close_value,
+                            volume=volume_value,
+                            turnover=turnover_value,
+                        )
                     )
-                    session.add(bar)
                 count += 1
+
+            if new_rows:
+                session.add_all(new_rows)
 
             await session.commit()
             return count

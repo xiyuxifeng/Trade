@@ -1,0 +1,253 @@
+# trade-strategy-ai 最小可用配置模板
+#
+# 填写原则：
+# 1. 把“必须配置”的内容放在前面先填好
+# 2. 中间的分隔注释表示功能分组
+# 3. 敏感项优先使用环境变量，不要明文提交到 Git
+
+# ============================================================
+# 必须配置：不填会影响系统启动、登录或核心数据写入
+# ============================================================
+
+database:
+  # 必填：PostgreSQL 异步连接串。
+  # 推荐写成环境变量占位符，例如 ${DATABASE_URL}；
+  # 也可以直接写：
+  # postgresql+asyncpg://trade:trade@127.0.0.1:5432/trade_strategy_ai
+  url: "${DATABASE_URL}"
+  # 是否打印 SQL；排查问题时可临时改为 true，正式环境建议 false。
+  echo: false
+  # 连接池大小；并发任务较多时可适当调大。
+  pool_size: 10
+  # 连接池溢出上限；保持默认通常即可。
+  max_overflow: 20
+  # 获取连接超时时间（秒）；数据库压力大时可适当调大。
+  pool_timeout: 30
+  # 连接回收周期（秒）；用于避免长连接失效。
+  pool_recycle: 1800
+
+# 系统使用的本地时区；盘前/盘后调度和日期计算都按这个时区解释。
+timezone: Asia/Shanghai
+
+api:
+  # API 服务监听地址；对外暴露时通常使用 0.0.0.0。
+  host: "0.0.0.0"
+  # API 服务端口。
+  port: 8000
+  # 单个请求超时（秒）；长任务提交和健康检查可按需调整。
+  timeout_seconds: 300
+  auth:
+    # 是否启用 API Key 鉴权；正式环境建议 true。
+    enabled: true
+    # API Key 列表；建议使用环境变量或部署平台的 Secret 注入。
+    api_keys:
+      - "${ADMIN_API_KEY}"
+
+storage:
+  # 通用处理产物输出目录；日报、报告、证据包等都会用到这里。
+  output_dir: data/processed/phase0
+
+traders:
+  # 至少保留一个 trader 配置，供策略、盘前、盘后、回测等流程使用。
+  - trader_id: trader_a
+    # 展示名，用于页面和报告显示。
+    display_name: Trader A
+    article_sources:
+      # 交易员文章来源 URL 列表；如果文章抓取走 crawl.sources，这里可先留空。
+      urls: []
+      # RSS 来源列表；没有则留空。
+      rss: []
+      # 站点类型；未知时可留 null。
+      site_type: null
+      # 抓取频率（分钟）；未启用自动刷新时留 null。
+      crawl_frequency_minutes: null
+    trade_log_sources:
+      # 交易记录来源 CSV 路径列表；没有导入时留空。
+      csv_paths: []
+    # 默认止盈比例；当上层未指定时使用。
+    default_target_pct: 0.06
+    # 默认止损比例；当上层未指定时使用。
+    default_stop_pct: 0.03
+
+# ============================================================
+# 常用功能配置：按需启用，不用的功能可以保留默认值
+# ============================================================
+
+schedule:
+  # 是否启用系统级定时调度；不需要自动任务时保持 false。
+  enable: false
+  # 盘前触发时间（HH:MM）。
+  pre_market_time: "09:25"
+  # 盘后触发时间（HH:MM）。
+  after_close_time: "18:00"
+
+evaluation:
+  # 回测/策略评估时的最低预期收益阈值（例如 0.01 = 1%）。
+  min_expected_return: 0.05
+  # 是否启用“亏损触发复盘”。
+  loss_trigger: true
+  trade_constraint:
+    # 是否启用 T+1 约束。
+    t_plus_one: true
+    # 涨停比例；null 表示自动按板块类型推断。
+    limit_up_pct: null
+    # 跌停比例；null 表示自动按板块类型推断。
+    limit_down_pct: null
+    # 板块类型：auto / main / chinext / star / st / bse。
+    board_type: "auto"
+
+data:
+  # 数据提供者列表；交付默认建议使用 akshare，便于直接跑真实行情链路。
+  providers: ["akshare"]
+  # 候选池快照目录；用于市场快照/盘前/回测相关流程。
+  market_universe_snapshot_dir: data/market_universe/snapshots
+
+crawl:
+  auth:
+    tgb.cn:
+      # 站点认证模式；当前主流程使用 cookie。
+      mode: cookie
+      # 站点 Cookie；建议通过环境变量注入，例如 ${TGB_COOKIE}。
+      cookie: "${TGB_COOKIE}"
+
+  sources:
+    # 文章抓取来源示例。按你的实际站点/作者信息修改这里即可。
+    - source: tgb
+      site: tgb.cn
+      trader_id: javxsp
+      # 作者 ID（站点内唯一标识）。
+      author_id: "10461311"
+      # 作者展示名。
+      author_name: javxsp
+      # 列表页 URL；分页参数由程序拼接。
+      list_url: https://www.tgb.cn/user/blog/moreTopic
+
+  throttling:
+    # 最小请求间隔（秒）；防止请求过快被限流。
+    min_interval_seconds: 1.0
+    # 最大请求间隔（秒）；用于随机抖动。
+    max_interval_seconds: 5.0
+    # 失败后退避序列（秒）；按顺序重试。
+    backoff_seconds: [5, 15, 30]
+
+# 盘前主链路开关：交付默认开启盘前候选池快照流程。
+stage4:
+  # 是否启用盘前主链路。
+  enable: true
+  # 候选池快照时段。
+  market_universe_slot: "09-25"
+
+llm:
+  # 大模型提供商；按你实际接入的服务修改。
+  provider: "qwen"
+  # 模型名；可写单个或多个候选模型。
+  model: ["qwen3-8b"]
+  # 兼容 OpenAI 风格的接口地址。
+  url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  # 大模型 API Key；建议使用环境变量，例如 ${DASHSCOPE_API_KEY}。
+  api_key: "${DASHSCOPE_API_KEY}"
+
+kaipan:
+  # Kaipan 数据存储目录。
+  data_dir: data/kaipan
+  # Kaipan schema 目录。
+  schema_dir: src/providers/kaipan_schema
+  # Kaipan token；建议环境变量注入，例如 ${KAIPAN_TOKEN}。
+  token: "${KAIPAN_TOKEN}"
+  # Kaipan user id；建议环境变量注入，例如 ${KAIPAN_USER_ID}。
+  user_id: "${KAIPAN_USER_ID}"
+  # 默认请求头；一般无需修改。
+  default_headers:
+    Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+    User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)
+    Connection: Keep-Alive
+    Accept-Encoding: gzip
+  # Kaipan 抓取调度时间。
+  fetch_schedule:
+    # 盘前触发时间。
+    pre_market: "09:25"
+    # 盘后触发时间。
+    post_close: "18:00"
+  # 交易日历来源；默认使用 akshare。
+  trading_calendar:
+    source: akshare
+  # 最小请求间隔（秒）；防止请求过快。
+  min_request_interval_seconds: 1.0
+  # 最大重试次数。
+  max_retries: 3
+  # 重试退避序列（秒）。
+  retry_backoff_seconds: [1.0, 2.0, 4.0]
+  # 遇到这些状态码时重试。
+  retry_status_codes: [403, 429, 500, 502, 503, 504]
+
+akshare:
+  # AkShare 请求最小间隔（秒）。
+  min_request_interval_seconds: 1.0
+  # 失败重试次数。
+  max_retries: 2
+  # 重试退避序列（秒）。
+  retry_backoff_seconds: [1.0, 3.0]
+  # A 股 stock 接口失败后是否自动降级到新浪源。
+  fallback_enabled: true
+
+alerting:
+  # 告警开关；如果不需要通知，可改成 false。
+  enabled: false
+  # 告警通道：dingtalk / feishu / wecom / generic。
+  channel: "dingtalk"
+  aggregation:
+    # 聚合窗口（分钟）；相同类别告警在窗口内合并。
+    window_minutes: 60
+    # 单窗口最大数量；超过后立即发送。
+    max_count: 100
+  dingtalk:
+    # 钉钉群机器人 Webhook；建议环境变量注入。
+    webhook_url: "${DINGTALK_WEBHOOK_URL}"
+    # 钉钉加签密钥；可选。
+    secret: "${DINGTALK_SECRET}"
+  feishu:
+    # 飞书群机器人 Webhook；按需填写。
+    webhook_url: "${FEISHU_WEBHOOK_URL}"
+  wecom:
+    # 企业微信群机器人 Webhook；按需填写。
+    webhook_url: "${WECOM_WEBHOOK_URL}"
+  # 最低告警级别。
+  min_level: "WARNING"
+  # 是否同时打印到控制台。
+  console_output: true
+
+# ============================================================
+# 调优项：通常保持默认值即可，只有排障或性能调优时修改
+# ============================================================
+
+data_quality:
+  trade:
+    # 交易费率阈值：超过此比例就会被标记为高费率。
+    # 调小：更多交易会被判定为高费率，适合更严格地排查手续费异常或数据质量问题。
+    # 调大：只有特别高的费率才会被标记，误报更少，但也更容易漏掉边缘异常。
+    # 常用默认值：0.01，表示 1%。
+    fee_high_threshold: 0.01
+  anomaly:
+    # 价格异常检测的 IQR 倍数。
+    # 调小建议：1.0 ~ 1.2，更敏感，适合更严格地排查异常波动，但误报会变多。
+    # 调大建议：2.0 ~ 3.0，更宽松，适合减少误报，但也更容易漏掉边缘异常。
+    iqr_multiplier: 1.5
+    # 成交量 spike 阈值倍数。
+    # 调小建议：2.0 ~ 3.0，更容易把放量标记为异常，适合更敏感的监控。
+    # 调大建议：5.0 ~ 8.0，只会捕获特别夸张的放量，噪声更少但也更容易漏掉早期信号。
+    volume_spike_multiplier: 5.0
+
+dashboard:
+  alerts:
+    # 是否启用告警。
+    enabled: true
+    # 数据新鲜度阈值（小时），超过则告警。
+    freshness_threshold_hours: 24
+    # 异常率阈值（%），超过则告警。
+    anomaly_rate_threshold: 5.0
+  # HTML 输出目录。
+  html_output_dir: data/processed/dashboard
+  # 最大显示异常详情数。
+  max_anomaly_details: 20
+  # 告警输出模式：cli / html / both。
+  alert_mode: both

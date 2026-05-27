@@ -38,14 +38,10 @@ evaluation:
   loss_trigger: true
 
 data:
-  # 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
-  providers: ["mock"]
-  # mock_prices 用于演示闭环，后续可接入真实行情
-  mock_prices:
-    000001.SZ: 10.0
-    510300.SH: 3.5
-  # market_data_cache_dir 用于存放 AkShare 同步后的标准化日线缓存
-  market_data_cache_dir: data/processed/market_data
+  # 数据提供者列表：交付默认建议使用 akshare，便于直接跑真实行情链路
+  providers: ["akshare"]
+  # 候选池快照目录，用于市场快照/盘前/回测相关流程
+  market_universe_snapshot_dir: data/market_universe/snapshots
 
 crawl:
   # 站点认证信息（按域名/站点名分组）
@@ -89,17 +85,12 @@ llm:
   # 大模型 API Key（建议通过环境变量注入）
   api_key: null
 
-persona:
-  # 是否启用 Persona Router
-  enable: false
-  # 路由目标：return_max（收益最大化）；后续可扩展 risk_min
-  objective: "return_max"
-  # clusters 文件路径（可用 persona-init-sample 生成样例）
-  clusters_path: data/processed/persona/clusters.sample.json
-  # 输出 Top-K（默认 2：Top-1 + Top-2 备选）
-  top_k: 2
-  # 可选：直接指定 MarketState JSON
-  market_state_path: null
+# 盘前主链路开关：交付默认开启盘前候选池快照流程
+stage4:
+  # 是否启用盘前主链路
+  enable: true
+  # 候选池快照时段
+  market_universe_slot: "09-25"
 
 traders:
   - trader_id: trader_a
@@ -112,8 +103,6 @@ traders:
       crawl_frequency_minutes: null
     trade_log_sources:
       csv_paths: []
-    # 关注列表
-    watchlist: ["000001.SZ", "510300.SH"]
     # 默认止盈/止损
     default_target_pct: 0.05
     default_stop_pct: 0.03

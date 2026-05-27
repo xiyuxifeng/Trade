@@ -21,6 +21,7 @@ import { formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strateg
 
 type SubmissionType = 'snapshot-build' | 'run-pre-market';
 
+const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 const DEFAULT_BENCHMARK_NAME = '沪深300';
 
 type SubmissionState = {
@@ -73,17 +74,15 @@ function buildSnapshotParams({
   force: boolean;
   offline: boolean;
 }) {
+  const resolvedBenchmarkSymbol = benchmarkSymbol.trim() || DEFAULT_BENCHMARK_SYMBOL;
   const params: Record<string, unknown> = {
     profile_id: profileId,
     slot,
     snapshot_type: snapshotType,
     force,
     offline,
+    benchmark_symbol: resolvedBenchmarkSymbol,
   };
-
-  if (benchmarkSymbol.trim()) {
-    params.benchmark_symbol = benchmarkSymbol.trim();
-  }
 
   if (startDate && endDate) {
     params.start_date = startDate;
@@ -108,16 +107,14 @@ function buildRunParams({
   force: boolean;
   exportHtml: boolean;
 }) {
+  const resolvedBenchmarkSymbol = benchmarkSymbol.trim() || DEFAULT_BENCHMARK_SYMBOL;
   const params: Record<string, unknown> = {
     profile_id: profileId,
     as_of_date: strategyDate,
     force,
     export_html: exportHtml,
+    benchmark_symbol: resolvedBenchmarkSymbol,
   };
-
-  if (benchmarkSymbol.trim()) {
-    params.benchmark_symbol = benchmarkSymbol.trim();
-  }
 
   return params;
 }
@@ -128,7 +125,7 @@ export function StrategyPreMarketPage() {
   const today = useMemo(() => formatLocalDateInputOffset(0), []);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [strategyDate, setStrategyDate] = useState(today);
-  const [benchmarkSymbol, setBenchmarkSymbol] = useState('');
+  const [benchmarkSymbol, setBenchmarkSymbol] = useState(DEFAULT_BENCHMARK_SYMBOL);
   const [snapshotStartDate, setSnapshotStartDate] = useState('');
   const [snapshotEndDate, setSnapshotEndDate] = useState('');
   const [snapshotSlot, setSnapshotSlot] = useState('17-30');
@@ -380,14 +377,14 @@ export function StrategyPreMarketPage() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <Badge variant="info" className="w-fit">
-              基础设置
-            </Badge>
-            <CardTitle className="mt-2 text-slate-950">Profile / 策略日期 / Benchmark</CardTitle>
-            <CardDescription className="text-slate-600">
-              `benchmark_symbol` 为空时会由后端按 Profile 默认值补齐，Web 只保留 Profile 入口。
-            </CardDescription>
-          </CardHeader>
+              <Badge variant="info" className="w-fit">
+                基础设置
+              </Badge>
+              <CardTitle className="mt-2 text-slate-950">Profile / 策略日期 / Benchmark</CardTitle>
+              <CardDescription className="text-slate-600">
+              Benchmark 默认选中沪深300，可在页面下拉中手动切换。
+              </CardDescription>
+            </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
@@ -407,14 +404,13 @@ export function StrategyPreMarketPage() {
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark 选择</p>
                 <Select aria-label="Benchmark 选择" value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
-                  <option value="">自动从 Profile 读取</option>
                   {benchmarkOptions.map((item: MarketBenchmarkOption) => (
                     <option key={item.symbol} value={item.symbol}>
                       {item.name} ({item.symbol})
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-slate-500">可手动选择指数基准；留空时由后端按 Profile 默认值补齐。</p>
+                <p className="text-xs text-slate-500">页面默认选中沪深300；如需其他口径，可在这里切换。</p>
                 {benchmarkOptionsQuery.isError ? (
                   <p className="text-xs text-amber-600">Benchmark 选项加载失败，当前回退到默认沪深300。</p>
                 ) : null}

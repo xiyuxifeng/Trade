@@ -167,7 +167,7 @@ describe('Strategy lifecycle pages', () => {
 
     expect(await screen.findByLabelText('Profile')).toHaveValue('default');
     expect(screen.getByLabelText('Profile')).toHaveValue('default');
-    expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('');
+    expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('000300.SH');
     expect(screen.getByLabelText('Strategy date')).toBeInTheDocument();
     expect(screen.getByLabelText('Snapshot start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Snapshot end date')).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe('Strategy lifecycle pages', () => {
     expect(screen.getByLabelText('Export HTML')).not.toBeChecked();
     expect(screen.getByRole('button', { name: '提交快照构建' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交盘前运行' })).toBeInTheDocument();
-    expect(screen.getByText('可手动选择指数基准；留空时由后端按 Profile 默认值补齐。')).toBeInTheDocument();
+    expect(screen.getByText('页面默认选中沪深300；如需其他口径，可在这里切换。')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Strategy date'), { target: { value: '2026-05-22' } });
     fireEvent.change(screen.getByLabelText('Snapshot start date'), { target: { value: '2026-05-20' } });
@@ -194,19 +194,20 @@ describe('Strategy lifecycle pages', () => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
         expect.objectContaining({
           job_type: 'snapshot-build',
-            params: expect.objectContaining({
-              profile_id: 'default',
-              start_date: '2026-05-20',
-              end_date: '2026-05-22',
-              slot: '17-30',
-              snapshot_type: 'all',
-              force: true,
-              offline: true,
-            }),
+          params: expect.objectContaining({
+            profile_id: 'default',
+            start_date: '2026-05-20',
+            end_date: '2026-05-22',
+            slot: '17-30',
+            snapshot_type: 'all',
+            force: true,
+            offline: true,
+            benchmark_symbol: '000300.SH',
           }),
-        );
+        }),
+      );
       expect(mockedCreateJob.mock.calls[0][0].params).not.toHaveProperty('date');
-      expect(mockedCreateJob.mock.calls[0][0].params).not.toHaveProperty('benchmark_symbol');
+      expect(mockedCreateJob.mock.calls[0][0].params).toHaveProperty('benchmark_symbol', '000300.SH');
     });
 
     fireEvent.change(screen.getByLabelText('Benchmark 选择'), { target: { value: '000905.SH' } });

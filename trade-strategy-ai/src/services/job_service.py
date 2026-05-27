@@ -931,7 +931,11 @@ class JobService(BaseService):
                     session=session,
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("failed to fire job failure alert: job_type=%s, error=%s, exc=%s", job.job_type, error, exc)
+            logger.exception(
+                "failed to fire job failure alert: job_type=%s, error=%s",
+                job.job_type,
+                error,
+            )
 
     async def fail_job(
         self,

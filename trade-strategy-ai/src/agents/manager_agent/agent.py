@@ -140,7 +140,7 @@ class ManagerAgent:
         try:
             return load_trader_profiles_file(path).profiles_by_trader
         except Exception:  # noqa: BLE001
-            self.logger.warning("failed to load trader profiles", path=str(path))
+            self.logger.exception("failed to load trader profiles: path=%s", path)
             return {}
 
     def _resolve_path(self, value: str | None) -> Path | None:
@@ -172,7 +172,7 @@ class ManagerAgent:
             try:
                 return MarketState.model_validate(read_json(p))
             except Exception:  # noqa: BLE001
-                self.logger.warning("persona.market_state_path invalid, using default", path=str(p))
+                self.logger.exception("persona.market_state_path invalid, using default: path=%s", p)
 
         # Phase 0.5: build from benchmark daily CSV (index/ETF)
         bench_symbol = COMMON_MARKET_INDICES[0]["symbol"]
@@ -186,7 +186,7 @@ class ManagerAgent:
                     df = load_daily_close_series(src)
                     return classify_market_state(as_of_date=as_of_date, daily_df=df, symbol=bench_symbol)
                 except Exception as exc:  # noqa: BLE001
-                    self.logger.warning("failed to build MarketState from market data cache", error=str(exc))
+                    self.logger.exception("failed to build MarketState from market data cache: error=%s", exc)
         return MarketState(as_of_date=as_of_date, benchmark_symbol=bench_symbol)
 
     async def _load_market_state_from_db(self, *, as_of_date: date) -> MarketState:
@@ -214,7 +214,7 @@ class ManagerAgent:
                         len(df) if df is not None else 0,
                 )
         except Exception as exc:  # noqa: BLE001
-            self.logger.warning("failed to build MarketState from DB, fallback to CSV", error=str(exc))
+            self.logger.exception("failed to build MarketState from DB, fallback to CSV: error=%s", exc)
 
         # fallback 到 CSV 缓存
         return self._load_market_state(as_of_date=as_of_date)
@@ -514,7 +514,7 @@ class ManagerAgent:
                 slot = self.config.stage4.market_universe_slot
                 market_universe = self.snapshot_service.load(as_of_date.isoformat(), slot)
             except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
-                self.logger.warning("failed to load market universe snapshot, Stage 4 path disabled: %s", e)
+                self.logger.exception("failed to load market universe snapshot, Stage 4 path disabled: %s", e)
                 self._append_task(
                     AgentTask(
                         type="data_missing",
@@ -572,7 +572,7 @@ class ManagerAgent:
                             [p.rule_type for p in rule_predictions[:5]],
                         )
             except Exception as e:
-                self.logger.warning("规则池预测加载失败: %s", e)
+                self.logger.exception("规则池预测加载失败: %s", e)
 
         if rule_predictions and ideas:
             self._apply_rule_pool_predictions_to_ideas(ideas, rule_predictions)

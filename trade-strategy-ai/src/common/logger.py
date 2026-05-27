@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import logging
 import sys
+from contextvars import ContextVar, Token
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Iterator
 
 from src.common.paths import resolve_project_path
 
@@ -15,8 +18,11 @@ _LOG_DIR.mkdir(exist_ok=True, parents=True)
 _DEFAULT_LOG_FILE = _LOG_DIR / "app.log"
 
 # 日志格式
-_FILE_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
-_CONSOLE_FORMAT = "%(asctime)s %(levelname)-8s %(message)s"
+_FILE_FORMAT = (
+    "%(asctime)s %(levelname)-8s %(name)s "
+    "[request_id=%(request_id)s job_id=%(job_id)s job_type=%(job_type)s profile_id=%(profile_id)s config_path=%(config_path)s]: %(message)s"
+)
+_CONSOLE_FORMAT = "%(asctime)s %(levelname)-8s %(name)s [request_id=%(request_id)s job_id=%(job_id)s profile_id=%(profile_id)s]: %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _CONSOLE_DATE_FORMAT = "%H:%M:%S"
 
@@ -26,6 +32,55 @@ _DEFAULT_BACKUP_COUNT = 5
 
 # 全局是否已配置
 _configured = False
+
+_LOG_CONTEXT_FIELDS = ("request_id", "job_id", "job_type", "profile_id", "config_path")
+_LOG_CONTEXT: dict[str, ContextVar[str | None]] = {
+    field: ContextVar(f"log_{field}", default=None) for field in _LOG_CONTEXT_FIELDS
+}
+_OLD_LOG_RECORD_FACTORY = logging.getLogRecordFactory()
+
+
+def _install_log_record_factory() -> None:
+    """为所有日志记录注入默认上下文字段。"""
+    def _record_factory(*args: object, **kwargs: object) -> logging.LogRecord:
+        record = _OLD_LOG_RECORD_FACTORY(*args, **kwargs)
+        for field, context_var in _LOG_CONTEXT.items():
+            value = context_var.get()
+            setattr(record, field, value if value is not None else "-")
+        return record
+
+    logging.setLogRecordFactory(_record_factory)
+
+
+_install_log_record_factory()
+
+
+@contextmanager
+def bind_log_context(**kwargs: str | None) -> Iterator[None]:
+    """临时绑定日志上下文，退出时自动恢复。"""
+    tokens: list[tuple[str, Token[str | None]]] = []
+    try:
+        for field, value in kwargs.items():
+            if field not in _LOG_CONTEXT:
+                continue
+            tokens.append((field, _LOG_CONTEXT[field].set(value)))
+        yield
+    finally:
+        for field, token in reversed(tokens):
+            _LOG_CONTEXT[field].reset(token)
+
+
+def get_log_context() -> dict[str, str | None]:
+    """返回当前线程/协程的日志上下文。"""
+    return {field: context_var.get() for field, context_var in _LOG_CONTEXT.items()}
+
+
+def set_log_context(**kwargs: str | None) -> None:
+    """直接设置当前上下文字段。"""
+    for field, value in kwargs.items():
+        if field not in _LOG_CONTEXT:
+            continue
+        _LOG_CONTEXT[field].set(value)
 
 
 def configure_logging(

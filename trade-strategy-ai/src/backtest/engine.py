@@ -577,7 +577,7 @@ async def _preload_forward_bars(
         scalars = await _resolve_maybe_awaitable(result.scalars())
         rows = await _resolve_maybe_awaitable(scalars.all())
     except Exception as e:
-        logger.warning("预加载 OHLCV bars 失败: %s", e)
+        logger.exception("预加载 OHLCV bars 失败: %s", e)
         return {}
 
     bars_by_symbol: dict[str, list[dict[str, Any]]] = {}

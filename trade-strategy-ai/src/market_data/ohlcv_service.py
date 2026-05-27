@@ -94,7 +94,14 @@ class OHLCVService:
                 results[symbol] = count
                 logger.info(f"抓取成功: {symbol}, {count} 条记录")
             except Exception as e:
-                logger.warning(f"抓取失败: {symbol}, error={e}")
+                logger.exception(
+                    "ohlcv 抓取失败: symbol=%s, start=%s, end=%s, market_kind=%s, error=%s",
+                    symbol,
+                    start_date,
+                    end_date,
+                    kind_map.get(symbol) or "auto",
+                    e,
+                )
                 results[symbol] = 0
             if progress_callback is not None:
                 runtime_state_update = {

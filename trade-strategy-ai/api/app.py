@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,8 +42,11 @@ from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
+from src.common.logger import bind_log_context, get_logger
 from src.audit.service import AuditService
 from src.health.routes import health_router
+
+logger = get_logger(__name__)
 
 
 def _resolve_local_web_static_dir() -> Path | None:
@@ -172,6 +177,35 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def request_context_middleware(request: Request, call_next):
+        """给每个请求注入 request_id，并记录简要请求日志。"""
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        request.state.request_id = request_id
+        started_at = time.perf_counter()
+        with bind_log_context(request_id=request_id):
+            try:
+                response = await call_next(request)
+            except Exception:
+                duration_ms = (time.perf_counter() - started_at) * 1000.0
+                logger.exception(
+                    "request failed method=%s path=%s duration_ms=%.2f",
+                    request.method,
+                    request.url.path,
+                    duration_ms,
+                )
+                raise
+            duration_ms = (time.perf_counter() - started_at) * 1000.0
+            response.headers["X-Request-ID"] = request_id
+            logger.info(
+                "request completed method=%s path=%s status=%s duration_ms=%.2f",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+            )
+        return response
 
     app.include_router(run.router)
     app.include_router(reports.router)

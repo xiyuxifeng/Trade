@@ -205,7 +205,7 @@ class SnapshotService:
                 data = json.load(f)
             return self._deserialize(data)
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError, KeyError, TypeError) as exc:
-            logger.warning("快照文件损坏或格式不合法，已跳过读取: path=%s error=%s", path, exc)
+            logger.exception("快照文件损坏或格式不合法，已跳过读取: path=%s error=%s", path, exc)
             return None
 
     def _deserialize(self, data: dict) -> MarketUniverse:

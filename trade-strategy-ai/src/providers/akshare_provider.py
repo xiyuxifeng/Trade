@@ -232,9 +232,7 @@ class AkshareProvider(ProviderBase):
         try:
             return self._fetch_with_retry(req=req, market_kind="stock")
         except Exception as em_exc:
-            logger.warning(
-                f"东方财富源请求失败 ({req.symbol})，尝试新浪源 fallback: {em_exc}"
-            )
+            logger.warning("东方财富源请求失败 (%s)，尝试新浪源 fallback: %s", req.symbol, em_exc)
             try:
                 # fallback 前额外等待，避免连续请求
                 self._throttle()
@@ -243,7 +241,7 @@ class AkshareProvider(ProviderBase):
                 logger.info(f"新浪源 fallback 成功: {req.symbol}")
                 return result
             except Exception as sina_exc:
-                logger.error(f"新浪源 fallback 也失败 ({req.symbol}): {sina_exc}")
+                logger.exception("新浪源 fallback 也失败 (%s): %s", req.symbol, sina_exc)
                 # 抛出原始错误，让上层知道东方财富的失败原因
                 raise em_exc from sina_exc
 

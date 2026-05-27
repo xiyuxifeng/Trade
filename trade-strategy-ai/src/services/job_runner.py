@@ -41,6 +41,10 @@ from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
 from src.services.job_control import JobControlInterrupted, JobControlState
 from src.models.job import JobStatus
+from src.common.logger import bind_log_context, get_logger
+
+
+logger = get_logger(__name__)
 
 
 _KAIPAN_PROGRESS_REPORTER: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar(
@@ -847,11 +851,15 @@ class JobRunner(BaseService):
                 if current.status == "ok" and isinstance(current.payload, dict):
                     current_job = current.payload.get("job")
                     if isinstance(current_job, dict) and current_job.get("status") == JobStatus.cancelled.value:
+                        logger.info("job control resolved action=cancel status=cancelled")
                         return ServiceResult(status="ok", message="job cancelled", payload={"job": current_job})
                 completed = await self._job_service.complete_job(job_id=job_id, result={})
+                logger.info("job control resolved action=cancel status=cancelled")
                 return ServiceResult(status="ok", message="job cancelled", payload={"job": completed.payload.get("job")})
             if current.status == "ok" and isinstance(current.payload, dict) and isinstance(current.payload.get("job"), dict):
+                logger.info("job control resolved action=%s status=paused", action)
                 return ServiceResult(status="ok", message="job paused", payload={"job": current.payload["job"]})
+            logger.info("job control resolved action=%s status=paused", action)
             return ServiceResult(status="ok", message="job paused", payload={"job": job_payload})
 
         async def _monitor_control_state() -> None:
@@ -877,98 +885,112 @@ class JobRunner(BaseService):
         if progress_reporter is not None:
             progress_token = _KAIPAN_PROGRESS_REPORTER.set(_report_progress)
 
-        try:
-            initial_control_action = await self._resolve_job_control_action(job_id)
-            if initial_control_action is not None:
-                return await _resolve_and_handle_control(initial_control_action)
-            result = await handler(params)
-            current_control_action = await self._resolve_job_control_action(job_id)
-            if current_control_action is not None:
-                return await _resolve_and_handle_control(current_control_action)
-            await _finish_progress()
-            result_payload = _to_plain(result.model_dump(mode="json"))
-            if job_payload["job_type"] in {"crawl", "clean", "validate", "store", "process", "pipeline-run", "pipeline-step"}:
-                has_profile_context = bool(params.get("profile_id")) and not bool(params.get("config_path"))
-                if has_profile_context:
-                    result_payload = _strip_keys_recursive(result_payload, {"config_path"})
-            public_result_payload = _sanitize_result_payload_for_output(result_payload)
-            result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
-            await self._job_service.bind_artifact(
-                job_id=job_id,
-                kind="result-json",
-                path=result_path,
-                metadata={"job_type": job_payload["job_type"]},
-            )
-            await self._bind_result_artifacts(
-                job_id=job_id,
-                job_dir=job_dir,
-                job_type=job_payload["job_type"],
-                result_payload=result_payload,
-            )
-            if result.status == "error":
+        with bind_log_context(
+            job_id=str(job_id),
+            job_type=str(job_payload.get("job_type") or "-"),
+            profile_id=str(params.get("profile_id")) if params.get("profile_id") else None,
+            config_path=str(params.get("config_path")) if params.get("config_path") else None,
+        ):
+            try:
+                logger.info("job execution started")
+                initial_control_action = await self._resolve_job_control_action(job_id)
+                if initial_control_action is not None:
+                    return await _resolve_and_handle_control(initial_control_action)
+                result = await handler(params)
+                current_control_action = await self._resolve_job_control_action(job_id)
+                if current_control_action is not None:
+                    return await _resolve_and_handle_control(current_control_action)
+                await _finish_progress()
+                result_payload = _to_plain(result.model_dump(mode="json"))
+                if job_payload["job_type"] in {"crawl", "clean", "validate", "store", "process", "pipeline-run", "pipeline-step"}:
+                    has_profile_context = bool(params.get("profile_id")) and not bool(params.get("config_path"))
+                    if has_profile_context:
+                        result_payload = _strip_keys_recursive(result_payload, {"config_path"})
+                public_result_payload = _sanitize_result_payload_for_output(result_payload)
+                result_path = await self._write_result_file(job_dir=job_dir, payload=public_result_payload)
+                await self._job_service.bind_artifact(
+                    job_id=job_id,
+                    kind="result-json",
+                    path=result_path,
+                    metadata={"job_type": job_payload["job_type"]},
+                )
+                await self._bind_result_artifacts(
+                    job_id=job_id,
+                    job_dir=job_dir,
+                    job_type=job_payload["job_type"],
+                    result_payload=result_payload,
+                )
+                if result.status == "error":
+                    error_type, error_code, retryable = self._classify_error(
+                        job_type=job_payload["job_type"],
+                        message=result.message or "job handler returned error",
+                        payload=result_payload,
+                    )
+                    failed = await self._job_service.fail_job(
+                        job_id=job_id,
+                        error={
+                            "type": error_type,
+                            "message": result.message or "job handler returned error",
+                            "code": error_code,
+                            "retryable": retryable,
+                            "result": result_payload,
+                        },
+                    )
+                    return ServiceResult(
+                        status="error",
+                        message="job execution failed",
+                        payload={"job": failed.payload.get("job"), "result": public_result_payload, "result_path": result_path.name},
+                    )
+
+                completed = await self._job_service.complete_job(job_id=job_id, result=result_payload)
+                await self._job_service.append_log(
+                    job_id=job_id,
+                    line=f"[runner] completed job_type={job_payload['job_type']} status={result.status}",
+                )
+                logger.info("job execution completed status=%s", result.status)
+                return ServiceResult(
+                    status="ok",
+                    message="job executed",
+                    payload={
+                        "job": completed.payload["job"],
+                        "result": public_result_payload,
+                        "result_path": result_path.name,
+                    },
+                )
+            except JobControlInterrupted as exc:
+                logger.info("job execution interrupted control_action=%s", exc.control_action)
+                return await _resolve_and_handle_control(exc.control_action)
+            except Exception as exc:  # noqa: BLE001
+                with suppress(Exception):
+                    await _finish_progress()
+                logger.exception(
+                    "job execution failed job_type=%s error=%s",
+                    job_payload["job_type"],
+                    exc,
+                )
+                await self._job_service.append_log(job_id=job_id, line=f"[runner] failed: {exc}")
                 error_type, error_code, retryable = self._classify_error(
                     job_type=job_payload["job_type"],
-                    message=result.message or "job handler returned error",
-                    payload=result_payload,
+                    message=str(exc),
                 )
                 failed = await self._job_service.fail_job(
                     job_id=job_id,
-                    error={
-                        "type": error_type,
-                        "message": result.message or "job handler returned error",
-                        "code": error_code,
-                        "retryable": retryable,
-                        "result": result_payload,
-                    },
+                    error={"type": error_type, "message": str(exc), "code": error_code, "retryable": retryable},
                 )
                 return ServiceResult(
                     status="error",
                     message="job execution failed",
-                    payload={"job": failed.payload.get("job"), "result": public_result_payload, "result_path": result_path.name},
+                    payload={"job": failed.payload.get("job"), "error": str(exc)},
                 )
-
-            completed = await self._job_service.complete_job(job_id=job_id, result=result_payload)
-            await self._job_service.append_log(
-                job_id=job_id,
-                line=f"[runner] completed job_type={job_payload['job_type']} status={result.status}",
-            )
-            return ServiceResult(
-                status="ok",
-                message="job executed",
-                payload={
-                    "job": completed.payload["job"],
-                    "result": public_result_payload,
-                    "result_path": result_path.name,
-                },
-            )
-        except JobControlInterrupted as exc:
-            return await _resolve_and_handle_control(exc.control_action)
-        except Exception as exc:  # noqa: BLE001
-            with suppress(Exception):
-                await _finish_progress()
-            await self._job_service.append_log(job_id=job_id, line=f"[runner] failed: {exc}")
-            error_type, error_code, retryable = self._classify_error(
-                job_type=job_payload["job_type"],
-                message=str(exc),
-            )
-            failed = await self._job_service.fail_job(
-                job_id=job_id,
-                error={"type": error_type, "message": str(exc), "code": error_code, "retryable": retryable},
-            )
-            return ServiceResult(
-                status="error",
-                message="job execution failed",
-                payload={"job": failed.payload.get("job"), "error": str(exc)},
-            )
-        finally:
-            if progress_token is not None:
-                _KAIPAN_PROGRESS_REPORTER.reset(progress_token)
-            control_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await control_task
-            heartbeat_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await heartbeat_task
+            finally:
+                if progress_token is not None:
+                    _KAIPAN_PROGRESS_REPORTER.reset(progress_token)
+                control_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await control_task
+                heartbeat_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat_task
 
     async def submit_job(
         self,

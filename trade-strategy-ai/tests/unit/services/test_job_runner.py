@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -1783,4 +1784,35 @@ def test_recover_stale_jobs_marks_retryable(tmp_path: Path) -> None:
     assert recovered.payload["count"] == 1
     assert job_id in recovered.payload["job_ids"]
     assert job_id in recovered.payload["retryable_job_ids"]
+    asyncio.run(engine.dispose())
+
+
+def test_job_runner_logs_handler_context(tmp_path: Path, caplog) -> None:
+    """JobRunner 执行 handler 时应把 job 上下文注入日志。"""
+
+    async def _handler(params: dict[str, Any]) -> ServiceResult:
+        logging.getLogger("tests.job.handler").info("handler invoked")
+        return ServiceResult(status="ok", payload={"profile_id": params.get("profile_id")}, message="done")
+
+    runner, job_service, engine, _ = _build_job_runner(
+        tmp_path,
+        handlers={"run-pre-market": _handler},
+    )
+
+    with caplog.at_level(logging.INFO):
+            submitted = asyncio.run(
+                runner.submit_job(
+                    job_type="run-pre-market",
+                    params={"profile_id": "profile-a", "config_path": "config/app.yaml"},
+                    created_by="web",
+                    idempotency_key="job-context-001",
+                )
+            )
+
+    job_id = submitted.payload["execution"]["job"]["id"]
+    handler_records = [record for record in caplog.records if record.name == "tests.job.handler" and record.message == "handler invoked"]
+    assert handler_records, "handler log should be captured"
+    assert handler_records[-1].job_id == job_id
+    assert handler_records[-1].profile_id == "profile-a"
+    assert handler_records[-1].config_path == "config/app.yaml"
     asyncio.run(engine.dispose())

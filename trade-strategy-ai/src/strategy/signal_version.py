@@ -359,7 +359,7 @@ class SignalVersioning:
                     context=self._dict_to_context(data["context"]),
                 )
         except Exception as e:
-            logger.warning("从归档读取失败: %s / %s, error=%s", archive_file, signal_id, e)
+            logger.exception("从归档读取失败: %s / %s, error=%s", archive_file, signal_id, e)
             return None
 
     @staticmethod
@@ -369,7 +369,7 @@ class SignalVersioning:
             with open(file_path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            logger.warning("JSON 文件读取失败: %s, error=%s", file_path, e)
+            logger.exception("JSON 文件读取失败: %s, error=%s", file_path, e)
             return None
 
     # -------------------------------------------------------------------------

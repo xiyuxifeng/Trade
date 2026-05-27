@@ -202,5 +202,5 @@ async def _get_latest_prices(
         rows = result.all()
         return {row.symbol: float(row.close) for row in rows if row.close}
     except Exception as e:
-        logger.warning("获取最新价格失败: %s，使用成本价估算", e)
+        logger.exception("获取最新价格失败: 使用成本价估算, error=%s", e)
         return {}

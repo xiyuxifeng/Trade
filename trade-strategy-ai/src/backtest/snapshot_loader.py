@@ -131,11 +131,7 @@ class SnapshotLoader:
             )
             return result
         except Exception as e:
-            logger.warning(
-                "indicators 加载失败: date=%s, error=%s",
-                trade_date,
-                e,
-            )
+            logger.exception("indicators 加载失败: date=%s, error=%s", trade_date, e)
             return {}
 
     async def _load_market_regime_from_db(
@@ -158,7 +154,7 @@ class SnapshotLoader:
                     limit=1,
                 )
         except Exception as e:
-            logger.warning(
+            logger.exception(
                 "market_regime 加载失败: date=%s, regime_version=%s, error=%s",
                 trade_date,
                 regime_version,
@@ -211,7 +207,7 @@ class SnapshotLoader:
             try:
                 market_universe = await self._load_snapshot(trade_date, "market_universe")
             except Exception as e:
-                logger.warning("快照加载失败: slot=market_universe, date=%s, error=%s", trade_date, e)
+                logger.exception("快照加载失败: slot=market_universe, date=%s, error=%s", trade_date, e)
 
         load_symbols = list(dict.fromkeys([*symbols, benchmark_symbol] if benchmark_symbol else symbols))
 
@@ -278,7 +274,7 @@ class SnapshotLoader:
             # 取最新发布的版本
             return sorted(versions, key=lambda v: v.released_at or date.min, reverse=True)[0]
         except Exception as e:
-            logger.warning(
+            logger.exception(
                 "strategy_repo 异常: trader=%s, date=%s, error=%s",
                 trader_id,
                 trade_date,

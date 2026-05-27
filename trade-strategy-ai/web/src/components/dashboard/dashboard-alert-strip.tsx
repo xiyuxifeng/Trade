@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Link } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
 import { ErrorState } from '@/components/state/ErrorState';
@@ -73,7 +74,7 @@ export function DashboardAlertStrip() {
         category="network error"
         title="重点告警加载失败"
         description="当前告警摘要接口请求失败。"
-        suggestion="重试后查看任务中心，确认是否已有新的失败任务或告警记录。"
+        suggestion="重试后查看告警中心和任务中心，确认是否已有新的失败任务或告警记录。"
         detail={message}
         retryLabel={isFetching ? '重试中' : '重试'}
         onRetry={() => {
@@ -87,9 +88,17 @@ export function DashboardAlertStrip() {
 
   return (
     <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
-      <CardHeader>
-        <CardTitle className="text-slate-900">重点告警</CardTitle>
-        <CardDescription>展示最重要的 3 到 5 条告警摘要，便于快速判断告警趋势。</CardDescription>
+      <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <CardTitle className="text-slate-900">重点告警</CardTitle>
+          <CardDescription>展示最重要的 3 到 5 条告警摘要，便于快速判断告警趋势。</CardDescription>
+        </div>
+        <Link
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
+          to="/alerts"
+        >
+          查看全部告警
+        </Link>
       </CardHeader>
       <CardContent>
         {!alerts.length ? (

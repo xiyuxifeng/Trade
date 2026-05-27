@@ -44,6 +44,7 @@
 | 分组 | 页面 | 路径 | 作用 |
 |------|------|------|------|
 | 正式入口 | 仪表盘 | `/dashboard` | 系统健康、告警、最近任务/产物摘要 |
+| 正式入口 | 告警中心 | `/alerts` | 告警历史、确认/解决、测试告警 |
 | 正式入口 | 任务 | `/jobs` | 长时间运行任务列表与详情 |
 | 业务工作台 | 文章 | `/articles` | 文章抓取与处理 |
 | 业务工作台 | 市场数据 | `/market` | OHLCV、快照、Kaipan 等市场数据 |
@@ -112,13 +113,47 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 - 系统健康、数据库状态、失败/成功任务数
 - 产物数量、告警摘要
 - 最近任务与最近产物（可跳转详情）
-- 快速入口：任务中心、配置管理、市场数据、策略工作台、系统审计、产物中心
+- 快速入口：告警中心、任务中心、配置管理、市场数据、策略工作台、系统审计、产物中心
 
 **建议使用场景**：每天开始工作前扫一眼，确认无大量失败任务或告警。
 
 ---
 
-### 5.2 任务中心（`/jobs`）
+### 5.2 告警中心（`/alerts`）
+
+**作用**：集中查看告警状态、历史记录，并对已触发的告警做确认/解决/测试。
+
+| 功能 | 说明 |
+|------|------|
+| 状态摘要 | 显示 `alerting.enabled`、当前通道、Webhook 是否配置 |
+| 告警历史 | 查看最近告警，支持按状态、级别、标签筛选 |
+| 告警处理 | 对告警执行 `确认`、`解决` |
+| 配置验证 | 发送测试告警，验证 Webhook 是否可用 |
+
+**使用顺序**：
+
+1. 先在部署配置里确认 `alerting.enabled=true`，并为对应通道配置 Webhook。
+2. 登录 Web 后打开 **告警中心**。
+3. 先看状态卡片，确认当前通道是否已就绪。
+4. 如果 `Webhook` 未配置，先回到部署配置修正；页面会只显示历史，不会真正发送测试告警。
+5. 点击 **发送测试告警** 验证通知链路。
+6. 告警真正触发后，在列表里执行 **确认** 或 **解决**。
+
+**页面提示规则**：
+
+- `alerting.enabled=false` 时，页面会提示告警功能未启用，测试告警按钮不可用。
+- `alerting.enabled=true` 但 `Webhook` 未配置时，页面仍可看历史，但测试告警和外部推送不会真正发送。
+- `console_output=true` 仅表示会输出到本地日志，不等于外部通知已配置。
+
+**预期结果**：
+
+- 能明确看到告警是否启用、当前通道是否配置完成
+- 能用测试告警验证通知链路
+- 能查看真实告警历史并标记处理状态
+
+---
+
+### 5.3 任务中心（`/jobs`）
 
 **作用**：所有长时间运行任务的统一入口。
 
@@ -127,13 +162,14 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | 列表筛选 | 按 `status`、`job_type`、`created_by` 过滤 |
 | 自动刷新 | 运行中任务约每 5 秒刷新 |
 | 任务详情 | 参数、结果 payload、日志、关联产物 |
-| 重试 | 部分 Job 支持失败后重试 |
+| 任务控制 | 支持 `pause / resume / cancel / retry`，仅对对应 Job 能力开放 |
+| 暂停状态 | `paused` 会在列表、详情和筛选中单独显示 |
 
 **排错路径**：任何页面提交 Job 后 → 进入 `/jobs/:jobId` → 查看日志与错误 → 跳转关联产物。
 
 ---
 
-### 5.3 产物中心（`/artifacts`）
+### 5.4 产物中心（`/artifacts`）
 
 **作用**：查看、预览、下载 Job 产生的文件。
 
@@ -152,38 +188,71 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 
 ---
 
-### 5.4 文章工作台（`/articles`）
+### 5.5 文章工作台（`/articles`）
 
 **作用**：从交易员站点抓取文章 → 清洗 → 结构化入库。
 
 | 子页面 | 路径 | 作用 |
 |--------|------|------|
 | 工作台首页 | `/articles` | 六个子入口导航 |
-| 抓取与处理 | `/articles/run` | 提交完整 `pipeline-run` |
+| 抓取与处理 | `/articles/run` | 选择 step，生成对应 job |
 | 文章列表 | `/articles/list` | 按作者/来源/交易员/日期浏览 |
 | 数据质量 | `/articles/quality` | 摘要、标签、去重、新鲜度 |
 | 最近任务 | `/articles/jobs` | 文章相关 Job |
 | 处理结果 | `/articles/results` | 最近结构化输出 |
 | 高级维护 | `/articles/maintenance` | 重跑、失败重试、清理 |
 
-**`pipeline-run` 主要参数**：
+#### 文章工作台使用顺序
+
+1. 先在页面顶部选择 **Profile**，这会决定本次运行的上下文。
+2. 选择一个 step。
+3. 按该 step 的参数 schema 填写参数。
+4. 点击提交，系统自动生成对应 Job。
+5. 打开 **任务中心** 查看进度、日志和结果。
+
+#### step 与作用
+
+| step | 作用 | 说明 |
+|------|------|------|
+| `crawl` | 抓取文章 | 从来源站点拉取原始文章数据 |
+| `clean` | 清洗文章 | 去噪、规范化、拆解文本 |
+| `validate` | 校验文章 | 检查结构完整性与质量 |
+| `store` | 入库 | 将处理结果写入数据库 |
+| `process` | 生成最终结构化输出 | 产出供策略、规则池使用的数据 |
+
+#### 常用参数
 
 | 参数 | 含义 |
 |------|------|
-| `config_path` | 配置文件路径（Profile 驱动时自动映射） |
-| `max_articles` | 最多处理文章数（默认 10） |
-| `force` | 强制执行，忽略缓存 |
+| `force` | 强制重跑；会删除旧状态后重新开始 |
+| `max_articles` | 最多处理文章数；留空时使用默认值 |
 | `skip_crawl` | 跳过抓取，仅处理已有数据 |
-| `from_step` | 从指定步骤恢复 |
-| `use_db` | 是否使用数据库 |
 | `new_version` | 生成新版本 |
-| `retry_failed` | 重试失败项 |
+
+> 说明：`use_db` 和 `config_path` 属于系统内部兼容参数，Web 日常操作不需要填写，页面会自动处理。
+
+#### 失败与恢复规则
+
+- 如果当前 step 需要的前置产物不存在，系统会提示先执行前一步。
+- 不勾选 `force` 时，系统只处理上次基础上未完成的数据。
+- `force` 适合重跑、清理旧状态或修复异常链路。
 
 **预期结果**：`result-json` 摘要；可选 HTML 报告；文章可在列表页浏览。
 
+#### 定时调度
+
+页面下方的定时区域只用于 **全量 `pipeline-run`**，不分 step。
+
+1. 先选择 Profile。
+2. 设置触发时间。
+3. 可选勾选 `Force`。
+4. 点击 **启动定时任务**。
+5. 如果当天已经完成，且未勾选 `Force`，系统会提示“已完成”。
+6. 需要停用时，点击 **停止定时任务**。
+
 ---
 
-### 5.5 市场数据（`/market`）
+### 5.6 市场数据（`/market`）
 
 **作用**：准备盘前/策略构建所需的市场数据。
 
@@ -195,18 +264,49 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | Kaipan 数据 | `/market/kaipan` | Kaipan 抓取/归一化/调度（admin） |
 | OHLCV 行情 | `/market/ohlcv` | 日线 OHLCV 抓取 |
 
-**市场 Job 类型与参数**：
+#### OHLCV 行情（`/market/ohlcv`）
 
-#### OHLCV 抓取（`ohlcv-crawl`）
+**作用**：为盘前、回测、快照构建准备日线行情数据。
+
+**使用顺序**：
+
+1. 选择 Profile。
+2. 选择抓取模式。
+3. `incremental`：用于日常增量更新，默认只抓当天。
+4. `full`：用于历史回补，填写 `start_date` / `end_date`。
+5. 提交 `ohlcv-crawl` 后到 **任务中心** 查看进度。
 
 | 参数 | 必填 | 含义 |
 |------|------|------|
 | `profile_id` | 二选一 | Profile ID（优先） |
 | `config_path` | 二选一 | 配置文件路径 |
 | `symbols` | 是 | 标的列表 |
-| `mode` | 否 | `incremental`（增量，默认）/ 全量 |
+| `mode` | 否 | `incremental`（增量，默认）/ `full`（全量回补） |
 | `start_date` / `end_date` | 否 | 抓取日期区间 |
 | `limit` | 否 | 最多抓取标的数 |
+
+**结果规则**：
+
+- 数据按 `symbol + trade_date` 增量写入，不会整表清空。
+- 同一标的同一天重复抓取时，会更新已有记录。
+
+#### Kaipan 数据（`/market/kaipan`）
+
+**作用**：抓取 Kaipan 原始数据、归一化并支持定时调度。
+
+**使用顺序**：
+
+1. 选择 Profile。
+2. 如需一次性执行，提交 `kaipan-fetch` 或 `kaipan-normalize`。
+3. 如需长期调度，设置调度时间后点击 **启动**。
+4. 运行中可到 **任务中心** 看进度。
+5. 不再需要时点击 **停止**。
+
+| Job | 作用 | 说明 |
+|-----|------|------|
+| `kaipan-fetch` | 抓取 Kaipan 原始数据 | 从数据源获取原始记录 |
+| `kaipan-normalize` | 归一化为统一格式 | 将原始数据转成系统可用结构 |
+| `kaipan-run` | 一键运行或启动调度器 | 实际上用于启动/停止调度，不是历史全量重跑 |
 
 #### 市场状态构建（`market-state-build`）
 
@@ -232,17 +332,9 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | `force` | 否 | 强制重建 |
 | `offline` | 否 | 离线模式 |
 
-#### Kaipan（admin）
-
-| Job | 作用 |
-|-----|------|
-| `kaipan-fetch` | 抓取 Kaipan 原始数据 |
-| `kaipan-normalize` | 归一化为统一格式 |
-| `kaipan-run` | 一键运行或启动调度器 |
-
 ---
 
-### 5.6 策略工作台（`/strategies`）
+### 5.7 策略工作台（`/strategies`）
 
 **作用**：策略版本构建、盘前准备、盘后复盘的全流程中心。
 
@@ -256,17 +348,30 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | 规则选择 | `/strategies/regime-selection` | Regime-aware 规则选择视图 |
 | 运行历史 | `/strategies/history` | 策略相关 Job 历史 |
 
+**使用前提**：
+
+- Profile 已导入且为 `validated`
+- 文章流程已完成，至少有可用结构化数据
+- OHLCV 与快照数据已准备好
+
 **策略 Pipeline 逻辑顺序**：
 
 ```text
 strategy-build → run-pre-market → run-after-close
 ```
 
-日常使用时 **不必每天重建策略版本**；仅在 Profile、规则、快照或 Regime 发生变化时才需要重新 `strategy-build`。
+**推荐操作顺序**：
+
+1. 当 Profile、规则、快照或 Regime 发生变化时，先执行 `strategy-build`。
+2. 每个交易日开盘前执行 `run-pre-market`。
+3. 收盘后执行 `run-after-close`。
+4. 在 `/strategies/history` 或 `/jobs` 查看执行结果和日志。
+
+日常使用时 **不必每天重建策略版本**；只有输入发生变化时才需要重新 `strategy-build`。
 
 ---
 
-### 5.7 回测工作台（`/backtest`）
+### 5.8 回测工作台（`/backtest`）
 
 **作用**：对历史数据进行离线回测，评估策略表现。
 
@@ -281,17 +386,59 @@ strategy-build → run-pre-market → run-after-close
 backtest-run →（可选）backtest-validate-rules / backtest-reproducibility-check
 ```
 
+**使用顺序**：
+
+1. 选择 Profile。
+2. 选择 `trader_id`、`date_from`、`date_to` 和 `strategy_version_id`。
+3. 如需限定标的，填写 `symbols`；如需指定基准，填写 `benchmark_symbol`。
+4. 保持 `use_snapshot_only=true`，由系统只使用快照数据。
+5. 提交 `backtest-run`。
+6. 结果出来后查看摘要指标、报告和交易明细。
+7. 如需规则验真，继续提交 `backtest-validate-rules`。
+8. 如需检查稳定性，提交 `backtest-reproducibility-check`。
+
+**常用参数说明**：
+
+| 参数 | 含义 |
+|------|------|
+| `profile_id` | 运行上下文，优先使用 |
+| `trader_id` | 交易员 ID |
+| `date_from` / `date_to` | 回测区间 |
+| `strategy_version_id` | 策略版本 ID |
+| `symbols` | 参与回测的标的列表 |
+| `benchmark_symbol` | 基准指数 |
+| `mode` | 回测模式 |
+| `use_snapshot_only` | 固定为 `true`，Web 不可改 |
+| `scoring_profile` | 评分口径 |
+
+**结果判读**：
+
+- `result-json` 会给出摘要指标和 fingerprint
+- `report-markdown` 适合人工阅读
+- `records-csv` 适合进一步分析
+- `validation-report-markdown` 用于规则验真
+
 ---
 
-### 5.8 规则池（`/rule-pool`）
+### 5.9 规则池（`/rule-pool`）
 
 **作用**：审核从文章/策略中提取的交易规则。
 
-- **列表**：按 `status`（默认 pending）、`rule_type`、`mapping_status` 等筛选
-- **详情**（`/rule-pool/:ruleId`）：
-  - 查看规则内容与证据
-  - 生成/审核适用性画像（Rule Applicability Profile）
-  - 提交 **规则池回测**（`rule-pool-backtest`，admin，需二次确认）
+**使用顺序**：
+
+1. 打开列表页，按 `status`（默认 pending）、`rule_type`、`mapping_status` 筛选。
+2. 进入规则详情查看原文证据与抽取结果。
+3. 生成或审核适用性画像（Rule Applicability Profile）。
+4. 确认需要验证的规则后，提交 `rule-pool-backtest`。
+5. 在任务中心查看回测任务状态和结果。
+6. 结合回测结果决定是否保留、修改或淘汰规则。
+
+**详情页能看到**：
+
+- 规则内容
+- 证据片段
+- 适用性画像
+- 回测入口（admin，需二次确认）
 
 **规则池回测参数**：
 
@@ -304,7 +451,7 @@ backtest-run →（可选）backtest-validate-rules / backtest-reproducibility-c
 
 ---
 
-### 5.9 系统管理（`/system`，admin only）
+### 5.10 系统管理（`/system`，admin only）
 
 | 子页面 | 路径 | 作用 |
 |--------|------|------|
@@ -326,7 +473,7 @@ backtest-run →（可选）backtest-validate-rules / backtest-reproducibility-c
 ```mermaid
 flowchart TD
     A[首次部署与环境就绪] --> B[导入 Profile]
-    B --> C[文章 pipeline-run]
+    B --> C[文章 step job]
     C --> D[OHLCV 抓取]
     D --> E[快照构建 snapshot-build]
     E --> F{规则/Regime 有变化?}
@@ -359,12 +506,20 @@ flowchart TD
 ### Step 2：准备文章数据（首次或需要更新时）
 
 1. 打开 **文章** → **抓取与处理**（`/articles/run`）。
-2. 选择 Profile，填写参数：
-   - `max_articles`：根据需要设置（如 50）
-   - 首次运行：`force=false`，`skip_crawl=false`
-3. 提交 `pipeline-run` Job。
-4. 在 **任务中心** 等待完成。
-5. 在 **文章列表** 确认文章已入库；在 **数据质量** 检查摘要。
+2. 选择 Profile。
+3. 选择一个 step：
+   - 日常抓取：`crawl`
+   - 清洗：`clean`
+   - 校验：`validate`
+   - 入库：`store`
+   - 生成最终输出：`process`
+4. 按页面显示的参数填写表单：
+   - `force`：重跑或修复异常时勾选
+   - `max_articles`：需要限制数量时填写
+   - `skip_crawl` / `new_version`：按页面提示使用
+5. 提交对应 Job。
+6. 在 **任务中心** 等待完成。
+7. 在 **文章列表** 确认文章已入库；在 **数据质量** 检查摘要。
 
 **预期结果**：文章结构化数据入库，供后续策略与规则提取使用。
 
@@ -419,12 +574,33 @@ flowchart TD
 - `result-json`：策略版本摘要
 - 可选 `regime-selection-json`、HTML 报告
 
+#### 4.1 策略版本状态说明
+
+`strategy-build` 提交完成后，系统会先生成一个 **draft 草稿版本**，它还不是盘前/回测会自动消费的正式版本。
+
+| 状态 | 含义 | 是否可直接用于盘前/回测 |
+|------|------|------------------------|
+| `draft` | 已构建完成，等待人工审核 | 否 |
+| `released` | 已人工确认并发布 | 是 |
+
+**Release 操作说明**：
+
+1. 先在 **策略版本** 页面检查 `draft` 版本的推荐、规则快照和证据链。
+2. 确认内容无误后，再执行人工 `Release`。
+3. `Release` 完成后，版本状态变为 `released`，盘前准备、回测和其他主流程才会优先读取它。
+
+**注意**：
+
+- `strategy-build` 只负责生成草稿，不会自动把版本升级为 `released`。
+- 如果当天没有可用的 `released` 版本，系统会直接报错，需要先完成策略版本发布。
+- 日常操作中，请把 `released` 版本视为“正式可用版本”，把 `draft` 版本视为“待审核版本”。
+
 ---
 
 ### Step 5：盘前准备
 
 1. 打开 **策略** → **盘前准备**（`/strategies/pre-market`）。
-2. 选择 Profile、**Strategy date**（策略日期）、Benchmark（可留空，使用 Profile 默认）。
+2. 选择 Profile、**Strategy date**（策略日期）、Benchmark（页面默认选中沪深300，可手动切换）。
 3. 若当日快照尚未构建，先提交 **快照构建**（参数见 Step 3）。
 4. 提交 **`run-pre-market`**：
 
@@ -432,7 +608,7 @@ flowchart TD
 |------|------|
 | `profile_id` | Profile ID |
 | `as_of_date` | 执行日期（= 策略日期） |
-| `benchmark_symbol` | 基准指数（可选，如 `000300.SH`） |
+| `benchmark_symbol` | 基准指数（页面默认已选中，如 `000300.SH`） |
 | `force` | 强制执行 |
 | `export_html` | 是否导出 HTML 报告 |
 
@@ -633,7 +809,109 @@ Job 完成后，在结果列表和详情页可看到：
 
 ---
 
-## 12. 附录：典型工作日时间线
+## 12. 按角色的最小操作清单
+
+### 12.1 admin 日常清单
+
+1. 登录 Web，确认 `/dashboard` 正常。
+2. 进入 `/profiles` 检查当前 Profile 是否为 `validated`。
+3. 进入 `/articles/run`，按需要运行文章 step。
+4. 进入 `/market/ohlcv` 更新 OHLCV。
+5. 进入 `/market/kaipan` 执行或检查 Kaipan 调度。
+6. 进入 `/market/snapshots` 确认快照质量。
+7. 进入 `/strategies/pre-market` 执行盘前准备。
+8. 收盘后进入 `/strategies/after-close` 执行盘后复盘。
+9. 进入 `/jobs` 查看失败任务、暂停任务和重试状态。
+10. 进入 `/artifacts` 查看结果文件。
+
+### 12.2 operator 日常清单
+
+1. 登录 Web。
+2. 打开 `/dashboard` 确认系统正常。
+3. 在允许的业务页面提交 Job。
+4. 到 `/jobs` 查看执行进度与日志。
+5. 在 `/artifacts` 查看结果产物。
+
+### 12.3 viewer 日常清单
+
+1. 登录 Web。
+2. 只查看 `/dashboard`、`/jobs`、`/artifacts`、`/backtest` 等只读页面。
+3. 通过任务详情和产物判断结果是否可用。
+
+---
+
+## 13. 页面成功标准与常见问题
+
+### 13.1 `/articles/run`
+
+**成功标准**
+
+- 能选择 Profile
+- 能选择 step
+- 提交后生成对应 Job
+- Job 进入 `running` 并最终结束为 `success`
+
+**常见问题**
+
+- 没有可选 step：通常是页面加载失败或后端工作流未就绪
+- 提示先执行前一步：前置产物不存在，先回到前一步执行
+- Job 卡住：去 `/jobs` 看日志，检查 Worker 是否运行
+
+### 13.2 `/market/ohlcv`
+
+**成功标准**
+
+- 能提交 `ohlcv-crawl`
+- 日常增量场景会只更新当天或当前区间
+- 任务完成后可在数据集或快照流程里使用
+
+**常见问题**
+
+- 抓取耗时过长：属于大区间历史回补的正常现象
+- 标的为空：先确认 `symbols` 是否填写正确
+
+### 13.3 `/market/kaipan`
+
+**成功标准**
+
+- 能启动或停止调度
+- 能分别提交 `kaipan-fetch` 和 `kaipan-normalize`
+- 状态区域能正确显示当前是否运行中
+
+**常见问题**
+
+- 启动后没有任务执行：检查调度时间和 Worker 状态
+- 同一天数据已存在：未勾选 `Force` 时系统会提示已完成
+
+### 13.4 `/strategies/pre-market` 和 `/strategies/after-close`
+
+**成功标准**
+
+- 能基于当前 Profile 提交任务
+- 能生成结果摘要和报告
+- 最近任务列表能看到新 Job
+
+**常见问题**
+
+- 提示快照不存在：先执行 `snapshot-build`
+- 提示 Profile 无效：去 `/profiles` 检查 validation 状态
+
+### 13.5 `/backtest`
+
+**成功标准**
+
+- 能提交 `backtest-run`
+- 能看到摘要指标、报告和交易明细
+- 必要时可继续做规则验真或 fingerprint 检查
+
+**常见问题**
+
+- `skipped` 很多：通常是快照或 OHLCV 缺数据
+- 结果不稳定：检查是否需要复现性检查
+
+---
+
+## 14. 附录：典型工作日时间线
 
 | 时间 | 操作 | 页面 |
 |------|------|------|

@@ -327,7 +327,7 @@ export function StrategyWorkspaceHomePage() {
             </Badge>
             <CardTitle className="mt-2 text-slate-950">候选版本</CardTitle>
             <CardDescription className="text-slate-600">
-              候选版本审核通过后会成为 released 策略版本，用于后续构建和运行选择。
+              候选版本需要先人工审核，审核通过后再执行 Release，才会成为 released 策略版本，用于后续构建和运行选择。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

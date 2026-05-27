@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   acknowledgeAlert,
+  getAlertingStatus,
   listAlertHistory,
   resolveAlert,
   sendTestAlert,
@@ -71,5 +72,27 @@ describe('alerts api client', () => {
         method: 'POST',
       }),
     );
+  });
+
+  it('loads alerting status from the root endpoint', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        enabled: true,
+        channel: 'dingtalk',
+        min_level: 'WARNING',
+        console_output: true,
+        aggregation_window_minutes: 60,
+        aggregation_max_count: 100,
+        webhook_configured: true,
+        channel_configured: true,
+      }),
+    } as Response);
+
+    await getAlertingStatus();
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/alerts/status');
+    expect((init?.headers as Headers).get('Accept')).toBe('application/json');
   });
 });

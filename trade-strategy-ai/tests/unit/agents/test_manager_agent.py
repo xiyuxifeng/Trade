@@ -409,7 +409,7 @@ async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
     config = AppConfig(
         storage=StorageConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0, "600001.SH": 8.0}),
-        stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+        stage4=Stage4Config(enable=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -450,17 +450,16 @@ async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_phase0_fallback_when_no_strategy_version(tmp_path: Path) -> None:
-    """NTL-S4-011: Phase 0 降级路径：strategy_version 不可用时使用 watchlist"""
+async def test_run_pre_market_raises_when_strategy_version_missing(tmp_path: Path) -> None:
+    """严格模式：strategy_version 不可用时直接报错。"""
     config = AppConfig(
         storage=StorageConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-        stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+        stage4=Stage4Config(enable=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
                 display_name="Trader A",
-                watchlist=["000001.SZ"],
                 default_target_pct=0.05,
                 default_stop_pct=0.03,
             )
@@ -470,31 +469,25 @@ async def test_phase0_fallback_when_no_strategy_version(tmp_path: Path) -> None:
     manager.memory_store = _make_memory_store_stub()
     day = date(2026, 4, 20)
 
-    # Mock StrategyLibraryService 抛出异常（模拟 DB 不可用）
+    # Mock StrategyLibraryService 返回空版本（模拟没有 released 版本）
     from unittest.mock import AsyncMock
-    manager.strategy_library_service.get_current_released_version = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+    manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=None)
 
-    # 不应抛出异常，降级到 Phase 0
-    report = await manager.run_pre_market(as_of_date=day, force=True)
-
-    # Phase 0 路径：候选来自 watchlist
-    assert len(report.ideas) == 1
-    assert report.ideas[0].symbol == "000001.SZ"
-    assert report.ideas[0].strategy_version_id is None
+    with pytest.raises(ValueError, match="缺少可用的 released strategy_version"):
+        await manager.run_pre_market(as_of_date=day, force=True)
 
 
 @pytest.mark.asyncio
-async def test_allow_phase0_false_skips_trader(tmp_path: Path) -> None:
-    """NTL-S4-011: allow_phase0_fallback=False 时，strategy_version 不可用则跳过 trader"""
+async def test_run_pre_market_raises_when_strategy_version_loader_fails(tmp_path: Path) -> None:
+    """严格模式：策略版本加载异常时直接报错。"""
     config = AppConfig(
         storage=StorageConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-        stage4=Stage4Config(enable=True, allow_phase0_fallback=False),
+        stage4=Stage4Config(enable=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
                 display_name="Trader A",
-                watchlist=["000001.SZ"],
                 default_target_pct=0.05,
                 default_stop_pct=0.03,
             )
@@ -508,9 +501,8 @@ async def test_allow_phase0_false_skips_trader(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
     manager.strategy_library_service.get_current_released_version = AsyncMock(side_effect=RuntimeError("DB unavailable"))
 
-    # 不应抛出异常，但 trader 被跳过（无 ideas）
-    report = await manager.run_pre_market(as_of_date=day, force=True)
-    assert len(report.ideas) == 0
+    with pytest.raises(ValueError, match="缺少可用的 released strategy_version"):
+        await manager.run_pre_market(as_of_date=day, force=True)
 
 
 @pytest.mark.asyncio
@@ -661,7 +653,7 @@ async def test_market_universe_snapshot_populated_in_signal(tmp_path: Path) -> N
     config = AppConfig(
         storage=StorageConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True, market_universe_slot="09-25", allow_phase0_fallback=True),
+        stage4=Stage4Config(enable=True, market_universe_slot="09-25"),
         traders=[
             TraderConfig(
                 trader_id="trader_a",

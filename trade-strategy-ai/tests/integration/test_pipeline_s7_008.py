@@ -35,7 +35,21 @@ from src.strategy.types import SignalSide
 @asynccontextmanager
 async def _mock_session_scope():
     """避免单元测试连接真实数据库。"""
-    yield MagicMock()
+    session = MagicMock()
+    session.scalar = AsyncMock(return_value=None)
+    session.scalars = AsyncMock(return_value=MagicMock(all=lambda: []))
+    session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=lambda: MagicMock(all=lambda: []),
+            scalar_one_or_none=lambda: None,
+            scalar_one=lambda: None,
+        )
+    )
+    session.flush = AsyncMock(return_value=None)
+    session.commit = AsyncMock(return_value=None)
+    session.rollback = AsyncMock(return_value=None)
+    session.add = MagicMock()
+    yield session
 
 
 # ============================================================================
@@ -49,7 +63,7 @@ def pre_market_config(tmp_path: Path) -> AppConfig:
     return AppConfig(
         storage=StorageConfig(output_dir=str(tmp_path / "data/processed/phase0")),
         data=DataConfig(mock_prices={"000001.SZ": 12.0, "600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+        stage4=Stage4Config(enable=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -65,7 +79,19 @@ def pre_market_config(tmp_path: Path) -> AppConfig:
 @pytest.fixture
 def pre_market_manager(pre_market_config: AppConfig, tmp_path: Path) -> ManagerAgent:
     """创建盘前链路 ManagerAgent"""
-    return ManagerAgent(config=pre_market_config, base_dir=tmp_path)
+    manager = ManagerAgent(config=pre_market_config, base_dir=tmp_path)
+    manager.strategy_library_service.get_current_released_version = AsyncMock(
+        return_value=StrategyVersion(
+            version_id="trader_a:2026-04-20:released:v1",
+            trader_id="trader_a",
+            strategy_date=date(2026, 4, 20),
+            status=StrategyVersionStatus.released,
+            recommendations=[
+                StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+            ],
+        )
+    )
+    return manager
 
 
 class TestPreMarketPipeline:
@@ -105,7 +131,7 @@ class TestPreMarketPipeline:
 
         assert report is not None
         assert report.as_of_date == day
-        assert len(report.ideas) >= 0  # Phase 0 或 Stage 4 路径
+        assert len(report.ideas) >= 0
         assert report.highlights  # 应有 highlights
 
     @pytest.mark.asyncio
@@ -136,17 +162,14 @@ class TestPreMarketPipeline:
         day = date(2026, 4, 22)
 
         pre_market_manager.memory_store = self._mock_memory_store()
+        pre_market_manager.signal_repository.upsert_signal = AsyncMock(return_value=MagicMock())
         with patch(
             "src.agents.manager_agent.agent.session_scope", _mock_session_scope
         ):
             report = await pre_market_manager.run_pre_market(as_of_date=day, force=True)
 
-        # 验证信号版本已被记录
-        for idea in report.ideas:
-            signal_id = f"idea_{idea.idea_id}"
-            stored = pre_market_manager.signal_versioning.get_version(signal_id)
-            if stored:
-                assert stored.signal.symbol == idea.symbol
+        # 验证信号持久化层被调用
+        assert pre_market_manager.signal_repository.upsert_signal.call_count == len(report.ideas)
 
     @pytest.mark.asyncio
     async def test_run_pre_market_with_stage4_path(
@@ -189,10 +212,11 @@ class TestPreMarketService:
         """验证 PreMarketService 能为单个 trader 生成 ideas"""
         from src.agents.data_agent.agent import DataAgent
 
+        day = date(2026, 4, 24)
         config = AppConfig(
             storage=StorageConfig(output_dir="/tmp/test"),
             data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-            stage4=Stage4Config(enable=True, allow_phase0_fallback=True),
+            stage4=Stage4Config(enable=True),
             traders=[
                 TraderConfig(
                     trader_id="trader_a",
@@ -225,7 +249,17 @@ class TestPreMarketService:
         )
 
         mock_strategy_library_service = MagicMock()
-        mock_strategy_library_service.get_current_released_version = AsyncMock(return_value=None)
+        mock_strategy_library_service.get_current_released_version = AsyncMock(
+            return_value=StrategyVersion(
+                version_id="trader_a:2026-04-24:released:v1",
+                trader_id="trader_a",
+                strategy_date=day,
+                status=StrategyVersionStatus.released,
+                recommendations=[
+                    StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+                ],
+            )
+        )
 
         service = PreMarketService(
             data_agent=mock_data_agent,

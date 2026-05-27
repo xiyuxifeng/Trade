@@ -6,6 +6,8 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/dashboard').path).toBe('/dashboard');
     expect(resolveRouteByPathname('/jobs').path).toBe('/jobs');
     expect(resolveRouteByPathname('/jobs/job-1').path).toBe('/jobs/:jobId');
+    expect(resolveRouteByPathname('/alerts').path).toBe('/alerts');
+    expect(resolveRouteByPathname('/alerts').description).toBe('告警历史、确认和测试入口');
     expect(resolveRouteByPathname('/workflows').path).toBe('/workflows');
     expect(resolveRouteByPathname('/workflows/pipeline/run').path).toBe('/workflows/:workflowId/run');
     expect(resolveRouteByPathname('/articles').path).toBe('/articles');

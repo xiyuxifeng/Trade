@@ -35,8 +35,10 @@ pip install -e ".[dev]"
 - `schedule.after_close_time`
 - `evaluation.min_expected_return`
 - `evaluation.loss_trigger`
-- `traders[].watchlist`
-- `data.mock_prices`（Phase 0 演示用，后续可接入 akshare/tushare 等）
+- `traders[].default_target_pct`
+- `traders[].default_stop_pct`
+- `data.providers`
+- `data.market_universe_snapshot_dir`（候选池快照文件目录）
 
 Phase 0.5（Persona Router MVP，可选）：
 

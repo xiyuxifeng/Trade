@@ -172,13 +172,13 @@ class PersonaConfig(BaseModel):
 
 
 class Stage4Config(BaseModel):
-    """Stage 4 盘前主链路配置（NTL-S4-009）。
+    """盘前主链路配置（NTL-S4-009）。
 
     控制是否启用新版盘前链路（策略版本 + 候选池快照）。
     当前主流程要求 released strategy_version 必须可用，缺失时直接报错。
     """
 
-    enable: bool = True  # 默认启用 Stage 4 路径
+    enable: bool = True  # 默认启用盘前主链路
     market_universe_slot: str = "09-25"  # 候选池快照时段
 
 class KaipanConfig(BaseModel):

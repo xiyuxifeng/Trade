@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from src.agents.trader_agent.agent import TraderAgent
 from src.agents.strategy_agent.agent import StrategyAgent
 from src.agents.risk_agent.agent import RiskAgent
-from src.common.config import AppConfig, Stage4Config, TraderConfig
+from src.common.config import AppConfig, TraderConfig
 from src.common.logger import get_logger
 from src.market_universe.schemas import MarketUniverse
 from src.risk.types import AccountSnapshot
@@ -49,11 +49,11 @@ class PreMarketService:
     """Per-trader 盘前想法生成 Service。
 
     封装单 trader 的完整盘前编排逻辑：
-    1. 策略版本加载（可选）
+    1. 策略版本加载（必需）
     2. TraderAgent 生成想法
     3. 定向深挖 DataRequest（NTL-S4-007）
     4. 信号评估
-    5. Missing symbols 任务生成
+    5. 产出盘前结果
 
     ManagerAgent 只负责循环调用，不承担具体业务逻辑。
     """
@@ -96,49 +96,33 @@ class PreMarketService:
         """
         from src.db.session import session_scope
 
-        # === 策略版本加载（Stage 4 路径）===
-        strategy_version: StrategyVersion | None = None
-        if self.config.stage4.enable:
-            try:
-                async with session_scope() as session:
-                    strategy_version = await self.strategy_library_service.get_current_released_version(
-                        session=session,
-                        trader_id=trader_cfg.trader_id,
-                        strategy_date=as_of_date,
-                    )
-                if strategy_version is not None:
-                    logger.debug(
-                        "策略版本加载成功: trader=%s, date=%s, version=%s",
-                        trader_cfg.trader_id,
-                        as_of_date,
-                        strategy_version.version_id,
-                    )
-            except (OSError, RuntimeError, ValueError, KeyError, ConnectionError) as e:
-                logger.warning(
-                    "策略版本加载异常: trader=%s, date=%s, error=%s",
-                    trader_cfg.trader_id,
-                    as_of_date,
-                    e,
+        # === 策略版本加载（Stage 4 主路径，必须存在 released 版本）===
+        try:
+            async with session_scope() as session:
+                strategy_version = await self.strategy_library_service.get_current_released_version(
+                    session=session,
+                    trader_id=trader_cfg.trader_id,
+                    strategy_date=as_of_date,
                 )
-                if self.config.stage4.allow_phase0_fallback:
-                    pass  # 降级到 Phase 0
-                else:
-                    logger.info(
-                        "Trader跳过（无策略版本且不允许降级）: trader=%s, date=%s",
-                        trader_cfg.trader_id,
-                        as_of_date,
-                    )
-                    return PreMarketResult(
-                        ideas=[],
-                        strategy_version_id=None,
-                        evaluated_signals=[],
-                        missing_symbol_tasks=[],
-                    )
-        else:
-            logger.debug(
-                "Stage4未启用，跳过策略版本加载: trader=%s, date=%s",
+        except (OSError, RuntimeError, ValueError, KeyError, ConnectionError) as e:
+            logger.exception(
+                "策略版本加载失败: trader=%s, date=%s, error=%s",
                 trader_cfg.trader_id,
                 as_of_date,
+                e,
+            )
+            raise ValueError(
+                f"缺少可用的 released strategy_version, trader={trader_cfg.trader_id}, date={as_of_date}"
+            ) from e
+
+        if strategy_version is None:
+            logger.error(
+                "策略版本缺失: trader=%s, date=%s",
+                trader_cfg.trader_id,
+                as_of_date,
+            )
+            raise ValueError(
+                f"缺少可用的 released strategy_version, trader={trader_cfg.trader_id}, date={as_of_date}"
             )
 
         # === TraderAgent 生成想法 ===
@@ -150,7 +134,7 @@ class PreMarketService:
 
         # === NTL-S4-007: 定向深挖 DataRequest ===
         deep_market_data: dict[str, Any] = {}
-        if strategy_version is not None and strategy_version.rules_snapshot:
+        if strategy_version.rules_snapshot:
             candidate_symbols = [
                 rec.symbol for rec in strategy_version.recommendations if rec.symbol
             ]
@@ -180,36 +164,19 @@ class PreMarketService:
             if signal:
                 evaluated_signals.append(signal)
 
-        # === Missing symbols 任务 ===
-        missing_symbol_tasks: list[AgentTask] = []
-        if self.config.stage4.enable:
-            missing_symbols = [
-                s for s in trader_cfg.watchlist
-                if s not in self.config.data.mock_prices
-            ]
-            for s in missing_symbols:
-                missing_symbol_tasks.append(
-                    AgentTask(
-                        type="data_missing",
-                        title=f"Missing mock price for {s}",
-                        trader_id=trader_cfg.trader_id,
-                        details={"symbol": s, "field": "last_price"},
-                    )
-                )
-
-        return PreMarketResult(
-            ideas=ideas,
-            strategy_version_id=strategy_version.version_id if strategy_version else None,
-            evaluated_signals=evaluated_signals,
-            missing_symbol_tasks=missing_symbol_tasks,
-        )
         logger.info(
             "PreMarketService完成: trader=%s, date=%s, ideas=%d, evaluated=%d, missing_tasks=%d",
             trader_cfg.trader_id,
             as_of_date,
             len(ideas),
             len(evaluated_signals),
-            len(missing_symbol_tasks),
+            0,
+        )
+        return PreMarketResult(
+            ideas=ideas,
+            strategy_version_id=strategy_version.version_id,
+            evaluated_signals=evaluated_signals,
+            missing_symbol_tasks=[],
         )
 
     async def _evaluate_idea(self, idea: TradeIdea, market_data: dict[str, Any]) -> Signal | None:

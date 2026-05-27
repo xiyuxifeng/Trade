@@ -786,10 +786,12 @@ class TradeCalendar:
     def _fire_calendar_refresh_alert(cls, error: str) -> None:
         """交易日历刷新失败时触发告警。"""
         try:
+            from src.common.config import load_app_config
             from src.alerting.manager import AlertManager
             from src.alerting.models import AlertLevel, AlertEvent
 
-            manager = AlertManager()
+            loaded = load_app_config()
+            manager = AlertManager(alerting_config=loaded.config.alerting)
             alert = AlertEvent(
                 id="calendar_refresh_failed",
                 level=AlertLevel.WARNING,

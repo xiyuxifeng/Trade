@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -54,6 +55,18 @@ class AlertResolveRequest(BaseModel):
     resolved_by: str | None = None
 
 
+class AlertingStatusResponse(BaseModel):
+    """告警配置状态响应。"""
+    enabled: bool
+    channel: str
+    min_level: str
+    console_output: bool
+    aggregation_window_minutes: int
+    aggregation_max_count: int
+    webhook_configured: bool
+    channel_configured: bool
+
+
 def _row_to_item(row) -> AlertHistoryItem:
     """将 AlertHistory ORM 行转为 API 响应模型。"""
     return AlertHistoryItem(
@@ -72,6 +85,34 @@ def _row_to_item(row) -> AlertHistoryItem:
         resolved_at=row.resolved_at.isoformat() if row.resolved_at else None,
         alert_metadata=row.alert_metadata or {},
         created_at=row.created_at.isoformat() if row.created_at else None,
+    )
+
+
+def _build_alerting_status() -> AlertingStatusResponse:
+    """从应用配置构建告警状态。"""
+    from src.common.config import load_app_config
+    from src.alerting.config import load_alerting_config
+
+    loaded = load_app_config(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+    cfg = load_alerting_config(loaded.config.alerting)
+
+    webhook_configured = False
+    if cfg.channel == "dingtalk":
+        webhook_configured = bool(cfg.dingtalk.webhook_url.strip())
+    elif cfg.channel == "feishu":
+        webhook_configured = bool(cfg.feishu.webhook_url.strip())
+    elif cfg.channel == "wecom":
+        webhook_configured = bool(cfg.wecom.webhook_url.strip())
+
+    return AlertingStatusResponse(
+        enabled=bool(cfg.enabled),
+        channel=cfg.channel,
+        min_level=cfg.min_level,
+        console_output=bool(cfg.console_output),
+        aggregation_window_minutes=int(cfg.aggregation.window_minutes),
+        aggregation_max_count=int(cfg.aggregation.max_count),
+        webhook_configured=webhook_configured,
+        channel_configured=webhook_configured or bool(cfg.console_output),
     )
 
 
@@ -113,6 +154,12 @@ async def list_alert_history(
 
         items = [_row_to_item(row) for row in rows]
         return PaginatedAlertHistory(count=len(items), total=total, items=items)
+
+
+@router.get("/status", response_model=AlertingStatusResponse)
+async def get_alerting_status(_key: str = Depends(verify_api_key)) -> AlertingStatusResponse:
+    """查询当前告警配置状态。"""
+    return _build_alerting_status()
 
 
 @router.get("/history/{record_id}", response_model=AlertHistoryItem)
@@ -197,10 +244,23 @@ async def resolve_alert(
 @router.post("/test")
 async def send_test_alert(_key: str = Depends(verify_api_key)) -> dict:
     """发送测试告警（验证 Webhook 配置）。"""
-    from src.common.config import load_app_config
     from src.alerting.manager import AlertManager
 
+    alerting_status = _build_alerting_status()
+    if not alerting_status.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="告警未启用，请先在配置中设置 alerting.enabled=true",
+        )
+    if not alerting_status.webhook_configured:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="告警通道未配置 Webhook，无法发送测试告警",
+        )
+
     try:
+        from src.common.config import load_app_config
+
         loaded = load_app_config()
         manager = AlertManager(alerting_config=loaded.config.alerting)
         manager.send_test_alert(
@@ -208,6 +268,8 @@ async def send_test_alert(_key: str = Depends(verify_api_key)) -> dict:
             message="如果你看到这条消息，说明告警 Webhook 配置正确。",
         )
         return {"status": "ok", "message": "测试告警已发送"}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"测试告警发送失败: {exc}")
         raise HTTPException(

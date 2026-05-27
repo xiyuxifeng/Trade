@@ -60,7 +60,7 @@ class TestAlertManagerExtensions:
         manager.fire_alert(info_alert, session=None)
 
     def test_fire_alert_calls_webhook(self):
-        """fire_alert 发送 Webhook"""
+        """fire_alert 应走 Webhook 发送路径且不应同步抛错。"""
         from src.alerting.manager import AlertManager
 
         cfg = {
@@ -82,6 +82,30 @@ class TestAlertManagerExtensions:
             tags=["test"],
         )
 
-        with pytest.raises(Exception):
-            # 无真实网络，会抛异常，但证明走到了发送逻辑
-            manager.fire_alert(alert, session=None)
+        manager.fire_alert(alert, session=None)
+
+    def test_disabled_alerting_is_noop(self):
+        """alerting.enabled=false 时应直接跳过发送。"""
+        from src.alerting.manager import AlertManager
+
+        cfg = {
+            "alerting": {
+                "enabled": False,
+                "channel": "dingtalk",
+                "aggregation": {"window_minutes": 0, "max_count": 100},
+                "dingtalk": {"webhook_url": "https://oapi.dingtalk.com/robot/send?token=test"},
+                "min_level": "WARNING",
+                "console_output": False,
+            }
+        }
+        manager = AlertManager(alerting_config=cfg)
+
+        alert = AlertEvent(
+            id="disabled-001",
+            level=AlertLevel.CRITICAL,
+            title="禁用告警",
+            message="should be skipped",
+            tags=["test"],
+        )
+
+        manager.fire_alert(alert, session=None)

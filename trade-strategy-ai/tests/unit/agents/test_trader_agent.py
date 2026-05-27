@@ -35,11 +35,21 @@ async def test_generate_trade_ideas_includes_memory_hint(tmp_path: Path) -> None
     trader = TraderConfig(
         trader_id="trader_a",
         display_name="Trader A",
-        watchlist=["000001.SZ"],
         default_target_pct=0.05,
         default_stop_pct=0.03,
     )
     agent = TraderAgent(trader=trader, memory_store=store)
+
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-06:released:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 6),
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+        ],
+        released_at=datetime.now(UTC),
+    )
 
     data_agent = SimpleNamespace(
         handle=AsyncMock(
@@ -51,7 +61,11 @@ async def test_generate_trade_ideas_includes_memory_hint(tmp_path: Path) -> None
         )
     )
 
-    ideas = await agent.generate_trade_ideas(as_of_date=date(2026, 4, 6), data_agent=data_agent)
+    ideas = await agent.generate_trade_ideas(
+        as_of_date=date(2026, 4, 6),
+        data_agent=data_agent,
+        strategy_version=strategy_version,
+    )
 
     assert len(ideas) == 1
     assert "memory summary" in (ideas[0].rationale or "")
@@ -80,11 +94,20 @@ async def test_generate_trade_ideas_uses_postmortem_and_adjustment_memory() -> N
     trader = TraderConfig(
         trader_id="trader_a",
         display_name="Trader A",
-        watchlist=["000001.SZ"],
         default_target_pct=0.05,
         default_stop_pct=0.03,
     )
     agent = TraderAgent(trader=trader, memory_store=memory_store)
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-06:released:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 6),
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+        ],
+        released_at=datetime.now(UTC),
+    )
     data_agent = SimpleNamespace(
         handle=AsyncMock(
             return_value=DataResponse(
@@ -95,7 +118,11 @@ async def test_generate_trade_ideas_uses_postmortem_and_adjustment_memory() -> N
         )
     )
 
-    ideas = await agent.generate_trade_ideas(as_of_date=date(2026, 4, 6), data_agent=data_agent)
+    ideas = await agent.generate_trade_ideas(
+        as_of_date=date(2026, 4, 6),
+        data_agent=data_agent,
+        strategy_version=strategy_version,
+    )
 
     assert len(ideas) == 1
     assert "postmortem" in (ideas[0].rationale or "")
@@ -103,11 +130,10 @@ async def test_generate_trade_ideas_uses_postmortem_and_adjustment_memory() -> N
 
 
 @pytest.mark.asyncio
-async def test_generate_trade_ideas_uses_profile_symbols_when_watchlist_empty(tmp_path: Path) -> None:
+async def test_generate_trade_ideas_uses_profile_symbols_as_context(tmp_path: Path) -> None:
     trader = TraderConfig(
         trader_id="trader_a",
         display_name="Trader A",
-        watchlist=[],
         default_target_pct=0.05,
         default_stop_pct=0.03,
     )
@@ -118,6 +144,16 @@ async def test_generate_trade_ideas_uses_profile_symbols_when_watchlist_empty(tm
         style_cluster_ids=["trader_a:etf:v0"],
     )
     agent = TraderAgent(trader=trader, trader_profile=profile)
+    strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-06:released:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 6),
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="510300.SH", decision="buy", confidence=0.72),
+        ],
+        released_at=datetime.now(UTC),
+    )
 
     data_agent = SimpleNamespace(
         handle=AsyncMock(
@@ -129,13 +165,17 @@ async def test_generate_trade_ideas_uses_profile_symbols_when_watchlist_empty(tm
         )
     )
 
-    ideas = await agent.generate_trade_ideas(as_of_date=date(2026, 4, 6), data_agent=data_agent)
+    ideas = await agent.generate_trade_ideas(
+        as_of_date=date(2026, 4, 6),
+        data_agent=data_agent,
+        strategy_version=strategy_version,
+    )
 
     assert len(ideas) == 1
     assert ideas[0].symbol == "510300.SH"
     assert "profile symbols" in (ideas[0].rationale or "")
     assert "memory mix" not in (ideas[0].rationale or "")
-    assert (ideas[0].confidence or 0.0) > 0.3
+    assert ideas[0].confidence == 0.72
 
 
 @pytest.mark.asyncio
@@ -271,12 +311,11 @@ async def test_generate_trade_ideas_includes_strong_symbol_hint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_trade_ideas_phase0_fallback_when_no_strategy_version() -> None:
-    """Phase 0 降级：未传入 strategy_version 时使用 watchlist 路径"""
+async def test_generate_trade_ideas_requires_strategy_version() -> None:
+    """严格模式：未传入 strategy_version 时直接报错。"""
     trader = TraderConfig(
         trader_id="trader_a",
         display_name="Trader A",
-        watchlist=["000001.SZ"],
         default_target_pct=0.05,
         default_stop_pct=0.03,
     )
@@ -292,19 +331,11 @@ async def test_generate_trade_ideas_phase0_fallback_when_no_strategy_version() -
         )
     )
 
-    # 不传 strategy_version，使用 Phase 0 路径
-    ideas = await agent.generate_trade_ideas(
-        as_of_date=date(2026, 4, 24),
-        data_agent=data_agent,
-    )
-
-    assert len(ideas) == 1
-    assert ideas[0].symbol == "000001.SZ"
-    assert "Phase0" in (ideas[0].rationale or "")
-    # strategy_version_id 为 None
-    assert ideas[0].strategy_version_id is None
-    # confidence 走 Phase 0 启发式（0.3）
-    assert ideas[0].confidence == 0.3
+    with pytest.raises(ValueError, match="requires a released strategy_version"):
+        await agent.generate_trade_ideas(
+            as_of_date=date(2026, 4, 24),
+            data_agent=data_agent,
+        )
 
 
 @pytest.mark.asyncio

@@ -127,6 +127,7 @@ export function DashboardQuickLinks() {
         <div className="flex flex-wrap gap-3">
           {[
             { label: '任务中心', path: '/jobs' },
+            { label: '告警中心', path: '/alerts' },
             { label: '配置管理', path: '/profiles' },
             { label: '市场数据', path: '/market' },
             { label: '策略工作台', path: '/strategies' },

@@ -81,11 +81,14 @@ class AlertManager:
 
         # S7-007 扩展：告警配置
         self._alerting_config = alerting_config
+        self._alert_cfg = None
+        self._alerting_enabled = False
         self._init_alerting_extensions()
 
         # 自动注册为全局默认实例（供健康检查等模块发现）
+        # 仅在告警已启用且存在显式配置时注册，避免未配置实例污染全局状态。
         global _default_manager
-        if _default_manager is None:
+        if self._alerting_enabled and _default_manager is None:
             _default_manager = self
 
     def _init_alerting_extensions(self) -> None:
@@ -100,6 +103,10 @@ class AlertManager:
 
         cfg = load_alerting_config(self._alerting_config)
         self._alert_cfg = cfg
+        self._alerting_enabled = bool(cfg.enabled)
+        if not cfg.enabled:
+            logger.info("alerting disabled by config")
+            return
         self._formatter = get_formatter(cfg.channel)
         self._aggregator = AlertAggregator(
             window_minutes=cfg.aggregation.window_minutes,
@@ -118,6 +125,10 @@ class AlertManager:
             alert: 告警事件
             session: DB session（可选）
         """
+        if hasattr(self, "_alert_cfg") and self._alert_cfg and not self._alert_cfg.enabled:
+            logger.debug("alert %s skipped because alerting is disabled", alert.id)
+            return
+
         # 级别过滤
         if hasattr(self, "_alert_cfg") and self._alert_cfg:
             priority_map = {
@@ -158,7 +169,11 @@ class AlertManager:
 
     def _send_and_persist(self, alert: AlertEvent, session=None) -> None:
         """发送告警 + 持久化 + 写日志。"""
-        channel = getattr(self, "_alert_cfg", None) or self._alerting_config.get("channel", "generic") if self._alerting_config else "generic"
+        channel = (
+            self._alert_cfg.channel
+            if getattr(self, "_alert_cfg", None) is not None
+            else (self._alerting_config.get("channel", "generic") if self._alerting_config else "generic")
+        )
 
         # 发送到 Webhook
         status = "sent"
@@ -274,6 +289,10 @@ class AlertManager:
         session=None,
     ) -> None:
         """发送测试告警（用于验证 Webhook 配置）。"""
+        if hasattr(self, "_alert_cfg") and self._alert_cfg and not self._alert_cfg.enabled:
+            logger.debug("test alert skipped because alerting is disabled")
+            return
+
         alert = AlertEvent(
             id=str(uuid.uuid4()),
             level=AlertLevel.INFO,
@@ -359,6 +378,10 @@ class AlertManager:
         Returns:
             触发的告警事件列表
         """
+        if hasattr(self, "_alert_cfg") and self._alert_cfg and not self._alert_cfg.enabled:
+            logger.debug("alert evaluation skipped because alerting is disabled")
+            return []
+
         alerts = await self.evaluate(stats, quality)
 
         if alerts:

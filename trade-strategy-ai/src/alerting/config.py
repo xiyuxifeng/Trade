@@ -46,7 +46,7 @@ class AlertingConfig(BaseModel):
 
 
 def load_alerting_config(config: dict[str, Any] | None = None) -> AlertingConfig:
-    """从完整 app config 中提取 alerting 子配置。
+    """从完整 app config 或 alerting 子配置中提取告警配置。
 
     Args:
         config: 完整 app config dict，为空时返回默认值
@@ -56,5 +56,5 @@ def load_alerting_config(config: dict[str, Any] | None = None) -> AlertingConfig
     """
     if config is None:
         return AlertingConfig()
-    raw = config.get("alerting", {})
+    raw = config.get("alerting", config) if isinstance(config, dict) else {}
     return AlertingConfig(**raw)

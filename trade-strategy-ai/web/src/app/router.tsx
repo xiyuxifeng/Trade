@@ -13,6 +13,7 @@ import {
 import { ArtifactDetailPage, ArtifactsPage } from '@/pages/artifacts';
 import { BacktestPage } from '@/pages/backtest';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
+import { AlertsPage } from '@/pages/alerts';
 import { DashboardPage } from '@/pages/dashboard';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
@@ -91,6 +92,7 @@ const dashboardLayoutRoutes = [
   { path: 'articles/jobs', element: <ArticleJobsPage /> },
   { path: 'articles/results', element: <ArticleResultsPage /> },
   { path: 'articles/maintenance', element: <ArticleMaintenancePage /> },
+  { path: 'alerts', element: <AlertsPage /> },
   { path: 'backtest', element: <BacktestPage /> },
   { path: 'backtest/regime', element: <RegimeBacktestReportPage /> },
   { path: 'rule-pool', element: <RulePoolPage /> },

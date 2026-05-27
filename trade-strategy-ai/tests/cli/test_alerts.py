@@ -10,9 +10,10 @@ class TestAlertsAPI:
         """alerts router 已在 main.py 注册"""
         from api.main import app
 
-        # 检查 /alerts/history 路由存在
+        # 检查告警路由存在
         routes = [r.path for r in app.routes]
         assert any("/alerts/history" in r for r in routes)
+        assert any("/alerts/status" in r for r in routes)
 
     @patch("src.db.session.session_scope")
     def test_list_alert_history_returns_401_without_auth(self, mock_session):

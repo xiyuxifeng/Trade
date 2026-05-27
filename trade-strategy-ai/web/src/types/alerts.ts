@@ -22,6 +22,17 @@ export type AlertHistoryResponse = {
   items: AlertHistoryItem[];
 };
 
+export type AlertingStatusResponse = {
+  enabled: boolean;
+  channel: string;
+  min_level: string;
+  console_output: boolean;
+  aggregation_window_minutes: number;
+  aggregation_max_count: number;
+  webhook_configured: boolean;
+  channel_configured: boolean;
+};
+
 export type AlertHistoryQuery = {
   status?: string;
   level?: string;
@@ -37,4 +48,3 @@ export type AlertActionResponse = {
   id: string;
   new_status: string;
 };
-

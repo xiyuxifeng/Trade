@@ -6,11 +6,7 @@
 - 不承担策略评估，委托 StrategyAgent/RiskAgent
 - 不管理记忆存储，委托 TraderMemoryStore
 
-Phase 0（当前）：
-- 基于 watchlist + last_price 生成 TradeIdea
-- 使用 target/stop 百分比配置
-
-后续演进（Stage 4）：
+Stage 4（当前主流程）：
 - 输入升级为：策略版本、强势池快照、画像、记忆
 - 不再以 watchlist 为核心输入
 - 同一 trader 同日只产出一个 released 版本
@@ -49,9 +45,8 @@ class TraderAgent:
     - 不做风控、不做评估、不做编排
 
     Stage 4 输入升级（NTL-S4-001）：
-    - 主要候选来源：strategy_version.recommendations（替代 watchlist）
+    - 主要候选来源：strategy_version.recommendations
     - 额外上下文：market_universe.strong_symbols 提供强势标的评分
-    - Phase 0 兼容：当未传入 strategy_version 时，降级到 watchlist + profile.top_symbols 路径
     """
 
     def __init__(
@@ -64,25 +59,6 @@ class TraderAgent:
         self.trader = trader
         self.memory_store = memory_store
         self.trader_profile = trader_profile
-
-    def _candidate_symbols(self) -> list[str]:
-        """Merge watchlist and profile symbols into a stable candidate list."""
-
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        for symbol in self.trader.watchlist:
-            if isinstance(symbol, str) and symbol.strip() and symbol not in seen:
-                candidates.append(symbol)
-                seen.add(symbol)
-
-        if self.trader_profile is not None:
-            for stat in self.trader_profile.top_symbols:
-                if isinstance(stat.symbol, str) and stat.symbol.strip() and stat.symbol not in seen:
-                    candidates.append(stat.symbol)
-                    seen.add(stat.symbol)
-
-        return candidates
 
     def _format_memory_hint(self, summary: "TraderMemorySummary | None") -> str | None:
         """Format a pre-fetched memory summary into a hint string."""
@@ -174,61 +150,41 @@ class TraderAgent:
     ) -> list[TradeIdea]:
         """Generate structured trade ideas.
 
-        Stage 4 路径（strategy_version 非 None）：
+        Stage 4 路径：
         - 候选标的来自 strategy_version.recommendations（buy/hold 决策）
         - market_universe.strong_symbols 提供强势评分上下文
         - confidence 优先使用 strategy_version 中的值
-
-        Phase 0 路径（strategy_version 为 None）：
-        - 候选标的来自 trader.watchlist + profile.top_symbols
-        - 兼容原有逻辑
         """
 
-        # === 候选标的派生：Stage 4 路径 vs Phase 0 降级路径 ===
-        if strategy_version is not None:
-            # Stage 4 路径：基于策略版本推荐
-            strategy_candidates = self._candidates_from_strategy(strategy_version)
-            if not strategy_candidates:
-                logger.debug(
-                    "TraderAgent候选为空: trader=%s, date=%s, 原因=strategy_version无recommendations",
-                    self.trader.trader_id,
-                    as_of_date,
-                )
-                return []
-            # 提取纯 symbol 列表用于行情请求
-            candidate_symbols = [sym for sym, _, _, _ in strategy_candidates]
-            candidate_map: dict[str, tuple[str, float]] = {
-                sym: (decision, conf) for sym, decision, conf, _ in strategy_candidates
-            }
-            candidate_rec_index: dict[str, int] = {
-                sym: idx for sym, _, _, idx in strategy_candidates
-            }
-            idea_mode = "strategy"
-            logger.info(
-                "TraderAgent启动: trader=%s, date=%s, mode=strategy, candidates=%d, version=%s",
+        if strategy_version is None:
+            raise ValueError(
+                f"TraderAgent requires a released strategy_version, trader={self.trader.trader_id}, date={as_of_date}"
+            )
+
+        # === 候选标的派生：必须来自已发布策略版本 ===
+        strategy_candidates = self._candidates_from_strategy(strategy_version)
+        if not strategy_candidates:
+            logger.debug(
+                "TraderAgent候选为空: trader=%s, date=%s, 原因=strategy_version无recommendations",
                 self.trader.trader_id,
                 as_of_date,
-                len(candidate_symbols),
-                strategy_version.version_id,
             )
-        else:
-            # Phase 0 降级路径：使用 watchlist + profile.top_symbols
-            candidate_symbols = self._candidate_symbols()
-            if not candidate_symbols:
-                logger.debug(
-                    "TraderAgent候选为空: trader=%s, date=%s, 原因=watchlist和profile均无标的",
-                    self.trader.trader_id,
-                    as_of_date,
-                )
-                return []
-            candidate_map = {sym: ("buy", 0.3) for sym in candidate_symbols}
-            idea_mode = "phase0"
-            logger.info(
-                "TraderAgent启动: trader=%s, date=%s, mode=phase0, candidates=%d",
-                self.trader.trader_id,
-                as_of_date,
-                len(candidate_symbols),
-            )
+            return []
+        # 提取纯 symbol 列表用于行情请求
+        candidate_symbols = [sym for sym, _, _, _ in strategy_candidates]
+        candidate_map: dict[str, tuple[str, float]] = {
+            sym: (decision, conf) for sym, decision, conf, _ in strategy_candidates
+        }
+        candidate_rec_index: dict[str, int] = {
+            sym: idx for sym, _, _, idx in strategy_candidates
+        }
+        logger.info(
+            "TraderAgent启动: trader=%s, date=%s, mode=strategy, candidates=%d, version=%s",
+            self.trader.trader_id,
+            as_of_date,
+            len(candidate_symbols),
+            strategy_version.version_id,
+        )
 
         # === 获取行情数据 ===
         req = DataRequest(
@@ -278,10 +234,7 @@ class TraderAgent:
                 target = entry_price * (1.0 + target_pct)
                 stop = entry_price * (1.0 - stop_pct)
 
-            if idea_mode == "strategy":
-                rationale = f"Stage4: strategy-based idea from version {strategy_version.version_id}"
-            else:
-                rationale = "Phase0: rule-based idea from watchlist + mock price"
+            rationale = f"Stage4: strategy-based idea from version {strategy_version.version_id}"
 
             # strong_symbols 上下文（Stage 4 路径）
             if market_universe is not None:
@@ -302,26 +255,8 @@ class TraderAgent:
 
             # === confidence 计算 ===
             _, strategy_confidence = candidate_map[symbol]
-            if idea_mode == "strategy":
-                # Stage 4 路径：优先使用策略版本的 confidence
-                confidence = strategy_confidence
-            else:
-                # Phase 0 路径：使用原有的启发式 confidence
-                confidence = 0.3
-                if self.trader_profile is not None:
-                    confidence += min(0.15, 0.03 * len(self.trader_profile.top_symbols[:5]))
-                    if self.trader_profile.concept_tags:
-                        confidence += 0.05
-                    if self.trader_profile.style_cluster_ids:
-                        confidence += 0.05
-                if self.memory_store is not None:
-                    summary = memory_summary_by_symbol.get(symbol)
-                    if summary and summary.by_type.get("success_case", 0):
-                        confidence += 0.03
-                    if summary and summary.by_type.get("failure_case", 0):
-                        confidence += 0.01
-                if memory_hint:
-                    confidence += 0.05
+            # Stage 4 路径：优先使用策略版本的 confidence
+            confidence = strategy_confidence
 
             ideas.append(
                 TradeIdea(
@@ -335,8 +270,8 @@ class TraderAgent:
                     rationale=rationale,
                     invalidation="Price data unavailable or market regime changes",
                     confidence=min(0.85, round(confidence, 3)),
-                    strategy_version_id=strategy_version.version_id if strategy_version else None,
-                    source_recommendation_idx=candidate_rec_index.get(symbol) if idea_mode == "strategy" else None,
+                    strategy_version_id=strategy_version.version_id,
+                    source_recommendation_idx=candidate_rec_index.get(symbol),
                 )
             )
 
@@ -361,10 +296,9 @@ class TraderAgent:
             )
 
         logger.info(
-            "TraderAgent完成: trader=%s, date=%s, mode=%s, ideas=%d",
+            "TraderAgent完成: trader=%s, date=%s, mode=strategy, ideas=%d",
             self.trader.trader_id,
             as_of_date,
-            idea_mode,
             len(ideas),
         )
         return ideas

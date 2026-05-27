@@ -26,6 +26,10 @@ from src.common.paths import resolve_project_path
 from src.services.runtime_contracts import ArtifactRef, StorageRef
 from src.services.runtime_config import resolve_runtime_config
 from src.services.step_timeline_service import StepTimelineService
+from src.common.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 def _to_plain(value: Any) -> Any:
@@ -847,6 +851,88 @@ class JobService(BaseService):
             payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
+    def _job_failure_alert_target(self, job_type: str, error: dict[str, Any] | str) -> tuple[str, dict[str, str]] | None:
+        """根据 job_type 和错误内容选择告警规则。"""
+        error_text = error.get("message") if isinstance(error, dict) else str(error)
+        error_type = str(error.get("type") or "") if isinstance(error, dict) else ""
+        normalized_job_type = str(job_type or "").strip()
+
+        if normalized_job_type in {"backtest-run", "backtest-validate-rules", "rule-pool-backtest"}:
+            return ("backtest", {"task_id": normalized_job_type})
+
+        if normalized_job_type in {"run-pre-market", "run-after-close"}:
+            run_type = "pre_market" if normalized_job_type == "run-pre-market" else "after_close"
+            return ("agent", {"agent_name": "ManagerAgent", "run_type": run_type})
+
+        if normalized_job_type in {"kaipan-fetch", "kaipan-normalize", "ohlcv-crawl"}:
+            provider = "kaipan" if normalized_job_type.startswith("kaipan-") else "akshare"
+            capability = normalized_job_type.replace("-", "_")
+            if any(token in f"{error_type} {error_text}".lower() for token in ("provider", "akshare", "network", "timeout", "fetch")):
+                return ("provider", {"provider": provider, "capability": capability})
+
+        if normalized_job_type in {"pipeline-run", "pipeline-step", "crawl", "clean", "validate", "store", "process", "snapshot-build", "strategy-build", "candidate-review"}:
+            return ("pipeline", {"pipeline_name": normalized_job_type})
+
+        return ("pipeline", {"pipeline_name": normalized_job_type or "job"})
+
+    async def _fire_failure_alert(self, *, job, error: dict[str, Any] | str, session=None) -> None:
+        """把 Job 失败统一映射为告警事件并持久化。"""
+        try:
+            import os
+
+            from src.common.config import load_app_config
+            from src.alerting.manager import AlertManager
+            from src.alerting.rules import (
+                fire_agent_failure_alert,
+                fire_backtest_failure_alert,
+                fire_pipeline_failure_alert,
+                fire_provider_failure_alert,
+            )
+
+            loaded = load_app_config(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+            manager = AlertManager(alerting_config=loaded.config.alerting)
+            target = self._job_failure_alert_target(job.job_type, error)
+            if target is None:
+                return
+
+            target_kind, target_kwargs = target
+            error_text = error.get("message") if isinstance(error, dict) else str(error)
+
+            if target_kind == "backtest":
+                fire_backtest_failure_alert(
+                    manager,
+                    task_id=target_kwargs["task_id"],
+                    error=error_text,
+                    session=session,
+                )
+            elif target_kind == "agent":
+                fire_agent_failure_alert(
+                    manager,
+                    agent_name=target_kwargs["agent_name"],
+                    run_type=target_kwargs["run_type"],
+                    error=error_text,
+                    session=session,
+                )
+            elif target_kind == "provider":
+                fire_provider_failure_alert(
+                    manager,
+                    provider=target_kwargs["provider"],
+                    capability=target_kwargs["capability"],
+                    error=error_text,
+                    session=session,
+                )
+            else:
+                fire_pipeline_failure_alert(
+                    manager,
+                    pipeline_name=target_kwargs["pipeline_name"],
+                    node_name=None,
+                    error=error_text,
+                    status="failed",
+                    session=session,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("failed to fire job failure alert: job_type=%s, error=%s, exc=%s", job.job_type, error, exc)
+
     async def fail_job(
         self,
         *,
@@ -885,6 +971,7 @@ class JobService(BaseService):
                 payload={"error": error, "increment_retry": increment_retry, "retry_count": job.retry_count},
                 event_at=now,
             )
+            await self._fire_failure_alert(job=job, error=error, session=session)
 
         self._materialize_job_dir(
             job=job,

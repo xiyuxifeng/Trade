@@ -146,12 +146,41 @@ Web 配置页只展示 **脱敏值**；保存时由服务端校验并写回。
 | `schedule.enable` | 是否启用定时调度 |
 | `schedule.pre_market_time` | 盘前定时 |
 | `schedule.after_close_time` | 盘后定时 |
+| `alerting.enabled` | 是否启用告警系统；关闭后告警中心仍可查看历史，但不会发送外部通知 |
+| `alerting.channel` | 告警通道（`dingtalk` / `feishu` / `wecom` / `generic`） |
+| `alerting.console_output` | 是否输出到本地日志；仅本地输出不等于外部通知已开通 |
+| `alerting.aggregation.window_minutes` | 告警聚合时间窗口 |
+| `alerting.aggregation.max_count` | 聚合达到多少条后分段发送 |
+| `alerting.<channel>.webhook_url` | 对应通道的 Webhook；没有它就只能本地输出，无法发外部消息 |
 | `evaluation.min_expected_return` | 最低预期收益 |
 | `evaluation.loss_trigger` | 亏损触发阈值 |
-| `traders[].watchlist` | 各交易员关注列表 |
-| `persona.enable` | 是否启用 Persona Router |
-| `persona.clusters_path` | 聚类文件路径 |
-| `data.mock_prices` | Phase 0 演示用 mock 价格 |
+| `data.market_universe_snapshot_dir` | 候选池快照文件目录（当前仍是文件存储） |
+
+> 说明：`data.market_data_cache_dir` 已不作为交付模板必填项暴露；它仅保留为运行时兼容缓存目录，不建议作为交付配置入口。
+>
+> 说明：告警系统的交付配置以 `alerting.enabled` 为总开关。启用后，管理员可在 Web 的 **告警中心**（`/alerts`）查看历史、确认/解决告警，并通过 **发送测试告警** 验证 Webhook 是否可用。
+
+### 3.5 配置边界与生效顺序
+
+为了避免把“部署配置”和“业务运行配置”混在一起，建议按下面理解：
+
+| 配置层 | 位置 | 影响范围 | 说明 |
+|------|------|----------|------|
+| 部署配置 | 环境变量 / `.env` / `config/app.yaml` | API、Worker、数据库、定时默认值 | 由运维维护，重启后生效 |
+| 运行配置 | Web `/profiles` | 文章、市场数据、策略、回测的运行上下文 | 由 admin 在页面导入和维护 |
+| 任务参数 | 各业务页面表单 | 单次 Job 的执行行为 | 例如 `force`、日期、标的、回测区间等 |
+
+**优先级**：
+
+1. 页面任务参数优先于默认值
+2. Profile 优先于直接写 `config_path`
+3. `config/app.yaml` 提供全局默认值
+
+**结论**：
+
+- 运维负责把系统启动起来，并保证默认配置正确。
+- admin 在 Web 里通过 `/profiles` 和各业务页面完成日常操作。
+- 日常用户不需要手工编辑 `config_path`，页面会自动绑定当前 Profile。
 
 ---
 
@@ -490,6 +519,7 @@ python -m cli.main db-migrate --config config/app.yaml
 | 页面 | 关注内容 |
 |------|----------|
 | `/dashboard` | 系统健康、失败任务、告警 |
+| `/alerts` | 告警启用状态、历史记录、确认/解决、测试告警 |
 | `/jobs` | 任务状态、耗时异常 |
 | `/system/health` | API、DB、Worker、存储 |
 | `/system/audit` | 高风险操作、权限拒绝 |
@@ -629,6 +659,7 @@ docker compose up -d api worker web
 | 模块 | 职责 |
 |------|------|
 | **配置管理 `/profiles`** | Profile 与配置文件 |
+| **告警中心 `/alerts`** | 告警历史、确认/解决、测试验证 |
 | **系统管理 `/system/backup`** | 项目快照与回滚 |
 | **Dashboard / System Health** | 运维摘要与探测 |
 | **任务中心 `/jobs`** | 长任务执行与日志 |

@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -254,6 +255,56 @@ def test_job_state_transitions_and_cancel(tmp_path: Path) -> None:
     assert cancelled.payload["job"]["cancel_requested_at"] is not None
     assert cancelled.payload["job"]["created_by"] == "web"
     assert len(cancelled.payload["job"]["audit_events"]) >= 2
+
+    asyncio.run(engine.dispose())
+
+
+def test_fail_job_emits_alerts_by_job_type(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """JobService.fail_job 应按 job_type 触发对应告警规则。"""
+    service, engine = _build_job_service(tmp_path)
+
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def fake_config(path=None):
+        return SimpleNamespace(
+            config=SimpleNamespace(
+                alerting={
+                    "enabled": True,
+                    "channel": "dingtalk",
+                    "aggregation": {"window_minutes": 60, "max_count": 100},
+                    "dingtalk": {"webhook_url": "https://example.invalid"},
+                    "feishu": {"webhook_url": ""},
+                    "wecom": {"webhook_url": ""},
+                    "min_level": "WARNING",
+                    "console_output": True,
+                }
+            )
+        )
+
+    monkeypatch.setattr("src.common.config.load_app_config", fake_config)
+
+    def record(name: str):
+        def _inner(*args, **kwargs):
+            calls.append((name, args, kwargs))
+
+        return _inner
+
+    monkeypatch.setattr("src.alerting.rules.fire_pipeline_failure_alert", record("pipeline"))
+    monkeypatch.setattr("src.alerting.rules.fire_backtest_failure_alert", record("backtest"))
+    monkeypatch.setattr("src.alerting.rules.fire_provider_failure_alert", record("provider"))
+    monkeypatch.setattr("src.alerting.rules.fire_agent_failure_alert", record("agent"))
+
+    job_ids = {}
+    for job_type in ("pipeline-run", "backtest-run", "kaipan-fetch", "run-pre-market"):
+        created = asyncio.run(service.create_job(job_type=job_type, params={}, created_by="web"))
+        job_ids[job_type] = created.payload["job"]["id"]
+
+    asyncio.run(service.fail_job(job_id=job_ids["pipeline-run"], error="boom"))
+    asyncio.run(service.fail_job(job_id=job_ids["backtest-run"], error="boom"))
+    asyncio.run(service.fail_job(job_id=job_ids["kaipan-fetch"], error="akshare timeout"))
+    asyncio.run(service.fail_job(job_id=job_ids["run-pre-market"], error="boom"))
+
+    assert [item[0] for item in calls] == ["pipeline", "backtest", "provider", "agent"]
 
     asyncio.run(engine.dispose())
 

@@ -12,9 +12,17 @@ def get_risk_monitor() -> RiskMonitor:
     global _risk_monitor
     if _risk_monitor is None:
         from src.risk.types import ConcentrationConfig, IndustryExposureConfig, PortfolioRiskConfig
-        from src.alerting.models import AlertManager
+        from src.common.config import load_app_config
+        from src.alerting.manager import AlertManager
+
+        try:
+            loaded = load_app_config()
+            alert_manager = AlertManager(alerting_config=loaded.config.alerting)
+        except Exception:
+            alert_manager = AlertManager()
+
         _risk_monitor = RiskMonitor(
-            alert_manager=AlertManager(),
+            alert_manager=alert_manager,
             concentration_config=ConcentrationConfig(),
             industry_config=IndustryExposureConfig(),
             portfolio_config=PortfolioRiskConfig(),

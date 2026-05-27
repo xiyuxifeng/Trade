@@ -18,6 +18,7 @@ const formalNavigationGroups: NavGroup[] = [
     items: [
       { label: '仪表盘', path: '/dashboard', description: '系统运行状态与入口摘要' },
       { label: '任务', path: '/jobs', description: '长时间运行的任务中心' },
+      { label: '告警', path: '/alerts', description: '告警历史、确认和测试入口' },
     ],
   },
   {

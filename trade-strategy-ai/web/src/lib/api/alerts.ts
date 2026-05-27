@@ -4,6 +4,7 @@ import type {
   AlertHistoryQuery,
   AlertHistoryItem,
   AlertHistoryResponse,
+  AlertingStatusResponse,
 } from '@/types/alerts';
 
 export function listAlertHistory(query: AlertHistoryQuery = {}) {
@@ -20,6 +21,10 @@ export function listAlertHistory(query: AlertHistoryQuery = {}) {
 
 export function getAlertHistory(recordId: string) {
   return fetchRootJson<AlertHistoryItem>(`/alerts/history/${recordId}`);
+}
+
+export function getAlertingStatus() {
+  return fetchRootJson<AlertingStatusResponse>('/alerts/status');
 }
 
 export function acknowledgeAlert(recordId: string, acknowledgedBy = 'web') {

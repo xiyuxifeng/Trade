@@ -29,6 +29,61 @@ class TestBacktestEngine:
         assert result.request_date_from == date(2026, 4, 1)
         assert result.request_date_to == date(2026, 4, 1)
 
+    @pytest.mark.asyncio
+    async def test_engine_run_can_resume_from_checkpoint(self):
+        """回测运行应能从 runtime_state 的交易日游标恢复。"""
+        from src.backtest.engine import BacktestEngine
+
+        mock_loader = AsyncMock()
+        mock_loader.load_market_context.return_value = {
+            "trade_date": "2026-04-02",
+            "bars_by_symbol": {},
+            "indicators_by_symbol": {},
+            "market_universe": None,
+            "topic_snapshot": None,
+            "source_refs": [],
+        }
+
+        mock_strategy_loader = AsyncMock()
+        mock_strategy_loader.load_version_for_date.return_value = None
+
+        engine = BacktestEngine(
+            loader=mock_loader,
+            strategy_loader=mock_strategy_loader,
+        )
+        req = BacktestRequest(
+            trader_id="trader_a",
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 2),
+        )
+        progress_events: list[dict[str, object]] = []
+        result = await engine.run(
+            req,
+            progress_callback=progress_events.append,
+            runtime_state={
+                "checkpoint": {
+                    "trade_date_index": 1,
+                    "records": [
+                        {
+                            "trade_date": "2026-04-01",
+                            "trader_id": "trader_a",
+                            "strategy_version_id": "",
+                            "symbol": "",
+                            "status": "skipped",
+                            "skip_reason": "checkpointed",
+                            "evidence_refs": [],
+                        }
+                    ],
+                }
+            },
+        )
+
+        assert mock_loader.load_market_context.call_count == 1
+        assert len(result.records) == 2
+        assert result.records[0].trade_date == date(2026, 4, 1)
+        assert result.records[1].trade_date == date(2026, 4, 2)
+        assert progress_events[-1]["runtime_state"]["checkpoint"]["trade_date_index"] == 2
+
     def test_engine_run_multi_day_backtest(self):
         """多日回测：覆盖指定日期区间"""
         from src.backtest.engine import BacktestEngine

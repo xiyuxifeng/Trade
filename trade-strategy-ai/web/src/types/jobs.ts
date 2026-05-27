@@ -5,6 +5,7 @@ export type JobRecord = {
   params: Record<string, unknown>;
   result: Record<string, unknown> | null;
   error: JobError | string | null;
+  runtime_state: Record<string, unknown> | null;
   progress?: JobProgress | null;
   artifacts: JobArtifactRef[];
   created_by: string;
@@ -29,6 +30,25 @@ export type JobRecord = {
   config_snapshot?: JobConfigSnapshot | null;
   profile_snapshot_path?: string | null;
   profile_snapshot?: JobProfileSnapshot | null;
+};
+
+export type JobDefinitionSummary = {
+  job_type: string;
+  title: string;
+  service_name: string;
+  handler_name: string;
+  permission: string;
+  risk: string;
+  can_retry: boolean;
+  can_pause: boolean;
+  can_resume: boolean;
+  can_cancel: boolean;
+  can_run_concurrently: boolean;
+  concurrency_group: string;
+  requires_confirmation: boolean;
+  runnable: boolean;
+  description: string;
+  param_schema: Record<string, unknown>;
 };
 
 export type JobProgress = {

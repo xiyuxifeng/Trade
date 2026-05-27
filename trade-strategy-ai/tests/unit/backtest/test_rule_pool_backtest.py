@@ -317,6 +317,51 @@ class TestBacktestEngineRulePool:
             for call in mock_repo_instance.update_backtest_result.call_args_list:
                 assert call[1]["rule_id"] in [r.rule_id for r in sample_rules]
 
+    @pytest.mark.asyncio
+    async def test_run_rules_backtest_resumes_from_rule_index(self, mock_session, sample_rules):
+        """规则池回测应能从 runtime_state 恢复并跳过已完成规则。"""
+        engine = BacktestEngine()
+
+        with patch("src.rule_pool.repository.RulePoolRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_rules_by_status = AsyncMock(return_value=sample_rules)
+            mock_repo_instance.update_backtest_result = AsyncMock(return_value=True)
+
+            resumed_state = {
+                "checkpoint": {
+                    "rule_index": 1,
+                    "rule_results": [
+                        {
+                            "run_id": "run_000",
+                            "run_at": datetime.now(),
+                            "start_date": date(2026, 4, 1),
+                            "end_date": date(2026, 4, 3),
+                            "rule_id": sample_rules[0].rule_id,
+                            "regime_version": None,
+                            "source_feature_version": None,
+                            "total_trades": 0,
+                            "hit_trades": 0,
+                            "miss_trades": 0,
+                            "hit_rate": 0.0,
+                            "avg_return": 0.0,
+                            "sample_count": 0,
+                            "regime_metrics": [],
+                        }
+                    ],
+                }
+            }
+
+            result = await engine.run_rules_backtest(
+                session=mock_session,
+                rule_ids=None,
+                start_date=date(2026, 4, 1),
+                end_date=date(2026, 4, 3),
+                runtime_state=resumed_state,
+            )
+
+            assert mock_repo_instance.update_backtest_result.call_count == len(sample_rules) - 1
+            assert result.summary.total_days >= 1
+
 
 class TestBacktestEngineRulePoolIntegration:
     """规则池回测与其他模块的集成测试"""

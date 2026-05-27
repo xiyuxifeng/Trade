@@ -226,6 +226,27 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert kaipan_normalize.status == "ok"
     assert kaipan_normalize.payload["params"]["start_date"] == "2026-05-01"
 
+    target_jobs = {
+        "ohlcv-crawl",
+        "kaipan-fetch",
+        "kaipan-normalize",
+        "snapshot-build",
+        "backtest-run",
+        "backtest-validate-rules",
+        "rule-pool-backtest",
+    }
+    for job_type in target_jobs:
+        definition = get_job_definition(job_type)
+        assert definition is not None
+        assert definition.can_pause is True
+        assert definition.can_resume is True
+        assert definition.can_cancel is True
+        assert definition.can_retry is True
+
+    rule_pool_definition = get_job_definition("rule-pool-backtest")
+    assert rule_pool_definition is not None
+    assert rule_pool_definition.can_retry is True
+
     snapshot = validate_job_submission(
         job_type="snapshot-build",
         params={"profile_id": "default", "date": "2026-05-09", "snapshot_type": "all"},

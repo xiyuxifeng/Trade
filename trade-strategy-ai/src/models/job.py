@@ -21,6 +21,7 @@ class JobStatus(StrEnum):
 
     pending = "pending"
     running = "running"
+    paused = "paused"
     success = "success"
     failed = "failed"
     cancelled = "cancelled"
@@ -51,6 +52,7 @@ class Job(TimestampMixin, Base):
     params: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
     error: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
+    runtime_state: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
     progress: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
     artifacts: Mapped[list[dict[str, Any]]] = mapped_column(JSONVariant, default=list, nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(64))

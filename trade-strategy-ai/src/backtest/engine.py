@@ -13,8 +13,9 @@ import inspect
 import operator
 import re
 import statistics
+from dataclasses import asdict, is_dataclass
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,6 +108,131 @@ def _build_regime_metric(
         confidence=confidence,
         low_sample=sample_count < 10,
     )
+
+
+def _to_plain(value: Any) -> Any:
+    """把 dataclass / Pydantic / 容器转换为可写入 runtime_state 的 JSON 结构。"""
+    if hasattr(value, "model_dump"):
+        return _to_plain(value.model_dump())
+    if is_dataclass(value):
+        return {k: _to_plain(v) for k, v in asdict(value).items()}
+    if isinstance(value, dict):
+        return {k: _to_plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_plain(item) for item in value]
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _coerce_backtest_trade_record(value: Any) -> BacktestTradeRecord:
+    """把 runtime_state 里的字典恢复成 BacktestTradeRecord。"""
+    if isinstance(value, BacktestTradeRecord):
+        return value
+    if not isinstance(value, dict):
+        if hasattr(value, "__dict__"):
+            value = dict(vars(value))
+        else:
+            raise TypeError(f"Unsupported backtest record type: {type(value)!r}")
+    trade_date = value.get("trade_date")
+    if isinstance(trade_date, str):
+        trade_date = date.fromisoformat(trade_date)
+    elif not isinstance(trade_date, date):
+        trade_date = date.today()
+    return BacktestTradeRecord(
+        trade_date=trade_date,
+        trader_id=str(value.get("trader_id") or ""),
+        strategy_version_id=str(value.get("strategy_version_id") or ""),
+        symbol=str(value.get("symbol") or ""),
+        status=str(value.get("status") or "skipped"),
+        entry_price=value.get("entry_price"),
+        exit_price=value.get("exit_price"),
+        entry_date=value.get("entry_date"),
+        exit_date=value.get("exit_date"),
+        return_pct=value.get("return_pct"),
+        mfe=value.get("mfe"),
+        mae=value.get("mae"),
+        volume=value.get("volume"),
+        is_valid_lot_size=value.get("is_valid_lot_size"),
+        skip_reason=value.get("skip_reason"),
+        evidence_refs=list(value.get("evidence_refs") or []),
+    )
+
+
+def _coerce_backtest_trade_record_list(value: Any | None) -> list[BacktestTradeRecord]:
+    """把 runtime_state 里的交易记录列表恢复为 BacktestTradeRecord 列表。"""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
+            value = list(value)
+        else:
+            return []
+    return [_coerce_backtest_trade_record(item) for item in value]
+
+
+def _coerce_rule_validation_result(value: Any) -> RuleValidationResult:
+    """把 runtime_state 里的字典恢复成 RuleValidationResult。"""
+    if isinstance(value, RuleValidationResult):
+        return value
+    if not isinstance(value, dict):
+        if hasattr(value, "__dict__"):
+            value = dict(vars(value))
+        else:
+            raise TypeError(f"Unsupported rule validation result type: {type(value)!r}")
+    return RuleValidationResult(
+        trader_id=str(value.get("trader_id") or ""),
+        strategy_version_id=str(value.get("strategy_version_id") or ""),
+        rule_id=str(value.get("rule_id") or ""),
+        rule_text=str(value.get("rule_text") or ""),
+        programmable=bool(value.get("programmable") or False),
+        validation_status=str(value.get("validation_status") or "invalid_rule"),
+        hit_count=int(value.get("hit_count") or 0),
+        sample_count=int(value.get("sample_count") or 0),
+        hit_rate=value.get("hit_rate"),
+        posterior_return_mean=value.get("posterior_return_mean"),
+        posterior_return_median=value.get("posterior_return_median"),
+        notes=list(value.get("notes") or []),
+        result_version=str(value.get("result_version") or "1.0"),
+    )
+
+
+def _coerce_rule_validation_result_list(value: Any | None) -> list[RuleValidationResult]:
+    """把 runtime_state 里的规则验真列表恢复为 RuleValidationResult 列表。"""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
+            value = list(value)
+        else:
+            return []
+    return [_coerce_rule_validation_result(item) for item in value]
+
+
+def _coerce_rule_backtest_result(value: Any) -> RuleBacktestResult:
+    """把 runtime_state 里的字典恢复成 RuleBacktestResult。"""
+    if isinstance(value, RuleBacktestResult):
+        return value
+    if not isinstance(value, dict):
+        if hasattr(value, "__dict__"):
+            value = dict(vars(value))
+        else:
+            raise TypeError(f"Unsupported rule backtest result type: {type(value)!r}")
+    return RuleBacktestResult.model_validate(value)
+
+
+def _coerce_rule_backtest_result_list(value: Any | None) -> list[RuleBacktestResult]:
+    """把 runtime_state 里的规则回测列表恢复为 RuleBacktestResult 列表。"""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
+            value = list(value)
+        else:
+            return []
+    return [_coerce_rule_backtest_result(item) for item in value]
 
 
 # ---------------------------------------------------------------------------
@@ -831,6 +957,8 @@ async def validate_rules_for_trader(
     date_from: date,
     date_to: date,
     loader: SnapshotLoader,
+    runtime_state: dict[str, Any] | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[RuleValidationResult]:
     """对某交易员在日期区间内做规则验真。
 
@@ -859,35 +987,130 @@ async def validate_rules_for_trader(
         date_to,
     )
     trade_dates = iter_trade_dates(date_from, date_to)
-    all_contexts: list[MarketContextSnapshot] = []
-    # rule_map: rule_id -> (rule_dict, strategy_version_id)
-    rule_map: dict[str, tuple[dict, str]] = {}
+    runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+    checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+    phase = str(checkpoint.get("phase") or "collect")
+    if phase not in {"collect", "classify"}:
+        phase = "collect"
 
-    for trade_date in trade_dates:
-        # 加载市场上下文（收集 indicators）
-        ctx = await loader.load_market_context(trade_date=trade_date, symbols=[], regime_version=None)
-        if ctx:
-            all_contexts.append(ctx)
+    all_contexts: list[dict[str, Any]] = []
+    checkpoint_contexts = checkpoint.get("contexts") if isinstance(checkpoint.get("contexts"), list) else []
+    for ctx in checkpoint_contexts:
+        if isinstance(ctx, dict):
+            all_contexts.append(dict(ctx))
 
-        # 加载策略版本
-        version = await loader.load_version_for_date(trader_id=trader_id, trade_date=trade_date)
-        if version is None:
+    rule_map: dict[str, tuple[dict[str, Any], str]] = {}
+    raw_rule_map = checkpoint.get("rule_map") if isinstance(checkpoint.get("rule_map"), dict) else {}
+    for rule_id, entry in raw_rule_map.items():
+        if not isinstance(entry, dict):
             continue
+        rule_dict = entry.get("rule_dict") if isinstance(entry.get("rule_dict"), dict) else entry.get("rule")
+        if not isinstance(rule_dict, dict):
+            continue
+        version_id = str(entry.get("strategy_version_id") or entry.get("version_id") or "")
+        if version_id:
+            rule_map[str(rule_id)] = (dict(rule_dict), version_id)
 
-        # 提取规则（同时记录版本 ID）
-        for rule_dict in (version.rules_snapshot or []):
-            rule_id = str(rule_dict.get("rule_id", ""))
-            if rule_id and rule_id not in rule_map:
-                rule_map[rule_id] = (rule_dict, version.version_id)
+    results: list[RuleValidationResult] = _coerce_rule_validation_result_list(checkpoint.get("validated_results"))
+    collected_index = int(checkpoint.get("trade_date_index") or 0)
+    if collected_index < 0:
+        collected_index = 0
+    classification_index = int(checkpoint.get("classification_index") or len(results))
+    if classification_index < 0:
+        classification_index = 0
 
-    # 对每条规则分类并验真
-    results: list[RuleValidationResult] = []
-    for rule_id, (rule_dict, version_id) in rule_map.items():
+    def _serialize_rule_map() -> dict[str, dict[str, Any]]:
+        return {
+            rule_id: {
+                "rule_dict": _to_plain(rule_dict),
+                "strategy_version_id": version_id,
+            }
+            for rule_id, (rule_dict, version_id) in rule_map.items()
+        }
+
+    def _emit_progress(
+        *,
+        current: int,
+        total: int,
+        trade_date: date | None,
+        current_step: str,
+        status: str = "running",
+        phase_name: str = phase,
+        classification_done: int | None = None,
+    ) -> None:
+        if progress_callback is None:
+            return
+        progress_callback(
+            {
+                "job_type": "backtest-validate-rules",
+                "stage": "rule_validation",
+                "current": current,
+                "total": total,
+                "percent": round((current / total) * 100, 2) if total else 0.0,
+                "remaining": max(total - current, 0),
+                "current_step": current_step,
+                "current_trade_date": trade_date.isoformat() if trade_date is not None else None,
+                "status": status,
+                "runtime_state": {
+                    "schema_version": 1,
+                    "stage": "backtest-validate-rules",
+                    "checkpoint": {
+                        "phase": phase_name,
+                        "trade_date_index": collected_index,
+                        "contexts": _to_plain(all_contexts),
+                        "rule_map": _serialize_rule_map(),
+                        "validated_results": _to_plain(results),
+                        "classification_index": classification_done if classification_done is not None else classification_index,
+                    },
+                },
+            }
+        )
+
+    if phase == "collect":
+        for trade_index, trade_date in enumerate(trade_dates[collected_index:], start=collected_index + 1):
+            ctx = await loader.load_market_context(trade_date=trade_date, symbols=[], regime_version=None)
+            if ctx:
+                all_contexts.append(_to_plain(ctx))
+
+            version = await loader.load_version_for_date(trader_id=trader_id, trade_date=trade_date)
+            if version is not None:
+                for rule_dict in (version.rules_snapshot or []):
+                    rule_id = str(rule_dict.get("rule_id", ""))
+                    if rule_id and rule_id not in rule_map:
+                        rule_map[rule_id] = (dict(rule_dict), version.version_id)
+
+            collected_index = trade_index
+            _emit_progress(
+                current=trade_index,
+                total=len(trade_dates),
+                trade_date=trade_date,
+                current_step=f"collect:{trade_date.isoformat()}",
+                classification_done=len(results),
+            )
+
+    rule_items = list(rule_map.items())
+    if classification_index > len(rule_items):
+        classification_index = len(rule_items)
+    last_trade_date = trade_dates[-1] if trade_dates else None
+
+    for rule_index, (rule_id, (rule_dict, version_id)) in enumerate(rule_items[classification_index:], start=classification_index + 1):
         rule_meta = classify_rule(rule_dict)
         validation_result = validate_rule_hits(
-            rule_meta, all_contexts, trader_id=trader_id, strategy_version_id=version_id
+            rule_meta,
+            all_contexts,
+            trader_id=trader_id,
+            strategy_version_id=version_id,
         )
         results.append(validation_result)
+        _emit_progress(
+            current=rule_index,
+            total=max(len(rule_items), 1),
+            trade_date=last_trade_date,
+            current_step=f"classify:{rule_id}",
+            status="success",
+            phase_name="classify",
+            classification_done=rule_index,
+        )
 
     logger.info(
         "规则验真结束: trader=%s, total_rules=%d, supported=%d, unsupported=%d",
@@ -1109,10 +1332,21 @@ class BacktestEngine:
         self.strategy_loader = strategy_loader
         self.scoring_func = scoring_func
 
+    def _feature_version_for_regime_version(self, regime_version: str | None) -> str | None:
+        """将市场状态版本映射到对应的特征版本。"""
+        if regime_version is None:
+            return None
+        if regime_version.endswith("-v3"):
+            return "market-regime-features-v3"
+        if regime_version.endswith("-v2"):
+            return "market-regime-features-v2"
+        return "market-regime-features-v3"
+
     async def run(
         self,
         request: BacktestRequest,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        runtime_state: dict[str, Any] | None = None,
     ) -> BacktestResult:
         """异步运行回测。
 
@@ -1132,8 +1366,15 @@ class BacktestEngine:
         trade_dates = iter_trade_dates(request.date_from, request.date_to)
         records: list[BacktestTradeRecord] = []
 
+        runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        start_index = int(checkpoint.get("trade_date_index") or 0)
+        if start_index < 0:
+            start_index = 0
+        records.extend(_coerce_backtest_trade_record_list(checkpoint.get("records")))
+
         total_days = len(trade_dates)
-        for index, trade_date in enumerate(trade_dates, start=1):
+        for index, trade_date in enumerate(trade_dates[start_index:], start=start_index + 1):
             day_records = await self._process_single_day(trade_date, request)
             records.extend(day_records)
             if progress_callback is not None:
@@ -1148,6 +1389,15 @@ class BacktestEngine:
                         "current_step": f"backtest:{trade_date.isoformat()}",
                         "current_trade_date": trade_date.isoformat(),
                         "status": "success",
+                        "runtime_state": {
+                            "schema_version": 1,
+                            "stage": "backtest-run",
+                            "checkpoint": {
+                                "trade_date_index": index,
+                                "records": _to_plain(records),
+                                "total_days": total_days,
+                            },
+                        },
                     }
                 )
 
@@ -1175,6 +1425,7 @@ class BacktestEngine:
         self,
         request: BacktestRequest,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        runtime_state: dict[str, Any] | None = None,
     ) -> BacktestResult:
         """同步运行回测（内部调用 async run）。
 
@@ -1185,11 +1436,11 @@ class BacktestEngine:
             BacktestResult
         """
         try:
-            return asyncio.run(self.run(request, progress_callback=progress_callback))
+            return asyncio.run(self.run(request, progress_callback=progress_callback, runtime_state=runtime_state))
         except RuntimeError:
             # 已有 event loop（如 Jupyter / pytest-asyncio）时使用现有 loop
             loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self.run(request, progress_callback=progress_callback))
+            return loop.run_until_complete(self.run(request, progress_callback=progress_callback, runtime_state=runtime_state))
 
     async def _process_single_day(
         self, trade_date: date, request: BacktestRequest
@@ -1463,6 +1714,7 @@ class BacktestEngine:
         end_date: date = None,
         min_confidence: float = 0.5,
         market_regime_version: str | None = None,
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> BacktestResult:
         """
@@ -1540,35 +1792,79 @@ class BacktestEngine:
         )
 
         # 3. 对每条规则执行回测（共享预加载的 forward_bars）
-        rule_results: list[RuleBacktestResult] = []
-        all_records: list[BacktestTradeRecord] = []
-
         trade_dates = iter_trade_dates(start_date, end_date)
         total_steps = len(rules) * max(len(trade_dates), 1)
+        runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        start_rule_index = int(checkpoint.get("rule_index") or 0)
+        if start_rule_index < 0:
+            start_rule_index = 0
+        completed_rule_results: list[RuleBacktestResult] = _coerce_rule_backtest_result_list(checkpoint.get("rule_results"))
+        current_rule_state = checkpoint.get("current_rule_state") if isinstance(checkpoint.get("current_rule_state"), dict) else None
 
-        for rule_index, rule in enumerate(rules, start=1):
+        def _emit_progress(
+            *,
+            current: int,
+            total: int,
+            rule_id: str,
+            trade_date: date | None,
+            rule_state: dict[str, Any] | None = None,
+            status: str = "running",
+            next_rule_index: int | None = None,
+        ) -> None:
+            if progress_callback is None:
+                return
+            progress_callback(
+                {
+                    "job_type": "rule-pool-backtest",
+                    "stage": "rule_pool_backtest",
+                    "current": current,
+                    "total": total,
+                    "percent": round((current / total) * 100, 2) if total else 0.0,
+                    "remaining": max(total - current, 0),
+                    "current_step": f"{rule_id}:{trade_date.isoformat() if trade_date is not None else 'resume'}",
+                    "current_trade_date": trade_date.isoformat() if trade_date is not None else None,
+                    "current_dataset": rule_id,
+                    "status": status,
+                    "runtime_state": {
+                        "schema_version": 1,
+                        "stage": "rule_pool_backtest",
+                        "checkpoint": {
+                            "rule_index": next_rule_index if next_rule_index is not None else start_rule_index,
+                            "rule_results": _to_plain(completed_rule_results),
+                            "current_rule_state": _to_plain(rule_state) if rule_state is not None else None,
+                        },
+                    },
+                }
+            )
+
+        for rule_index, rule in enumerate(rules[start_rule_index:], start=start_rule_index):
+            rule_runtime_state = current_rule_state if isinstance(current_rule_state, dict) and str(current_rule_state.get("rule_id") or "") == str(rule.rule_id) else None
+            rule_progress_state: dict[str, Any] | None = None
+
+            def _rule_progress(progress: dict[str, Any]) -> None:
+                nonlocal rule_progress_state
+                rule_progress_state = progress.get("runtime_state") if isinstance(progress.get("runtime_state"), dict) else None
+                _emit_progress(
+                    current=int(progress.get("current") or 0),
+                    total=total_steps,
+                    rule_id=str(rule.rule_id),
+                    trade_date=date.fromisoformat(str(progress.get("current_trade_date"))) if progress.get("current_trade_date") else None,
+                    rule_state=rule_progress_state,
+                    status=str(progress.get("status") or "running"),
+                    next_rule_index=rule_index,
+                )
+
             result = await self._backtest_single_rule(
                 rule, start_date, end_date,
                 session=session, forward_bars=forward_bars,
                 market_regime_version=market_regime_version,
-                progress_callback=progress_callback,
-                progress_offset=(rule_index - 1) * len(trade_dates),
+                runtime_state=rule_runtime_state,
+                progress_callback=_rule_progress,
+                progress_offset=rule_index * len(trade_dates),
                 progress_total=total_steps,
             )
-            rule_results.append(result)
-
-            # 生成规则回测汇总交易记录（基于真实评估结果）
-            if result.total_trades > 0:
-                all_records.append(
-                    BacktestTradeRecord(
-                        trade_date=end_date,
-                        trader_id="rule_pool",
-                        strategy_version_id=rule.rule_id,
-                        symbol=f"RULE:{rule.rule_id}",
-                        status="closed",
-                        return_pct=result.avg_return,
-                    )
-                )
+            completed_rule_results.append(result)
 
             extraction_layer = rule.extraction_layer or {}
             has_mapped_condition = bool(extraction_layer.get("mapped_condition"))
@@ -1585,8 +1881,18 @@ class BacktestEngine:
                     "规则回测无有效样本，跳过置信度更新: rule_id=%s", rule.rule_id
                 )
 
+            _emit_progress(
+                current=min((rule_index + 1) * max(len(trade_dates), 1), total_steps),
+                total=total_steps,
+                rule_id=str(rule.rule_id),
+                trade_date=end_date,
+                rule_state=None,
+                status="success",
+                next_rule_index=rule_index + 1,
+            )
+
         # 4. 汇总结果
-        aggregated = self._aggregate_rule_results(rule_results)
+        aggregated = self._aggregate_rule_results(completed_rule_results)
 
         logger.info(
             "规则池回测结束: total_rules=%d, total_trades=%d, hit_rate=%.2f",
@@ -1605,6 +1911,7 @@ class BacktestEngine:
         session: AsyncSession | None = None,
         forward_bars: dict[str, list[dict[str, Any]]] | None = None,
         market_regime_version: str | None = None,
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         progress_offset: int = 0,
         progress_total: int | None = None,
@@ -1637,6 +1944,9 @@ class BacktestEngine:
 
         extraction_layer = rule.extraction_layer or {}
         mapped_condition = extraction_layer.get("mapped_condition", {})
+        runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        checkpoint_rule_id = str(checkpoint.get("rule_id") or "")
 
         # 无映射条件 → 无法回测
         if not mapped_condition:
@@ -1661,6 +1971,29 @@ class BacktestEngine:
 
         trade_dates = iter_trade_dates(start_date, end_date)
         sample_count = len(trade_dates)
+        start_index = 0
+        if checkpoint_rule_id == str(rule.rule_id):
+            start_index = int(checkpoint.get("trade_date_index") or 0)
+            if start_index < 0:
+                start_index = 0
+            restored_hit_returns = checkpoint.get("hit_returns") if isinstance(checkpoint.get("hit_returns"), list) else []
+            hit_returns = [float(value) for value in restored_hit_returns if isinstance(value, (int, float))]
+            hit_count = int(checkpoint.get("hit_count") or 0)
+            total_checks = int(checkpoint.get("total_checks") or 0)
+            raw_regime_returns = checkpoint.get("regime_returns") if isinstance(checkpoint.get("regime_returns"), dict) else {}
+            regime_returns: dict[str, list[float]] = {
+                str(regime_label): [float(value) for value in values if isinstance(value, (int, float))]
+                for regime_label, values in raw_regime_returns.items()
+                if isinstance(values, list)
+            }
+            loaded_source_feature_version = checkpoint.get("source_feature_version")
+            if isinstance(loaded_source_feature_version, str) and loaded_source_feature_version:
+                source_feature_version = loaded_source_feature_version
+        else:
+            hit_returns = []
+            hit_count = 0
+            total_checks = 0
+            regime_returns = defaultdict(list)
 
         # 预加载全量 OHLCV bars（含前向天数，用于 T+1 收益计算）
         # 优先使用共享预加载的数据（批量优化），否则独立加载
@@ -1672,17 +2005,13 @@ class BacktestEngine:
                 forward_days=5,
             )
 
-        # 收集每次命中的收益率
-        hit_returns: list[float] = []
-        hit_count = 0
-        total_checks = 0
-        regime_returns: dict[str, list[float]] = defaultdict(list)
-
         # 确定加载策略：loader 可用时走 loader，否则从预加载的 bars 派生基础 OHLCV 指标
         use_loader = self.loader is not None
 
         total_days = len(trade_dates)
-        for day_index, trade_date in enumerate(trade_dates, start=1):
+        if progress_total is None:
+            progress_total = max(len(trade_dates), 1)
+        for day_index, trade_date in enumerate(trade_dates[start_index:], start=start_index + 1):
             trade_date_str = trade_date.isoformat()
             market_regime_obj: Any = None
 
@@ -1733,6 +2062,7 @@ class BacktestEngine:
                     if result is True:
                         triggered = True
 
+                t1_ret = None
                 if triggered:
                     hit_count += 1
                     t1_ret = _calc_t1_return_from_bars(
@@ -1745,6 +2075,19 @@ class BacktestEngine:
 
             if progress_callback is not None and progress_total:
                 completed = progress_offset + day_index
+                current_runtime_state = {
+                    "schema_version": 1,
+                    "stage": "rule_pool_backtest",
+                    "checkpoint": {
+                        "rule_id": str(rule.rule_id),
+                        "trade_date_index": day_index,
+                        "hit_returns": _to_plain(hit_returns),
+                        "hit_count": hit_count,
+                        "total_checks": total_checks,
+                        "regime_returns": _to_plain(regime_returns),
+                        "source_feature_version": source_feature_version,
+                    },
+                }
                 progress_callback(
                     {
                         "job_type": "rule-pool-backtest",
@@ -1757,6 +2100,7 @@ class BacktestEngine:
                         "current_trade_date": trade_date_str,
                         "current_dataset": rule.rule_id,
                         "status": "running",
+                        "runtime_state": current_runtime_state,
                     }
                 )
 

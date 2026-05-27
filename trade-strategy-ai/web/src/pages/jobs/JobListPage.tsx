@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,14 +11,15 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { listJobs } from '@/lib/api/jobs';
-import type { JobsListResponse } from '@/types/jobs';
+import { cancelJob, listJobDefinitions, listJobs, pauseJob, retryJob, resumeJob } from '@/lib/api/jobs';
+import type { JobDefinitionSummary, JobsListResponse } from '@/types/jobs';
 import { JobTable } from '@/components/jobs/JobTable';
 
 const PAGE_SIZE = 20;
 
 export function JobListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { canAccess, isAuthenticated, principal } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -29,6 +30,17 @@ export function JobListPage() {
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam - 1 : 0;
 
   const canViewJobs = isAuthenticated && canAccess('viewer');
+
+  const definitionsQuery = useQuery<JobDefinitionSummary[]>({
+    queryKey: ['job-definitions'],
+    queryFn: () => listJobDefinitions(),
+    enabled: canViewJobs,
+    staleTime: 60_000,
+  });
+
+  const jobDefinitionsByType = useMemo(() => {
+    return Object.fromEntries((definitionsQuery.data ?? []).map((definition) => [definition.job_type, definition]));
+  }, [definitionsQuery.data]);
 
   function updateFilters(next: { status?: string; jobType?: string; createdBy?: string; page?: number }) {
     const params = new URLSearchParams(searchParams);
@@ -84,6 +96,30 @@ export function JobListPage() {
     const failed = jobs.filter((item) => item.status === 'failed').length;
     return { running, failed };
   }, [jobs]);
+
+  const invalidateJobs = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+  };
+
+  const pauseMutation = useMutation({
+    mutationFn: (jobId: string) => pauseJob(jobId, 'web console request'),
+    onSuccess: invalidateJobs,
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: (jobId: string) => resumeJob(jobId),
+    onSuccess: invalidateJobs,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (jobId: string) => cancelJob(jobId, 'web console request'),
+    onSuccess: invalidateJobs,
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (jobId: string) => retryJob(jobId, 'web console request'),
+    onSuccess: invalidateJobs,
+  });
 
   if (!canViewJobs) {
     return (
@@ -143,6 +179,7 @@ export function JobListPage() {
                 <option value="">所有状态</option>
                 <option value="pending">等待中</option>
                 <option value="running">运行中</option>
+                <option value="paused">已暂停</option>
                 <option value="success">成功</option>
                 <option value="failed">失败</option>
                 <option value="cancelled">已取消</option>
@@ -186,8 +223,17 @@ export function JobListPage() {
                 暂无符合条件的任务。
               </div>
             ) : (
-              <JobTable jobs={jobs} onViewDetail={(jobId) => navigate(`/jobs/${encodeURIComponent(jobId)}`)} />
-            )}
+                <JobTable
+                  jobs={jobs}
+                  canOperate={canAccess('operator')}
+                  jobDefinitionsByType={jobDefinitionsByType}
+                  onViewDetail={(jobId) => navigate(`/jobs/${encodeURIComponent(jobId)}`)}
+                  onPause={(jobId) => pauseMutation.mutate(jobId)}
+                  onResume={(jobId) => resumeMutation.mutate(jobId)}
+                  onCancel={(jobId) => cancelMutation.mutate(jobId)}
+                  onRetry={(jobId) => retryMutation.mutate(jobId)}
+                />
+              )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-slate-600">

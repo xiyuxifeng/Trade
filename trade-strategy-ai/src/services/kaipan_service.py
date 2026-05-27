@@ -266,6 +266,7 @@ class KaipanService(BaseService):
 		start_date: str | date | None = None,
 		end_date: str | date | None = None,
 		slot: str = "all",
+		runtime_state: dict[str, Any] | None = None,
 		progress_callback: Callable[[dict[str, Any]], None] | None = None,
 	) -> ServiceResult:
 		"""抓取指定交易日或区间的数据并执行标准化。"""
@@ -283,7 +284,11 @@ class KaipanService(BaseService):
 			for current_slot in slots_to_fetch
 		)
 		current_step = 0
-		date_results: dict[str, dict[str, Any]] = {}
+		runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+		checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+		start_step = int(checkpoint.get("step_index") or 0)
+		current_step = int(checkpoint.get("step_index") or 0)
+		date_results: dict[str, dict[str, Any]] = dict(checkpoint.get("date_results") or {})
 
 		for trade_day in trade_dates:
 			trade_day_key = trade_day.isoformat()
@@ -302,6 +307,10 @@ class KaipanService(BaseService):
 					"failed": [],
 				}
 				for name, fetcher in fetchers:
+					step_index = current_step + 1
+					current_step = step_index
+					if step_index <= start_step:
+						continue
 					status = "success"
 					error_message: str | None = None
 					try:
@@ -311,40 +320,58 @@ class KaipanService(BaseService):
 						status = "error"
 						error_message = str(exc)
 						day_slot_results[current_slot]["failed"].append({"dataset": name, "error": error_message})
-					current_step += 1
-					self._emit_progress(
-						progress_callback,
-						self._progress_payload(
-							job_type="kaipan-fetch",
-							stage="fetch",
-							current=current_step,
-							total=total_steps,
-							current_trade_date=trade_day_key,
-							current_slot=current_slot,
-							current_fetcher=name,
-							status=status,
-							error=error_message,
-						),
-					)
-
+					if progress_callback is not None:
+						progress_callback(
+							{
+								"job_type": "kaipan-fetch",
+								"stage": "fetch",
+								"current": step_index,
+								"total": total_steps,
+								"percent": round((step_index / total_steps) * 100, 2) if total_steps else 0.0,
+								"remaining": max(total_steps - step_index, 0),
+								"current_step": f"fetch:{name}",
+								"current_trade_date": trade_day_key,
+								"current_slot": current_slot,
+								"current_fetcher": name,
+								"status": status,
+								"error": error_message,
+								"runtime_state": {
+									"schema_version": 1,
+									"checkpoint": {
+										"step_index": step_index,
+										"date_results": date_results,
+									},
+								},
+							}
+						)
 				def _on_normalize_step(step_payload: dict[str, Any]) -> None:
 					nonlocal current_step
 					current_step += 1
 					dataset_name = step_payload.get("dataset")
-					self._emit_progress(
-						progress_callback,
-						self._progress_payload(
-							job_type="kaipan-fetch",
-							stage="normalize",
-							current=current_step,
-							total=total_steps,
-							current_trade_date=str(step_payload.get("trade_date") or trade_day_key),
-							current_slot=str(step_payload.get("slot") or current_slot),
-							current_dataset=str(dataset_name) if dataset_name else None,
-							status=str(step_payload.get("status") or "unknown"),
-							error=str(step_payload["error"]) if step_payload.get("error") else None,
-						),
-					)
+					if progress_callback is not None:
+						progress_callback(
+							{
+								"job_type": "kaipan-fetch",
+								"stage": "normalize",
+								"current": current_step,
+								"total": total_steps,
+								"percent": round((current_step / total_steps) * 100, 2) if total_steps else 0.0,
+								"remaining": max(total_steps - current_step, 0),
+								"current_step": f"normalize:{dataset_name}" if dataset_name else "normalize",
+								"current_trade_date": str(step_payload.get("trade_date") or trade_day_key),
+								"current_slot": str(step_payload.get("slot") or current_slot),
+								"current_dataset": str(dataset_name) if dataset_name else None,
+								"status": str(step_payload.get("status") or "unknown"),
+								"error": str(step_payload["error"]) if step_payload.get("error") else None,
+								"runtime_state": {
+									"schema_version": 1,
+									"checkpoint": {
+										"step_index": current_step,
+										"date_results": date_results,
+									},
+								},
+							}
+						)
 
 				normalize_results = normalizer.normalize_date(trade_day_key, slots=(current_slot,), progress_callback=_on_normalize_step)
 				day_normalize_results[current_slot] = normalize_results.get(current_slot, {})
@@ -374,6 +401,7 @@ class KaipanService(BaseService):
 		start_date: str | date | None = None,
 		end_date: str | date | None = None,
 		slot: str = "all",
+		runtime_state: dict[str, Any] | None = None,
 		progress_callback: Callable[[dict[str, Any]], None] | None = None,
 	) -> ServiceResult:
 		"""仅执行 normalize，可覆盖单日或区间。"""
@@ -386,7 +414,11 @@ class KaipanService(BaseService):
 		normalizer = self._create_normalizer(runtime)
 		total_steps = len(self._NORMALIZE_DATASETS) * len(slots) * len(trade_dates)
 		current_step = 0
-		date_results: dict[str, dict[str, Any]] = {}
+		runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+		checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+		start_step = int(checkpoint.get("step_index") or 0)
+		current_step = int(checkpoint.get("step_index") or 0)
+		date_results: dict[str, dict[str, Any]] = dict(checkpoint.get("date_results") or {})
 
 		def _on_normalize_step(step_payload: dict[str, Any]) -> None:
 			nonlocal current_step
@@ -405,6 +437,30 @@ class KaipanService(BaseService):
 					error=str(step_payload["error"]) if step_payload.get("error") else None,
 				),
 			)
+			if progress_callback is not None:
+				progress_callback(
+					{
+						"job_type": "kaipan-normalize",
+						"stage": "normalize",
+						"current": current_step,
+						"total": total_steps,
+						"percent": round((current_step / total_steps) * 100, 2) if total_steps else 0.0,
+						"remaining": max(total_steps - current_step, 0),
+						"current_step": f"normalize:{step_payload.get('dataset')}" if step_payload.get("dataset") else "normalize",
+						"current_trade_date": str(step_payload.get("trade_date") or ""),
+						"current_slot": str(step_payload.get("slot") or ""),
+						"current_dataset": str(step_payload.get("dataset")) if step_payload.get("dataset") else None,
+						"status": str(step_payload.get("status") or "unknown"),
+						"error": str(step_payload["error"]) if step_payload.get("error") else None,
+						"runtime_state": {
+							"schema_version": 1,
+							"checkpoint": {
+								"step_index": current_step,
+								"date_results": date_results,
+							},
+						},
+					}
+				)
 
 		for trade_day in trade_dates:
 			trade_day_key = trade_day.isoformat()

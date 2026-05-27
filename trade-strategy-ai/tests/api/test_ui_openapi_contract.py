@@ -19,6 +19,9 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/jobs/{job_id}/timeline": {"get"},
         "/api/ui/v1/jobs/{job_id}/artifacts": {"get"},
         "/api/ui/v1/jobs/{job_id}/cancel": {"post"},
+        "/api/ui/v1/jobs/{job_id}/pause": {"post"},
+        "/api/ui/v1/jobs/{job_id}/resume": {"post"},
+        "/api/ui/v1/jobs/{job_id}/retry": {"post"},
         "/api/ui/v1/job-audits": {"get"},
         "/api/ui/v1/job-audits/{job_id}": {"get"},
         "/api/ui/v1/security/permission-denied": {"get"},
@@ -94,6 +97,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
     expected_request_refs = {
         ("/api/ui/v1/jobs", "post"): "#/components/schemas/JobSubmissionRequest",
         ("/api/ui/v1/jobs/{job_id}/cancel", "post"): "#/components/schemas/JobCancelRequest",
+        ("/api/ui/v1/jobs/{job_id}/pause", "post"): "#/components/schemas/JobControlRequest",
+        ("/api/ui/v1/jobs/{job_id}/retry", "post"): "#/components/schemas/JobControlRequest",
         ("/api/ui/v1/optimize/create-candidate", "post"): "#/components/schemas/CandidateCreateRequest",
         ("/api/ui/v1/optimize/filter-active-traders", "post"): "#/components/schemas/ActiveTraderFilterRequest",
         ("/api/ui/v1/rule-pool/filter-options", "get"): None,

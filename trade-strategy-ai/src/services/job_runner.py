@@ -39,6 +39,8 @@ from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
 from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
+from src.services.job_control import JobControlInterrupted, JobControlState
+from src.models.job import JobStatus
 
 
 _KAIPAN_PROGRESS_REPORTER: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar(
@@ -205,6 +207,22 @@ class JobRunner(BaseService):
 
         return _report, _finish
 
+    async def _resolve_job_control_action(self, job_id: str | UUID) -> str | None:
+        """读取当前 Job 的控制态，判断是否应暂停或取消。"""
+        result = await self._job_service.get_job(job_id)
+        if result.status != "ok":
+            return None
+        job = result.payload.get("job") if isinstance(result.payload, dict) else None
+        if not isinstance(job, dict):
+            return None
+        runtime_state = JobControlState.from_runtime_state(job.get("runtime_state"))
+        status = str(job.get("status") or "")
+        if status == JobStatus.paused.value or runtime_state.paused:
+            return "pause"
+        if status == JobStatus.cancelled.value or runtime_state.cancel_requested or bool(job.get("cancel_requested")):
+            return "cancel"
+        return None
+
     def supported_job_types(self) -> list[str]:
         """返回当前 Runner 支持的 job type 白名单。"""
         return get_runnable_job_types()
@@ -357,6 +375,7 @@ class JobRunner(BaseService):
                 start_date=params.get("start_date"),
                 end_date=params.get("end_date"),
                 slot=params.get("slot", "all"),
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -371,6 +390,7 @@ class JobRunner(BaseService):
                 start_date=params.get("start_date"),
                 end_date=params.get("end_date"),
                 slot=params.get("slot", "all"),
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -399,6 +419,7 @@ class JobRunner(BaseService):
                 start_date=_parse_optional_date(params.get("start_date")),
                 end_date=_parse_optional_date(params.get("end_date")),
                 limit=limit,
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -429,6 +450,7 @@ class JobRunner(BaseService):
                 force=_parse_bool(params.get("force"), default=False),
                 offline=_parse_bool(params.get("offline"), default=False),
                 snapshot_type=str(params.get("snapshot_type") or "all"),
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -465,6 +487,7 @@ class JobRunner(BaseService):
                 config_path=config_path,
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
                 scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -485,6 +508,8 @@ class JobRunner(BaseService):
                 config_path=config_path,
                 use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
                 scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                runtime_state=params.get("__job_runtime_state__"),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _backtest_reproducibility_check(params: dict[str, Any]) -> ServiceResult:
@@ -530,6 +555,7 @@ class JobRunner(BaseService):
                 min_confidence=float(params.get("min_confidence") or 0.5),
                 market_regime_version=params.get("market_regime_version") or "market-regime-v3",
                 config_path=params.get("config_path", "config/app.yaml"),
+                runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
@@ -786,9 +812,13 @@ class JobRunner(BaseService):
         )
 
         params = dict(job_payload.get("params") or {})
+        params["__job_runtime_state__"] = job_payload.get("runtime_state")
         progress_reporter: Callable[[dict[str, Any]], None] | None = None
         progress_finish: Callable[[], Awaitable[None]] | None = None
         progress_token = None
+        control_event = asyncio.Event()
+        control_state: dict[str, str | None] = {"action": None}
+        control_poll_interval = max(0.5, min(self._heartbeat_interval_seconds, 2.0))
         if job_payload["job_type"] in {
             "kaipan-fetch",
             "kaipan-normalize",
@@ -801,15 +831,61 @@ class JobRunner(BaseService):
             "pipeline-run",
             "pipeline-step",
             "backtest-run",
+            "backtest-validate-rules",
             "rule-pool-backtest",
         }:
             progress_reporter, progress_finish = self._create_progress_tracker(job_id=job_id)
-            progress_token = _KAIPAN_PROGRESS_REPORTER.set(progress_reporter)
 
-        try:
-            result = await handler(params)
+        async def _finish_progress() -> None:
             if progress_finish is not None:
                 await progress_finish()
+
+        async def _resolve_and_handle_control(action: str) -> ServiceResult:
+            await _finish_progress()
+            current = await self._job_service.get_job(job_id)
+            if action == "cancel":
+                if current.status == "ok" and isinstance(current.payload, dict):
+                    current_job = current.payload.get("job")
+                    if isinstance(current_job, dict) and current_job.get("status") == JobStatus.cancelled.value:
+                        return ServiceResult(status="ok", message="job cancelled", payload={"job": current_job})
+                completed = await self._job_service.complete_job(job_id=job_id, result={})
+                return ServiceResult(status="ok", message="job cancelled", payload={"job": completed.payload.get("job")})
+            if current.status == "ok" and isinstance(current.payload, dict) and isinstance(current.payload.get("job"), dict):
+                return ServiceResult(status="ok", message="job paused", payload={"job": current.payload["job"]})
+            return ServiceResult(status="ok", message="job paused", payload={"job": job_payload})
+
+        async def _monitor_control_state() -> None:
+            try:
+                while True:
+                    await asyncio.sleep(control_poll_interval)
+                    action = await self._resolve_job_control_action(job_id)
+                    if action is not None:
+                        control_state["action"] = action
+                        control_event.set()
+                        return
+            except asyncio.CancelledError:
+                raise
+
+        control_task = asyncio.create_task(_monitor_control_state())
+
+        def _report_progress(progress: dict[str, Any]) -> None:
+            if control_event.is_set():
+                raise JobControlInterrupted(control_state["action"] or "pause")
+            if progress_reporter is not None:
+                progress_reporter(progress)
+
+        if progress_reporter is not None:
+            progress_token = _KAIPAN_PROGRESS_REPORTER.set(_report_progress)
+
+        try:
+            initial_control_action = await self._resolve_job_control_action(job_id)
+            if initial_control_action is not None:
+                return await _resolve_and_handle_control(initial_control_action)
+            result = await handler(params)
+            current_control_action = await self._resolve_job_control_action(job_id)
+            if current_control_action is not None:
+                return await _resolve_and_handle_control(current_control_action)
+            await _finish_progress()
             result_payload = _to_plain(result.model_dump(mode="json"))
             if job_payload["job_type"] in {"crawl", "clean", "validate", "store", "process", "pipeline-run", "pipeline-step"}:
                 has_profile_context = bool(params.get("profile_id")) and not bool(params.get("config_path"))
@@ -865,10 +941,11 @@ class JobRunner(BaseService):
                     "result_path": result_path.name,
                 },
             )
+        except JobControlInterrupted as exc:
+            return await _resolve_and_handle_control(exc.control_action)
         except Exception as exc:  # noqa: BLE001
-            if progress_finish is not None:
-                with suppress(Exception):
-                    await progress_finish()
+            with suppress(Exception):
+                await _finish_progress()
             await self._job_service.append_log(job_id=job_id, line=f"[runner] failed: {exc}")
             error_type, error_code, retryable = self._classify_error(
                 job_type=job_payload["job_type"],
@@ -886,6 +963,9 @@ class JobRunner(BaseService):
         finally:
             if progress_token is not None:
                 _KAIPAN_PROGRESS_REPORTER.reset(progress_token)
+            control_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await control_task
             heartbeat_task.cancel()
             with suppress(asyncio.CancelledError):
                 await heartbeat_task

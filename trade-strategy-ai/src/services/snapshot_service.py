@@ -85,6 +85,7 @@ class SnapshotService(BaseService):
         snapshot_type: str = "all",
         force: bool = False,
         offline: bool = False,
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """构建候选池快照。"""
@@ -122,10 +123,20 @@ class SnapshotService(BaseService):
         failure_count = 0
         total_steps = len(trade_dates) * len(types_to_build)
         current_step = 0
+        runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        start_step = int(checkpoint.get("step_index") or 0)
+        current_step = int(checkpoint.get("step_index") or 0)
+        if isinstance(checkpoint.get("results"), list):
+            results = list(checkpoint.get("results") or [])
+        if isinstance(checkpoint.get("snapshot_paths"), list):
+            snapshot_paths = list(checkpoint.get("snapshot_paths") or [])
 
         for trade_date in trade_dates:
             for stype in types_to_build:
                 current_step += 1
+                if current_step <= start_step:
+                    continue
                 details = {
                     "trade_date": trade_date,
                     "slot": slot,
@@ -158,6 +169,14 @@ class SnapshotService(BaseService):
                                 "current_dataset": stype,
                                 "status": "success",
                                 "updated_at": None,
+                                "runtime_state": {
+                                    "schema_version": 1,
+                                    "checkpoint": {
+                                        "step_index": current_step,
+                                        "results": results,
+                                        "snapshot_paths": snapshot_paths,
+                                    },
+                                },
                             }
                         )
                 except Exception as exc:  # noqa: BLE001
@@ -185,6 +204,14 @@ class SnapshotService(BaseService):
                                 "status": "error",
                                 "error": str(exc),
                                 "updated_at": None,
+                                "runtime_state": {
+                                    "schema_version": 1,
+                                    "checkpoint": {
+                                        "step_index": current_step,
+                                        "results": results,
+                                        "snapshot_paths": snapshot_paths,
+                                    },
+                                },
                             }
                         )
 

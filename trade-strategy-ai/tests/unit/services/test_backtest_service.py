@@ -24,8 +24,14 @@ class _FakeEngine:
         self.run_sync_calls: list[object] = []
         self.rule_pool_calls: list[dict[str, object]] = []
 
-    def run_sync(self, request):
-        self.run_sync_calls.append(request)
+    def run_sync(self, request, progress_callback=None, runtime_state=None):
+        self.run_sync_calls.append(
+            {
+                "request": request,
+                "progress_callback": progress_callback,
+                "runtime_state": runtime_state,
+            }
+        )
         return BacktestResult(
             request_trader_id=request.trader_id,
             request_date_from=request.date_from,
@@ -133,6 +139,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
         config_path="config/app.yaml",
         use_snapshot_only=True,
         scoring_profile="stage5",
+        runtime_state={"checkpoint": {"trade_date_index": 1, "records": []}},
     )
 
     rendered = service.render_backtest_report(
@@ -151,6 +158,7 @@ def test_backtest_service_runs_backtest_and_renders_report() -> None:
     assert len(run_result.payload["fingerprint"]) == 64
     assert "Backtest Report" in rendered.payload["content"]
     assert len(engine.run_sync_calls) == 1
+    assert engine.run_sync_calls[0]["runtime_state"]["checkpoint"]["trade_date_index"] == 1
 
 
 def test_backtest_service_validates_rules_and_produces_report() -> None:
@@ -158,9 +166,11 @@ def test_backtest_service_validates_rules_and_produces_report() -> None:
     from src.services.backtest_service import BacktestService
 
     engine = _FakeEngine()
-    service = BacktestService(
-        engine_factory=lambda **kwargs: engine,
-        rule_validation_runner=lambda **kwargs: asyncio.sleep(0, result=[
+    rule_validation_calls: list[dict[str, object]] = []
+
+    async def _rule_validation_runner(**kwargs):
+        rule_validation_calls.append(kwargs)
+        return [
             SimpleNamespace(
                 trader_id="trader_a",
                 strategy_version_id="sv-001",
@@ -175,7 +185,11 @@ def test_backtest_service_validates_rules_and_produces_report() -> None:
                 posterior_return_median=0.015,
                 notes=[],
             )
-        ]),
+        ]
+
+    service = BacktestService(
+        engine_factory=lambda **kwargs: engine,
+        rule_validation_runner=_rule_validation_runner,
     )
 
     result = asyncio.run(
@@ -183,6 +197,7 @@ def test_backtest_service_validates_rules_and_produces_report() -> None:
             trader_id="trader_a",
             date_from=date(2026, 4, 1),
             date_to=date(2026, 4, 3),
+            runtime_state={"checkpoint": {"trade_date_index": 1}},
         )
     )
     report = service.render_rule_validation_report(result.payload["results"])
@@ -191,6 +206,7 @@ def test_backtest_service_validates_rules_and_produces_report() -> None:
     assert result.payload["coverage"]["programmable"] == 1
     assert result.payload["results"][0]["rule_id"] == "rule-001"
     assert "Rule Validation Report" in report.payload["content"]
+    assert rule_validation_calls[0]["runtime_state"]["checkpoint"]["trade_date_index"] == 1
 
 
 def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> None:
@@ -219,6 +235,7 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
             end_date=date(2026, 4, 3),
             rule_ids=["rule-001"],
             min_confidence=0.6,
+            runtime_state={"checkpoint": {"rule_index": 1}},
         )
     )
 
@@ -231,3 +248,4 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
     assert rule_pool_result.payload["summary"]["total_trades"] == 6
     assert session_factory.calls == 2
     assert engine.rule_pool_calls[0]["rule_ids"] == ["rule-001"]
+    assert engine.rule_pool_calls[0]["runtime_state"]["checkpoint"]["rule_index"] == 1

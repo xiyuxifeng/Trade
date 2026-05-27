@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from './http';
 import { getCurrentPrincipal } from './auth';
 import { getSystemStatus } from './system';
-import { createJob, getJob, getJobLogs, cancelJob, listJobs } from './jobs';
+import { createJob, getJob, getJobDefinition, getJobLogs, cancelJob, pauseJob, resumeJob, retryJob, listJobs, listJobDefinitions } from './jobs';
 import { listWorkflows, getWorkflow, runWorkflow } from './workflows';
 import {
   getArticlePipeline,
@@ -77,9 +77,14 @@ describe('UI API client contract', () => {
     await getSystemStatus();
     await getCurrentPrincipal();
     await listJobs({ skip: 0, limit: 10 });
+    await listJobDefinitions();
+    await getJobDefinition('pipeline-run');
     await getJob('job-1');
     await getJobLogs('job-1');
     await cancelJob('job-1', 'test');
+    await pauseJob('job-1', 'test');
+    await resumeJob('job-1');
+    await retryJob('job-1', 'test');
     await createJob({ job_type: 'run-pre-market', params: { date: '2026-05-10' } } as never);
     await listWorkflows();
     await getWorkflow('pipeline');
@@ -187,9 +192,14 @@ describe('UI API client contract', () => {
     expect(findCall('/api/ui/v1/system/status')).toBeTruthy();
     expect(findCall('/api/ui/v1/auth/me')).toBeTruthy();
     expect(findCall('/api/ui/v1/jobs?skip=0&limit=10')).toBeTruthy();
+    expect(findCall('/api/ui/v1/jobs/definitions')).toBeTruthy();
+    expect(findCall('/api/ui/v1/jobs/definitions/pipeline-run')).toBeTruthy();
     expect(findCall('/api/ui/v1/jobs/job-1')).toBeTruthy();
     expect(findCall('/api/ui/v1/jobs/job-1/logs')).toBeTruthy();
     expectJsonBody('/api/ui/v1/jobs/job-1/cancel', 'POST', { reason: 'test' });
+    expectJsonBody('/api/ui/v1/jobs/job-1/pause', 'POST', { reason: 'test' });
+    expect(findCall('/api/ui/v1/jobs/job-1/resume', 'POST')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/jobs/job-1/retry', 'POST', { reason: 'test' });
     expectJsonBody('/api/ui/v1/jobs', 'POST', {
       job_type: 'run-pre-market',
       params: { date: '2026-05-10' },

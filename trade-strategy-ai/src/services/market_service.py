@@ -201,6 +201,7 @@ class MarketService(BaseService):
         start_date: date | None = None,
         end_date: date | None = None,
         limit: int | None = None,
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """抓取 OHLCV 日线。"""
@@ -221,6 +222,7 @@ class MarketService(BaseService):
             "symbols": crawl_symbols,
             "start_date": start_date,
             "end_date": end_date,
+            "runtime_state": runtime_state,
         }
         if progress_callback is not None:
             crawl_kwargs["progress_callback"] = progress_callback

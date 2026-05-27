@@ -17,6 +17,7 @@ from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.config_profile_service import ConfigProfileService
 from src.db.repositories import BacktestResultRunRepository
 from src.services.job_registry import get_job_definition
+from src.services.job_control import JobControlState
 from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
 from src.models.backtest_result_run import BacktestResultRun
@@ -368,6 +369,7 @@ class JobService(BaseService):
             "params": _to_plain(job.params),
             "result": _to_plain(job.result),
             "error": _to_plain(job.error),
+            "runtime_state": _to_plain(job.runtime_state),
             "progress": _to_plain(job.progress),
             "artifacts": artifacts,
             "created_by": job.created_by,
@@ -959,6 +961,176 @@ class JobService(BaseService):
             payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
         )
 
+    async def pause_job(
+        self,
+        *,
+        job_id: str | UUID,
+        actor: str,
+        reason: str | None = None,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """把 Job 暂停到可恢复状态。"""
+        session_scope = self._ensure_session_factory()
+        now = datetime.now(UTC)
+        async with session_scope() as session:
+            job = await self._load_job(session, job_id)
+            if job is None:
+                return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            if job.status not in {JobStatus.pending.value, JobStatus.running.value}:
+                return ServiceResult(
+                    status="error",
+                    message=f"job cannot pause from status {job.status}",
+                    payload={"job_id": str(job_id), "status": job.status},
+                )
+
+            control_state = JobControlState.from_runtime_state(job.runtime_state)
+            control_state.paused = True
+            control_state.cancel_requested = False
+            control_state.paused_at = now.isoformat()
+            control_state.resume_from = job.status
+            if reason:
+                control_state.extra["pause_reason"] = reason
+            job.runtime_state = control_state.to_runtime_state()
+            job.status = JobStatus.paused.value
+            job.worker_id = None
+            job.lock_token = None
+            job.lock_acquired_at = None
+            job.heartbeat_at = None
+            job.cancel_requested = False
+            job.cancel_requested_at = None
+            job.scheduled_at = None
+            await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="pause",
+                actor=actor,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"reason": reason, "status": job.status, "runtime_state": _to_plain(job.runtime_state)},
+                event_at=now,
+            )
+
+        return ServiceResult(
+            status="ok",
+            message="job paused",
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
+        )
+
+    async def resume_job(
+        self,
+        *,
+        job_id: str | UUID,
+        actor: str,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """把 paused Job 恢复回待领取状态。"""
+        session_scope = self._ensure_session_factory()
+        now = datetime.now(UTC)
+        async with session_scope() as session:
+            job = await self._load_job(session, job_id)
+            if job is None:
+                return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            if job.status != JobStatus.paused.value:
+                return ServiceResult(
+                    status="error",
+                    message=f"job cannot resume from status {job.status}",
+                    payload={"job_id": str(job_id), "status": job.status},
+                )
+
+            control_state = JobControlState.from_runtime_state(job.runtime_state)
+            control_state.paused = False
+            control_state.cancel_requested = False
+            control_state.resumed_at = now.isoformat()
+            job.runtime_state = control_state.to_runtime_state()
+            job.status = JobStatus.pending.value
+            job.cancel_requested = False
+            job.cancel_requested_at = None
+            job.worker_id = None
+            job.lock_token = None
+            job.lock_acquired_at = None
+            job.heartbeat_at = None
+            job.scheduled_at = None
+            await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="resume",
+                actor=actor,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"status": job.status, "runtime_state": _to_plain(job.runtime_state)},
+                event_at=now,
+            )
+
+        return ServiceResult(
+            status="ok",
+            message="job resumed",
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
+        )
+
+    async def retry_job(
+        self,
+        *,
+        job_id: str | UUID,
+        actor: str,
+        audit_source: dict[str, Any] | None = None,
+    ) -> ServiceResult:
+        """把 failed Job 重新放回待领取状态。"""
+        session_scope = self._ensure_session_factory()
+        now = datetime.now(UTC)
+        async with session_scope() as session:
+            job = await self._load_job(session, job_id)
+            if job is None:
+                return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            if job.status != JobStatus.failed.value:
+                return ServiceResult(
+                    status="error",
+                    message=f"job cannot retry from status {job.status}",
+                    payload={"job_id": str(job_id), "status": job.status},
+                )
+            job_definition = get_job_definition(job.job_type)
+            if job_definition is not None and not job_definition.can_retry:
+                return ServiceResult(
+                    status="error",
+                    message=f"job type does not support retry: {job.job_type}",
+                    payload={"job_id": str(job_id), "job_type": job.job_type},
+                )
+
+            control_state = JobControlState.from_runtime_state(job.runtime_state)
+            control_state.paused = False
+            control_state.cancel_requested = False
+            control_state.retried_at = now.isoformat()
+            job.runtime_state = control_state.to_runtime_state()
+            job.status = JobStatus.pending.value
+            job.error = None
+            job.result = None
+            job.cancel_requested = False
+            job.cancel_requested_at = None
+            job.worker_id = None
+            job.lock_token = None
+            job.lock_acquired_at = None
+            job.heartbeat_at = None
+            job.finished_at = None
+            job.scheduled_at = None
+            await self._persist(session, job)
+            await self._record_job_audit(
+                session=session,
+                job=job,
+                operation="retry",
+                actor=actor,
+                audit_source=audit_source,
+                params_summary=job.params,
+                payload={"status": job.status, "runtime_state": _to_plain(job.runtime_state)},
+                event_at=now,
+            )
+
+        return ServiceResult(
+            status="ok",
+            message="job retried",
+            payload={**self._job_path_payload(job.id), "job": self._serialize_job(job)},
+        )
+
     async def append_log(self, *, job_id: str | UUID, line: str) -> ServiceResult:
         """追加 Job 日志。"""
         session_scope = self._ensure_session_factory()
@@ -1036,11 +1208,18 @@ class JobService(BaseService):
         session_scope = self._ensure_session_factory()
         now = datetime.now(UTC)
         normalized_progress = None if progress is None else {**progress, "updated_at": now.isoformat()}
+        runtime_state_update = None
+        if isinstance(normalized_progress, dict):
+            runtime_state_update = normalized_progress.pop("runtime_state", None)
         async with session_scope() as session:
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
             job.progress = normalized_progress
+            if isinstance(runtime_state_update, dict):
+                runtime_state = JobControlState.from_runtime_state(job.runtime_state).to_runtime_state()
+                runtime_state.update(runtime_state_update)
+                job.runtime_state = runtime_state
             await self._persist(session, job)
             await self._record_job_audit(
                 session=session,
@@ -1049,7 +1228,7 @@ class JobService(BaseService):
                 actor=job.created_by,
                 audit_source=audit_source,
                 params_summary=job.params,
-                payload={"progress": _to_plain(normalized_progress)},
+                payload={"progress": _to_plain(normalized_progress), "runtime_state": _to_plain(job.runtime_state) if isinstance(runtime_state_update, dict) else None},
                 event_at=now,
             )
 

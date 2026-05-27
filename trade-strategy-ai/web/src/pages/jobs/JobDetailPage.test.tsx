@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { ApiError } from '@/lib/api/http';
-import { getJob, getJobLogs } from '@/lib/api/jobs';
+import { getJob, getJobDefinition, getJobLogs } from '@/lib/api/jobs';
 import { renderWithRouter } from '@/test/test-utils';
 import { JobDetailPage } from './JobDetailPage';
 
@@ -9,15 +9,42 @@ vi.mock('@/lib/api/jobs', () => ({
   cancelJob: vi.fn(),
   createJob: vi.fn(),
   getJob: vi.fn(),
+  getJobDefinition: vi.fn(),
   getJobLogs: vi.fn(),
+  pauseJob: vi.fn(),
+  resumeJob: vi.fn(),
+  retryJob: vi.fn(),
   listJobs: vi.fn(),
 }));
 
 const mockedGetJob = vi.mocked(getJob);
+const mockedGetJobDefinition = vi.mocked(getJobDefinition);
 const mockedGetJobLogs = vi.mocked(getJobLogs);
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('JobDetailPage', () => {
   it('renders successful job detail sections, artifacts and config snapshot', async () => {
+    mockedGetJobDefinition.mockResolvedValue({
+      job_type: 'pipeline-run',
+      title: 'Pipeline Run',
+      service_name: 'pipeline',
+      handler_name: 'pipeline_run',
+      permission: 'operator',
+      risk: 'medium',
+      can_retry: true,
+      can_pause: true,
+      can_resume: true,
+      can_cancel: true,
+      can_run_concurrently: false,
+      concurrency_group: 'pipeline',
+      requires_confirmation: false,
+      runnable: true,
+      description: 'desc',
+      param_schema: {},
+    });
     mockedGetJob.mockResolvedValue({
       job: {
         id: 'job-1',
@@ -103,6 +130,7 @@ describe('JobDetailPage', () => {
         ],
         created_at: '2026-05-09T08:00:00Z',
         updated_at: '2026-05-09T08:01:00Z',
+        runtime_state: null,
         config_snapshot_path: '/tmp/job-1/config_snapshot.json',
         config_snapshot: {
           config_snapshot_id: 'snapshot-1',
@@ -140,6 +168,24 @@ describe('JobDetailPage', () => {
   });
 
   it('renders failed job detail with empty artifact fallback', async () => {
+    mockedGetJobDefinition.mockResolvedValue({
+      job_type: 'pipeline-run',
+      title: 'Pipeline Run',
+      service_name: 'pipeline',
+      handler_name: 'pipeline_run',
+      permission: 'operator',
+      risk: 'medium',
+      can_retry: true,
+      can_pause: true,
+      can_resume: true,
+      can_cancel: true,
+      can_run_concurrently: false,
+      concurrency_group: 'pipeline',
+      requires_confirmation: false,
+      runnable: true,
+      description: 'desc',
+      param_schema: {},
+    });
     mockedGetJob.mockResolvedValue({
       job: {
         id: 'job-2',
@@ -192,6 +238,7 @@ describe('JobDetailPage', () => {
         ],
         created_at: '2026-05-09T08:00:00Z',
         updated_at: '2026-05-09T08:05:00Z',
+        runtime_state: null,
         config_snapshot_path: '/tmp/job-2/config_snapshot.json',
         config_snapshot: {
           config_snapshot_id: 'snapshot-2',
@@ -226,6 +273,7 @@ describe('JobDetailPage', () => {
     expect(await screen.findByText('任务执行失败')).toBeInTheDocument();
     expect(screen.getByText('先打开 Job 详情确认错误，再决定是否重试。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重新运行' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '重试' })).toBeInTheDocument();
     expect(screen.getByText('该任务未产生任何产物。')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
   });

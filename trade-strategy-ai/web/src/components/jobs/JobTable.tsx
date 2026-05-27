@@ -1,13 +1,15 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { JobRecord } from '@/types/jobs';
+import type { JobDefinitionSummary, JobRecord } from '@/types/jobs';
 import { JobProgress } from './JobProgress';
+import { JobControls } from './JobControls';
 
 function statusVariant(status: string) {
   if (status === 'success') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'destructive';
   if (status === 'running') return 'info';
+  if (status === 'paused') return 'default';
   return 'warning';
 }
 
@@ -17,6 +19,7 @@ function getStatusLabel(status: string) {
     running: '运行中',
     success: '成功',
     failed: '失败',
+    paused: '已暂停',
     cancelled: '已取消',
   };
   return mapping[status] || status;
@@ -33,9 +36,21 @@ function formatTimestamp(value: string | null) {
 export function JobTable({
   jobs,
   onViewDetail,
+  canOperate,
+  onPause,
+  onResume,
+  onCancel,
+  onRetry,
+  jobDefinitionsByType,
 }: {
   jobs: JobRecord[];
   onViewDetail: (jobId: string) => void;
+  canOperate: boolean;
+  jobDefinitionsByType?: Record<string, JobDefinitionSummary>;
+  onPause?: (jobId: string) => void;
+  onResume?: (jobId: string) => void;
+  onCancel?: (jobId: string) => void;
+  onRetry?: (jobId: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -73,9 +88,24 @@ export function JobTable({
               <TableCell>{formatTimestamp(job.finished_at)}</TableCell>
               <TableCell>{job.retry_count}</TableCell>
               <TableCell>
-                <Button variant="outline" size="sm" onClick={() => onViewDetail(job.id)}>
-                  查看详情
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => onViewDetail(job.id)}>
+                    查看详情
+                  </Button>
+                  <JobControls
+                    status={job.status}
+                    canOperate={canOperate}
+                    canPause={jobDefinitionsByType?.[job.job_type]?.can_pause ?? false}
+                    canResume={jobDefinitionsByType?.[job.job_type]?.can_resume ?? false}
+                    canCancel={jobDefinitionsByType?.[job.job_type]?.can_cancel ?? false}
+                    canRetry={jobDefinitionsByType?.[job.job_type]?.can_retry ?? false}
+                    onPause={onPause ? () => onPause(job.id) : undefined}
+                    onResume={onResume ? () => onResume(job.id) : undefined}
+                    onCancel={onCancel ? () => onCancel(job.id) : undefined}
+                    onRetry={onRetry ? () => onRetry(job.id) : undefined}
+                    className="flex flex-wrap gap-2"
+                  />
+                </div>
               </TableCell>
             </TableRow>
           ))}

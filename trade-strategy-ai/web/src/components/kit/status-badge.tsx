@@ -8,6 +8,7 @@ const STATUS_META: Record<string, { label: string; variant: 'default' | 'success
   draft: { label: '草稿', variant: 'warning' },
   pending: { label: '等待中', variant: 'warning' },
   running: { label: '运行中', variant: 'info' },
+  paused: { label: '已暂停', variant: 'default' },
   failed: { label: '失败', variant: 'destructive' },
   cancelled: { label: '已取消', variant: 'default' },
   archived: { label: '已归档', variant: 'default' },

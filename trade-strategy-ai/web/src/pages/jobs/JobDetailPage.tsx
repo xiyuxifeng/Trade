@@ -12,10 +12,11 @@ import { JsonViewer, LoadingState, LogViewer, SectionCard, StatusBadge } from '@
 import { ErrorState } from '@/components/state/ErrorState';
 import { StepTimeline } from '@/components/jobs/StepTimeline';
 import { JobProgress } from '@/components/jobs/JobProgress';
+import { JobControls } from '@/components/jobs/JobControls';
 import { useAuth } from '@/features/auth/auth-context';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { cancelJob, createJob, getJob, getJobLogs } from '@/lib/api/jobs';
-import type { JobRecord, JobDetailResponse } from '@/types/jobs';
+import { cancelJob, createJob, getJob, getJobDefinition, getJobLogs, pauseJob, resumeJob, retryJob } from '@/lib/api/jobs';
+import type { JobDefinitionSummary, JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
 
 function buildTimelineItems(job: JobRecord): StepTimelineItem[] {
@@ -88,6 +89,13 @@ export function JobDetailPage() {
   });
 
   const detail = detailQuery.data?.job ?? null;
+  const jobDefinitionQuery = useQuery<JobDefinitionSummary>({
+    queryKey: ['job-definition', detail?.job_type],
+    queryFn: () => getJobDefinition(detail?.job_type ?? ''),
+    enabled: Boolean(detail?.job_type),
+    staleTime: 60_000,
+  });
+  const jobDefinition = jobDefinitionQuery.data ?? null;
 
   const logsQuery = useQuery({
     queryKey: ['job-logs', jobId],
@@ -122,6 +130,33 @@ export function JobDetailPage() {
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelJob(jobId, 'web console request'),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['job-detail', jobId] });
+      await queryClient.invalidateQueries({ queryKey: ['job-logs', jobId] });
+    },
+  });
+
+  const pauseMutation = useMutation({
+    mutationFn: () => pauseJob(jobId, 'web console request'),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['job-detail', jobId] });
+      await queryClient.invalidateQueries({ queryKey: ['job-logs', jobId] });
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () => resumeJob(jobId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      await queryClient.invalidateQueries({ queryKey: ['job-detail', jobId] });
+      await queryClient.invalidateQueries({ queryKey: ['job-logs', jobId] });
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: () => retryJob(jobId, 'web console request'),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       await queryClient.invalidateQueries({ queryKey: ['job-detail', jobId] });
@@ -218,13 +253,19 @@ export function JobDetailPage() {
           <Button variant="secondary" onClick={() => rerunMutation.mutate()} disabled={rerunMutation.isPending || !canOperateJobs}>
             {rerunMutation.isPending ? '重新运行中' : '重新运行任务'}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={() => cancelMutation.mutate()}
-            disabled={cancelMutation.isPending || !canOperateJobs || !['pending', 'running'].includes(detail.status) || detail.cancel_requested}
-          >
-            {cancelMutation.isPending ? '取消中' : '取消任务'}
-          </Button>
+          <JobControls
+            status={detail.status}
+            canOperate={canOperateJobs}
+            canPause={jobDefinition?.can_pause ?? false}
+            canResume={jobDefinition?.can_resume ?? false}
+            canCancel={jobDefinition?.can_cancel ?? false}
+            canRetry={jobDefinition?.can_retry ?? false}
+            onPause={() => pauseMutation.mutate()}
+            onResume={() => resumeMutation.mutate()}
+            onCancel={() => cancelMutation.mutate()}
+            onRetry={() => retryMutation.mutate()}
+            className="flex flex-wrap gap-2"
+          />
         </div>
       </div>
 

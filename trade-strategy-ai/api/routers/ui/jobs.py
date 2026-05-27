@@ -33,6 +33,12 @@ class JobCancelRequest(BaseModel):
     reason: str | None = None
 
 
+class JobControlRequest(BaseModel):
+    """Job 控制请求体。"""
+
+    reason: str | None = None
+
+
 def _audit_source_from_request(request: Request) -> dict[str, Any]:
     """提取请求来源，写入 Job 审计记录。"""
     client_host = request.client.host if request.client is not None else None
@@ -204,4 +210,67 @@ async def cancel_job(
         raise HTTPException(status_code=404, detail=result.message or "job not found")
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "job cancel failed")
+    return result.payload
+
+
+@router.post("/{job_id}/pause")
+async def pause_job(
+    job_id: str,
+    request: JobControlRequest,
+    http_request: Request,
+    job_service: JobService = Depends(get_job_service),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+) -> dict[str, Any]:
+    """请求暂停 Job。"""
+    result = await job_service.pause_job(
+        job_id=job_id,
+        actor=principal.api_key_label or principal.role,
+        reason=request.reason,
+        audit_source=_audit_source_from_request(http_request),
+    )
+    if result.status == "partial":
+        raise HTTPException(status_code=404, detail=result.message or "job not found")
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "job pause failed")
+    return result.payload
+
+
+@router.post("/{job_id}/resume")
+async def resume_job(
+    job_id: str,
+    http_request: Request,
+    job_service: JobService = Depends(get_job_service),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+) -> dict[str, Any]:
+    """请求恢复 paused Job。"""
+    result = await job_service.resume_job(
+        job_id=job_id,
+        actor=principal.api_key_label or principal.role,
+        audit_source=_audit_source_from_request(http_request),
+    )
+    if result.status == "partial":
+        raise HTTPException(status_code=404, detail=result.message or "job not found")
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "job resume failed")
+    return result.payload
+
+
+@router.post("/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    request: JobControlRequest,
+    http_request: Request,
+    job_service: JobService = Depends(get_job_service),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+) -> dict[str, Any]:
+    """请求重试 failed Job。"""
+    result = await job_service.retry_job(
+        job_id=job_id,
+        actor=principal.api_key_label or principal.role,
+        audit_source=_audit_source_from_request(http_request),
+    )
+    if result.status == "partial":
+        raise HTTPException(status_code=404, detail=result.message or "job not found")
+    if result.status != "ok":
+        raise HTTPException(status_code=400, detail=result.message or "job retry failed")
     return result.payload

@@ -25,6 +25,9 @@ class _FakeJobService:
     jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     create_calls: list[dict[str, Any]] = field(default_factory=list)
     cancel_calls: list[dict[str, Any]] = field(default_factory=list)
+    pause_calls: list[dict[str, Any]] = field(default_factory=list)
+    resume_calls: list[dict[str, Any]] = field(default_factory=list)
+    retry_calls: list[dict[str, Any]] = field(default_factory=list)
 
     async def create_job(self, **kwargs: Any) -> Any:
         job_id = f"job-{len(self.jobs) + 1}"
@@ -35,6 +38,7 @@ class _FakeJobService:
             "params": kwargs.get("params", {}),
             "result": None,
             "error": None,
+            "runtime_state": None,
             "progress": None,
             "artifacts": [],
             "created_by": kwargs.get("created_by") or "system",
@@ -167,6 +171,66 @@ class _FakeJobService:
             }
         )
 
+    async def pause_job(self, **kwargs: Any) -> Any:
+        self.pause_calls.append(kwargs)
+        job_id = kwargs["job_id"]
+        job = self.jobs.get(job_id)
+        if job is not None:
+            job["status"] = "paused"
+            job["runtime_state"] = {"schema_version": 1, "paused": True, "pause_reason": kwargs.get("reason")}
+        return _service_result(
+            {
+                "job": job,
+                "job_dir": str(Path("/tmp") / job_id),
+                "log_path": str(Path("/tmp") / job_id / "job.log"),
+                "params_path": str(Path("/tmp") / job_id / "params.json"),
+                "result_path": str(Path("/tmp") / job_id / "result.json"),
+                "artifacts_path": str(Path("/tmp") / job_id / "artifacts.json"),
+            }
+        )
+
+    async def resume_job(self, **kwargs: Any) -> Any:
+        self.resume_calls.append(kwargs)
+        job_id = kwargs["job_id"]
+        job = self.jobs.get(job_id)
+        if job is not None:
+            job["status"] = "pending"
+            runtime_state = dict(job.get("runtime_state") or {})
+            runtime_state["paused"] = False
+            runtime_state["resumed_at"] = "2026-05-09T00:00:00"
+            job["runtime_state"] = runtime_state
+        return _service_result(
+            {
+                "job": job,
+                "job_dir": str(Path("/tmp") / job_id),
+                "log_path": str(Path("/tmp") / job_id / "job.log"),
+                "params_path": str(Path("/tmp") / job_id / "params.json"),
+                "result_path": str(Path("/tmp") / job_id / "result.json"),
+                "artifacts_path": str(Path("/tmp") / job_id / "artifacts.json"),
+            }
+        )
+
+    async def retry_job(self, **kwargs: Any) -> Any:
+        self.retry_calls.append(kwargs)
+        job_id = kwargs["job_id"]
+        job = self.jobs.get(job_id)
+        if job is not None:
+            job["status"] = "pending"
+            job["error"] = None
+            runtime_state = dict(job.get("runtime_state") or {})
+            runtime_state["retried_at"] = "2026-05-09T00:00:00"
+            job["runtime_state"] = runtime_state
+        return _service_result(
+            {
+                "job": job,
+                "job_dir": str(Path("/tmp") / job_id),
+                "log_path": str(Path("/tmp") / job_id / "job.log"),
+                "params_path": str(Path("/tmp") / job_id / "params.json"),
+                "result_path": str(Path("/tmp") / job_id / "result.json"),
+                "artifacts_path": str(Path("/tmp") / job_id / "artifacts.json"),
+            }
+        )
+
 
 def _service_result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     """构造测试用的 ServiceResult 替身。"""
@@ -241,6 +305,59 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     cancelled = await client.post(f"/api/ui/v1/jobs/{job_id}/cancel", json={"reason": "stop now"})
     assert cancelled.status_code == 200
     assert cancelled.json()["job"]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_pause_resume_and_retry_job_controls(client: AsyncClient) -> None:
+    """Job UI API 应支持暂停、恢复和重试控制。"""
+    created = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "ohlcv-crawl",
+            "params": {"profile_id": "default", "symbols": ["000001.SZ"]},
+            "created_by": "web",
+        },
+    )
+    assert created.status_code == 200
+    job_id = created.json()["job"]["id"]
+
+    paused = await client.post(f"/api/ui/v1/jobs/{job_id}/pause", json={"reason": "maintenance"})
+    assert paused.status_code == 200
+    assert paused.json()["job"]["status"] == "paused"
+    assert paused.json()["job"]["runtime_state"]["paused"] is True
+    assert _job_service_spy is not None
+    assert _job_service_spy.pause_calls[-1]["reason"] == "maintenance"
+
+    resumed = await client.post(f"/api/ui/v1/jobs/{job_id}/resume")
+    assert resumed.status_code == 200
+    assert resumed.json()["job"]["status"] == "pending"
+    assert resumed.json()["job"]["runtime_state"]["paused"] is False
+    assert _job_service_spy.resume_calls[-1]["job_id"] == job_id
+
+    failed_job = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "backtest-run",
+            "params": {
+                "profile_id": "default",
+                "trader_id": "trader-a",
+                "date_from": "2026-05-01",
+                "date_to": "2026-05-03",
+            },
+            "created_by": "web",
+        },
+    )
+    failed_job_id = failed_job.json()["job"]["id"]
+    assert _job_service_spy is not None
+    _job_service_spy.jobs[failed_job_id]["status"] = "failed"
+    _job_service_spy.jobs[failed_job_id]["error"] = {"message": "boom"}
+
+    retried = await client.post(f"/api/ui/v1/jobs/{failed_job_id}/retry", json={"reason": "rerun"})
+    assert retried.status_code == 200
+    assert retried.json()["job"]["status"] == "pending"
+    assert retried.json()["job"]["error"] is None
+    assert retried.json()["job"]["runtime_state"]["retried_at"] is not None
+    assert _job_service_spy.retry_calls[-1]["job_id"] == failed_job_id
 
 
 @pytest.mark.asyncio

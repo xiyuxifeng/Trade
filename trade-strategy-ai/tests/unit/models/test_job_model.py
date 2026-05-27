@@ -15,6 +15,7 @@ def test_job_table_metadata() -> None:
         "params",
         "result",
         "error",
+        "runtime_state",
         "artifacts",
         "created_by",
         "idempotency_key",
@@ -47,6 +48,7 @@ def test_job_model_is_registered_and_exports_status_enum() -> None:
     assert "jobs" in Base.metadata.tables
     assert JobStatus.pending.value == "pending"
     assert JobStatus.running.value == "running"
+    assert JobStatus.paused.value == "paused"
     assert JobStatus.success.value == "success"
     assert JobStatus.failed.value == "failed"
     assert JobStatus.cancelled.value == "cancelled"

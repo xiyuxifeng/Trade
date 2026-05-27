@@ -369,6 +369,7 @@ class BacktestService(BaseService):
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """运行离线回测。"""
@@ -390,11 +391,16 @@ class BacktestService(BaseService):
             scoring_profile=scoring_profile,
         )
         try:
-            result = engine.run_sync(request, progress_callback=progress_callback)
+            result = engine.run_sync(request, progress_callback=progress_callback, runtime_state=runtime_state)
         except TypeError as exc:
-            if "progress_callback" not in str(exc):
+            if "progress_callback" not in str(exc) and "runtime_state" not in str(exc):
                 raise
-            result = engine.run_sync(request)
+            try:
+                result = engine.run_sync(request, progress_callback=progress_callback)
+            except TypeError as inner_exc:
+                if "progress_callback" not in str(inner_exc):
+                    raise
+                result = engine.run_sync(request)
         fingerprint = fingerprint_result(result)
         return ServiceResult(
             status="ok",
@@ -459,6 +465,8 @@ class BacktestService(BaseService):
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
         mode: str = "rule_validation",
+        runtime_state: dict[str, Any] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """执行规则验真并生成验真报告。"""
         del strategy_version_id, symbols, benchmark_symbol, use_snapshot_only, scoring_profile, mode
@@ -466,12 +474,24 @@ class BacktestService(BaseService):
         loader_obj = getattr(engine, "loader", None)
         loader = loader_obj if loader_obj is not None else SnapshotLoader()
 
-        results = await self._rule_validation_runner(
-            trader_id=trader_id,
-            date_from=date_from,
-            date_to=date_to,
-            loader=loader,
-        )
+        try:
+            results = await self._rule_validation_runner(
+                trader_id=trader_id,
+                date_from=date_from,
+                date_to=date_to,
+                loader=loader,
+                runtime_state=runtime_state,
+                progress_callback=progress_callback,
+            )
+        except TypeError as exc:
+            if "runtime_state" not in str(exc) and "progress_callback" not in str(exc):
+                raise
+            results = await self._rule_validation_runner(
+                trader_id=trader_id,
+                date_from=date_from,
+                date_to=date_to,
+                loader=loader,
+            )
         coerced_results = [_coerce_rule_validation_result(item) for item in results]
         report = render_rule_validation_markdown(coerced_results)
         programmable_count = sum(1 for item in coerced_results if item.programmable)
@@ -582,6 +602,7 @@ class BacktestService(BaseService):
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
+        runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """对规则池中的规则执行回测。"""
@@ -600,15 +621,29 @@ class BacktestService(BaseService):
         )
         try:
             async with self._session_scope_factory() as session:
-                result = await engine.run_rules_backtest(
-                    session=session,
-                    rule_ids=rule_ids,
-                    start_date=start_date,
-                    end_date=end_date,
-                    min_confidence=min_confidence,
-                    market_regime_version=market_regime_version,
-                    progress_callback=progress_callback,
-                )
+                try:
+                    result = await engine.run_rules_backtest(
+                        session=session,
+                        rule_ids=rule_ids,
+                        start_date=start_date,
+                        end_date=end_date,
+                        min_confidence=min_confidence,
+                        market_regime_version=market_regime_version,
+                        runtime_state=runtime_state,
+                        progress_callback=progress_callback,
+                    )
+                except TypeError as exc:
+                    if "runtime_state" not in str(exc) and "progress_callback" not in str(exc):
+                        raise
+                    result = await engine.run_rules_backtest(
+                        session=session,
+                        rule_ids=rule_ids,
+                        start_date=start_date,
+                        end_date=end_date,
+                        min_confidence=min_confidence,
+                        market_regime_version=market_regime_version,
+                        progress_callback=progress_callback,
+                    )
         except Exception as e:
             logger = __import__("logging").getLogger(__name__)
             logger.error("rule pool backtest failed: %s", e, exc_info=True)

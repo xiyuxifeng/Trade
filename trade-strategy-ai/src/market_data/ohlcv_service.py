@@ -49,6 +49,7 @@ class OHLCVService:
         end_date: date | None = None,
         market_kind_by_symbol: dict[str, str] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        runtime_state: dict[str, Any] | None = None,
     ) -> dict[str, int]:
         """抓取并存储 ohlcv 数据。
 
@@ -69,11 +70,16 @@ class OHLCVService:
             retry_backoff_seconds=self._retry_backoff_seconds,
             fallback_enabled=self._fallback_enabled,
         )
-        results: dict[str, int] = {}
+        runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        start_index = int(checkpoint.get("symbol_index") or 0)
+        results: dict[str, int] = dict(checkpoint.get("results") or {})
         kind_map = market_kind_by_symbol or {}
         total = len(symbols)
 
         for index, symbol in enumerate(symbols, start=1):
+            if index <= start_index:
+                continue
             try:
                 market_kind = kind_map.get(symbol)
                 if not market_kind:
@@ -91,6 +97,13 @@ class OHLCVService:
                 logger.warning(f"抓取失败: {symbol}, error={e}")
                 results[symbol] = 0
             if progress_callback is not None:
+                runtime_state_update = {
+                    "schema_version": 1,
+                    "checkpoint": {
+                        "symbol_index": index,
+                        "results": results,
+                    },
+                }
                 progress_callback(
                     {
                         "job_type": "ohlcv-crawl",
@@ -104,6 +117,7 @@ class OHLCVService:
                         "current_trade_date": start_date.isoformat() if start_date else None,
                         "status": "success" if results.get(symbol, 0) > 0 else "partial",
                         "error": None if results.get(symbol, 0) > 0 else f"failed to crawl {symbol}",
+                        "runtime_state": runtime_state_update,
                     }
                 )
 

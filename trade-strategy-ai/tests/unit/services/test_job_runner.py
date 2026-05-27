@@ -1658,6 +1658,86 @@ def test_job_runner_emits_heartbeat(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_job_runner_pauses_running_job_on_request(tmp_path: Path) -> None:
+    """JobRunner 收到 pause 请求后应在安全边界停止并保留 paused 状态。"""
+
+    async def _handler(params: dict[str, Any]) -> Any:
+        del params
+        await asyncio.sleep(0.05)
+        return ServiceResult(
+            status="ok",
+            payload={"result": "ok"},
+            message="done",
+        )
+
+    runner, job_service, engine, _ = _build_job_runner(
+        tmp_path,
+        handlers={"run-pre-market": _handler},
+    )
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="run-pre-market",
+            params={"config_path": "config/app.yaml"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    async def _run() -> None:
+        task = asyncio.create_task(runner.execute_job(job_id=job_id))
+        await asyncio.sleep(0.01)
+        await job_service.pause_job(job_id=job_id, actor="web", reason="maintenance")
+        result = await task
+        assert result.status == "ok"
+        assert result.message == "job paused"
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+    assert loaded.payload["job"]["status"] == "paused"
+    assert loaded.payload["job"]["runtime_state"]["paused"] is True
+    asyncio.run(engine.dispose())
+
+
+def test_job_runner_cancels_running_job_on_request(tmp_path: Path) -> None:
+    """JobRunner 收到 cancel 请求后应在安全边界停止并标记 cancelled。"""
+
+    async def _handler(params: dict[str, Any]) -> Any:
+        del params
+        await asyncio.sleep(0.05)
+        return ServiceResult(
+            status="ok",
+            payload={"result": "ok"},
+            message="done",
+        )
+
+    runner, job_service, engine, _ = _build_job_runner(
+        tmp_path,
+        handlers={"run-after-close": _handler},
+    )
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="run-after-close",
+            params={"config_path": "config/app.yaml"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    async def _run() -> None:
+        task = asyncio.create_task(runner.execute_job(job_id=job_id))
+        await asyncio.sleep(0.01)
+        await job_service.cancel_job(job_id=job_id, reason="stop now")
+        result = await task
+        assert result.status == "ok"
+        assert result.message == "job cancelled"
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+    assert loaded.payload["job"]["status"] == "cancelled"
+    assert loaded.payload["job"]["error"]["type"] == "cancelled"
+    asyncio.run(engine.dispose())
+
+
 def test_worker_respects_job_type_concurrency_limit(tmp_path: Path) -> None:
     """JobRunner 应按 job type 限制并发领取。"""
 

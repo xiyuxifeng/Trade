@@ -1,4 +1,10 @@
-import type { JobDetailResponse, JobLogsResponse, JobSubmissionRequest, JobsListResponse } from '@/types/jobs';
+import type {
+  JobDefinitionSummary,
+  JobDetailResponse,
+  JobLogsResponse,
+  JobSubmissionRequest,
+  JobsListResponse,
+} from '@/types/jobs';
 import { fetchJson } from './http';
 
 type JobsQuery = {
@@ -21,6 +27,14 @@ export function listJobs(query: JobsQuery = {}) {
   return fetchJson<JobsListResponse>(`/jobs${suffix}`);
 }
 
+export function listJobDefinitions() {
+  return fetchJson<JobDefinitionSummary[]>(`/jobs/definitions`);
+}
+
+export function getJobDefinition(jobType: string) {
+  return fetchJson<JobDefinitionSummary>(`/jobs/definitions/${encodeURIComponent(jobType)}`);
+}
+
 export function getJob(jobId: string) {
   return fetchJson<JobDetailResponse>(`/jobs/${jobId}`);
 }
@@ -31,6 +45,32 @@ export function getJobLogs(jobId: string) {
 
 export function cancelJob(jobId: string, reason?: string) {
   return fetchJson<JobDetailResponse>(`/jobs/${jobId}/cancel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function pauseJob(jobId: string, reason?: string) {
+  return fetchJson<JobDetailResponse>(`/jobs/${jobId}/pause`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function resumeJob(jobId: string) {
+  return fetchJson<JobDetailResponse>(`/jobs/${jobId}/resume`, {
+    method: 'POST',
+  });
+}
+
+export function retryJob(jobId: string, reason?: string) {
+  return fetchJson<JobDetailResponse>(`/jobs/${jobId}/retry`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

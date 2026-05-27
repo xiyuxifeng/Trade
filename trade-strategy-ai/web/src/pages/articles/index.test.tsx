@@ -351,6 +351,7 @@ function buildJobList() {
         audit_events: [],
         created_at: '2026-05-10T08:00:00Z',
         updated_at: '2026-05-10T08:20:00Z',
+        runtime_state: null,
       },
     ],
   };

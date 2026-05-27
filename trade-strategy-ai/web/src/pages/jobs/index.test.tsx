@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import { ApiError } from '@/lib/api/http';
-import { listJobs } from '@/lib/api/jobs';
+import { listJobs, listJobDefinitions } from '@/lib/api/jobs';
 import { renderWithRouter } from '@/test/test-utils';
 import { JobsPage } from './index';
 import type { JobRecord } from '@/types/jobs';
@@ -12,15 +12,22 @@ vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
   getJob: vi.fn(),
   getJobLogs: vi.fn(),
+  getJobDefinition: vi.fn(),
+  listJobDefinitions: vi.fn(),
+  pauseJob: vi.fn(),
+  resumeJob: vi.fn(),
+  retryJob: vi.fn(),
   listJobs: vi.fn(),
 }));
 
 const mockedListJobs = vi.mocked(listJobs);
+const mockedListJobDefinitions = vi.mocked(listJobDefinitions);
 
 beforeEach(() => {
   vi.restoreAllMocks();
   cleanup();
   window.localStorage.clear();
+  mockedListJobDefinitions.mockResolvedValue([]);
 });
 
 function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
@@ -50,6 +57,7 @@ function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
     audit_events: [],
     created_at: '2026-05-09T08:00:00Z',
     updated_at: '2026-05-09T08:05:00Z',
+    runtime_state: null,
     config_snapshot_path: null,
     config_snapshot: null,
     ...overrides,
@@ -96,7 +104,7 @@ describe('JobsPage', () => {
         makeJob({
           id: 'job-1',
           job_type: 'pipeline-run',
-          status: 'success',
+          status: 'running',
           created_by: 'alice',
           progress: {
             job_type: 'kaipan-fetch',
@@ -133,6 +141,44 @@ describe('JobsPage', () => {
     );
 
     mockedListJobs.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(filteredPage);
+    mockedListJobDefinitions.mockResolvedValue([
+      {
+        job_type: 'pipeline-run',
+        title: 'Pipeline Run',
+        service_name: 'pipeline',
+        handler_name: 'pipeline_run',
+        permission: 'operator',
+        risk: 'medium',
+        can_retry: true,
+        can_pause: true,
+        can_resume: true,
+        can_cancel: true,
+        can_run_concurrently: false,
+        concurrency_group: 'pipeline',
+        requires_confirmation: false,
+        runnable: true,
+        description: 'desc',
+        param_schema: {},
+      },
+      {
+        job_type: 'article-pipeline',
+        title: 'Article Pipeline',
+        service_name: 'pipeline',
+        handler_name: 'article_pipeline',
+        permission: 'operator',
+        risk: 'medium',
+        can_retry: true,
+        can_pause: false,
+        can_resume: false,
+        can_cancel: true,
+        can_run_concurrently: false,
+        concurrency_group: 'pipeline',
+        requires_confirmation: false,
+        runnable: true,
+        description: 'desc',
+        param_schema: {},
+      },
+    ]);
 
     renderWithRouter(
       [
@@ -147,6 +193,8 @@ describe('JobsPage', () => {
     expect(screen.getByText('pipeline-run')).toBeInTheDocument();
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
     expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
 
     await user.selectOptions(screen.getByRole('combobox'), 'failed');
     await waitFor(() => {

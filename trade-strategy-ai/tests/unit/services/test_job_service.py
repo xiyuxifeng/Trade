@@ -185,6 +185,29 @@ def test_update_job_progress_persists_and_serializes(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_serialize_job_includes_runtime_state(tmp_path: Path) -> None:
+    """Job 详情序列化应透出 runtime_state，供 pause/resume checkpoint 使用。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="ohlcv-crawl", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+
+    async def _set_runtime_state() -> None:
+        async with service._ensure_session_factory()() as session:  # noqa: SLF001
+            job = await service._load_job(session, job_id)  # noqa: SLF001
+            assert job is not None
+            job.runtime_state = {"schema_version": 1, "checkpoint_type": "symbol"}
+            await session.flush()
+
+    asyncio.run(_set_runtime_state())
+    loaded = asyncio.run(service.get_job(job_id))
+
+    assert loaded.payload["job"]["runtime_state"]["checkpoint_type"] == "symbol"
+    assert loaded.payload["job"]["runtime_state"]["schema_version"] == 1
+
+    asyncio.run(engine.dispose())
+
+
 def test_idempotent_create_returns_existing_job(tmp_path: Path) -> None:
     """幂等键重复时不应创建新 Job。"""
     service, engine = _build_job_service(tmp_path)
@@ -231,6 +254,35 @@ def test_job_state_transitions_and_cancel(tmp_path: Path) -> None:
     assert cancelled.payload["job"]["cancel_requested_at"] is not None
     assert cancelled.payload["job"]["created_by"] == "web"
     assert len(cancelled.payload["job"]["audit_events"]) >= 2
+
+    asyncio.run(engine.dispose())
+
+
+def test_job_pause_resume_and_retry_flow(tmp_path: Path) -> None:
+    """JobService 应支持暂停、恢复和错误重试。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="ohlcv-crawl", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+
+    paused = asyncio.run(service.pause_job(job_id=job_id, actor="web", reason="need to wait"))
+    resumed = asyncio.run(service.resume_job(job_id=job_id, actor="web"))
+
+    failed_job = asyncio.run(service.create_job(job_type="backtest-run", params={"trader_id": "trader_a", "date_from": "2026-05-01", "date_to": "2026-05-02"}, created_by="web"))
+    failed_job_id = failed_job.payload["job"]["id"]
+    failed = asyncio.run(service.fail_job(job_id=failed_job_id, error={"type": "runner_error", "message": "boom"}))
+    retried = asyncio.run(service.retry_job(job_id=failed_job_id, actor="web"))
+
+    assert paused.payload["job"]["status"] == "paused"
+    assert paused.payload["job"]["runtime_state"]["paused"] is True
+    assert paused.payload["job"]["runtime_state"]["pause_reason"] == "need to wait"
+    assert resumed.payload["job"]["status"] == "pending"
+    assert resumed.payload["job"]["runtime_state"]["paused"] is False
+    assert resumed.payload["job"]["runtime_state"]["resumed_at"] is not None
+    assert failed.payload["job"]["status"] == "failed"
+    assert retried.payload["job"]["status"] == "pending"
+    assert retried.payload["job"]["error"] is None
+    assert retried.payload["job"]["runtime_state"]["retried_at"] is not None
 
     asyncio.run(engine.dispose())
 

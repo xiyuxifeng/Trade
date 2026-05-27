@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
+import pytest
 
 from cli.main import _DEFAULT_CONFIG_YAML
+from src.common.config import ConfigError
 from src.common.config import load_app_config
 from src.common.paths import project_root
 
@@ -95,6 +97,26 @@ kaipan:
     assert kaipan.max_retries == 3
     assert kaipan.retry_backoff_seconds == [1.0, 2.0, 4.0]
     assert kaipan.retry_status_codes == [403, 429, 500, 502, 503, 504]
+
+
+def test_load_app_config_rejects_deprecated_config_keys(tmp_path: Path) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+stage4:
+  enable: true
+  allow_phase0_fallback: true
+traders:
+  - trader_id: trader_a
+    display_name: Trader A
+    watchlist: ["000001.SZ"]
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="Deprecated config keys found"):
+        load_app_config(config_path)
 
 
 def test_load_app_config_resolves_project_relative_config_path() -> None:

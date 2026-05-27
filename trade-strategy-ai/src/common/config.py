@@ -66,8 +66,6 @@ class TraderConfig(BaseModel):
 
     article_sources: TraderSourceConfig = Field(default_factory=TraderSourceConfig)
     trade_log_sources: TradeLogSourceConfig = Field(default_factory=TradeLogSourceConfig)
-
-    watchlist: list[str] = Field(default_factory=list)
     default_target_pct: float = 0.05
     default_stop_pct: float = 0.03
 
@@ -177,12 +175,11 @@ class Stage4Config(BaseModel):
     """Stage 4 盘前主链路配置（NTL-S4-009）。
 
     控制是否启用新版盘前链路（策略版本 + 候选池快照）。
-    当 enable=False 时，降级到 Phase 0 兼容路径（watchlist + last_price）。
+    当前主流程要求 released strategy_version 必须可用，缺失时直接报错。
     """
 
     enable: bool = True  # 默认启用 Stage 4 路径
     market_universe_slot: str = "09-25"  # 候选池快照时段
-    allow_phase0_fallback: bool = True  # 允许在策略版本不可用时降级到 Phase 0
 
 class KaipanConfig(BaseModel):
     """开盘啦私有接口运行配置。"""
@@ -247,6 +244,31 @@ class AppConfig(BaseModel):
     alerting: dict[str, Any] | None = None  # S7-007 告警配置
 
 
+_DEPRECATED_CONFIG_KEYS = {
+    "watchlist",
+    "allow_phase0_fallback",
+}
+
+
+def _find_deprecated_config_keys(value: Any, path: str = "") -> list[str]:
+    """递归扫描已废弃的配置键，避免旧配置静默生效。"""
+
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            current_path = f"{path}.{key}" if path else str(key)
+            if key in _DEPRECATED_CONFIG_KEYS:
+                found.append(current_path)
+            found.extend(_find_deprecated_config_keys(item, current_path))
+        return found
+
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            current_path = f"{path}[{index}]" if path else f"[{index}]"
+            found.extend(_find_deprecated_config_keys(item, current_path))
+    return found
+
+
 @dataclass(frozen=True)
 class LoadedConfig:
     config: AppConfig
@@ -264,6 +286,14 @@ def load_app_config(path: str | Path) -> LoadedConfig:
             raw = yaml.safe_load(f) or {}
     except Exception as exc:  # noqa: BLE001
         raise ConfigError(f"Failed to load config: {config_path}: {exc}") from exc
+
+    deprecated_keys = _find_deprecated_config_keys(raw)
+    if deprecated_keys:
+        joined = ", ".join(deprecated_keys)
+        raise ConfigError(
+            f"Deprecated config keys found in {config_path}: {joined}. "
+            "Please remove them and use the current schema."
+        )
 
     try:
         cfg = AppConfig.model_validate(_expand_env_vars(raw))

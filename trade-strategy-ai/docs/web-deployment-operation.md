@@ -117,6 +117,7 @@ python -m cli.main db-check --config config/app.yaml
 |------|------|------|
 | `DATABASE_URL` | PostgreSQL 异步连接串 | `postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai` |
 | `DATABASE_ECHO` | SQL 日志 | `false` |
+| `LOG_LEVEL` | 应用日志级别（API / Worker 共用，部署时设置即可） | `INFO` / `WARNING` / `ERROR` / `DEBUG` |
 | `WEB_STATIC_DIR` | API 托管前端时指定 dist 目录 | `web/dist` |
 | `CONFIG_PATH` | 默认配置文件 | `config/app.yaml` |
 
@@ -124,6 +125,7 @@ Docker Compose 中 API 与 Worker 共享：
 
 ```yaml
 DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/trade_strategy_ai
+LOG_LEVEL: WARNING
 ```
 
 ### 3.3 敏感信息
@@ -159,6 +161,8 @@ Web 配置页只展示 **脱敏值**；保存时由服务端校验并写回。
 > 说明：`data.market_data_cache_dir` 已不作为交付模板必填项暴露；它仅保留为运行时兼容缓存目录，不建议作为交付配置入口。
 >
 > 说明：告警系统的交付配置以 `alerting.enabled` 为总开关。启用后，管理员可在 Web 的 **告警中心**（`/alerts`）查看历史、确认/解决告警，并通过 **发送测试告警** 验证 Webhook 是否可用。
+>
+> 说明：日志级别不需要写入 `config/app.yaml`。部署时通过环境变量 `LOG_LEVEL` 设置即可，API 和 Worker 会读取同一值。Docker Compose 可在 `environment` 中设置，手动启动可直接在命令前加 `LOG_LEVEL=WARNING` 之类的前缀。
 
 ### 3.5 配置边界与生效顺序
 
@@ -236,6 +240,7 @@ curl http://localhost:3000/
 使用仓库内 launcher 脚本：
 
 ```bash
+export LOG_LEVEL=WARNING
 python -m scripts.web_local build
 python -m scripts.web_local migrate
 python -m scripts.web_local seed-admin
@@ -245,6 +250,7 @@ python -m scripts.web_local start
 **分步启动**：
 
 ```bash
+export LOG_LEVEL=WARNING
 python -m scripts.web_local build
 python -m scripts.web_local migrate
 python -m scripts.web_local seed-admin
@@ -259,6 +265,7 @@ python -m scripts.web_local start-worker # 终端 2
 - `seed-admin`：创建默认管理员（默认 Dev/wanghui，可通过参数修改）
 - `start-api` / `start`：要求 `web/dist/index.html` 已存在
 - 设置 `WEB_STATIC_DIR=web/dist` 时，API 直接托管前端
+- `LOG_LEVEL`：在启动前通过环境变量设置，例如 `export LOG_LEVEL=WARNING`；`scripts.web_local` 启动的 API / Worker 会继承该值
 - 浏览器访问 **`http://localhost:8000`** 即可同时使用页面与 API
 - PID 文件写入 `.pids/api.pid`、`.pids/worker.pid`
 
@@ -271,6 +278,13 @@ python -m scripts.web_local stop
 ---
 
 ### 4.3 方式 C：手动非 Docker 启动
+
+如果需要临时调整日志级别，可以在命令前直接加环境变量，例如：
+
+```bash
+LOG_LEVEL=WARNING uvicorn api.main:app --host 0.0.0.0 --port 8000
+LOG_LEVEL=WARNING python -m cli.main job-worker-start --config config/app.yaml
+```
 
 ```bash
 python -m cli.main db-migrate --config config/app.yaml

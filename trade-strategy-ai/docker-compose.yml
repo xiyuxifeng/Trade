@@ -7,6 +7,7 @@ x-backend-env: &backend-env
   DATABASE_MAX_OVERFLOW: "20"
   DATABASE_POOL_TIMEOUT: "30"
   DATABASE_POOL_RECYCLE: "1800"
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
 
 services:
   db:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import logging
+import os
 import sys
 from contextvars import ContextVar, Token
 from logging.handlers import RotatingFileHandler
@@ -38,6 +39,8 @@ _LOG_CONTEXT: dict[str, ContextVar[str | None]] = {
     field: ContextVar(f"log_{field}", default=None) for field in _LOG_CONTEXT_FIELDS
 }
 _OLD_LOG_RECORD_FACTORY = logging.getLogRecordFactory()
+_HANDLER_MARK_ATTR = "_trade_strategy_ai_handler"
+_HANDLER_KIND_ATTR = "_trade_strategy_ai_handler_kind"
 
 
 def _install_log_record_factory() -> None:
@@ -83,8 +86,29 @@ def set_log_context(**kwargs: str | None) -> None:
         _LOG_CONTEXT[field].set(value)
 
 
+def _resolve_requested_level(level: str | None) -> int:
+    """把部署环境或显式级别解析成 logging level。"""
+    raw_level = (os.getenv("LOG_LEVEL") or level or "INFO").strip().upper()
+    return getattr(logging, raw_level, logging.INFO)
+
+
+def _mark_handler(handler: logging.Handler, kind: str) -> None:
+    """给 handler 打上项目级标记，便于重复配置时识别。"""
+    setattr(handler, _HANDLER_MARK_ATTR, True)
+    setattr(handler, _HANDLER_KIND_ATTR, kind)
+
+
+def _is_project_handler(handler: logging.Handler, kind: str | None = None) -> bool:
+    """判断 handler 是否由本项目创建。"""
+    if not getattr(handler, _HANDLER_MARK_ATTR, False):
+        return False
+    if kind is None:
+        return True
+    return getattr(handler, _HANDLER_KIND_ATTR, None) == kind
+
+
 def configure_logging(
-    level: str = "INFO",
+    level: str | None = None,
     log_file: str | Path | None = None,
     max_bytes: int = _DEFAULT_MAX_BYTES,
     backup_count: int = _DEFAULT_BACKUP_COUNT,
@@ -96,9 +120,10 @@ def configure_logging(
     分流规则：
     - DEBUG 级别 → 只写入文件（控制台不显示）
     - INFO/WARNING/ERROR → 同时写入控制台和文件
+    - 部署环境变量 LOG_LEVEL 优先级最高，其次是显式 level，最后是 INFO
 
     Args:
-        level: 最低日志级别（默认 INFO）
+        level: 最低日志级别（默认读取 LOG_LEVEL，否则 INFO）
         log_file: 日志文件路径，默认 logs/app.log
         max_bytes: 单个日志文件最大字节数，默认 10MB
         backup_count: 保留的旧日志文件数量，默认 5
@@ -111,36 +136,46 @@ def configure_logging(
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)  # 根 logger 捕获所有级别，由 handler 过滤
+    requested_level = _resolve_requested_level(level)
+    console_level = max(requested_level, logging.INFO)
 
-    # 避免重复添加 handlers
     if force:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
-    elif root_logger.handlers:
-        # 已有 handlers 且非 force，不再重复配置
-        _configured = True
-        return
+            try:
+                handler.close()
+            except Exception:
+                pass
 
     log_path = resolve_project_path(log_file) if log_file else _DEFAULT_LOG_FILE
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 文件 handler：捕获所有级别（DEBUG + INFO + WARNING + ERROR）
-    file_handler = RotatingFileHandler(
-        filename=str(log_path),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler = next((handler for handler in root_logger.handlers if _is_project_handler(handler, "file")), None)
+    if file_handler is None:
+        file_handler = RotatingFileHandler(
+            filename=str(log_path),
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        _mark_handler(file_handler, "file")
+        root_logger.addHandler(file_handler)
+    file_handler.setLevel(requested_level)
     file_handler.setFormatter(logging.Formatter(_FILE_FORMAT, datefmt=_DATE_FORMAT))
 
-    # 控制台 handler：只捕获 INFO 及以上
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(_CONSOLE_FORMAT, datefmt=_CONSOLE_DATE_FORMAT))
-
-    root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
+    console_handler = next((handler for handler in root_logger.handlers if _is_project_handler(handler, "console")), None)
+    if console_handler is None:
+        has_foreign_stream_handler = any(
+            isinstance(handler, logging.StreamHandler) and not _is_project_handler(handler)
+            for handler in root_logger.handlers
+        )
+        if not has_foreign_stream_handler:
+            console_handler = logging.StreamHandler(sys.stdout)
+            _mark_handler(console_handler, "console")
+            root_logger.addHandler(console_handler)
+    if console_handler is not None:
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(logging.Formatter(_CONSOLE_FORMAT, datefmt=_CONSOLE_DATE_FORMAT))
 
     _configured = True
 

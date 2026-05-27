@@ -42,7 +42,7 @@ from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
-from src.common.logger import bind_log_context, get_logger
+from src.common.logger import bind_log_context, configure_logging, get_logger
 from src.audit.service import AuditService
 from src.health.routes import health_router
 
@@ -69,6 +69,7 @@ def _is_reserved_local_path(path: str) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理，负责初始化运行时配置。"""
+    configure_logging()
     config_path = resolve_project_path("config/app.yaml")
     if config_path.exists():
         run.set_config_path(config_path)

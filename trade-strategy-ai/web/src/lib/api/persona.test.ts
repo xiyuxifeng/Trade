@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from '@/lib/api/http';
-import { buildMarketState, buildSampleClusters } from './persona';
+import { buildMarketState, buildSampleClusters, listBehaviorRules } from './persona';
 
 describe('persona api', () => {
   beforeEach(() => {
@@ -37,5 +37,29 @@ describe('persona api', () => {
     expect(url).toBe('/api/ui/v1/persona/market-state/build');
     expect(init?.method).toBe('POST');
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
+  });
+
+  it('loads the behavior rules preview from the readonly endpoint', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        schema_version: 'v1',
+        title: '交易行为标签规则',
+        description: '只读规则集',
+        source_path: 'config/rules/behavior_rules.yaml',
+        rule_count: 2,
+        enabled_rule_count: 2,
+        category_count: 1,
+        categories: [{ name: '追涨类', rule_count: 2, enabled_rule_count: 2 }],
+        rules: [],
+      }),
+    } as Response);
+
+    await listBehaviorRules();
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/persona/rules');
+    expect(init?.method).toBe('GET');
+    expect((init?.headers as Headers).get('Accept')).toBe('application/json');
   });
 });

@@ -1,209 +1,260 @@
-# 行为分类规则配置
-# 规则按顺序评估，匹配第一个即返回
-# 所有特征均从 ContextBuilder 派生（price_vs_ma, volume_ratio 等）
-
+title: "交易行为标签规则"
+description: "用于将单笔交易归类为追涨、抄底、趋势、风控等行为标签的只读规则集。"
 schema_version: "v1"
 
+# 说明：
+# - 这是只读规则集，Web 只负责展示和解释，不提供在线编辑
+# - 规则引擎按文件顺序评估，匹配第一个即返回
+# - priority 数值越大，代表展示和维护上越优先；运行时仍以文件顺序为准
+# - enabled=true 表示该规则参与行为标签化；enabled=false 仅用于临时停用或灰度
+# - conditions 内部条件是 AND 关系，必须全部满足才命中
+# - 所有特征都来自 ContextBuilder 派生字段（price_vs_ma、volume_ratio 等）
+# - 字段含义可理解为：
+#   price_vs_ma: 交易价格 / MA20
+#   volume_ratio: 单笔交易量 / 20 日均量
+#   ma_slope: 均线斜率，>0 表示趋势向上
+#   distance_from_high / low: 与阶段高点 / 低点的距离
+#   price_volatility: 最近 5 日价格波动率
+#   atr_ratio: ATR / 收盘价，衡量波动幅度
 rules:
   # ========== 追涨类 ==========
+  # 场景：价格走强、放量、趋势明确时，用户通常会归到追涨行为。
 
-  # 追缺口：跳空高开/低开后追入
   - label: chase_gap
     description: 追缺口（跳空后顺势追入）
+    category: 追涨类
+    # 数值越大，展示上越靠前。文件顺序仍然是实际命中的优先级。
+    priority: 130
+    # 启用后会参与行为标签化；停用后仅保留在文件中，不参与命中。
+    enabled: true
     conditions:
       - field: gap_ratio
         op: gt
-        value: 0.02   # 跳空 >2%
+        value: 0.02   # 跳空 >2% 才视为明显缺口
       - field: volume_ratio
         op: gt
+        # 成交量放大说明追入有资金确认
         value: 1.3
     signals: ["gap_up", "momentum"]
-    priority: 10  # 高优先级，gap 信号明确
 
   - label: chase_rally
     description: 追涨（突破后追入）
+    category: 追涨类
+    priority: 120
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: gt
-        value: 1.02   # 价格 > MA20 * 1.02
+        value: 1.02   # 价格显著站上均线，说明有向上动能
       - field: volume_ratio
         op: gt
-        value: 1.5    # 成交量放大
+        value: 1.5    # 放量确认突破有效
       - field: ma_slope
         op: gt
-        value: 0.0    # 均线向上
+        value: 0.0    # 均线至少不应走弱
     signals: ["price_breakout", "high_volume"]
 
   # ========== 抄底类 ==========
+  # 场景：价格偏弱但下跌开始收敛，或者距离低点不远，用户更像在做抄底。
 
-  # 接飞刀：激进抄底，价格跌破均线且距离低点很近
   - label: catch_falling_knife
     description: 接飞刀（激进抄底，快速下跌中逆势买入）
+    category: 抄底类
+    priority: 110
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: lt
-        value: 0.95   # 价格显著低于 MA20
+        value: 0.95   # 明显跌破均线
       - field: ma_slope
         op: lt
-        value: -0.02  # 均线向下
+        value: -0.02  # 趋势仍在下行，属于激进抄底
       - field: distance_from_low
         op: lt
-        value: 0.03   # 距低点 <3%（在低位接盘）
+        value: 0.03   # 靠近阶段低点，容易被归为“接飞刀”
     signals: ["falling_knife", "contrarian"]
 
   - label: bottom_fish
     description: 抄底（均值回归左侧）
+    category: 抄底类
+    priority: 100
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: lt
-        value: 0.98   # 价格 < MA20 * 0.98
+        value: 0.98   # 价格偏弱但未必极端
       - field: distance_from_high
         op: gt
-        value: 0.1    # 距离高点 >10%
+        value: 0.1    # 已经离阶段高点较远
       - field: ma_slope
         op: ge
-        value: -0.01  # 下跌趋缓（非飞刀）
+        value: -0.01  # 下跌趋缓，更像均值回归
     signals: ["oversold", "support_level", "mean_reversion"]
 
   # ========== 趋势类 ==========
+  # 场景：价格沿趋势运行，既有突破也有持续跟随。
 
   - label: breakout
     description: 突破交易（价格创N日新高/新低）
+    category: 趋势类
+    priority: 90
+    enabled: true
     conditions:
       - field: high_breakout_ratio
         op: gt
-        value: 0.0    # 突破今日高点
+        value: 0.0    # 说明价格已经突破前高
       - field: distance_from_high
         op: lt
-        value: 0.02  # 距N日高点很近（刚突破）
+        value: 0.02  # 刚突破不久，通常属于追突破
       - field: volume_ratio
         op: gt
+        # 突破需要放量确认更可信
         value: 1.2
     signals: ["breakout", "new_high"]
 
   - label: trend_follow
     description: 趋势跟踪（顺势而为）
+    category: 趋势类
+    priority: 80
+    enabled: true
     conditions:
       - field: ma_slope
         op: gt
-        value: 0.005  # 均线明显向上
+        value: 0.005  # 趋势向上更明显
       - field: price_vs_ma
         op: gt
-        value: 1.0    #价格在均线上方
+        value: 1.0    # 价格站上均线，说明顺势
     signals: ["trend_up", "above_ma", "momentum"]
 
   # ========== 震荡/短线类 ==========
+  # 场景：价格围绕均线来回波动，或者波动率较高，适合高频/短线标签。
 
-  # 区间操作：高抛低吸（价格在均线附近波动，波动率低）
   - label: range_play
     description: 区间操作（高抛低吸）
+    category: 震荡/短线类
+    priority: 70
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: ge
+        # 价格靠近均线下沿
         value: 0.97
       - field: price_vs_ma
         op: le
         value: 1.03   # 价格围绕均线波动
       - field: price_volatility
         op: gt
-        value: 0.0   # 有波动（非无数据情况）
+        value: 0.0   # 不是无数据占位
       - field: price_volatility
         op: lt
-        value: 0.03  # 波动率低（震荡市）
+        value: 0.03  # 波动率低，典型震荡市
       - field: ma_slope
         op: ge
         value: -0.005
       - field: ma_slope
         op: le
-        value: 0.005  # 均线走平
+        value: 0.005  # 均线近似走平
     signals: ["range_bound", "mean_reversion", "low_volatility"]
 
-  # 超短线：价格在均线上方但波动大，持仓周期短
   - label: scalp
     description: 超短线（日内快速买卖）
+    category: 震荡/短线类
+    priority: 60
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: gt
-        value: 1.01   # 价格略高于均线
+        value: 1.01   # 略强于均线，给短线操作空间
       - field: price_volatility
         op: gt
-        value: 0.02   # 波动较大（短线有机会）
+        value: 0.02   # 波动大，适合超短线
       - field: atr_ratio
         op: gt
-        value: 0.01  # 日内振幅足够
+        value: 0.01  # 振幅足够，说明波动不是噪声
     signals: ["intraday", "short_holding", "high_frequency"]
 
   # ========== 风控类 ==========
+  # 场景：以风控动作命名的标签，用于表达止损、止盈和调仓。
 
-  # 止损：价格显著低于均线，可能触发止损
   - label: stop_loss_cut
     description: 止损（亏损后砍仓）
+    category: 风控类
+    priority: 50
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: lt
-        value: 0.93   # 价格 < MA20 * 0.93（大幅亏损）
+        value: 0.93   # 显著跌破均线，通常视为止损信号
       - field: ma_slope
         op: lt
-        value: 0.0    # 下跌趋势中
+        value: 0.0    # 趋势继续走弱
     signals: ["stop_loss", "cut_position", "risk_control"]
 
-  # 止盈：价格显著高于均线，接近前期高点
   - label: profit_taking
     description: 止盈（盈利后了结）
+    category: 风控类
+    priority: 40
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: gt
-        value: 1.08   # 价格 > MA20 * 1.08（大涨）
+        value: 1.08   # 显著偏强，倾向止盈
       - field: distance_from_high
         op: lt
-        value: 0.03  # 接近前期高点
+        value: 0.03  # 接近阶段高点
     signals: ["profit_take", "close_position", "risk_control"]
 
-  # 调仓：成交量大但价格变化小（分批建仓/减仓）
   - label: position_adjust
     description: 调仓（增仓/减仓操作）
+    category: 风控类
+    priority: 30
+    enabled: true
     conditions:
       - field: volume_ratio
         op: gt
-        value: 2.0    # 成交量明显放大
+        value: 2.0    # 放量但不一定是进攻，也可能是调仓
       - field: price_vs_ma
         op: ge
         value: 0.98
       - field: price_vs_ma
         op: le
-        value: 1.02   # 价格变化不大（调仓非主动进攻）
+        value: 1.02   # 价格变化不大，偏向调仓而非进攻
     signals: ["position_build", "volume_surge", "neutral_price"]
 
   # ========== 套利/对冲类 ==========
-  # 注意：套利和对冲需要跨品种/跨市场数据，
-  # 当前上下文仅有单一标的，此处用代理特征
+  # 场景：更偏中性、价差或对冲语义。当前仅有单标的数据，因此用代理特征表达。
+  # 注意：真实套利/对冲最好结合跨品种、跨市场或更完整的组合数据。
 
-  # 套利：低波动 + 高成交量 + 价格接近均线（均值回归机会）
   - label: arbitrage
     description: 套利（价差交易）
+    category: 套利/对冲类
+    priority: 20
+    enabled: true
     conditions:
       - field: price_volatility
         op: lt
-        value: 0.015  # 极低波动（价差稳定）
+        value: 0.015  # 低波动，说明价差结构相对稳定
       - field: distance_from_high
         op: gt
-        value: 0.08  # 距离高点较远（价差大）
+        value: 0.08  # 远离高点，可能存在均值回归空间
       - field: distance_from_low
         op: gt
-        value: 0.08  # 距离低点较远
+        value: 0.08  # 同时远离低点，避免被单边趋势误判
     signals: ["low_volatility", "spread_opportunity"]
 
-  # 对冲：价格接近均线 + 成交量萎缩（方向不明）
   - label: hedge
     description: 对冲（双向持仓/锁定利润）
+    category: 套利/对冲类
+    priority: 10
+    enabled: true
     conditions:
       - field: price_vs_ma
         op: ge
         value: 0.99
       - field: price_vs_ma
         op: le
-        value: 1.01   # 价格紧贴均线
+        value: 1.01   # 价格紧贴均线，方向不明显
       - field: volume_ratio
         op: lt
-        value: 0.7   # 成交量萎缩（无明确方向）
+        value: 0.7   # 成交量萎缩，通常表示观望或对冲
     signals: ["hedging", "low_direction", "neutral"]

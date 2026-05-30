@@ -36,8 +36,8 @@ export function PersonaCenter() {
     <section className="dashboard-grid">
       <Card className="xl:col-span-5">
         <CardHeader>
-          <CardTitle>生成样例聚类</CardTitle>
-          <CardDescription>生成可运行的 Persona 样例聚类文件，便于验证聚类和 MarketState 的输入链路。</CardDescription>
+          <CardTitle>生成样例聚类文件</CardTitle>
+          <CardDescription>生成可运行的 Persona 样例聚类文件，便于验证风格路由和 MarketState 的输入链路。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
@@ -55,7 +55,7 @@ export function PersonaCenter() {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-500">
-              点击按钮后，会在后端生成 clusters.sample.json。
+              点击按钮后，会在后端生成 clusters.sample.json。行为标签规则请切换到右侧“行为规则（只读）”标签查看。
             </div>
           )}
         </CardContent>

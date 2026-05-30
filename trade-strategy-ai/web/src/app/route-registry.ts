@@ -29,6 +29,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: 'Kaipan 数据', path: '/market/kaipan', description: 'Kaipan 数据抓取与健康检查', kind: 'canonical' },
   { label: 'OHLCV 行情', path: '/market/ohlcv', description: 'OHLCV 行情抓取与回灌', kind: 'canonical' },
   { label: '策略', path: '/strategies', description: '策略状态摘要与工作台入口', kind: 'canonical' },
+  { label: 'Persona', path: '/persona', description: '交易风格画像与行为规则', kind: 'canonical' },
   { label: '策略版本', path: '/strategies/versions', description: '策略版本构建与查看', kind: 'canonical' },
   { label: '候选版本', path: '/strategies/candidates', description: '候选版本生成与审核', kind: 'canonical' },
   { label: '运行历史', path: '/strategies/history', description: '策略任务历史与筛选', kind: 'canonical' },

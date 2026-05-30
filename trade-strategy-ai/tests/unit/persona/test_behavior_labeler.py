@@ -7,6 +7,7 @@ sys.path.insert(0, "src")
 
 from decimal import Decimal
 from datetime import date, datetime
+from pathlib import Path
 
 from src.models.trade_log import TradeLog
 from src.models.ohlcv_bar import OHLCVBar
@@ -110,6 +111,44 @@ def test_classifier_unknown_when_no_match():
 
     result = classifier.classify(ctx)
     assert result.label == BehaviorLabel.UNKNOWN
+
+
+def test_classifier_skips_disabled_rules(tmp_path: Path):
+    """disabled 的规则不应参与命中。"""
+    rules_file = tmp_path / "behavior_rules.yaml"
+    rules_file.write_text(
+        """
+schema_version: "v1"
+rules:
+  - label: chase_rally
+    description: disabled rule
+    category: 追涨类
+    priority: 100
+    enabled: false
+    conditions:
+      - field: price_vs_ma
+        op: gt
+        value: 1.0
+    signals: ["disabled"]
+  - label: bottom_fish
+    description: enabled rule
+    category: 抄底类
+    priority: 90
+    enabled: true
+    conditions:
+      - field: price_vs_ma
+        op: lt
+        value: 1.1
+    signals: ["enabled"]
+""",
+        encoding="utf-8",
+    )
+
+    classifier = RuleBasedClassifier(str(rules_file))
+    ctx = {"trade": None, "bars": [], "features": {"price_vs_ma": 1.05}}
+
+    result = classifier.classify(ctx)
+    assert result.label == BehaviorLabel.BOTTOM_FISH
 
 
 def test_labeler_facade():

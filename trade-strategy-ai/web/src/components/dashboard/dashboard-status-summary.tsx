@@ -132,15 +132,16 @@ export function DashboardQuickLinks() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-3">
-          {[
-            { label: '任务中心', path: '/jobs' },
-            { label: '告警中心', path: '/alerts' },
-            { label: '配置管理', path: '/profiles' },
-            { label: '市场数据', path: '/market' },
-            { label: '策略工作台', path: '/strategies' },
-            { label: '系统审计', path: '/system/audit' },
-            { label: '产物中心', path: '/artifacts' },
-          ].map((item) => (
+        {[
+          { label: '任务中心', path: '/jobs' },
+          { label: '告警中心', path: '/alerts' },
+          { label: '配置管理', path: '/profiles' },
+          { label: '市场数据', path: '/market' },
+          { label: '策略工作台', path: '/strategies' },
+          { label: 'Persona', path: '/persona' },
+          { label: '系统审计', path: '/system/audit' },
+          { label: '产物中心', path: '/artifacts' },
+        ].map((item) => (
             <Link
               className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
               key={item.path}

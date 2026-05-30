@@ -11,6 +11,7 @@ describe('navigation contract', () => {
       '/articles',
       '/market',
       '/strategies',
+      '/persona',
       '/backtest',
       '/rule-pool',
       '/artifacts',
@@ -18,6 +19,7 @@ describe('navigation contract', () => {
       '/system',
     ]);
     expect(mainNavigation.find((item) => item.path === '/rule-pool')?.description).toBe('规则池审核中心');
+    expect(mainNavigation.find((item) => item.path === '/persona')?.description).toBe('交易风格画像与行为规则');
   });
 
 });

@@ -4,10 +4,12 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
 from src.common.paths import resolve_project_path
+from src.persona.behavior_rules import load_behavior_rules_preview
 from src.services.persona_service import PersonaService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-persona"])
@@ -37,6 +39,18 @@ async def build_sample_clusters(service: PersonaService = Depends(get_persona_se
     """生成 Persona 样例聚类文件。"""
     result = service.build_sample_clusters(config_path=_config_path())
     return result.payload
+
+
+@router.get("/persona/rules", dependencies=[Depends(verify_api_key)])
+async def list_behavior_rules():
+    """返回行为标签规则的只读预览。"""
+    try:
+        preview = load_behavior_rules_preview()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"行为规则文件不存在: {exc.filename or 'config/rules/behavior_rules.yaml'}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return preview.to_payload()
 
 
 @router.post("/persona/market-state/build", dependencies=[Depends(verify_api_key)])

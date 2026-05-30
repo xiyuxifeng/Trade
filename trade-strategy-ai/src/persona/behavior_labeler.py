@@ -233,6 +233,9 @@ class Rule:
 
     label: BehaviorLabel
     description: str = ""
+    category: str = ""
+    priority: int | None = None
+    enabled: bool = True
     conditions: list[RuleCondition] = None
     signals: list[str] = None
 
@@ -268,6 +271,13 @@ class RuleBasedClassifier:
 
         rules = []
         for rule_dict in config.get("rules", []):
+            if not rule_dict.get("enabled", True):
+                continue
+            raw_priority = rule_dict.get("priority")
+            try:
+                priority = int(raw_priority) if raw_priority is not None else None
+            except (TypeError, ValueError):
+                priority = None
             conditions = [
                 RuleCondition(
                     field=c["field"],
@@ -279,6 +289,9 @@ class RuleBasedClassifier:
             rules.append(Rule(
                 label=BehaviorLabel(rule_dict["label"]),
                 description=rule_dict.get("description", ""),
+                category=rule_dict.get("category", ""),
+                priority=priority,
+                enabled=bool(rule_dict.get("enabled", True)),
                 conditions=conditions,
                 signals=rule_dict.get("signals", []),
             ))

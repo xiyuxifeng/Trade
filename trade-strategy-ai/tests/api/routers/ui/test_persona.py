@@ -99,3 +99,16 @@ async def test_build_market_state_returns_snapshot(client: AsyncClient) -> None:
     payload = response.json()
     assert "snapshot_path" in payload
     assert payload["snapshot_path"].endswith("market_state.json")
+
+
+@pytest.mark.asyncio
+async def test_list_behavior_rules_returns_preview(client: AsyncClient) -> None:
+    """行为规则预览接口应返回结构化只读内容。"""
+    response = await client.get("/api/ui/v1/persona/rules")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == "v1"
+    assert payload["title"] == "交易行为标签规则"
+    assert payload["rule_count"] > 0
+    assert payload["category_count"] > 0
+    assert payload["rules"][0]["category"]

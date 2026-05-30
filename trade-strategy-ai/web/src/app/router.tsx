@@ -22,6 +22,7 @@ import { MarketPage } from '@/pages/market';
 import { MarketSnapshotsPage } from '@/pages/market/snapshots';
 import { MarketKaipanPage } from '@/pages/market/kaipan';
 import { MarketOhlcvPage } from '@/pages/market/ohlcv';
+import { PersonaPage } from '@/pages/persona';
 import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
 import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
@@ -105,6 +106,7 @@ const dashboardLayoutRoutes = [
   { path: 'market/kaipan', element: <MarketKaipanPage /> },
   { path: 'market/ohlcv', element: <MarketOhlcvPage /> },
   { path: 'strategies', element: <StrategiesPage /> },
+  { path: 'persona', element: <PersonaPage /> },
   { path: 'strategies/versions', element: <VersionsPage /> },
   { path: 'strategies/candidates', element: <CandidatesPage /> },
   { path: 'strategies/history', element: <HistoryPage /> },

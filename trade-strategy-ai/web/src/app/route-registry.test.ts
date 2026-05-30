@@ -27,6 +27,8 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/market/ohlcv').path).toBe('/market/ohlcv');
     expect(resolveRouteByPathname('/strategies').path).toBe('/strategies');
     expect(resolveRouteByPathname('/strategies').description).toBe('策略状态摘要与工作台入口');
+    expect(resolveRouteByPathname('/persona').path).toBe('/persona');
+    expect(resolveRouteByPathname('/persona').description).toBe('交易风格画像与行为规则');
     expect(resolveRouteByPathname('/strategies/versions').path).toBe('/strategies/versions');
     expect(resolveRouteByPathname('/strategies/versions').label).toBe('策略版本');
     expect(resolveRouteByPathname('/strategies/candidates').path).toBe('/strategies/candidates');

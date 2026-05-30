@@ -240,18 +240,17 @@ class JobRunner(BaseService):
 
     async def _resolve_profile_config_path(self, params: dict[str, Any]) -> str | Path | None:
         """优先按 Profile 解析配置路径，兼容旧的 config_path 入口。"""
+        profile_id = str(params.get("profile_id") or "").strip()
+        if profile_id:
+            resolved = await ConfigProfileService().resolve_profile_config_path(profile_id)
+            if resolved is None:
+                raise ValueError(f"profile not found: {profile_id}")
+            return resolved
+
         config_path = params.get("config_path")
         if config_path:
             return config_path
-
-        profile_id = str(params.get("profile_id") or "").strip()
-        if not profile_id:
-            return None
-
-        resolved = await ConfigProfileService().resolve_profile_config_path(profile_id)
-        if resolved is None:
-            raise ValueError(f"profile not found: {profile_id}")
-        return resolved
+        return None
 
     def _build_default_handlers(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[ServiceResult]]]:
         """构建默认的 Job 处理器集合。"""
@@ -432,8 +431,11 @@ class JobRunner(BaseService):
             benchmark_symbol = params.get("benchmark_symbol")
             if not benchmark_symbol:
                 raise ValueError("missing required param: benchmark_symbol")
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
             return service.build_market_state(
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=config_path,
                 benchmark_symbol=benchmark_symbol,
                 as_of=params.get("as_of"),
                 dest=params.get("dest", "data/processed/persona/market_state.json"),
@@ -443,8 +445,11 @@ class JobRunner(BaseService):
 
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
             return await service.build_snapshot(
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=config_path,
                 benchmark_symbol=params.get("benchmark_symbol"),
                 date=str(params.get("date") or params.get("trade_date") or date.today().isoformat()) if params.get("start_date") is None else None,
                 start_date=str(params.get("start_date")) if params.get("start_date") else None,
@@ -552,19 +557,25 @@ class JobRunner(BaseService):
             end_date = _parse_optional_date(params.get("end_date"))
             if start_date is None or end_date is None:
                 raise ValueError("missing required param: start_date/end_date")
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
             return await service.run_rule_pool_backtest(
                 start_date=start_date,
                 end_date=end_date,
                 rule_ids=rule_ids,
                 min_confidence=float(params.get("min_confidence") or 0.5),
                 market_regime_version=params.get("market_regime_version") or "market-regime-v3",
-                config_path=params.get("config_path", "config/app.yaml"),
+                config_path=config_path,
                 runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _run_pre_market(params: dict[str, Any]) -> ServiceResult:
-            manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
+            manager, _ = self._build_manager(config_path=config_path)
             service = RunService(manager)
             return await service.run_pre_market(
                 as_of_date=_parse_date(params.get("as_of_date")),
@@ -573,7 +584,10 @@ class JobRunner(BaseService):
             )
 
         async def _run_after_close(params: dict[str, Any]) -> ServiceResult:
-            manager, _ = self._build_manager(config_path=params.get("config_path", "config/app.yaml"))
+            config_path = await self._resolve_profile_config_path(params)
+            if config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
+            manager, _ = self._build_manager(config_path=config_path)
             service = RunService(manager)
             return await service.run_after_close(
                 as_of_date=_parse_date(params.get("as_of_date")),

@@ -54,7 +54,7 @@ function ResultPanel({ result }: { result: ProfileImportResponse | null }) {
 export function ProfileImportPage() {
   const navigate = useNavigate();
   const [profileId, setProfileId] = useState('default');
-  const [configPath, setConfigPath] = useState('');
+  const [configPath, setConfigPath] = useState('config/app.template.yaml');
   const [createdBy, setCreatedBy] = useState('web');
   const [submittedResult, setSubmittedResult] = useState<ProfileImportResponse | null>(null);
 
@@ -93,7 +93,7 @@ export function ProfileImportPage() {
             <Badge variant="info">配置管理</Badge>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">导入为正式配置</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              从旧的 config_path 导入配置，生成正式配置，并保留兼容入口。
+              从 `config/app.yaml` 或交付模板 `config/app.template.yaml` 导入一次，生成正式 Profile。导入完成后，Web 后续运行只认 Profile，`config_path` 仅保留给导入和 CLI 调试。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -138,8 +138,11 @@ export function ProfileImportPage() {
                 id="config_path"
                 value={configPath}
                 onChange={(event) => setConfigPath(event.target.value)}
-                placeholder="config/articles.yaml"
+                placeholder="config/app.template.yaml"
               />
+              <p className="text-xs text-slate-500">
+                可输入 `config/app.yaml` 或 `config/app.template.yaml`。导入后系统会把配置写入 `config_profiles`，后续 Web 只通过 Profile 串联。
+              </p>
             </div>
 
             <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
@@ -150,7 +153,7 @@ export function ProfileImportPage() {
                 <MetaCard label="创建者" value={submitPreview.created_by} />
               </div>
               <p className="mt-3 text-xs text-sky-700">
-                实际脱敏预览与校验结果由后端返回，页面不会伪造配置内容。
+                实际脱敏预览与校验结果由后端返回，页面不会伪造配置内容。导入成功后，后续页面只展示 Profile 和 snapshot。
               </p>
             </div>
 

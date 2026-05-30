@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import type { WorkflowDefinition, WorkflowParamField, WorkflowStep } from '@/types/workflows';
 
-const DEFAULT_CONFIG_PATH = 'config/app.yaml';
+const DEFAULT_CONFIG_PATH = 'config/app.template.yaml';
 const DEFAULT_BASE_DIR = 'trade-strategy-ai';
 const DEFAULT_BACKUP_DIR = 'data/backups';
 const DEFAULT_DEMO_SYMBOL = '000001.SZ';

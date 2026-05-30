@@ -35,6 +35,11 @@ export type SystemHealthComponentStatus = {
 export type SystemStatusResponse = {
   status: 'ok';
   config_path: string;
+  profile_context?: {
+    profile_id: string | null;
+    profile_snapshot_id: string | null;
+    source: 'env' | 'unset';
+  };
   project_root: string;
   run_mode: string;
   database: DatabaseHealthStatus;

@@ -75,10 +75,13 @@
 
 Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行上下文**。优先使用 `profile_id`，而不是直接写配置文件路径。
 
+> 口径说明：`config/app.yaml` 和交付模板 `config/app.template.yaml` 只用于首次导入 Profile。导入完成后，Web 日常运行只认 Profile / Profile snapshot，`config_path` 仅保留给 CLI 调试与历史兼容。
+> 其中 `strategy` 和 `risk` 配置也包含在这份单文件模板内，不再要求用户单独维护 `strategy.yaml` / `risk.yaml`。
+
 ### 4.1 导入 Profile
 
 1. 进入 **配置管理** → **导入**（`/profiles/import`）。
-2. 填写 `config_path`（通常为 `config/app.yaml`）及 Profile 名称。
+2. 填写 `config_path`（通常为 `config/app.yaml` 或 `config/app.template.yaml`）及 Profile 名称。
 3. 提交后系统生成 Profile 及配置快照。
 4. 在 Profile 列表确认 `validation_status` 为 **validated**。
 
@@ -461,6 +464,8 @@ backtest-run →（可选）backtest-validate-rules / backtest-reproducibility-c
 | 系统健康 | `/system/health` | API、DB、Worker、存储状态 |
 | 数据库迁移 | `/system/db-migrate` | 触发 `db-migrate`（高风险） |
 | 数据备份与恢复 | `/system/backup` | 项目级备份/恢复 |
+
+> 补充说明：系统健康页里会显示 `运行配置` 和 `Profile 上下文` 两块信息。`运行配置` 表示当前进程加载的 `config_path`；`Profile 上下文` 只表示启动环境显式注入的 `PROFILE_ID` / `PROFILE_SNAPSHOT_ID`，如果没有注入就显示 `未绑定`，不代表业务 Profile 丢失。
 
 ---
 

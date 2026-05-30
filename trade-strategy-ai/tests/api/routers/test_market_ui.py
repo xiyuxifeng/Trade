@@ -355,6 +355,9 @@ async def test_ohlcv_scheduler_endpoints(monkeypatch: pytest.MonkeyPatch, client
 
     monkeypatch.setattr(market_ui.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
 
+    missing_profile = await client.get("/api/ui/v1/market/ohlcv/status")
+    assert missing_profile.status_code == 422
+
     status = await client.get("/api/ui/v1/market/ohlcv/status", params={"profile_id": "default"})
     assert status.status_code == 200
     assert status.json()["latest_trade_date"] == "2026-05-16"

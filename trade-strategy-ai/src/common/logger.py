@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from contextvars import ContextVar, Token
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Iterator
 
@@ -27,8 +27,7 @@ _CONSOLE_FORMAT = "%(asctime)s %(levelname)-8s %(name)s [request_id=%(request_id
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _CONSOLE_DATE_FORMAT = "%H:%M:%S"
 
-# 默认轮转大小：10MB
-_DEFAULT_MAX_BYTES = 10 * 1024 * 1024
+# 默认轮转保留天数：5 天
 _DEFAULT_BACKUP_COUNT = 5
 
 # 全局是否已配置
@@ -110,7 +109,6 @@ def _is_project_handler(handler: logging.Handler, kind: str | None = None) -> bo
 def configure_logging(
     level: str | None = None,
     log_file: str | Path | None = None,
-    max_bytes: int = _DEFAULT_MAX_BYTES,
     backup_count: int = _DEFAULT_BACKUP_COUNT,
     force: bool = False,
 ) -> None:
@@ -125,8 +123,7 @@ def configure_logging(
     Args:
         level: 最低日志级别（默认读取 LOG_LEVEL，否则 INFO）
         log_file: 日志文件路径，默认 logs/app.log
-        max_bytes: 单个日志文件最大字节数，默认 10MB
-        backup_count: 保留的旧日志文件数量，默认 5
+        backup_count: 保留的旧日志文件数量，默认 5 天
         force: 强制重新配置（清除现有 handlers）
     """
     global _configured
@@ -152,9 +149,10 @@ def configure_logging(
 
     file_handler = next((handler for handler in root_logger.handlers if _is_project_handler(handler, "file")), None)
     if file_handler is None:
-        file_handler = RotatingFileHandler(
+        file_handler = TimedRotatingFileHandler(
             filename=str(log_path),
-            maxBytes=max_bytes,
+            when="midnight",
+            interval=1,
             backupCount=backup_count,
             encoding="utf-8",
         )
@@ -194,31 +192,3 @@ def set_log_level(logger_name: str, level: str) -> None:
     """动态设置指定 logger 的日志级别。"""
     logger = logging.getLogger(logger_name)
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-
-
-def add_file_handler(
-    logger_name: str | None,
-    log_file: str | Path,
-    level: str = "DEBUG",
-    max_bytes: int = _DEFAULT_MAX_BYTES,
-    backup_count: int = _DEFAULT_BACKUP_COUNT,
-) -> None:
-    """
-    为指定 logger（或 root logger）追加一个文件 handler。
-
-    用于需要单独输出日志文件的场景，如回测结果、告警记录等。
-    """
-    if logger_name:
-        logger = logging.getLogger(logger_name)
-    else:
-        logger = logging.getLogger()
-
-    handler = RotatingFileHandler(
-        filename=str(log_file),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    handler.setLevel(getattr(logging, level.upper(), logging.DEBUG))
-    handler.setFormatter(logging.Formatter(_FILE_FORMAT, datefmt=_DATE_FORMAT))
-    logger.addHandler(handler)

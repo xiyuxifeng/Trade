@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import TimedRotatingFileHandler
 
 from src.common.logger import bind_log_context, get_log_context
 
@@ -63,6 +64,41 @@ def test_configure_logging_uses_log_level_env(monkeypatch, tmp_path) -> None:
         assert file_handlers[0].level == logging.WARNING
         assert console_handlers
         assert console_handlers[0].level == logging.WARNING
+    finally:
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            handler.close()
+
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+
+        logger_module._configured = original_configured
+
+
+def test_configure_logging_defaults_to_daily_rotation(monkeypatch, tmp_path) -> None:
+    """默认日志文件应按天轮转，并保留 5 天。"""
+    import src.common.logger as logger_module
+
+    root_logger = logging.getLogger()
+    original_handlers = root_logger.handlers[:]
+    original_configured = logger_module._configured
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+
+    try:
+        logger_module._configured = False
+        logger_module.configure_logging(log_file=tmp_path / "app.log", force=True)
+
+        file_handlers = [
+            handler
+            for handler in root_logger.handlers
+            if getattr(handler, "_trade_strategy_ai_handler_kind", None) == "file"
+        ]
+
+        assert file_handlers
+        assert isinstance(file_handlers[0], TimedRotatingFileHandler)
+        assert file_handlers[0].when.lower() == "midnight"
+        assert file_handlers[0].interval == 24 * 60 * 60
+        assert file_handlers[0].backupCount == 5
     finally:
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)

@@ -8,6 +8,7 @@ from src.strategy.config import (
     RuleEvaluatorConfig,
     SignalSynthesizerConfig,
     StrategyConfig,
+    get_strategy_config,
     load_strategy_config,
 )
 
@@ -98,3 +99,12 @@ def test_strategy_config_nested_defaults():
     # 子配置应有默认值
     assert config.feature_engine.mode == "realtime"
     assert config.signal_synthesizer.weights == {}
+
+
+def test_get_strategy_config_reads_app_yaml():
+    """测试默认策略配置从 app.yaml 读取"""
+    config = get_strategy_config()
+
+    assert config.feature_engine.mode == "realtime"
+    assert config.rule_evaluator.dsl_executor["mode"] == "all"
+    assert config.signal_synthesizer.weights["risk"] == 2.0

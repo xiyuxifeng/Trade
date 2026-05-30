@@ -49,7 +49,6 @@ type BacktestFormState = {
   symbols: string;
   benchmarkSymbol: string;
   mode: BacktestJobSubmission['mode'];
-  configPath: string;
   useSnapshotOnly: boolean;
   scoringProfile: string;
 };
@@ -111,7 +110,6 @@ function buildSubmission(form: BacktestFormState): BacktestJobSubmission {
     strategyVersionId: form.strategyVersionId.trim(),
     benchmarkSymbol: form.benchmarkSymbol,
     mode: form.mode,
-    configPath: form.configPath.trim() || undefined,
     symbols: splitSymbols(form.symbols),
     useSnapshotOnly: form.useSnapshotOnly,
     scoringProfile: form.scoringProfile.trim() || 'stage5',
@@ -198,7 +196,6 @@ export function BacktestCenter() {
     symbols: '',
     benchmarkSymbol: DEFAULT_BENCHMARK_SYMBOL,
     mode: 'full',
-    configPath: '',
     useSnapshotOnly: true,
     scoringProfile: '',
   });
@@ -296,16 +293,6 @@ export function BacktestCenter() {
     () => selectLatestProfileSnapshot(selectedProfileDetailQuery.data ?? null),
     [selectedProfileDetailQuery.data],
   );
-  const resolvedProfileConfigPath = selectedProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
-
-  useEffect(() => {
-    setForm((current) => {
-      if (current.configPath === resolvedProfileConfigPath) {
-        return current;
-      }
-      return { ...current, configPath: resolvedProfileConfigPath };
-    });
-  }, [resolvedProfileConfigPath]);
 
   const detailQuery = useQuery({
     queryKey: ['backtest-center', 'detail', selectedResultId],
@@ -359,8 +346,8 @@ export function BacktestCenter() {
   const resultPayload = getResultPayload(lastJob);
   const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
   const profileConfigPathHint = selectedProfileSnapshot
-    ? `已从最新快照解析配置路径：${selectedProfileSnapshot.config_path || 'config/app.yaml'}`
-    : '配置路径将从所选 Profile 的最新快照自动解析。';
+    ? `已绑定最新 Profile snapshot：${selectedProfileSnapshot.snapshot_id}`
+    : '配置上下文将从所选 Profile 的最新 snapshot 自动解析。';
 
   if (!canViewBacktest) {
     return (
@@ -441,7 +428,7 @@ export function BacktestCenter() {
                 </Select>
                 <p className="text-xs text-slate-500">{profileConfigPathHint}</p>
                 {profilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
-                {selectedProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，当前使用默认配置路径。</p> : null}
+                {selectedProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，当前无法预览最新 snapshot。</p> : null}
               </label>
               <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>

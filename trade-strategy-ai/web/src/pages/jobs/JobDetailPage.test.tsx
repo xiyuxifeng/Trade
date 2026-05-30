@@ -163,6 +163,7 @@ describe('JobDetailPage', () => {
     expect(screen.getByText('执行进度')).toBeInTheDocument();
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
     expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getAllByText('Profile 导入来源')).toHaveLength(2);
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
   });

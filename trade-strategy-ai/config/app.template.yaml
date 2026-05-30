@@ -96,6 +96,167 @@ evaluation:
     # 板块类型：auto / main / chinext / star / st / bse。
     board_type: "auto"
 
+strategy:
+  # 策略配置：控制特征计算、规则评估与信号合成的执行方式。
+  # 这部分通常由策略维护者调整；如果不确定，保持默认值即可。
+  feature_engine:
+    # 特征计算模式。
+    # realtime：运行时实时计算，适合日常使用。
+    # precomputed：使用预计算结果，适合离线批处理或性能调优。
+    mode: "realtime"  # realtime | precomputed
+    # 是否按批次计算特征。
+    # true：更适合批量任务，吞吐更高；false：更接近单条实时处理。
+    compute_batch: true
+  rule_evaluator:
+    dsl_executor:
+      # 规则执行策略。
+      # all：全部执行，适合完整评估。
+      # first：命中第一条即停，适合快速筛选。
+      # best：选择最优结果，适合更复杂的评分场景。
+      mode: "all"  # all | first | best
+      # 单条规则执行超时（毫秒）。
+      # 常用范围：50 ~ 500；规则越复杂，建议越高。
+      timeout_ms: 100
+  signal_synthesizer:
+    # 信号合成模式。
+    # priority：按优先级决策，最直观，默认推荐。
+    # weighted_score：按权重打分，适合需要可解释综合评分的场景。
+    # voting：按投票结果合成，适合多规则集成。
+    mode: "priority"  # weighted_score | voting | priority
+    # 各信号类型的权重。
+    # 范围建议：0.0 ~ 5.0；数值越大，影响越强。
+    # entry/exit/filter/sizing/risk 分别表示入场、出场、过滤、仓位、风控类信号。
+    weights:
+      entry: 1.0
+      exit: 1.2
+      filter: 1.5
+      sizing: 1.0
+      risk: 2.0
+    # 合成优先级，从高到低排列。
+    # 建议把最保守、最能拦截风险的项放前面，例如 risk/filter。
+    priorities:
+      - risk
+      - filter
+      - exit
+      - sizing
+      - entry
+
+risk:
+  # 风控配置：用于仓位、止损、止盈和组合风险约束。
+  # 这部分一般由风控或策略维护者调整；修改后会直接影响交易行为。
+  position_manager:
+    # 仓位管理模式。
+    # fixed_amount：固定金额建仓。
+    # fixed_ratio：按账户净值比例建仓，默认最常用。
+    # volatility_adjusted：按波动率调整仓位，适合更稳健的控制。
+    mode: "fixed_ratio"  # fixed_amount | fixed_ratio | volatility_adjusted
+    # 固定金额模式下每笔的基准金额（元）。
+    # 常见范围：几千到几万元，取决于账户规模。
+    fixed_amount: 10_000.0
+    # 固定比例模式下的单笔仓位占比。
+    # 范围建议：0.01 ~ 0.20（1%~20%），越大越激进。
+    fixed_ratio_pct: 0.05
+    # 目标波动率。
+    # 仅在波动率相关模式中更有意义；常见范围：0.05 ~ 0.30。
+    target_volatility: 0.15
+    # 单笔最大仓位占比（占组合净值）。
+    # 建议不超过 0.20，避免单票过度集中。
+    max_position_pct: 0.20
+    # 单笔最大金额上限（元）。
+    # 用于给绝对金额兜底，避免极端情况下仓位过大。
+    max_single_position: 50_000.0
+  stop_loss:
+    # 止损模式。
+    # fixed：固定比例止损。
+    # volatility：按波动率止损，默认推荐。
+    # trailing：跟踪止损。
+    # time：按持有时间止损。
+    mode: "volatility"  # fixed | volatility | trailing | time
+    # 固定止损比例。
+    # 例如 0.05 表示跌 5% 触发；常见范围：0.03 ~ 0.15。
+    fixed_pct: 0.05
+    # 波动率止损倍数。
+    # 值越大越宽松，值越小越敏感；常见范围：1.5 ~ 3.0。
+    atr_multiplier: 2.0
+    # ATR 计算窗口。
+    # 常见范围：7 ~ 21；窗口越大越平滑。
+    atr_window: 14
+    # 最大允许回撤比例。
+    # 常见范围：0.05 ~ 0.20。
+    drawdown_pct: 0.10
+    # 最大持有天数。
+    # 到期未退出时也会触发风控；常见范围：3 ~ 20。
+    max_hold_days: 10
+  take_profit:
+    # 止盈模式。
+    # fixed：固定比例止盈。
+    # scaling：分批止盈，默认推荐。
+    # trailing：跟踪止盈。
+    # time：按持有时间止盈。
+    mode: "scaling"  # fixed | scaling | trailing | time
+    # 固定止盈比例。
+    # 例如 0.15 表示涨 15% 止盈；常见范围：0.05 ~ 0.30。
+    fixed_pct: 0.15
+    # 分批止盈档位。
+    # target_pct：达到该收益后触发。
+    # close_pct：本档卖出比例，范围 0.0 ~ 1.0。
+    scaling_levels:
+      - target_pct: 0.05
+        close_pct: 0.50
+      - target_pct: 0.10
+        close_pct: 0.30
+      - target_pct: 0.20
+        close_pct: 0.20
+    # 跟踪止盈回撤比例。
+    # 常见范围：0.03 ~ 0.15；越小越敏感。
+    trailing_pct: 0.05
+    # 目标持有天数。
+    # 适合按交易周期做时间止盈的场景。
+    target_hold_days: 5
+  simulated_account:
+    # 是否启用模拟账户。
+    # true：会把模拟账户结果保存下来；false：只做内存计算。
+    enabled: true
+    # 初始资金（元）。
+    # 按演示场景或测试规模调整即可。
+    initial_capital: 100_000.0
+    # 是否持久化到数据库。
+    # true：便于回放和审计；false：适合纯本地试验。
+    persist_to_db: true
+  concentration:
+    # 单股最大仓位占净值比例。
+    # 建议范围：0.05 ~ 0.30。
+    max_single_position_pct: 0.20
+    # 单股最大金额限制（元）。
+    # 用于双重保险，避免单一标的暴露过高。
+    max_single_position_amount: 50_000.0
+  industry:
+    # 单个申万二级行业最大占比。
+    # 常见范围：0.20 ~ 0.40。
+    max_industry_pct: 0.30
+    # 单个申万一级行业最大占比。
+    # 通常应大于等于二级行业上限。
+    max_sector_pct: 0.40
+    # 行业数据缓存时间（小时）。
+    # 常见范围：6 ~ 48；越大越少请求外部数据。
+    cache_ttl_hours: 24
+  portfolio:
+    # VaR 置信度。
+    # 0.95 表示 95% 置信度，0.99 更保守。
+    var_confidence: 0.95
+    # VaR 计算窗口（交易日）。
+    # 常见范围：10 ~ 60。
+    var_window: 20
+    # 最大 VaR 占比。
+    # 常见范围：0.05 ~ 0.20；越小越保守。
+    max_var_pct: 0.10
+    # 最大波动率。
+    # 常见范围：0.15 ~ 0.40；用于约束组合整体风险。
+    max_volatility: 0.30
+    # 最大杠杆率。
+    # 1.0 表示不加杠杆；更高值表示允许放大风险。
+    max_leverage: 1.0
+
 data:
   # 数据提供者列表；交付默认建议使用 akshare，便于直接跑真实行情链路。
   providers: ["akshare"]

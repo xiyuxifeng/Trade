@@ -5,9 +5,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
 from pydantic import BaseModel
 
+from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 
 
@@ -40,23 +40,18 @@ class StrategyConfig(BaseModel):
 def get_strategy_config() -> StrategyConfig:
     """获取策略配置（单例）
 
-    从 config/strategy.yaml 加载配置
+    优先从 config/app.yaml 读取 strategy section；兼容独立 strategy.yaml。
     """
-    config_path = resolve_project_path("config/strategy.yaml")
-    if config_path.exists():
-        with open(config_path) as f:
-            data = yaml.safe_load(f) or {}
-        # 提取 strategy 节点
-        return StrategyConfig(**data.get("strategy", {}))
-    return StrategyConfig()
+    config_path = resolve_project_path("config/app.yaml")
+    loaded = load_app_config(config_path)
+    return StrategyConfig.model_validate(loaded.config.strategy or {})
 
 
 def load_strategy_config(config_path: str | Path) -> StrategyConfig:
     """从指定路径加载策略配置"""
     path = resolve_project_path(config_path)
-    if path.exists():
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        # 提取 strategy 节点
-        return StrategyConfig(**data.get("strategy", {}))
-    return StrategyConfig()
+    if not path.exists():
+        return StrategyConfig()
+
+    loaded = load_app_config(path)
+    return StrategyConfig.model_validate(loaded.config.strategy or {})

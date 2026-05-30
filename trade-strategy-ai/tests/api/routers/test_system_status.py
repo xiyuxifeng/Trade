@@ -30,8 +30,28 @@ async def test_system_status_route_exists(client: AsyncClient) -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert "config_path" in payload
+    assert "profile_context" in payload
     assert "database" in payload
     assert "directories" in payload
+    assert payload["profile_context"]["profile_id"] is None
+    assert payload["profile_context"]["profile_snapshot_id"] is None
+    assert payload["profile_context"]["source"] == "unset"
+
+
+@pytest.mark.asyncio
+async def test_system_status_includes_env_profile_context(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """系统状态应显式透出环境变量注入的 Profile 上下文。"""
+    monkeypatch.setenv("PROFILE_ID", "profile-001")
+    monkeypatch.setenv("PROFILE_SNAPSHOT_ID", "snapshot-001")
+
+    response = await client.get("/api/ui/v1/system/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["profile_context"] == {
+        "profile_id": "profile-001",
+        "profile_snapshot_id": "snapshot-001",
+        "source": "env",
+    }
 
 
 @pytest.mark.asyncio

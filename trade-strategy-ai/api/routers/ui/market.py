@@ -61,10 +61,17 @@ def _structured_error(error_type: str, message: str, detail: str | None = None, 
     }
 
 
-async def _resolve_profile_config_path(profile_id: str | None, config_path: str) -> str:
-    """优先按 Profile 解析配置路径，找不到时返回明确错误。"""
-    if not profile_id:
-        return config_path
+async def _resolve_profile_config_path(profile_id: str) -> str:
+    """只按 Profile 解析配置路径，避免 Web 端回退到旧的 config_path 语义。"""
+    if not profile_id.strip():
+        raise HTTPException(
+            status_code=422,
+            detail=_structured_error(
+                "invalid_profile_id",
+                "profile_id is required",
+                metadata={"field": "profile_id"},
+            ),
+        )
     resolved = await ConfigProfileService().resolve_profile_config_path(profile_id)
     if resolved is None:
         raise HTTPException(
@@ -166,13 +173,12 @@ async def get_ohlcv(
 
 @router.get("/ohlcv/status", response_model=OhlcvSchedulerStatusResponse)
 async def get_ohlcv_status(
-    profile_id: str | None = Query(default=None),
-    config_path: str = Query(default="config/app.yaml"),
+    profile_id: str = Query(...),
     market_service: MarketService = Depends(get_market_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     """查看 OHLCV 调度器状态。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    resolved_config_path = await _resolve_profile_config_path(profile_id)
     result = await market_service.ohlcv_scheduler_status(config_path=resolved_config_path)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler status failed")
@@ -181,12 +187,11 @@ async def get_ohlcv_status(
 
 @router.post("/ohlcv/run", response_model=OhlcvSchedulerRunResponse, dependencies=[Depends(verify_api_key)])
 async def run_ohlcv_scheduler(
-    profile_id: str | None = Query(default=None),
-    config_path: str = Query(default="config/app.yaml"),
+    profile_id: str = Query(...),
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """启动 OHLCV 调度器。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    resolved_config_path = await _resolve_profile_config_path(profile_id)
     result = market_service.run_ohlcv_scheduler(config_path=resolved_config_path, start_scheduler=True, block=False)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler start failed")
@@ -195,12 +200,11 @@ async def run_ohlcv_scheduler(
 
 @router.post("/ohlcv/stop", response_model=OhlcvSchedulerStopResponse, dependencies=[Depends(verify_api_key)])
 async def stop_ohlcv_scheduler(
-    profile_id: str | None = Query(default=None),
-    config_path: str = Query(default="config/app.yaml"),
+    profile_id: str = Query(...),
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """停止 OHLCV 调度器。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id, config_path)
+    resolved_config_path = await _resolve_profile_config_path(profile_id)
     result = market_service.stop_ohlcv_scheduler(config_path=resolved_config_path)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler stop failed")

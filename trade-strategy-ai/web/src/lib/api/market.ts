@@ -54,20 +54,20 @@ export function getOhlcv(symbol: string, startDate: string, endDate: string) {
   return fetchJson<OhlcvResponse>(`/market/ohlcv?${params.toString()}`);
 }
 
-export function getOhlcvSchedulerStatus(profileId?: string, configPath = 'config/app.yaml') {
-  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+export function getOhlcvSchedulerStatus(profileId?: string) {
+  const query = buildQueryString({ profile_id: profileId });
   return fetchJson<OhlcvSchedulerStatusResponse>(`/market/ohlcv/status${query ? `?${query}` : ''}`);
 }
 
-export function runOhlcvScheduler(profileId?: string, configPath = 'config/app.yaml') {
-  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+export function runOhlcvScheduler(profileId?: string) {
+  const query = buildQueryString({ profile_id: profileId });
   return fetchJson<OhlcvSchedulerRunResponse>(`/market/ohlcv/run${query ? `?${query}` : ''}`, {
     method: 'POST',
   });
 }
 
-export function stopOhlcvScheduler(profileId?: string, configPath = 'config/app.yaml') {
-  const query = buildQueryString({ profile_id: profileId, config_path: profileId ? undefined : configPath });
+export function stopOhlcvScheduler(profileId?: string) {
+  const query = buildQueryString({ profile_id: profileId });
   return fetchJson<OhlcvSchedulerStopResponse>(`/market/ohlcv/stop${query ? `?${query}` : ''}`, {
     method: 'POST',
   });

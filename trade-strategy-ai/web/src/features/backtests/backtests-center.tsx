@@ -35,7 +35,7 @@ import type { JobSubmissionRequest } from '@/types/jobs';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
 import type { MarketBenchmarkOption } from '@/types/market';
 
-const DEFAULT_CONFIG_PATH = 'config/app.yaml';
+const DEFAULT_CONFIG_PATH = 'config/app.template.yaml';
 const DEFAULT_SCORING_PROFILE = 'stage5';
 const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 

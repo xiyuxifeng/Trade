@@ -88,6 +88,7 @@ export function SystemStatusPanel() {
   }
 
   const directoryEntries = Object.entries(data.directories);
+  const profileContext = data.profile_context ?? null;
 
   return (
     <Card>
@@ -95,7 +96,7 @@ export function SystemStatusPanel() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>系统状态</CardTitle>
-            <CardDescription>实时查看当前配置、数据库和关键目录。</CardDescription>
+            <CardDescription>实时查看当前运行配置、数据库和关键目录。</CardDescription>
           </div>
           <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? '刷新中' : '刷新'}
@@ -103,7 +104,7 @@ export function SystemStatusPanel() {
         </div>
       </CardHeader>
       <CardContent className="grid gap-5">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">运行模式</p>
             <p className="mt-2 text-base font-semibold">{data.run_mode}</p>
@@ -118,8 +119,15 @@ export function SystemStatusPanel() {
             </div>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">配置路径</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">运行配置</p>
             <p className="mt-2 break-all text-sm text-slate-900">{data.config_path}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile</p>
+            <p className="mt-2 text-base font-semibold text-slate-950">{profileContext?.profile_id ?? '未绑定'}</p>
+            <p className="mt-1 break-all text-xs text-slate-500">
+              snapshot: {profileContext?.profile_snapshot_id ?? '未绑定'} · source: {profileContext?.source ?? 'unset'}
+            </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">项目根目录</p>

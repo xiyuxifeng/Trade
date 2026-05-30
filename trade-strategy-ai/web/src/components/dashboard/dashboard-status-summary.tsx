@@ -63,6 +63,7 @@ export function DashboardStatusSummary() {
   const acknowledgedJobs = jobs.filter((job) => job.status === 'success').length;
   const warnings = system?.warnings?.length ?? 0;
   const databaseStatus = system?.database.status ?? 'unknown';
+  const profileContext = system?.profile_context ?? null;
 
   return (
     <section className="space-y-4">
@@ -100,10 +101,16 @@ export function DashboardStatusSummary() {
         <MetricCard label="告警摘要" value={alerts.length} note="重点告警状态栏会显示这些记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
         <MetricCard label="目录提示" value={warnings} note={warnings ? '有目录需要检查' : '关键目录正常'} tone={warnings ? 'text-amber-600' : 'text-emerald-600'} />
         <MetricCard
-          label="配置"
+          label="运行配置"
           value={system?.config_path ? '已加载' : '未知'}
-          note={system?.config_path ? '当前配置文件已识别' : '未识别配置文件'}
+          note={system?.config_path ? '当前运行配置已识别' : '未识别运行配置'}
           tone="text-slate-900"
+        />
+        <MetricCard
+          label="Profile 上下文"
+          value={profileContext?.profile_id ?? '未绑定'}
+          note={`snapshot: ${profileContext?.profile_snapshot_id ?? '未绑定'} · source: ${profileContext?.source ?? 'unset'}`}
+          tone="text-indigo-600"
         />
         <MetricCard
           label="工作流"

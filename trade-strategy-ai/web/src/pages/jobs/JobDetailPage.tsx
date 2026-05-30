@@ -292,7 +292,7 @@ export function JobDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="参数快照" description="展示任务提交时的参数和关联配置快照。">
+          <SectionCard title="参数快照" description="展示任务提交时的参数、关联 Profile 和配置快照。">
             <div className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <JsonViewer value={detail.params} title="参数" />
@@ -307,7 +307,7 @@ export function JobDetailPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="快照 ID" value={configSnapshot?.config_snapshot_id} />
                 <Field label="快照哈希" value={configSnapshot?.config_hash} />
-                <Field label="快照来源" value={maskAbsolutePath(configSnapshot?.config_source)} />
+                <Field label="Profile 导入来源" value={maskAbsolutePath(configSnapshot?.config_source)} />
               </div>
               {configSnapshot?.profile_id && configSnapshot?.config_snapshot_id ? (
                 <div className="flex flex-wrap gap-2">

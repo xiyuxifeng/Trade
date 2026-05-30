@@ -163,7 +163,7 @@ async def import_profile(
     service: ConfigProfileService = Depends(get_profile_service),
     _role_principal: CurrentPrincipal = Depends(require_role("operator")),
 ) -> dict[str, Any]:
-    """从旧 config_path 导入正式 Profile。"""
+    """从 `config/app.yaml` 或 `config/app.template.yaml` 导入正式 Profile。"""
     existing = await service.get_profile(request.profile_id)
     try:
         profile = await service.import_from_config_path(

@@ -26,6 +26,10 @@ export function buildWorkflowDefaultValues(schema: WorkflowParamSchema | null): 
   if (!schema) return values;
 
   for (const [name, field] of Object.entries(schema.fields)) {
+    if (name === 'profile_id' && field.default === undefined) {
+      values[name] = '';
+      continue;
+    }
     if (field.default !== undefined) {
       values[name] = field.type === 'boolean' ? Boolean(field.default) : stringifyDefault(field.default);
       continue;
@@ -49,7 +53,7 @@ export function buildFieldPlaceholder(name: string, field: WorkflowParamField): 
   if (field.type === 'integer' || field.type === 'number') return field.required ? '1' : '';
   if (field.type === 'date') return formatLocalDateInputOffset(0);
   if (field.type === 'path') {
-    if (name === 'config_path') return 'config/app.yaml';
+    if (name === 'config_path') return 'config/app.template.yaml';
     if (name === 'base_dir') return 'trade-strategy-ai';
     if (name === 'backup_dir') return 'data/backups';
     if (name === 'adjustments_path') return 'data/processed/optimize/advise.json';

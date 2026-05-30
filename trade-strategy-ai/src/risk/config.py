@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
 
-import yaml
 from pydantic import BaseModel, Field
 
+from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 from src.risk.types import (
     PositionSizeType,
@@ -76,21 +75,18 @@ class RiskConfig(BaseModel):
 def get_risk_config() -> RiskConfig:
     """获取风控配置（单例）
 
-    从 config/risk.yaml 加载配置
+    优先从 config/app.yaml 读取 risk section；兼容独立 risk.yaml。
     """
-    config_path = resolve_project_path("config/risk.yaml")
-    if config_path.exists():
-        with open(config_path) as f:
-            data = yaml.safe_load(f) or {}
-        return RiskConfig(**data)
-    return RiskConfig()
+    config_path = resolve_project_path("config/app.yaml")
+    loaded = load_app_config(config_path)
+    return RiskConfig.model_validate(loaded.config.risk or {})
 
 
 def load_risk_config(config_path: str | Path) -> RiskConfig:
     """从指定路径加载风控配置"""
     path = resolve_project_path(config_path)
-    if path.exists():
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return RiskConfig(**data)
-    return RiskConfig()
+    if not path.exists():
+        return RiskConfig()
+
+    loaded = load_app_config(path)
+    return RiskConfig.model_validate(loaded.config.risk or {})

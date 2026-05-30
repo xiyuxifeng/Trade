@@ -43,6 +43,113 @@ evaluation:
     # 板块类型：auto（自动推断）/ main（主板 10%）/ chinext（创业板 20%）/ star（科创板 20%）/ st（ST 5%）/ bse（北交所 30%）
     board_type: "auto"
 
+strategy:
+  # 策略执行配置；保持与 app.template.yaml 同结构，方便 Profile 导入和 CLI 调试。
+  feature_engine:
+    # realtime：运行时实时计算；precomputed：使用预计算结果。
+    mode: "realtime"
+    # true：批量计算；false：单条处理。
+    compute_batch: true
+  rule_evaluator:
+    dsl_executor:
+      # all / first / best：规则执行策略。
+      mode: "all"
+      # 单条规则超时（毫秒）。
+      timeout_ms: 100
+  signal_synthesizer:
+    # priority / weighted_score / voting：信号合成策略。
+    mode: "priority"
+    # 数值越大影响越强，通常 0.0 ~ 5.0。
+    weights:
+      entry: 1.0
+      exit: 1.2
+      filter: 1.5
+      sizing: 1.0
+      risk: 2.0
+    # 从高到低的合成优先级。
+    priorities:
+      - risk
+      - filter
+      - exit
+      - sizing
+      - entry
+
+risk:
+  # 风控执行配置；与 app.template.yaml 保持一致。
+  position_manager:
+    # fixed_amount / fixed_ratio / volatility_adjusted。
+    mode: "fixed_ratio"
+    # 固定金额模式的基准金额（元）。
+    fixed_amount: 10_000.0
+    # 固定比例模式下的仓位占比（建议 0.01 ~ 0.20）。
+    fixed_ratio_pct: 0.05
+    # 目标波动率（建议 0.05 ~ 0.30）。
+    target_volatility: 0.15
+    # 单笔仓位占净值上限（建议不超过 0.20）。
+    max_position_pct: 0.20
+    # 单笔绝对金额上限（元）。
+    max_single_position: 50_000.0
+  stop_loss:
+    # fixed / volatility / trailing / time。
+    mode: "volatility"
+    # 固定止损比例（例如 0.05 = 5%）。
+    fixed_pct: 0.05
+    # 波动率止损倍数（常见 1.5 ~ 3.0）。
+    atr_multiplier: 2.0
+    # ATR 窗口（交易日）。
+    atr_window: 14
+    # 最大回撤比例。
+    drawdown_pct: 0.10
+    # 最大持有天数。
+    max_hold_days: 10
+  take_profit:
+    # fixed / scaling / trailing / time。
+    mode: "scaling"
+    # 固定止盈比例。
+    fixed_pct: 0.15
+    # 分批止盈档位；close_pct 为该档位卖出比例。
+    scaling_levels:
+      - target_pct: 0.05
+        close_pct: 0.50
+      - target_pct: 0.10
+        close_pct: 0.30
+      - target_pct: 0.20
+        close_pct: 0.20
+    # 跟踪止盈回撤比例。
+    trailing_pct: 0.05
+    # 目标持有天数。
+    target_hold_days: 5
+  simulated_account:
+    # 是否保存模拟账户结果。
+    enabled: true
+    # 初始资金（元）。
+    initial_capital: 100_000.0
+    # 是否落库，便于回放与审计。
+    persist_to_db: true
+  concentration:
+    # 单股仓位占净值上限。
+    max_single_position_pct: 0.20
+    # 单股绝对金额上限（元）。
+    max_single_position_amount: 50_000.0
+  industry:
+    # 单行业最大占比。
+    max_industry_pct: 0.30
+    # 单一级行业最大占比。
+    max_sector_pct: 0.40
+    # 缓存时长（小时）。
+    cache_ttl_hours: 24
+  portfolio:
+    # VaR 置信度。
+    var_confidence: 0.95
+    # VaR 计算窗口（交易日）。
+    var_window: 20
+    # 最大 VaR 占比。
+    max_var_pct: 0.10
+    # 最大波动率。
+    max_volatility: 0.30
+    # 最大杠杆率，1.0 表示不加杠杆。
+    max_leverage: 1.0
+
 data:
   # 数据提供者列表：Phase 0 默认 mock；后续可扩展为 akshare/tushare 等
   providers: ["mock"]

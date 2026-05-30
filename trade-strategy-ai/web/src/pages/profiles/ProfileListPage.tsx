@@ -104,7 +104,7 @@ export function ProfileListPage() {
             <Badge variant="info">配置管理</Badge>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">配置管理工作台</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              查看正式配置、检查校验状态、进入详情页，并从旧的 config_path 导入新的正式配置。
+              查看正式配置、检查校验状态、进入详情页，并从 `config/app.yaml` 或 `config/app.template.yaml` 导入新的正式配置。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -2,7 +2,7 @@
 
 ## 配置修改指南
 
-### 策略配置 (config/strategy.yaml)
+### 策略配置（`config/app.template.yaml` / `config/app.yaml` 中的 `strategy` section）
 
 #### 信号合成模式
 
@@ -45,7 +45,7 @@ strategy:
       risk: 2.0
 ```
 
-### 风控配置 (config/risk.yaml)
+### 风控配置（`config/app.template.yaml` / `config/app.yaml` 中的 `risk` section）
 
 #### 头寸管理
 

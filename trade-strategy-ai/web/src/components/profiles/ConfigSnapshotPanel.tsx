@@ -82,9 +82,9 @@ export function ConfigSnapshotPanel({ snapshot, state }: ConfigSnapshotPanelProp
 
       <div className="grid gap-3 md:grid-cols-3">
         <FieldCard label="快照 ID" value={snapshot.config_snapshot_id} />
-        <FieldCard label="快照来源" value={maskAbsolutePath(snapshot.config_source)} />
+        <FieldCard label="Profile 导入来源" value={maskAbsolutePath(snapshot.config_source)} />
         <FieldCard label="快照哈希" value={snapshot.config_hash} />
-        <FieldCard label="profile_id" value={snapshot.profile_id ?? '未提供'} />
+        <FieldCard label="关联 Profile" value={snapshot.profile_id ?? '未提供'} />
         <FieldCard label="snapshot_created_at" value={formatTimestamp(snapshot.captured_at)} />
         <FieldCard label="validation_status" value={snapshot.validation_status ?? (invalid ? 'invalid_config' : '未提供')} />
       </div>

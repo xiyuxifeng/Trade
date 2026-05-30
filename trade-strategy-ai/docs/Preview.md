@@ -339,7 +339,7 @@ curl http://localhost:8000/api/ui/v1/system/status
 
 1. 使用 preview admin 登录。
 2. 打开 `/profiles`。
-3. 导入 `config/app.yaml` 为 `preview-demo`。
+3. 导入 `config/app.yaml` 或交付模板 `config/app.template.yaml` 为 `preview-demo`。
 4. 确认状态为 `validated`。
 5. 进入 Profile 详情，确认关键 sections 存在。
 
@@ -706,7 +706,7 @@ curl http://localhost:8000/api/ui/v1/system/status
 | 失败点 | 处理方式 |
 |---|---|
 | 登录失败 | 检查 API Key / 用户密码，重新创建 preview admin |
-| Profile validation 失败 | 回到 `config/app.yaml`，检查必填 section 和路径 |
+| Profile validation 失败 | 回到导入源（`config/app.yaml` 或 `config/app.template.yaml`），检查必填 section 和路径 |
 | Job pending | 检查 Worker 是否启动、DB 是否可连 |
 | 文章抓取失败 | 降低 max_articles，检查来源配置和网络 |
 | OHLCV 失败 | 缩小 symbols，缩短日期范围，检查 Provider |

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,8 +17,10 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
+import { listProfiles } from '@/lib/api/profiles';
 import { runWorkflow } from '@/lib/api/workflows';
 import type { WorkflowDefinition, WorkflowParamField, WorkflowRunResponse } from '@/types/workflows';
+import type { ProfileRecord } from '@/types/profile';
 import {
   buildWorkflowDefaultValues,
   getWorkflowRunSchema,
@@ -153,9 +155,26 @@ export function WorkflowParameterForm({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewParams, setPreviewParams] = useState<Record<string, unknown>>({});
   const [submittedSummary, setSubmittedSummary] = useState<WorkflowRunResponse | null>(null);
+  const profilesQuery = useQuery({
+    queryKey: ['workflow-parameter-form', 'profiles'],
+    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
+    staleTime: 60_000,
+  });
+  const profileItems = profilesQuery.data?.items ?? [];
 
   const riskSummary = useMemo(() => summarizeWorkflowRisk(workflow), [workflow]);
   const canRunWorkflow = canAccess('operator');
+  const hasProfileField = Boolean(schema?.fields.profile_id);
+  const fields = useMemo(
+    () => Object.entries(schema?.fields ?? {}).filter(([name]) => !(hasProfileField && name === 'config_path')),
+    [hasProfileField, schema?.fields],
+  );
+  const previewValues = useMemo(() => {
+    if (!hasProfileField) return values;
+    const next = { ...values };
+    delete next.config_path;
+    return next;
+  }, [hasProfileField, values]);
 
   useEffect(() => {
     setValues(buildWorkflowDefaultValues(schema));
@@ -165,6 +184,15 @@ export function WorkflowParameterForm({
     setPreviewParams({});
     setSubmittedSummary(null);
   }, [schema, workflow.workflow_id]);
+
+  useEffect(() => {
+    if (!hasProfileField || !profileItems.length) {
+      return;
+    }
+    if (!String(values.profile_id ?? '').trim()) {
+      setValues((current) => ({ ...current, profile_id: profileItems[0].profile_id }));
+    }
+  }, [hasProfileField, profileItems, values.profile_id]);
 
   const runMutation = useMutation({
     mutationFn: async (request: { params: Record<string, unknown>; confirmed: boolean }) => {
@@ -191,8 +219,6 @@ export function WorkflowParameterForm({
     },
   });
 
-  const fields = Object.entries(schema?.fields ?? {});
-
   const submit = () => {
     if (!canRunWorkflow) {
       setErrorMessage('当前身份需要 operator 权限才能提交工作流。');
@@ -206,7 +232,10 @@ export function WorkflowParameterForm({
       return;
     }
 
-    setPreviewParams(validation.params);
+    const submittedParams = hasProfileField
+      ? Object.fromEntries(Object.entries(validation.params).filter(([name]) => name !== 'config_path'))
+      : validation.params;
+    setPreviewParams(submittedParams);
     setErrorMessage(null);
     setFieldErrors({});
 
@@ -215,7 +244,7 @@ export function WorkflowParameterForm({
       return;
     }
 
-    runMutation.mutate({ params: validation.params, confirmed: false });
+    runMutation.mutate({ params: submittedParams, confirmed: false });
   };
 
   return (
@@ -236,30 +265,69 @@ export function WorkflowParameterForm({
         </div>
         ) : (
           <>
+            {hasProfileField ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">Profile</p>
+                    <p className="mt-1 text-sm text-slate-600">Web 主流程只认 Profile，`config_path` 仅保留兼容/调试入口。</p>
+                  </div>
+                  <Badge variant={profileItems.length === 0 ? 'warning' : 'info'}>{profileItems.length === 0 ? '无可用 Profile' : 'Profile'}</Badge>
+                </div>
+                <label className="mt-4 block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Profile</span>
+                  <Select
+                    aria-invalid={fieldErrors.profile_id ? 'true' : undefined}
+                    aria-label="Profile"
+                    value={String(values.profile_id ?? '')}
+                    onChange={(event) => {
+                      setValues((current) => ({ ...current, profile_id: event.target.value }));
+                      setFieldErrors((current) => {
+                        const next = { ...current };
+                        delete next.profile_id;
+                        return next;
+                      });
+                    }}
+                    disabled={profilesQuery.isLoading || profileItems.length === 0}
+                  >
+                    {profileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+                    {profileItems.map((profile: ProfileRecord) => (
+                      <option key={profile.profile_id} value={profile.profile_id}>
+                        {profile.name} ({profile.profile_id})
+                      </option>
+                    ))}
+                  </Select>
+                  {profilesQuery.isError ? <p className="mt-2 text-sm text-rose-700">Profile 列表加载失败，请稍后重试。</p> : null}
+                  {fieldErrors.profile_id ? <p className="mt-2 text-sm text-rose-700">{fieldErrors.profile_id}</p> : null}
+                </label>
+              </div>
+            ) : null}
             <div className="grid gap-3">
-              {fields.map(([name, field]) => (
-                <FieldEditor
-                  key={name}
-                  name={name}
-                  field={field}
-                  error={fieldErrors[name]}
-                  value={values[name]}
-                  onChange={(nextValue) => {
-                    setValues((current) => ({ ...current, [name]: nextValue }));
-                    setFieldErrors((current) => {
-                      const next = { ...current };
-                      delete next[name];
-                      return next;
-                    });
-                  }}
-                />
-              ))}
+              {fields.map(([name, field]) =>
+                name === 'profile_id' ? null : (
+                  <FieldEditor
+                    key={name}
+                    name={name}
+                    field={field}
+                    error={fieldErrors[name]}
+                    value={values[name]}
+                    onChange={(nextValue) => {
+                      setValues((current) => ({ ...current, [name]: nextValue }));
+                      setFieldErrors((current) => {
+                        const next = { ...current };
+                        delete next[name];
+                        return next;
+                      });
+                    }}
+                  />
+                ),
+              )}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">参数预览</p>
               <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-800">
-                {prettyJson(values)}
+                {prettyJson(previewValues)}
               </pre>
             </div>
           </>

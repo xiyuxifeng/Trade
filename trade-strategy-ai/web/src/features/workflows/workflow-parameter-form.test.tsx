@@ -5,6 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
+import { listProfiles } from '@/lib/api/profiles';
 import { WorkflowParameterForm } from './workflow-parameter-form';
 import { runWorkflow } from '@/lib/api/workflows';
 import type { WorkflowDefinition } from '@/types/workflows';
@@ -13,7 +14,15 @@ vi.mock('@/lib/api/workflows', () => ({
   runWorkflow: vi.fn(),
 }));
 
+vi.mock('@/lib/api/profiles', () => ({
+  getProfile: vi.fn(),
+  getProfileSnapshot: vi.fn(),
+  importProfile: vi.fn(),
+  listProfiles: vi.fn(),
+}));
+
 const mockedRunWorkflow = vi.mocked(runWorkflow);
+const mockedListProfiles = vi.mocked(listProfiles);
 
 const highRiskWorkflow = {
   workflow_id: 'install-config',
@@ -72,6 +81,44 @@ const pipelineWorkflow = {
   steps: [],
 } as unknown as WorkflowDefinition;
 
+const profileWorkflow = {
+  workflow_id: 'profile-pipeline',
+  title: 'Profile Pipeline',
+  description: '使用 Profile 串联工作流。',
+  job_type: 'pipeline-run',
+  permissions: 'operator',
+  job_definition: {
+    risk: 'medium',
+    requires_confirmation: false,
+    params_schema: {
+      description: 'Profile 参数',
+      fields: {
+        profile_id: {
+          type: 'string',
+          description: 'Profile ID',
+          required: true,
+          enum: [],
+        },
+        config_path: {
+          type: 'path',
+          description: '兼容路径',
+          required: true,
+          enum: [],
+        },
+        max_articles: {
+          type: 'integer',
+          description: '最大文章数',
+          required: false,
+          default: 5,
+          enum: [],
+        },
+      },
+      allow_additional_fields: false,
+    },
+  },
+  steps: [],
+} as unknown as WorkflowDefinition;
+
 function renderForm({
   workflow = highRiskWorkflow,
   onSubmitted,
@@ -108,6 +155,13 @@ function renderForm({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedListProfiles.mockResolvedValue({
+    count: 0,
+    total: 0,
+    skip: 0,
+    limit: 50,
+    items: [],
+  });
 });
 
 describe('WorkflowParameterForm', () => {
@@ -132,7 +186,7 @@ describe('WorkflowParameterForm', () => {
           created_by: 'web',
           confirmed: true,
           params: {
-            config_path: 'config/app.yaml',
+            config_path: 'config/app.template.yaml',
           },
         }),
       );
@@ -175,7 +229,7 @@ describe('WorkflowParameterForm', () => {
 
     renderForm({ workflow: pipelineWorkflow });
 
-    const configPath = screen.getByDisplayValue('config/app.yaml');
+    const configPath = screen.getByDisplayValue('config/app.template.yaml');
     await user.clear(configPath);
     await user.click(screen.getByRole('button', { name: '提交运行' }));
 
@@ -204,7 +258,7 @@ describe('WorkflowParameterForm', () => {
     await user.click(screen.getByRole('button', { name: '提交运行' }));
 
     expect(await screen.findByText('配置文件不存在')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('config/app.yaml')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByDisplayValue('config/app.template.yaml')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByText('invalid workflow params')).toBeInTheDocument();
   });
 
@@ -222,6 +276,58 @@ describe('WorkflowParameterForm', () => {
 
     await waitFor(() => {
       expect(onSubmitted).toHaveBeenCalledWith('job-pipeline-1');
+    });
+  });
+
+  it('prefers profile selection and hides config_path when the schema includes profile_id', async () => {
+    const user = userEvent.setup();
+    mockedListProfiles.mockResolvedValueOnce({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-16T08:00:00Z',
+          updated_at: '2026-05-16T08:00:00Z',
+          archived_at: null,
+        },
+      ],
+    });
+    mockedRunWorkflow.mockResolvedValue({
+      workflow: profileWorkflow,
+      job: { id: 'job-profile-1', job_type: 'pipeline-run' },
+    } as Awaited<ReturnType<typeof runWorkflow>>);
+
+    renderForm({ workflow: profileWorkflow });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Profile' })).toHaveValue('default');
+    });
+    expect(screen.queryByDisplayValue('config/app.template.yaml')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '提交运行' }));
+
+    await waitFor(() => {
+      expect(mockedRunWorkflow).toHaveBeenCalledWith(
+        'profile-pipeline',
+        expect.objectContaining({
+          created_by: 'web',
+          confirmed: false,
+          params: expect.objectContaining({
+            profile_id: 'default',
+            max_articles: 5,
+          }),
+        }),
+      );
     });
   });
 });

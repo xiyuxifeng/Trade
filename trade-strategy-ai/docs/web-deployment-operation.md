@@ -184,7 +184,9 @@ Web 配置页只展示 **脱敏值**；保存时由服务端校验并写回。
 
 - 运维负责把系统启动起来，并保证默认配置正确。
 - admin 在 Web 里通过 `/profiles` 和各业务页面完成日常操作。
-- 日常用户不需要手工编辑 `config_path`，页面会自动绑定当前 Profile。
+- Web 日常用户不需要手工编辑 `config_path`，页面会自动绑定当前 Profile。
+- `config/app.yaml` 和 `config/app.template.yaml` 只作为导入源和 CLI 调试入口，不应作为 Web 主流程的正式事实源；其中已包含 `strategy` 和 `risk` 配置段，用户不需要再单独维护独立的策略/风控配置文件。
+- `/api/ui/v1/system/status` 里的 `Profile 上下文` 只表示环境变量注入的显式绑定，默认不会从 `config_path` 推断；没有注入时显示 `unset` / `未绑定`，这是为了避免把运行环境和业务 Profile 混为一谈。
 
 ---
 

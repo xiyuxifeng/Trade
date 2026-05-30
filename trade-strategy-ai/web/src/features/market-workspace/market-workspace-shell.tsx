@@ -20,7 +20,6 @@ import { MarketWorkspaceRecentJobs } from './market-workspace-recent-jobs';
 import { MarketWorkspaceErrors } from './market-workspace-errors';
 import { MarketWorkspaceArtifacts } from './market-workspace-artifacts';
 import { DataHealthCenter } from '@/features/data-health';
-import { selectLatestProfileSnapshot } from '@/features/strategy-workspace/strategy-workspace-utils';
 import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { KaipanStatusResponse } from '@/types/kaipan';
 import type { OhlcvSchedulerStatusResponse } from '@/types/market';
@@ -134,8 +133,6 @@ function ProfileField({
   onChange,
   loading,
   items,
-  selectedSnapshotConfigPath,
-  fallbackConfigPath,
   profileListError,
   profileDetailError,
 }: {
@@ -145,8 +142,6 @@ function ProfileField({
   onChange: (value: string) => void;
   loading: boolean;
   items: ProfileRecord[];
-  selectedSnapshotConfigPath: string | null | undefined;
-  fallbackConfigPath: string;
   profileListError: boolean;
   profileDetailError: boolean;
 }) {
@@ -162,10 +157,10 @@ function ProfileField({
         ))}
       </Select>
       <p className="text-xs text-slate-500">
-        配置路径将从所选 Profile 的最新快照自动解析：{selectedSnapshotConfigPath ?? fallbackConfigPath}
+        配置上下文将从所选 Profile 的最新 snapshot 自动解析。
       </p>
       {profileListError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
-      {profileDetailError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时将回退到默认配置。</p> : null}
+      {profileDetailError ? <p className="text-xs text-rose-600">Profile 详情加载失败，提交时仍以 Profile 为准。</p> : null}
     </label>
   );
 }
@@ -177,7 +172,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
     .filter(Boolean);
 
   const base = {
-    config_path: form.configPath,
+    profile_id: form.profileId,
     trade_date: form.tradeDate,
     slot: form.slot,
   };
@@ -201,7 +196,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
           block: false,
         }
       : {
-          config_path: form.configPath,
+          profile_id: form.profileId,
           trade_date: form.tradeDate,
           slot: form.slot,
           mode: form.mode,
@@ -227,7 +222,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
       return params;
     }
     return {
-      config_path: form.configPath,
+      profile_id: form.profileId,
       mode: form.mode,
       symbols,
       start_date: form.startDate,
@@ -238,7 +233,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
 
   if (jobType === 'market-state-build') {
     return {
-      config_path: form.configPath,
+      profile_id: form.profileId,
       benchmark_symbol: form.benchmarkSymbol,
       as_of: form.asOf,
       dest: form.dest,
@@ -248,7 +243,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
   }
 
   return {
-    config_path: form.configPath,
+    profile_id: form.profileId,
     benchmark_symbol: form.benchmarkSymbol,
     date: form.snapshotDate,
     start_date: form.startDate,
@@ -261,7 +256,7 @@ function buildJobParams(jobType: string, form: WorkspaceFormState, mode: MarketW
 }
 
 type WorkspaceFormState = {
-  configPath: string;
+  profileId: string;
   ohlcvProfileId: string;
   kaipanProfileId: string;
   tradeDate: string;
@@ -297,7 +292,7 @@ export function MarketOhlcvWorkspaceShell() {
 function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) {
   const modeConfig = MARKET_WORKSPACE_MODE_CONFIG[mode];
   const [form, setForm] = useState<WorkspaceFormState>({
-    configPath: 'config/app.yaml',
+    profileId: '',
     ohlcvProfileId: '',
     kaipanProfileId: '',
     tradeDate: formatLocalDateInputOffset(0),
@@ -336,7 +331,29 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     staleTime: 30_000,
   });
   const kaipanProfileItems = kaipanProfilesQuery.data?.items ?? [];
+  const allProfilesQuery = useQuery({
+    queryKey: ['market-workspace', 'profiles'],
+    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
+    enabled: mode === 'all',
+    staleTime: 30_000,
+  });
+  const allProfileItems = allProfilesQuery.data?.items ?? [];
 
+  useEffect(() => {
+    if (mode !== 'all' || !allProfileItems.length) {
+      return;
+    }
+    if (!form.profileId || !allProfileItems.some((item: ProfileRecord) => item.profile_id === form.profileId)) {
+      setForm((current) => ({ ...current, profileId: allProfileItems[0].profile_id }));
+    }
+  }, [allProfileItems, form.profileId, mode]);
+
+  const selectedAllProfileDetailQuery = useQuery<ProfileDetailResponse, Error>({
+    queryKey: ['market-workspace', 'profile-detail', form.profileId],
+    queryFn: () => getProfile(form.profileId),
+    enabled: mode === 'all' && Boolean(form.profileId),
+    staleTime: 30_000,
+  });
   useEffect(() => {
     if (mode !== 'kaipan' || !kaipanProfileItems.length) {
       return;
@@ -353,11 +370,6 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     staleTime: 30_000,
   });
 
-  const selectedKaipanProfileSnapshot = useMemo(
-    () => selectLatestProfileSnapshot(selectedKaipanProfileDetailQuery.data ?? null),
-    [selectedKaipanProfileDetailQuery.data],
-  );
-  const resolvedKaipanConfigPath = selectedKaipanProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
   const ohlcvProfilesQuery = useQuery({
     queryKey: ['market-workspace', 'ohlcv-profiles'],
     queryFn: () => listProfiles({ skip: 0, limit: 50 }),
@@ -379,11 +391,6 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     enabled: mode === 'ohlcv' && Boolean(form.ohlcvProfileId),
     staleTime: 30_000,
   });
-  const selectedOhlcvProfileSnapshot = useMemo(
-    () => selectLatestProfileSnapshot(selectedOhlcvProfileDetailQuery.data ?? null),
-    [selectedOhlcvProfileDetailQuery.data],
-  );
-  const resolvedOhlcvConfigPath = selectedOhlcvProfileSnapshot?.config_path?.trim() || 'config/app.yaml';
   const [kaipanSchedulerStartedOverride, setKaipanSchedulerStartedOverride] = useState<boolean | null>(null);
   const kaipanSchedulerQuery = useQuery<KaipanStatusResponse>({
     queryKey: ['market-workspace', 'kaipan-status'],
@@ -400,7 +407,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   const [ohlcvSchedulerStartedOverride, setOhlcvSchedulerStartedOverride] = useState<boolean | null>(null);
   const ohlcvSchedulerQuery = useQuery<OhlcvSchedulerStatusResponse>({
     queryKey: ['market-workspace', 'ohlcv-status', form.ohlcvProfileId],
-    queryFn: () => getOhlcvSchedulerStatus(form.ohlcvProfileId, resolvedOhlcvConfigPath),
+    queryFn: () => getOhlcvSchedulerStatus(form.ohlcvProfileId),
     enabled: mode === 'ohlcv',
     staleTime: 10_000,
   });
@@ -468,9 +475,9 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   const ohlcvSchedulerToggleMutation = useMutation({
     mutationFn: async () => {
       if (ohlcvSchedulerStarted) {
-        return stopOhlcvScheduler(form.ohlcvProfileId, resolvedOhlcvConfigPath);
+        return stopOhlcvScheduler(form.ohlcvProfileId);
       }
-      return runOhlcvScheduler(form.ohlcvProfileId, resolvedOhlcvConfigPath);
+      return runOhlcvScheduler(form.ohlcvProfileId);
     },
     onSuccess: (result) => {
       const started = Boolean(result.started);
@@ -556,6 +563,20 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             <CardDescription className="text-slate-500">{modeConfig.paramsDescription}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
+            {mode === 'all' ? (
+              <div className="md:col-span-2">
+                <ProfileField
+                  id="all-profile"
+                  label="Profile"
+                  profileId={form.profileId}
+                  onChange={(value) => updateForm({ profileId: value })}
+                  loading={allProfilesQuery.isLoading}
+                  items={allProfileItems}
+                  profileListError={allProfilesQuery.isError}
+                  profileDetailError={selectedAllProfileDetailQuery.isError}
+                />
+              </div>
+            ) : null}
             {mode === 'kaipan' || mode === 'all' ? (
               <>
                 {mode === 'kaipan' ? (
@@ -566,17 +587,10 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                     onChange={(value) => updateForm({ kaipanProfileId: value })}
                     loading={kaipanProfilesQuery.isLoading}
                     items={kaipanProfileItems}
-                    selectedSnapshotConfigPath={selectedKaipanProfileSnapshot?.config_path}
-                    fallbackConfigPath={resolvedKaipanConfigPath}
                     profileListError={kaipanProfilesQuery.isError}
                     profileDetailError={selectedKaipanProfileDetailQuery.isError}
                   />
-                ) : (
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">配置路径</span>
-                    <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
-                  </label>
-                )}
+                ) : null}
                 {mode === 'kaipan' ? (
                   <>
                     <label className="space-y-2">
@@ -627,17 +641,10 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                     onChange={(value) => updateForm({ ohlcvProfileId: value })}
                     loading={ohlcvProfilesQuery.isLoading}
                     items={ohlcvProfileItems}
-                    selectedSnapshotConfigPath={selectedOhlcvProfileSnapshot?.config_path}
-                    fallbackConfigPath={resolvedOhlcvConfigPath}
                     profileListError={ohlcvProfilesQuery.isError}
                     profileDetailError={selectedOhlcvProfileDetailQuery.isError}
                   />
-                ) : (
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">配置路径</span>
-                    <Input value={form.configPath} onChange={(event) => updateForm({ configPath: event.target.value })} />
-                  </label>
-                )}
+                ) : null}
                 <label className="space-y-2">
                   <span className="text-sm font-medium text-slate-700">任务模式</span>
                   <Select value={form.mode} onChange={(event) => updateForm({ mode: event.target.value })}>

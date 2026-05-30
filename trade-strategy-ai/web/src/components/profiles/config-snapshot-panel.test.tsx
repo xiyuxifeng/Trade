@@ -36,6 +36,8 @@ describe('ConfigSnapshotPanel', () => {
     expect(screen.getByText('snapshot-1')).toBeInTheDocument();
     expect(screen.getByText('profile-1')).toBeInTheDocument();
     expect(screen.getByText('validated')).toBeInTheDocument();
+    expect(screen.getByText('Profile 导入来源')).toBeInTheDocument();
+    expect(screen.getByText('关联 Profile')).toBeInTheDocument();
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText('database')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照').closest('div')?.textContent).toContain('api_key');

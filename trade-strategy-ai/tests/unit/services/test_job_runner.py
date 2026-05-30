@@ -413,8 +413,8 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
-def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """盘前运行 handler 应允许仅通过 Profile 提交。"""
+def test_run_pre_market_handler_prefers_profile_over_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """盘前运行 handler 应优先使用 Profile 解析结果。"""
     from src.services import job_runner as job_runner_module
 
     calls: dict[str, Any] = {}
@@ -431,11 +431,16 @@ def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch
                 message="pre market done",
             )
 
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "pre-market.yaml"
+
     def _fake_build_manager(self, *, config_path):
         calls["config_path"] = config_path
         return object(), tmp_path
 
     monkeypatch.setattr(job_runner_module, "RunService", _FakeRunService)
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
     monkeypatch.setattr(job_runner_module.JobRunner, "_build_manager", _fake_build_manager, raising=False)
 
     runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
@@ -444,6 +449,7 @@ def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch
         handler(
             {
                 "profile_id": "default",
+                "config_path": "config/app.yaml",
                 "as_of_date": "2026-05-16",
                 "force": True,
                 "export_html": False,
@@ -452,7 +458,8 @@ def test_run_pre_market_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     )
 
     assert result.status == "ok"
-    assert calls["config_path"] == "config/app.yaml"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] == tmp_path / "config" / "pre-market.yaml"
     assert calls["as_of_date"].isoformat() == "2026-05-16"
 
 
@@ -647,8 +654,8 @@ def test_ohlcv_crawl_handler_accepts_profile_only_and_allows_full_crawl(
     asyncio.run(engine.dispose())
 
 
-def test_run_after_close_handler_accepts_profile_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """盘后运行 handler 应允许仅通过 Profile 提交。"""
+def test_run_after_close_handler_prefers_profile_over_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """盘后运行 handler 应优先使用 Profile 解析结果。"""
     from src.services import job_runner as job_runner_module
 
     calls: dict[str, Any] = {}
@@ -665,11 +672,16 @@ def test_run_after_close_handler_accepts_profile_only(tmp_path: Path, monkeypatc
                 message="after close done",
             )
 
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "after-close.yaml"
+
     def _fake_build_manager(self, *, config_path):
         calls["config_path"] = config_path
         return object(), tmp_path
 
     monkeypatch.setattr(job_runner_module, "RunService", _FakeRunService)
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
     monkeypatch.setattr(job_runner_module.JobRunner, "_build_manager", _fake_build_manager, raising=False)
 
     runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
@@ -678,6 +690,7 @@ def test_run_after_close_handler_accepts_profile_only(tmp_path: Path, monkeypatc
         handler(
             {
                 "profile_id": "default",
+                "config_path": "config/app.yaml",
                 "as_of_date": "2026-05-16",
                 "force": True,
                 "export_html": True,
@@ -686,7 +699,8 @@ def test_run_after_close_handler_accepts_profile_only(tmp_path: Path, monkeypatc
     )
 
     assert result.status == "ok"
-    assert calls["config_path"] == "config/app.yaml"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] == tmp_path / "config" / "after-close.yaml"
     assert calls["as_of_date"].isoformat() == "2026-05-16"
     assert calls["force"] is True
     assert calls["export_html"] is True
@@ -708,7 +722,12 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
                 message="snapshot done",
             )
 
+    async def _fake_resolve_profile_config_path(self, profile_id: str):
+        calls["profile_id"] = profile_id
+        return tmp_path / "config" / "snapshot.yaml"
+
     monkeypatch.setattr(job_runner_module, "SnapshotService", lambda: _FakeSnapshotService())
+    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
 
     runner, _, engine, ServiceResult = _build_job_runner(tmp_path)
     handler = runner._build_default_handlers()["snapshot-build"]
@@ -724,7 +743,7 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     )
 
     assert result.status == "ok"
-    assert calls["config_path"] == "config/app.yaml"
+    assert calls["config_path"] == tmp_path / "config" / "snapshot.yaml"
     assert calls["benchmark_symbol"] is None
     assert calls["profile_id"] == "default"
     assert calls["date"] == "2026-05-16"

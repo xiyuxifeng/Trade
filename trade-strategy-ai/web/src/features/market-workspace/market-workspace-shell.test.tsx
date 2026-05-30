@@ -110,6 +110,44 @@ describe('MarketWorkspaceShell', () => {
         { symbol: '510300.SH', code: '510300', market: 'CN', name: '沪深300ETF', security_type: 'etf' },
       ],
     } as never);
+    mockedListProfiles.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-16T08:00:00Z',
+          updated_at: '2026-05-16T08:10:00Z',
+          archived_at: null,
+        },
+      ],
+    } as never);
+    mockedGetProfile.mockResolvedValue({
+      profile: {
+        profile_id: 'default',
+        name: 'Default Profile',
+        environment: 'production',
+        version: 1,
+        sections: {},
+        secret_refs: {},
+        validation_status: 'validated',
+        created_by: 'web',
+        created_at: '2026-05-16T08:00:00Z',
+        updated_at: '2026-05-16T08:10:00Z',
+        archived_at: null,
+      },
+      linked_jobs: [],
+      snapshots: [],
+    } as never);
     mockedCreateJob.mockResolvedValue({
       created: true,
       job: { id: 'job-market-1' },
@@ -139,7 +177,7 @@ describe('MarketWorkspaceShell', () => {
         expect.objectContaining({
           job_type: 'snapshot-build',
           params: expect.objectContaining({
-            config_path: 'config/app.yaml',
+            profile_id: 'default',
             benchmark_symbol: '000300.SH',
           }),
         }),
@@ -555,12 +593,12 @@ describe('MarketWorkspaceShell', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/OHLCV 调度器已启动/)).toBeInTheDocument();
-      expect(mockedRunOhlcvScheduler).toHaveBeenCalledWith('default', 'config/ohlcv.yaml');
+      expect(mockedRunOhlcvScheduler).toHaveBeenCalledWith('default');
       expect(screen.getByRole('button', { name: '停止调度器' })).toBeInTheDocument();
     });
 
     mockedGetOhlcvSchedulerStatus.mockResolvedValueOnce({
-      config_path: 'config/app.yaml',
+      config_path: 'config/app.template.yaml',
       base_dir: '/tmp/trade-strategy-ai',
       latest_trade_date: '2026-05-23',
       latest_record_count: 120,
@@ -573,7 +611,7 @@ describe('MarketWorkspaceShell', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/OHLCV 调度器已停止/)).toBeInTheDocument();
-      expect(mockedStopOhlcvScheduler).toHaveBeenCalledWith('default', 'config/ohlcv.yaml');
+      expect(mockedStopOhlcvScheduler).toHaveBeenCalledWith('default');
       expect(screen.getByRole('button', { name: '启动调度器' })).toBeInTheDocument();
     });
   });

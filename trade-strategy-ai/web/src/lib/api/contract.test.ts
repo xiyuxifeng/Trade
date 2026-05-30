@@ -161,9 +161,9 @@ describe('UI API client contract', () => {
     await listDataAudits({ entity_type: 'backup', limit: 10 });
     await listSymbols('000001', 50);
     await getOhlcv('000001.SZ', '2026-05-01', '2026-05-10');
-    await getOhlcvSchedulerStatus('config/app.yaml');
-    await runOhlcvScheduler('config/app.yaml');
-    await stopOhlcvScheduler('config/app.yaml');
+    await getOhlcvSchedulerStatus('default');
+    await runOhlcvScheduler('default');
+    await stopOhlcvScheduler('default');
     await listMarketSnapshots({ tradeDate: '2026-05-16', market: 'cn', limit: 10, offset: 0 });
     await getMarketSnapshot('snapshot-001');
     await listMarketSnapshotSections('snapshot-001', 20, 0);

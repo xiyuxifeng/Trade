@@ -17,7 +17,7 @@ class RuntimeConfigResolution:
 def resolve_runtime_config(params: dict[str, Any] | None) -> RuntimeConfigResolution:
     """解析 Job / Workflow 入参中的运行时配置引用。
 
-    兼容 Web 的 Profile 引用与 CLI 的 config_path 入口，供上层统一选择快照策略。
+    Web 主路径优先使用 Profile；`config_path` 仅作为 CLI / 历史兼容入口保留，供上层统一选择快照策略。
     """
 
     incoming = dict(params or {})

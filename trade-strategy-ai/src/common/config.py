@@ -238,6 +238,8 @@ class AppConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
     akshare: AkshareConfig = Field(default_factory=AkshareConfig)
+    strategy: dict[str, Any] = Field(default_factory=dict)
+    risk: dict[str, Any] = Field(default_factory=dict)
     market_state_benchmark_symbol: str | None = "510300.SH"
 
     traders: list[TraderConfig] = Field(default_factory=list)

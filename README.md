@@ -1,5 +1,10 @@
 # Trade
 
+![Status](https://img.shields.io/badge/status-active_development-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![AI](https://img.shields.io/badge/AI-Multi--Agent-orange)
+![LLM](https://img.shields.io/badge/LLM-assisted_research-purple)
+
 本项目是一个面向“多交易员文章 + 交易记录”的多 Agent 交易研究与复盘系统。
 
 Trade is an open-source, AI-assisted trading research and review system. It combines trader article processing, market data ingestion, rule extraction, backtesting, pre-market and post-market workflows, and multi-agent analysis into a reproducible research pipeline for strategy review and decision support.

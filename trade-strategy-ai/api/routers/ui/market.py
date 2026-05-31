@@ -11,6 +11,8 @@ from api.schemas.market import (
     OhlcvSchedulerRunResponse,
     OhlcvSchedulerStatusResponse,
     OhlcvSchedulerStopResponse,
+    StockInfoRefreshResponse,
+    StockInfoStatusResponse,
     MarketRegimeDetailResponse,
     MarketRegimeListResponse,
     MarketDatasetDetailResponse,
@@ -23,8 +25,12 @@ from api.schemas.market import (
     MarketSnapshotSectionListResponse,
     MarketSnapshotSectionResponse,
 )
-from src.market_data.stock_info_service import COMMON_MARKET_INDICES, list_index_stock_infos
-from src.services.config_profile_service import ConfigProfileService
+from src.market_data.stock_info_service import (
+    COMMON_MARKET_INDICES,
+    get_stock_info_status,
+    list_index_stock_infos,
+    refresh_stock_info,
+)
 from src.services import MarketRegimeFeatureService, MarketRegimeService, MarketService, MarketSnapshotQueryService
 
 
@@ -59,30 +65,6 @@ def _structured_error(error_type: str, message: str, detail: str | None = None, 
         "detail": detail,
         "metadata": metadata or {},
     }
-
-
-async def _resolve_profile_config_path(profile_id: str) -> str:
-    """只按 Profile 解析配置路径，避免 Web 端回退到旧的 config_path 语义。"""
-    if not profile_id.strip():
-        raise HTTPException(
-            status_code=422,
-            detail=_structured_error(
-                "invalid_profile_id",
-                "profile_id is required",
-                metadata={"field": "profile_id"},
-            ),
-        )
-    resolved = await ConfigProfileService().resolve_profile_config_path(profile_id)
-    if resolved is None:
-        raise HTTPException(
-            status_code=404,
-            detail=_structured_error(
-                "profile_not_found",
-                f"profile not found: {profile_id}",
-                metadata={"profile_id": profile_id},
-            ),
-        )
-    return str(resolved)
 
 
 def _raise_query_error(result: Any) -> None:
@@ -156,6 +138,23 @@ async def list_benchmark_options(
     return {"count": len(payload), "items": payload}
 
 
+@router.get("/stock-info/status", response_model=StockInfoStatusResponse)
+async def get_stock_info_status_endpoint(
+    max_age_days: int = Query(default=7, ge=1, le=365),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """查看 stock_info 的新鲜度与 benchmark 覆盖情况。"""
+    return await get_stock_info_status(max_age_days=max_age_days)
+
+
+@router.post("/stock-info/refresh", response_model=StockInfoRefreshResponse, dependencies=[Depends(verify_api_key)])
+async def refresh_stock_info_endpoint(
+    max_age_days: int = Query(default=7, ge=1, le=365),
+) -> dict[str, Any]:
+    """刷新 stock_info 基础信息。"""
+    return await refresh_stock_info(max_age_days=max_age_days)
+
+
 @router.get("/ohlcv")
 async def get_ohlcv(
     symbol: str = Query(...),
@@ -178,8 +177,7 @@ async def get_ohlcv_status(
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     """查看 OHLCV 调度器状态。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id)
-    result = await market_service.ohlcv_scheduler_status(config_path=resolved_config_path)
+    result = await market_service.ohlcv_scheduler_status(profile_id=profile_id)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler status failed")
     return result.payload
@@ -191,8 +189,7 @@ async def run_ohlcv_scheduler(
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """启动 OHLCV 调度器。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id)
-    result = market_service.run_ohlcv_scheduler(config_path=resolved_config_path, start_scheduler=True, block=False)
+    result = await market_service.run_ohlcv_scheduler(profile_id=profile_id, start_scheduler=True, block=False)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler start failed")
     return result.payload
@@ -204,8 +201,7 @@ async def stop_ohlcv_scheduler(
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """停止 OHLCV 调度器。"""
-    resolved_config_path = await _resolve_profile_config_path(profile_id)
-    result = market_service.stop_ohlcv_scheduler(config_path=resolved_config_path)
+    result = await market_service.stop_ohlcv_scheduler(profile_id=profile_id)
     if result.status not in {"ok", "partial"}:
         raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler stop failed")
     return result.payload

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -97,9 +98,10 @@ def test_strategy_service_builds_strategy_version(tmp_path: Path) -> None:
     assert calls["build"][0]["trader_id"] == "trader_a"
 
 
-def test_strategy_service_builds_strategy_version_from_profile_only() -> None:
+def test_strategy_service_builds_strategy_version_from_profile_only(monkeypatch) -> None:
     """StrategyService 应允许 Web 只传 profile_id 而不传 config_path。"""
     from src.services.strategy_service import StrategyService
+    from src.common.config import load_app_config
 
     calls: dict[str, object] = {}
 
@@ -107,6 +109,22 @@ def test_strategy_service_builds_strategy_version_from_profile_only() -> None:
         calls["build"] = (details, config)
         return None
 
+    config_path = Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml")
+    loaded = load_app_config(config_path)
+
+    async def fake_load_profile_runtime_config(profile_id: str):
+        assert profile_id == "default"
+        return SimpleNamespace(
+            profile_id="default",
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(
+        "src.services.strategy_service.ConfigProfileService",
+        lambda: SimpleNamespace(load_profile_runtime_config=fake_load_profile_runtime_config),
+    )
     service = StrategyService(build_handler=fake_build)
     result = asyncio.run(
         service.build_strategy_version(
@@ -119,7 +137,7 @@ def test_strategy_service_builds_strategy_version_from_profile_only() -> None:
 
     assert result.status == "ok"
     assert result.payload["profile_id"] == "default"
-    assert result.payload["config_path"].endswith("config/app.yaml")
+    assert result.payload["config_path"] is None
     assert calls["build"][0]["trader_id"] == "trader_a"
 
 

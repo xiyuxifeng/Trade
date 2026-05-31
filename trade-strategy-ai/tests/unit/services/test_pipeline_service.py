@@ -44,30 +44,42 @@ class _FakeManager:
 def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypatch) -> None:
     """PipelineService 应能封装 crawl、pipeline-run 和 pipeline-step。"""
     from src.services.pipeline_service import PipelineService
-
-    config_path = tmp_path / "config" / "app.yaml"
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+    from src.common.config import load_app_config
+    from types import SimpleNamespace
 
     calls: dict[str, object] = {}
-
-    def fake_crawl(*, config_path: Path, max_articles: int | None = None, force: bool = False):
-        calls["crawl"] = (config_path, max_articles, force)
-        return ["line-1", "line-2"]
 
     async def fake_pipeline(**kwargs):
         calls["pipeline"] = kwargs
         return _FakePipelineResult(name="pipeline", nested=_FakeNested(value="ok"))
 
+    def fake_run_crawl(config, *, base_dir: Path, max_articles: int | None = None, force: bool = False):
+        calls["crawl"] = (config, base_dir, max_articles, force)
+        return ["line-1", "line-2"]
+
+    monkeypatch.setattr("src.services.pipeline_service.run_crawl", fake_run_crawl)
+    loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
+
+    async def fake_load_profile_runtime_config(profile_id: str):
+        return SimpleNamespace(
+            profile_id=profile_id,
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(
+        "src.services.pipeline_service.ConfigProfileService",
+        lambda: SimpleNamespace(load_profile_runtime_config=fake_load_profile_runtime_config),
+    )
     service = PipelineService(
-        crawl_runner=fake_crawl,
         pipeline_runner=fake_pipeline,
     )
 
-    crawl_result = service.crawl(config_path=config_path, max_articles=12)
+    crawl_result = asyncio.run(service.crawl(profile_id="default", max_articles=12))
     run_result = asyncio.run(
         service.run_pipeline(
-            config_path=config_path,
+            profile_id="default",
             max_articles=5,
             force=True,
             skip_crawl=False,
@@ -81,7 +93,7 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     step_result = asyncio.run(
         service.run_pipeline_step(
             step="store",
-            config_path=config_path,
+            profile_id="default",
             max_articles=3,
             force=True,
             use_db=False,
@@ -91,7 +103,8 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     step_call = dict(calls["pipeline"])
 
     assert crawl_result.payload["lines"] == ["line-1", "line-2"]
-    assert calls["crawl"] == (tmp_path / "config" / "app.yaml", 12, False)
+    assert calls["crawl"][1].as_posix().endswith("trade-strategy-ai")
+    assert calls["crawl"][2:] == (12, False)
     assert run_result.payload["result"]["name"] == "pipeline"
     assert run_result.payload["result"]["nested"]["value"] == "ok"
     assert pipeline_call["from_step"] == "clean"

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.common.paths import project_root
 from src.models.config_profile import ConfigProfile
 
 
@@ -82,6 +83,40 @@ storage:
     assert snapshot.status == "ok"
     assert snapshot.payload["profile_id"] == "profile-dev"
     assert Path(snapshot.payload["profile_snapshot_path"]).exists()
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_clears_masked_secrets(tmp_path: Path) -> None:
+    """Profile 运行态应清空已脱敏字段，避免把 `***` 当成真实 secret 运行。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+database:
+  url: postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
+  echo: true
+llm:
+  provider: qwen
+  model: ["qwen3-8b"]
+  url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key: secret-1
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-runtime", created_by="system"))
+    runtime = asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+
+    assert runtime.profile_id == "profile-runtime"
+    assert runtime.base_dir == project_root().resolve()
+    assert runtime.config.llm.provider == "qwen"
+    assert runtime.config.llm.model == ["qwen3-8b"]
+    assert runtime.config.llm.api_key is None
+    assert runtime.config.database.url is None
+    assert runtime.profile_snapshot_id is not None
 
     asyncio.run(engine.dispose())
 

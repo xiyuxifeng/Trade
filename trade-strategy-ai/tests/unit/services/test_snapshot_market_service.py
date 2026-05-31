@@ -93,8 +93,8 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: py
         def __init__(self):
             self.crawl_calls = []
 
-        async def crawl_bars(self, symbols, start_date=None, end_date=None):
-            self.crawl_calls.append((tuple(symbols), start_date, end_date))
+        async def crawl_bars(self, symbols, start_date=None, end_date=None, **kwargs):
+            self.crawl_calls.append((tuple(symbols), start_date, end_date, kwargs))
             return {"000001.SZ": 2}
 
         async def get_latest_close(self, symbol: str):
@@ -108,11 +108,15 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: py
 
             return pd.DataFrame([{"date": start_date, "close": 10.5}])
 
-    async def _fake_resolve_profile_config_path(self, profile_id: str):
-        del self, profile_id
-        return config_path
+    from types import SimpleNamespace
+    from src.common.config import load_app_config
 
-    monkeypatch.setattr(ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path)
+    async def _fake_load_profile_runtime_config(self, profile_id: str):
+        del profile_id
+        loaded = load_app_config(config_path)
+        return SimpleNamespace(profile_id="default", config=loaded.config, base_dir=tmp_path, profile_snapshot_id="snap-1")
+
+    monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _fake_load_profile_runtime_config)
     service = MarketService(ohlcv_service=_FakeOhlcv())
 
     crawl_result = asyncio.run(
@@ -131,6 +135,7 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: py
 
     assert crawl_result.payload["results"]["000001.SZ"] == 2
     assert crawl_result.payload["profile_id"] == "default"
+    assert crawl_result.payload["config_path"] is None
     assert latest.payload["close"] == 10.5
     assert bars.payload["count"] == 1
     assert bars_df.payload["rows"] == 1
@@ -149,7 +154,7 @@ def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_pat
         def __init__(self) -> None:
             self.crawl_calls: list[tuple[tuple[str, ...], date | None, date | None]] = []
 
-        async def crawl_bars(self, symbols, start_date=None, end_date=None):
+        async def crawl_bars(self, symbols, start_date=None, end_date=None, **kwargs):
             self.crawl_calls.append((tuple(symbols), start_date, end_date))
             return {"000001.SZ": 2}
 
@@ -291,7 +296,7 @@ def test_market_service_ohlcv_scheduler_status_and_toggle(tmp_path: Path, monkey
         def __init__(self) -> None:
             self.crawl_calls: list[tuple[tuple[str, ...], date | None, date | None, dict[str, str] | None]] = []
 
-        async def crawl_bars(self, symbols, start_date=None, end_date=None, market_kind_by_symbol=None):
+        async def crawl_bars(self, symbols, start_date=None, end_date=None, market_kind_by_symbol=None, **kwargs):
             self.crawl_calls.append((tuple(symbols), start_date, end_date, market_kind_by_symbol))
             return {"000001.SZ": 2, "000300.SH": 1}
 
@@ -357,7 +362,7 @@ def test_market_service_ohlcv_scheduler_status_and_toggle(tmp_path: Path, monkey
         assert status.payload["latest_trade_date"] == "2026-04-30"
         assert status.payload["latest_record_count"] == 12
 
-        started = service.run_ohlcv_scheduler(config_path=config_path, start_scheduler=True, block=False)
+        started = asyncio.run(service.run_ohlcv_scheduler(config_path=config_path, start_scheduler=True, block=False))
         assert started.status == "ok"
         assert started.payload["scheduler_started"] is True
         assert started.payload["pre_market"] == "9:25"
@@ -371,7 +376,7 @@ def test_market_service_ohlcv_scheduler_status_and_toggle(tmp_path: Path, monkey
         assert fake_ohlcv.crawl_calls[0][2] == date.today()
         assert fake_ohlcv.crawl_calls[0][3] == {"000001.SZ": "stock", "000300.SH": "index"}
 
-        stopped = service.stop_ohlcv_scheduler(config_path=config_path)
+        stopped = asyncio.run(service.stop_ohlcv_scheduler(config_path=config_path))
         assert stopped.status == "ok"
         assert stopped.payload["started"] is False
         assert MarketService._scheduler is None
@@ -453,6 +458,11 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
                 return _FakeProfile(profile_id="missing", benchmark_symbol=None)
             return None
 
+        async def load_profile_runtime_config(self, profile_id: str):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(profile_id=profile_id, config=SimpleNamespace(), base_dir=tmp_path, profile_snapshot_id="snap-1")
+
     monkeypatch.setattr(snapshot_service_module, "MarketSnapshotService", _FakeMarketSnapshotService)
     monkeypatch.setattr(snapshot_service_module, "ConfigProfileService", lambda: _FakeProfileService())
 
@@ -492,6 +502,11 @@ def test_snapshot_service_build_market_snapshot_requires_profile_benchmark(tmp_p
             if profile_id == "missing":
                 return _FakeProfile()
             return None
+
+        async def load_profile_runtime_config(self, profile_id: str):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(profile_id=profile_id, config=SimpleNamespace(), base_dir=tmp_path, profile_snapshot_id="snap-1")
 
     monkeypatch.setattr(snapshot_service_module, "ConfigProfileService", lambda: _FakeProfileService())
 

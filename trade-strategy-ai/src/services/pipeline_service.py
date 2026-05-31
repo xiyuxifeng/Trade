@@ -5,14 +5,16 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
+from cli.crawl import run_crawl_command
+from src.agents.data_agent.skills.crawl_blog import run_crawl
 from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.persona.cluster_builder import build_clusters_from_db
 from src.pipeline.dag import run_pipeline
 from src.services.base import BaseService, ServiceResult
+from src.services.config_profile_service import ConfigProfileService
 from src.trader_profile.service import build_trader_profiles, default_profiles_path, write_trader_profiles_file
-from cli.crawl import run_crawl_command
 
 
 def _project_base_dir(config_path: Path) -> Path:
@@ -61,15 +63,47 @@ class PipelineService(BaseService):
         self._write_trader_profiles_runner = write_trader_profiles_runner
         self._manager_factory = manager_factory
 
-    def crawl(self, *, config_path: str | Path, max_articles: int | None = None, force: bool = False) -> ServiceResult:
-        """执行文章抓取。"""
+    async def _load_runtime_context(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> tuple[Any, Path, str | None]:
+        """优先 materialize Profile 运行态；CLI/历史兼容时才读 config_path。"""
+        if profile_id is not None and str(profile_id).strip():
+            runtime = await ConfigProfileService().load_profile_runtime_config(str(profile_id).strip())
+            apply_database_config_to_env(runtime.config)
+            return runtime.config, runtime.base_dir, None
+
+        if config_path is None:
+            config_path = Path("config/app.yaml")
         loaded = load_app_config(config_path)
-        lines = self._crawl_runner(config_path=loaded.config_path, max_articles=max_articles, force=force)
+        apply_database_config_to_env(loaded.config)
+        base_dir = _project_base_dir(loaded.config_path)
+        return loaded.config, base_dir, str(loaded.config_path)
+
+    async def crawl(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+        max_articles: int | None = None,
+        force: bool = False,
+    ) -> ServiceResult:
+        """执行文章抓取。"""
+        config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
+        if profile_id is not None and str(profile_id).strip():
+            lines = run_crawl(config, base_dir=base_dir, max_articles=max_articles, force=force)
+        else:
+            assert resolved_path is not None
+            lines = self._crawl_runner(config_path=resolved_path, max_articles=max_articles, force=force)
         return ServiceResult(
             status="ok",
             message="crawl completed",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
+                "config_path": resolved_path,
+                "base_dir": str(base_dir),
                 "line_count": len(lines),
                 "lines": lines,
                 "force": force,
@@ -79,7 +113,8 @@ class PipelineService(BaseService):
     async def run_pipeline(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         max_articles: int | None = None,
         force: bool = False,
         skip_crawl: bool = False,
@@ -90,11 +125,9 @@ class PipelineService(BaseService):
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """执行完整 pipeline。"""
-        loaded = load_app_config(config_path)
-        apply_database_config_to_env(loaded.config)
-        base_dir = _project_base_dir(loaded.config_path)
+        config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
         result = await self._pipeline_runner(
-            config=loaded.config,
+            config=config,
             base_dir=base_dir,
             max_articles=max_articles,
             force=force,
@@ -109,7 +142,8 @@ class PipelineService(BaseService):
             status="ok",
             message="pipeline completed",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
+                "config_path": resolved_path,
                 "base_dir": str(base_dir),
                 "result": _to_plain(result),
             },
@@ -119,7 +153,8 @@ class PipelineService(BaseService):
         self,
         *,
         step: str,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         max_articles: int | None = None,
         force: bool = False,
         use_db: bool = False,
@@ -129,6 +164,7 @@ class PipelineService(BaseService):
     ) -> ServiceResult:
         """执行 pipeline 的单步或从指定步骤开始的链路。"""
         return await self.run_pipeline(
+            profile_id=profile_id,
             config_path=config_path,
             max_articles=max_articles,
             force=force,
@@ -143,20 +179,19 @@ class PipelineService(BaseService):
     async def build_clusters(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         dest: str | Path,
         max_articles: int | None = None,
     ) -> ServiceResult:
         """从数据库构建 persona clusters。"""
-        loaded = load_app_config(config_path)
-        apply_database_config_to_env(loaded.config)
-        base_dir = _project_base_dir(loaded.config_path)
+        config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
         full_dest = Path(dest)
         if not full_dest.is_absolute():
             full_dest = base_dir / full_dest
         full_dest.parent.mkdir(parents=True, exist_ok=True)
         written, stats = await self._build_clusters_runner(
-            config=loaded.config,
+            config=config,
             dest=full_dest,
             max_articles=max_articles,
         )
@@ -164,7 +199,8 @@ class PipelineService(BaseService):
             status="ok",
             message="clusters completed",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
+                "config_path": resolved_path,
                 "base_dir": str(base_dir),
                 "dest": str(written),
                 "stats": _to_plain(stats),
@@ -174,27 +210,27 @@ class PipelineService(BaseService):
     async def build_trader_profiles(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         clusters_path: str | Path | None = None,
         max_articles_per_trader: int = 50,
     ) -> ServiceResult:
         """构建 trader profile 文件。"""
-        loaded = load_app_config(config_path)
-        apply_database_config_to_env(loaded.config)
-        base_dir = _project_base_dir(loaded.config_path)
+        config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
         profiles_file = await self._build_trader_profiles_runner(
-            config=loaded.config,
+            config=config,
             base_dir=base_dir,
             clusters_path=clusters_path,
             max_articles_per_trader=max_articles_per_trader,
         )
-        profiles_path = default_profiles_path(base_dir=base_dir, config=loaded.config)
+        profiles_path = default_profiles_path(base_dir=base_dir, config=config)
         written = self._write_trader_profiles_runner(path=profiles_path, data=profiles_file)
         return ServiceResult(
             status="ok",
             message="profiles completed",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
+                "config_path": resolved_path,
                 "base_dir": str(base_dir),
                 "profiles_path": str(written),
                 "profiles": _to_plain(profiles_file),
@@ -204,18 +240,17 @@ class PipelineService(BaseService):
     async def e2e_regression(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         max_articles: int | None = 10,
         extract_limit: int = 10,
         clusters_dest: str | Path = "data/processed/persona/clusters.real.json",
     ) -> ServiceResult:
         """串起主链路回归：pipeline -> extract -> clusters -> profiles -> pre/post market。"""
-        loaded = load_app_config(config_path)
-        apply_database_config_to_env(loaded.config)
-        base_dir = _project_base_dir(loaded.config_path)
+        config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
 
         pipeline_result = await self._pipeline_runner(
-            config=loaded.config,
+            config=config,
             base_dir=base_dir,
             max_articles=max_articles,
             force=True,
@@ -225,7 +260,7 @@ class PipelineService(BaseService):
             process_version="v1",
         )
         extract_stats = await self._extract_metadata_runner(
-            config=loaded.config,
+            config=config,
             base_dir=base_dir,
             total_limit=extract_limit,
         )
@@ -234,20 +269,20 @@ class PipelineService(BaseService):
             full_clusters = base_dir / full_clusters
         full_clusters.parent.mkdir(parents=True, exist_ok=True)
         clusters_path, clusters_stats = await self._build_clusters_runner(
-            config=loaded.config,
+            config=config,
             dest=full_clusters,
             max_articles=max_articles,
         )
         profiles_file = await self._build_trader_profiles_runner(
-            config=loaded.config,
+            config=config,
             base_dir=base_dir,
             clusters_path=clusters_path,
             max_articles_per_trader=max(1, int(extract_limit)),
         )
-        profiles_path = default_profiles_path(base_dir=base_dir, config=loaded.config)
+        profiles_path = default_profiles_path(base_dir=base_dir, config=config)
         written_profiles = self._write_trader_profiles_runner(path=profiles_path, data=profiles_file)
 
-        cfg2 = loaded.config.model_copy(deep=True)
+        cfg2 = config.model_copy(deep=True)
         cfg2.persona.enable = True
         try:
             cfg2.persona.clusters_path = str(full_clusters.relative_to(base_dir))
@@ -263,7 +298,8 @@ class PipelineService(BaseService):
             status="ok",
             message="e2e regression completed",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": profile_id,
+                "config_path": resolved_path,
                 "base_dir": str(base_dir),
                 "pipeline": _to_plain(pipeline_result),
                 "extract": _to_plain(extract_stats),

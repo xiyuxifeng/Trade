@@ -101,9 +101,13 @@ export function DashboardStatusSummary() {
         <MetricCard label="告警摘要" value={alerts.length} note="重点告警状态栏会显示这些记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
         <MetricCard label="目录提示" value={warnings} note={warnings ? '有目录需要检查' : '关键目录正常'} tone={warnings ? 'text-amber-600' : 'text-emerald-600'} />
         <MetricCard
-          label="运行配置"
-          value={system?.config_path ? '已加载' : '未知'}
-          note={system?.config_path ? '当前运行配置已识别' : '未识别运行配置'}
+          label="Profile 运行态"
+          value={profileContext?.profile_id ?? system?.profile_id ?? '未绑定'}
+          note={
+            profileContext?.profile_snapshot_id || system?.profile_snapshot_id
+              ? `snapshot: ${profileContext?.profile_snapshot_id ?? system?.profile_snapshot_id}`
+              : '未识别运行态'
+          }
           tone="text-slate-900"
         />
         <MetricCard

@@ -271,6 +271,27 @@ def _find_deprecated_config_keys(value: Any, path: str = "") -> list[str]:
     return found
 
 
+def build_app_config(raw: Any) -> AppConfig:
+    """从原始映射构造 AppConfig。
+
+    该函数保留与 `load_app_config()` 相同的 schema 校验与环境变量展开逻辑，
+    但不要求输入必须来自磁盘文件。适合 Profile 运行态等“无 config_path”场景。
+    """
+
+    deprecated_keys = _find_deprecated_config_keys(raw)
+    if deprecated_keys:
+        joined = ", ".join(deprecated_keys)
+        raise ConfigError(
+            f"Deprecated config keys found in runtime config: {joined}. "
+            "Please remove them and use the current schema."
+        )
+
+    try:
+        return AppConfig.model_validate(_expand_env_vars(raw))
+    except Exception as exc:  # noqa: BLE001
+        raise ConfigError(f"Invalid config schema: {exc}") from exc
+
+
 @dataclass(frozen=True)
 class LoadedConfig:
     config: AppConfig
@@ -289,18 +310,10 @@ def load_app_config(path: str | Path) -> LoadedConfig:
     except Exception as exc:  # noqa: BLE001
         raise ConfigError(f"Failed to load config: {config_path}: {exc}") from exc
 
-    deprecated_keys = _find_deprecated_config_keys(raw)
-    if deprecated_keys:
-        joined = ", ".join(deprecated_keys)
-        raise ConfigError(
-            f"Deprecated config keys found in {config_path}: {joined}. "
-            "Please remove them and use the current schema."
-        )
-
     try:
-        cfg = AppConfig.model_validate(_expand_env_vars(raw))
-    except Exception as exc:  # noqa: BLE001
-        raise ConfigError(f"Invalid config schema: {exc}") from exc
+        cfg = build_app_config(raw)
+    except ConfigError as exc:
+        raise ConfigError(str(exc).replace("runtime config", str(config_path))) from exc
 
     return LoadedConfig(config=cfg, config_path=config_path)
 

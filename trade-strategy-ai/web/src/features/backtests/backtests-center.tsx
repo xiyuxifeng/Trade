@@ -35,7 +35,6 @@ import type { JobSubmissionRequest } from '@/types/jobs';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
 import type { MarketBenchmarkOption } from '@/types/market';
 
-const DEFAULT_CONFIG_PATH = 'config/app.template.yaml';
 const DEFAULT_SCORING_PROFILE = 'stage5';
 const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 
@@ -97,7 +96,6 @@ function toJobSubmission(form: BacktestJobFormState): BacktestJobSubmission {
     strategyVersionId: form.strategyVersionId,
     benchmarkSymbol: form.benchmarkSymbol,
     mode: form.mode,
-    configPath: form.configPath,
     symbols: form.symbols,
     useSnapshotOnly: form.useSnapshotOnly,
     scoringProfile: form.scoringProfile,
@@ -111,7 +109,6 @@ type BacktestJobFormState = {
   dateTo: string;
   strategyVersionId: string;
   mode: 'full' | 'replay' | 'rule_validation';
-  configPath: string;
   symbols: string[];
   benchmarkSymbol: string;
   useSnapshotOnly: boolean;
@@ -260,7 +257,6 @@ export function BacktestsCenter() {
   const [strategyVersionId, setStrategyVersionId] = useState('');
   const [benchmarkSymbol, setBenchmarkSymbol] = useState(DEFAULT_BENCHMARK_SYMBOL);
   const [mode, setMode] = useState<'full' | 'replay' | 'rule_validation'>('full');
-  const [configPath, setConfigPath] = useState(DEFAULT_CONFIG_PATH);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [submittedJobId, setSubmittedJobId] = useState<string | null>(null);
   const [submittedJobType, setSubmittedJobType] = useState<string | null>(null);
@@ -352,7 +348,6 @@ export function BacktestsCenter() {
       strategyVersionId,
       benchmarkSymbol,
       mode,
-      configPath,
       symbols: [],
       useSnapshotOnly: true,
       scoringProfile: DEFAULT_SCORING_PROFILE,
@@ -470,10 +465,6 @@ export function BacktestsCenter() {
                     <option value="replay">重放 (replay)</option>
                     <option value="rule_validation">规则验真 (rule_validation)</option>
                   </Select>
-                </label>
-                <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">配置路径</span>
-                  <Input value={configPath} onChange={(event) => setConfigPath(event.target.value)} />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300 md:col-span-2">
                   <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark</span>

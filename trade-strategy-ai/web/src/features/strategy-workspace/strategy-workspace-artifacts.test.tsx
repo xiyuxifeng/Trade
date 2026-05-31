@@ -3,7 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
 import { StrategyWorkspaceArtifacts } from './strategy-workspace-artifacts';
 import { renderWithRouter } from '@/test/test-utils';
+import { listArticleMetadataSummary } from '@/lib/api/article-metadata';
 import type { ArtifactRecord } from '@/types/artifacts';
+
+vi.mock('@/lib/api/article-metadata', () => ({
+  listArticleMetadataSummary: vi.fn(),
+}));
+
+const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
 
 const versions = [
   {
@@ -99,6 +106,64 @@ describe('StrategyWorkspaceArtifacts', () => {
   it('renders version detail and allows switching versions', async () => {
     const user = userEvent.setup();
     const onSelectVersion = vi.fn();
+    mockedListArticleMetadataSummary.mockResolvedValue({
+      items: [
+        {
+          article_id: 'article-1',
+          selected_schema_version: 'v2',
+          selected_by: 'web',
+          selected_at: '2026-05-16T08:00:00Z',
+          selection_mode: 'manual',
+          selection_score: 4.2,
+          selection_reason: '手动选择',
+          recommended_schema_version: 'v1',
+          recommended_score: 4.8,
+          recommended_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
+          effective_schema_version: 'v2',
+          effective_score: 4.2,
+          effective_reason: '手动选择',
+          warning: null,
+          candidates: [
+            {
+              schema_version: 'v2',
+              score: 4.2,
+              score_reasons: ['字段完整度高', '规则覆盖充分'],
+              processed_at: '2026-05-16T08:00:00Z',
+              provider: 'openai',
+              model: 'gpt-4.1',
+              article_type: 'strategy',
+              extraction_version: 'v2',
+              sentiment_score: 0.6,
+              confidence_score: 0.9,
+              extracted_concepts_count: 3,
+              trading_symbols_count: 2,
+              strategy_rules_count: 2,
+              preconditions_count: 1,
+              comment_insights_count: 1,
+              raw_llm_output_keys: 4,
+            },
+            {
+              schema_version: 'v1',
+              score: 4.8,
+              score_reasons: ['概念覆盖更广', '置信度更高'],
+              processed_at: '2026-05-16T07:50:00Z',
+              provider: 'openai',
+              model: 'gpt-4.1',
+              article_type: 'strategy',
+              extraction_version: 'v1',
+              sentiment_score: 0.5,
+              confidence_score: 0.92,
+              extracted_concepts_count: 4,
+              trading_symbols_count: 3,
+              strategy_rules_count: 3,
+              preconditions_count: 2,
+              comment_insights_count: 2,
+              raw_llm_output_keys: 5,
+            },
+          ],
+        },
+      ],
+    } as never);
 
     renderWithRouter(
       [
@@ -131,6 +196,9 @@ describe('StrategyWorkspaceArtifacts', () => {
     expect(screen.getByText('strategy_report.html')).toBeInTheDocument();
     expect(screen.getByText('Regime-aware selection')).toBeInTheDocument();
     expect(screen.getByText('sel-001')).toBeInTheDocument();
+    expect(await screen.findByText('来源文章 metadata 版本')).toBeInTheDocument();
+    expect(screen.getByText('article-1')).toBeInTheDocument();
+    expect(screen.getByText('当前版本评分原因')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /sv-1/ }));
     expect(onSelectVersion).toHaveBeenCalledWith('sv-1');

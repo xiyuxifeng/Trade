@@ -20,12 +20,13 @@ class _FakePersonaService:
     sample_calls: list[dict[str, Any]] = field(default_factory=list)
     market_calls: list[dict[str, Any]] = field(default_factory=list)
 
-    def build_sample_clusters(self, *, config_path: str) -> ServiceResult:
-        self.sample_calls.append({"config_path": config_path})
+    def build_sample_clusters(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
+        self.sample_calls.append({"profile_id": profile_id, "config_path": config_path})
         return ServiceResult(
             status="ok",
             message="sample clusters written",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "clusters_path": "/tmp/project/data/processed/persona/clusters.sample.json",
@@ -37,14 +38,16 @@ class _FakePersonaService:
     def build_market_state(
         self,
         *,
-        config_path: str,
-        benchmark_symbol: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
+        benchmark_symbol: str | None = None,
         as_of: str | None = None,
         from_akshare: bool = False,
         cache_csv: bool = True,
     ) -> ServiceResult:
         self.market_calls.append(
             {
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "benchmark_symbol": benchmark_symbol,
                 "as_of": as_of,
@@ -56,6 +59,7 @@ class _FakePersonaService:
             status="ok",
             message="market state written",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "market_state_path": "/tmp/project/data/processed/persona/market_state.json",

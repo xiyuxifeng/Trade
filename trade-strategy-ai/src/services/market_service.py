@@ -99,15 +99,15 @@ class MarketService(BaseService):
         if progress_callback is not None:
             progress_callback(payload)
 
-    def _create_ohlcv_service(self, config_path: str | Path) -> OHLCVService:
+    def _create_ohlcv_service(self, config_source: Any) -> OHLCVService:
         """根据配置创建 OHLCVService。"""
         if self._ohlcv_service is not None:
             return self._ohlcv_service
 
-        loaded = load_app_config(config_path)
+        loaded = config_source if hasattr(config_source, "akshare") else load_app_config(config_source)
         factory = self._ohlcv_service_factory or OHLCVService
         session_factory = get_session_factory()
-        akshare_cfg = loaded.config.akshare
+        akshare_cfg = loaded.akshare if hasattr(loaded, "akshare") else loaded.config.akshare
         return factory(
             session_factory=session_factory,
             min_request_interval_seconds=akshare_cfg.min_request_interval_seconds,
@@ -121,6 +121,11 @@ class MarketService(BaseService):
         if self._session_factory is not None:
             return self._session_factory
         return get_session_factory
+
+    async def _load_profile_runtime(self, profile_id: str) -> tuple[Any, Path]:
+        """从 Profile materialize 行情运行态。"""
+        runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+        return runtime.config, runtime.base_dir
 
     async def _resolve_config_path(
         self,
@@ -205,12 +210,18 @@ class MarketService(BaseService):
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """抓取 OHLCV 日线。"""
-        resolved_config_path = await self._resolve_config_path(profile_id=profile_id, config_path=config_path)
-        if resolved_config_path is None:
-            raise ValueError("missing required param: profile_id or config_path")
-        loaded = load_app_config(resolved_config_path)
-        base_dir = _project_base_dir(loaded.config_path)
-        service = self._create_ohlcv_service(resolved_config_path)
+        runtime_profile_id = str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None
+        if runtime_profile_id is not None:
+            loaded_config, base_dir = await self._load_profile_runtime(runtime_profile_id)
+            service = self._create_ohlcv_service(loaded_config)
+            resolved_config_path: Path | None = None
+        else:
+            resolved_config_path = await self._resolve_config_path(profile_id=profile_id, config_path=config_path)
+            if resolved_config_path is None:
+                raise ValueError("missing required param: profile_id or config_path")
+            loaded = load_app_config(resolved_config_path)
+            base_dir = _project_base_dir(loaded.config_path)
+            service = self._create_ohlcv_service(resolved_config_path)
 
         if symbols is None:
             raise ValueError("symbols must be provided for the web service wrapper")
@@ -222,8 +233,9 @@ class MarketService(BaseService):
             "symbols": crawl_symbols,
             "start_date": start_date,
             "end_date": end_date,
-            "runtime_state": runtime_state,
         }
+        if runtime_state is not None:
+            crawl_kwargs["runtime_state"] = runtime_state
         if progress_callback is not None:
             crawl_kwargs["progress_callback"] = progress_callback
 
@@ -258,8 +270,8 @@ class MarketService(BaseService):
             status="ok",
             message="ohlcv crawl completed",
             payload={
-                "config_path": str(loaded.config_path),
-                "profile_id": profile_id,
+                "config_path": str(resolved_config_path) if resolved_config_path is not None else None,
+                "profile_id": runtime_profile_id,
                 "base_dir": str(base_dir),
                 "mode": mode,
                 "results": results,
@@ -353,10 +365,17 @@ class MarketService(BaseService):
             },
         )
 
-    async def ohlcv_scheduler_status(self, *, config_path: str | Path) -> ServiceResult:
+    async def ohlcv_scheduler_status(self, *, profile_id: str | None = None, config_path: str | Path | None = None) -> ServiceResult:
         """查看 OHLCV 调度器状态和最新行情日期。"""
-        loaded = load_app_config(config_path)
-        base_dir = _project_base_dir(loaded.config_path)
+        runtime_profile_id = str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None
+        if runtime_profile_id is not None:
+            _loaded_config, base_dir = await self._load_profile_runtime(runtime_profile_id)
+            config_path_value = None
+        else:
+            resolved_config_path = config_path or Path("config/app.yaml")
+            loaded = load_app_config(resolved_config_path)
+            base_dir = _project_base_dir(loaded.config_path)
+            config_path_value = str(loaded.config_path)
         scheduler_state = self._scheduler_snapshot()
         session_factory = self._get_session_factory()()
         async with session_factory.begin() as session:
@@ -372,7 +391,8 @@ class MarketService(BaseService):
                 status="partial",
                 message="no ohlcv data yet",
                 payload={
-                    "config_path": str(loaded.config_path),
+                    "profile_id": runtime_profile_id,
+                    "config_path": config_path_value,
                     "base_dir": str(base_dir),
                     "latest_trade_date": None,
                     "latest_record_count": 0,
@@ -386,7 +406,8 @@ class MarketService(BaseService):
             status="ok",
             message="ohlcv status fetched",
             payload={
-                "config_path": str(loaded.config_path),
+                "profile_id": runtime_profile_id,
+                "config_path": config_path_value,
                 "base_dir": str(base_dir),
                 "latest_trade_date": latest_trade_date.isoformat(),
                 "latest_record_count": int(latest_record_count or 0),
@@ -396,10 +417,26 @@ class MarketService(BaseService):
             },
         )
 
-    def run_ohlcv_scheduler(self, *, config_path: str | Path, start_scheduler: bool = False, block: bool = False) -> ServiceResult:
+    async def run_ohlcv_scheduler(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+        start_scheduler: bool = False,
+        block: bool = False,
+    ) -> ServiceResult:
         """构建 OHLCV 调度计划或启动调度器。"""
-        loaded = load_app_config(config_path)
-        cfg = loaded.config.kaipan
+        runtime_profile_id = str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None
+        if runtime_profile_id is not None:
+            loaded_config, base_dir = await self._load_profile_runtime(runtime_profile_id)
+            cfg = loaded_config.kaipan
+            config_path_value = None
+        else:
+            resolved_config_path = config_path or Path("config/app.yaml")
+            loaded = load_app_config(resolved_config_path)
+            cfg = loaded.config.kaipan
+            base_dir = _project_base_dir(loaded.config_path)
+            config_path_value = str(loaded.config_path)
         pre_market = cfg.fetch_schedule.get("pre_market", "9:25")
         post_close = cfg.fetch_schedule.get("post_close", "17:30")
         scheduler_state = self._scheduler_snapshot()
@@ -409,8 +446,9 @@ class MarketService(BaseService):
                 status="ok",
                 message="ohlcv scheduler plan prepared",
                 payload={
-                    "config_path": str(loaded.config_path),
-                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "profile_id": runtime_profile_id,
+                    "config_path": config_path_value,
+                    "base_dir": str(base_dir),
                     "pre_market": pre_market,
                     "post_close": post_close,
                     "scheduler_started": scheduler_state["started"],
@@ -422,8 +460,9 @@ class MarketService(BaseService):
                 status="partial",
                 message="ohlcv scheduler already running",
                 payload={
-                    "config_path": str(loaded.config_path),
-                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "profile_id": runtime_profile_id,
+                    "config_path": config_path_value,
+                    "base_dir": str(base_dir),
                     "pre_market": scheduler_state["pre_market"] or pre_market,
                     "post_close": scheduler_state["post_close"] or post_close,
                     "started": True,
@@ -432,7 +471,7 @@ class MarketService(BaseService):
             )
 
         def _run_crawl() -> None:
-            asyncio.run(self._run_ohlcv_incremental_crawl(config_path=loaded.config_path))
+            asyncio.run(self._run_ohlcv_incremental_crawl(config_path=config_path_value or Path("config/app.yaml")))
 
         scheduler = BackgroundScheduler()
         pre_hour, pre_min = map(int, pre_market.split(":"))
@@ -446,7 +485,7 @@ class MarketService(BaseService):
             cls._scheduler = scheduler
             cls._scheduler_pre_market = pre_market
             cls._scheduler_post_close = post_close
-            cls._scheduler_config_path = loaded.config_path
+            cls._scheduler_config_path = Path(config_path_value) if config_path_value is not None else None
 
         if block:
             signal.signal(signal.SIGINT, lambda *_: scheduler.shutdown())
@@ -454,11 +493,12 @@ class MarketService(BaseService):
             scheduler._thread.join()
 
         return ServiceResult(
-            status="ok",
-            message="ohlcv scheduler started",
-            payload={
-                "config_path": str(loaded.config_path),
-                "base_dir": str(_project_base_dir(loaded.config_path)),
+                status="ok",
+                message="ohlcv scheduler started",
+                payload={
+                    "profile_id": runtime_profile_id,
+                    "config_path": config_path_value,
+                    "base_dir": str(base_dir),
                 "pre_market": pre_market,
                 "post_close": post_close,
                 "started": True,
@@ -466,17 +506,26 @@ class MarketService(BaseService):
             },
         )
 
-    def stop_ohlcv_scheduler(self, *, config_path: str | Path) -> ServiceResult:
+    async def stop_ohlcv_scheduler(self, *, profile_id: str | None = None, config_path: str | Path | None = None) -> ServiceResult:
         """停止当前 OHLCV 调度器。"""
-        loaded = load_app_config(config_path)
+        runtime_profile_id = str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None
+        if runtime_profile_id is not None:
+            _loaded_config, base_dir = await self._load_profile_runtime(runtime_profile_id)
+            config_path_value = None
+        else:
+            resolved_config_path = config_path or Path("config/app.yaml")
+            loaded = load_app_config(resolved_config_path)
+            base_dir = _project_base_dir(loaded.config_path)
+            config_path_value = str(loaded.config_path)
         scheduler_state = self._scheduler_snapshot()
         if not scheduler_state["started"]:
             return ServiceResult(
                 status="partial",
                 message="ohlcv scheduler is not running",
                 payload={
-                    "config_path": str(loaded.config_path),
-                    "base_dir": str(_project_base_dir(loaded.config_path)),
+                    "profile_id": runtime_profile_id,
+                    "config_path": config_path_value,
+                    "base_dir": str(base_dir),
                     "started": False,
                     "pre_market": scheduler_state["pre_market"],
                     "post_close": scheduler_state["post_close"],
@@ -487,8 +536,9 @@ class MarketService(BaseService):
             status="ok",
             message="ohlcv scheduler stopped",
             payload={
-                "config_path": str(loaded.config_path),
-                "base_dir": str(_project_base_dir(loaded.config_path)),
+                "profile_id": runtime_profile_id,
+                "config_path": config_path_value,
+                "base_dir": str(base_dir),
                 "started": False,
                 "pre_market": scheduler_state["pre_market"],
                 "post_close": scheduler_state["post_close"],

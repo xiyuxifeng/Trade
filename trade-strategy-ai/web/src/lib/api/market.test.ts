@@ -3,9 +3,11 @@ import {
   getMarketRegime,
   getMarketRegimeFeature,
   getOhlcvSchedulerStatus,
+  getStockInfoStatus,
   listBenchmarkOptions,
   listMarketRegimeFeatures,
   listMarketRegimes,
+  refreshStockInfo,
   runOhlcvScheduler,
   stopOhlcvScheduler,
 } from '@/lib/api/market';
@@ -30,6 +32,8 @@ describe('market api client', () => {
       offset: 0,
     });
     await listBenchmarkOptions(20);
+    await getStockInfoStatus(7);
+    await refreshStockInfo(7);
     await getOhlcvSchedulerStatus('default');
     await runOhlcvScheduler('default');
     await stopOhlcvScheduler('default');
@@ -48,6 +52,8 @@ describe('market api client', () => {
       '/api/ui/v1/market/regime-features?trade_date=2026-05-16&market=CN&feature_version=market-regime-features-v1&limit=10&offset=0',
     );
     expect(calls).toContain('/api/ui/v1/market/benchmark-options?limit=20');
+    expect(calls).toContain('/api/ui/v1/market/stock-info/status?max_age_days=7');
+    expect(calls).toContain('/api/ui/v1/market/stock-info/refresh?max_age_days=7');
     expect(calls).toContain('/api/ui/v1/market/ohlcv/status?profile_id=default');
     expect(calls).toContain('/api/ui/v1/market/ohlcv/run?profile_id=default');
     expect(calls).toContain('/api/ui/v1/market/ohlcv/stop?profile_id=default');

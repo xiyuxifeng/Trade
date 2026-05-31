@@ -22,7 +22,12 @@ import {
   startArticlePipelineSchedule,
   stopArticlePipelineSchedule,
 } from '@/lib/api/pipelines';
+import {
+  listArticleMetadataSummary,
+  selectArticleMetadataVersion,
+} from '@/lib/api/article-metadata';
 import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleRecord } from '@/types/articles';
+import type { ArticleMetadataResolutionListResponse } from '@/types/article-metadata';
 import type { JobRecord, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import type { ArticlePipelineRunParams, ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
@@ -72,7 +77,7 @@ const workspaceSections = [
   {
     title: '处理结果',
     description: '文章结构化产物。',
-    purpose: '查看最近一次处理的结构化输出和样本结果。',
+    purpose: '查看最近一次处理的结构化输出、样本结果，并为每篇文章选择当前生效的 metadata 版本。',
     path: '/articles/results',
   },
   {
@@ -108,13 +113,13 @@ const articleSubpages = {
   },
   '/articles/results': {
     title: '处理结果',
-    description: '查看文章处理后的结构化结果。',
-    summary: '展示最近 Job 的结构化输出与样本文章。',
+    description: '查看文章处理后的结构化结果，并选择当前生效的 metadata 版本。',
+    summary: '展示最近 Job 的结构化输出、样本文章与元数据版本选择。',
   },
   '/articles/maintenance': {
     title: '高级维护',
-    description: '失败恢复、重跑和清理的维护入口。',
-    summary: '提供失败恢复、重跑和清理操作。',
+    description: '失败恢复、重跑、候选版本重建和清理的维护入口。',
+    summary: '提供失败恢复、重跑、候选 metadata 版本重建和清理操作。',
   },
 } as const;
 
@@ -221,6 +226,13 @@ function formatDuration(durationMs: number | null | undefined) {
     return `${minutes} 分钟`;
   }
   return `${minutes} 分钟 ${seconds} 秒`;
+}
+
+function formatScore(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '未评分';
+  }
+  return value.toFixed(2);
 }
 
 function toIsoTimestamp(dateInput: string, endOfDay = false) {
@@ -1404,6 +1416,9 @@ export function ArticleQualityPage() {
 
 export function ArticleResultsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [message, setMessage] = useState<string | null>(null);
+  const [selectedMetadataVersions, setSelectedMetadataVersions] = useState<Record<string, string>>({});
   const articlesQuery = useQuery<ArticleListResponse, ApiError>({
     queryKey: ['articles', 'results'],
     queryFn: () => listArticles({ page: 1, page_size: 10 }),
@@ -1417,8 +1432,69 @@ export function ArticleResultsPage() {
   });
 
   const articles = articlesQuery.data?.items ?? [];
+  const articleIds = useMemo(() => articles.slice(0, 5).map((article) => article.id), [articles]);
   const latestJob = latestArticleJob(jobsQuery.data?.items ?? []);
   const latestJobPayload = latestJob ? getJobResultPayload(latestJob) : null;
+  const articleMetadataSummaryQueryKey = useMemo(() => ['article-metadata', 'summary', articleIds.join(',')], [articleIds]);
+  const articleMetadataQuery = useQuery<ArticleMetadataResolutionListResponse, ApiError>({
+    queryKey: articleMetadataSummaryQueryKey,
+    queryFn: () => listArticleMetadataSummary(articleIds),
+    enabled: articleIds.length > 0,
+    staleTime: 20_000,
+  });
+  const articleMetadataById = useMemo(() => {
+    return new Map((articleMetadataQuery.data?.items ?? []).map((item) => [item.article_id, item]));
+  }, [articleMetadataQuery.data?.items]);
+
+  useEffect(() => {
+    const items = articleMetadataQuery.data?.items ?? [];
+    if (items.length === 0) {
+      return;
+    }
+    setSelectedMetadataVersions((current) => {
+      const next = { ...current };
+      items.forEach((resolution) => {
+        if (next[resolution.article_id]) {
+          return;
+        }
+        next[resolution.article_id] =
+          resolution.selected_schema_version ??
+          resolution.recommended_schema_version ??
+          resolution.candidates[0]?.schema_version ??
+          '';
+      });
+      return next;
+    });
+  }, [articleMetadataQuery.data?.items]);
+
+  const selectMetadataMutation = useMutation({
+    mutationFn: async (payload: { articleId: string; selectedSchemaVersion: string }) => {
+      return selectArticleMetadataVersion(payload.articleId, {
+        selected_schema_version: payload.selectedSchemaVersion,
+        selected_by: 'web',
+      });
+    },
+    onSuccess: async (resolution) => {
+      setMessage('文章元数据版本已更新。');
+      setSelectedMetadataVersions((current) => ({
+        ...current,
+        [resolution.article_id]: resolution.selected_schema_version ?? '',
+      }));
+      queryClient.setQueryData<ArticleMetadataResolutionListResponse | undefined>(articleMetadataSummaryQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          items: current.items.map((item) => (item.article_id === resolution.article_id ? resolution : item)),
+        };
+      });
+      await articleMetadataQuery.refetch();
+    },
+    onError: (error: unknown) => {
+      setMessage(getErrorMessage(error));
+    },
+  });
   const resultHighlights = useMemo(() => {
     const payload = latestJobPayload?.processStep?.output_json;
     if (!payload || typeof payload !== 'object') {
@@ -1463,6 +1539,8 @@ export function ArticleResultsPage() {
   return (
     <ArticlePageShell title={articleSubpages['/articles/results'].title} description={articleSubpages['/articles/results'].description} summary={articleSubpages['/articles/results'].summary}>
       <div className="space-y-6">
+        {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
+
         <SectionCard title="结构化结果摘要" description="展示最近一次文章 Job 中可消费的结构化输出。">
           {latestJob ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1472,6 +1550,161 @@ export function ArticleResultsPage() {
             </div>
           ) : (
             <EmptyState title="暂无结构化结果" description="还没有找到 article_pipeline 的执行记录。" />
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="元数据版本选择"
+          description="同一篇文章可以保留多个候选版本，这里只设置当前生效版本；后续策略生成和回测只消费这一版。"
+          action={
+            <Button variant="outline" size="sm" onClick={() => void articleMetadataQuery.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              刷新版本
+            </Button>
+          }
+        >
+          {articleMetadataQuery.isLoading ? (
+            <LoadingState label="正在加载元数据版本" description="正在读取文章候选版本和当前选择。" />
+          ) : articleMetadataQuery.error ? (
+            <ArticleErrorState error={articleMetadataQuery.error} title="元数据版本加载失败" onRetry={() => void articleMetadataQuery.refetch()} />
+          ) : articleIds.length === 0 ? (
+            <EmptyState title="暂无可选择文章" description="当前没有可用于版本选择的文章。" actionLabel="返回工作台" onAction={() => navigate('/articles')} />
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {articles.slice(0, 5).map((article) => {
+                const resolution = articleMetadataById.get(article.id);
+                if (!resolution) {
+                  return (
+                    <div key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <p className="font-medium text-slate-950">{article.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
+                      </p>
+                      <EmptyState
+                        title="暂无 metadata 候选"
+                        description="这篇文章还没有生成可供选择的 metadata 版本。"
+                        actionLabel="查看处理结果"
+                        onAction={() => navigate('/articles/results')}
+                      />
+                    </div>
+                  );
+                }
+
+                const selectedVersion =
+                  selectedMetadataVersions[article.id] ??
+                  resolution.selected_schema_version ??
+                  resolution.recommended_schema_version ??
+                  resolution.candidates[0]?.schema_version ??
+                  '';
+                const selectedCandidate = resolution.candidates.find((candidate) => candidate.schema_version === selectedVersion) ?? null;
+                const isSelectedRecommended = selectedVersion === resolution.recommended_schema_version;
+                const isSelectedEffective = selectedVersion === resolution.effective_schema_version;
+
+                return (
+                  <div key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-950">{article.title}</p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-slate-500">{article.source_url}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={isSelectedEffective ? 'success' : 'default'}>当前：{selectedVersion || '未设置'}</Badge>
+                        <Badge variant={isSelectedRecommended ? 'info' : 'default'}>推荐：{resolution.recommended_schema_version ?? '无'}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <MetricCard label="当前模式" value={resolution.selection_mode ?? '未记录'} hint={resolution.selection_reason ?? '暂无选择说明'} />
+                      <MetricCard
+                        label="推荐评分"
+                        value={formatScore(resolution.recommended_score)}
+                        hint={resolution.recommended_reason ?? '暂无推荐说明'}
+                      />
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <label className="text-sm font-medium text-slate-900" htmlFor={`article-metadata-version-${article.id}`}>
+                        选择当前使用版本
+                      </label>
+                      <Select
+                        id={`article-metadata-version-${article.id}`}
+                        value={selectedVersion}
+                        onChange={(event) =>
+                          setSelectedMetadataVersions((current) => ({
+                            ...current,
+                            [article.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        {resolution.candidates.map((candidate) => (
+                          <option key={candidate.schema_version} value={candidate.schema_version}>
+                            {candidate.schema_version} · score {formatScore(candidate.score)}
+                          </option>
+                        ))}
+                      </Select>
+                      <p className="text-xs leading-6 text-slate-500">回测和策略生成将只消费当前选中的版本。</p>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          selectMetadataMutation.mutate({
+                            articleId: article.id,
+                            selectedSchemaVersion: selectedVersion,
+                          })
+                        }
+                        disabled={!selectedVersion || selectMetadataMutation.isPending}
+                      >
+                        {selectMetadataMutation.isPending ? '保存中' : '设为当前版本'}
+                      </Button>
+                      {resolution.warning ? <p className="text-xs leading-6 text-amber-700">{resolution.warning}</p> : null}
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">候选详情</p>
+                      <div className="mt-3 space-y-3">
+                        {resolution.candidates.map((candidate) => {
+                          const active = candidate.schema_version === selectedVersion;
+                          const recommended = candidate.schema_version === resolution.recommended_schema_version;
+                          return (
+                            <div key={candidate.schema_version} className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={active ? 'success' : 'default'}>{active ? '当前选中' : '候选'}</Badge>
+                                {recommended ? <Badge variant="info">系统推荐</Badge> : null}
+                                <Badge variant="default">{candidate.schema_version}</Badge>
+                                <span className="text-xs text-slate-500">score {formatScore(candidate.score)}</span>
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-slate-700">
+                                {candidate.score_reasons.length > 0 ? candidate.score_reasons.join('；') : '暂无评分说明'}
+                              </p>
+                              <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                                <span>处理时间：{candidate.processed_at ?? '未记录'}</span>
+                                <span>
+                                  provider/model：{candidate.provider ?? '未记录'} / {candidate.model ?? '未记录'}
+                                </span>
+                                <span>概念：{candidate.extracted_concepts_count}</span>
+                                <span>标的：{candidate.trading_symbols_count}</span>
+                                <span>策略规则：{candidate.strategy_rules_count}</span>
+                                <span>前置条件：{candidate.preconditions_count}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {selectedCandidate ? (
+                        <p className="mt-3 text-xs leading-6 text-slate-500">
+                          当前选中版本：{selectedCandidate.schema_version}，处理评分 {formatScore(selectedCandidate.score)}。
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </SectionCard>
 
@@ -1814,16 +2047,16 @@ export function ArticleMaintenancePage() {
                     {visibleStepParams.includes('new_version') ? (
                       <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
                         <label className="text-sm font-medium text-slate-900" htmlFor="article-maintenance-new-version">
-                          new_version
+                          new_version（候选 metadata 版本）
                         </label>
                         <Input
                           id="article-maintenance-new-version"
                           value={newVersion}
                           onChange={(event) => setNewVersion(event.target.value)}
-                          placeholder="例如 v2"
+                          placeholder="例如 v2 / llm-2"
                           disabled={cleanup || rebuildPending || retryFailed}
                         />
-                        <p className="text-xs leading-5 text-slate-500">仅在 process 步骤显示。</p>
+                        <p className="text-xs leading-5 text-slate-500">仅在 process 步骤显示，用于生成某一版候选 metadata。</p>
                       </div>
                     ) : null}
                   </div>

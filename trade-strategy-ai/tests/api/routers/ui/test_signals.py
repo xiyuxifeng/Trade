@@ -22,13 +22,15 @@ class _FakeSignalService:
     def list_signals(
         self,
         *,
-        config_path: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
         symbol: str | None = None,
         since: str | None = None,
         limit: int = 100,
     ) -> ServiceResult:
         self.calls.append(
             {
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "symbol": symbol,
                 "since": since,
@@ -39,6 +41,7 @@ class _FakeSignalService:
             status="ok",
             message="signals listed",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "count": 1,

@@ -11,9 +11,10 @@ import {
   listBacktestResults,
 } from '@/lib/api/backtests';
 import { listBenchmarkOptions } from '@/lib/api/market';
+import { listArticleMetadataSummary } from '@/lib/api/article-metadata';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { listTraderOptions } from '@/lib/api/traders';
-import { listStrategyVersions } from '@/lib/api/strategyStudio';
+import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
 
 vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
@@ -30,7 +31,6 @@ vi.mock('@/lib/api/backtests', () => ({
     strategy_version_id: submission.strategyVersionId || undefined,
     benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
-    config_path: submission.configPath || undefined,
     symbols: submission.symbols,
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
@@ -43,7 +43,6 @@ vi.mock('@/lib/api/backtests', () => ({
     strategy_version_id: submission.strategyVersionId || undefined,
     benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
-    config_path: submission.configPath || undefined,
     symbols: submission.symbols,
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
@@ -56,7 +55,6 @@ vi.mock('@/lib/api/backtests', () => ({
     strategy_version_id: submission.strategyVersionId || undefined,
     benchmark_symbol: submission.benchmarkSymbol || undefined,
     mode: submission.mode,
-    config_path: submission.configPath || undefined,
     symbols: submission.symbols,
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
@@ -67,6 +65,9 @@ vi.mock('@/lib/api/backtests', () => ({
 vi.mock('@/lib/api/market', () => ({
   listBenchmarkOptions: vi.fn(),
 }));
+vi.mock('@/lib/api/article-metadata', () => ({
+  listArticleMetadataSummary: vi.fn(),
+}));
 vi.mock('@/lib/api/profiles', () => ({
   getProfile: vi.fn(),
   listProfiles: vi.fn(),
@@ -76,6 +77,7 @@ vi.mock('@/lib/api/traders', () => ({
 }));
 vi.mock('@/lib/api/strategyStudio', () => ({
   listStrategyVersions: vi.fn(),
+  getStrategyVersion: vi.fn(),
 }));
 
 const mockedCreateJob = vi.mocked(createJob);
@@ -84,9 +86,11 @@ const mockedDownloadBacktestValidationReport = vi.mocked(downloadBacktestValidat
 const mockedGetBacktestResult = vi.mocked(getBacktestResult);
 const mockedListBacktestResults = vi.mocked(listBacktestResults);
 const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
+const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedListTraderOptions = vi.mocked(listTraderOptions);
+const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 
 beforeEach(() => {
@@ -292,6 +296,82 @@ describe('BacktestPage', () => {
         },
       ],
     });
+    mockedGetStrategyVersion.mockResolvedValue({
+      status: 'success',
+      item: {
+        version_id: 'sv-1',
+        trader_id: 'trader_a',
+        strategy_date: '2026-05-09',
+        status: 'released',
+        version_type: 'manual',
+        parent_version_id: null,
+        recommendations: [],
+        source_article_ids: ['article-1'],
+        evidence_refs: [],
+        notes: null,
+        released_at: null,
+        rules_snapshot: [],
+        regime_selection: null,
+      },
+    } as never);
+    mockedListArticleMetadataSummary.mockResolvedValue({
+      items: [
+        {
+          article_id: 'article-1',
+          selected_schema_version: 'v2',
+          selected_by: 'web',
+          selected_at: '2026-05-10T08:00:00Z',
+          selection_mode: 'manual',
+          selection_score: 4.2,
+          selection_reason: '手动选择',
+          recommended_schema_version: 'v1',
+          recommended_score: 4.8,
+          recommended_reason: '自动推荐：字段更完整',
+          effective_schema_version: 'v2',
+          effective_score: 4.2,
+          effective_reason: '手动选择',
+          warning: null,
+          candidates: [
+            {
+              schema_version: 'v2',
+              score: 4.2,
+              score_reasons: ['字段完整度高', '规则覆盖充分'],
+              processed_at: '2026-05-10T08:00:00Z',
+              provider: 'openai',
+              model: 'gpt-4.1',
+              article_type: 'strategy',
+              extraction_version: 'v2',
+              sentiment_score: 0.6,
+              confidence_score: 0.9,
+              extracted_concepts_count: 3,
+              trading_symbols_count: 2,
+              strategy_rules_count: 2,
+              preconditions_count: 1,
+              comment_insights_count: 1,
+              raw_llm_output_keys: 4,
+            },
+            {
+              schema_version: 'v1',
+              score: 4.8,
+              score_reasons: ['概念覆盖更广', '置信度更高'],
+              processed_at: '2026-05-10T07:50:00Z',
+              provider: 'openai',
+              model: 'gpt-4.1',
+              article_type: 'strategy',
+              extraction_version: 'v1',
+              sentiment_score: 0.5,
+              confidence_score: 0.92,
+              extracted_concepts_count: 4,
+              trading_symbols_count: 3,
+              strategy_rules_count: 3,
+              preconditions_count: 2,
+              comment_insights_count: 2,
+              raw_llm_output_keys: 5,
+            },
+          ],
+        },
+      ],
+    } as never);
     mockedCreateJob.mockResolvedValue({
       created: true,
       job: {
@@ -327,6 +407,9 @@ describe('BacktestPage', () => {
     expect(screen.getByLabelText('回测模式')).toHaveValue('full');
     expect(screen.getByText('仅使用快照数据')).toBeInTheDocument();
     expect(screen.getByText('统一回测评分口径')).toBeInTheDocument();
+    expect(await screen.findByText('策略版本来源')).toBeInTheDocument();
+    expect(screen.getByText('article-1')).toBeInTheDocument();
+    expect(screen.getByText('当前版本评分原因')).toBeInTheDocument();
     expect(
       screen.getByText('按 MFE / MAE / return_pct 计算，并包含 T+1 与涨跌停约束。当前为固定口径，不提供切换。'),
     ).toBeInTheDocument();
@@ -340,6 +423,8 @@ describe('BacktestPage', () => {
       expect(mockedListProfiles).toHaveBeenCalled();
       expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
       expect(mockedListStrategyVersions).toHaveBeenCalledWith({ skip: 0, limit: 100 });
+      expect(mockedGetStrategyVersion).toHaveBeenCalledWith('sv-1');
+      expect(mockedListArticleMetadataSummary).toHaveBeenCalledWith(['article-1']);
       expect(mockedGetProfile).toHaveBeenCalledWith('default');
     });
     expect((await screen.findAllByText('result-1')).length).toBeGreaterThan(0);
@@ -364,7 +449,6 @@ describe('BacktestPage', () => {
             trader_id: 'trader_a',
             strategy_version_id: 'sv-1',
             benchmark_symbol: '000300.SH',
-            config_path: 'config/profile-default.yaml',
             symbols: ['000001.SZ', '000002.SZ'],
             use_snapshot_only: true,
             scoring_profile: 'stage5',
@@ -384,7 +468,6 @@ describe('BacktestPage', () => {
             profile_id: 'default',
             symbols: ['000001.SZ', '000002.SZ'],
             benchmark_symbol: '000300.SH',
-            config_path: 'config/profile-default.yaml',
             use_snapshot_only: true,
             scoring_profile: 'stage5',
           }),
@@ -401,7 +484,6 @@ describe('BacktestPage', () => {
             profile_id: 'default',
             symbols: ['000001.SZ', '000002.SZ'],
             benchmark_symbol: '000300.SH',
-            config_path: 'config/profile-default.yaml',
             use_snapshot_only: true,
             scoring_profile: 'stage5',
           }),

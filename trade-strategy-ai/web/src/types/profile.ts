@@ -54,7 +54,7 @@ export type ProfileDetailResponse = {
 
 export type ProfileImportRequest = {
   profile_id: string;
-  config_path: string;
+  source: 'app.yaml' | 'app.template.yaml';
   created_by?: string;
 };
 

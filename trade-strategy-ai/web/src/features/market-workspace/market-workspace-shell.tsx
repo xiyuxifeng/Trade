@@ -10,7 +10,14 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
-import { getOhlcvSchedulerStatus, listBenchmarkOptions, runOhlcvScheduler, stopOhlcvScheduler } from '@/lib/api/market';
+import {
+  getOhlcvSchedulerStatus,
+  getStockInfoStatus,
+  listBenchmarkOptions,
+  refreshStockInfo,
+  runOhlcvScheduler,
+  stopOhlcvScheduler,
+} from '@/lib/api/market';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { kaipanRun, kaipanStatus, kaipanStop } from '@/lib/api/kaipan';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
@@ -22,7 +29,7 @@ import { MarketWorkspaceArtifacts } from './market-workspace-artifacts';
 import { DataHealthCenter } from '@/features/data-health';
 import type { ProfileDetailResponse, ProfileRecord } from '@/types/profile';
 import type { KaipanStatusResponse } from '@/types/kaipan';
-import type { OhlcvSchedulerStatusResponse } from '@/types/market';
+import type { OhlcvSchedulerStatusResponse, StockInfoStatusResponse } from '@/types/market';
 
 const RUNTIME_JOB_TYPES = new Set([
   'kaipan-fetch',
@@ -323,6 +330,24 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     staleTime: 30_000,
   });
   const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
+  const stockInfoStatusQuery = useQuery<StockInfoStatusResponse>({
+    queryKey: ['market-workspace', 'stock-info-status'],
+    queryFn: () => getStockInfoStatus(7),
+    enabled: mode === 'ohlcv',
+    staleTime: 10_000,
+  });
+  const stockInfoStatus = stockInfoStatusQuery.data;
+  const stockInfoNeedsRefresh = Boolean(stockInfoStatus?.needs_refresh);
+  const stockInfoStatusMessage = stockInfoStatus?.message ?? '正在检查 stock_info 是否可用于 OHLCV 抓取。';
+  const stockInfoRefreshMutation = useMutation({
+    mutationFn: async () => refreshStockInfo(7),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'stock-info-status'] });
+      void queryClient.invalidateQueries({ queryKey: ['market-workspace-benchmark-options'] });
+      setSubmissionMessage('股票基础信息已刷新，可继续运行 OHLCV 抓取。');
+      setSubmissionJobId(null);
+    },
+  });
 
   const kaipanProfilesQuery = useQuery({
     queryKey: ['market-workspace', 'kaipan-profiles'],
@@ -393,9 +418,9 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   });
   const [kaipanSchedulerStartedOverride, setKaipanSchedulerStartedOverride] = useState<boolean | null>(null);
   const kaipanSchedulerQuery = useQuery<KaipanStatusResponse>({
-    queryKey: ['market-workspace', 'kaipan-status'],
-    queryFn: () => kaipanStatus(),
-    enabled: mode === 'kaipan',
+    queryKey: ['market-workspace', 'kaipan-status', form.kaipanProfileId],
+    queryFn: () => kaipanStatus(form.kaipanProfileId),
+    enabled: mode === 'kaipan' && Boolean(form.kaipanProfileId),
     staleTime: 10_000,
   });
   const kaipanSchedulerStarted = kaipanSchedulerStartedOverride ?? kaipanSchedulerQuery.data?.scheduler_started ?? false;
@@ -408,7 +433,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   const ohlcvSchedulerQuery = useQuery<OhlcvSchedulerStatusResponse>({
     queryKey: ['market-workspace', 'ohlcv-status', form.ohlcvProfileId],
     queryFn: () => getOhlcvSchedulerStatus(form.ohlcvProfileId),
-    enabled: mode === 'ohlcv',
+    enabled: mode === 'ohlcv' && Boolean(form.ohlcvProfileId),
     staleTime: 10_000,
   });
   const ohlcvSchedulerStarted = ohlcvSchedulerStartedOverride ?? ohlcvSchedulerQuery.data?.scheduler_started ?? false;
@@ -455,14 +480,14 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   const schedulerToggleMutation = useMutation({
     mutationFn: async () => {
       if (kaipanSchedulerStarted) {
-        return kaipanStop();
+        return kaipanStop(form.kaipanProfileId);
       }
-      return kaipanRun({ start_scheduler: true, block: false });
+      return kaipanRun({ start_scheduler: true, block: false }, form.kaipanProfileId);
     },
     onSuccess: (result) => {
       const started = Boolean(result.started ?? result.scheduler_started);
       setKaipanSchedulerStartedOverride(started);
-      void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'kaipan-status'] });
+      void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'kaipan-status', form.kaipanProfileId] });
       if (!started) {
         setSubmissionMessage('Kaipan 调度器已停止。');
         setSubmissionJobId(null);
@@ -735,9 +760,52 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
           <div className="space-y-4">
             <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
               <CardHeader>
+                <CardTitle className="text-slate-900">股票基础信息预检</CardTitle>
+                <CardDescription className="text-slate-500">
+                  OHLCV 抓取前先检查 stock_info 是否覆盖常用 benchmark 且更新时间在 7 天内。若过期或缺失，请先刷新再继续。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-600">
+                  <p>状态：{stockInfoStatusQuery.isLoading ? '检查中' : stockInfoStatusQuery.isError ? '检查失败' : stockInfoStatus?.is_fresh ? '可直接用于 OHLCV 抓取' : '需要刷新'}</p>
+                  <p>说明：{stockInfoStatusMessage}</p>
+                  <p>
+                    数据量：{stockInfoStatus?.stock_count ?? 0} 条股票，{stockInfoStatus?.index_count ?? 0} 条指数，benchmark 覆盖 {stockInfoStatus?.benchmark_count ?? 0}/
+                    {stockInfoStatus?.expected_benchmark_count ?? 0}。
+                  </p>
+                  <p>最近更新时间：{stockInfoStatus?.latest_updated_at ?? '暂无'}</p>
+                </div>
+                {stockInfoStatusQuery.isError ? (
+                  <p className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs leading-6 text-rose-700">
+                    股票基础信息状态检查失败，请先点击“检查并更新股票基础信息”重新获取状态，再运行 OHLCV 抓取。
+                  </p>
+                ) : null}
+                {stockInfoNeedsRefresh ? (
+                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-6 text-amber-700">
+                    stock_info 已过期或缺少 benchmark，OHLCV 抓取前建议先刷新基础信息。
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    className="border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                    onClick={() => {
+                      stockInfoRefreshMutation.mutate();
+                    }}
+                    disabled={stockInfoRefreshMutation.isPending}
+                  >
+                    {stockInfoRefreshMutation.isPending ? '刷新中' : '检查并更新股票基础信息'}
+                  </Button>
+                  <p className="text-xs leading-6 text-slate-500">这个按钮只刷新股票基础信息，不会创建 Job。</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
+              <CardHeader>
                 <CardTitle className="text-slate-900">OHLCV 抓取</CardTitle>
                 <CardDescription className="text-slate-500">
-                  直接使用左侧抓取参数提交 `ohlcv-crawl`，手动抓取与定时调度互不干扰。
+                  直接使用左侧抓取参数提交 `ohlcv-crawl`。如果股票基础信息未通过预检，请先刷新再提交。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -748,7 +816,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                 </div>
                 <Button
                   className="w-full bg-sky-500 text-slate-950 hover:bg-sky-400"
-                  disabled={submittingJobType === 'ohlcv-crawl'}
+                  disabled={submittingJobType === 'ohlcv-crawl' || stockInfoStatusQuery.isLoading || stockInfoStatusQuery.isError || stockInfoNeedsRefresh}
                   onClick={() => {
                     setSubmissionMessage(null);
                     runMutation.mutate('ohlcv-crawl');

@@ -16,6 +16,8 @@ import type {
   OhlcvSchedulerStatusResponse,
   OhlcvSchedulerStopResponse,
   OhlcvResponse,
+  StockInfoRefreshResponse,
+  StockInfoStatusResponse,
   SymbolListResponse,
 } from '@/types/market';
 
@@ -69,6 +71,18 @@ export function runOhlcvScheduler(profileId?: string) {
 export function stopOhlcvScheduler(profileId?: string) {
   const query = buildQueryString({ profile_id: profileId });
   return fetchJson<OhlcvSchedulerStopResponse>(`/market/ohlcv/stop${query ? `?${query}` : ''}`, {
+    method: 'POST',
+  });
+}
+
+export function getStockInfoStatus(maxAgeDays = 7) {
+  const query = buildQueryString({ max_age_days: maxAgeDays });
+  return fetchJson<StockInfoStatusResponse>(`/market/stock-info/status${query ? `?${query}` : ''}`);
+}
+
+export function refreshStockInfo(maxAgeDays = 7) {
+  const query = buildQueryString({ max_age_days: maxAgeDays });
+  return fetchJson<StockInfoRefreshResponse>(`/market/stock-info/refresh${query ? `?${query}` : ''}`, {
     method: 'POST',
   });
 }

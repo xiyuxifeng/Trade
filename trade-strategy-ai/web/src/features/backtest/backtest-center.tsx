@@ -29,9 +29,11 @@ import {
   listBacktestResults,
 } from '@/lib/api/backtests';
 import { listBenchmarkOptions } from '@/lib/api/market';
+import { listArticleMetadataSummary } from '@/lib/api/article-metadata';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
-import { listStrategyVersions } from '@/lib/api/strategyStudio';
+import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStudio';
 import type { BacktestJobSubmission, BacktestListItem, BacktestResultItem, BacktestResultsResponse } from '@/types/backtests';
+import type { ArticleMetadataResolutionListResponse } from '@/types/article-metadata';
 import type { MarketBenchmarkOption } from '@/types/market';
 import type { JobRecord, JobSubmissionRequest } from '@/types/jobs';
 import type { ProfileRecord, ProfileDetailResponse } from '@/types/profile';
@@ -245,6 +247,39 @@ export function BacktestCenter() {
     () => strategyVersionItems.filter((item) => !form.traderId || item.trader_id === form.traderId),
     [form.traderId, strategyVersionItems],
   );
+  const selectedStrategyVersionDetailQuery = useQuery({
+    queryKey: ['backtest-center', 'strategy-version-detail', form.strategyVersionId],
+    queryFn: () => getStrategyVersion(form.strategyVersionId),
+    enabled: Boolean(form.strategyVersionId) && canViewBacktest,
+    staleTime: 30_000,
+  });
+  const selectedStrategyVersionDetail = selectedStrategyVersionDetailQuery.data?.item ?? null;
+  const sourceArticleIds = selectedStrategyVersionDetail?.source_article_ids ?? [];
+  const sourceMetadataQuery = useQuery<ArticleMetadataResolutionListResponse>({
+    queryKey: ['backtest-center', 'source-article-metadata', selectedStrategyVersionDetail?.version_id, sourceArticleIds.join(',')],
+    queryFn: () => listArticleMetadataSummary(sourceArticleIds),
+    enabled: Boolean(selectedStrategyVersionDetail && sourceArticleIds.length > 0) && canViewBacktest,
+    staleTime: 30_000,
+  });
+  const sourceMetadataById = useMemo(
+    () => new Map((sourceMetadataQuery.data?.items ?? []).map((item) => [item.article_id, item])),
+    [sourceMetadataQuery.data?.items],
+  );
+  function renderScoreReasons(reasons: string[] | undefined | null) {
+    if (!reasons || reasons.length === 0) {
+      return <p className="mt-2 text-xs text-slate-500">暂无评分原因。</p>;
+    }
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {reasons.slice(0, 4).map((reason) => (
+          <span key={reason} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+            {reason}
+          </span>
+        ))}
+        {reasons.length > 4 ? <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500">+{reasons.length - 4}</span> : null}
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!results.length) {
@@ -548,6 +583,65 @@ export function BacktestCenter() {
                 可复现性检查
               </Button>
             </div>
+
+              {selectedStrategyVersionDetail ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本来源</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{selectedStrategyVersionDetail.version_id}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {selectedStrategyVersionDetail.trader_id} · {selectedStrategyVersionDetail.strategy_date} · {selectedStrategyVersionDetail.status}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        这里仅展示该策略版本引用的来源文章 metadata 版本；回测仍只消费已选中的策略版本，不在此处切换版本。
+                      </p>
+                    </div>
+                    <Badge variant="info">{sourceArticleIds.length} 篇来源文章</Badge>
+                  </div>
+                <div className="mt-4 space-y-3">
+                  {selectedStrategyVersionDetail.source_article_ids.length ? (
+                    selectedStrategyVersionDetail.source_article_ids.slice(0, 5).map((articleId) => {
+                      const resolution = sourceMetadataById.get(articleId);
+                      const selectedCandidate = resolution?.candidates.find((candidate) => candidate.schema_version === resolution.selected_schema_version);
+                      const recommendedCandidate = resolution?.candidates.find((candidate) => candidate.schema_version === resolution.recommended_schema_version);
+                      return (
+                        <div key={articleId} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-slate-950">{articleId}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                当前版本：{resolution?.selected_schema_version ?? '未记录'} · 推荐版本：{resolution?.recommended_schema_version ?? '未记录'}
+                              </p>
+                            </div>
+                            <Badge variant={resolution?.selection_mode === 'manual' ? 'warning' : 'info'}>
+                              {resolution?.selection_mode === 'manual' ? '手动选择' : '自动推荐'}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-xs leading-6 text-slate-500">
+                            {resolution?.selection_reason ?? resolution?.recommended_reason ?? '暂无来源版本说明'}
+                          </p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">当前版本评分原因</p>
+                              {renderScoreReasons(selectedCandidate?.score_reasons)}
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">推荐版本评分原因</p>
+                              {renderScoreReasons(recommendedCandidate?.score_reasons)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-slate-600">该策略版本没有来源文章。</p>
+                  )}
+                </div>
+                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章 metadata 版本…</p> : null}
+                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章 metadata 版本加载失败，请稍后重试。</p> : null}
+              </div>
+            ) : null}
 
             {submissionError ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{submissionError}</div>

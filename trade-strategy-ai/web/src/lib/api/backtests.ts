@@ -51,9 +51,6 @@ export function buildBacktestRunParams(submission: BacktestJobSubmission): Recor
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
   };
-  if (submission.configPath) {
-    params.config_path = submission.configPath;
-  }
   return params;
 }
 
@@ -70,9 +67,6 @@ export function buildBacktestValidateRulesParams(submission: BacktestJobSubmissi
     use_snapshot_only: submission.useSnapshotOnly,
     scoring_profile: submission.scoringProfile,
   };
-  if (submission.configPath) {
-    params.config_path = submission.configPath;
-  }
   return params;
 }
 
@@ -86,7 +80,6 @@ export type RulePoolBacktestSubmission = {
   endDate: string;
   minConfidence?: number;
   marketRegimeVersion?: string;
-  configPath: string;
 };
 
 export function buildRulePoolBacktestParams(submission: RulePoolBacktestSubmission): Record<string, unknown> {
@@ -96,7 +89,6 @@ export function buildRulePoolBacktestParams(submission: RulePoolBacktestSubmissi
     end_date: submission.endDate,
     min_confidence: submission.minConfidence ?? 0.5,
     market_regime_version: submission.marketRegimeVersion || 'market-regime-v3',
-    config_path: submission.configPath,
   };
 }
 

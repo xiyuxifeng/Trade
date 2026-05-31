@@ -123,12 +123,22 @@ def test_pipeline_application_service_runs_article_pipeline_through_workflow_run
     """PipelineApplicationService 应通过 WorkflowRunner 运行 article_pipeline。"""
     from src.services import PipelineApplicationService
     from pathlib import Path
+    from types import SimpleNamespace
+    from src.common.config import load_app_config
     from src.services.config_profile_service import ConfigProfileService
 
-    async def _resolve_profile_config_path(self, profile_id: str) -> Path:
-        return Path("config/app.yaml")
+    loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
 
-    monkeypatch.setattr(ConfigProfileService, "resolve_profile_config_path", _resolve_profile_config_path)
+    async def _load_profile_runtime_config(self, profile_id: str):
+        assert profile_id == "default"
+        return SimpleNamespace(
+            profile_id="default",
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _load_profile_runtime_config)
 
     fake_runner = _FakeWorkflowRunner(calls=[])
     service = PipelineApplicationService(workflow_runner=fake_runner)
@@ -155,12 +165,22 @@ def test_pipeline_application_service_runs_single_article_step_through_job_runne
     """PipelineApplicationService 应支持单步运行并把 step 映射到对应 job。"""
     from src.services import PipelineApplicationService
     from pathlib import Path
+    from types import SimpleNamespace
+    from src.common.config import load_app_config
     from src.services.config_profile_service import ConfigProfileService
 
-    async def _resolve_profile_config_path(self, profile_id: str) -> Path:
-        return Path("config/app.yaml")
+    loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
 
-    monkeypatch.setattr(ConfigProfileService, "resolve_profile_config_path", _resolve_profile_config_path)
+    async def _load_profile_runtime_config(self, profile_id: str):
+        assert profile_id == "default"
+        return SimpleNamespace(
+            profile_id="default",
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _load_profile_runtime_config)
 
     fake_job_runner = _FakeJobRunner(calls=[])
     service = PipelineApplicationService(job_runner=fake_job_runner)
@@ -185,13 +205,23 @@ def test_pipeline_application_service_runs_single_article_step_through_job_runne
 def test_pipeline_application_service_rejects_validate_step_when_previous_profile_artifacts_do_not_match(monkeypatch) -> None:
     """validate step 不应被其他 Profile 的旧 clean job 放行。"""
     from pathlib import Path
+    from types import SimpleNamespace
     from src.services import PipelineApplicationService
+    from src.common.config import load_app_config
     from src.services.config_profile_service import ConfigProfileService
 
-    async def _resolve_profile_config_path(self, profile_id: str) -> Path:
-        return Path("config/app.yaml")
+    loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
 
-    monkeypatch.setattr(ConfigProfileService, "resolve_profile_config_path", _resolve_profile_config_path)
+    async def _load_profile_runtime_config(self, profile_id: str):
+        assert profile_id == "default"
+        return SimpleNamespace(
+            profile_id="default",
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _load_profile_runtime_config)
 
     fake_job_service = _FakeJobService(
         list_responses=[

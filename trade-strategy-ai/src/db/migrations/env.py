@@ -13,6 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 from src.models.base import Base  # noqa: E402
 from src.models import (  # noqa: F401
     article_metadata,
+    article_metadata_selection,
     blog_article,
     crawl_state,
     data_audit_event,

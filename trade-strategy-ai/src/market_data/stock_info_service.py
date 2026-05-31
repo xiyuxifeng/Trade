@@ -12,7 +12,7 @@ import akshare as ak
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.db.session import session_scope
 from src.models.stock_info import StockInfo
@@ -186,6 +186,60 @@ async def _upsert_stock_info_records(
         await session.commit()
 
     return stats
+
+
+async def get_stock_info_status(*, max_age_days: int = 7) -> dict[str, Any]:
+    """返回 stock_info 的当前状态摘要。"""
+    benchmark_symbols = [item["symbol"] for item in COMMON_MARKET_INDICES]
+    async with session_scope() as session:
+        total = int(await session.scalar(select(func.count()).select_from(StockInfo)) or 0)
+        stock_count = int(
+            await session.scalar(select(func.count()).select_from(StockInfo).where(StockInfo.security_type == "stock"))
+            or 0
+        )
+        index_count = int(
+            await session.scalar(select(func.count()).select_from(StockInfo).where(StockInfo.security_type == "index"))
+            or 0
+        )
+        latest_updated_at = await session.scalar(select(func.max(StockInfo.updated_at)))
+        benchmark_rows = await session.scalars(select(StockInfo.symbol).where(StockInfo.symbol.in_(benchmark_symbols)))
+        existing_benchmark_symbols = {symbol for symbol in benchmark_rows.all()}
+
+    fresh = await is_stock_list_fresh(max_age_days=max_age_days, security_types=["stock", "index"])
+    missing_benchmark_symbols = [symbol for symbol in benchmark_symbols if symbol not in existing_benchmark_symbols]
+    benchmark_count = len(existing_benchmark_symbols)
+    needs_refresh = not fresh or total == 0 or bool(missing_benchmark_symbols)
+    message = "stock_info 已就绪，可直接用于 OHLCV 抓取"
+    if total == 0:
+        message = "stock_info 为空，请先刷新股票基础信息"
+    elif needs_refresh:
+        message = "stock_info 已过期或缺少 benchmark，请先刷新股票基础信息"
+
+    return {
+        "total": total,
+        "stock_count": stock_count,
+        "index_count": index_count,
+        "benchmark_count": benchmark_count,
+        "expected_benchmark_count": len(benchmark_symbols),
+        "missing_benchmark_symbols": missing_benchmark_symbols,
+        "latest_updated_at": latest_updated_at.isoformat() if latest_updated_at is not None else None,
+        "is_fresh": fresh and total > 0 and not missing_benchmark_symbols,
+        "needs_refresh": needs_refresh,
+        "message": message,
+        "max_age_days": max_age_days,
+    }
+
+
+async def refresh_stock_info(*, max_age_days: int = 7) -> dict[str, Any]:
+    """强制刷新 stock_info，并返回刷新后的状态摘要。"""
+    index_stats = await seed_common_market_indices()
+    stock_stats = await fetch_and_store_stock_list()
+    status = await get_stock_info_status(max_age_days=max_age_days)
+    return {
+        "stock_stats": stock_stats,
+        "index_stats": index_stats,
+        "status": status,
+    }
 
 
 async def get_stock_info_by_name(name: str) -> StockInfo | None:

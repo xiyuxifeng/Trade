@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any
 
@@ -84,19 +85,16 @@ class PipelineApplicationService(BaseService):
         runtime_config = resolve_runtime_config(params)
         normalized_params = dict(params or {})
 
-        resolved_config_path = runtime_config.config_path
-        if runtime_config.profile_id and not resolved_config_path:
-            resolved_config_path = await ConfigProfileService().resolve_profile_config_path(runtime_config.profile_id)
-            if resolved_config_path is None:
-                raise ValueError(f"profile not found: {runtime_config.profile_id}")
-
-        loaded = load_app_config(resolved_config_path or "config/app.yaml")
-
         if runtime_config.profile_id:
+            runtime = await ConfigProfileService().load_profile_runtime_config(runtime_config.profile_id)
+            loaded = SimpleNamespace(config=runtime.config, config_path=Path(f"profile:{runtime.profile_id}"))
             normalized_params["profile_id"] = runtime_config.profile_id
+            normalized_params.pop("config_path", None)
         elif runtime_config.config_path:
+            loaded = load_app_config(runtime_config.config_path)
             normalized_params["config_path"] = str(loaded.config_path)
         else:
+            loaded = load_app_config("config/app.yaml")
             normalized_params["config_path"] = str(loaded.config_path)
 
         if normalized_params.get("cleanup"):

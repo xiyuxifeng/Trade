@@ -15,6 +15,11 @@ import {
 import { listArtifacts, listArtifactFilterOptions, getArtifact, downloadArtifact } from './artifacts';
 import { listArticleFilterOptions, listArticles } from './articles';
 import {
+  getArticleMetadataSummary,
+  listArticleMetadataSummary,
+  selectArticleMetadataVersion,
+} from './article-metadata';
+import {
   archiveProfile,
   getProfile,
   getProfileEdit,
@@ -107,6 +112,13 @@ describe('UI API client contract', () => {
       published_after: '2026-05-01T00:00:00Z',
       published_before: '2026-05-10T23:59:59Z',
     });
+    await listArticleMetadataSummary(['article-1', 'article-2']);
+    await getArticleMetadataSummary('article-1');
+    await selectArticleMetadataVersion('article-1', {
+      selected_schema_version: 'v2',
+      selected_by: 'web',
+      selection_reason: 'manual test',
+    });
     await runArticlePipeline({
       params: { profile_id: 'default' },
       created_by: 'web',
@@ -136,7 +148,7 @@ describe('UI API client contract', () => {
       confirmed: true,
     } as never);
     await archiveProfile('default', { archived_by: 'web' });
-    await importProfile({ profile_id: 'default', config_path: 'config/app.yaml', created_by: 'web' });
+    await importProfile({ profile_id: 'default', source: 'app.yaml', created_by: 'web' });
     await getProfileSnapshot('default', 'snapshot-1');
     await listArtifacts({ skip: 0, limit: 10 });
     await listArtifactFilterOptions();
@@ -222,6 +234,13 @@ describe('UI API client contract', () => {
     expect(calls.some((call) => call.url.startsWith('/api/ui/v1/market/ohlcv/stop') && call.method === 'POST')).toBe(true);
     expect(findCall('/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expect(findCall('/articles/filter-options?author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
+    expect(findCall('/api/ui/v1/article-metadata/summary?article_ids=article-1&article_ids=article-2')).toBeTruthy();
+    expect(findCall('/api/ui/v1/article-metadata/articles/article-1')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/article-metadata/articles/article-1/select', 'POST', {
+      selected_schema_version: 'v2',
+      selected_by: 'web',
+      selection_reason: 'manual test',
+    });
     expectJsonBody('/api/ui/v1/pipelines/article_pipeline/run', 'POST', {
       params: { profile_id: 'default' },
       created_by: 'web',
@@ -261,7 +280,7 @@ describe('UI API client contract', () => {
     expectJsonBody('/api/ui/v1/profiles/default/archive', 'POST', { archived_by: 'web' });
     expectJsonBody('/api/ui/v1/profiles/import', 'POST', {
       profile_id: 'default',
-      config_path: 'config/app.yaml',
+      source: 'app.yaml',
       created_by: 'web',
     });
     expect(findCall('/api/ui/v1/profiles/default/snapshots/snapshot-1')).toBeTruthy();

@@ -1,88 +1,72 @@
 """Web 管理后台和 CLI 共用的服务层入口。
 
-本阶段只建立基础约定：
-- 服务不依赖 Typer
-- 服务不直接输出终端文本
-- 服务返回结构化结果
+说明：
+- 这里只提供统一命名空间，不在包导入阶段 eager 加载整棵服务树。
+- 这样可以避免 ManagerAgent / JobRunner / PipelineApplicationService
+  等互相依赖的模块在 import 阶段形成循环引用。
+- 需要具体服务时，使用 `from src.services import FooService`，
+  由本模块按需加载并缓存到全局命名空间。
 """
 
-from src.services.artifact_service import ArtifactService
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
+
 from src.services.base import BaseService, ServiceResult
-from src.services.backtest_service import BacktestService
-from src.services.config_edit_service import ConfigEditService
-from src.services.config_migration_service import ConfigMigrationService
-from src.services.config_profile_service import ConfigProfileService
-from src.services.config_snapshot_service import ConfigSnapshotService
-from src.services.dashboard_service import DashboardService
-from src.services.data_audit_query_service import DataAuditQueryService
-from src.services.config_service import ConfigService
-from src.services.job_service import JobService
-from src.services.job_audit_query_service import JobAuditQueryService
-from src.services.job_runner import JobRunner
-from src.services.kaipan_service import KaipanService
-from src.services.market_service import MarketService
-from src.services.market_data_storage_service import MarketDataStorageService
-from src.services.market_snapshot_service import MarketSnapshotService
-from src.services.market_snapshot_query_service import MarketSnapshotQueryService
-from src.services.market_regime_service import MarketRegimeService
-from src.services.market_regime_feature_service import MarketRegimeFeatureService
-from src.services.rule_applicability_service import RuleApplicabilityService
-from src.services.regime_rule_selection_service import RegimeRuleSelectionService
-from src.services.optimize_service import OptimizeService
-from src.services.pipeline_application_service import PipelineApplicationService
-from src.services.persona_service import PersonaService
-from src.services.pipeline_service import PipelineService
-from src.services.signal_service import SignalService
-from src.services.security_audit_query_service import SecurityAuditQueryService
-from src.services.rule_pool_service import RulePoolService
-from src.services.setup_service import SetupService
-from src.services.step_timeline_service import StepTimelineService
-from src.services.run_service import RunService
-from src.services.workflow_run_service import WorkflowRunService
-from src.services.workflow_runner import WorkflowRunner
-from src.services.workflow_service import WorkflowService
-from src.services.snapshot_service import SnapshotService
-from src.services.strategy_service import StrategyService
-from src.services.system_service import SystemService
+
+_LAZY_EXPORTS: dict[str, str] = {
+    "ArtifactService": "src.services.artifact_service",
+    "BacktestService": "src.services.backtest_service",
+    "ConfigEditService": "src.services.config_edit_service",
+    "ConfigMigrationService": "src.services.config_migration_service",
+    "ConfigProfileService": "src.services.config_profile_service",
+    "ConfigSnapshotService": "src.services.config_snapshot_service",
+    "DashboardService": "src.services.dashboard_service",
+    "DataAuditQueryService": "src.services.data_audit_query_service",
+    "ConfigService": "src.services.config_service",
+    "JobService": "src.services.job_service",
+    "JobAuditQueryService": "src.services.job_audit_query_service",
+    "JobRunner": "src.services.job_runner",
+    "SystemService": "src.services.system_service",
+    "RunService": "src.services.run_service",
+    "WorkflowRunner": "src.services.workflow_runner",
+    "WorkflowRunService": "src.services.workflow_run_service",
+    "WorkflowService": "src.services.workflow_service",
+    "PipelineService": "src.services.pipeline_service",
+    "PipelineApplicationService": "src.services.pipeline_application_service",
+    "SnapshotService": "src.services.snapshot_service",
+    "MarketService": "src.services.market_service",
+    "MarketDataStorageService": "src.services.market_data_storage_service",
+    "MarketSnapshotService": "src.services.market_snapshot_service",
+    "MarketSnapshotQueryService": "src.services.market_snapshot_query_service",
+    "MarketRegimeService": "src.services.market_regime_service",
+    "MarketRegimeFeatureService": "src.services.market_regime_feature_service",
+    "RegimeRuleSelectionService": "src.services.regime_rule_selection_service",
+    "RuleApplicabilityService": "src.services.rule_applicability_service",
+    "StrategyService": "src.services.strategy_service",
+    "PersonaService": "src.services.persona_service",
+    "SignalService": "src.services.signal_service",
+    "KaipanService": "src.services.kaipan_service",
+    "SecurityAuditQueryService": "src.services.security_audit_query_service",
+    "OptimizeService": "src.services.optimize_service",
+    "RulePoolService": "src.services.rule_pool_service",
+    "SetupService": "src.services.setup_service",
+    "StepTimelineService": "src.services.step_timeline_service",
+}
 
 __all__ = [
     "BaseService",
     "ServiceResult",
-    "ArtifactService",
-    "BacktestService",
-    "ConfigEditService",
-    "ConfigMigrationService",
-    "ConfigProfileService",
-    "ConfigSnapshotService",
-    "DashboardService",
-    "DataAuditQueryService",
-    "ConfigService",
-    "JobService",
-    "JobAuditQueryService",
-    "JobRunner",
-    "SystemService",
-    "RunService",
-    "WorkflowRunner",
-    "WorkflowRunService",
-    "WorkflowService",
-    "PipelineService",
-    "SnapshotService",
-    "MarketService",
-    "MarketDataStorageService",
-    "MarketSnapshotService",
-    "MarketSnapshotQueryService",
-    "MarketRegimeService",
-    "MarketRegimeFeatureService",
-    "RegimeRuleSelectionService",
-    "RuleApplicabilityService",
-    "StrategyService",
-    "PersonaService",
-    "SignalService",
-    "KaipanService",
-    "SecurityAuditQueryService",
-    "OptimizeService",
-    "PipelineApplicationService",
-    "RulePoolService",
-    "SetupService",
-    "StepTimelineService",
+    *sorted(_LAZY_EXPORTS.keys()),
 ]
+
+
+def __getattr__(name: str) -> Any:
+    module_path = _LAZY_EXPORTS.get(name)
+    if module_path is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_path)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value

@@ -246,7 +246,7 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
       return {
         title: '配置缺失',
         description: '页面依赖的配置或 snapshot 没有找到。',
-        suggestion: '先检查 Profile 和 config_path，再重新打开页面。',
+        suggestion: '先检查 Profile，再重新打开页面。',
       };
     case 'provider unavailable':
       if (page === 'market') {

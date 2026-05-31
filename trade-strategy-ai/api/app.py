@@ -3,19 +3,17 @@ from __future__ import annotations
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import date
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
-from api.dependencies import describe_api_key, verify_api_key
-from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
+from api.dependencies import describe_api_key
+from api.routers import alerts, backtest_results, rankings, reports, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
 from api.routers.ui import auth_router as ui_auth_router
 from api.routers.ui import imports_router as ui_imports_router
@@ -23,6 +21,7 @@ from api.routers.ui import job_audits_router as ui_job_audits_router
 from api.routers.ui import jobs_router as ui_jobs_router
 from api.routers.ui import data_health_router as ui_data_health_router
 from api.routers.ui import data_audits_router as ui_data_audits_router
+from api.routers.ui import article_metadata_router as ui_article_metadata_router
 from api.routers.ui import kaipan_router as ui_kaipan_router
 from api.routers.ui import legacy_system_router as ui_legacy_system_router
 from api.routers.ui import market_router as ui_market_router
@@ -32,7 +31,6 @@ from api.routers.ui import optimize_router as ui_optimize_router
 from api.routers.ui import security_audit_router as ui_security_audit_router
 from api.routers.ui import pipelines_router as ui_pipelines_router
 from api.routers.ui import traders_router as ui_traders_router
-from api.routers.ui import settings_router as ui_settings_router
 from api.routers.ui import persona_router as ui_persona_router
 from api.routers.ui import snapshots_router as ui_snapshots_router
 from api.routers.ui import rule_pool_router as ui_rule_pool_router
@@ -70,41 +68,7 @@ def _is_reserved_local_path(path: str) -> bool:
 async def lifespan(app: FastAPI):
     """应用生命周期管理，负责初始化运行时配置。"""
     configure_logging()
-    config_path = resolve_project_path("config/app.yaml")
-    if config_path.exists():
-        run.set_config_path(config_path)
     yield
-
-
-class HostCommandRequest(BaseModel):
-    """主机命令请求体。"""
-
-    type: str
-    config_path: str = "config/app.yaml"
-    as_of_date: date | None = None
-    force: bool = False
-    args: dict[str, Any] = Field(default_factory=dict)
-
-
-def _register_legacy_trigger_routes(app: FastAPI) -> None:
-    """注册 legacy 主机命令接口。"""
-
-    @app.post("/host/command")
-    async def host_command(
-        request: HostCommandRequest,
-        _: str = Depends(verify_api_key),
-    ):
-        """通用 host 命令入口。"""
-        from src.host.handler import handle_command_async
-
-        command = {
-            "type": request.type,
-            "config_path": request.config_path,
-            "as_of_date": request.as_of_date.isoformat() if request.as_of_date else None,
-            "force": request.force,
-            "args": request.args,
-        }
-        return await handle_command_async(command)
 
 
 def get_audit_service() -> AuditService:
@@ -208,7 +172,6 @@ def create_app() -> FastAPI:
             )
         return response
 
-    app.include_router(run.router)
     app.include_router(reports.router)
     app.include_router(strategy_versions.router)
     app.include_router(snapshots.router)
@@ -218,6 +181,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_system_router)
     app.include_router(ui_legacy_system_router)
     app.include_router(ui_auth_router)
+    app.include_router(ui_imports_router)
     app.include_router(ui_workflows_router)
     app.include_router(ui_jobs_router)
     app.include_router(ui_pipelines_router)
@@ -233,12 +197,11 @@ def create_app() -> FastAPI:
     app.include_router(ui_strategy_studio_router)
     app.include_router(ui_signals_router)
     app.include_router(ui_persona_router)
-    app.include_router(ui_imports_router)
     app.include_router(ui_job_audits_router)
-    app.include_router(ui_settings_router)
     app.include_router(ui_kaipan_router)
     app.include_router(ui_data_health_router)
     app.include_router(ui_data_audits_router)
+    app.include_router(ui_article_metadata_router)
     app.include_router(articles_router)
     app.include_router(trades_router)
     app.include_router(market_router)
@@ -253,8 +216,6 @@ def create_app() -> FastAPI:
             content={"detail": exc.detail},
             headers=getattr(exc, "headers", None),
         )
-
-    _register_legacy_trigger_routes(app)
 
     @app.get("/")
     async def root():

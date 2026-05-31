@@ -51,7 +51,6 @@ describe('OperationalDashboardCenter', () => {
       status: 'ok',
       run_mode: 'production',
       database: { name: 'database', status: 'ok', latency_ms: 3.2, error: null },
-      config_path: 'config/app.yaml',
       project_root: '/repo',
       directories: {},
       warnings: [],

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -16,29 +15,22 @@ from api.schemas.report import (
     EvaluationResultResponse,
     EvaluationResultSummary,
 )
-from src.common.config import load_app_config
 from src.common.utils import read_json
 from src.schemas.contracts import DailyReport, EvaluationResult
+from src.services.config_profile_service import ConfigProfileService
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
-def _project_base_dir(config_path: Path) -> Path:
-    if config_path.parent.name == "config":
-        return config_path.parent.parent
-    return config_path.parent
+async def _resolve_runtime_output_dir(profile_id: str | None = None) -> tuple[Path, str | None, str | None]:
+    """解析 Web 报告输出目录。
 
-
-def _get_base_dir() -> Path:
-    config_path = os.environ.get("CONFIG_PATH", "config/app.yaml")
-    loaded = load_app_config(config_path)
-    return _project_base_dir(loaded.config_path)
-
-
-def _output_dir() -> Path:
-    base_dir = _get_base_dir()
-    cfg = load_app_config(os.environ.get("CONFIG_PATH", "config/app.yaml")).config
-    return base_dir / cfg.storage.output_dir
+    优先从 Profile runtime 解析，找不到则回退到默认 Profile。
+    """
+    service = ConfigProfileService()
+    resolved_profile_id = service.resolve_runtime_profile_id(profile_id)
+    runtime = await service.load_profile_runtime_config(resolved_profile_id)
+    return runtime.base_dir / runtime.config.storage.output_dir, runtime.profile_id, runtime.profile_snapshot_id
 
 
 def _daily_report_path(output_dir: Path, as_of_date: date) -> Path:
@@ -60,10 +52,11 @@ def _evaluation_html_path(output_dir: Path, as_of_date: date) -> Path:
 @router.get("/daily/{as_of_date}", response_model=DailyReportResponse)
 async def get_daily_report(
     as_of_date: date,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Get daily report by date."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
     path = _daily_report_path(output_dir, as_of_date)
 
     if not path.exists():
@@ -80,10 +73,11 @@ async def list_daily_reports(
     page_size: int = Query(default=10, ge=1, le=50),
     start_date: date | None = None,
     end_date: date | None = None,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """List daily reports with optional date range filter."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
 
     reports: list[DailyReportSummary] = []
     if output_dir.exists():
@@ -124,10 +118,11 @@ async def list_daily_reports(
 async def export_daily_report(
     as_of_date: date,
     format: str = Query(default="json", pattern="^(json|html)$"),
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Export daily report as JSON or HTML."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
 
     if format == "html":
         path = _daily_report_html_path(output_dir, as_of_date)
@@ -155,10 +150,11 @@ async def export_daily_report(
 @router.get("/evaluation/{as_of_date}", response_model=EvaluationResultResponse)
 async def get_evaluation_result(
     as_of_date: date,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Get evaluation result by date."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
     path = _evaluation_path(output_dir, as_of_date)
 
     if not path.exists():
@@ -175,10 +171,11 @@ async def list_evaluation_results(
     page_size: int = Query(default=10, ge=1, le=50),
     start_date: date | None = None,
     end_date: date | None = None,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """List evaluation results with optional date range filter."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
 
     results: list[EvaluationResultSummary] = []
     if output_dir.exists():
@@ -219,10 +216,11 @@ async def list_evaluation_results(
 async def export_evaluation_result(
     as_of_date: date,
     format: str = Query(default="json", pattern="^(json|html)$"),
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Export evaluation result as JSON or HTML."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
 
     if format == "html":
         path = _evaluation_html_path(output_dir, as_of_date)
@@ -254,10 +252,11 @@ def _persona_route_path(output_dir: Path, as_of_date: date) -> Path:
 @router.get("/persona-route/{as_of_date}")
 async def get_persona_route(
     as_of_date: date,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Get persona route decision by date."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
     path = _persona_route_path(output_dir, as_of_date)
 
     if not path.exists():
@@ -273,10 +272,11 @@ async def list_persona_routes(
     page_size: int = Query(default=10, ge=1, le=50),
     start_date: date | None = None,
     end_date: date | None = None,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """List persona route decisions with optional date range filter."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
 
     routes: list[dict] = []
     if output_dir.exists():
@@ -311,10 +311,11 @@ async def list_persona_routes(
 @router.get("/persona-route/{as_of_date}/export")
 async def export_persona_route(
     as_of_date: date,
+    profile_id: str | None = Query(default=None),
     _: str = Depends(verify_api_key),
 ):
     """Export persona route decision as JSON."""
-    output_dir = _output_dir()
+    output_dir, _, _ = await _resolve_runtime_output_dir(profile_id)
     path = _persona_route_path(output_dir, as_of_date)
 
     if not path.exists():

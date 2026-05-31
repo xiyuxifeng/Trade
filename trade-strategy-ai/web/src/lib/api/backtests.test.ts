@@ -95,7 +95,6 @@ describe('backtests api client', () => {
       strategyVersionId: 'sv-1',
       benchmarkSymbol: '000300.SH',
       mode: 'full' as const,
-      configPath: undefined,
       symbols: ['000001.SZ'],
       useSnapshotOnly: true,
       scoringProfile: 'stage5',

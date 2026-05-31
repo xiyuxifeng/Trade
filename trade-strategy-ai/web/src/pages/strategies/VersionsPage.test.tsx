@@ -5,6 +5,7 @@ import { VersionsPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { listProfiles, getProfile } from '@/lib/api/profiles';
 import { listArtifacts } from '@/lib/api/artifacts';
+import { listArticleMetadataSummary } from '@/lib/api/article-metadata';
 import { listStrategyVersions, getStrategyVersion } from '@/lib/api/strategyStudio';
 import { createJob } from '@/lib/api/jobs';
 import { listTraderOptions } from '@/lib/api/traders';
@@ -16,6 +17,10 @@ vi.mock('@/lib/api/profiles', () => ({
 
 vi.mock('@/lib/api/artifacts', () => ({
   listArtifacts: vi.fn(),
+}));
+
+vi.mock('@/lib/api/article-metadata', () => ({
+  listArticleMetadataSummary: vi.fn(),
 }));
 
 vi.mock('@/lib/api/strategyStudio', () => ({
@@ -34,6 +39,7 @@ vi.mock('@/lib/api/traders', () => ({
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
 const mockedListArtifacts = vi.mocked(listArtifacts);
+const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
 const mockedListStrategyVersions = vi.mocked(listStrategyVersions);
 const mockedGetStrategyVersion = vi.mocked(getStrategyVersion);
 const mockedCreateJob = vi.mocked(createJob);
@@ -159,6 +165,27 @@ describe('VersionsPage', () => {
         },
       },
     } as never);
+    mockedListArticleMetadataSummary.mockResolvedValue({
+      items: [
+        {
+          article_id: 'article-1',
+          selected_schema_version: 'v1',
+          selected_by: 'web',
+          selected_at: '2026-05-16T08:00:00Z',
+          selection_mode: 'auto',
+          selection_score: 4.7,
+          selection_reason: '自动推荐',
+          recommended_schema_version: 'v1',
+          recommended_score: 4.7,
+          recommended_reason: '自动推荐',
+          effective_schema_version: 'v1',
+          effective_score: 4.7,
+          effective_reason: '自动推荐',
+          warning: null,
+          candidates: [],
+        },
+      ],
+    } as never);
     mockedListArtifacts.mockResolvedValue({ count: 0, total: 0, skip: 0, limit: 24, items: [] } as never);
     mockedListTraderOptions.mockResolvedValue({
       status: 'success',
@@ -184,7 +211,10 @@ describe('VersionsPage', () => {
     expect(await screen.findByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
     expect((await screen.findAllByText('trader_a_2026-05-16_released')).length).toBeGreaterThan(0);
     expect(screen.getByText('latest released version')).toBeInTheDocument();
+    expect(await screen.findByText('来源文章 metadata 版本')).toBeInTheDocument();
+    expect(screen.getByText('article-1')).toBeInTheDocument();
     expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
+    expect(mockedListArticleMetadataSummary).toHaveBeenCalledWith(['article-1']);
 
     fireEvent.change(screen.getByLabelText('策略日期'), { target: { value: '2026-05-16' } });
     await user.click(screen.getByRole('button', { name: '搜索' }));

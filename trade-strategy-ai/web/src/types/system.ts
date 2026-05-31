@@ -34,12 +34,13 @@ export type SystemHealthComponentStatus = {
 
 export type SystemStatusResponse = {
   status: 'ok';
-  config_path: string;
   profile_context?: {
     profile_id: string | null;
     profile_snapshot_id: string | null;
     source: 'env' | 'unset';
   };
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   project_root: string;
   run_mode: string;
   database: DatabaseHealthStatus;
@@ -61,7 +62,8 @@ export type SystemDashboardFailedJob = {
 export type SystemDashboardResponse = {
   status: 'ok' | 'partial' | 'error';
   generated_at: string;
-  config_path?: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   health: {
     overall: string;
     issues: string[];

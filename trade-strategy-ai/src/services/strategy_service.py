@@ -12,6 +12,7 @@ from src.db.session import session_scope
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.pipeline.tasks.strategy_version_tasks import handle_build_trader_strategy_version
 from src.services.base import BaseService, ServiceResult
+from src.services.config_profile_service import ConfigProfileService
 from src.services.runtime_config import resolve_runtime_config
 
 
@@ -73,10 +74,19 @@ class StrategyService(BaseService):
         selected_by: str | None = None,
     ) -> ServiceResult:
         """构建指定交易员的策略版本。"""
-        runtime_config = resolve_runtime_config({"profile_id": profile_id, "config_path": config_path})
-        config_file = Path(runtime_config.config_path or "config/app.yaml").expanduser().resolve()
-        loaded = load_app_config(config_file)
-        base_dir = _project_base_dir(loaded.config_path)
+        if profile_id is not None and str(profile_id).strip():
+            runtime = await ConfigProfileService().load_profile_runtime_config(str(profile_id).strip())
+            loaded_config = runtime.config
+            base_dir = runtime.base_dir
+            config_file = None
+            runtime_profile_id = runtime.profile_id
+        else:
+            runtime_config = resolve_runtime_config({"profile_id": profile_id, "config_path": config_path})
+            config_file = Path(runtime_config.config_path or "config/app.yaml").expanduser().resolve()
+            loaded = load_app_config(config_file)
+            loaded_config = loaded.config
+            base_dir = _project_base_dir(loaded.config_path)
+            runtime_profile_id = runtime_config.profile_id
         regime_selection_payload = regime_selection or {}
         if not regime_selection_payload and any(
             value is not None
@@ -107,14 +117,14 @@ class StrategyService(BaseService):
             )
             else None,
         }
-        await self._build_handler(details, config=loaded.config)
+        await self._build_handler(details, config=loaded_config)
         return ServiceResult(
             status="ok",
             message="strategy version build completed",
             payload={
-                "config_path": str(config_file),
+                "config_path": str(config_file) if config_file is not None else None,
                 "base_dir": str(base_dir),
-                "profile_id": runtime_config.profile_id,
+                "profile_id": runtime_profile_id,
                 "trader_id": trader_id,
                 "strategy_date": strategy_date,
                 "force": force,

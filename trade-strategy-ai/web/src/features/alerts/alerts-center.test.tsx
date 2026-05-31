@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '@/test/test-utils';
 import { AlertsPage } from '@/pages/alerts';
 import { acknowledgeAlert, getAlertingStatus, listAlertHistory, resolveAlert, sendTestAlert } from '@/lib/api/alerts';

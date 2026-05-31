@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.common.config import ConfigError
+from src.common.paths import resolve_project_path
 from src.services.config_profile_service import ConfigProfileService
 
 
@@ -18,7 +18,7 @@ class ProfileImportRequest(BaseModel):
     """Profile 导入请求。"""
 
     profile_id: str
-    config_path: str
+    source: str = "app.template.yaml"
     created_by: str | None = None
 
 
@@ -163,18 +163,21 @@ async def import_profile(
     service: ConfigProfileService = Depends(get_profile_service),
     _role_principal: CurrentPrincipal = Depends(require_role("operator")),
 ) -> dict[str, Any]:
-    """从 `config/app.yaml` 或 `config/app.template.yaml` 导入正式 Profile。"""
+    """从交付模板导入正式 Profile。"""
+    if request.source not in {"app.yaml", "app.template.yaml"}:
+        raise HTTPException(status_code=400, detail="unsupported import source")
+    config_path = resolve_project_path(f"config/{request.source}")
     existing = await service.get_profile(request.profile_id)
     try:
         profile = await service.import_from_config_path(
-            request.config_path,
+            config_path,
             profile_id=request.profile_id,
             created_by=request.created_by or "web",
         )
         snapshot_result = await service.capture_profile_snapshot(
             profile.profile_id,
-            source=request.config_path,
-            config_path=Path(request.config_path),
+            source=request.source,
+            config_path=config_path,
         )
     except ConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc) or "profile import failed") from exc

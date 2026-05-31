@@ -93,7 +93,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 3. 提交后系统生成 Profile 及配置快照。
 4. 在 Profile 列表确认 `validation_status` 为 **validated**。
 
-> 说明：`config_path` 是 CLI/兼容层概念。Web 用户只需要选择 Profile；页面会自动把 Profile 映射到运行所需配置。
+> 说明：Web 用户只需要选择 Profile；页面会自动绑定当前 Profile，不要求手动填写 `config_path`。`config_path` 仅保留给 CLI / 历史兼容。
 
 ### 4.2 Profile 详情与编辑
 
@@ -167,9 +167,19 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | 处理结果 | `/articles/results` | 最近结构化输出 |
 | 高级维护 | `/articles/maintenance` | 重跑、失败重试、清理 |
 
+> 版本口径：`/articles/results` 可查看同一篇文章的多个 `article_metadata` 候选版本，并设置当前生效版本；后续策略生成和回测只使用当前生效版本。`/articles/maintenance` 的 `new_version` 表示候选 metadata 版本，不是回测版本号。
+
 常用 step：`crawl`、`clean`、`validate`、`store`、`process`。日常操作先选择 Profile，再选择 step，然后按页面表单提交。
 
-> 说明：`use_db` 和 `config_path` 属于系统内部兼容参数，Web 日常操作不需要填写。
+> 说明：`use_db` 和 `config_path` 属于系统内部兼容参数，Web 日常操作不需要填写，页面会自动处理。
+
+**`article_metadata` 版本怎么操作**：
+
+1. 打开 **处理结果**（`/articles/results`）。
+2. 找到目标文章，查看当前版本、推荐版本和评分原因。
+3. 如果自动推荐不合适，切换为更适合该文章的候选版本并保存。
+4. 保存后，后续 **策略版本** 和 **回测** 只会读取当前生效版本。
+5. 如需重新生成候选版本，去 **高级维护**（`/articles/maintenance`）执行 `process`，`new_version` 只是候选 metadata 版本号。
 
 ### 5.6 市场数据（`/market`）
 
@@ -190,7 +200,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 3. 填写 `symbols`、日期区间等。
 4. 提交 `ohlcv-crawl`，到任务中心查看进度。
 
-Web 页面优先使用 `profile_id`。`config_path` 只作为兼容字段，不建议交付用户手动填写。
+Web 页面优先使用 `profile_id`，默认自动绑定当前 Profile。`config_path` 仅保留给 CLI / debug / 历史兼容，不建议交付用户手动填写。
 
 #### Kaipan 数据
 
@@ -265,6 +275,14 @@ Web 页面优先使用 `profile_id`。`config_path` 只作为兼容字段，不�
 
 请先在策略版本页面检查 draft 的推荐、规则快照和证据链，确认无误后执行 Release。没有可用 `released` 版本时，盘前和回测主流程可能报错。
 
+**策略版本页面的操作顺序**：
+
+1. 打开 `/strategies/versions`，选择 trader、策略日期和 Profile。
+2. 生成或筛选出目标策略版本后，查看版本详情。
+3. 在版本详情里检查 **来源文章 metadata 版本**，确认每篇来源文章的当前版本、推荐版本和评分原因。
+4. 如果某篇文章的来源版本不合适，先回到 `/articles/results` 切换该文章的当前生效版本，再重新生成策略版本。
+5. 确认 draft 无误后再执行 Release。
+
 ### 日常重复流程
 
 第二个交易日及以后，通常只需：
@@ -299,8 +317,9 @@ Web 页面优先使用 `profile_id`。`config_path` 只作为兼容字段，不�
 5. 提交 `backtest-run`。
 6. 查看摘要指标、Markdown 报告、CSV 明细。
 7. 可选执行 `backtest-validate-rules` 或 `backtest-reproducibility-check`。
+8. 提交前先检查页面里的 **策略版本来源** 卡片，确认该策略版本引用的来源文章 metadata 版本和评分原因符合预期。
 
-`config_path` 在 Web 中通常由 Profile 自动填充，不建议手动修改。
+Web 中由系统自动绑定当前 Profile，不向用户暴露 `config_path`。
 
 ---
 
@@ -347,4 +366,4 @@ Web 页面优先使用 `profile_id`。`config_path` 只作为兼容字段，不�
 
 ---
 
-*文档版本：修订交付版。重点收敛 Profile、弱化 config_path、明确策略 Release、调度边界与 legacy market-state-build。*
+*文档版本：修订交付版。重点收敛 Profile、明确策略 Release、调度边界与 legacy market-state-build。*

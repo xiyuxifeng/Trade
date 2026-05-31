@@ -615,20 +615,15 @@ def test_ohlcv_crawl_handler_accepts_profile_only_and_allows_full_crawl(
 
     calls: dict[str, Any] = {}
 
-    async def _fake_resolve_profile_config_path(self, profile_id: str):
-        calls["profile_id"] = profile_id
-        return tmp_path / "config" / "ohlcv.yaml"
-
     class _FakeMarketService:
         async def crawl_ohlcv(self, **kwargs):
             calls.update(kwargs)
             return ServiceResult(
                 status="ok",
-                payload={"config_path": str(kwargs["config_path"]), "result": "ohlcv done"},
+                payload={"config_path": kwargs["config_path"], "result": "ohlcv done"},
                 message="ohlcv done",
             )
 
-    monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
     monkeypatch.setattr(job_runner_module, "MarketService", _FakeMarketService)
 
     runner, _, engine, _ = _build_job_runner(tmp_path)
@@ -647,7 +642,7 @@ def test_ohlcv_crawl_handler_accepts_profile_only_and_allows_full_crawl(
 
     assert result.status == "ok"
     assert calls["profile_id"] == "default"
-    assert calls["config_path"] == tmp_path / "config" / "ohlcv.yaml"
+    assert calls["config_path"] is None
     assert calls["mode"] == "incremental"
     assert calls["symbols"] == ["000001.SZ", "000300.SH"]
     assert calls["limit"] is None
@@ -743,7 +738,8 @@ def test_snapshot_build_handler_accepts_profile_only(tmp_path: Path, monkeypatch
     )
 
     assert result.status == "ok"
-    assert calls["config_path"] == tmp_path / "config" / "snapshot.yaml"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] is None
     assert calls["benchmark_symbol"] is None
     assert calls["profile_id"] == "default"
     assert calls["date"] == "2026-05-16"

@@ -37,7 +37,7 @@ describe('ProfileImportPage', () => {
         snapshot_id: 'snapshot-1',
         profile_id: 'default',
         job_id: null,
-        source: 'config/app.template.yaml',
+        source: 'app.template.yaml',
         config_path: 'config/app.template.yaml',
         config_hash: 'hash-1',
         masked_snapshot: {},
@@ -52,8 +52,7 @@ describe('ProfileImportPage', () => {
 
     await user.clear(screen.getByLabelText('配置 ID'));
     await user.type(screen.getByLabelText('配置 ID'), 'default');
-    await user.clear(screen.getByLabelText('源配置路径'));
-    await user.type(screen.getByLabelText('源配置路径'), 'config/app.template.yaml');
+    await user.selectOptions(screen.getByLabelText('导入模板'), 'app.template.yaml');
     await user.clear(screen.getByLabelText('创建者'));
     await user.type(screen.getByLabelText('创建者'), 'web');
 
@@ -63,7 +62,7 @@ describe('ProfileImportPage', () => {
       expect(mockedImportProfile).toHaveBeenCalledWith(
         expect.objectContaining({
           profile_id: 'default',
-          config_path: 'config/app.template.yaml',
+          source: 'app.template.yaml',
           created_by: 'web',
         }),
       );

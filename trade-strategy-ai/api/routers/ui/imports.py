@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,6 +8,7 @@ from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
 from src.common.paths import resolve_project_path
+from src.services.config_profile_service import ConfigProfileService
 from src.services.setup_service import SetupService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-imports"])
@@ -30,9 +30,10 @@ class MigrateCrawlStateRequest(BaseModel):
     """crawl state 迁移请求体占位，便于前端保持 JSON 提交。"""
 
 
-def _config_path() -> Path:
-    """读取当前 UI BFF 使用的配置文件路径。"""
-    return resolve_project_path(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+    """读取当前 UI BFF 使用的 Profile。"""
+    service = ConfigProfileService()
+    return service.resolve_runtime_profile_id(preferred)
 
 
 def get_setup_service() -> SetupService:
@@ -88,29 +89,48 @@ async def import_trade_logs(
     file: UploadFile = File(...),
     dry_run: bool = Form(False),
     source: str = Form("csv_import"),
+    profile_id: str | None = None,
     service: SetupService = Depends(get_setup_service),
 ):
     """上传交易日志并在后端临时落盘后交给服务处理。"""
     suffix = _validate_upload_filename(file.filename)
     _validate_upload_content_type(file.content_type, suffix)
+    runtime_profile_id = await _resolve_profile_id(profile_id)
     with TemporaryDirectory(prefix="trade-strategy-ai-import-") as tmp_dir:
         target = Path(tmp_dir) / f"trade-log{suffix}"
         await _write_upload_to_tempfile(file, target)
-        result = await service.import_trade_logs(
-            config_path=_config_path(),
-            csv_path=target,
-            source=source,
-            dry_run=dry_run,
-        )
-    return result.payload
+        if runtime_profile_id is not None:
+            result = await service.import_trade_logs(
+                profile_id=runtime_profile_id,
+                csv_path=target,
+                source=source,
+                dry_run=dry_run,
+            )
+        else:
+            result = await service.import_trade_logs(
+                config_path=resolve_project_path("config/app.yaml"),
+                csv_path=target,
+                source=source,
+                dry_run=dry_run,
+            )
+    payload = dict(result.payload)
+    payload.pop("config_path", None)
+    return payload
 
 
 @router.post("/imports/crawl-state/migrate", dependencies=[Depends(verify_api_key)])
 async def migrate_crawl_state(
     request: MigrateCrawlStateRequest | None = None,
+    profile_id: str | None = None,
     service: SetupService = Depends(get_setup_service),
 ):
     """迁移 crawl state 到数据库。"""
     del request
-    result = await service.migrate_crawl_state(config_path=_config_path())
-    return result.payload
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    if runtime_profile_id is not None:
+        result = await service.migrate_crawl_state(profile_id=runtime_profile_id)
+    else:
+        result = await service.migrate_crawl_state(config_path=resolve_project_path("config/app.yaml"))
+    payload = dict(result.payload)
+    payload.pop("config_path", None)
+    return payload

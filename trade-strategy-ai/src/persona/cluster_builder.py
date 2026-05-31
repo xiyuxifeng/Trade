@@ -10,8 +10,8 @@ from sqlalchemy import select
 
 from src.common.config import AppConfig
 from src.db.session import session_scope
-from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
 from src.persona.schemas import (
     ClusterApplicability,
     InstrumentFocus,
@@ -82,25 +82,46 @@ async def build_clusters_from_db(
     )
     evidence_by_trader: dict[str, list[dict[str, Any]]] = defaultdict(list)
     article_count_by_trader: dict[str, int] = defaultdict(int)
+    metadata_selection_service = ArticleMetadataSelectionService()
 
     async with session_scope() as session:
         stmt = (
-            select(BlogArticle, ArticleMetadata)
-            .join(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
-            .where(ArticleMetadata.processed_at.is_not(None))
-            .order_by(ArticleMetadata.processed_at.desc())
+            select(
+                BlogArticle.id,
+                BlogArticle.author_id,
+                BlogArticle.source_url,
+                BlogArticle.published_at,
+                BlogArticle.raw_payload,
+            )
+            .order_by(BlogArticle.crawled_at.desc())
         )
         if max_articles is not None:
             stmt = stmt.limit(max_articles)
 
         rows = await session.execute(stmt)
+        article_rows = rows.all()
+        effective_metadata_map = await metadata_selection_service.load_effective_metadata_map(
+            session,
+            article_ids=[row[0] for row in article_rows],
+            selected_by="system",
+        )
 
-        for article, meta in rows.all():
+        for article_id, author_id, source_url, published_at, raw_payload in article_rows:
             stats.scanned_articles += 1
+            article = BlogArticle(
+                id=article_id,
+                author_id=author_id,
+                source_url=source_url,
+                published_at=published_at,
+                raw_payload=raw_payload,
+            )
             trader_id = _infer_trader_id(article=article, config=config)
             if not trader_id:
                 continue
 
+            meta = effective_metadata_map.get(article_id)
+            if meta is None or meta.processed_at is None:
+                continue
             # 仅当有规则/前置条件时才用于聚类
             if not meta.strategy_rules and not meta.preconditions:
                 continue

@@ -90,7 +90,7 @@ python -m cli.main db-check --config config/app.yaml
 | 运行配置 | Web `/profiles` | 文章、市场数据、策略、回测上下文 | admin 在页面导入和维护 |
 | 任务参数 | 各业务页面表单 | 单次 Job 的执行行为 | 如 `force`、日期、标的、回测区间 |
 
-结论：Web 日常操作优先使用 Profile。`config/app.yaml` 和 `config/app.template.yaml` 只作为导入源；它们已包含 `strategy` 和 `risk` 配置段。`config_path` 仅作为 CLI/兼容字段，不建议交付用户手动填写。
+结论：Web 日常操作优先使用 Profile。`config/app.yaml` 和 `config/app.template.yaml` 只作为导入源；它们已包含 `strategy` 和 `risk` 配置段。`config_path` 仅作为 CLI/debug/历史兼容字段，不建议交付用户手动填写。
 补充：`config/rules/behavior_rules.yaml` 是 Persona 行为标签的只读规则源，Web `/persona` 只提供预览与解释，不提供编辑入口。
 补充：`/api/ui/v1/system/status` 展示的 `Profile 上下文` 只读取启动环境显式注入的 `PROFILE_ID` / `PROFILE_SNAPSHOT_ID`，不从 `config_path` 反推；如果没有注入，界面会显示 `未绑定`，这是正常情况。
 
@@ -368,4 +368,4 @@ python -m scripts.web_local start-worker
 
 ---
 
-*文档版本：修订交付版。重点移除默认密码风险、统一 Profile/config_path 口径、补充 smoke test、访问地址与备份边界。*
+*文档版本：修订交付版。重点移除默认密码风险、统一 Profile 口径、补充 smoke test、访问地址与备份边界。*

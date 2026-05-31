@@ -164,14 +164,14 @@ describe('profiles api client', () => {
     } as Response);
 
     await expect(
-      importProfile({ profile_id: 'default', config_path: 'config/articles.yaml', created_by: 'web' }),
+      importProfile({ profile_id: 'default', source: 'app.template.yaml', created_by: 'web' }),
     ).resolves.toMatchObject({ created: true });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(url).toBe('/api/ui/v1/profiles/import');
     expect(init?.method).toBe('POST');
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
-    expect(init?.body).toBe(JSON.stringify({ profile_id: 'default', config_path: 'config/articles.yaml', created_by: 'web' }));
+    expect(init?.body).toBe(JSON.stringify({ profile_id: 'default', source: 'app.template.yaml', created_by: 'web' }));
   });
 
   it('loads a profile snapshot detail view', async () => {

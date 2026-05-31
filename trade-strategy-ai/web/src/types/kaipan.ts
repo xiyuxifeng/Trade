@@ -1,4 +1,5 @@
 export type KaipanFetchRequest = {
+  profile_id?: string | null;
   trade_date?: string | null;
   start_date?: string | null;
   end_date?: string | null;
@@ -6,7 +7,8 @@ export type KaipanFetchRequest = {
 };
 
 export type KaipanFetchResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   trade_date: string;
   slots: string[];
@@ -15,7 +17,8 @@ export type KaipanFetchResponse = {
 };
 
 export type KaipanStatusResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   raw_base: string;
   latest_slot: string | null;
@@ -25,6 +28,7 @@ export type KaipanStatusResponse = {
 };
 
 export type KaipanNormalizeRequest = {
+  profile_id?: string | null;
   trade_date?: string | null;
   start_date?: string | null;
   end_date?: string | null;
@@ -32,7 +36,8 @@ export type KaipanNormalizeRequest = {
 };
 
 export type KaipanNormalizeResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   trade_date: string;
   slots: string[];
@@ -40,12 +45,14 @@ export type KaipanNormalizeResponse = {
 };
 
 export type KaipanRunRequest = {
+  profile_id?: string | null;
   start_scheduler?: boolean;
   block?: boolean;
 };
 
 export type KaipanRunResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   pre_market: string;
   post_close: string;
@@ -54,7 +61,8 @@ export type KaipanRunResponse = {
 };
 
 export type KaipanStopResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   started: boolean;
   pre_market?: string | null;

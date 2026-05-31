@@ -5,7 +5,9 @@ export type ImportTradeLogsRequest = {
 };
 
 export type ImportTradeLogsResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
+  base_dir: string;
   csv_path: string;
   file_kind: string;
   source: string;
@@ -21,7 +23,8 @@ export type ImportTradeLogsResponse = {
 export type MigrateCrawlStateRequest = Record<string, never>;
 
 export type MigrateCrawlStateResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   migrated: number;
   skipped: number;

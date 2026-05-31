@@ -221,6 +221,114 @@ python -m cli.main seed-admin --username preview-admin --password <strong-passwo
 
 这样可以完全避免开发旧数据污染演示。
 
+### 3.6 数据表清理清单
+
+> 说明：
+> - 下面表格按“演示用途”来判断是否保留，不是按“是否有数据”简单二分。
+> - 如果文章链路采用“只增量抓取”，则 `raw_articles`、`blog_articles`、`article_metadata`、`crawl_state` 应保留为演示基线，不做整表删除。
+> - `stock_info` 和 `ohlcv_bars` 建议收缩为演示所需的最小子集，而不是保留全市场历史。
+
+| 表名 | 数据用途 | 保留 / 删除 | 原因 |
+|---|---|---|---|
+| `alembic_version` | 记录数据库迁移版本 | 保留 | 这是数据库底座表，删除会破坏迁移状态判断。 |
+| `users` | 系统用户与管理员账号 | 保留 | 演示登录、权限、审计都依赖用户表。 |
+| `config_profiles` | Profile 正式事实源 | 保留单条演示 Profile | 需要保留 `preview-demo` 或等价演示配置；多余旧 Profile 建议清理或归档。 |
+| `raw_articles` | 原始文章抓取结果 | 保留演示基线，删除脏数据 | 如果文章只做增量抓取，这张表应保留一批最近可演示数据；仅删除明显脏数据、测试数据和重复数据。 |
+| `blog_articles` | 清洗后的文章主表 | 保留演示基线，删除脏数据 | 与 `raw_articles` 同步保留，作为文章流程展示底座。 |
+| `article_metadata` | 文章结构化结果与 LLM 提取结果 | 保留演示基线，删除脏数据 | 文章处理、规则提取、质量展示都依赖这张表。 |
+| `crawl_state` | 增量抓取游标 | 保留并按演示起点重置 | 这是增量抓取的关键控制表；不保留会导致重复抓取或跳过目标区间。 |
+| `stock_info` | 股票基础信息 | 收缩到演示标的子集 | 当前全市场数据过大，演示时只需 10～30 个标的和必要基准数据。 |
+| `ohlcv_bars` | 日线行情数据 | 收缩到演示区间子集 | 只保留演示标的最近约 30 个交易日的数据，避免全市场历史干扰演示。 |
+| `jobs` | 历史任务记录 | 删除旧开发 Job | 演示时应只保留本次新产生的任务，旧 Job 会污染任务中心和排错路径。 |
+| `job_audit_events` | Job 审计轨迹 | 删除旧开发审计 | 旧审计记录会暴露开发历史和失败堆栈，影响演示清爽度。 |
+| `data_audit_events` | 数据变更审计 | 删除旧开发审计 | 旧审计记录不属于演示基线，应清理。 |
+| `user_sessions` | 登录会话 | 删除旧会话 | 演示前应重新登录，避免旧会话干扰权限和身份展示。 |
+| `ranking_entries` | 排名结果与历史评估 | 删除旧测试结果 | 当前只有少量开发残留记录，不适合作为正式演示数据。 |
+| `market_snapshots` | 市场快照主表 | 视演示需要保留最小集合 | 若要展示盘前、盘后或回测，应保留演示日及必要历史快照；其余可清理。 |
+| `market_snapshot_sections` | 快照分段内容 | 视 `market_snapshots` 保留策略同步处理 | 依赖快照主表存在，不应单独保留无主记录数据。 |
+| `market_snapshot_items` | 快照明细项 | 视 `market_snapshots` 保留策略同步处理 | 依赖快照主表存在，建议与主快照一起裁剪。 |
+| `market_data_quality_reports` | 快照质量报告 | 视 `market_snapshots` 保留策略同步处理 | 只保留演示快照对应的质量报告即可。 |
+| `market_datasets` | 市场数据集元信息 | 视演示需要保留最小集合 | 如果演示包含数据集查看，应保留本次演示数据集；历史数据集建议清理。 |
+| `market_regimes` | 市场状态记录 | 视演示需要保留最小集合 | 如果要演示市场状态分析，只保留演示区间的记录。 |
+| `market_regime_features` | 市场状态特征 | 视演示需要保留最小集合 | 与 `market_regimes` 配套，按演示区间裁剪。 |
+| `rule_applicability_profiles` | 规则适用性画像 | 视演示需要保留最小集合 | 如果要展示规则适用性，应保留演示期样本；否则可清理历史残留。 |
+| `signals` | 信号结果 | 视演示需要保留最小集合 | 若要展示策略/文章到信号的链路，可保留演示期数据；否则清理旧残留。 |
+| `workflow_runs` | 工作流运行记录 | 删除旧开发记录 | 演示时只应保留本次运行记录，避免混入历史测试。 |
+| `workflow_run_steps` | 工作流步骤记录 | 删除旧开发记录 | 同上，防止任务中心展示大量旧步骤。 |
+| `alert_history` | 告警历史 | 删除旧开发记录 | 旧告警会干扰健康检查与排错展示。 |
+| `evidence_packs` | 证据包 | 视演示需要保留最小集合 | 若演示要展示证据链，可保留本次演示生成的证据包；历史残留建议清理。 |
+| `hot_topics_snapshots` | 热点主题快照 | 视演示需要保留最小集合 | 如果演示包含热点主题分析，只保留最近演示窗口的数据。 |
+| `strong_symbols_snapshots` | 强势标的快照 | 视演示需要保留最小集合 | 如果演示会展示强势标的分析，只保留演示期快照。 |
+| `topic_constituents_snapshots` | 主题成分快照 | 视演示需要保留最小集合 | 与热点主题链路配套，按演示窗口裁剪。 |
+| `trade_logs` | 交易日志 | 删除旧测试记录 | 当前库里无有效演示依赖，旧记录会增加噪音。 |
+| `trade_sample` | 交易样本 | 删除旧测试记录 | 不是当前演示主链路所必需。 |
+| `trader_memory` | 交易员记忆 | 视 Persona 演示需要保留最小集合 | 如果要演示画像/个性化，可以保留演示期样本；否则清理旧残留。 |
+| `trader_strategy_versions` | 策略版本记录 | 视策略演示需要保留最小集合 | 若要演示策略版本、draft/release，保留演示版本即可；旧测试版本建议删除。 |
+| `rule_pool` | 规则池 | 视规则池演示需要保留最小集合 | 若本次不演示规则池能力，可清理旧测试数据。 |
+| `article_classification` | 文章分类结果 | 视文章演示需要保留最小集合 | 如果文章链路要展示分类结果，可保留演示窗口数据；否则清理旧残留。 |
+
+#### 建议执行顺序
+
+1. 先清理 `jobs`、`job_audit_events`、`data_audit_events`、`user_sessions`、`ranking_entries`。
+2. 再确认 `config_profiles` 只保留一个演示 Profile。
+3. 文章链路如果采用增量抓取，则先保留基线，再删除脏数据和测试数据。
+4. 行情链路只保留演示标的和最近约 30 个交易日。
+5. 其余按本次演示是否要展示对应页面决定是否保留最小集合。
+
+#### 可执行清理顺序
+
+> 说明：
+> - 下面顺序是“按风险从低到高”排列，适合先清开发痕迹，再收缩业务基线。
+> - 文章链路如果采用只增量抓取，不要整表删除文章三表，而是保留基线后再删脏数据、测试数据和重复数据。
+> - 如果当前环境并不打算做逐表裁剪，优先切到 Preview 专用数据库再重建基线。
+
+1. 清理开发痕迹表：
+   - `jobs`
+   - `job_audit_events`
+   - `data_audit_events`
+   - `user_sessions`
+   - `ranking_entries`
+2. 处理演示 Profile：
+   - `config_profiles` 只保留一个演示 Profile
+   - 如果当前只有 `default`，建议替换或重建为 `preview-demo`
+3. 处理文章增量基线：
+   - 保留 `raw_articles`、`blog_articles`、`article_metadata`、`crawl_state`
+   - 删除明显脏数据、测试数据、重复数据
+   - 按你希望的增量起点重置 `crawl_state`
+4. 收缩行情基线：
+   - `stock_info` 只保留演示标的和必要 benchmark
+   - `ohlcv_bars` 只保留演示标的最近约 30 个交易日
+5. 按演示页面决定是否保留最小集合：
+   - `market_snapshots`
+   - `market_snapshot_sections`
+   - `market_snapshot_items`
+   - `market_data_quality_reports`
+   - `market_datasets`
+   - `market_regimes`
+   - `market_regime_features`
+   - `rule_applicability_profiles`
+   - `signals`
+   - `evidence_packs`
+   - `hot_topics_snapshots`
+   - `strong_symbols_snapshots`
+   - `topic_constituents_snapshots`
+   - `trader_memory`
+   - `trader_strategy_versions`
+   - `rule_pool`
+   - `article_classification`
+
+#### 绝对不要删
+
+> 这些表属于数据库底座或当前演示必须保留的核心入口，删除会直接破坏系统启动、登录、迁移判断或演示 Profile。
+
+| 表名 | 原因 |
+|---|---|
+| `alembic_version` | 迁移版本控制表，删除后无法正确判断数据库迁移状态。 |
+| `users` | 登录和权限基础表，演示必须保留至少一个管理员账号。 |
+| `config_profiles` | Profile 正式事实源，演示需要 `preview-demo` 或等价配置。 |
+
+> 如果你要重新构建演示环境，优先“替换成新的单条演示 Profile”，不要把这张表整体清空后还保留旧的多套配置入口。
+
 ---
 
 ## 4. Preview 数据准备方案

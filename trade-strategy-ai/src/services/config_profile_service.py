@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -11,15 +12,18 @@ from urllib.parse import urlsplit
 
 from sqlalchemy import select
 
-from src.common.config import ConfigError
-from src.common.paths import resolve_project_path
+from src.common.config import ConfigError, build_app_config
+from src.common.paths import project_root, resolve_project_path
 from src.models.config_profile import ConfigProfile
 from src.services.base import BaseService, ServiceResult
 from src.services.config_service import ConfigService
+from src.services.runtime_config import ProfileRuntimeConfig
 from src.db.session import session_scope
 
 
 _SENSITIVE_KEYS = {"password", "token", "secret", "api_key", "api_keys", "cookie"}
+
+_PATH_TOKEN_RE = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
 
 
 def _to_plain(value: Any) -> Any:
@@ -57,6 +61,60 @@ def _profile_payload(profile: ConfigProfile) -> dict[str, Any]:
         "updated_at": _to_plain(profile.updated_at),
         "archived_at": _to_plain(profile.archived_at),
     }
+
+
+def _iter_path_tokens(path: str) -> list[str | int]:
+    tokens: list[str | int] = []
+    for match in _PATH_TOKEN_RE.finditer(path):
+        key, index = match.groups()
+        if key is not None:
+            tokens.append(key)
+        elif index is not None:
+            tokens.append(int(index))
+    return tokens
+
+
+def _mask_sensitive_runtime_values(value: Any, secret_refs: dict[str, Any]) -> Any:
+    """把 Profile 中已脱敏的敏感字段在运行态中清空，让环境变量接管。"""
+
+    if not isinstance(secret_refs, dict) or not secret_refs:
+        return value
+
+    import copy
+
+    result = copy.deepcopy(value)
+
+    for path, state in secret_refs.items():
+        if state != "masked":
+            continue
+        tokens = _iter_path_tokens(str(path))
+        if not tokens:
+            continue
+
+        current = result
+        for token in tokens[:-1]:
+            if isinstance(token, int):
+                if not isinstance(current, list) or token >= len(current):
+                    current = None
+                    break
+                current = current[token]
+            else:
+                if not isinstance(current, dict) or token not in current:
+                    current = None
+                    break
+                current = current[token]
+        if current is None:
+            continue
+
+        last = tokens[-1]
+        if isinstance(last, int):
+            if isinstance(current, list) and 0 <= last < len(current):
+                current[last] = None
+        elif isinstance(current, dict):
+            current[last] = [] if last == "api_keys" else None
+
+    return result
+
 
 
 class ConfigProfileService(BaseService):
@@ -301,6 +359,51 @@ class ConfigProfileService(BaseService):
         session_scope_factory = self._ensure_session_factory()
         async with session_scope_factory() as session:
             return await self._load_profile(session, profile_id)
+
+    async def load_profile_runtime_config(self, profile_id: str) -> ProfileRuntimeConfig:
+        """将 Profile materialize 成 Web 运行时直接消费的 AppConfig。"""
+        profile = await self.get_profile(profile_id)
+        if profile is None:
+            raise ConfigError(f"profile not found: {profile_id}")
+
+        raw_sections = _to_plain(profile.sections)
+        if not isinstance(raw_sections, dict):
+            raise ConfigError(f"invalid profile sections for {profile_id}")
+
+        cleaned_sections = _mask_sensitive_runtime_values(raw_sections, _to_plain(profile.secret_refs))
+        config = build_app_config(cleaned_sections)
+        snapshots = await self.list_profile_snapshots(profile_id)
+        latest_snapshot_id = None
+        if snapshots:
+            latest_snapshot_id = str(
+                snapshots[-1].get("snapshot_id")
+                or snapshots[-1].get("profile_snapshot_id")
+                or ""
+            ) or None
+
+        return ProfileRuntimeConfig(
+            profile_id=profile.profile_id,
+            config=config,
+            base_dir=project_root().resolve(),
+            profile_snapshot_id=latest_snapshot_id,
+        )
+
+    def resolve_runtime_profile_id(self, preferred: str | None = None) -> str:
+        """解析 Web 运行时应使用的 Profile ID。
+
+        优先使用显式传入的 Profile，其次使用环境变量绑定的 Profile，最后回退到
+        canonical 的 `default` Profile。
+        """
+        candidates = [
+            preferred,
+            os.environ.get("PROFILE_ID"),
+            os.environ.get("ACTIVE_PROFILE_ID"),
+            "default",
+        ]
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        return "default"
 
     async def list_profiles(self) -> list[ConfigProfile]:
         """列出全部 Profile。"""

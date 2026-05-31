@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
+import { listArticleMetadataSummary, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
@@ -19,6 +20,11 @@ import type { PipelineDetailResponse } from '@/types/pipeline';
 vi.mock('@/lib/api/articles', () => ({
   listArticleFilterOptions: vi.fn(),
   listArticles: vi.fn(),
+}));
+
+vi.mock('@/lib/api/article-metadata', () => ({
+  listArticleMetadataSummary: vi.fn(),
+  selectArticleMetadataVersion: vi.fn(),
 }));
 
 vi.mock('@/lib/api/jobs', () => ({
@@ -39,6 +45,8 @@ vi.mock('@/lib/api/pipelines', () => ({
 }));
 
 const mockedListProfiles = vi.mocked(listProfiles);
+const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
+const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListJobs = vi.mocked(listJobs);
@@ -297,6 +305,67 @@ function buildArticleFilterOptions() {
   };
 }
 
+function buildArticleMetadataSummary() {
+  return {
+    items: [
+      {
+        article_id: 'article-1',
+        selected_schema_version: 'v1',
+        selected_by: 'system',
+        selected_at: '2026-05-10T10:00:00Z',
+        selection_mode: 'auto',
+        selection_score: 4.5,
+        selection_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
+        recommended_schema_version: 'v1',
+        recommended_score: 4.5,
+        recommended_reason: '自动推荐：当前候选即最优候选',
+        effective_schema_version: 'v1',
+        effective_score: 4.5,
+        effective_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
+        warning: null,
+        candidates: [
+          {
+            schema_version: 'v1',
+            score: 4.5,
+            score_reasons: ['已完成处理', 'provider=openai', 'model=gpt-5'],
+            processed_at: '2026-05-10T10:00:00Z',
+            provider: 'openai',
+            model: 'gpt-5',
+            article_type: 'rule',
+            extraction_version: 'v1',
+            sentiment_score: 0.8,
+            confidence_score: 0.9,
+            extracted_concepts_count: 3,
+            trading_symbols_count: 2,
+            strategy_rules_count: 1,
+            preconditions_count: 1,
+            comment_insights_count: 1,
+            raw_llm_output_keys: 4,
+          },
+          {
+            schema_version: 'v2',
+            score: 4.1,
+            score_reasons: ['已完成处理', 'provider=claude', 'model=sonnet'],
+            processed_at: '2026-05-10T10:20:00Z',
+            provider: 'claude',
+            model: 'sonnet',
+            article_type: 'rule',
+            extraction_version: 'v2',
+            sentiment_score: 0.7,
+            confidence_score: 0.85,
+            extracted_concepts_count: 2,
+            trading_symbols_count: 1,
+            strategy_rules_count: 1,
+            preconditions_count: 1,
+            comment_insights_count: 1,
+            raw_llm_output_keys: 3,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function buildJobList() {
   return {
     count: 1,
@@ -548,13 +617,56 @@ describe('ArticlesPage', () => {
   it('renders the results page with structured process output', async () => {
     mockedListArticles.mockResolvedValue(buildArticleList());
     mockedListJobs.mockResolvedValue(buildJobList());
+    mockedListArticleMetadataSummary.mockResolvedValue(buildArticleMetadataSummary());
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
     expect(await screen.findByRole('heading', { name: '处理结果' })).toBeInTheDocument();
     expect(await screen.findByText('Article One')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '元数据版本选择' })).toBeInTheDocument();
+    expect(await screen.findByText('当前：v1')).toBeInTheDocument();
+    expect(await screen.findByText('推荐：v1')).toBeInTheDocument();
     expect(screen.getByText('Process Output')).toBeInTheDocument();
     expect(screen.getByText('最新 process 输出')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '设为当前版本' })).toBeInTheDocument();
+  });
+
+  it('submits the selected article metadata version from the results page', async () => {
+    const user = userEvent.setup();
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedListJobs.mockResolvedValue(buildJobList());
+    mockedListArticleMetadataSummary.mockResolvedValue(buildArticleMetadataSummary());
+    mockedSelectArticleMetadataVersion.mockResolvedValue({
+      article_id: 'article-1',
+      selected_schema_version: 'v2',
+      selected_by: 'web',
+      selected_at: '2026-05-10T11:00:00Z',
+      selection_mode: 'manual',
+      selection_score: 4.1,
+      selection_reason: '用户手动确认',
+      recommended_schema_version: 'v1',
+      recommended_score: 4.5,
+      recommended_reason: '自动推荐：当前候选即最优候选',
+      effective_schema_version: 'v2',
+      effective_score: 4.1,
+      effective_reason: '用户手动确认',
+      warning: null,
+      candidates: buildArticleMetadataSummary().items[0].candidates,
+    });
+
+    renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
+
+    await screen.findByRole('heading', { name: '元数据版本选择' });
+    await user.selectOptions(await screen.findByLabelText('选择当前使用版本'), 'v2');
+    await user.click(screen.getByRole('button', { name: '设为当前版本' }));
+
+    await waitFor(() => {
+      expect(mockedSelectArticleMetadataVersion).toHaveBeenCalledWith('article-1', {
+        selected_schema_version: 'v2',
+        selected_by: 'web',
+      });
+    });
+    expect(await screen.findByText('文章元数据版本已更新。')).toBeInTheDocument();
   });
 
   it('renders the maintenance page and submits maintenance options', async () => {
@@ -577,7 +689,7 @@ describe('ArticlesPage', () => {
     expect(screen.queryByText('Hash：')).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByRole('combobox', { name: '从指定步骤开始' }), 'process');
-    expect(screen.getByLabelText('new_version')).toBeInTheDocument();
+    expect(await screen.findByLabelText('new_version（候选 metadata 版本）')).toBeInTheDocument();
     expect(screen.queryByLabelText('max_articles')).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('重建 pending tasks'));

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
 from api.dependencies import verify_api_key
 from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
+from src.services.config_profile_service import ConfigProfileService
 from src.services.system_service import SystemService
 
 router = APIRouter(prefix="/api/ui/v1/system", tags=["ui-system"])
@@ -19,9 +19,10 @@ def get_system_service() -> SystemService:
     return SystemService()
 
 
-def _config_path() -> Path:
-    """返回当前 API 使用的配置文件路径。"""
-    return resolve_project_path(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+async def _resolve_profile_id() -> str | None:
+    """解析当前 UI 应使用的 Profile ID。"""
+    service = ConfigProfileService()
+    return service.resolve_runtime_profile_id()
 
 
 def _profile_context() -> dict[str, str | None]:
@@ -54,7 +55,14 @@ async def get_system_dashboard(
     _: str = Depends(verify_api_key),
 ) -> dict[str, object]:
     """返回运维 Dashboard 摘要。"""
-    result = await service.build_dashboard_summary(config_path=_config_path())
+    runtime_profile_id = await _resolve_profile_id()
+    if runtime_profile_id is not None:
+        try:
+            result = await service.build_dashboard_summary(profile_id=runtime_profile_id)
+        except Exception:
+            result = await service.build_dashboard_summary(config_path=resolve_project_path("config/app.yaml"))
+    else:
+        result = await service.build_dashboard_summary(config_path=resolve_project_path("config/app.yaml"))
     return result.payload
 
 
@@ -66,18 +74,40 @@ async def get_legacy_system_status(_: str = Depends(verify_api_key)) -> dict[str
 
 async def _build_system_status() -> dict[str, object]:
     """构建系统状态响应体。"""
-    config_path = _config_path()
-    loaded = load_app_config(config_path)
+    profile_id = await _resolve_profile_id()
+    if profile_id is not None:
+        try:
+            runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+            service = SystemService()
+            db_result = await service.check_database()
+            dir_result = await service.check_key_directories(profile_id=profile_id)
+            return {
+                "status": "ok",
+                "profile_context": _profile_context(),
+                "profile_id": runtime.profile_id,
+                "profile_snapshot_id": runtime.profile_snapshot_id,
+                "project_root": str(runtime.base_dir),
+                "run_mode": runtime.config.run_mode,
+                "database": db_result.payload["database"],
+                "directories": dir_result.payload["directories"],
+                "warnings": dir_result.warnings,
+            }
+        except Exception:
+            profile_id = None
+
+    loaded = load_app_config(resolve_project_path("config/app.yaml"))
+    base_dir = loaded.config_path.parent.parent if loaded.config_path.parent.name == "config" else loaded.config_path.parent
     service = SystemService()
 
     db_result = await service.check_database()
-    dir_result = service.check_key_directories(config_path)
+    dir_result = await service.check_key_directories(config_path=resolve_project_path("config/app.yaml"))
 
     return {
         "status": "ok",
-        "config_path": str(config_path),
         "profile_context": _profile_context(),
-        "project_root": str(config_path.parent.parent if config_path.parent.name == "config" else config_path.parent),
+        "profile_id": None,
+        "profile_snapshot_id": None,
+        "project_root": str(base_dir),
         "run_mode": loaded.config.run_mode,
         "database": db_result.payload["database"],
         "directories": dir_result.payload["directories"],

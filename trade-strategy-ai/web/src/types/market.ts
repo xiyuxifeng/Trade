@@ -22,7 +22,7 @@ export type OhlcvResponse = {
 };
 
 export type OhlcvSchedulerStatusResponse = {
-  config_path: string;
+  profile_id?: string | null;
   base_dir: string;
   latest_trade_date?: string | null;
   latest_record_count?: number;
@@ -32,7 +32,7 @@ export type OhlcvSchedulerStatusResponse = {
 };
 
 export type OhlcvSchedulerRunResponse = {
-  config_path: string;
+  profile_id?: string | null;
   base_dir: string;
   pre_market: string;
   post_close: string;
@@ -41,11 +41,31 @@ export type OhlcvSchedulerRunResponse = {
 };
 
 export type OhlcvSchedulerStopResponse = {
-  config_path: string;
+  profile_id?: string | null;
   base_dir: string;
   started?: boolean;
   pre_market?: string | null;
   post_close?: string | null;
+};
+
+export type StockInfoStatusResponse = {
+  total: number;
+  stock_count: number;
+  index_count: number;
+  benchmark_count: number;
+  expected_benchmark_count: number;
+  missing_benchmark_symbols: string[];
+  latest_updated_at: string | null;
+  is_fresh: boolean;
+  needs_refresh: boolean;
+  message: string;
+  max_age_days: number;
+};
+
+export type StockInfoRefreshResponse = {
+  stock_stats: Record<string, number>;
+  index_stats: Record<string, number>;
+  status: StockInfoStatusResponse;
 };
 
 export type MarketQueryPage = {

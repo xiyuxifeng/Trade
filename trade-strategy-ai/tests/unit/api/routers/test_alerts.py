@@ -1,9 +1,12 @@
 from types import SimpleNamespace
 
+import pytest
+
 from api.routers.alerts import _build_alerting_status
 
 
-def test_build_alerting_status_reads_alerting_config(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_build_alerting_status_reads_alerting_config(monkeypatch) -> None:
     """告警状态接口应正确映射 app config。"""
 
     def fake_load_app_config(*args, **kwargs):
@@ -24,7 +27,7 @@ def test_build_alerting_status_reads_alerting_config(monkeypatch) -> None:
 
     monkeypatch.setattr("src.common.config.load_app_config", fake_load_app_config)
 
-    status = _build_alerting_status()
+    status = await _build_alerting_status()
 
     assert status.enabled is True
     assert status.channel == "dingtalk"

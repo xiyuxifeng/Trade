@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
+import { listArticleMetadataSummary } from '@/lib/api/article-metadata';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { formatWorkspaceTimestamp } from './strategy-workspace-utils';
 import type { ArtifactRecord } from '@/types/artifacts';
+import type { ArticleMetadataResolutionListResponse } from '@/types/article-metadata';
 import type { StrategyVersionDetailItem, StrategyVersionSummaryItem } from '@/types/strategyStudio';
 
 function matchesStrategyArtifact(artifact: ArtifactRecord) {
@@ -69,6 +72,31 @@ export function StrategyWorkspaceArtifacts({
   );
   const selectedVersion = selectedVersionDetail;
   const regimeSelection = (selectedVersion?.regime_selection ?? {}) as Record<string, unknown>;
+  const sourceArticleIds = selectedVersion?.source_article_ids ?? [];
+  const sourceMetadataQuery = useQuery<ArticleMetadataResolutionListResponse>({
+    queryKey: ['strategy-workspace', 'source-article-metadata', selectedVersion?.version_id, sourceArticleIds.join(',')],
+    queryFn: () => listArticleMetadataSummary(sourceArticleIds),
+    enabled: Boolean(selectedVersion && sourceArticleIds.length > 0),
+    staleTime: 30_000,
+  });
+  const sourceMetadataById = useMemo(() => {
+    return new Map((sourceMetadataQuery.data?.items ?? []).map((item) => [item.article_id, item]));
+  }, [sourceMetadataQuery.data?.items]);
+  function renderScoreReasons(reasons: string[] | undefined | null) {
+    if (!reasons || reasons.length === 0) {
+      return <p className="mt-2 text-xs text-slate-500">暂无评分原因。</p>;
+    }
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {reasons.slice(0, 4).map((reason) => (
+          <span key={reason} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
+            {reason}
+          </span>
+        ))}
+        {reasons.length > 4 ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500">+{reasons.length - 4}</span> : null}
+      </div>
+    );
+  }
   const regimeSelectionItems = [
     { label: 'selection_id', value: String(regimeSelection.selection_id ?? '未记录') },
     { label: 'snapshot_id', value: String(regimeSelection.snapshot_id ?? '未记录') },
@@ -231,6 +259,55 @@ export function StrategyWorkspaceArtifacts({
                     <span className="text-sm text-slate-600">暂无证据引用。</span>
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">来源文章 metadata 版本</p>
+                    <p className="mt-1 text-sm text-slate-600">展示这条策略版本从哪些文章候选版本生成，便于回溯上游 LLM 结果。</p>
+                  </div>
+                  <StatusBadge value={sourceArticleIds.length ? 'info' : 'default'} label={`${sourceArticleIds.length} 篇来源文章`} />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {sourceArticleIds.length ? (
+                    sourceArticleIds.slice(0, 5).map((articleId) => {
+                      const resolution = sourceMetadataById.get(articleId);
+                      const selectedCandidate = resolution?.candidates.find((candidate) => candidate.schema_version === resolution.selected_schema_version);
+                      const recommendedCandidate = resolution?.candidates.find((candidate) => candidate.schema_version === resolution.recommended_schema_version);
+                      return (
+                        <div key={articleId} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-slate-950">{articleId}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                当前版本：{resolution?.selected_schema_version ?? '未记录'} · 推荐版本：{resolution?.recommended_schema_version ?? '未记录'}
+                              </p>
+                            </div>
+                            <StatusBadge value={resolution?.selection_mode === 'manual' ? 'warning' : 'info'} label={resolution?.selection_mode === 'manual' ? '手动选择' : '自动推荐'} />
+                          </div>
+                          <p className="mt-2 text-xs leading-6 text-slate-500">
+                            {resolution?.selection_reason ?? resolution?.recommended_reason ?? '暂无来源版本说明'}
+                          </p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">当前版本评分原因</p>
+                              {renderScoreReasons(selectedCandidate?.score_reasons)}
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">推荐版本评分原因</p>
+                              {renderScoreReasons(recommendedCandidate?.score_reasons)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-slate-600">暂无来源文章。</p>
+                  )}
+                </div>
+                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章 metadata 版本…</p> : null}
+                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章 metadata 版本加载失败，请稍后重试。</p> : null}
               </div>
             </div>
           ) : (

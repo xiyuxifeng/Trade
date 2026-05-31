@@ -47,6 +47,7 @@ class _FakeMarketService:
     async def ohlcv_scheduler_status(self, **_: Any) -> Any:
         return _result(
             {
+                "profile_id": "default",
                 "config_path": "config/app.yaml",
                 "base_dir": "/tmp/trade-strategy-ai",
                 "latest_trade_date": "2026-05-16",
@@ -57,9 +58,10 @@ class _FakeMarketService:
             }
         )
 
-    def run_ohlcv_scheduler(self, **_: Any) -> Any:
+    async def run_ohlcv_scheduler(self, **_: Any) -> Any:
         return _result(
             {
+                "profile_id": "default",
                 "config_path": "config/app.yaml",
                 "base_dir": "/tmp/trade-strategy-ai",
                 "pre_market": "9:25",
@@ -69,9 +71,10 @@ class _FakeMarketService:
             }
         )
 
-    def stop_ohlcv_scheduler(self, **_: Any) -> Any:
+    async def stop_ohlcv_scheduler(self, **_: Any) -> Any:
         return _result(
             {
+                "profile_id": "default",
                 "config_path": "config/app.yaml",
                 "base_dir": "/tmp/trade-strategy-ai",
                 "started": False,
@@ -307,10 +310,74 @@ class _FakeMarketSnapshotQueryService:
         return _result({"quality_report": {"snapshot_id": snapshot_id, "overall_status": "ok"}})
 
 
+@dataclass
+class _FakeStockInfoStatus:
+    """stock_info 状态接口单测用的替身。"""
+
+    async def __call__(self, **_: Any) -> Any:
+        return {
+            "total": 5515,
+            "stock_count": 5505,
+            "index_count": 10,
+            "benchmark_count": 10,
+            "expected_benchmark_count": 10,
+            "missing_benchmark_symbols": [],
+            "latest_updated_at": "2026-05-29T10:00:00+00:00",
+            "is_fresh": True,
+            "needs_refresh": False,
+            "message": "stock_info 已就绪，可直接用于 OHLCV 抓取",
+            "max_age_days": 7,
+        }
+
+
+@dataclass
+class _FakeStockInfoRefresh:
+    """stock_info 刷新接口单测用的替身。"""
+
+    async def __call__(self, **_: Any) -> Any:
+        return {
+            "stock_stats": {"total": 5505, "inserted": 5, "updated": 5500, "skipped": 0},
+            "index_stats": {"total": 10, "inserted": 10, "updated": 0, "skipped": 0},
+            "status": {
+                "total": 5515,
+                "stock_count": 5505,
+                "index_count": 10,
+                "benchmark_count": 10,
+                "expected_benchmark_count": 10,
+                "missing_benchmark_symbols": [],
+                "latest_updated_at": "2026-05-29T10:00:00+00:00",
+                "is_fresh": True,
+                "needs_refresh": False,
+                "message": "stock_info 已就绪，可直接用于 OHLCV 抓取",
+                "max_age_days": 7,
+            },
+        }
+
+
 def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok") -> Any:
     from types import SimpleNamespace
 
     return SimpleNamespace(status=status, message=message, payload=payload)
+
+
+@pytest.mark.asyncio
+async def test_stock_info_status_and_refresh_endpoints(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
+    """stock_info 状态和刷新接口应返回结构化结果。"""
+    monkeypatch.setattr(market_ui, "get_stock_info_status", _FakeStockInfoStatus())
+    monkeypatch.setattr(market_ui, "refresh_stock_info", _FakeStockInfoRefresh())
+
+    status = await client.get("/api/ui/v1/market/stock-info/status", params={"max_age_days": 7})
+    assert status.status_code == 200
+    status_payload = status.json()
+    assert status_payload["is_fresh"] is True
+    assert status_payload["benchmark_count"] == 10
+    assert status_payload["message"] == "stock_info 已就绪，可直接用于 OHLCV 抓取"
+
+    refresh = await client.post("/api/ui/v1/market/stock-info/refresh", params={"max_age_days": 7})
+    assert refresh.status_code == 200
+    refresh_payload = refresh.json()
+    assert refresh_payload["status"]["is_fresh"] is True
+    assert refresh_payload["stock_stats"]["updated"] == 5500
 
 
 @pytest_asyncio.fixture
@@ -348,27 +415,23 @@ async def test_list_symbols_and_ohlcv(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_ohlcv_scheduler_endpoints(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
     """Market OHLCV scheduler API 应支持状态、启动和停止。"""
-    async def _fake_resolve_profile_config_path(self, profile_id: str):
-        del self
-        assert profile_id == "default"
-        return Path("config/ohlcv.yaml")
-
-    monkeypatch.setattr(market_ui.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
-
     missing_profile = await client.get("/api/ui/v1/market/ohlcv/status")
     assert missing_profile.status_code == 422
 
     status = await client.get("/api/ui/v1/market/ohlcv/status", params={"profile_id": "default"})
     assert status.status_code == 200
     assert status.json()["latest_trade_date"] == "2026-05-16"
+    assert status.json()["profile_id"] == "default"
 
     started = await client.post("/api/ui/v1/market/ohlcv/run", params={"profile_id": "default"})
     assert started.status_code == 200
     assert started.json()["scheduler_started"] is True
+    assert started.json()["profile_id"] == "default"
 
     stopped = await client.post("/api/ui/v1/market/ohlcv/stop", params={"profile_id": "default"})
     assert stopped.status_code == 200
     assert stopped.json()["started"] is False
+    assert stopped.json()["profile_id"] == "default"
 
 
 @pytest.mark.asyncio

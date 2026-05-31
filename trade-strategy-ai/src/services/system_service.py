@@ -10,6 +10,7 @@ from src.common.config import load_app_config
 from src.health.db_checker import DatabaseHealthChecker
 from src.health.service import HealthCheckService
 from src.services.dashboard_service import DashboardService
+from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 from src.services.job_service import JobService
 
@@ -63,18 +64,35 @@ class SystemService(BaseService):
             payload={"database": asdict(check)},
         )
 
-    def check_key_directories(self, config_path: str | Path) -> ServiceResult:
+    async def check_key_directories(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> ServiceResult:
         """检查配置相关的关键目录是否存在。"""
-        loaded = load_app_config(config_path)
-        config_file = Path(config_path).expanduser().resolve()
-        base_dir = config_file.parent.parent if config_file.parent.name == "config" else config_file.parent
+        resolved_profile_id = str(profile_id).strip() if isinstance(profile_id, str) and profile_id.strip() else None
+        loaded_config: Any
+        profile_snapshot_id: str | None = None
+        if resolved_profile_id is not None:
+            runtime = await ConfigProfileService().load_profile_runtime_config(resolved_profile_id)
+            loaded_config = runtime.config
+            base_dir = runtime.base_dir
+            config_file = None
+            profile_snapshot_id = runtime.profile_snapshot_id
+        else:
+            resolved_path = Path(config_path or "config/app.yaml").expanduser().resolve()
+            loaded = load_app_config(resolved_path)
+            loaded_config = loaded.config
+            config_file = Path(loaded.config_path)
+            base_dir = config_file.parent.parent if config_file.parent.name == "config" else config_file.parent
 
         directory_specs: dict[str, Path] = {
             "data": base_dir / "data",
             "logs": base_dir / "logs",
-            "storage.output_dir": base_dir / loaded.config.storage.output_dir,
-            "data.market_data_cache_dir": base_dir / loaded.config.data.market_data_cache_dir,
-            "data.market_universe_snapshot_dir": base_dir / loaded.config.data.market_universe_snapshot_dir,
+            "storage.output_dir": base_dir / loaded_config.storage.output_dir,
+            "data.market_data_cache_dir": base_dir / loaded_config.data.market_data_cache_dir,
+            "data.market_universe_snapshot_dir": base_dir / loaded_config.data.market_universe_snapshot_dir,
         }
 
         directories: dict[str, dict[str, Any]] = {}
@@ -92,7 +110,9 @@ class SystemService(BaseService):
             message=message,
             payload={
                 "base_dir": str(base_dir),
-                "config_path": str(config_file),
+                "profile_id": resolved_profile_id,
+                "profile_snapshot_id": profile_snapshot_id,
+                "config_path": str(config_file) if config_file is not None else None,
                 "directories": directories,
             },
             warnings=missing,
@@ -101,18 +121,37 @@ class SystemService(BaseService):
     async def build_dashboard_summary(
         self,
         *,
+        profile_id: str | None = None,
         config_path: str | Path = Path("config/app.yaml"),
     ) -> ServiceResult:
         """构建运维 Dashboard 摘要。"""
-        loaded = load_app_config(config_path)
+        resolved_profile_id = str(profile_id).strip() if isinstance(profile_id, str) and profile_id.strip() else None
+        profile_snapshot_id: str | None = None
+        if resolved_profile_id is not None:
+            runtime = await ConfigProfileService().load_profile_runtime_config(resolved_profile_id)
+            loaded_config = runtime.config
+            base_dir = runtime.base_dir
+            profile_snapshot_id = runtime.profile_snapshot_id
+            config_file = None
+        else:
+            loaded = load_app_config(config_path)
+            loaded_config = loaded.config
+            config_file = Path(loaded.config_path)
+            base_dir = config_file.parent.parent if config_file.parent.name == "config" else config_file.parent
         detailed = await self._health_service.check_detailed()
         failed_jobs_result = await self._job_service.list_jobs(status="failed", limit=10)
         running_jobs_result = await self._job_service.list_jobs(status="running", limit=10)
         success_jobs_result = await self._job_service.list_jobs(status="success", limit=20)
-        dashboard_report_result = await self._dashboard_service.build_report(
-            config_path=loaded.config_path,
-            mode="cli",
-        )
+        if resolved_profile_id is not None:
+            dashboard_report_result = await self._dashboard_service.build_report(
+                profile_id=resolved_profile_id,
+                mode="cli",
+            )
+        else:
+            dashboard_report_result = await self._dashboard_service.build_report(
+                config_path=config_path,
+                mode="cli",
+            )
 
         failed_jobs = list(failed_jobs_result.payload.get("items", [])) if failed_jobs_result.status == "ok" else []
         running_jobs = list(running_jobs_result.payload.get("items", [])) if running_jobs_result.status == "ok" else []
@@ -143,7 +182,10 @@ class SystemService(BaseService):
             payload={
                 "status": status,
                 "generated_at": datetime.now(UTC).isoformat(),
-                "config_path": str(loaded.config_path),
+                "profile_id": resolved_profile_id,
+                "profile_snapshot_id": profile_snapshot_id,
+                "config_path": str(config_file) if config_file is not None else None,
+                "base_dir": str(base_dir),
                 "health": health_payload,
                 "worker": running_job_entry,
                 "failed_jobs": failed_job_entries,

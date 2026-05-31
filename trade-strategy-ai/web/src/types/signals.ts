@@ -17,7 +17,8 @@ export type SignalItem = {
 };
 
 export type SignalListResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   count: number;
   signals: SignalItem[];

@@ -24,14 +24,16 @@ class _FakeSetupService:
     async def import_trade_logs(
         self,
         *,
-        config_path: str,
-        csv_path: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
+        csv_path: str | None = None,
         source: str = "csv_import",
         trader_account_map: dict[str, str] | None = None,
         dry_run: bool = False,
     ) -> ServiceResult:
         self.import_calls.append(
             {
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "csv_path": csv_path,
                 "source": source,
@@ -55,12 +57,13 @@ class _FakeSetupService:
             },
         )
 
-    async def migrate_crawl_state(self, *, config_path: str) -> ServiceResult:
-        self.migrate_calls.append({"config_path": config_path})
+    async def migrate_crawl_state(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
+        self.migrate_calls.append({"profile_id": profile_id, "config_path": config_path})
         return ServiceResult(
             status="ok",
             message="crawl state migrated",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "migrated": 2,

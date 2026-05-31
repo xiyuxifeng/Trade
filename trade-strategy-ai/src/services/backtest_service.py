@@ -26,6 +26,7 @@ from src.backtest.snapshot_loader import SnapshotLoader
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.db.repositories.market_snapshot_repository import MarketSnapshotRepository
 from src.services.base import BaseService, ServiceResult
+from src.services.config_profile_service import ConfigProfileService
 from src.services.market_regime_feature_service import DEFAULT_FEATURE_VERSION, FULL_MARKET_FEATURE_VERSION, MarketRegimeFeatureService
 from src.services.market_regime_service import DEFAULT_REGIME_VERSION, MarketRegimeService
 
@@ -204,20 +205,26 @@ def _coerce_rule_validation_result(value: Any) -> RuleValidationResult:
 def _default_engine_factory(
     *,
     config_path: str | Path | None = None,
+    config: Any | None = None,
+    base_dir: Path | None = None,
     use_snapshot_only: bool = True,
     scoring_profile: str = "stage5",
 ) -> BacktestEngine:
     """从配置文件构建默认回测引擎。"""
     del scoring_profile
-    if config_path is None:
+    if config is None and config_path is None:
         return BacktestEngine()
 
-    try:
-        loaded = load_app_config(config_path)
-    except Exception:
-        return BacktestEngine()
+    if config is None:
+        try:
+            loaded = load_app_config(config_path)
+        except Exception:
+            return BacktestEngine()
+        config = loaded.config
+        if base_dir is None:
+            base_dir = Path(loaded.config_path).parent.parent if Path(loaded.config_path).parent.name == "config" else Path(loaded.config_path).parent
 
-    apply_database_config_to_env(loaded.config)
+    apply_database_config_to_env(config)
 
     from config.database import get_session_factory
     from src.backtest.snapshot_loader import SnapshotLoader
@@ -225,9 +232,12 @@ def _default_engine_factory(
     from src.market_data.strategy_repo_adapter import StrategyRepoAdapter
     from src.market_universe.snapshot_service import SnapshotService
 
-    snapshot_base_dir = loaded.config.data.market_universe_snapshot_dir
+    snapshot_base_dir = config.data.market_universe_snapshot_dir
     if not snapshot_base_dir:
         snapshot_base_dir = "data/market_universe/snapshots"
+    snapshot_base_dir = Path(snapshot_base_dir)
+    if not snapshot_base_dir.is_absolute():
+        snapshot_base_dir = (base_dir or Path.cwd()) / snapshot_base_dir
 
     session_factory = get_session_factory()
     loader = SnapshotLoader(
@@ -260,12 +270,16 @@ class BacktestService(BaseService):
         self,
         *,
         config_path: str | Path | None = None,
+        config: Any | None = None,
+        base_dir: Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
     ) -> BacktestEngine:
         """按需构建回测引擎。"""
         return self._engine_factory(
             config_path=config_path,
+            config=config,
+            base_dir=base_dir,
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
         )
@@ -354,6 +368,75 @@ class BacktestService(BaseService):
                     regime_version=market_regime_version,
                     feature_version=feature_version,
                 )
+
+    async def _load_profile_runtime_context(self, profile_id: str) -> tuple[Any, Path]:
+        """加载 Profile 运行态，供 Web 回测链路使用。"""
+        runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+        return runtime.config, runtime.base_dir
+
+    async def run_backtest_profile(
+        self,
+        *,
+        profile_id: str,
+        trader_id: str,
+        date_from: date,
+        date_to: date,
+        strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
+        market_regime_version: str | None = DEFAULT_REGIME_VERSION,
+        benchmark_symbol: str | None = None,
+        mode: str = "full",
+        config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
+        runtime_state: dict[str, Any] | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> ServiceResult:
+        """基于 Profile 运行离线回测。"""
+        runtime_config, runtime_base_dir = await self._load_profile_runtime_context(profile_id)
+        request = self._build_request(
+            trader_id=trader_id,
+            date_from=date_from,
+            date_to=date_to,
+            strategy_version_id=strategy_version_id,
+            symbols=symbols,
+            market_regime_version=market_regime_version,
+            benchmark_symbol=benchmark_symbol,
+            mode=mode,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
+        engine = self._build_engine(
+            config=runtime_config,
+            base_dir=runtime_base_dir,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
+        apply_database_config_to_env(runtime_config)
+        try:
+            result = engine.run_sync(request, progress_callback=progress_callback, runtime_state=runtime_state)
+        except TypeError as exc:
+            if "progress_callback" not in str(exc) and "runtime_state" not in str(exc):
+                raise
+            try:
+                result = engine.run_sync(request, progress_callback=progress_callback)
+            except TypeError as inner_exc:
+                if "progress_callback" not in str(inner_exc):
+                    raise
+                result = engine.run_sync(request)
+        fingerprint = fingerprint_result(result)
+        return ServiceResult(
+            status="ok",
+            message="backtest completed",
+            payload={
+                "profile_id": profile_id,
+                "config_path": None,
+                "request": _to_plain(request),
+                "result": _to_plain(result),
+                "summary": _to_plain(result.summary),
+                "fingerprint": fingerprint,
+            },
+        )
 
     def run_backtest(
         self,
@@ -458,6 +541,7 @@ class BacktestService(BaseService):
         trader_id: str,
         date_from: date,
         date_to: date,
+        profile_id: str | None = None,
         config_path: str | Path | None = None,
         strategy_version_id: str | None = None,
         symbols: list[str] | None = None,
@@ -470,7 +554,16 @@ class BacktestService(BaseService):
     ) -> ServiceResult:
         """执行规则验真并生成验真报告。"""
         del strategy_version_id, symbols, benchmark_symbol, use_snapshot_only, scoring_profile, mode
-        engine = self._build_engine(config_path=config_path)
+        runtime_config = None
+        runtime_base_dir = None
+        if profile_id is not None and str(profile_id).strip():
+            runtime_config, runtime_base_dir = await self._load_profile_runtime_context(str(profile_id).strip())
+            config_path = None
+        engine = self._build_engine(
+            config_path=config_path,
+            config=runtime_config,
+            base_dir=runtime_base_dir,
+        )
         loader_obj = getattr(engine, "loader", None)
         loader = loader_obj if loader_obj is not None else SnapshotLoader()
 
@@ -500,6 +593,7 @@ class BacktestService(BaseService):
             status="ok",
             message="rule validation completed",
             payload={
+                "profile_id": str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None,
                 "config_path": str(config_path) if config_path is not None else None,
                 "trader_id": trader_id,
                 "date_from": date_from.isoformat(),
@@ -557,11 +651,7 @@ class BacktestService(BaseService):
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
         )
-        engine = self._build_engine(
-            config_path=config_path,
-            use_snapshot_only=use_snapshot_only,
-            scoring_profile=scoring_profile,
-        )
+        engine = self._build_engine(config_path=config_path, use_snapshot_only=use_snapshot_only, scoring_profile=scoring_profile)
         result_a = engine.run_sync(request)
         result_b = engine.run_sync(request)
         fingerprint_a = fingerprint_result(_coerce_backtest_result(result_a))
@@ -574,6 +664,67 @@ class BacktestService(BaseService):
             message="reproducibility check completed" if matches else "reproducibility check failed",
             payload={
                 "config_path": str(config_path) if config_path is not None else None,
+                "request": _to_plain(request),
+                "fingerprint_a": fingerprint_a,
+                "fingerprint_b": fingerprint_b,
+                "matches": matches,
+                "result_a": _to_plain(result_a),
+                "result_b": _to_plain(result_b),
+            },
+            warnings=warnings,
+        )
+
+    async def reproducibility_check_profile(
+        self,
+        *,
+        profile_id: str,
+        trader_id: str,
+        date_from: date,
+        date_to: date,
+        strategy_version_id: str | None = None,
+        symbols: list[str] | None = None,
+        market_regime_version: str | None = DEFAULT_REGIME_VERSION,
+        benchmark_symbol: str | None = None,
+        mode: str = "full",
+        config_path: str | Path | None = None,
+        use_snapshot_only: bool = True,
+        scoring_profile: str = "stage5",
+    ) -> ServiceResult:
+        """基于 Profile 运行两次回测并检查 fingerprint 是否一致。"""
+        del config_path
+        runtime_config, runtime_base_dir = await self._load_profile_runtime_context(profile_id)
+        request = self._build_request(
+            trader_id=trader_id,
+            date_from=date_from,
+            date_to=date_to,
+            strategy_version_id=strategy_version_id,
+            symbols=symbols,
+            market_regime_version=market_regime_version,
+            benchmark_symbol=benchmark_symbol,
+            mode=mode,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
+        engine = self._build_engine(
+            config=runtime_config,
+            base_dir=runtime_base_dir,
+            use_snapshot_only=use_snapshot_only,
+            scoring_profile=scoring_profile,
+        )
+        apply_database_config_to_env(runtime_config)
+        result_a = engine.run_sync(request)
+        result_b = engine.run_sync(request)
+        fingerprint_a = fingerprint_result(_coerce_backtest_result(result_a))
+        fingerprint_b = fingerprint_result(_coerce_backtest_result(result_b))
+        matches = fingerprint_a == fingerprint_b
+        status = "ok" if matches else "partial"
+        warnings = [] if matches else ["reproducibility check failed"]
+        return ServiceResult(
+            status=status,
+            message="reproducibility check completed" if matches else "reproducibility check failed",
+            payload={
+                "profile_id": profile_id,
+                "config_path": None,
                 "request": _to_plain(request),
                 "fingerprint_a": fingerprint_a,
                 "fingerprint_b": fingerprint_b,
@@ -599,6 +750,7 @@ class BacktestService(BaseService):
         rule_ids: list[str] | None = None,
         min_confidence: float = 0.5,
         market_regime_version: str | None = DEFAULT_REGIME_VERSION,
+        profile_id: str | None = None,
         config_path: str | Path | None = None,
         use_snapshot_only: bool = True,
         scoring_profile: str = "stage5",
@@ -614,8 +766,15 @@ class BacktestService(BaseService):
             market_regime_version=market_regime_version,
         )
 
+        runtime_config = None
+        runtime_base_dir = None
+        if profile_id is not None and str(profile_id).strip():
+            runtime_config, runtime_base_dir = await self._load_profile_runtime_context(str(profile_id).strip())
+            config_path = None
         engine = self._build_engine(
             config_path=config_path,
+            config=runtime_config,
+            base_dir=runtime_base_dir,
             use_snapshot_only=use_snapshot_only,
             scoring_profile=scoring_profile,
         )
@@ -651,6 +810,7 @@ class BacktestService(BaseService):
                 status="error",
                 message=f"rule pool backtest failed: {e!s}",
                 payload={
+                    "profile_id": str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None,
                     "config_path": str(config_path) if config_path is not None else None,
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
@@ -664,6 +824,7 @@ class BacktestService(BaseService):
             status="ok",
             message="rule pool backtest completed",
             payload={
+                "profile_id": str(profile_id).strip() if profile_id is not None and str(profile_id).strip() else None,
                 "config_path": str(config_path) if config_path is not None else None,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),

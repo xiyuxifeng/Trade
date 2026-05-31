@@ -1,15 +1,17 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, LoadingState, SectionCard } from '@/components/kit';
+import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { listJobs } from '@/lib/api/jobs';
-import { listMarketDatasets, listMarketSnapshots } from '@/lib/api/market';
+import { getStockInfoStatus, listMarketDatasets, listMarketSnapshots, refreshStockInfo } from '@/lib/api/market';
 import type { ArtifactRecord } from '@/types/artifacts';
 import type { JobRecord } from '@/types/jobs';
+import type { StockInfoStatusResponse } from '@/types/market';
 
 const MARKET_JOB_TYPES = new Set([
   'kaipan-fetch',
@@ -48,6 +50,8 @@ function QuickLink({ label, href, description }: { label: string; href: string; 
 }
 
 export function MarketPage() {
+  const [stockInfoActionMessage, setStockInfoActionMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const snapshotsQuery = useQuery({
     queryKey: ['market-overview', 'snapshots'],
     queryFn: () => listMarketSnapshots({ limit: 1, offset: 0 }),
@@ -71,6 +75,21 @@ export function MarketPage() {
     queryFn: () => listArtifacts({ limit: 12 }),
     staleTime: 30_000,
   });
+  const stockInfoStatusQuery = useQuery<StockInfoStatusResponse>({
+    queryKey: ['market-overview', 'stock-info-status'],
+    queryFn: () => getStockInfoStatus(7),
+    staleTime: 30_000,
+  });
+  const stockInfoRefreshMutation = useMutation({
+    mutationFn: async () => refreshStockInfo(7),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['market-overview', 'stock-info-status'], result.status);
+      setStockInfoActionMessage('股票基础信息已刷新，可继续进入 OHLCV 页面。');
+    },
+    onError: () => {
+      setStockInfoActionMessage('股票基础信息刷新失败，请稍后重试。');
+    },
+  });
 
   const marketJobs = useMemo(
     () => sortJobsByCreatedAtDesc((jobsQuery.data?.items ?? []).filter((job) => MARKET_JOB_TYPES.has(job.job_type))),
@@ -80,6 +99,9 @@ export function MarketPage() {
   const latestSnapshot = snapshotsQuery.data?.items?.[0] ?? null;
   const latestDataset = datasetsQuery.data?.items?.[0] ?? null;
   const artifacts = useMemo(() => sortArtifactsByModifiedAtDesc((artifactsQuery.data?.items ?? []).slice(0, 6)), [artifactsQuery.data?.items]);
+  const stockInfoStatus = stockInfoStatusQuery.data;
+  const stockInfoIsFresh = Boolean(stockInfoStatus?.is_fresh);
+  const stockInfoNeedsRefresh = Boolean(stockInfoStatus?.needs_refresh);
 
   const pageError = snapshotsQuery.error ?? datasetsQuery.error ?? jobsQuery.error ?? artifactsQuery.error;
 
@@ -135,6 +157,74 @@ export function MarketPage() {
         <StatTile label="数据集总数" value={datasetsQuery.data?.page.total ?? 0} hint="当前可浏览的市场数据集数量" />
         <StatTile label="最近失败任务" value={failedJobs.length} hint="最近失败的市场相关 Job" />
       </section>
+
+      <SectionCard
+        title="OHLCV 前置预检"
+        description="先确认 stock_info 是否足够新鲜，再进入 OHLCV 页面抓取。这里可以直接刷新股票基础信息。"
+        action={
+          <Link className="text-sm font-medium text-sky-700 hover:underline" to="/market/ohlcv">
+            前往 OHLCV 页面
+          </Link>
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">检查结果</p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {stockInfoStatusQuery.isLoading
+                ? '正在检查 stock_info'
+                : stockInfoStatusQuery.isError
+                  ? 'stock_info 检查失败'
+                  : stockInfoIsFresh
+                    ? 'stock_info 可直接用于 OHLCV 抓取'
+                    : 'stock_info 需要刷新'}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              {stockInfoStatusQuery.isError
+                ? '页面仍可浏览，建议稍后重试状态检查。'
+                : stockInfoStatus?.message ?? '系统会先检查股票基础信息是否覆盖常用 benchmark。'}
+            </p>
+            <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+              <p>股票：{stockInfoStatus?.stock_count ?? 0}</p>
+              <p>指数：{stockInfoStatus?.index_count ?? 0}</p>
+              <p>
+                benchmark：{stockInfoStatus?.benchmark_count ?? 0}/{stockInfoStatus?.expected_benchmark_count ?? 0}
+              </p>
+              <p>最近更新时间：{stockInfoStatus?.latest_updated_at ?? '暂无'}</p>
+            </div>
+            {stockInfoNeedsRefresh ? (
+              <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                stock_info 已过期或缺少 benchmark，建议先刷新再进入 OHLCV 页面。
+              </p>
+            ) : null}
+            {stockInfoStatusQuery.isError ? (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                股票基础信息状态加载失败，但不影响其他市场页面浏览。
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => {
+                setStockInfoActionMessage(null);
+                stockInfoRefreshMutation.mutate();
+              }}
+              disabled={stockInfoRefreshMutation.isPending}
+            >
+              {stockInfoRefreshMutation.isPending ? '刷新中' : '检查并更新股票基础信息'}
+            </Button>
+            <p className="text-xs leading-6 text-slate-500">这个动作只刷新股票基础信息，不会创建 Job。</p>
+            {stockInfoActionMessage ? <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{stockInfoActionMessage}</p> : null}
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+              <p className="font-medium text-slate-900">建议流程</p>
+              <p className="mt-1 leading-6">先刷新基础信息，再进入 OHLCV 页面执行抓取，避免 benchmark 不全或基础信息过期。</p>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="市场快照" description="浏览快照、构建快照、查看 snapshot-build 任务和产物。">

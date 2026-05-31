@@ -82,7 +82,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 ### 4.1 导入 Profile
 
 1. 进入 **配置管理** → **导入**（`/profiles/import`）。
-2. 填写 `config_path`（通常为 `config/app.yaml` 或 `config/app.template.yaml`）及 Profile 名称。
+2. 选择导入模板（推荐 `config/app.template.yaml`，部署已有的 `config/app.yaml` 也可）并填写 Profile 名称。
 3. 提交后系统生成 Profile 及配置快照。
 4. 在 Profile 列表确认 `validation_status` 为 **validated**。
 
@@ -206,6 +206,8 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | 处理结果 | `/articles/results` | 最近结构化输出 |
 | 高级维护 | `/articles/maintenance` | 重跑、失败重试、清理 |
 
+> 版本口径：`/articles/results` 里可以查看同一篇文章的多个 `article_metadata` 候选版本，并选择当前生效版本；回测与策略生成只消费当前生效版本。`/articles/maintenance` 中的 `new_version` 是“候选 metadata 版本”，不是回测版本号。
+
 #### 文章工作台使用顺序
 
 1. 先在页面顶部选择 **Profile**，这会决定本次运行的上下文。
@@ -213,6 +215,14 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 3. 按该 step 的参数 schema 填写参数。
 4. 点击提交，系统自动生成对应 Job。
 5. 打开 **任务中心** 查看进度、日志和结果。
+
+#### `article_metadata` 版本怎么操作
+
+1. 打开 **处理结果**（`/articles/results`），找到目标文章。
+2. 查看当前版本、推荐版本、评分原因和 `selection_reason`。
+3. 如果自动推荐不合适，切换成更适合该文章的候选版本并保存。
+4. 保存后，后续策略生成和回测只会消费当前生效版本。
+5. 如果需要重新生成候选版本，去 **高级维护**（`/articles/maintenance`）执行 `process`；`new_version` 只是候选 metadata 版本号，不是回测版本号。
 
 #### step 与作用
 
@@ -306,12 +316,13 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 
 | 参数 | 必填 | 含义 |
 |------|------|------|
-| `profile_id` | 二选一 | Profile ID（优先） |
-| `config_path` | 二选一 | 配置文件路径 |
+| `profile_id` | 推荐 | Profile ID（默认自动使用当前 Profile） |
 | `symbols` | 是 | 标的列表 |
 | `mode` | 否 | `incremental`（增量，默认）/ `full`（全量回补） |
 | `start_date` / `end_date` | 否 | 抓取日期区间 |
 | `limit` | 否 | 最多抓取标的数 |
+
+> 说明：Web 页面会自动绑定当前 Profile，不再要求用户手动填写 `config_path`。
 
 **结果规则**：
 
@@ -340,18 +351,19 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 
 | 参数 | 必填 | 含义 |
 |------|------|------|
-| `config_path` | 是 | 配置文件路径 |
+| `profile_id` | 推荐 | 当前 Profile（自动） |
 | `benchmark_symbol` | 是 | 基准指数代码（如 `000300.SH`） |
 | `as_of` | 否 | 基准日期 |
 | `from_akshare` | 否 | 是否从 AkShare 构建 |
 | `cache_csv` | 否 | 是否缓存 CSV |
 
+> 说明：该入口默认绑定当前 Profile；Web 日常操作不再要求填写 `config_path`。
+
 #### 快照构建（`snapshot-build`）
 
 | 参数 | 必填 | 含义 |
 |------|------|------|
-| `profile_id` | 二选一 | Profile ID |
-| `config_path` | 二选一 | 配置文件路径 |
+| `profile_id` | 推荐 | 当前 Profile（自动） |
 | `date` | 二选一 | 单日快照日期 |
 | `start_date` + `end_date` | 二选一 | 区间快照 |
 | `benchmark_symbol` | 否 | 基准指数 |
@@ -359,6 +371,8 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | `snapshot_type` | 否 | `all` / `hot_topics` 等 |
 | `force` | 否 | 强制重建 |
 | `offline` | 否 | 离线模式 |
+
+> 说明：Web 端优先使用当前 Profile；兼容层在后台自动处理配置，不作为用户输入项。
 
 ---
 
@@ -490,7 +504,7 @@ backtest-run →（可选）backtest-validate-rules / backtest-reproducibility-c
 | 数据库迁移 | `/system/db-migrate` | 触发 `db-migrate`（高风险） |
 | 数据备份与恢复 | `/system/backup` | 项目级备份/恢复 |
 
-> 补充说明：系统健康页里会显示 `运行配置` 和 `Profile 上下文` 两块信息。`运行配置` 表示当前进程加载的 `config_path`；`Profile 上下文` 只表示启动环境显式注入的 `PROFILE_ID` / `PROFILE_SNAPSHOT_ID`，如果没有注入就显示 `未绑定`，不代表业务 Profile 丢失。
+> 补充说明：系统健康页里会显示 `运行配置` 和 `Profile 上下文` 两块信息。`运行配置` 表示当前进程实际使用的 Profile 运行态；`Profile 上下文` 只表示启动环境显式注入的 `PROFILE_ID` / `PROFILE_SNAPSHOT_ID`，如果没有注入就显示 `未绑定`，不代表业务 Profile 丢失。
 
 ---
 
@@ -619,6 +633,14 @@ flowchart TD
 2. 确认内容无误后，再执行人工 `Release`。
 3. `Release` 完成后，版本状态变为 `released`，盘前准备、回测和其他主流程才会优先读取它。
 
+**策略版本页面的操作顺序**：
+
+1. 打开 `/strategies/versions`，选择 trader、策略日期和 Profile。
+2. 生成或筛选出目标策略版本后，查看版本详情。
+3. 在版本详情里检查 **来源文章 metadata 版本**，确认每篇来源文章的当前版本、推荐版本和评分原因。
+4. 如果某篇文章的来源版本不合适，先回到 `/articles/results` 切换该文章的当前生效版本，再重新生成策略版本。
+5. 确认 draft 无误后再执行 Release。
+
 **注意**：
 
 - `strategy-build` 只负责生成草稿，不会自动把版本升级为 `released`。
@@ -714,12 +736,13 @@ flowchart TD
 6. 预览或下载 Markdown 报告、CSV 明细。
 7. （可选）点击 **「验证规则」** 提交 `backtest-validate-rules`。
 8. （可选，admin）**「可复现性检查」** 提交 `backtest-reproducibility-check`，比对 fingerprint。
+9. 提交前先检查页面里的 **策略版本来源** 卡片，确认该策略版本引用的来源文章 metadata 版本和评分原因符合预期。
 
 ### 7.3 回测参数详解
 
 | 参数 | 必填 | 默认值 | 含义 |
 |------|------|--------|------|
-| `profile_id` | 推荐 | — | 运行上下文；驱动 config_path |
+| `profile_id` | 推荐 | — | 运行上下文；默认驱动当前 Profile |
 | `trader_id` | 是 | — | 交易员 ID |
 | `date_from` | 是 | 近 30 天 | 回测开始日期 |
 | `date_to` | 是 | 今日 | 回测结束日期 |
@@ -729,7 +752,6 @@ flowchart TD
 | `mode` | 否 | `full` | 见下表 |
 | `use_snapshot_only` | 固定 | `true` | 仅使用快照数据（UI 不可改） |
 | `scoring_profile` | 否 | `stage5` | 评分配置口径 |
-| `config_path` | 否 | 自动 | 通常由 Profile 自动填充 |
 
 **`mode` 取值**：
 

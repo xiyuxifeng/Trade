@@ -45,7 +45,6 @@ describe('persona page', () => {
     });
 
     vi.mocked(buildSampleClusters).mockResolvedValueOnce({
-      config_path: 'config/app.yaml',
       base_dir: '/tmp/project',
       clusters_path: '/tmp/project/data/processed/persona/clusters.sample.json',
       trader_count: 3,

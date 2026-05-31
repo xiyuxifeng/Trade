@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import os
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -10,14 +7,16 @@ from fastapi import APIRouter, Depends, Query
 from api.dependencies import verify_api_key
 from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory
+from src.services.config_profile_service import ConfigProfileService
 from src.services.signal_service import SignalService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-signals"])
 
 
-def _config_path() -> Path:
-    """读取当前 UI BFF 使用的配置文件路径。"""
-    return resolve_project_path(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+    """读取当前 UI BFF 使用的 Profile。"""
+    service = ConfigProfileService()
+    return service.resolve_runtime_profile_id(preferred)
 
 
 def get_signal_service() -> SignalService:
@@ -52,11 +51,27 @@ async def list_signals(
     symbol: str | None = None,
     since: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
+    profile_id: str | None = None,
     service: SignalService = Depends(get_signal_service),
 ):
     """列出已生成的信号版本，补充可读的上下文摘要。"""
-    result = await asyncio.to_thread(service.list_signals, config_path=_config_path(), symbol=symbol, since=since, limit=limit)
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    if runtime_profile_id is not None:
+        result = service.list_signals(
+            profile_id=runtime_profile_id,
+            symbol=symbol,
+            since=since,
+            limit=limit,
+        )
+    else:
+        result = service.list_signals(
+            config_path=resolve_project_path("config/app.yaml"),
+            symbol=symbol,
+            since=since,
+            limit=limit,
+        )
     payload = dict(result.payload)
+    payload.pop("config_path", None)
     payload["signals"] = [
         {**item, "context_summary": _summarize_context(item.get("context"))}
         for item in payload.get("signals", [])

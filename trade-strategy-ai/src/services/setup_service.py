@@ -22,6 +22,7 @@ from src.agents.data_agent.skills.import_trade_logs import (
 )
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.models.crawl_state import CrawlState
+from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 
 
@@ -102,6 +103,38 @@ class SetupService(BaseService):
         loaded = self._load_config_runner(config_path)
         self._apply_database_config_runner(loaded.config)
         return loaded
+
+    async def _load_runtime_context(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """加载 Web/CLI 运行时配置。
+
+        Web 主路径优先使用 Profile runtime；CLI 调试保留 config_path。
+        """
+        resolved_profile_id = str(profile_id).strip() if isinstance(profile_id, str) and profile_id.strip() else None
+        if resolved_profile_id is not None:
+            runtime = await ConfigProfileService().load_profile_runtime_config(resolved_profile_id)
+            self._apply_database_config_runner(runtime.config)
+            return {
+                "profile_id": runtime.profile_id,
+                "profile_snapshot_id": runtime.profile_snapshot_id,
+                "config_path": None,
+                "config": runtime.config,
+                "base_dir": runtime.base_dir,
+            }
+
+        resolved_config_path = config_path or Path("config/app.yaml")
+        loaded = self._load_config(resolved_config_path)
+        return {
+            "profile_id": None,
+            "profile_snapshot_id": None,
+            "config_path": str(loaded.config_path),
+            "config": loaded.config,
+            "base_dir": _project_base_dir(loaded.config_path),
+        }
 
     async def _default_crawl_state_writer(
         self,
@@ -189,14 +222,15 @@ class SetupService(BaseService):
     async def import_trade_logs(
         self,
         *,
-        config_path: str | Path,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
         csv_path: str | Path,
         source: str = "csv_import",
         trader_account_map: dict[str, str] | None = None,
         dry_run: bool = False,
     ) -> ServiceResult:
         """导入交易记录。"""
-        loaded = self._load_config(config_path)
+        runtime = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
         csv_file = Path(csv_path)
         suffix = csv_file.suffix.lower()
 
@@ -243,33 +277,43 @@ class SetupService(BaseService):
                 }
             )
 
+        payload: dict[str, Any] = {
+            "profile_id": runtime["profile_id"],
+            "profile_snapshot_id": runtime["profile_snapshot_id"],
+            "base_dir": str(runtime["base_dir"]),
+            "csv_path": str(csv_file),
+            "file_kind": file_kind,
+            "source": source,
+            "rows_seen": getattr(stats, "rows_seen", 0),
+            "invalid": getattr(stats, "invalid", 0),
+            "duplicates": getattr(stats, "duplicates", 0),
+            "issues": issues,
+            "parsed_count": len(records),
+            "stored_count": stored_count,
+            "dry_run": dry_run,
+        }
+        if runtime["config_path"] is not None:
+            payload["config_path"] = runtime["config_path"]
         return ServiceResult(
             status="ok",
             message="trade logs imported" if not dry_run else "trade logs parsed",
-            payload={
-                "config_path": str(loaded.config_path),
-                "csv_path": str(csv_file),
-                "file_kind": file_kind,
-                "source": source,
-                "rows_seen": getattr(stats, "rows_seen", 0),
-                "invalid": getattr(stats, "invalid", 0),
-                "duplicates": getattr(stats, "duplicates", 0),
-                "issues": issues,
-                "parsed_count": len(records),
-                "stored_count": stored_count,
-                "dry_run": dry_run,
-            },
+            payload=payload,
         )
 
-    async def migrate_crawl_state(self, *, config_path: str | Path) -> ServiceResult:
+    async def migrate_crawl_state(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+    ) -> ServiceResult:
         """将 crawl state.json 迁移到数据库。"""
-        loaded = self._load_config(config_path)
-        base_dir = _project_base_dir(loaded.config_path)
+        runtime = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
+        base_dir = Path(runtime["base_dir"])
         migrated = 0
         skipped = 0
         results: list[dict[str, Any]] = []
 
-        for source_cfg in loaded.config.crawl.sources:
+        for source_cfg in runtime["config"].crawl.sources:
             if not source_cfg.enabled:
                 continue
             state_path = base_dir / "data" / "processed" / "crawl" / source_cfg.source / source_cfg.author_id / "state.json"
@@ -316,14 +360,18 @@ class SetupService(BaseService):
                     }
                 )
 
+        payload: dict[str, Any] = {
+            "profile_id": runtime["profile_id"],
+            "profile_snapshot_id": runtime["profile_snapshot_id"],
+            "base_dir": str(base_dir),
+            "migrated": migrated,
+            "skipped": skipped,
+            "results": results,
+        }
+        if runtime["config_path"] is not None:
+            payload["config_path"] = runtime["config_path"]
         return ServiceResult(
             status="ok" if skipped == 0 else "partial",
             message="crawl state migrated" if skipped == 0 else "crawl state migrated partially",
-            payload={
-                "config_path": str(loaded.config_path),
-                "base_dir": str(base_dir),
-                "migrated": migrated,
-                "skipped": skipped,
-                "results": results,
-            },
+            payload=payload,
         )

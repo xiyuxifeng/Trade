@@ -1,5 +1,6 @@
 export type PersonaClustersResponse = {
-  config_path: string;
+  profile_id?: string | null;
+  profile_snapshot_id?: string | null;
   base_dir: string;
   clusters_path: string;
   trader_count: number;

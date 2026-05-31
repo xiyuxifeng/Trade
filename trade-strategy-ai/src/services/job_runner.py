@@ -257,10 +257,12 @@ class JobRunner(BaseService):
 
         async def _crawl(params: dict[str, Any]) -> ServiceResult:
             service = self._pipeline_service_factory()
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
-            return service.crawl(
+            return await service.crawl(
+                profile_id=profile_id,
                 config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
@@ -268,6 +270,10 @@ class JobRunner(BaseService):
 
         async def _article_pipeline_context(params: dict[str, Any]) -> tuple[Any, Path, Path]:
             """按 Profile 或 config_path 解析 article pipeline 的运行上下文。"""
+            profile_id = str(params.get("profile_id") or "").strip()
+            if profile_id:
+                runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+                return runtime.config, runtime.base_dir, Path(f"profile:{profile_id}")
             config_path = await self._resolve_profile_config_path(params)
             if config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
@@ -410,12 +416,14 @@ class JobRunner(BaseService):
 
         async def _ohlcv_crawl(params: dict[str, Any]) -> ServiceResult:
             service = MarketService()
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             raw_limit = params.get("limit")
             limit = None if raw_limit in {None, ""} else int(raw_limit)
             return await service.crawl_ohlcv(
+                profile_id=profile_id,
                 config_path=config_path,
                 mode=str(params.get("mode") or "incremental"),
                 symbols=params.get("symbols"),
@@ -431,10 +439,12 @@ class JobRunner(BaseService):
             benchmark_symbol = params.get("benchmark_symbol")
             if not benchmark_symbol:
                 raise ValueError("missing required param: benchmark_symbol")
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             return service.build_market_state(
+                profile_id=profile_id,
                 config_path=config_path,
                 benchmark_symbol=benchmark_symbol,
                 as_of=params.get("as_of"),
@@ -445,17 +455,18 @@ class JobRunner(BaseService):
 
         async def _snapshot_build(params: dict[str, Any]) -> ServiceResult:
             service = SnapshotService()
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             return await service.build_snapshot(
+                profile_id=profile_id,
                 config_path=config_path,
                 benchmark_symbol=params.get("benchmark_symbol"),
                 date=str(params.get("date") or params.get("trade_date") or date.today().isoformat()) if params.get("start_date") is None else None,
                 start_date=str(params.get("start_date")) if params.get("start_date") else None,
                 end_date=str(params.get("end_date")) if params.get("end_date") else None,
                 slot=str(params.get("slot") or "17-30"),
-                profile_id=params.get("profile_id"),
                 force=_parse_bool(params.get("force"), default=False),
                 offline=_parse_bool(params.get("offline"), default=False),
                 snapshot_type=str(params.get("snapshot_type") or "all"),
@@ -481,10 +492,26 @@ class JobRunner(BaseService):
 
         async def _backtest_run(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
+            profile_id = str(params.get("profile_id") or "").strip() or None
             benchmark_symbol = params.get("benchmark_symbol")
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
+            if profile_id is not None:
+                return await service.run_backtest_profile(
+                    profile_id=profile_id,
+                    trader_id=str(params.get("trader_id") or ""),
+                    date_from=_parse_date(params.get("date_from")),
+                    date_to=_parse_date(params.get("date_to")),
+                    strategy_version_id=params.get("strategy_version_id"),
+                    symbols=params.get("symbols") or [],
+                    benchmark_symbol=benchmark_symbol,
+                    mode=str(params.get("mode") or "full"),
+                    use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                    scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                    runtime_state=params.get("__job_runtime_state__"),
+                    progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+                )
             return service.run_backtest(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
@@ -503,9 +530,25 @@ class JobRunner(BaseService):
         async def _backtest_validate_rules(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
             benchmark_symbol = params.get("benchmark_symbol")
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
+            if profile_id is not None:
+                return await service.validate_rules(
+                    profile_id=profile_id,
+                    trader_id=str(params.get("trader_id") or ""),
+                    date_from=_parse_date(params.get("date_from")),
+                    date_to=_parse_date(params.get("date_to")),
+                    strategy_version_id=params.get("strategy_version_id"),
+                    symbols=params.get("symbols") or [],
+                    benchmark_symbol=benchmark_symbol,
+                    mode=str(params.get("mode") or "rule_validation"),
+                    use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                    scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                    runtime_state=params.get("__job_runtime_state__"),
+                    progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+                )
             return await service.validate_rules(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
@@ -524,9 +567,23 @@ class JobRunner(BaseService):
         async def _backtest_reproducibility_check(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
             benchmark_symbol = params.get("benchmark_symbol")
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
+            if profile_id is not None:
+                return await service.reproducibility_check_profile(
+                    profile_id=profile_id,
+                    trader_id=str(params.get("trader_id") or ""),
+                    date_from=_parse_date(params.get("date_from")),
+                    date_to=_parse_date(params.get("date_to")),
+                    strategy_version_id=params.get("strategy_version_id"),
+                    symbols=params.get("symbols") or [],
+                    benchmark_symbol=benchmark_symbol,
+                    mode=str(params.get("mode") or "full"),
+                    use_snapshot_only=_parse_bool(params.get("use_snapshot_only"), default=True),
+                    scoring_profile=str(params.get("scoring_profile") or "stage5"),
+                )
             return service.reproducibility_check(
                 trader_id=str(params.get("trader_id") or ""),
                 date_from=_parse_date(params.get("date_from")),
@@ -557,8 +614,9 @@ class JobRunner(BaseService):
             end_date = _parse_optional_date(params.get("end_date"))
             if start_date is None or end_date is None:
                 raise ValueError("missing required param: start_date/end_date")
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             return await service.run_rule_pool_backtest(
                 start_date=start_date,
@@ -566,6 +624,7 @@ class JobRunner(BaseService):
                 rule_ids=rule_ids,
                 min_confidence=float(params.get("min_confidence") or 0.5),
                 market_regime_version=params.get("market_regime_version") or "market-regime-v3",
+                profile_id=profile_id,
                 config_path=config_path,
                 runtime_state=params.get("__job_runtime_state__"),
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
@@ -597,10 +656,12 @@ class JobRunner(BaseService):
 
         async def _pipeline_run(params: dict[str, Any]) -> ServiceResult:
             service = self._pipeline_service_factory()
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             return await service.run_pipeline(
+                profile_id=profile_id,
                 config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
@@ -614,11 +675,13 @@ class JobRunner(BaseService):
 
         async def _pipeline_step(params: dict[str, Any]) -> ServiceResult:
             service = self._pipeline_service_factory()
-            config_path = await self._resolve_profile_config_path(params)
-            if config_path is None:
+            profile_id = str(params.get("profile_id") or "").strip() or None
+            config_path = await self._resolve_profile_config_path(params) if profile_id is None else None
+            if profile_id is None and config_path is None:
                 raise ValueError("missing required param: profile_id or config_path")
             return await service.run_pipeline_step(
                 step=params.get("step", "crawl"),
+                profile_id=profile_id,
                 config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),

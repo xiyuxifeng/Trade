@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 
@@ -14,6 +13,7 @@ from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
 from src.common.logger import get_logger
+from src.services.config_profile_service import ConfigProfileService
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 logger = get_logger(__name__)
@@ -88,13 +88,19 @@ def _row_to_item(row) -> AlertHistoryItem:
     )
 
 
-def _build_alerting_status() -> AlertingStatusResponse:
+async def _build_alerting_status() -> AlertingStatusResponse:
     """从应用配置构建告警状态。"""
-    from src.common.config import load_app_config
     from src.alerting.config import load_alerting_config
+    from src.common.config import load_app_config
+    from src.common.paths import resolve_project_path
 
-    loaded = load_app_config(os.environ.get("CONFIG_PATH", "config/app.yaml"))
-    cfg = load_alerting_config(loaded.config.alerting)
+    profile_id = ConfigProfileService().resolve_runtime_profile_id()
+    try:
+        runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+        cfg = load_alerting_config(runtime.config.alerting)
+    except Exception:
+        loaded = load_app_config(resolve_project_path("config/app.yaml"))
+        cfg = load_alerting_config(loaded.config.alerting)
 
     webhook_configured = False
     if cfg.channel == "dingtalk":
@@ -159,7 +165,7 @@ async def list_alert_history(
 @router.get("/status", response_model=AlertingStatusResponse)
 async def get_alerting_status(_key: str = Depends(verify_api_key)) -> AlertingStatusResponse:
     """查询当前告警配置状态。"""
-    return _build_alerting_status()
+    return await _build_alerting_status()
 
 
 @router.get("/history/{record_id}", response_model=AlertHistoryItem)
@@ -246,7 +252,7 @@ async def send_test_alert(_key: str = Depends(verify_api_key)) -> dict:
     """发送测试告警（验证 Webhook 配置）。"""
     from src.alerting.manager import AlertManager
 
-    alerting_status = _build_alerting_status()
+    alerting_status = await _build_alerting_status()
     if not alerting_status.enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -259,10 +265,9 @@ async def send_test_alert(_key: str = Depends(verify_api_key)) -> dict:
         )
 
     try:
-        from src.common.config import load_app_config
-
-        loaded = load_app_config()
-        manager = AlertManager(alerting_config=loaded.config.alerting)
+        profile_id = ConfigProfileService().resolve_runtime_profile_id()
+        runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+        manager = AlertManager(alerting_config=runtime.config.alerting)
         manager.send_test_alert(
             title="[测试] 告警系统连通性验证",
             message="如果你看到这条消息，说明告警 Webhook 配置正确。",

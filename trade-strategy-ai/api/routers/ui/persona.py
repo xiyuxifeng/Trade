@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
+import inspect
 
 from fastapi import APIRouter, Depends
 from fastapi import HTTPException
@@ -10,6 +9,7 @@ from pydantic import BaseModel
 from api.dependencies import verify_api_key
 from src.common.paths import resolve_project_path
 from src.persona.behavior_rules import load_behavior_rules_preview
+from src.services.config_profile_service import ConfigProfileService
 from src.services.persona_service import PersonaService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-persona"])
@@ -24,9 +24,10 @@ class MarketStateBuildRequest(BaseModel):
     cache_csv: bool = True
 
 
-def _config_path() -> Path:
-    """读取当前 UI BFF 使用的配置文件路径。"""
-    return resolve_project_path(os.environ.get("CONFIG_PATH", "config/app.yaml"))
+async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+    """读取当前 UI BFF 使用的 Profile。"""
+    service = ConfigProfileService()
+    return service.resolve_runtime_profile_id(preferred)
 
 
 def get_persona_service() -> PersonaService:
@@ -35,10 +36,20 @@ def get_persona_service() -> PersonaService:
 
 
 @router.post("/persona/sample", dependencies=[Depends(verify_api_key)])
-async def build_sample_clusters(service: PersonaService = Depends(get_persona_service)):
+async def build_sample_clusters(
+    profile_id: str | None = None,
+    service: PersonaService = Depends(get_persona_service),
+):
     """生成 Persona 样例聚类文件。"""
-    result = service.build_sample_clusters(config_path=_config_path())
-    return result.payload
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    if runtime_profile_id is not None:
+        maybe_result = service.build_sample_clusters(profile_id=runtime_profile_id)
+    else:
+        maybe_result = service.build_sample_clusters(config_path=resolve_project_path("config/app.yaml"))
+    result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
+    payload = dict(result.payload)
+    payload.pop("config_path", None)
+    return payload
 
 
 @router.get("/persona/rules", dependencies=[Depends(verify_api_key)])
@@ -56,17 +67,30 @@ async def list_behavior_rules():
 @router.post("/persona/market-state/build", dependencies=[Depends(verify_api_key)])
 async def build_market_state(
     request: MarketStateBuildRequest,
+    profile_id: str | None = None,
     service: PersonaService = Depends(get_persona_service),
 ):
     """构建 MarketState 快照。"""
-    result = service.build_market_state(
-        config_path=_config_path(),
-        benchmark_symbol=request.benchmark_symbol,
-        as_of=request.as_of,
-        from_akshare=request.from_akshare,
-        cache_csv=request.cache_csv,
-    )
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    if runtime_profile_id is not None:
+        maybe_result = service.build_market_state(
+            profile_id=runtime_profile_id,
+            benchmark_symbol=request.benchmark_symbol,
+            as_of=request.as_of,
+            from_akshare=request.from_akshare,
+            cache_csv=request.cache_csv,
+        )
+    else:
+        maybe_result = service.build_market_state(
+            config_path=resolve_project_path("config/app.yaml"),
+            benchmark_symbol=request.benchmark_symbol,
+            as_of=request.as_of,
+            from_akshare=request.from_akshare,
+            cache_csv=request.cache_csv,
+        )
+    result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
     payload = dict(result.payload)
+    payload.pop("config_path", None)
     if "snapshot_path" not in payload and "market_state_path" in payload:
         payload["snapshot_path"] = payload["market_state_path"]
     return payload

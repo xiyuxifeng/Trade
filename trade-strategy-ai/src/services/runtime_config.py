@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from src.common.config import AppConfig
 
 
 @dataclass(frozen=True)
@@ -12,6 +15,21 @@ class RuntimeConfigResolution:
     config_path: str | None = None
     profile_snapshot_id: str | None = None
     source: str = "default"
+
+
+@dataclass(frozen=True)
+class ProfileRuntimeConfig:
+    """Profile 运行态配置视图。
+
+    这是 Web 主路径的事实来源：由 `profile_id` 加载 Profile 数据，再 materialize 成
+    `AppConfig` 供各类业务服务直接消费，不再依赖 `config_path`。
+    """
+
+    profile_id: str
+    config: AppConfig
+    base_dir: Path
+    profile_snapshot_id: str | None = None
+    source: str = "profile"
 
 
 def resolve_runtime_config(params: dict[str, Any] | None) -> RuntimeConfigResolution:

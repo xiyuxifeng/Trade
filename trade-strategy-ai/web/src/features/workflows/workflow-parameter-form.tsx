@@ -270,7 +270,7 @@ export function WorkflowParameterForm({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-medium text-slate-900">Profile</p>
-                    <p className="mt-1 text-sm text-slate-600">Web 主流程只认 Profile，`config_path` 仅保留兼容/调试入口。</p>
+                    <p className="mt-1 text-sm text-slate-600">Web 主流程只认 Profile，历史兼容参数仅保留给旧工作流。</p>
                   </div>
                   <Badge variant={profileItems.length === 0 ? 'warning' : 'info'}>{profileItems.length === 0 ? '无可用 Profile' : 'Profile'}</Badge>
                 </div>

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { ApiError } from '@/lib/api/http';
 import { importProfile } from '@/lib/api/profiles';
 import type { ProfileImportResponse } from '@/types/profile';
@@ -54,20 +55,19 @@ function ResultPanel({ result }: { result: ProfileImportResponse | null }) {
 export function ProfileImportPage() {
   const navigate = useNavigate();
   const [profileId, setProfileId] = useState('default');
-  const [configPath, setConfigPath] = useState('config/app.template.yaml');
+  const [source, setSource] = useState<'app.yaml' | 'app.template.yaml'>('app.template.yaml');
   const [createdBy, setCreatedBy] = useState('web');
   const [submittedResult, setSubmittedResult] = useState<ProfileImportResponse | null>(null);
 
   const importMutation = useMutation({
     mutationFn: async () => {
       const trimmedProfileId = profileId.trim();
-      const trimmedConfigPath = configPath.trim();
-      if (!trimmedProfileId || !trimmedConfigPath) {
-        throw new Error('请输入配置 ID 和源配置路径。');
+      if (!trimmedProfileId) {
+        throw new Error('请输入配置 ID。');
       }
       return importProfile({
         profile_id: trimmedProfileId,
-        config_path: trimmedConfigPath,
+        source,
         created_by: createdBy.trim() || 'web',
       });
     },
@@ -79,10 +79,10 @@ export function ProfileImportPage() {
   const submitPreview = useMemo(
     () => ({
       profile_id: profileId.trim() || '未填写',
-      config_path: configPath.trim() || '未填写',
+      source,
       created_by: createdBy.trim() || 'web',
     }),
-    [configPath, createdBy, profileId],
+    [createdBy, profileId, source],
   );
 
   return (
@@ -93,7 +93,7 @@ export function ProfileImportPage() {
             <Badge variant="info">配置管理</Badge>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">导入为正式配置</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              从 `config/app.yaml` 或交付模板 `config/app.template.yaml` 导入一次，生成正式 Profile。导入完成后，Web 后续运行只认 Profile，`config_path` 仅保留给导入和 CLI 调试。
+              选择交付模板导入一次，生成正式 Profile。导入完成后，Web 后续运行只认 Profile。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -130,18 +130,20 @@ export function ProfileImportPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700" htmlFor="config_path">
-                源配置路径
+              <label className="text-sm font-medium text-slate-700" htmlFor="source">
+                导入模板
               </label>
-              <Input
-                className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
-                id="config_path"
-                value={configPath}
-                onChange={(event) => setConfigPath(event.target.value)}
-                placeholder="config/app.template.yaml"
-              />
+              <Select
+                id="source"
+                className="border-slate-200 bg-white text-slate-900"
+                value={source}
+                onChange={(event) => setSource(event.target.value as 'app.yaml' | 'app.template.yaml')}
+              >
+                <option value="app.template.yaml">app.template.yaml（推荐）</option>
+                <option value="app.yaml">app.yaml</option>
+              </Select>
               <p className="text-xs text-slate-500">
-                可输入 `config/app.yaml` 或 `config/app.template.yaml`。导入后系统会把配置写入 `config_profiles`，后续 Web 只通过 Profile 串联。
+                选择预置模板后导入，系统会把配置写入 `config_profiles`，后续 Web 只通过 Profile 串联。
               </p>
             </div>
 
@@ -149,7 +151,7 @@ export function ProfileImportPage() {
               <p className="text-xs uppercase tracking-[0.16em] text-sky-700">提交前确认</p>
               <div className="mt-3 grid gap-3 md:grid-cols-3">
                 <MetaCard label="配置 ID" value={submitPreview.profile_id} />
-                <MetaCard label="源配置路径" value={submitPreview.config_path} />
+                <MetaCard label="导入模板" value={submitPreview.source} />
                 <MetaCard label="创建者" value={submitPreview.created_by} />
               </div>
               <p className="mt-3 text-xs text-sky-700">

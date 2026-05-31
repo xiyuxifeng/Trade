@@ -29,7 +29,6 @@ async def test_system_status_route_exists(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert "config_path" in payload
     assert "profile_context" in payload
     assert "database" in payload
     assert "directories" in payload

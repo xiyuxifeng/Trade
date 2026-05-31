@@ -11,6 +11,7 @@ from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 from src.pipeline.dashboard_models import DashboardReport
 from src.pipeline.dashboard_renderers import CLIRenderer, HTMLRenderer
+from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 
 
@@ -62,6 +63,7 @@ class DashboardService(BaseService):
 	async def build_report(
 		self,
 		*,
+		profile_id: str | None = None,
 		config_path: str | Path = Path("config/app.yaml"),
 		mode: str = "cli",
 		output: str | Path | None = None,
@@ -78,8 +80,19 @@ class DashboardService(BaseService):
 				},
 			)
 
-		loaded = load_app_config(config_path)
-		settings = loaded.config
+		resolved_profile_id = str(profile_id).strip() if isinstance(profile_id, str) and profile_id.strip() else None
+		profile_snapshot_id: str | None = None
+		if resolved_profile_id is not None:
+			runtime = await ConfigProfileService().load_profile_runtime_config(resolved_profile_id)
+			settings = runtime.config
+			base_dir = runtime.base_dir
+			profile_snapshot_id = runtime.profile_snapshot_id
+			loaded_config_path: str | None = None
+		else:
+			loaded = load_app_config(config_path)
+			settings = loaded.config
+			base_dir = loaded.config_path.parent.parent if loaded.config_path.parent.name == "config" else loaded.config_path.parent
+			loaded_config_path = str(loaded.config_path)
 		report = await self._build_report(settings)
 
 		rendered_path: str | None = None
@@ -103,7 +116,10 @@ class DashboardService(BaseService):
 			status=status,
 			message="dashboard report built",
 			payload={
-				"config_path": str(loaded.config_path),
+				"profile_id": resolved_profile_id,
+				"profile_snapshot_id": profile_snapshot_id,
+				"config_path": loaded_config_path,
+				"base_dir": str(base_dir),
 				"report": _to_plain(report),
 				"html_path": rendered_path,
 				"critical_alerts": len(critical_alerts),

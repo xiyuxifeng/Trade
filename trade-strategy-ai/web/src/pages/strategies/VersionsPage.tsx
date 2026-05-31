@@ -325,6 +325,10 @@ export function StrategyVersionsPage() {
         </Card>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-600">
+        下方会展示该策略版本引用的来源文章 metadata 版本选择结果，用于回溯和复核；这里仅展示选择结果，不在页面内重新切换版本。
+      </section>
+
       <StrategyWorkspaceActions
         disabled={!selectedProfileId || !traderId.trim() || !strategyDate}
         onSubmitted={({ jobType, jobId }) => {

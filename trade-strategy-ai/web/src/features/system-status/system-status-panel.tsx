@@ -119,14 +119,17 @@ export function SystemStatusPanel() {
             </div>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">运行配置</p>
-            <p className="mt-2 break-all text-sm text-slate-900">{data.config_path}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile 运行态</p>
+            <p className="mt-2 break-all text-sm text-slate-900">{profileContext?.profile_id ?? data.profile_id ?? '未绑定'}</p>
+            <p className="mt-1 break-all text-xs text-slate-500">
+              snapshot: {profileContext?.profile_snapshot_id ?? data.profile_snapshot_id ?? '未绑定'} · source: {profileContext?.source ?? 'unset'}
+            </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Profile</p>
-            <p className="mt-2 text-base font-semibold text-slate-950">{profileContext?.profile_id ?? '未绑定'}</p>
+            <p className="mt-2 text-base font-semibold text-slate-950">{profileContext?.profile_id ?? data.profile_id ?? '未绑定'}</p>
             <p className="mt-1 break-all text-xs text-slate-500">
-              snapshot: {profileContext?.profile_snapshot_id ?? '未绑定'} · source: {profileContext?.source ?? 'unset'}
+              snapshot: {profileContext?.profile_snapshot_id ?? data.profile_snapshot_id ?? '未绑定'} · source: {profileContext?.source ?? 'unset'}
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">

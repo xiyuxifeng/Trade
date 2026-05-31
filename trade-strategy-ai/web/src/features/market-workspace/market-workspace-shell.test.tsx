@@ -5,7 +5,14 @@ import { MarketKaipanWorkspaceShell, MarketOhlcvWorkspaceShell, MarketWorkspaceS
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob, listJobs } from '@/lib/api/jobs';
 import { listArtifacts } from '@/lib/api/artifacts';
-import { getOhlcvSchedulerStatus, listBenchmarkOptions, runOhlcvScheduler, stopOhlcvScheduler } from '@/lib/api/market';
+import {
+  getOhlcvSchedulerStatus,
+  getStockInfoStatus,
+  listBenchmarkOptions,
+  refreshStockInfo,
+  runOhlcvScheduler,
+  stopOhlcvScheduler,
+} from '@/lib/api/market';
 import { buildDashboardReport } from '@/lib/api/dataHealth';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { kaipanRun, kaipanStatus, kaipanStop } from '@/lib/api/kaipan';
@@ -23,7 +30,9 @@ vi.mock('@/lib/api/artifacts', () => ({
 
 vi.mock('@/lib/api/market', () => ({
   getOhlcvSchedulerStatus: vi.fn(),
+  getStockInfoStatus: vi.fn(),
   listBenchmarkOptions: vi.fn(),
+  refreshStockInfo: vi.fn(),
   runOhlcvScheduler: vi.fn(),
   stopOhlcvScheduler: vi.fn(),
 }));
@@ -48,6 +57,8 @@ const mockedListJobs = vi.mocked(listJobs);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 const mockedGetOhlcvSchedulerStatus = vi.mocked(getOhlcvSchedulerStatus);
+const mockedGetStockInfoStatus = vi.mocked(getStockInfoStatus);
+const mockedRefreshStockInfo = vi.mocked(refreshStockInfo);
 const mockedRunOhlcvScheduler = vi.mocked(runOhlcvScheduler);
 const mockedStopOhlcvScheduler = vi.mocked(stopOhlcvScheduler);
 const mockedBuildDashboardReport = vi.mocked(buildDashboardReport);
@@ -59,6 +70,36 @@ const mockedGetProfile = vi.mocked(getProfile);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedGetStockInfoStatus.mockResolvedValue({
+    total: 5515,
+    stock_count: 5505,
+    index_count: 10,
+    benchmark_count: 10,
+    expected_benchmark_count: 10,
+    missing_benchmark_symbols: [],
+    latest_updated_at: '2026-05-29T10:00:00+00:00',
+    is_fresh: true,
+    needs_refresh: false,
+    message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+    max_age_days: 7,
+  } as never);
+  mockedRefreshStockInfo.mockResolvedValue({
+    stock_stats: { total: 5505, inserted: 5, updated: 5500, skipped: 0 },
+    index_stats: { total: 10, inserted: 10, updated: 0, skipped: 0 },
+    status: {
+      total: 5515,
+      stock_count: 5505,
+      index_count: 10,
+      benchmark_count: 10,
+      expected_benchmark_count: 10,
+      missing_benchmark_symbols: [],
+      latest_updated_at: '2026-05-29T10:00:00+00:00',
+      is_fresh: true,
+      needs_refresh: false,
+      message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+      max_age_days: 7,
+    },
+  } as never);
 });
 
 describe('MarketWorkspaceShell', () => {
@@ -613,6 +654,142 @@ describe('MarketWorkspaceShell', () => {
       expect(screen.getByText(/OHLCV 调度器已停止/)).toBeInTheDocument();
       expect(mockedStopOhlcvScheduler).toHaveBeenCalledWith('default');
       expect(screen.getByRole('button', { name: '启动调度器' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows stock info precheck and refreshes before ohlcv crawl', async () => {
+    const user = userEvent.setup();
+
+    mockedListJobs.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 12,
+      items: [],
+    } as never);
+    mockedListArtifacts.mockResolvedValue({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 8,
+      items: [],
+    } as never);
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'CN', name: '沪深300', security_type: 'index' },
+        { symbol: '510300.SH', code: '510300', market: 'CN', name: '沪深300ETF', security_type: 'etf' },
+      ],
+    } as never);
+    mockedListProfiles.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-16T08:00:00Z',
+          updated_at: '2026-05-16T08:10:00Z',
+          archived_at: null,
+        },
+      ],
+    } as never);
+    mockedGetProfile.mockResolvedValue({
+      profile: {
+        profile_id: 'default',
+        name: 'Default Profile',
+        environment: 'production',
+        version: 1,
+        sections: {},
+        secret_refs: {},
+        validation_status: 'validated',
+        created_by: 'web',
+        created_at: '2026-05-16T08:00:00Z',
+        updated_at: '2026-05-16T08:10:00Z',
+        archived_at: null,
+      },
+      linked_jobs: [],
+      snapshots: [
+        {
+          snapshot_id: 'profile-snapshot-1',
+          profile_id: 'default',
+          job_id: 'job-profile-1',
+          source: 'profile-import',
+          config_path: 'config/ohlcv.yaml',
+          config_hash: 'hash-1',
+          masked_snapshot: {},
+          masked_sections: [],
+          validation_status: 'validated',
+          captured_at: '2026-05-16T08:10:00Z',
+          snapshot_path: '/tmp/profile-snapshot-1.json',
+        },
+      ],
+    } as never);
+    mockedGetStockInfoStatus
+      .mockResolvedValueOnce({
+        total: 5515,
+        stock_count: 5505,
+        index_count: 10,
+        benchmark_count: 8,
+        expected_benchmark_count: 10,
+        missing_benchmark_symbols: ['000906.SH', '932000.SH'],
+        latest_updated_at: '2026-05-20T10:00:00+00:00',
+        is_fresh: false,
+        needs_refresh: true,
+        message: 'stock_info 已过期或缺少 benchmark，请先刷新股票基础信息',
+        max_age_days: 7,
+      } as never)
+      .mockResolvedValueOnce({
+        total: 5515,
+        stock_count: 5505,
+        index_count: 10,
+        benchmark_count: 10,
+        expected_benchmark_count: 10,
+        missing_benchmark_symbols: [],
+        latest_updated_at: '2026-05-29T10:00:00+00:00',
+        is_fresh: true,
+        needs_refresh: false,
+        message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+        max_age_days: 7,
+      } as never);
+    mockedRefreshStockInfo.mockResolvedValue({
+      stock_stats: { total: 5505, inserted: 5, updated: 5500, skipped: 0 },
+      index_stats: { total: 10, inserted: 10, updated: 0, skipped: 0 },
+      status: {
+        total: 5515,
+        stock_count: 5505,
+        index_count: 10,
+        benchmark_count: 10,
+        expected_benchmark_count: 10,
+        missing_benchmark_symbols: [],
+        latest_updated_at: '2026-05-29T10:00:00+00:00',
+        is_fresh: true,
+        needs_refresh: false,
+        message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+        max_age_days: 7,
+      },
+    } as never);
+
+    renderWithRouter([{ path: '/market/ohlcv', element: <MarketOhlcvWorkspaceShell /> }], ['/market/ohlcv']);
+
+    expect(await screen.findByRole('heading', { name: 'OHLCV 行情' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '运行 OHLCV 抓取' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '检查并更新股票基础信息' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '检查并更新股票基础信息' }));
+
+    await waitFor(() => {
+      expect(mockedRefreshStockInfo).toHaveBeenCalledWith(7);
+      expect(screen.getByText(/股票基础信息已刷新，可继续运行 OHLCV 抓取。/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '运行 OHLCV 抓取' })).not.toBeDisabled();
     });
   });
 

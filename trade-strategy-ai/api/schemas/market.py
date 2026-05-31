@@ -298,10 +298,34 @@ class MarketBenchmarkOptionListResponse(BaseModel):
     items: list[MarketBenchmarkOption] = Field(default_factory=list)
 
 
+class StockInfoStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    total: int
+    stock_count: int
+    index_count: int
+    benchmark_count: int
+    expected_benchmark_count: int
+    missing_benchmark_symbols: list[str] = Field(default_factory=list)
+    latest_updated_at: str | None = None
+    is_fresh: bool = False
+    needs_refresh: bool = False
+    message: str
+    max_age_days: int
+
+
+class StockInfoRefreshResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    stock_stats: dict[str, int] = Field(default_factory=dict)
+    index_stats: dict[str, int] = Field(default_factory=dict)
+    status: StockInfoStatusResponse
+
+
 class OhlcvSchedulerStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    config_path: str
+    profile_id: str | None = None
     base_dir: str
     latest_trade_date: str | None = None
     latest_record_count: int = 0
@@ -313,7 +337,7 @@ class OhlcvSchedulerStatusResponse(BaseModel):
 class OhlcvSchedulerRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    config_path: str
+    profile_id: str | None = None
     base_dir: str
     pre_market: str
     post_close: str
@@ -324,7 +348,7 @@ class OhlcvSchedulerRunResponse(BaseModel):
 class OhlcvSchedulerStopResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    config_path: str
+    profile_id: str | None = None
     base_dir: str
     started: bool = False
     pre_market: str | None = None

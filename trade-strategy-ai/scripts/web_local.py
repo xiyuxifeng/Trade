@@ -13,7 +13,92 @@ import typer
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEB_DIST = PROJECT_ROOT / "web" / "dist"
 
+_CONFIG_SUMMARY_KEYS = (
+    "DATABASE_URL",
+    "ADMIN_API_KEY",
+    "TGB_COOKIE",
+    "DASHSCOPE_API_KEY",
+    "DINGTALK_WEBHOOK_URL",
+    "DINGTALK_SECRET",
+    "FEISHU_WEBHOOK_URL",
+    "WECOM_WEBHOOK_URL",
+    "KAIPAN_TOKEN",
+    "KAIPAN_USER_ID",
+)
+
 app = typer.Typer(add_completion=False, help="本机非 Docker 部署命令")
+
+
+def _load_dotenv_file(path: Path | None = None) -> dict[str, str]:
+    """加载项目根目录的 `.env` 文件，不覆盖已存在的环境变量。"""
+    dotenv_path = path or (PROJECT_ROOT / ".env")
+    if not dotenv_path.exists():
+        return {}
+
+    parsed: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+        parsed.setdefault(key, value)
+    return parsed
+
+
+def _local_env(*, web_dist: Path | None = None, emit_summary: bool = False) -> dict[str, str]:
+    """构造本机启动环境，优先保留当前 shell 变量，再补 `.env`。"""
+    env = dict(os.environ)
+    dotenv_vars = _load_dotenv_file()
+    sources: dict[str, str] = {key: "shell" for key in env}
+    for key, value in dotenv_vars.items():
+        if key not in env:
+            env[key] = value
+            sources[key] = ".env"
+    if web_dist is not None:
+        env["WEB_STATIC_DIR"] = str(web_dist)
+        sources["WEB_STATIC_DIR"] = "脚本生成"
+    if emit_summary:
+        _print_config_summary(env=env, sources=sources)
+    return env
+
+
+def _is_sensitive_config_key(key: str) -> bool:
+    """判断某个配置项是否属于敏感信息。"""
+    upper_key = key.upper()
+    return any(token in upper_key for token in ("KEY", "TOKEN", "SECRET", "COOKIE", "PASSWORD", "WEBHOOK", "URL"))
+
+
+def _format_config_value(key: str, value: str | None) -> str:
+    """格式化配置值，敏感项仅显示是否已设置。"""
+    if value is None:
+        return "未设置"
+    if value == "":
+        return "空"
+    if _is_sensitive_config_key(key):
+        return "已设置(已脱敏)"
+    return value
+
+
+def _print_config_summary(*, env: dict[str, str], sources: dict[str, str]) -> None:
+    """输出本机脚本实际生效的关键配置摘要。"""
+    configured_count = sum(1 for key in _CONFIG_SUMMARY_KEYS if env.get(key) not in (None, ""))
+    typer.echo(f"本机脚本已读取到以下关键配置（已设置 {configured_count}/{len(_CONFIG_SUMMARY_KEYS)} 项）：")
+    for key in _CONFIG_SUMMARY_KEYS:
+        value = env.get(key)
+        source = sources.get(key, "未设置")
+        typer.echo(f"  - {key}: {_format_config_value(key, value)}（来源: {source}）")
+    if "WEB_STATIC_DIR" in env:
+        typer.echo(f"  - WEB_STATIC_DIR: {env['WEB_STATIC_DIR']}（来源: {sources.get('WEB_STATIC_DIR', '脚本生成')}）")
 
 
 def _run_command(cmd: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
@@ -35,12 +120,9 @@ def _require_web_dist(web_dist: Path = DEFAULT_WEB_DIST) -> Path:
     return web_dist
 
 
-def _api_env(*, web_dist: Path | None = None) -> dict[str, str]:
+def _api_env(*, web_dist: Path | None = None, emit_summary: bool = False) -> dict[str, str]:
     """构造 API 子进程环境。"""
-    env = dict(os.environ)
-    if web_dist is not None:
-        env["WEB_STATIC_DIR"] = str(web_dist)
-    return env
+    return _local_env(web_dist=web_dist, emit_summary=emit_summary)
 
 
 def _api_command() -> tuple[str, ...]:
@@ -136,13 +218,13 @@ def _terminate_process(pid: int) -> None:
 @app.command("build")
 def build() -> None:
     """构建前端生产产物。"""
-    _run_command(("corepack", "pnpm", "build"), cwd=PROJECT_ROOT / "web")
+    _run_command(("corepack", "pnpm", "build"), cwd=PROJECT_ROOT / "web", env=_local_env(emit_summary=True))
 
 
 @app.command("migrate")
 def migrate() -> None:
     """执行数据库迁移。"""
-    _run_command((sys.executable, "-m", "cli.main", "db-migrate", "--config", "config/app.yaml"), cwd=PROJECT_ROOT)
+    _run_command((sys.executable, "-m", "cli.main", "db-migrate", "--config", "config/app.yaml"), cwd=PROJECT_ROOT, env=_local_env(emit_summary=True))
 
 
 @app.command("seed-admin")
@@ -154,6 +236,7 @@ def seed_admin(
     _run_command(
         (sys.executable, "-m", "cli.main", "seed-admin", "--username", username, "--password", password, "--log-level", "INFO"),
         cwd=PROJECT_ROOT,
+        env=_local_env(emit_summary=True),
     )
 
 
@@ -163,13 +246,13 @@ def start_api(
 ) -> None:
     """启动 API，并可选托管本机前端静态资源。"""
     static_dir = _require_web_dist(web_dist)
-    _run_command(_api_command(), cwd=PROJECT_ROOT, env=_api_env(web_dist=static_dir))
+    _run_command(_api_command(), cwd=PROJECT_ROOT, env=_api_env(web_dist=static_dir, emit_summary=True))
 
 
 @app.command("start-worker")
 def start_worker() -> None:
     """启动数据库轮询式 Job Worker。"""
-    _run_command(_worker_command(), cwd=PROJECT_ROOT)
+    _run_command(_worker_command(), cwd=PROJECT_ROOT, env=_local_env(emit_summary=True))
 
 
 @app.command("start")
@@ -178,8 +261,10 @@ def start(
 ) -> None:
     """同时启动 API 和 Worker，并在任一子进程退出时停止整个本机部署。"""
     static_dir = _require_web_dist(web_dist)
-    api_proc = _spawn_command(_api_command(), cwd=PROJECT_ROOT, env=_api_env(web_dist=static_dir))
-    worker_proc = _spawn_command(_worker_command(), cwd=PROJECT_ROOT)
+    api_env = _api_env(web_dist=static_dir, emit_summary=True)
+    worker_env = _local_env()
+    api_proc = _spawn_command(_api_command(), cwd=PROJECT_ROOT, env=api_env)
+    worker_proc = _spawn_command(_worker_command(), cwd=PROJECT_ROOT, env=worker_env)
 
     _write_pid_file("api", api_proc.pid)
     _write_pid_file("worker", worker_proc.pid)

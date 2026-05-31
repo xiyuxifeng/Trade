@@ -21,7 +21,7 @@ import type { StepTimelineItem } from '@/types/job';
 
 function buildTimelineItems(job: JobRecord): StepTimelineItem[] {
   const statusByOperation: Record<string, StepTimelineItem['status']> = {
-    create: 'pending',
+    create: 'success',
     start: 'running',
     heartbeat: 'running',
     complete: 'success',

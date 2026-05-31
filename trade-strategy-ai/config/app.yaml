@@ -201,7 +201,7 @@ crawl:
       # 认证模式：目前首版为 cookie；后续可扩展 playwright_login 等
       mode: cookie
       # 淘股吧 Cookie（建议通过环境变量注入）
-      cookie: null
+      cookie: "${TGB_COOKIE}"
 
   # 抓取来源列表（支持同站点多作者增量抓取）
   sources:

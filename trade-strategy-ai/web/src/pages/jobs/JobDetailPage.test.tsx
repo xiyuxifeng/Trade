@@ -159,13 +159,14 @@ describe('JobDetailPage', () => {
     renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/job-1']);
 
     expect(await screen.findByText('执行报告')).toBeInTheDocument();
-    expect(screen.getByText('成功')).toBeInTheDocument();
+    expect(screen.getAllByText('成功').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('执行进度')).toBeInTheDocument();
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
     expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getAllByText('Profile 导入来源')).toHaveLength(2);
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
+    expect(screen.queryByText('等待中')).not.toBeInTheDocument();
   });
 
   it('renders failed job detail with empty artifact fallback', async () => {

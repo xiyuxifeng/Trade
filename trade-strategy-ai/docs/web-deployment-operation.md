@@ -269,6 +269,8 @@ python -m scripts.web_local start-worker # 终端 2
 - `seed-admin`：创建默认管理员（默认 Dev/wanghui，可通过参数修改）
 - `start-api` / `start`：要求 `web/dist/index.html` 已存在
 - 设置 `WEB_STATIC_DIR=web/dist` 时，API 直接托管前端
+- `scripts.web_local` 会自动读取项目根目录 `.env`，并优先保留当前 shell 已设置的环境变量；本机调试时可直接把 `TGB_COOKIE`、`DATABASE_URL` 等写入 `.env`
+- 启动 `scripts.web_local` 时，脚本会在终端输出一段“本机脚本已读取到以下关键配置”的摘要，方便确认当前生效的是哪一组配置；敏感值会脱敏显示
 - `LOG_LEVEL`：在启动前通过环境变量设置，例如 `export LOG_LEVEL=WARNING`；`scripts.web_local` 启动的 API / Worker 会继承该值
 - 浏览器访问 **`http://localhost:8000`** 即可同时使用页面与 API
 - PID 文件写入 `.pids/api.pid`、`.pids/worker.pid`

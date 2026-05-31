@@ -162,6 +162,8 @@ Web 配置页只展示 **脱敏值**；保存时由服务端校验并写回。
 >
 > 说明：告警系统的交付配置以 `alerting.enabled` 为总开关。启用后，管理员可在 Web 的 **告警中心**（`/alerts`）查看历史、确认/解决告警，并通过 **发送测试告警** 验证 Webhook 是否可用。
 >
+> 说明：`alerting` 和 `Kaipan` 相关环境变量会在实际使用对应功能时再校验；缺失时会在页面里返回配置提示，不会让 Web 启动阶段直接 500。
+>
 > 说明：日志级别不需要写入 `config/app.yaml`。部署时通过环境变量 `LOG_LEVEL` 设置即可，API 和 Worker 会读取同一值。Docker Compose 可在 `environment` 中设置，手动启动可直接在命令前加 `LOG_LEVEL=WARNING` 之类的前缀。
 
 ### 3.5 配置边界与生效顺序

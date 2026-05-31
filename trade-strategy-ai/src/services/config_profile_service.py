@@ -25,14 +25,17 @@ _SENSITIVE_KEYS = {"password", "token", "secret", "api_key", "api_keys", "cookie
 _ENV_PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 _PATH_TOKEN_RE = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
-_RUNTIME_SECRET_ENV_OVERRIDES: dict[str, tuple[str, Callable[[str], Any]]] = {
+_RUNTIME_SECRET_ENV_OVERRIDES_REQUIRED: dict[str, tuple[str, Callable[[str], Any]]] = {
     "database.url": ("DATABASE_URL", lambda value: value),
     "api.auth.api_keys": ("ADMIN_API_KEY", lambda value: [value]),
     "llm.api_key": ("DASHSCOPE_API_KEY", lambda value: value),
     "crawl.auth.tgb.cn.cookie": ("TGB_COOKIE", lambda value: value),
+}
+_RUNTIME_SECRET_ENV_OVERRIDES_OPTIONAL: dict[str, tuple[str, Callable[[str], Any]]] = {
     "kaipan.token": ("KAIPAN_TOKEN", lambda value: value),
     "alerting.dingtalk.secret": ("DINGTALK_SECRET", lambda value: value),
 }
+_RUNTIME_SECRET_PLACEHOLDER_SKIP_PREFIXES = ("alerting.", "kaipan.")
 
 
 def _to_plain(value: Any) -> Any:
@@ -216,21 +219,36 @@ def _mask_sensitive_runtime_values(value: Any, secret_refs: dict[str, Any]) -> A
     return result
 
 
-def _collect_missing_env_placeholders(value: Any, *, prefix: str = "") -> list[tuple[str, str]]:
+def _collect_missing_env_placeholders(
+    value: Any,
+    *,
+    prefix: str = "",
+    skip_prefixes: tuple[str, ...] = (),
+) -> list[tuple[str, str]]:
     """收集运行态仍未解析的环境变量占位符。"""
+
+    if prefix and skip_prefixes:
+        normalized_skip_prefixes = tuple(item.rstrip(".") for item in skip_prefixes)
+        if any(
+            prefix == item
+            or prefix.startswith(f"{item}.")
+            or prefix.startswith(f"{item}[")
+            for item in normalized_skip_prefixes
+        ):
+            return []
 
     missing: list[tuple[str, str]] = []
     if isinstance(value, dict):
         for key, item in value.items():
             key_name = str(key)
             path = f"{prefix}.{key_name}" if prefix else key_name
-            missing.extend(_collect_missing_env_placeholders(item, prefix=path))
+            missing.extend(_collect_missing_env_placeholders(item, prefix=path, skip_prefixes=skip_prefixes))
         return missing
 
     if isinstance(value, list):
         for index, item in enumerate(value):
             path = f"{prefix}[{index}]" if prefix else f"[{index}]"
-            missing.extend(_collect_missing_env_placeholders(item, prefix=path))
+            missing.extend(_collect_missing_env_placeholders(item, prefix=path, skip_prefixes=skip_prefixes))
         return missing
 
     if isinstance(value, str):
@@ -245,7 +263,8 @@ def _apply_runtime_secret_overrides(value: Any, secret_refs: dict[str, Any], *, 
     """把 Profile 运行时可回填的 secret 从环境变量补回来。
 
     只允许回填明确登记过的运行时 secret；如果发现被脱敏但没有映射或环境变量缺失，
-    直接报错，避免静默使用错误值。
+    直接报错，避免静默使用错误值。允许延迟到使用时校验的字段，只在环境变量可用时回填，
+    不因为缺失而阻塞 Profile 载入。
     """
 
     if not isinstance(secret_refs, dict) or not secret_refs:
@@ -264,7 +283,12 @@ def _apply_runtime_secret_overrides(value: Any, secret_refs: dict[str, Any], *, 
         current_value = _get_path_value(result, str(path))
         if not _is_masked_runtime_value(current_value):
             continue
-        mapping = _RUNTIME_SECRET_ENV_OVERRIDES.get(str(path))
+        path_str = str(path)
+        mapping = _RUNTIME_SECRET_ENV_OVERRIDES_REQUIRED.get(path_str)
+        is_optional = False
+        if mapping is None:
+            mapping = _RUNTIME_SECRET_ENV_OVERRIDES_OPTIONAL.get(path_str)
+            is_optional = mapping is not None
         if mapping is None:
             missing_mappings.append(str(path))
             continue
@@ -272,10 +296,12 @@ def _apply_runtime_secret_overrides(value: Any, secret_refs: dict[str, Any], *, 
         env_name, transform = mapping
         env_value = os.getenv(env_name)
         if env_value is None or not str(env_value).strip():
+            if is_optional:
+                continue
             missing_env_vars.append(f"{path} -> {env_name}")
             continue
 
-        if not _set_path_value(result, str(path), transform(env_value)):
+        if not _set_path_value(result, path_str, transform(env_value)):
             invalid_paths.append(f"{path} -> {env_name}")
 
     if missing_mappings or missing_env_vars or invalid_paths:
@@ -557,7 +583,10 @@ class ConfigProfileService(BaseService):
             _to_plain(profile.secret_refs),
             profile_id=profile_id,
         )
-        missing_placeholders = _collect_missing_env_placeholders(cleaned_sections)
+        missing_placeholders = _collect_missing_env_placeholders(
+            cleaned_sections,
+            skip_prefixes=_RUNTIME_SECRET_PLACEHOLDER_SKIP_PREFIXES,
+        )
         if missing_placeholders:
             formatted = ", ".join(f"{path} -> {env_name}" for path, env_name in missing_placeholders)
             raise ConfigError(f"runtime config for profile {profile_id} has unresolved environment placeholders: {formatted}")

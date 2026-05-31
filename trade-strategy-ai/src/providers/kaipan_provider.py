@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import time
 import requests
@@ -30,9 +31,9 @@ from typing import Any
 from uuid import uuid4
 
 try:
-    from common.config import KaipanConfig
+    from common.config import ConfigError, KaipanConfig
 except ImportError:  # pragma: no cover - 兼容不同 PYTHONPATH 启动方式
-    from src.common.config import KaipanConfig
+    from src.common.config import ConfigError, KaipanConfig
 
 import pandas as pd
 
@@ -385,6 +386,32 @@ class KaipanProvider(ProviderBase):
             params["UserID"] = str(user_id)
         return params
 
+    @staticmethod
+    def _resolve_runtime_credential(field_name: str, configured_value: Any, env_name: str) -> str:
+        """解析 Kaipan 运行时凭据。
+
+        优先使用显式配置；如果当前值仍是脱敏占位或环境变量占位符，则从环境变量回填。
+        只有在真正使用时才校验，避免 Profile 载入阶段静默失败。
+        """
+
+        if isinstance(configured_value, str):
+            value = configured_value.strip()
+            if value and value != "***" and "***" not in value and "${" not in value:
+                return value
+
+        env_value = os.getenv(env_name)
+        if env_value is not None and str(env_value).strip():
+            return str(env_value).strip()
+
+        raise ConfigError(f"Kaipan 运行配置缺失，请先配置 {env_name}（对应 {field_name}）")
+
+    def _inject_runtime_credentials(self, params: dict[str, Any]) -> None:
+        """把运行时凭据回填到请求参数中。"""
+        token = self._resolve_runtime_credential("token", self._config_value("token", self.auth.token), "KAIPAN_TOKEN")
+        user_id = self._resolve_runtime_credential("user_id", self._config_value("user_id", self.auth.user_id), "KAIPAN_USER_ID")
+        params["Token"] = token
+        params["UserID"] = str(user_id)
+
     def build_request(
         self,
         *,
@@ -410,6 +437,7 @@ class KaipanProvider(ProviderBase):
     def _fetch_single(self, request: KaipanRequest) -> dict[str, Any]:
         """发起单次 HTTP 请求，返回解析后的 JSON 响应。"""
         last_error: Exception | None = None
+        self._inject_runtime_credentials(request.params)
         for attempt in range(self.max_retries + 1):
             self._throttle()
             try:

@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
+from src.common.config import ConfigError
 
 
 @dataclass
@@ -76,6 +77,10 @@ class _FakePipelineApplicationService:
                 "job": {"id": "job-article-step-1", "job_type": kwargs.get("step_id", "crawl"), "status": "pending"},
             }
         )
+
+    async def run_pipeline_step_raising_config_error(self, **kwargs: Any) -> Any:
+        del kwargs
+        raise ConfigError("missing environment variables: KAIPAN_TOKEN")
 
     async def start_schedule(self, **kwargs: Any) -> Any:
         self.run_calls.append({"schedule_start": kwargs})
@@ -199,6 +204,28 @@ async def test_article_pipeline_step_run_and_schedule_control(client: AsyncClien
     assert schedule_stop.status_code == 200
     assert schedule_stop.json()["scheduler_started"] is False
     assert schedule_stop.json()["profile_id"] == "default"
+
+
+@pytest.mark.asyncio
+async def test_article_pipeline_step_run_returns_400_for_config_error(client: AsyncClient) -> None:
+    """配置缺失时，Pipeline step 应返回 400 而不是 500。"""
+    from api.routers.ui.pipelines import get_pipeline_application_service
+
+    previous = app.dependency_overrides.get(get_pipeline_application_service)
+    app.dependency_overrides[get_pipeline_application_service] = lambda: client.fake_service  # type: ignore[attr-defined]
+    client.fake_service.run_pipeline_step = client.fake_service.run_pipeline_step_raising_config_error  # type: ignore[attr-defined]
+    try:
+        response = await client.post(
+            "/api/ui/v1/pipelines/article_pipeline/steps/crawl/run",
+            json={"params": {"profile_id": "default"}, "created_by": "web"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "missing environment variables: KAIPAN_TOKEN"
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_pipeline_application_service, None)
+        else:
+            app.dependency_overrides[get_pipeline_application_service] = previous
 
 
 @pytest.mark.asyncio

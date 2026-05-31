@@ -67,6 +67,20 @@ class AlertingStatusResponse(BaseModel):
     channel_configured: bool
 
 
+def _is_configured_value(value: str | None) -> bool:
+    """判断告警配置是否已经拿到可用值。"""
+    if value is None:
+        return False
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if text == "***" or "***" in text:
+        return False
+    if "${" in text:
+        return False
+    return True
+
+
 def _row_to_item(row) -> AlertHistoryItem:
     """将 AlertHistory ORM 行转为 API 响应模型。"""
     return AlertHistoryItem(
@@ -104,11 +118,11 @@ async def _build_alerting_status() -> AlertingStatusResponse:
 
     webhook_configured = False
     if cfg.channel == "dingtalk":
-        webhook_configured = bool(cfg.dingtalk.webhook_url.strip())
+        webhook_configured = _is_configured_value(cfg.dingtalk.webhook_url)
     elif cfg.channel == "feishu":
-        webhook_configured = bool(cfg.feishu.webhook_url.strip())
+        webhook_configured = _is_configured_value(cfg.feishu.webhook_url)
     elif cfg.channel == "wecom":
-        webhook_configured = bool(cfg.wecom.webhook_url.strip())
+        webhook_configured = _is_configured_value(cfg.wecom.webhook_url)
 
     return AlertingStatusResponse(
         enabled=bool(cfg.enabled),

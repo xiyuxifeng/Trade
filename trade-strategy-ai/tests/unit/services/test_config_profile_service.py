@@ -246,8 +246,8 @@ llm:
     asyncio.run(engine.dispose())
 
 
-def test_load_profile_runtime_config_errors_when_placeholder_has_no_env_source(tmp_path: Path) -> None:
-    """未回填来源的环境变量占位符应显式报错。"""
+def test_load_profile_runtime_config_skips_kaipan_placeholder_validation_until_use_time(tmp_path: Path) -> None:
+    """Kaipan 占位符应延迟到使用时再校验，不阻塞 Profile 载入。"""
     service, engine = _build_profile_service(tmp_path)
 
     config_path = tmp_path / "app.yaml"
@@ -262,8 +262,42 @@ kaipan:
 
     profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-placeholder-missing", created_by="system"))
 
-    with pytest.raises(ConfigError, match="KAIPAN_USER_ID"):
-        asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+    runtime = asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+    assert runtime.config.kaipan.user_id == "${KAIPAN_USER_ID}"
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_skips_disabled_alerting_and_kaipan_secret_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """未启用的 alerting / kaipan 不应在 Profile 载入阶段阻塞运行态。"""
+    service, engine = _build_profile_service(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://env:env@localhost:5432/trade_strategy_ai")
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+database:
+  url: postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
+alerting:
+  enabled: false
+  dingtalk:
+    secret: secret-dingtalk
+kaipan:
+  token: secret-kaipan
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-optional-secrets", created_by="system"))
+    runtime = asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+
+    assert runtime.profile_id == "profile-optional-secrets"
+    assert runtime.config.alerting["enabled"] is False
+    assert runtime.config.kaipan.token == "***"
 
     asyncio.run(engine.dispose())
 

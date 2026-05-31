@@ -40,6 +40,7 @@ from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
+from src.common.config import ConfigError
 from src.common.logger import bind_log_context, configure_logging, get_logger
 from src.audit.service import AuditService
 from src.health.routes import health_router
@@ -215,6 +216,14 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             content={"detail": exc.detail},
             headers=getattr(exc, "headers", None),
+        )
+
+    @app.exception_handler(ConfigError)
+    async def config_error_handler(_request: Request, exc: ConfigError):
+        """把可配置项缺失转成 400，提示用户补配置而不是 500。"""
+        return JSONResponse(
+            status_code=400,
+            content={"detail": str(exc) or "configuration error"},
         )
 
     @app.get("/")

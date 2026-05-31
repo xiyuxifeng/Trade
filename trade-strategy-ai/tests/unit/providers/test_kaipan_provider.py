@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.common.config import ConfigError
 from src.providers.base import ProviderStatus
 from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 
@@ -196,3 +197,42 @@ def test_kaipan_provider_10_5_request_params_align_with_docs(tmp_path: Path) -> 
     assert captured[5]["Index"] == 0
     assert captured[5]["Order"] == 17
     assert captured[5]["st"] == 500
+
+
+def test_kaipan_provider_requires_runtime_credentials_at_use_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kaipan 运行时凭据应在实际使用时再校验，不应在 Profile 载入阶段阻塞。"""
+    monkeypatch.delenv("KAIPAN_TOKEN", raising=False)
+    monkeypatch.delenv("KAIPAN_USER_ID", raising=False)
+
+    provider = KaipanProvider(
+        auth=KaipanAuth(token="***", user_id="${KAIPAN_USER_ID}"),
+        raw_dir=tmp_path / "raw",
+        normalized_dir=tmp_path / "normalized",
+        snapshots_dir=tmp_path / "snapshots",
+        kaipan_config={"token": "***", "user_id": "${KAIPAN_USER_ID}"},
+    )
+
+    request = provider.build_request(api_name="MorningBidding", controller="HisHomeDingPan", method="POST")
+
+    with pytest.raises(ConfigError, match="KAIPAN_TOKEN|KAIPAN_USER_ID"):
+        provider._inject_runtime_credentials(request.params)
+
+
+def test_kaipan_provider_resolves_runtime_credentials_from_env_at_use_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kaipan 运行时凭据应在使用时从环境变量回填。"""
+    monkeypatch.setenv("KAIPAN_TOKEN", "token-from-env")
+    monkeypatch.setenv("KAIPAN_USER_ID", "user-from-env")
+
+    provider = KaipanProvider(
+        auth=KaipanAuth(token="***", user_id="${KAIPAN_USER_ID}"),
+        raw_dir=tmp_path / "raw",
+        normalized_dir=tmp_path / "normalized",
+        snapshots_dir=tmp_path / "snapshots",
+        kaipan_config={"token": "***", "user_id": "${KAIPAN_USER_ID}"},
+    )
+
+    request = provider.build_request(api_name="MorningBidding", controller="HisHomeDingPan", method="POST")
+    provider._inject_runtime_credentials(request.params)
+
+    assert request.params["Token"] == "token-from-env"
+    assert request.params["UserID"] == "user-from-env"

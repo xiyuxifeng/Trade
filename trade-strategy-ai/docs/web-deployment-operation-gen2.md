@@ -157,6 +157,7 @@ python -m scripts.web_local start-worker # 终端 2
 - 设置 `WEB_STATIC_DIR=web/dist` 时，API 直接托管前端
 - `scripts.web_local` 会自动读取项目根目录 `.env`，并优先保留当前 shell 已设置的环境变量；本机调试时可直接把 `TGB_COOKIE`、`DATABASE_URL` 等写入 `.env`
 - Profile 里的敏感字段会在运行时从环境变量回填，例如 `crawl.auth.tgb.cn.cookie` 会从 `TGB_COOKIE` 注入；如果对应环境变量缺失，运行时会直接报错，不会静默兜底；看到 `***` 不代表运行时没有可用值。
+- `alerting` 和 `Kaipan` 相关环境变量会在实际使用对应功能时再校验；缺失时会返回配置提示，不会让 Web 启动阶段直接 500。
 - 启动 `scripts.web_local` 时，脚本会在终端输出一段“本机脚本已读取到以下关键配置”的摘要，方便确认当前生效的是哪一组配置；敏感值会脱敏显示
 - 浏览器访问 `http://localhost:8000`
 

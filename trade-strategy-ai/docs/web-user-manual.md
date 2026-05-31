@@ -78,6 +78,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 
 > 口径说明：`config/app.yaml` 和交付模板 `config/app.template.yaml` 只用于首次导入 Profile。导入完成后，Web 日常运行只认 Profile / Profile snapshot，`config_path` 仅保留给 CLI 调试与历史兼容。
 > 其中 `strategy` 和 `risk` 配置也包含在这份单文件模板内，不再要求用户单独维护 `strategy.yaml` / `risk.yaml`。
+> Profile 中的敏感字段会以脱敏形式存储，但运行时会从环境变量回填对应 secret，例如 `crawl.auth.tgb.cn.cookie` 会从 `TGB_COOKIE` 注入；如果对应环境变量缺失，运行时会直接报错，不会静默兜底；因此看到 `***` 不代表运行时没有可用值。
 > 如果系统状态页仍显示 `default` 且没有绑定 snapshot，这表示当前只是在兜底启动态，建议立刻去 `/profiles/import` 导入正式 Profile，不要把这个 fallback 当成正式配置使用。
 
 ### 4.1 导入 Profile
@@ -216,6 +217,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 3. 按该 step 的参数 schema 填写参数。
 4. 点击提交，系统自动生成对应 Job。
 5. 打开 **任务中心** 查看进度、日志和结果。
+6. 对于 Web/Profile 入口的 `crawl`，Job 成功时表示文章已经抓取并写入数据库；抓取过程会在任务中心显示进度，文章列表会在成功后立即增加。
 
 #### `article_metadata` 版本怎么操作
 
@@ -232,8 +234,10 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | `crawl` | 抓取文章 | 从来源站点拉取原始文章数据 |
 | `clean` | 清洗文章 | 去噪、规范化、拆解文本 |
 | `validate` | 校验文章 | 检查结构完整性与质量 |
-| `store` | 入库 | 将处理结果写入数据库 |
+| `store` | 入库 | 兼容旧文件链路的入库步骤；Web/Profile 日常一般不需要单独执行 |
 | `process` | 生成最终结构化输出 | 产出供策略、规则池使用的数据 |
+
+> 说明：Web/Profile 模式下 `crawl` 会直接写入数据库；`config_path` 的 CLI/debug 兼容链路仍可能使用 `articles.jsonl`，用于历史调试和单机排障。
 
 #### 常用参数
 

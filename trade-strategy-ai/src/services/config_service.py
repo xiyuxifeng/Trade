@@ -89,6 +89,10 @@ class ConfigService(BaseService):
                 return {k: _mask(v, k) for k, v in value.items()}
             if isinstance(value, list):
                 return [_mask(item, key) for item in value]
+            if value is None:
+                return None
+            if isinstance(value, str) and not value.strip():
+                return value
             if key is not None and key.lower() in _SENSITIVE_KEYS:
                 return "***"
             if key is not None and key.lower() == "url" and isinstance(value, str):

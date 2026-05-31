@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import hashlib
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,6 +116,7 @@ def run_crawl(
     max_articles: int | None = None,
     use_db: bool = False,
     force: bool = False,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[str]:
     """Run the configured crawl sources.
 
@@ -131,12 +132,15 @@ def run_crawl(
             loop = asyncio.get_running_loop()
         except RuntimeError:
             # 没有运行中的事件循环，可以安全使用 asyncio.run()
-            return asyncio.run(run_crawl_to_db(config, max_articles=max_articles, force=force))
+            return asyncio.run(run_crawl_to_db(config, max_articles=max_articles, force=force, progress_callback=progress_callback))
         else:
             # 已在事件循环中，创建新任务
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, run_crawl_to_db(config, max_articles=max_articles, force=force))
+                future = pool.submit(
+                    asyncio.run,
+                    run_crawl_to_db(config, max_articles=max_articles, force=force, progress_callback=progress_callback),
+                )
                 return future.result()
 
     results: list[str] = []
@@ -427,6 +431,7 @@ async def crawl_source_to_db(
     crawler: TgbCrawler,
     index: ExistingArticleIndex,
     max_articles: int | None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> int:
     """爬取并直接写入数据库。"""
     written = 0
@@ -435,10 +440,37 @@ async def crawl_source_to_db(
     latest_url = index.last_seen_article_url
     latest_published_at = index.last_seen_published_at
 
+    def _emit_progress(*, status: str, current: int, total: int, current_step: str, error: str | None = None) -> None:
+        if progress_callback is None:
+            return
+        safe_total = max(total, 0)
+        safe_current = max(0, min(current, safe_total if safe_total > 0 else current))
+        percent = 100.0 if safe_total == 0 else round((safe_current / safe_total) * 100, 2)
+        progress_callback(
+            {
+                "job_type": "crawl",
+                "stage": "crawl",
+                "current": safe_current,
+                "total": safe_total,
+                "percent": percent,
+                "remaining": max(safe_total - safe_current, 0),
+                "current_step": current_step,
+                "current_fetcher": source_cfg.source,
+                "current_dataset": source_cfg.author_id,
+                "status": status,
+                "error": error,
+            }
+        )
+
     async with session_scope() as session:
-        for item in crawler.fetch_article_list():
+        articles = crawler.fetch_article_list()
+        total_articles = len(articles)
+        _emit_progress(status="running", current=0, total=total_articles, current_step="fetch_article_list")
+
+        for index, item in enumerate(articles, start=1):
             # 跳过已处理过的 URL
             if item["source_url"] in seen_urls:
+                _emit_progress(status="running", current=index, total=total_articles, current_step=f"skip:{item['source_url']}")
                 continue
 
             # 继续抓取详情
@@ -494,6 +526,12 @@ async def crawl_source_to_db(
             await session.commit()  # 每篇 article 立即提交，避免中断丢数据
 
             written += 1
+            _emit_progress(
+                status="running" if (max_articles is None or written < max_articles) else "success",
+                current=written,
+                total=max_articles if max_articles is not None else total_articles,
+                current_step=f"store:{item['source_url']}",
+            )
             seen_urls.add(item["source_url"])
             if content_hash:
                 seen_hashes.add(content_hash)
@@ -514,11 +552,23 @@ async def crawl_source_to_db(
             latest_published_at=latest_published_at,
             article_count=written,
         )
+        _emit_progress(
+            status="success",
+            current=written,
+            total=max_articles if max_articles is not None else max(total_articles, written),
+            current_step="save_crawl_state",
+        )
 
     return written
 
 
-async def run_crawl_to_db(config: AppConfig, *, max_articles: int | None = None, force: bool = False) -> list[str]:
+async def run_crawl_to_db(
+    config: AppConfig,
+    *,
+    max_articles: int | None = None,
+    force: bool = False,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> list[str]:
     """Run the configured crawl sources and write directly to database."""
     results: list[str] = []
     for source_cfg in config.crawl.sources:
@@ -567,6 +617,7 @@ async def run_crawl_to_db(config: AppConfig, *, max_articles: int | None = None,
             crawler=crawler,
             index=index,
             max_articles=max_articles,
+            progress_callback=progress_callback,
         )
         results.append(f"{source_cfg.source}:{source_cfg.author_id}:{count}")
     return results

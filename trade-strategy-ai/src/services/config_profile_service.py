@@ -22,8 +22,17 @@ from src.db.session import session_scope
 
 
 _SENSITIVE_KEYS = {"password", "token", "secret", "api_key", "api_keys", "cookie"}
+_ENV_PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 _PATH_TOKEN_RE = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
+_RUNTIME_SECRET_ENV_OVERRIDES: dict[str, tuple[str, Callable[[str], Any]]] = {
+    "database.url": ("DATABASE_URL", lambda value: value),
+    "api.auth.api_keys": ("ADMIN_API_KEY", lambda value: [value]),
+    "llm.api_key": ("DASHSCOPE_API_KEY", lambda value: value),
+    "crawl.auth.tgb.cn.cookie": ("TGB_COOKIE", lambda value: value),
+    "kaipan.token": ("KAIPAN_TOKEN", lambda value: value),
+    "alerting.dingtalk.secret": ("DINGTALK_SECRET", lambda value: value),
+}
 
 
 def _to_plain(value: Any) -> Any:
@@ -74,6 +83,121 @@ def _iter_path_tokens(path: str) -> list[str | int]:
     return tokens
 
 
+def _resolve_path_parent(value: Any, path: str) -> tuple[Any | None, str | int | None]:
+    """按 Profile secret path 解析到最后一级的父节点和值键。"""
+
+    tokens = _iter_path_tokens(path)
+    if not tokens:
+        return None, None
+
+    current = value
+    index = 0
+    while index < len(tokens) - 1:
+        token = tokens[index]
+
+        if isinstance(current, list):
+            if not isinstance(token, int) or token < 0 or token >= len(current):
+                return None, None
+            current = current[token]
+            index += 1
+            continue
+
+        if not isinstance(current, dict):
+            return None, None
+
+        if token in current:
+            current = current[token]
+            index += 1
+            continue
+
+        if not isinstance(token, str):
+            return None, None
+
+        matched_key: str | None = None
+        matched_end: int | None = None
+        for end in range(len(tokens) - 1, index, -1):
+            segment = tokens[index : end + 1]
+            if any(not isinstance(item, str) for item in segment):
+                continue
+            candidate = ".".join(str(item) for item in segment)
+            if candidate in current:
+                matched_key = candidate
+                matched_end = end
+                break
+
+        if matched_key is None or matched_end is None:
+            return None, None
+
+        current = current[matched_key]
+        index = matched_end + 1
+
+    return current, tokens[-1]
+
+
+def _set_path_value(value: Any, path: str, new_value: Any) -> bool:
+    """把嵌套路径写回到 dict / list 结构里。"""
+
+    parent, key = _resolve_path_parent(value, path)
+    if parent is None or key is None:
+        return False
+
+    if isinstance(key, int):
+        if isinstance(parent, list) and 0 <= key < len(parent):
+            parent[key] = new_value
+            return True
+        return False
+
+    if isinstance(parent, dict):
+        parent[key] = new_value
+        return True
+    return False
+
+
+def _get_path_value(value: Any, path: str) -> Any:
+    """读取嵌套路径对应的当前值。"""
+
+    parent, key = _resolve_path_parent(value, path)
+    if parent is None or key is None:
+        return None
+
+    if isinstance(key, int):
+        if isinstance(parent, list) and 0 <= key < len(parent):
+            return parent[key]
+        return None
+
+    if isinstance(parent, dict):
+        return parent.get(key)
+    return None
+
+
+def _is_masked_runtime_value(value: Any) -> bool:
+    """判断 Profile 中某个值是否仍处于脱敏占位状态。"""
+
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value == "***" or "***" in value
+    if isinstance(value, list):
+        return any(_is_masked_runtime_value(item) for item in value)
+    if isinstance(value, dict):
+        return any(_is_masked_runtime_value(item) for item in value.values())
+    return False
+
+
+def _has_non_empty_value(value: Any) -> bool:
+    """判断配置值是否实际存在。"""
+
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return len(value) > 0
+    if isinstance(value, dict):
+        return len(value) > 0
+    return True
+
+
 def _mask_sensitive_runtime_values(value: Any, secret_refs: dict[str, Any]) -> Any:
     """把 Profile 中已脱敏的敏感字段在运行态中清空，让环境变量接管。"""
 
@@ -87,31 +211,84 @@ def _mask_sensitive_runtime_values(value: Any, secret_refs: dict[str, Any]) -> A
     for path, state in secret_refs.items():
         if state != "masked":
             continue
-        tokens = _iter_path_tokens(str(path))
-        if not tokens:
+        _set_path_value(result, str(path), [] if str(path).endswith("api_keys") else None)
+
+    return result
+
+
+def _collect_missing_env_placeholders(value: Any, *, prefix: str = "") -> list[tuple[str, str]]:
+    """收集运行态仍未解析的环境变量占位符。"""
+
+    missing: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_name = str(key)
+            path = f"{prefix}.{key_name}" if prefix else key_name
+            missing.extend(_collect_missing_env_placeholders(item, prefix=path))
+        return missing
+
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            path = f"{prefix}[{index}]" if prefix else f"[{index}]"
+            missing.extend(_collect_missing_env_placeholders(item, prefix=path))
+        return missing
+
+    if isinstance(value, str):
+        for env_name in sorted(set(_ENV_PLACEHOLDER_RE.findall(value))):
+            env_value = os.getenv(env_name)
+            if env_value is None or not str(env_value).strip():
+                missing.append((prefix or "<root>", env_name))
+    return missing
+
+
+def _apply_runtime_secret_overrides(value: Any, secret_refs: dict[str, Any], *, profile_id: str) -> Any:
+    """把 Profile 运行时可回填的 secret 从环境变量补回来。
+
+    只允许回填明确登记过的运行时 secret；如果发现被脱敏但没有映射或环境变量缺失，
+    直接报错，避免静默使用错误值。
+    """
+
+    if not isinstance(secret_refs, dict) or not secret_refs:
+        return value
+
+    import copy
+
+    result = copy.deepcopy(value)
+    missing_mappings: list[str] = []
+    missing_env_vars: list[str] = []
+    invalid_paths: list[str] = []
+
+    for path, state in secret_refs.items():
+        if state != "masked":
+            continue
+        current_value = _get_path_value(result, str(path))
+        if not _is_masked_runtime_value(current_value):
+            continue
+        mapping = _RUNTIME_SECRET_ENV_OVERRIDES.get(str(path))
+        if mapping is None:
+            missing_mappings.append(str(path))
             continue
 
-        current = result
-        for token in tokens[:-1]:
-            if isinstance(token, int):
-                if not isinstance(current, list) or token >= len(current):
-                    current = None
-                    break
-                current = current[token]
-            else:
-                if not isinstance(current, dict) or token not in current:
-                    current = None
-                    break
-                current = current[token]
-        if current is None:
+        env_name, transform = mapping
+        env_value = os.getenv(env_name)
+        if env_value is None or not str(env_value).strip():
+            missing_env_vars.append(f"{path} -> {env_name}")
             continue
 
-        last = tokens[-1]
-        if isinstance(last, int):
-            if isinstance(current, list) and 0 <= last < len(current):
-                current[last] = None
-        elif isinstance(current, dict):
-            current[last] = [] if last == "api_keys" else None
+        if not _set_path_value(result, str(path), transform(env_value)):
+            invalid_paths.append(f"{path} -> {env_name}")
+
+    if missing_mappings or missing_env_vars or invalid_paths:
+        details: list[str] = []
+        if missing_mappings:
+            details.append(f"unsupported masked secret paths: {', '.join(sorted(missing_mappings))}")
+        if missing_env_vars:
+            details.append(f"missing environment variables: {', '.join(sorted(missing_env_vars))}")
+        if invalid_paths:
+            details.append(f"failed to write runtime secret values: {', '.join(sorted(invalid_paths))}")
+        raise ConfigError(
+            f"runtime secret resolution failed for profile {profile_id}: " + "; ".join(details)
+        )
 
     return result
 
@@ -241,9 +418,9 @@ class ConfigProfileService(BaseService):
                 key_name = str(key)
                 path = f"{prefix}.{key_name}" if prefix else key_name
                 lowered = key_name.lower()
-                if lowered in _SENSITIVE_KEYS:
+                if _has_non_empty_value(item) and lowered in _SENSITIVE_KEYS:
                     refs[path] = "masked"
-                if lowered == "url" and isinstance(item, str):
+                if lowered == "url" and isinstance(item, str) and item.strip():
                     parsed = urlsplit(item)
                     if parsed.password is not None:
                         refs[path] = "masked"
@@ -375,7 +552,15 @@ class ConfigProfileService(BaseService):
         if not isinstance(raw_sections, dict):
             raise ConfigError(f"invalid profile sections for {profile_id}")
 
-        cleaned_sections = _mask_sensitive_runtime_values(raw_sections, _to_plain(profile.secret_refs))
+        cleaned_sections = _apply_runtime_secret_overrides(
+            raw_sections,
+            _to_plain(profile.secret_refs),
+            profile_id=profile_id,
+        )
+        missing_placeholders = _collect_missing_env_placeholders(cleaned_sections)
+        if missing_placeholders:
+            formatted = ", ".join(f"{path} -> {env_name}" for path, env_name in missing_placeholders)
+            raise ConfigError(f"runtime config for profile {profile_id} has unresolved environment placeholders: {formatted}")
         config = build_app_config(cleaned_sections)
         snapshots = await self.list_profile_snapshots(profile_id)
         latest_snapshot_id = None

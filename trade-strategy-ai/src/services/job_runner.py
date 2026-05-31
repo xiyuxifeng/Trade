@@ -266,6 +266,7 @@ class JobRunner(BaseService):
                 config_path=config_path,
                 max_articles=params.get("max_articles"),
                 force=_parse_bool(params.get("force"), default=False),
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
 
         async def _article_pipeline_context(params: dict[str, Any]) -> tuple[Any, Path, Path]:
@@ -901,6 +902,7 @@ class JobRunner(BaseService):
         control_state: dict[str, str | None] = {"action": None}
         control_poll_interval = max(0.5, min(self._heartbeat_interval_seconds, 2.0))
         if job_payload["job_type"] in {
+            "crawl",
             "kaipan-fetch",
             "kaipan-normalize",
             "ohlcv-crawl",

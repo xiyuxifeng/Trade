@@ -94,6 +94,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 4. 在 Profile 列表确认 `validation_status` 为 **validated**。
 
 > 说明：Web 用户只需要选择 Profile；页面会自动绑定当前 Profile，不要求手动填写 `config_path`。`config_path` 仅保留给 CLI / 历史兼容。
+> 说明：Profile 里保存的敏感字段是脱敏值，运行时会从环境变量回填对应 secret，例如 `crawl.auth.tgb.cn.cookie` 会从 `TGB_COOKIE` 注入；如果对应环境变量缺失，运行时会直接报错，不会静默兜底；看到 `***` 不代表运行时没有可用值。
 > 如果系统状态页仍显示 `default` 且 snapshot 为空，这表示系统只是在兜底启动；请先导入正式 Profile，再把它作为日常运行入口。
 
 ### 4.2 Profile 详情与编辑
@@ -173,6 +174,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 常用 step：`crawl`、`clean`、`validate`、`store`、`process`。日常操作先选择 Profile，再选择 step，然后按页面表单提交。
 
 > 说明：`use_db` 和 `config_path` 属于系统内部兼容参数，Web 日常操作不需要填写，页面会自动处理。
+> 说明：Web/Profile 模式下 `crawl` 成功就表示文章已经写入数据库；抓取过程会在任务中心显示进度，文章列表会在完成后立即增加。`store` 主要保留给 CLI/debug 与旧文件链路兼容。
 
 **`article_metadata` 版本怎么操作**：
 

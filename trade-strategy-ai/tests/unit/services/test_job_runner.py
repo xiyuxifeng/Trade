@@ -291,10 +291,12 @@ def _build_job_runner(
     tmp_path: Path,
     handlers: dict[str, Any] | None = None,
     *,
+    pipeline_service_factory: Any | None = None,
     backtest_service_factory: Any | None = None,
 ):
     """创建一个可用于 JobRunner 单测的临时 SQLite runner。"""
     from src.services import JobRunner, JobService, ServiceResult
+    from src.services.pipeline_service import PipelineService
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'jobs.db'}")
 
@@ -356,6 +358,7 @@ def _build_job_runner(
     job_service._config_profile_service = _FakeConfigProfileService()  # noqa: SLF001
     runner = JobRunner(
         job_service=job_service,
+        pipeline_service_factory=pipeline_service_factory or PipelineService,
         handlers=handlers or {},
         heartbeat_interval_seconds=0.01,
         backtest_service_factory=backtest_service_factory or _FakeBacktestService,
@@ -410,6 +413,86 @@ def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
     assert any(item["kind"] == "html" for item in loaded.payload["job"]["artifacts"])
     assert (tmp_path / "jobs" / job_id / "result.json").exists()
+    asyncio.run(engine.dispose())
+
+
+def test_submit_crawl_writes_progress_and_uses_db_mode(tmp_path: Path) -> None:
+    """crawl Job 在 Profile 路径下应直接走数据库入库并写回进度。"""
+    from src.services.base import ServiceResult
+
+    calls: dict[str, Any] = {}
+
+    class _FakePipelineService:
+        async def crawl(self, **kwargs):
+            calls.update(kwargs)
+            progress_callback = kwargs.get("progress_callback")
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "job_type": "crawl",
+                        "stage": "crawl",
+                        "current": 1,
+                        "total": 2,
+                        "percent": 50.0,
+                        "remaining": 1,
+                        "current_step": "store:tgb:10461311:1",
+                        "current_fetcher": "tgb",
+                        "current_dataset": "10461311",
+                        "status": "running",
+                    }
+                )
+                progress_callback(
+                    {
+                        "job_type": "crawl",
+                        "stage": "crawl",
+                        "current": 2,
+                        "total": 2,
+                        "percent": 100.0,
+                        "remaining": 0,
+                        "current_step": "save_crawl_state",
+                        "current_fetcher": "tgb",
+                        "current_dataset": "10461311",
+                        "status": "success",
+                    }
+                )
+            return ServiceResult(
+                status="ok",
+                message="crawl completed",
+                payload={
+                    "profile_id": kwargs.get("profile_id"),
+                    "base_dir": str(tmp_path),
+                    "line_count": 1,
+                    "lines": ["tgb:10461311:2"],
+                    "force": kwargs.get("force", False),
+                },
+            )
+
+    runner, job_service, engine, _ = _build_job_runner(
+        tmp_path,
+        pipeline_service_factory=lambda: _FakePipelineService(),
+    )
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="crawl",
+            params={
+                "profile_id": "default",
+                "max_articles": 2,
+            },
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls["profile_id"] == "default"
+    assert calls["config_path"] is None
+    assert calls["progress_callback"] is not None
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["progress"]["current"] == 2
+    assert loaded.payload["job"]["progress"]["current_step"] == "save_crawl_state"
+    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+
     asyncio.run(engine.dispose())
 
 

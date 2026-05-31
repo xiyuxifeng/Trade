@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from cli.crawl import run_crawl_command
-from src.agents.data_agent.skills.crawl_blog import run_crawl
+from src.agents.data_agent.skills.crawl_blog import run_crawl_to_db
 from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import apply_database_config_to_env, load_app_config
@@ -89,11 +89,17 @@ class PipelineService(BaseService):
         config_path: str | Path | None = None,
         max_articles: int | None = None,
         force: bool = False,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """执行文章抓取。"""
         config, base_dir, resolved_path = await self._load_runtime_context(profile_id=profile_id, config_path=config_path)
         if profile_id is not None and str(profile_id).strip():
-            lines = run_crawl(config, base_dir=base_dir, max_articles=max_articles, force=force)
+            lines = await run_crawl_to_db(
+                config,
+                max_articles=max_articles,
+                force=force,
+                progress_callback=progress_callback,
+            )
         else:
             assert resolved_path is not None
             lines = self._crawl_runner(config_path=resolved_path, max_articles=max_articles, force=force)

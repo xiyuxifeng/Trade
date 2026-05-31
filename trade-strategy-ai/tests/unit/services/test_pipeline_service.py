@@ -53,11 +53,17 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
         calls["pipeline"] = kwargs
         return _FakePipelineResult(name="pipeline", nested=_FakeNested(value="ok"))
 
-    def fake_run_crawl(config, *, base_dir: Path, max_articles: int | None = None, force: bool = False):
-        calls["crawl"] = (config, base_dir, max_articles, force)
+    async def fake_run_crawl_to_db(
+        config,
+        *,
+        max_articles: int | None = None,
+        force: bool = False,
+        progress_callback=None,
+    ):
+        calls["crawl"] = (config, max_articles, force, progress_callback)
         return ["line-1", "line-2"]
 
-    monkeypatch.setattr("src.services.pipeline_service.run_crawl", fake_run_crawl)
+    monkeypatch.setattr("src.services.pipeline_service.run_crawl_to_db", fake_run_crawl_to_db)
     loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
 
     async def fake_load_profile_runtime_config(profile_id: str):
@@ -103,8 +109,7 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     step_call = dict(calls["pipeline"])
 
     assert crawl_result.payload["lines"] == ["line-1", "line-2"]
-    assert calls["crawl"][1].as_posix().endswith("trade-strategy-ai")
-    assert calls["crawl"][2:] == (12, False)
+    assert calls["crawl"][1:] == (12, False, None)
     assert run_result.payload["result"]["name"] == "pipeline"
     assert run_result.payload["result"]["nested"]["value"] == "ok"
     assert pipeline_call["from_step"] == "clean"

@@ -4,8 +4,10 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.common.exceptions import ConfigError
 from src.common.paths import project_root
 from src.models.config_profile import ConfigProfile
 
@@ -104,9 +106,16 @@ storage:
     asyncio.run(engine.dispose())
 
 
-def test_load_profile_runtime_config_clears_masked_secrets(tmp_path: Path) -> None:
-    """Profile 运行态应清空已脱敏字段，避免把 `***` 当成真实 secret 运行。"""
+def test_load_profile_runtime_config_restores_runtime_secrets_from_env(tmp_path: Path, monkeypatch) -> None:
+    """Profile 运行态应从环境变量回填所有已登记的 runtime secret。"""
     service, engine = _build_profile_service(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://env:env@localhost:5432/trade_strategy_ai")
+    monkeypatch.setenv("ADMIN_API_KEY", "admin-from-env")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "llm-from-env")
+    monkeypatch.setenv("TGB_COOKIE", "cookie-from-env")
+    monkeypatch.setenv("KAIPAN_TOKEN", "kaipan-token-from-env")
+    monkeypatch.setenv("KAIPAN_USER_ID", "kaipan-user-from-env")
+    monkeypatch.setenv("DINGTALK_SECRET", "dingtalk-secret-from-env")
 
     config_path = tmp_path / "app.yaml"
     config_path.write_text(
@@ -115,11 +124,26 @@ timezone: Asia/Shanghai
 database:
   url: postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
   echo: true
+api:
+  auth:
+    api_keys:
+      - secret-admin-key
 llm:
   provider: qwen
   model: ["qwen3-8b"]
   url: https://dashscope.aliyuncs.com/compatible-mode/v1
   api_key: secret-1
+crawl:
+  auth:
+    tgb.cn:
+      mode: cookie
+      cookie: secret-cookie
+kaipan:
+  token: secret-kaipan
+  user_id: "${KAIPAN_USER_ID}"
+alerting:
+  dingtalk:
+    secret: secret-dingtalk
 """,
         encoding="utf-8",
     )
@@ -131,9 +155,115 @@ llm:
     assert runtime.base_dir == project_root().resolve()
     assert runtime.config.llm.provider == "qwen"
     assert runtime.config.llm.model == ["qwen3-8b"]
-    assert runtime.config.llm.api_key is None
-    assert runtime.config.database.url is None
+    assert runtime.config.llm.api_key == "llm-from-env"
+    assert runtime.config.database.url == "postgresql+asyncpg://env:env@localhost:5432/trade_strategy_ai"
+    assert runtime.config.api.auth.api_keys == ["admin-from-env"]
+    assert runtime.config.crawl.auth["tgb.cn"].cookie == "cookie-from-env"
+    assert runtime.config.kaipan.token == "kaipan-token-from-env"
+    assert runtime.config.kaipan.user_id == "kaipan-user-from-env"
+    assert runtime.config.alerting["dingtalk"]["secret"] == "dingtalk-secret-from-env"
     assert runtime.profile_snapshot_id is not None
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_restores_tgb_cookie_from_env(tmp_path: Path, monkeypatch) -> None:
+    """Profile 运行态应从环境变量回填 TGB cookie，避免 crawl 走 `***`。"""
+    service, engine = _build_profile_service(tmp_path)
+    monkeypatch.setenv("TGB_COOKIE", "cookie-from-env")
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+crawl:
+  auth:
+    tgb.cn:
+      mode: cookie
+      cookie: secret-cookie
+  sources:
+    - source: tgb
+      site: tgb.cn
+      trader_id: javxsp
+      author_id: "10461311"
+      author_name: javxsp
+      list_url: https://www.tgb.cn/user/blog/moreTopic
+      enabled: true
+      render_js: false
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-crawl", created_by="system"))
+    runtime = asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+
+    assert runtime.config.crawl.auth["tgb.cn"].cookie == "cookie-from-env"
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_errors_when_required_runtime_secret_env_is_missing(tmp_path: Path) -> None:
+    """缺少 runtime secret 的环境变量时，应显式报错。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+llm:
+  api_key: secret-1
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-missing-secret", created_by="system"))
+
+    with pytest.raises(ConfigError, match="DASHSCOPE_API_KEY|llm.api_key"):
+        asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_errors_when_masked_secret_has_no_runtime_mapping(tmp_path: Path) -> None:
+    """被脱敏但没有 runtime 映射的字段应显式报错。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+llm:
+  url: https://user:pass@dashscope.aliyuncs.com/compatible-mode/v1
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-unmapped-secret", created_by="system"))
+
+    with pytest.raises(ConfigError, match="unsupported masked secret paths|llm\\.url"):
+        asyncio.run(service.load_profile_runtime_config(profile.profile_id))
+
+    asyncio.run(engine.dispose())
+
+
+def test_load_profile_runtime_config_errors_when_placeholder_has_no_env_source(tmp_path: Path) -> None:
+    """未回填来源的环境变量占位符应显式报错。"""
+    service, engine = _build_profile_service(tmp_path)
+
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+kaipan:
+  user_id: "${KAIPAN_USER_ID}"
+""",
+        encoding="utf-8",
+    )
+
+    profile = asyncio.run(service.import_from_config_path(config_path, profile_id="profile-placeholder-missing", created_by="system"))
+
+    with pytest.raises(ConfigError, match="KAIPAN_USER_ID"):
+        asyncio.run(service.load_profile_runtime_config(profile.profile_id))
 
     asyncio.run(engine.dispose())
 

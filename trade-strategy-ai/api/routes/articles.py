@@ -1,25 +1,46 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from io import BytesIO
 from collections.abc import Iterable
+from pathlib import Path
 
 from sqlalchemy import or_
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import verify_api_key
 from api.schemas import ArticleFilterOptionsResponse, ArticleResponse
 from src.common.config import load_app_config
+from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
 
 router = APIRouter(prefix="/articles", tags=["articles"])
+
+
+def _resolve_local_web_index() -> Path | None:
+    """解析本机调试时的 Web 静态入口。"""
+    raw = os.getenv("WEB_STATIC_DIR")
+    if not raw:
+        return None
+    candidate = resolve_project_path(raw)
+    index_path = candidate / "index.html"
+    return index_path if index_path.exists() else None
+
+
+def _should_serve_web_index(request: Request) -> bool:
+    """判断当前请求是否更像浏览器的页面导航而不是 API 请求。"""
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return False
+    return "text/html" in accept or "*/*" in accept or not accept.strip()
 
 
 def _build_trader_id_condition(trader_id: str | None, config: Any):
@@ -129,6 +150,7 @@ def _apply_article_filters(
 
 @router.get("", response_model=dict[str, Any])
 async def list_articles(
+    request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     author_id: str | None = None,
@@ -139,6 +161,11 @@ async def list_articles(
     _: str = Depends(verify_api_key),
 ):
     """List articles with pagination and filters."""
+    if _should_serve_web_index(request):
+        web_index = _resolve_local_web_index()
+        if web_index is not None:
+            return FileResponse(web_index)
+
     offset = (page - 1) * page_size
 
     session_factory = async_session_factory()

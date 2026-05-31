@@ -61,6 +61,7 @@ def test_snapshot_service_build_and_query(tmp_path: Path) -> None:
     result = asyncio.run(
         service.build_snapshot(
             config_path=config_path,
+            benchmark_symbol="000300.SH",
             date="2026-04-23",
             slot="17-30",
             snapshot_type="all",
@@ -410,6 +411,7 @@ def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:
     result = asyncio.run(
         service.build_snapshot(
             config_path=config_path,
+            benchmark_symbol="000300.SH",
             date="2026-04-23",
             snapshot_type="all",
         )
@@ -422,8 +424,8 @@ def test_snapshot_service_reports_partial_failure(tmp_path: Path) -> None:
     assert any(item["status"] == "error" for item in result.payload["results"])
 
 
-def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Market Snapshot 构建应优先使用 Profile 的 benchmark 默认值。"""
+def test_snapshot_service_build_market_snapshot_uses_explicit_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Market Snapshot 构建应使用显式传入的 benchmark_symbol。"""
     from src.services import snapshot_service as snapshot_service_module
     from src.services.base import ServiceResult
     from src.services.snapshot_service import SnapshotService
@@ -470,6 +472,7 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
     result = asyncio.run(
         service.build_market_snapshot(
             config_path=config_path,
+            benchmark_symbol="000300.SH",
             trade_date="2026-05-16",
             profile_id="default",
         )
@@ -482,7 +485,7 @@ def test_snapshot_service_build_market_snapshot_uses_profile_default_benchmark(t
 
 
 def test_snapshot_service_build_market_snapshot_requires_profile_benchmark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """当 Web 只传 profile_id 时，Profile 没有 benchmark 默认值应明确报错。"""
+    """即使 Profile 有默认 benchmark，未显式传 benchmark_symbol 也必须报错。"""
     from src.services import snapshot_service as snapshot_service_module
     from src.services.snapshot_service import SnapshotService
 
@@ -495,7 +498,7 @@ def test_snapshot_service_build_market_snapshot_requires_profile_benchmark(tmp_p
 
     class _FakeProfile:
         def __init__(self):
-            self.sections = {}
+            self.sections = {"market_state_benchmark_symbol": "000300.SH"}
 
     class _FakeProfileService:
         async def get_profile(self, profile_id: str):
@@ -518,5 +521,25 @@ def test_snapshot_service_build_market_snapshot_requires_profile_benchmark(tmp_p
                 config_path=config_path,
                 trade_date="2026-05-16",
                 profile_id="missing",
+            )
+        )
+
+
+def test_snapshot_service_build_snapshot_requires_explicit_benchmark(tmp_path: Path) -> None:
+    """snapshot-build 未显式提供 benchmark_symbol 时应直接报错。"""
+    from src.services.snapshot_service import SnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = SnapshotService()
+
+    with pytest.raises(ValueError, match="benchmark_symbol is required"):
+        asyncio.run(
+            service.build_snapshot(
+                config_path=config_path,
+                date="2026-04-23",
+                snapshot_type="all",
             )
         )

@@ -313,7 +313,7 @@ Web 页面优先使用 `profile_id`，默认自动绑定当前 Profile。`config
 
 1. 打开 **回测**（`/backtest`）。
 2. 选择 Profile、`trader_id`、`date_from`、`date_to` 和 `strategy_version_id`。
-3. 如需限定标的，填写 `symbols`；如需指定基准，填写 `benchmark_symbol`。
+3. 如需限定标的，填写 `symbols`；如需指定基准，填写 `benchmark_symbol`，且该字段为必填，缺失会直接报错。
 4. 保持 `use_snapshot_only=true`。
 5. 提交 `backtest-run`。
 6. 查看摘要指标、Markdown 报告、CSV 明细。

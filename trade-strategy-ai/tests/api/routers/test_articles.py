@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import AsyncIterator
 
@@ -146,3 +147,21 @@ async def test_article_filter_options_survive_config_load_failure(
         "sources": ["tgb", "xhs"],
         "trader_ids": ["trader_b"],
     }
+
+
+@pytest.mark.asyncio
+async def test_article_list_still_returns_json_for_api_clients(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """API 客户端请求 /articles 时仍应返回 JSON，而不是 SPA HTML。"""
+    await _seed_articles(article_session_factory)
+
+    monkeypatch.setattr(article_routes, "async_session_factory", lambda: article_session_factory)
+    monkeypatch.setenv("WEB_STATIC_DIR", str(Path("/tmp/nonexistent-web-static")))
+
+    response = await client.get("/articles", headers={"Accept": "application/json"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["items"][0]["title"] == "Article Two"

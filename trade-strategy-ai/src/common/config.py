@@ -240,7 +240,6 @@ class AppConfig(BaseModel):
     akshare: AkshareConfig = Field(default_factory=AkshareConfig)
     strategy: dict[str, Any] = Field(default_factory=dict)
     risk: dict[str, Any] = Field(default_factory=dict)
-    market_state_benchmark_symbol: str | None = "510300.SH"
 
     traders: list[TraderConfig] = Field(default_factory=list)
     alerting: dict[str, Any] | None = None  # S7-007 告警配置

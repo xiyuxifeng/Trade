@@ -358,7 +358,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | `from_akshare` | 否 | 是否从 AkShare 构建 |
 | `cache_csv` | 否 | 是否缓存 CSV |
 
-> 说明：该入口默认绑定当前 Profile；Web 日常操作不再要求填写 `config_path`。
+> 说明：该入口默认绑定当前 Profile；Web 日常操作不再要求填写 `config_path`。`benchmark_symbol` 必须显式传入，后端不会从 Profile 或旧配置静默回填。
 
 #### 快照构建（`snapshot-build`）
 
@@ -367,13 +367,13 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 | `profile_id` | 推荐 | 当前 Profile（自动） |
 | `date` | 二选一 | 单日快照日期 |
 | `start_date` + `end_date` | 二选一 | 区间快照 |
-| `benchmark_symbol` | 否 | 基准指数 |
+| `benchmark_symbol` | 是 | 基准指数；缺失时直接报错 |
 | `slot` | 否 | 时间槽（默认 `17-30`） |
 | `snapshot_type` | 否 | `all` / `hot_topics` 等 |
 | `force` | 否 | 强制重建 |
 | `offline` | 否 | 离线模式 |
 
-> 说明：Web 端优先使用当前 Profile；兼容层在后台自动处理配置，不作为用户输入项。
+> 说明：Web 端优先使用当前 Profile；兼容层在后台自动处理配置，不作为用户输入项。`snapshot-build` 运行时必须明确提供 `benchmark_symbol`，不会使用 Profile 或 `config/app.yaml` 的隐藏兜底。
 
 ---
 

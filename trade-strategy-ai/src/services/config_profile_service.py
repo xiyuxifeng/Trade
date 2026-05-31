@@ -363,6 +363,11 @@ class ConfigProfileService(BaseService):
     async def load_profile_runtime_config(self, profile_id: str) -> ProfileRuntimeConfig:
         """将 Profile materialize 成 Web 运行时直接消费的 AppConfig。"""
         profile = await self.get_profile(profile_id)
+        if profile is None and profile_id == "default":
+            profile = await self.create_default_profile(
+                environment=os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "default",
+                created_by="system",
+            )
         if profile is None:
             raise ConfigError(f"profile not found: {profile_id}")
 

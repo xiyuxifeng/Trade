@@ -46,7 +46,8 @@ export function kaipanNormalize(payload: KaipanNormalizeRequest) {
 
 export function kaipanRun(payload: KaipanRunRequest, profileId?: string | null) {
   const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : payload.profile_id ? `?profile_id=${encodeURIComponent(payload.profile_id)}` : '';
-  const { profile_id: _profileId, ...body } = payload;
+  const body: Record<string, unknown> = { ...payload };
+  delete body.profile_id;
   return fetchJson<KaipanRunResponse>(`/kaipan/run${query}`, {
     method: 'POST',
     headers: {

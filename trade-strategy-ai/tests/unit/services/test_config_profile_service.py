@@ -52,6 +52,23 @@ def test_create_default_profile(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_load_profile_runtime_config_autocreates_default_profile_when_missing(tmp_path: Path, monkeypatch) -> None:
+    """Web 运行态加载 default Profile 时，若缺失应自动创建。"""
+    service, engine = _build_profile_service(tmp_path)
+    monkeypatch.setenv("APP_ENV", "dev")
+
+    runtime = asyncio.run(service.load_profile_runtime_config("default"))
+    persisted = asyncio.run(service.get_profile("default"))
+
+    assert runtime.profile_id == "default"
+    assert runtime.config.run_mode == "interactive"
+    assert persisted is not None
+    assert persisted.environment == "dev"
+    assert persisted.validation_status == "draft"
+
+    asyncio.run(engine.dispose())
+
+
 def test_import_profile_from_config_path_masks_secrets(tmp_path: Path) -> None:
     """从 config_path 导入时应脱敏并生成 secret_refs。"""
     service, engine = _build_profile_service(tmp_path)

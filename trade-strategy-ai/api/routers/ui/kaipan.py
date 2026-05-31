@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
+from src.services.config_profile_service import ConfigProfileService
 from src.services.kaipan_service import KaipanService
 
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-kaipan"])
@@ -30,6 +31,11 @@ def get_kaipan_service() -> KaipanService:
     return KaipanService()
 
 
+async def _resolve_profile_id(preferred: str | None = None) -> str:
+    """解析当前 UI 应使用的 Profile。"""
+    return ConfigProfileService().resolve_runtime_profile_id(preferred)
+
+
 @router.post("/kaipan/fetch", dependencies=[Depends(verify_api_key)])
 async def fetch_kaipan(
     trade_date: str | None = None,
@@ -38,14 +44,16 @@ async def fetch_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """抓取 Kaipan 数据并同步标准化。"""
-    result = await asyncio.to_thread(service.fetch, profile_id=profile_id, trade_date=trade_date, slot=slot)
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    result = await asyncio.to_thread(service.fetch, profile_id=runtime_profile_id, trade_date=trade_date, slot=slot)
     return result.payload
 
 
 @router.get("/kaipan/status", dependencies=[Depends(verify_api_key)])
 async def kaipan_status(profile_id: str | None = None, service: KaipanService = Depends(get_kaipan_service)):
     """返回最新可用的 Kaipan 时间槽状态。"""
-    result = await asyncio.to_thread(service.status, profile_id=profile_id)
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    result = await asyncio.to_thread(service.status, profile_id=runtime_profile_id)
     return result.payload
 
 
@@ -56,9 +64,10 @@ async def normalize_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """仅执行标准化。"""
+    runtime_profile_id = await _resolve_profile_id(profile_id)
     result = await asyncio.to_thread(
         service.normalize,
-        profile_id=profile_id,
+        profile_id=runtime_profile_id,
         trade_date=request.trade_date,
         slot=request.slot,
     )
@@ -72,9 +81,10 @@ async def run_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """构建或启动 Kaipan 调度计划。"""
+    runtime_profile_id = await _resolve_profile_id(profile_id)
     result = await asyncio.to_thread(
         service.run,
-        profile_id=profile_id,
+        profile_id=runtime_profile_id,
         start_scheduler=request.start_scheduler,
         block=request.block,
     )
@@ -84,5 +94,6 @@ async def run_kaipan(
 @router.post("/kaipan/stop", dependencies=[Depends(verify_api_key)])
 async def stop_kaipan(profile_id: str | None = None, service: KaipanService = Depends(get_kaipan_service)):
     """停止 Kaipan 调度器。"""
-    result = await asyncio.to_thread(service.stop, profile_id=profile_id)
+    runtime_profile_id = await _resolve_profile_id(profile_id)
+    result = await asyncio.to_thread(service.stop, profile_id=runtime_profile_id)
     return result.payload

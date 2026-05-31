@@ -5,7 +5,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from api.dependencies import verify_api_key
-from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory
 from src.services.config_profile_service import ConfigProfileService
 from src.services.signal_service import SignalService
@@ -13,7 +12,7 @@ from src.services.signal_service import SignalService
 router = APIRouter(prefix="/api/ui/v1", tags=["ui-signals"])
 
 
-async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+async def _resolve_profile_id(preferred: str | None = None) -> str:
     """读取当前 UI BFF 使用的 Profile。"""
     service = ConfigProfileService()
     return service.resolve_runtime_profile_id(preferred)
@@ -56,20 +55,12 @@ async def list_signals(
 ):
     """列出已生成的信号版本，补充可读的上下文摘要。"""
     runtime_profile_id = await _resolve_profile_id(profile_id)
-    if runtime_profile_id is not None:
-        result = service.list_signals(
-            profile_id=runtime_profile_id,
-            symbol=symbol,
-            since=since,
-            limit=limit,
-        )
-    else:
-        result = service.list_signals(
-            config_path=resolve_project_path("config/app.yaml"),
-            symbol=symbol,
-            since=since,
-            limit=limit,
-        )
+    result = service.list_signals(
+        profile_id=runtime_profile_id,
+        symbol=symbol,
+        since=since,
+        limit=limit,
+    )
     payload = dict(result.payload)
     payload.pop("config_path", None)
     payload["signals"] = [

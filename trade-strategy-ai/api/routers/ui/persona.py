@@ -7,7 +7,6 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
-from src.common.paths import resolve_project_path
 from src.persona.behavior_rules import load_behavior_rules_preview
 from src.services.config_profile_service import ConfigProfileService
 from src.services.persona_service import PersonaService
@@ -24,7 +23,7 @@ class MarketStateBuildRequest(BaseModel):
     cache_csv: bool = True
 
 
-async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+async def _resolve_profile_id(preferred: str | None = None) -> str:
     """读取当前 UI BFF 使用的 Profile。"""
     service = ConfigProfileService()
     return service.resolve_runtime_profile_id(preferred)
@@ -42,10 +41,7 @@ async def build_sample_clusters(
 ):
     """生成 Persona 样例聚类文件。"""
     runtime_profile_id = await _resolve_profile_id(profile_id)
-    if runtime_profile_id is not None:
-        maybe_result = service.build_sample_clusters(profile_id=runtime_profile_id)
-    else:
-        maybe_result = service.build_sample_clusters(config_path=resolve_project_path("config/app.yaml"))
+    maybe_result = service.build_sample_clusters(profile_id=runtime_profile_id)
     result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
     payload = dict(result.payload)
     payload.pop("config_path", None)
@@ -72,22 +68,13 @@ async def build_market_state(
 ):
     """构建 MarketState 快照。"""
     runtime_profile_id = await _resolve_profile_id(profile_id)
-    if runtime_profile_id is not None:
-        maybe_result = service.build_market_state(
-            profile_id=runtime_profile_id,
-            benchmark_symbol=request.benchmark_symbol,
-            as_of=request.as_of,
-            from_akshare=request.from_akshare,
-            cache_csv=request.cache_csv,
-        )
-    else:
-        maybe_result = service.build_market_state(
-            config_path=resolve_project_path("config/app.yaml"),
-            benchmark_symbol=request.benchmark_symbol,
-            as_of=request.as_of,
-            from_akshare=request.from_akshare,
-            cache_csv=request.cache_csv,
-        )
+    maybe_result = service.build_market_state(
+        profile_id=runtime_profile_id,
+        benchmark_symbol=request.benchmark_symbol,
+        as_of=request.as_of,
+        from_akshare=request.from_akshare,
+        cache_csv=request.cache_csv,
+    )
     result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
     payload = dict(result.payload)
     payload.pop("config_path", None)

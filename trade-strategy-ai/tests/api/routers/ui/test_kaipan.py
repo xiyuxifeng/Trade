@@ -22,15 +22,25 @@ class _FakeKaipanService:
     def fetch(
         self,
         *,
-        config_path: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
         trade_date: str | None = None,
         slot: str = "all",
     ) -> ServiceResult:
-        self.calls.append({"action": "fetch", "config_path": config_path, "trade_date": trade_date, "slot": slot})
+        self.calls.append(
+            {
+                "action": "fetch",
+                "profile_id": profile_id,
+                "config_path": config_path,
+                "trade_date": trade_date,
+                "slot": slot,
+            }
+        )
         return ServiceResult(
             status="ok",
             message="kaipan fetch completed",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "trade_date": trade_date or "2026-05-09",
@@ -40,12 +50,13 @@ class _FakeKaipanService:
             },
         )
 
-    def status(self, *, config_path: str) -> ServiceResult:
-        self.calls.append({"action": "status", "config_path": config_path})
+    def status(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
+        self.calls.append({"action": "status", "profile_id": profile_id, "config_path": config_path})
         return ServiceResult(
             status="ok",
             message="latest slot 2026-05-09_17-30",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "raw_base": "/tmp/project/data/processed/kaipan/raw",
@@ -59,15 +70,25 @@ class _FakeKaipanService:
     def normalize(
         self,
         *,
-        config_path: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
         trade_date: str | None = None,
         slot: str = "all",
     ) -> ServiceResult:
-        self.calls.append({"action": "normalize", "config_path": config_path, "trade_date": trade_date, "slot": slot})
+        self.calls.append(
+            {
+                "action": "normalize",
+                "profile_id": profile_id,
+                "config_path": config_path,
+                "trade_date": trade_date,
+                "slot": slot,
+            }
+        )
         return ServiceResult(
             status="ok",
             message="kaipan normalize completed",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "trade_date": trade_date or "2026-05-09",
@@ -79,13 +100,15 @@ class _FakeKaipanService:
     def run(
         self,
         *,
-        config_path: str,
+        profile_id: str | None = None,
+        config_path: str | None = None,
         start_scheduler: bool = False,
         block: bool = False,
     ) -> ServiceResult:
         self.calls.append(
             {
                 "action": "run",
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "start_scheduler": start_scheduler,
                 "block": block,
@@ -95,6 +118,7 @@ class _FakeKaipanService:
             status="ok",
             message="kaipan scheduler plan prepared" if not start_scheduler else "kaipan scheduler started",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "pre_market": "9:25",
@@ -104,12 +128,13 @@ class _FakeKaipanService:
             },
         )
 
-    def stop(self, *, config_path: str) -> ServiceResult:
-        self.calls.append({"action": "stop", "config_path": config_path})
+    def stop(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
+        self.calls.append({"action": "stop", "profile_id": profile_id, "config_path": config_path})
         return ServiceResult(
             status="ok",
             message="kaipan scheduler stopped",
             payload={
+                "profile_id": profile_id,
                 "config_path": config_path,
                 "base_dir": "/tmp/project",
                 "started": False,
@@ -140,6 +165,7 @@ async def test_kaipan_status_returns_latest_slot(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert "latest_slot" in payload
+    assert payload["profile_id"] == "default"
 
 
 @pytest.mark.asyncio
@@ -149,6 +175,7 @@ async def test_kaipan_fetch_returns_payload(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert "slot_results" in payload
+    assert payload["profile_id"] == "default"
 
 
 @pytest.mark.asyncio
@@ -158,6 +185,7 @@ async def test_kaipan_normalize_returns_results(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert "results" in payload
+    assert payload["profile_id"] == "default"
 
 
 @pytest.mark.asyncio
@@ -168,6 +196,7 @@ async def test_kaipan_run_returns_payload(client: AsyncClient) -> None:
     payload = response.json()
     assert "started" in payload or "pre_market" in payload
     assert payload["scheduler_started"] is True
+    assert payload["profile_id"] == "default"
 
 
 @pytest.mark.asyncio
@@ -177,3 +206,4 @@ async def test_kaipan_stop_returns_payload(client: AsyncClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["started"] is False
+    assert payload["profile_id"] == "default"

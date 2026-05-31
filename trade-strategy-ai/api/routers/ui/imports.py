@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from pydantic import BaseModel
 
 from api.dependencies import verify_api_key
-from src.common.paths import resolve_project_path
 from src.services.config_profile_service import ConfigProfileService
 from src.services.setup_service import SetupService
 
@@ -30,7 +29,7 @@ class MigrateCrawlStateRequest(BaseModel):
     """crawl state 迁移请求体占位，便于前端保持 JSON 提交。"""
 
 
-async def _resolve_profile_id(preferred: str | None = None) -> str | None:
+async def _resolve_profile_id(preferred: str | None = None) -> str:
     """读取当前 UI BFF 使用的 Profile。"""
     service = ConfigProfileService()
     return service.resolve_runtime_profile_id(preferred)
@@ -99,20 +98,12 @@ async def import_trade_logs(
     with TemporaryDirectory(prefix="trade-strategy-ai-import-") as tmp_dir:
         target = Path(tmp_dir) / f"trade-log{suffix}"
         await _write_upload_to_tempfile(file, target)
-        if runtime_profile_id is not None:
-            result = await service.import_trade_logs(
-                profile_id=runtime_profile_id,
-                csv_path=target,
-                source=source,
-                dry_run=dry_run,
-            )
-        else:
-            result = await service.import_trade_logs(
-                config_path=resolve_project_path("config/app.yaml"),
-                csv_path=target,
-                source=source,
-                dry_run=dry_run,
-            )
+        result = await service.import_trade_logs(
+            profile_id=runtime_profile_id,
+            csv_path=target,
+            source=source,
+            dry_run=dry_run,
+        )
     payload = dict(result.payload)
     payload.pop("config_path", None)
     return payload
@@ -127,10 +118,7 @@ async def migrate_crawl_state(
     """迁移 crawl state 到数据库。"""
     del request
     runtime_profile_id = await _resolve_profile_id(profile_id)
-    if runtime_profile_id is not None:
-        result = await service.migrate_crawl_state(profile_id=runtime_profile_id)
-    else:
-        result = await service.migrate_crawl_state(config_path=resolve_project_path("config/app.yaml"))
+    result = await service.migrate_crawl_state(profile_id=runtime_profile_id)
     payload = dict(result.payload)
     payload.pop("config_path", None)
     return payload

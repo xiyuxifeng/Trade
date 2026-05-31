@@ -19,7 +19,12 @@ class _FakeSystemService:
     def __init__(self) -> None:
         self.calls = []
 
-    async def build_dashboard_summary(self, *, config_path: str | None = None) -> Any:
+    async def build_dashboard_summary(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | None = None,
+    ) -> Any:
         self.calls.append("build_dashboard_summary")
         return type(
             "Result",

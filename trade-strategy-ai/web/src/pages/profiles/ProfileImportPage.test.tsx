@@ -50,6 +50,7 @@ describe('ProfileImportPage', () => {
 
     renderWithRouter([{ path: '/profiles/import', element: <ProfileImportPage /> }], ['/profiles/import']);
 
+    expect(await screen.findByText(/如果系统状态页仍显示 default 兜底/)).toBeInTheDocument();
     await user.clear(screen.getByLabelText('配置 ID'));
     await user.type(screen.getByLabelText('配置 ID'), 'default');
     await user.selectOptions(screen.getByLabelText('导入模板'), 'app.template.yaml');

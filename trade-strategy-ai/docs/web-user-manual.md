@@ -78,6 +78,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 
 > 口径说明：`config/app.yaml` 和交付模板 `config/app.template.yaml` 只用于首次导入 Profile。导入完成后，Web 日常运行只认 Profile / Profile snapshot，`config_path` 仅保留给 CLI 调试与历史兼容。
 > 其中 `strategy` 和 `risk` 配置也包含在这份单文件模板内，不再要求用户单独维护 `strategy.yaml` / `risk.yaml`。
+> 如果系统状态页仍显示 `default` 且没有绑定 snapshot，这表示当前只是在兜底启动态，建议立刻去 `/profiles/import` 导入正式 Profile，不要把这个 fallback 当成正式配置使用。
 
 ### 4.1 导入 Profile
 

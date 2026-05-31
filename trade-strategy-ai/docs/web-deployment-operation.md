@@ -186,6 +186,7 @@ Web 配置页只展示 **脱敏值**；保存时由服务端校验并写回。
 - admin 在 Web 里通过 `/profiles` 和各业务页面完成日常操作。
 - Web 日常用户只需要选择当前 Profile，页面会自动绑定运行态，不需要手工编辑 `config_path`。
 - `config/app.yaml` 和 `config/app.template.yaml` 只作为导入源和 CLI 调试入口，不应作为 Web 主流程的正式事实源；其中已包含 `strategy` 和 `risk` 配置段，用户不需要再单独维护独立的策略/风控配置文件。
+- 如果 `/api/ui/v1/system/status` 里仍显示 `default` 且没有绑定 snapshot，这只是兜底启动态，不代表正式配置已经导入；应优先进入 `/profiles/import` 生成正式 Profile。
 - `config/rules/behavior_rules.yaml` 仍是行为标签规则的只读配置源；Web 的 `/persona` 页面只提供预览与解释，不提供在线编辑入口。
 - `/api/ui/v1/system/status` 里的 `Profile 上下文` 只表示环境变量注入的显式绑定，默认不会从 `config_path` 推断；没有注入时显示 `unset` / `未绑定`，这是为了避免把运行环境和业务 Profile 混为一谈。
 

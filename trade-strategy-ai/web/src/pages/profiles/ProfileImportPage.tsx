@@ -95,6 +95,16 @@ export function ProfileImportPage() {
             <p className="mt-3 text-sm leading-6 text-slate-600">
               选择交付模板导入一次，生成正式 Profile。导入完成后，Web 后续运行只认 Profile。
             </p>
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
+              <p className="font-medium text-sky-950">首次部署建议</p>
+              <p className="mt-1">
+                如果系统状态页仍显示 default 兜底，请先在这里导入正式配置。推荐优先使用
+                <code className="rounded bg-white px-1.5 py-0.5 text-xs text-sky-900">config/app.template.yaml</code>
+                ，部署环境已有的
+                <code className="rounded bg-white px-1.5 py-0.5 text-xs text-sky-900">config/app.yaml</code>
+                也可以作为导入源。
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/profiles')}>

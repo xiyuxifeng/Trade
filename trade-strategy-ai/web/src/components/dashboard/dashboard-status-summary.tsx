@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
 import { ErrorState } from '@/components/state/ErrorState';
+import { ProfileBootstrapWarning, isBootstrapDefaultProfile } from '@/components/profiles/profile-bootstrap-warning';
 import { useRecentArtifacts } from '@/features/artifacts/use-recent-artifacts';
 import { useRecentJobs } from '@/features/jobs/use-recent-jobs';
 import { useDashboardAlertSummary } from '@/features/dashboard/use-dashboard-alert-summary';
@@ -64,6 +65,9 @@ export function DashboardStatusSummary() {
   const warnings = system?.warnings?.length ?? 0;
   const databaseStatus = system?.database.status ?? 'unknown';
   const profileContext = system?.profile_context ?? null;
+  const runtimeProfileId = profileContext?.profile_id ?? system?.profile_id ?? null;
+  const runtimeProfileSnapshotId = profileContext?.profile_snapshot_id ?? system?.profile_snapshot_id ?? null;
+  const isBootstrapDefault = isBootstrapDefaultProfile(runtimeProfileId, runtimeProfileSnapshotId);
 
   return (
     <section className="space-y-4">
@@ -80,6 +84,13 @@ export function DashboardStatusSummary() {
           onRetry={() => {
             void reloadAll();
           }}
+        />
+      ) : null}
+
+      {isBootstrapDefault ? (
+        <ProfileBootstrapWarning
+          profileId={runtimeProfileId}
+          profileSnapshotId={runtimeProfileSnapshotId}
         />
       ) : null}
 

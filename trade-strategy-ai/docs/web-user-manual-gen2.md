@@ -94,6 +94,7 @@ Profile 是策略、盘前、盘后、回测、文章等业务的 **统一运行
 4. 在 Profile 列表确认 `validation_status` 为 **validated**。
 
 > 说明：Web 用户只需要选择 Profile；页面会自动绑定当前 Profile，不要求手动填写 `config_path`。`config_path` 仅保留给 CLI / 历史兼容。
+> 如果系统状态页仍显示 `default` 且 snapshot 为空，这表示系统只是在兜底启动；请先导入正式 Profile，再把它作为日常运行入口。
 
 ### 4.2 Profile 详情与编辑
 

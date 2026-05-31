@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/http';
+import { ProfileBootstrapWarning, isBootstrapDefaultProfile } from '@/components/profiles/profile-bootstrap-warning';
 import { useSystemStatus } from './use-system-status';
 
 function statusVariant(status: string) {
@@ -89,6 +90,9 @@ export function SystemStatusPanel() {
 
   const directoryEntries = Object.entries(data.directories);
   const profileContext = data.profile_context ?? null;
+  const runtimeProfileId = profileContext?.profile_id ?? data.profile_id ?? null;
+  const runtimeProfileSnapshotId = profileContext?.profile_snapshot_id ?? data.profile_snapshot_id ?? null;
+  const isBootstrapDefault = isBootstrapDefaultProfile(runtimeProfileId, runtimeProfileSnapshotId);
 
   return (
     <Card>
@@ -104,6 +108,13 @@ export function SystemStatusPanel() {
         </div>
       </CardHeader>
       <CardContent className="grid gap-5">
+        {isBootstrapDefault ? (
+          <ProfileBootstrapWarning
+            className="border-amber-300 bg-amber-50/90"
+            profileId={runtimeProfileId}
+            profileSnapshotId={runtimeProfileSnapshotId}
+          />
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">运行模式</p>

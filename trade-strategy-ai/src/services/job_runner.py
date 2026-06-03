@@ -252,7 +252,11 @@ class JobRunner(BaseService):
             return config_path
         return None
 
-    def _build_default_handlers(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[ServiceResult]]]:
+    def _build_default_handlers(
+        self,
+        *,
+        cancel_check: Callable[[], Awaitable[bool]] | None = None,
+    ) -> dict[str, Callable[[dict[str, Any]], Awaitable[ServiceResult]]]:
         """构建默认的 Job 处理器集合。"""
 
         async def _crawl(params: dict[str, Any]) -> ServiceResult:
@@ -371,7 +375,17 @@ class JobRunner(BaseService):
                 retry_failed=retry_failed,
                 version=version,
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+                cancel_check=cancel_check,
             )
+            failed_count = int(getattr(result, "failed", 0) or 0)
+            fatal_error = getattr(result, "fatal_error", None)
+            if fatal_error or failed_count > 0:
+                message = fatal_error or f"process completed with failures: failed={failed_count}"
+                return ServiceResult(
+                    status="error",
+                    message=message,
+                    payload={"result": _to_plain(result)},
+                )
             return ServiceResult(status="ok", message="process completed", payload={"result": _to_plain(result)})
 
         async def _kaipan_fetch(params: dict[str, Any]) -> ServiceResult:
@@ -756,7 +770,18 @@ class JobRunner(BaseService):
                 str(_to_plain(payload or {})).lower(),
             ]
         )
-        if any(token in text for token in ("permission denied", "unauthorized", "forbidden")):
+        fatal_payload = payload if isinstance(payload, dict) else {}
+        fatal_error_type = str(fatal_payload.get("fatal_error_type") or "").lower()
+        fatal_error = str(fatal_payload.get("fatal_error") or "").lower()
+        if fatal_error_type in {"auth", "config"}:
+            if fatal_error_type == "config":
+                return "user_error", "config_missing", False
+            return "permission", "permission_denied", False
+        if any(token in text for token in ("permission denied", "unauthorized", "forbidden", "403", "allocationquota", "free tier", "free-tier", "quota exhausted", "quota exceeded", "insufficient quota", "insufficient_quota", "quota limit", "resource exhausted")):
+            return "permission", "permission_denied", False
+        if any(token in text for token in ("401", "invalid_api_key", "invalid api key", "incorrect api key", "api key", "apikey")):
+            return "permission", "permission_denied", False
+        if any(token in fatal_error for token in ("403", "allocationquota", "free tier", "free-tier", "quota exhausted", "quota exceeded", "insufficient quota", "insufficient_quota", "quota limit", "resource exhausted")):
             return "permission", "permission_denied", False
         if any(token in text for token in ("provider unavailable", "akshare", "network", "timeout", "connection", "http", "fetch failed")):
             return "external_dependency", "provider_unavailable", True
@@ -826,14 +851,19 @@ class JobRunner(BaseService):
                 metadata={"job_type": job_type, "source": "job_result"},
             )
 
-    def _handler_for(self, job_type: str) -> Callable[[dict[str, Any]], Awaitable[ServiceResult]] | None:
+    def _handler_for(
+        self,
+        job_type: str,
+        *,
+        cancel_check: Callable[[], Awaitable[bool]] | None = None,
+    ) -> Callable[[dict[str, Any]], Awaitable[ServiceResult]] | None:
         """获取某个 job type 的处理器。"""
         definition = get_job_definition(job_type)
         if definition is None or not definition.runnable:
             return None
         if job_type in self._handlers:
             return self._handlers[job_type]
-        return self._build_default_handlers().get(job_type)
+        return self._build_default_handlers(cancel_check=cancel_check).get(job_type)
 
     def _limit_for_job_type(self, job_type: str) -> int:
         """返回某个 job type 的并发限制。"""
@@ -873,12 +903,6 @@ class JobRunner(BaseService):
 
         job_payload = claim.payload["job"]
         job_dir = Path(claim.payload["job_dir"])
-        handler = self._handler_for(job_payload["job_type"])
-        if handler is None:
-            return await self._job_service.fail_job(
-                job_id=job_id,
-                error={"type": "unsupported_job_type", "message": f"unsupported job type: {job_payload['job_type']}"},
-            )
 
         await self._job_service.append_log(
             job_id=job_id,
@@ -922,6 +946,17 @@ class JobRunner(BaseService):
         async def _finish_progress() -> None:
             if progress_finish is not None:
                 await progress_finish()
+
+        async def _is_cancelled() -> bool:
+            action = await self._resolve_job_control_action(job_id)
+            return action == "cancel"
+
+        handler = self._handler_for(job_payload["job_type"], cancel_check=_is_cancelled)
+        if handler is None:
+            return await self._job_service.fail_job(
+                job_id=job_id,
+                error={"type": "unsupported_job_type", "message": f"unsupported job type: {job_payload['job_type']}"},
+            )
 
         async def _resolve_and_handle_control(action: str) -> ServiceResult:
             await _finish_progress()
@@ -1007,6 +1042,7 @@ class JobRunner(BaseService):
                     )
                     failed = await self._job_service.fail_job(
                         job_id=job_id,
+                        increment_retry=retryable,
                         error={
                             "type": error_type,
                             "message": result.message or "job handler returned error",
@@ -1054,6 +1090,7 @@ class JobRunner(BaseService):
                 )
                 failed = await self._job_service.fail_job(
                     job_id=job_id,
+                    increment_retry=retryable,
                     error={"type": error_type, "message": str(exc), "code": error_code, "retryable": retryable},
                 )
                 return ServiceResult(

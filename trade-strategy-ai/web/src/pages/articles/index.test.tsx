@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { listArticleMetadataSummary, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
@@ -15,6 +15,7 @@ import {
   startArticlePipelineSchedule,
   stopArticlePipelineSchedule,
 } from '@/lib/api/pipelines';
+import { toast } from '@/components/ui/toast';
 import type { PipelineDetailResponse } from '@/types/pipeline';
 
 vi.mock('@/lib/api/articles', () => ({
@@ -44,6 +45,10 @@ vi.mock('@/lib/api/pipelines', () => ({
   stopArticlePipelineSchedule: vi.fn(),
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  toast: vi.fn(),
+}));
+
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
 const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
@@ -56,6 +61,7 @@ const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
 const mockedRunArticlePipelineStep = vi.mocked(runArticlePipelineStep);
 const mockedStartArticlePipelineSchedule = vi.mocked(startArticlePipelineSchedule);
 const mockedStopArticlePipelineSchedule = vi.mocked(stopArticlePipelineSchedule);
+const mockedToast = vi.mocked(toast);
 
 function buildProfileList() {
   return {
@@ -453,6 +459,7 @@ describe('ArticlesPage', () => {
 
   it('renders step-based run form and submits selected step params', async () => {
     const user = userEvent.setup();
+    mockedToast.mockReset();
     mockedListProfiles.mockResolvedValue(buildProfileList());
     mockedGetArticlePipeline.mockResolvedValue(buildArticlePipelineDetail());
     mockedGetArticlePipelineScheduleStatus.mockResolvedValue({
@@ -461,10 +468,17 @@ describe('ArticlesPage', () => {
       force: false,
       profile_id: null,
     });
-    mockedRunArticlePipelineStep.mockResolvedValue({
-      workflow: { workflow_id: 'article_pipeline', job_type: 'clean' },
-      job: { id: 'job-article-1', job_type: 'clean', status: 'pending' },
-    });
+    let resolveRunStep:
+      | ((value: {
+          workflow: { workflow_id: string; job_type: string };
+          job: { id: string; job_type: string; status: string };
+        }) => void)
+      | undefined;
+    mockedRunArticlePipelineStep.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRunStep = resolve;
+      }) as never,
+    );
 
     renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
 
@@ -483,6 +497,9 @@ describe('ArticlesPage', () => {
 
     await user.click(screen.getByRole('button', { name: '运行步骤 Job' }));
 
+    expect(screen.getByRole('button', { name: '提交中' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '提交中' })).toHaveAttribute('aria-busy', 'true');
+
     await waitFor(() => {
       expect(mockedRunArticlePipelineStep).toHaveBeenCalledWith('clean', {
         params: expect.objectContaining({
@@ -492,6 +509,20 @@ describe('ArticlesPage', () => {
         }),
         created_by: 'web',
         confirmed: false,
+      });
+    });
+
+    await act(async () => {
+      resolveRunStep?.({
+        workflow: { workflow_id: 'article_pipeline', job_type: 'clean' },
+        job: { id: 'job-article-1', job_type: 'clean', status: 'pending' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockedToast).toHaveBeenCalledWith({
+        title: '文章抓取任务已提交',
+        description: 'Job job-article-1 已创建，正在打开详情页。',
       });
     });
 
@@ -671,11 +702,19 @@ describe('ArticlesPage', () => {
 
   it('renders the maintenance page and submits maintenance options', async () => {
     const user = userEvent.setup();
+    mockedToast.mockReset();
     mockedListProfiles.mockResolvedValue(buildProfileList());
-    mockedRunArticlePipeline.mockResolvedValue({
-      workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
-      job: { id: 'job-maintenance-1', job_type: 'pipeline-run', status: 'pending' },
-    });
+    let resolveRunMaintenance:
+      | ((value: {
+          workflow: { workflow_id: string; job_type: string };
+          job: { id: string; job_type: string; status: string };
+        }) => void)
+      | undefined;
+    mockedRunArticlePipeline.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRunMaintenance = resolve;
+      }) as never,
+    );
 
     renderWithRouter(
       [{ path: '/articles/maintenance', element: <ArticleMaintenancePage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }],
@@ -695,6 +734,9 @@ describe('ArticlesPage', () => {
     await user.click(screen.getByLabelText('重建 pending tasks'));
     await user.click(screen.getByRole('button', { name: '运行维护' }));
 
+    expect(screen.getByRole('button', { name: '提交中' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '提交中' })).toHaveAttribute('aria-busy', 'true');
+
     await waitFor(() => {
       expect(mockedRunArticlePipeline).toHaveBeenCalledWith({
         params: {
@@ -707,6 +749,20 @@ describe('ArticlesPage', () => {
         },
         created_by: 'web',
         confirmed: false,
+      });
+    });
+
+    await act(async () => {
+      resolveRunMaintenance?.({
+        workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
+        job: { id: 'job-maintenance-1', job_type: 'pipeline-run', status: 'pending' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockedToast).toHaveBeenCalledWith({
+        title: '文章维护任务已提交',
+        description: 'Job job-maintenance-1 已创建，正在打开详情页。',
       });
     });
 

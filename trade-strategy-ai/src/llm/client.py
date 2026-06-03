@@ -11,7 +11,15 @@ import httpx
 
 
 class LLMError(RuntimeError):
-    pass
+    """LLM 调用错误。
+
+    `retryable=False` 表示该错误不可重试，也不应切换到后续模型。
+    """
+
+    def __init__(self, message: str, *, retryable: bool = True, code: str | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.code = code
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +31,26 @@ class LLMResult:
 
 # LLM API 调用重试次数
 LLM_MAX_RETRIES = 3
+_FATAL_LLM_KEYWORDS = (
+    "invalid_api_key",
+    "invalid api key",
+    "incorrect api key",
+    "unauthorized",
+    "forbidden",
+    "authentication",
+    "api key",
+    "apikey",
+    "allocationquota",
+    "freetieronly",
+    "free tier",
+    "free-tier",
+    "quota exhausted",
+    "quota exceeded",
+    "insufficient quota",
+    "insufficient_quota",
+    "quota limit",
+    "resource exhausted",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +64,31 @@ class LLMClientConfig:
 
 def _env_or(value: str | None, env_key: str) -> str | None:
     return value or os.getenv(env_key)
+
+
+def _llm_error_metadata(exc: Exception) -> tuple[bool, str | None]:
+    """判断 LLM 错误是否可重试，并返回分类码。"""
+    status_candidates: list[int] = []
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        status_candidates.append(status)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        response_status = getattr(response, "status_code", None)
+        if isinstance(response_status, int):
+            status_candidates.append(response_status)
+
+    if any(status in {401, 403} for status in status_candidates):
+        return False, str(next(status for status in status_candidates if status in {401, 403}))
+
+    message = str(exc).lower()
+    if "401" in message or "403" in message:
+        return False, "401" if "401" in message else "403"
+    if any(keyword in message for keyword in _FATAL_LLM_KEYWORDS):
+        return False, "auth"
+    if "not configured" in message or "missing:" in message or "unsupported llm provider" in message:
+        return False, "config"
+    return True, None
 
 
 def from_env_and_config(*, provider: str | None, model: str | None, url: str | None, api_key: str | None) -> LLMClientConfig:
@@ -91,11 +144,11 @@ class LLMClient:
         """单次 LLM 调用，不重试。"""
         missing = self._missing_fields()
         if missing:
-            raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})")
+            raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})", retryable=False, code="config")
 
         models = self._normalize_models()
         if not models:
-            raise LLMError("No models configured")
+            raise LLMError("No models configured", retryable=False, code="config")
 
         # 使用第一个模型
         return await self._call_with_model(models[0], system_prompt, user_prompt)
@@ -113,11 +166,11 @@ class LLMClient:
         """
         missing = self._missing_fields()
         if missing:
-            raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})")
+            raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})", retryable=False, code="config")
 
         models = self._normalize_models()
         if not models:
-            raise LLMError("No models configured")
+            raise LLMError("No models configured", retryable=False, code="config")
 
         last_error: LLMError | None = None
         for model in models:
@@ -127,6 +180,8 @@ class LLMClient:
                     return LLMResult(data=data, model=model)
                 except LLMError as exc:
                     last_error = exc
+                    if not exc.retryable:
+                        raise
                     if attempt < LLM_MAX_RETRIES - 1:
                         await asyncio.sleep(2 ** attempt)  # 指数退避: 1, 2, 4 秒
 
@@ -140,7 +195,7 @@ class LLMClient:
             return await self._openai_chat_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
             return await self._anthropic_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
-        raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}")
+        raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}", retryable=False, code="config")
 
     async def complete_text(self, *, system_prompt: str, user_prompt: str) -> str:
         """按 llm_test.py 的方式返回纯文本（不强制 JSON）。"""
@@ -157,8 +212,8 @@ class LLMClient:
         if provider in {"openai", "openai_compatible", "qwen", "deepseek", "glm"}:
             return await self._openai_chat_text(model=models[0], system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
-            raise LLMError("complete_text for anthropic is not implemented")
-        raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}")
+            raise LLMError("complete_text for anthropic is not implemented", retryable=False, code="config")
+        raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}", retryable=False, code="config")
 
     async def _openai_chat_content(
         self,
@@ -191,7 +246,8 @@ class LLMClient:
         try:
             completion = await client.chat.completions.create(**request)
         except Exception as exc:  # noqa: BLE001
-            raise LLMError(f"LLM request failed: {exc}") from exc
+            retryable, code = _llm_error_metadata(exc)
+            raise LLMError(f"LLM request failed: {exc}", retryable=retryable, code=code) from exc
 
         try:
             content = completion.choices[0].message.content
@@ -242,7 +298,8 @@ class LLMClient:
         async with httpx.AsyncClient(timeout=self.cfg.timeout_seconds) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code >= 400:
-                raise LLMError(f"Anthropic request failed: {resp.status_code} {resp.text}")
+                retryable, code = _llm_error_metadata(Exception(f"{resp.status_code} {resp.text}"))
+                raise LLMError(f"Anthropic request failed: {resp.status_code} {resp.text}", retryable=retryable, code=code)
             data = resp.json()
 
         try:

@@ -57,7 +57,16 @@ export function JobProgress({
   className?: HTMLAttributes<HTMLDivElement>['className'];
 }) {
   const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
-  const mainLine = `${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
+  const isCompleted = progress.status === 'success';
+  const displayPercent = isCompleted ? 100 : percent;
+  const displayRemaining = isCompleted ? 0 : progress.remaining;
+  const mainLine = isCompleted
+    ? `已完成 · 实际处理 ${progress.current} 条`
+    : `${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
+  const summaryLine =
+    isCompleted && progress.total > progress.current
+      ? `本次上限 ${progress.total} 条，实际完成 ${progress.current} 条`
+      : null;
   const subLine =
     progress.sub_total !== undefined && progress.sub_total !== null
       ? `子进度 ${progress.sub_current ?? 0} / ${progress.sub_total} · ${formatPercent(progress.sub_percent)}`
@@ -87,14 +96,18 @@ export function JobProgress({
       </div>
 
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full rounded-full bg-sky-500 transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
+        <div
+          className="h-full rounded-full bg-sky-500 transition-[width] duration-300 ease-out"
+          style={{ width: `${displayPercent}%` }}
+        />
       </div>
 
       <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600', compact ? 'text-xs' : 'text-sm')}>
         <span>{mainLine}</span>
-        <span>剩余 {progress.remaining}</span>
+        <span>剩余 {displayRemaining}</span>
         <span>更新时间 {formatDateTime(progress.updated_at)}</span>
       </div>
+      {summaryLine ? <p className={cn('text-slate-500', compact ? 'text-xs' : 'text-sm')}>{summaryLine}</p> : null}
       {subLine ? <p className={cn('text-slate-500', compact ? 'text-xs' : 'text-sm')}>{subLine}</p> : null}
 
       {progress.error ? (

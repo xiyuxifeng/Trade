@@ -1678,6 +1678,147 @@ def test_submit_market_job_classifies_external_dependency_failure(tmp_path: Path
     asyncio.run(engine.dispose())
 
 
+def test_submit_process_job_marks_failed_when_process_reports_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """process 只要汇总出失败数，就应把 job 标成失败。"""
+    from src.services import job_runner as job_runner_module
+
+    class _FakeStats:
+        def __init__(self) -> None:
+            self.processed = 0
+            self.failed = 2
+            self.fatal_error = None
+            self.failure_details = [{"task_id": "task-1"}]
+            self.duration_ms = 10
+
+        def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            return {
+                "processed": self.processed,
+                "failed": self.failed,
+                "fatal_error": self.fatal_error,
+                "failure_details": self.failure_details,
+                "duration_ms": self.duration_ms,
+            }
+
+    async def fake_run_process_tasks(**kwargs):
+        del kwargs
+        return _FakeStats()
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    monkeypatch.setattr(job_runner_module, "run_process_tasks", fake_run_process_tasks)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="process",
+            params={"config_path": "config/app.yaml", "force": True, "new_version": "v1"},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "error"
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["error"]["message"] == "process completed with failures: failed=2"
+    asyncio.run(engine.dispose())
+
+
+def test_submit_process_job_marks_permission_failure_on_fatal_llm_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """401 / invalid_api_key 这类 fatal LLM 错误应直接标记为不可重试失败。"""
+    from src.services import job_runner as job_runner_module
+
+    class _FakeStats:
+        def __init__(self) -> None:
+            self.processed = 0
+            self.failed = 1
+            self.fatal_error = "LLM request failed: Error code: 401 - invalid_api_key"
+            self.fatal_error_type = "auth"
+            self.failure_details = [{"task_id": "task-1", "fatal": True}]
+            self.duration_ms = 10
+
+        def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            return {
+                "processed": self.processed,
+                "failed": self.failed,
+                "fatal_error": self.fatal_error,
+                "fatal_error_type": self.fatal_error_type,
+                "failure_details": self.failure_details,
+                "duration_ms": self.duration_ms,
+            }
+
+    async def fake_run_process_tasks(**kwargs):
+        del kwargs
+        return _FakeStats()
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    monkeypatch.setattr(job_runner_module, "run_process_tasks", fake_run_process_tasks)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="process",
+            params={"config_path": "config/app.yaml", "force": True, "new_version": "v1"},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "error"
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["error"]["type"] == "permission"
+    assert loaded.payload["job"]["error"]["retryable"] is False
+    assert "401" in loaded.payload["job"]["error"]["message"]
+    asyncio.run(engine.dispose())
+
+
+def test_submit_process_job_marks_403_quota_failure_as_non_retryable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """403 / 配额耗尽这类错误应直接标记为不可重试失败。"""
+    from src.services import job_runner as job_runner_module
+
+    class _FakeStats:
+        def __init__(self) -> None:
+            self.processed = 0
+            self.failed = 1
+            self.fatal_error = "LLM request failed: Error code: 403 - AllocationQuota.FreeTierOnly"
+            self.fatal_error_type = "auth"
+            self.failure_details = [{"task_id": "task-1", "fatal": True}]
+            self.duration_ms = 10
+
+        def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            return {
+                "processed": self.processed,
+                "failed": self.failed,
+                "fatal_error": self.fatal_error,
+                "fatal_error_type": self.fatal_error_type,
+                "failure_details": self.failure_details,
+                "duration_ms": self.duration_ms,
+            }
+
+    async def fake_run_process_tasks(**kwargs):
+        del kwargs
+        return _FakeStats()
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    monkeypatch.setattr(job_runner_module, "run_process_tasks", fake_run_process_tasks)
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="process",
+            params={"config_path": "config/app.yaml", "force": True, "new_version": "v1"},
+            created_by="web",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "error"
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["error"]["type"] == "permission"
+    assert loaded.payload["job"]["error"]["retryable"] is False
+    assert loaded.payload["job"]["retry_count"] == loaded.payload["job"]["max_retries"]
+    assert "403" in loaded.payload["job"]["error"]["message"]
+    asyncio.run(engine.dispose())
+
+
 def test_run_pending_jobs_once_processes_pending_jobs(tmp_path: Path) -> None:
     """JobRunner 应能轮询并执行 pending Job。"""
     calls: dict[str, Any] = {}

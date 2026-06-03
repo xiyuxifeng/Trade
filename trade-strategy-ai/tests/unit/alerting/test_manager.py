@@ -1,6 +1,10 @@
 """AlertManager 扩展测试（S7-007）。"""
-import pytest
+import uuid
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.alerting.models import AlertEvent, AlertLevel
 
@@ -109,3 +113,56 @@ class TestAlertManagerExtensions:
         )
 
         manager.fire_alert(alert, session=None)
+
+    @pytest.mark.asyncio
+    async def test_async_persist_uses_independent_session_scope(self):
+        """告警持久化应使用独立 session_scope，不复用外层 session。"""
+        from src.alerting.manager import AlertManager
+
+        cfg = {
+            "alerting": {
+                "channel": "generic",
+                "aggregation": {"window_minutes": 0, "max_count": 100},
+                "min_level": "WARNING",
+                "console_output": False,
+            }
+        }
+        manager = AlertManager(alerting_config=cfg)
+
+        inner_session = AsyncMock()
+        repo = MagicMock()
+        record = MagicMock()
+        record.id = uuid.uuid4()
+        repo.insert = AsyncMock(return_value=record)
+        repo.update_status = AsyncMock(return_value=record)
+
+        alert = AlertEvent(
+            id="persist-001",
+            level=AlertLevel.WARNING,
+            title="持久化告警",
+            message="persist me",
+            tags=["test"],
+            metadata={
+                "aggregation_key": "agg-key",
+                "aggregated_count": 2,
+                "aggregation_window_start": "2026-06-01T00:00:00+00:00",
+            },
+        )
+
+        @asynccontextmanager
+        async def fake_session_scope():
+            yield inner_session
+
+        with patch("src.alerting.manager.session_scope", fake_session_scope):
+            await manager._async_persist(
+                alert,
+                "generic",
+                "sent",
+                repo,
+                datetime.now(UTC),
+            )
+
+        repo.insert.assert_awaited_once()
+        assert repo.insert.await_args.kwargs["session"] is inner_session
+        repo.update_status.assert_awaited_once()
+        assert repo.update_status.await_args.args[0] is inner_session

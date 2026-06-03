@@ -6,10 +6,10 @@ AlertHistory ORM 模型 + AlertHistoryRepository。
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Sequence
 
-from sqlalchemy import String, Text, Index, select, func
+from sqlalchemy import DateTime, String, Text, Index, select, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,14 +32,19 @@ class AlertHistory(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     aggregated_count: Mapped[int] = mapped_column(default=1)
     aggregation_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    aggregation_window_start: Mapped[datetime | None] = mapped_column(nullable=True)
-    sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    acknowledged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    aggregation_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acknowledged_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     alert_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+        nullable=False,
+    )
 
     __table_args__ = (
         Index("idx_alert_history_status", "status"),
@@ -81,7 +86,7 @@ class AlertHistoryRepository:
             status="pending",
         )
         session.add(record)
-        await session.commit()
+        await session.flush()
         await session.refresh(record)
         return record
 
@@ -114,7 +119,7 @@ class AlertHistoryRepository:
             record.resolved_at = resolved_at
         if resolved_by is not None:
             record.resolved_by = resolved_by
-        await session.commit()
+        await session.flush()
         await session.refresh(record)
         return record
 

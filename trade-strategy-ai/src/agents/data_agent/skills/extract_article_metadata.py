@@ -3,18 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable, Callable
 from uuid import UUID
 
 # 并发处理限制：每次同时处理的文章数
 CONCURRENCY_LIMIT = 3
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from src.common.config import AppConfig
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
@@ -27,14 +27,26 @@ from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.persona.schemas import ArticlePrecondition, ArticleStrategyRule
 from src.common.logger import get_logger
+from src.services.job_control import JobControlInterrupted
 from src.schemas.contracts import AgentTask
 
 logger = get_logger(__name__)
 
 
+CancelCheck = Callable[[], Awaitable[bool]]
+
+
+async def _raise_if_cancelled(cancel_check: CancelCheck | None) -> None:
+    """在协作式取消点检查是否需要中断。"""
+    if cancel_check is not None and await cancel_check():
+        raise JobControlInterrupted("cancel")
+
+
 class ExtractErrorType(StrEnum):
     """LLM 抽取错误分类"""
     NETWORK = "network"      # 网络请求失败
+    AUTH = "auth"            # 鉴权/Key 错误
+    CONFIG = "config"        # 配置错误
     JSON_PARSE = "json_parse"  # JSON 解析失败
     SCHEMA_VALIDATION = "schema_validation"  # Schema 校验失败（输出不合规）
     QUALITY = "quality"    # 输出质量不达标（空结果、置信度低）
@@ -67,6 +79,10 @@ class ExtractStats:
     schema_invalid_preconds: int = 0
     # P2-LLM-002: 错误分类统计
     errors_by_type: dict[str, int] = None
+    failure_details: list[dict[str, Any]] = field(default_factory=list)
+    fatal_error: str | None = None
+    fatal_error_type: str | None = None
+    fatal_article_id: str | None = None
 
     def __post_init__(self):
         if self.errors_by_type is None:
@@ -234,6 +250,16 @@ def _record_error(
         timestamp=_now_utc().isoformat(),
     )
     append_jsonl(error_log_path, asdict(record))
+
+
+def _classify_llm_error(exc: LLMError) -> tuple[ExtractErrorType, bool]:
+    """将 LLMError 分类为抽取错误类型。"""
+    message = str(exc).lower()
+    if not exc.retryable:
+        if exc.code == "config" or "not configured" in message or "unsupported llm provider" in message:
+            return ExtractErrorType.CONFIG, True
+        return ExtractErrorType.AUTH, True
+    return ExtractErrorType.NETWORK, False
 
 
 def _load_checkpoint(*, checkpoint_path: Path) -> set[str]:
@@ -1053,6 +1079,7 @@ class ExtractionRunState:
     llm_model: str | None = None
     error_message: str | None = None
     error_type: ExtractErrorType | None = None
+    fatal: bool = False
     skipped: bool = False
     failed: bool = False
     success: bool = False
@@ -1069,12 +1096,17 @@ async def _run_article_extraction_pipeline(
     checkpoint_path: Path,
     version: str,
     llm_provider: str,
+    cancel_check: CancelCheck | None = None,
 ) -> ExtractionRunState:
     """执行分类、抽取、校验和落库的公共流水线。"""
     state = ExtractionRunState(llm_provider=llm_provider)
+    await _raise_if_cancelled(cancel_check)
 
     if client.is_enabled():
+        state.mode = "llm"
+        state.llm_provider = llm_provider
         try:
+            await _raise_if_cancelled(cancel_check)
             from src.article_classifier.classifier import classify_article
 
             classification = await classify_article(
@@ -1086,6 +1118,46 @@ async def _run_article_extraction_pipeline(
                 session=session,
                 article=article,
                 classification=classification,
+                llm_provider=llm_provider,
+                version=version,
+            )
+            meta.article_type = persisted.article_type
+            state.classification_type = persisted.article_type
+            await session.commit()
+        except LLMError as exc:
+            error_type, is_fatal = _classify_llm_error(exc)
+            if is_fatal:
+                state.failed = True
+                state.fatal = True
+                state.error_type = error_type
+                state.error_message = str(exc)
+                meta.raw_llm_output = {"mode": "fatal_error", "error": state.error_message}
+                logger.warning(
+                    "LLM fatal error during classification: article_id=%s error_type=%s error=%s",
+                    article.id,
+                    error_type.value,
+                    state.error_message,
+                )
+                _record_error(
+                    article_id=str(article.id),
+                    source_url=article.source_url,
+                    error_type=error_type,
+                    error_message=state.error_message,
+                    raw_output=None,
+                    error_log_path=error_log_path,
+                )
+                return state
+            meta.article_type = ArticleType.NOISE.value
+            fallback_classification = SimpleNamespace(
+                article_type=ArticleType.NOISE.value,
+                confidence=0.0,
+                type_scores={},
+                reason="classification failed",
+            )
+            persisted = await _persist_article_classification(
+                session=session,
+                article=article,
+                classification=fallback_classification,
                 llm_provider=llm_provider,
                 version=version,
             )
@@ -1127,27 +1199,38 @@ async def _run_article_extraction_pipeline(
         state.mode = "llm"
         state.llm_provider = llm_provider
         try:
+            await _raise_if_cancelled(cancel_check)
             llm_result = await _extract_one_with_retry(client=client, prompts_dir=prompts_dir, article=article)
             raw = llm_result.data
             state.llm_model = llm_result.model
         except LLMError as exc:
+            error_type, is_fatal = _classify_llm_error(exc)
             state.failed = True
-            state.error_type = ExtractErrorType.NETWORK
+            state.fatal = is_fatal
+            state.error_type = error_type
             state.error_message = str(exc)
-            meta.raw_llm_output = {"mode": "fallback_on_error", "error": state.error_message}
+            meta.raw_llm_output = {"mode": "fatal_error" if is_fatal else "fallback_on_error", "error": state.error_message}
             _record_error(
                 article_id=str(article.id),
                 source_url=article.source_url,
-                error_type=ExtractErrorType.NETWORK,
+                error_type=error_type,
                 error_message=state.error_message,
                 raw_output=None,
                 error_log_path=error_log_path,
             )
-            _add_to_checkpoint(
-                article_id=str(article.id),
-                error=state.error_message,
-                checkpoint_path=checkpoint_path,
-            )
+            if is_fatal:
+                logger.warning(
+                    "LLM fatal error during extraction: article_id=%s error_type=%s error=%s",
+                    article.id,
+                    error_type.value,
+                    state.error_message,
+                )
+            else:
+                _add_to_checkpoint(
+                    article_id=str(article.id),
+                    error=state.error_message,
+                    checkpoint_path=checkpoint_path,
+                )
             return state
         except Exception as exc:  # noqa: BLE001
             state.failed = True
@@ -1165,6 +1248,7 @@ async def _run_article_extraction_pipeline(
             return state
 
     try:
+        await _raise_if_cancelled(cancel_check)
         raw_rules = raw.get("strategy_rules") if raw else None
         raw_preconds = raw.get("preconditions") if raw else None
         rules = _validate_rules(raw_rules, source_url=article.source_url, published_at=article.published_at)
@@ -1200,6 +1284,7 @@ async def _run_article_extraction_pipeline(
     meta.model = state.llm_model
     meta.extraction_version = version
 
+    await _raise_if_cancelled(cancel_check)
     await _finalize_extraction_artifacts(
         session=session,
         article=article,
@@ -1309,6 +1394,7 @@ async def _process_article_isolated(
     pending_path: Path,
     error_log_path: Path,
     checkpoint_path: Path,
+    cancel_check: CancelCheck | None = None,
 ) -> dict:
     """独立的文章处理函数，每个调用使用自己的数据库 session。
 
@@ -1323,6 +1409,7 @@ async def _process_article_isolated(
         "scanned": 0,
         "skipped": 0,
         "failed": 0,
+        "fatal": False,
         "extracted": 0,
         "generated_tasks": 0,
         "llm_calls": 0,
@@ -1332,47 +1419,32 @@ async def _process_article_isolated(
         "schema_valid_preconds": 0,
         "schema_invalid_preconds": 0,
         "error_type": None,
+        "failure_detail": None,
         "llm_provider": None,
         "llm_model": None,
     }
 
     async with session_scope() as session:
+        await _raise_if_cancelled(cancel_check)
         article = await session.get(BlogArticle, article_id)
         if not article:
             result["error"] = f"Article not found: {article_id}"
             return result
 
         # 查找或创建该版本的 ArticleMetadata
-        if version == "v1":
-            # 先查找该文章是否有任何 metadata 记录
-            meta = await session.scalar(
-                select(ArticleMetadata).where(
-                    ArticleMetadata.article_id == article_id,
-                )
+        meta = await session.scalar(
+            select(ArticleMetadata).where(
+                ArticleMetadata.article_id == article_id,
+                ArticleMetadata.version == version,
             )
-            if meta and meta.processed_at is not None:
-                # 已有处理完成的 metadata，跳过
-                result["scanned"] = 1
-                result["error"] = "Already processed"
-                return result
-            if not meta:
-                # 没有记录，创建新记录
-                meta = ArticleMetadata(article_id=article_id, version=version)
-                session.add(meta)
-                await session.flush()
-        else:
-            # v2+：查找该版本的元数据记录是否已存在
-            existing = await session.scalar(
-                select(ArticleMetadata).where(
-                    ArticleMetadata.article_id == article_id,
-                    ArticleMetadata.version == version,
-                )
-            )
-            if existing:
-                result["scanned"] = 1
-                result["error"] = f"Version {version} metadata already exists"
-                return result
-            # 创建新记录
+        )
+        if meta and meta.processed_at is not None:
+            # 当前版本已处理完成，跳过
+            result["scanned"] = 1
+            result["error"] = "Already processed"
+            return result
+        if not meta:
+            # 当前版本没有记录，创建新记录
             meta = ArticleMetadata(article_id=article_id, version=version)
             session.add(meta)
             await session.flush()
@@ -1388,6 +1460,7 @@ async def _process_article_isolated(
             checkpoint_path=checkpoint_path,
             version=version,
             llm_provider=llm_provider,
+            cancel_check=cancel_check,
         )
 
         if state.mode == "llm":
@@ -1404,7 +1477,17 @@ async def _process_article_isolated(
 
         if state.failed:
             result["failed"] = 1
+            result["error"] = state.error_message
             result["error_type"] = state.error_type.value if state.error_type else None
+            result["fatal"] = state.fatal
+            result["failure_detail"] = {
+                "article_id": str(article.id),
+                "source_url": article.source_url,
+                "error_type": state.error_type.value if state.error_type else None,
+                "error": state.error_message,
+                "fatal": state.fatal,
+                "retryable": not state.fatal,
+            }
             return result
 
         raw = meta.raw_llm_output.get("raw") if isinstance(meta.raw_llm_output, dict) else None
@@ -1515,6 +1598,8 @@ async def extract_and_store_metadata(
     force: bool = False,
     version: str = "v1",
     total_limit: int | None = None,
+    target_article_ids: list[UUID] | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> ExtractStats:
     """流式批次处理：每批加载 CONCURRENCY_LIMIT * 7 = 21 条，并发处理完后再加载下一批，直到没有数据为止。"""
     prompts_dir = base_dir / "prompts"
@@ -1545,6 +1630,8 @@ async def extract_and_store_metadata(
     # 每批大小：并发数的 7 倍，确保每批能充分利用并发
     BATCH_SIZE = CONCURRENCY_LIMIT * 7
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    target_queue = list(target_article_ids or [])
+    target_only_mode = target_article_ids is not None
 
     async def process_one(article_id: UUID) -> dict:
         async with semaphore:
@@ -1557,6 +1644,7 @@ async def extract_and_store_metadata(
                 pending_path=pending_path,
                 error_log_path=error_log_path,
                 checkpoint_path=checkpoint_path,
+                cancel_check=cancel_check,
             )
 
     async def load_batch() -> list[UUID]:
@@ -1565,11 +1653,23 @@ async def extract_and_store_metadata(
         不使用 offset 分页：因为 WHERE 条件过滤掉已处理文章后，
         后续查询从 offset=0 开始不会重复拉取已处理的文章。
         """
+        if target_queue:
+            batch = target_queue[:BATCH_SIZE]
+            del target_queue[:BATCH_SIZE]
+            return batch
+        if target_only_mode:
+            return []
         async with session_scope() as session:
             if version == "v1":
                 rows = await session.execute(
                     select(BlogArticle.id)
-                    .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+                    .outerjoin(
+                        ArticleMetadata,
+                        and_(
+                            ArticleMetadata.article_id == BlogArticle.id,
+                            ArticleMetadata.version == version,
+                        ),
+                    )
                     .where(
                         or_(
                             ArticleMetadata.id.is_(None),
@@ -1609,6 +1709,7 @@ async def extract_and_store_metadata(
     async def run() -> ExtractStats:
         total_processed = 0
         while True:
+            await _raise_if_cancelled(cancel_check)
             batch_ids = await load_batch()
             if not batch_ids:
                 break
@@ -1617,6 +1718,7 @@ async def extract_and_store_metadata(
                 batch_ids = batch_ids[: total_limit - total_processed]
                 if not batch_ids:
                     break
+            await _raise_if_cancelled(cancel_check)
             print(f"[extract_and_store_metadata] processing batch of {len(batch_ids)} articles (total_processed={total_processed})")
             results = await process_batch(batch_ids)
 
@@ -1624,6 +1726,7 @@ async def extract_and_store_metadata(
             for r in results:
                 if isinstance(r, Exception):
                     stats.failed += 1
+                    stats.failure_details.append({"error": str(r), "fatal": False, "retryable": True})
                     continue
                 stats.scanned += r.get("scanned", 0)
                 stats.extracted += r.get("extracted", 0)
@@ -1636,8 +1739,20 @@ async def extract_and_store_metadata(
                 stats.schema_invalid_rules += r.get("schema_invalid_rules", 0)
                 stats.schema_valid_preconds += r.get("schema_valid_preconds", 0)
                 stats.schema_invalid_preconds += r.get("schema_invalid_preconds", 0)
+                failure_detail = r.get("failure_detail")
+                if isinstance(failure_detail, dict):
+                    stats.failure_details.append(failure_detail)
+                if r.get("fatal"):
+                    stats.fatal_error = r.get("error")
+                    stats.fatal_error_type = r.get("error_type")
+                    stats.fatal_article_id = (
+                        failure_detail.get("article_id") if isinstance(failure_detail, dict) else None
+                    )
+                    break
 
             total_processed += len(batch_ids)
+            if stats.fatal_error:
+                break
 
         return stats
 

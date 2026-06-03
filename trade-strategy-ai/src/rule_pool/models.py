@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
@@ -18,7 +18,7 @@ class RulePool(Base, TimestampMixin):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         primary_key=True,
-        default=lambda: UUID('00000000-0000-0000-0000-000000000000'),  # 占位，实际由应用生成
+        default=uuid4,
     )
     rule_id: Mapped[str] = mapped_column(
         String(128),
@@ -132,7 +132,7 @@ class TradeSample(Base, TimestampMixin):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         primary_key=True,
-        default=lambda: UUID('00000000-0000-0000-0000-000000000000'),
+        default=uuid4,
     )
     sample_id: Mapped[str] = mapped_column(
         String(128),
@@ -213,7 +213,7 @@ class ArticleClassification(Base, TimestampMixin):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         primary_key=True,
-        default=lambda: UUID('00000000-0000-0000-0000-000000000000'),
+        default=uuid4,
     )
     article_id: Mapped[UUID] = mapped_column(
         Uuid,

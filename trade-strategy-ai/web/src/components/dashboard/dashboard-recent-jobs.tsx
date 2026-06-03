@@ -27,8 +27,8 @@ export function DashboardRecentJobsPanel() {
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-slate-900">最近失败任务</CardTitle>
-            <CardDescription>优先关注失败或异常的 Job。</CardDescription>
+            <CardTitle className="text-slate-900">最近任务</CardTitle>
+            <CardDescription>优先展示失败任务；如果没有失败任务，则显示最近运行记录。</CardDescription>
           </div>
           <button
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50"

@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import UUID
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.models.config_profile import ConfigProfile
@@ -255,6 +257,59 @@ def test_job_state_transitions_and_cancel(tmp_path: Path) -> None:
     assert cancelled.payload["job"]["cancel_requested_at"] is not None
     assert cancelled.payload["job"]["created_by"] == "web"
     assert len(cancelled.payload["job"]["audit_events"]) >= 2
+
+    asyncio.run(engine.dispose())
+
+
+def test_heartbeat_job_records_audit_at_most_once_per_hour(tmp_path: Path) -> None:
+    """心跳应持续刷新 heartbeat_at，但审计最多每小时记录一次。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+    asyncio.run(service.start_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+
+    first = asyncio.run(service.heartbeat_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+    second = asyncio.run(service.heartbeat_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+
+    first_heartbeat_at = datetime.fromisoformat(first.payload["job"]["heartbeat_at"])
+    second_heartbeat_at = datetime.fromisoformat(second.payload["job"]["heartbeat_at"])
+
+    assert second_heartbeat_at >= first_heartbeat_at
+    assert len([event for event in second.payload["job"]["audit_events"] if event["operation"] == "heartbeat"]) == 1
+
+    asyncio.run(engine.dispose())
+
+
+def test_heartbeat_job_records_audit_again_after_one_hour(tmp_path: Path) -> None:
+    """超过一小时后，心跳审计应再次记录。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+    asyncio.run(service.start_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+
+    asyncio.run(service.heartbeat_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+
+    async def _backdate_last_heartbeat() -> None:
+        session_scope = service._ensure_session_factory()  # noqa: SLF001
+        async with session_scope() as session:
+            stmt = (
+                select(JobAuditEvent)
+                .where(JobAuditEvent.job_id == UUID(job_id), JobAuditEvent.operation == "heartbeat")
+                .order_by(JobAuditEvent.event_at.desc(), JobAuditEvent.created_at.desc(), JobAuditEvent.id.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            event = result.scalar_one()
+            event.event_at = datetime.now(UTC) - timedelta(hours=2)
+
+    asyncio.run(_backdate_last_heartbeat())
+
+    updated = asyncio.run(service.heartbeat_job(job_id=job_id, worker_id="worker-1", lock_token="lock-1"))
+
+    heartbeat_events = [event for event in updated.payload["job"]["audit_events"] if event["operation"] == "heartbeat"]
+    assert len(heartbeat_events) == 2
 
     asyncio.run(engine.dispose())
 
@@ -666,5 +721,27 @@ def test_failed_job_exhausts_retries_and_is_not_listed_again(tmp_path: Path) -> 
     ready_pending = asyncio.run(service.list_ready_jobs(limit=10))
 
     assert pending_id in {item["id"] for item in ready_pending.payload["items"]}
+
+    asyncio.run(engine.dispose())
+
+
+def test_failed_job_with_non_retryable_error_exhausts_retries_immediately(tmp_path: Path) -> None:
+    """不可重试错误应直接耗尽 Job 重试次数。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="crawl", params={}, created_by="web", max_retries=3, retry_backoff_seconds=0))
+    job_id = created.payload["job"]["id"]
+    failed = asyncio.run(
+        service.fail_job(
+            job_id=job_id,
+            error={"type": "permission", "message": "403 forbidden", "retryable": False},
+        )
+    )
+    ready_after_failure = asyncio.run(service.list_ready_jobs(limit=10))
+
+    assert failed.payload["job"]["retry_count"] == failed.payload["job"]["max_retries"]
+    assert failed.payload["job"]["scheduled_at"] is None
+    assert ready_after_failure.payload["count"] == 0
+    assert job_id not in {item["id"] for item in ready_after_failure.payload["items"]}
 
     asyncio.run(engine.dispose())

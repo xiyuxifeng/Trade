@@ -42,3 +42,37 @@ async def test_run_pipeline_records_audit_event(tmp_path: Path) -> None:
     assert audit_kwargs["event_type"] == "article_ingested_batch"
     assert audit_kwargs["actor"] == "pipeline.run_pipeline"
     assert audit_kwargs["source"] == "pipeline"
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_aborts_when_process_reports_failures(tmp_path: Path) -> None:
+    config = AppConfig()
+    base_dir = tmp_path / "project"
+    base_dir.mkdir()
+
+    audit_record = AsyncMock(return_value=SimpleNamespace(id="audit-1"))
+    audit_cls = MagicMock(return_value=SimpleNamespace(record=audit_record))
+
+    with (
+        patch("src.pipeline.dag.AuditService", audit_cls),
+        patch("src.pipeline.dag.run_crawl_task", return_value=SimpleNamespace(outputs=[])),
+        patch("src.pipeline.dag.run_clean_task", return_value=SimpleNamespace(cleaned_paths=[])),
+        patch("src.pipeline.dag.run_validate_task", return_value=SimpleNamespace(validated_paths=[])),
+        patch("src.pipeline.dag.store_articles_jsonl_to_db", AsyncMock(return_value=SimpleNamespace(
+            read_records=1,
+            inserted_articles=1,
+            updated_articles=0,
+            skipped_duplicates=0,
+            ensured_metadata=1,
+            generated_tasks=1,
+        ))),
+        patch("src.pipeline.dag.run_process_tasks", AsyncMock(return_value=SimpleNamespace(
+            processed=0,
+            failed=1,
+            fatal_error=None,
+            duration_ms=10,
+        ))),
+        patch("src.pipeline.dag.run_export_task", AsyncMock(return_value=SimpleNamespace(stats=SimpleNamespace(), duckdb_path=Path("x")))),
+    ):
+        with pytest.raises(RuntimeError, match="process completed with failures"):
+            await run_pipeline(config=config, base_dir=base_dir, max_articles=1, force=True)

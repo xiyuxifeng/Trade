@@ -119,6 +119,52 @@ def test_pipeline_service_runs_crawl_and_pipeline_steps(tmp_path: Path, monkeypa
     assert step_call["force"] is True
 
 
+def test_pipeline_service_run_pipeline_step_limits_to_current_step(tmp_path: Path, monkeypatch) -> None:
+    """PipelineService 的单步入口应只执行当前 step，不继续后续步骤。"""
+    from src.services.pipeline_service import PipelineService
+    from src.common.config import load_app_config
+    from types import SimpleNamespace
+
+    calls: dict[str, object] = {}
+
+    async def fake_pipeline(**kwargs):
+        calls["pipeline"] = kwargs
+        return _FakePipelineResult(name="pipeline", nested=_FakeNested(value="ok"))
+
+    loaded = load_app_config(Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/config/app.yaml"))
+
+    async def fake_load_profile_runtime_config(profile_id: str):
+        return SimpleNamespace(
+            profile_id=profile_id,
+            config=loaded.config,
+            base_dir=Path("/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai"),
+            profile_snapshot_id="profile-snapshot-default",
+        )
+
+    monkeypatch.setattr(
+        "src.services.pipeline_service.ConfigProfileService",
+        lambda: SimpleNamespace(load_profile_runtime_config=fake_load_profile_runtime_config),
+    )
+    service = PipelineService(
+        pipeline_runner=fake_pipeline,
+    )
+
+    asyncio.run(
+        service.run_pipeline_step(
+            step="process",
+            profile_id="default",
+            max_articles=3,
+            force=True,
+            use_db=True,
+            new_version="v3",
+        )
+    )
+
+    pipeline_call = dict(calls["pipeline"])
+    assert pipeline_call["from_step"] == "process"
+    assert pipeline_call["until_step"] == "process"
+
+
 def test_pipeline_service_runs_clusters_build(tmp_path: Path) -> None:
     """PipelineService 应能封装聚类构建（extract-articles 已合并到 pipeline-step process）。"""
     from src.services.pipeline_service import PipelineService

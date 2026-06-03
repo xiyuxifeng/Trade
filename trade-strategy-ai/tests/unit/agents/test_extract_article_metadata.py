@@ -16,6 +16,7 @@ from src.models.blog_article import BlogArticle
 from src.persona.claim_keys import ClaimKey
 from src.persona.schemas import ActionSpec, ArticlePrecondition, ArticleStrategyRule, InstrumentFocus
 from src.rule_pool.models import ArticleClassification
+from src.services.job_control import JobControlInterrupted
 
 
 def _make_article(*, content_text: str, raw_payload: dict | None = None) -> BlogArticle:
@@ -364,3 +365,252 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
     assert meta.raw_llm_output["mode"] == "fallback_on_error"
     assert meta.raw_llm_output["error"] == "network timeout"
     assert meta.trading_symbols == []
+
+
+@pytest.mark.asyncio
+async def test_run_article_extraction_pipeline_aborts_on_fatal_llm_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
+        (prompts_dir / name).write_text("prompt", encoding="utf-8")
+
+    article = _make_article(content_text="600000.SH 走弱，考虑止损。" * 10)
+    meta = _make_metadata(article)
+
+    class _Session:
+        async def commit(self) -> None:
+            return None
+
+    async def fake_classify_article(**_: object) -> object:
+        return SimpleNamespace(article_type="noise", confidence=0.9, type_scores={}, reason="ok")
+
+    async def fake_persist_article_classification(**_: object) -> object:
+        return SimpleNamespace(article_type="noise")
+
+    async def fake_extract_one_with_retry(**_: object) -> object:
+        raise LLMError("LLM request failed: Error code: 401 - invalid_api_key", retryable=False, code="401")
+
+    monkeypatch.setattr("src.article_classifier.classifier.classify_article", fake_classify_article)
+    monkeypatch.setattr(mod, "_persist_article_classification", fake_persist_article_classification)
+    monkeypatch.setattr(mod, "_extract_one_with_retry", fake_extract_one_with_retry)
+
+    state = await mod._run_article_extraction_pipeline(
+        session=_Session(),
+        article=article,
+        meta=meta,
+        client=SimpleNamespace(is_enabled=lambda: True),
+        prompts_dir=prompts_dir,
+        error_log_path=tmp_path / "error.log",
+        checkpoint_path=tmp_path / "checkpoint.jsonl",
+        version="v1",
+        llm_provider="llm",
+    )
+
+    assert state.failed is True
+    assert state.fatal is True
+    assert state.error_type == mod.ExtractErrorType.AUTH
+    assert "invalid_api_key" in (state.error_message or "")
+    assert meta.raw_llm_output["mode"] == "fatal_error"
+    assert meta.processed_at is None
+
+
+@pytest.mark.asyncio
+async def test_extract_and_store_metadata_v1_only_uses_v1_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
+        (prompts_dir / name).write_text("prompt", encoding="utf-8")
+
+    article_v1_target = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
+    article_other_version = _make_article(content_text="600000.SH 仍需观察，谨慎一点。" * 10)
+    meta_v1_target = _make_metadata(article_v1_target)
+    meta_other_version = _make_metadata(article_other_version)
+    meta_other_version.version = "v2"
+    meta_other_version.processed_at = datetime.now(UTC)
+
+    class _QueryAwareSession:
+        def __init__(self) -> None:
+            self.added: list[object] = []
+            self.committed = 0
+            self._execute_calls = 0
+            self._scalar_calls = 0
+
+        async def execute(self, query: object) -> _Result:
+            self._execute_calls += 1
+            if self._execute_calls > 1:
+                return _Result([])
+
+            compiled = str(query)
+            if "schema_version" in compiled:
+                return _Result([(article_v1_target.id,)])
+            return _Result([(article_v1_target.id,), (article_other_version.id,)])
+
+        async def flush(self) -> None:
+            return None
+
+        async def commit(self) -> None:
+            self.committed += 1
+
+        def add(self, obj: object) -> None:
+            self.added.append(obj)
+
+        async def scalar(self, query: object) -> object | None:
+            self._scalar_calls += 1
+            if self._scalar_calls == 1:
+                return meta_v1_target
+            if self._scalar_calls == 2:
+                return meta_other_version
+            return None
+
+        async def get(self, _model: type, article_id: object) -> object | None:
+            if article_id == article_v1_target.id:
+                return article_v1_target
+            if article_id == article_other_version.id:
+                return article_other_version
+            return None
+
+    session = _QueryAwareSession()
+
+    @asynccontextmanager
+    async def fake_session_scope() -> object:
+        yield session
+
+    async def fake_run_pipeline(**_: object) -> mod.ExtractionRunState:
+        return mod.ExtractionRunState(
+            classification_type="noise",
+            mode="fallback_heuristic",
+            success=True,
+        )
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+    monkeypatch.setattr(mod, "_run_article_extraction_pipeline", fake_run_pipeline)
+
+    config = SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None))
+    pending_path = tmp_path / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
+
+    stats = await mod.extract_and_store_metadata(
+        config=config,
+        base_dir=tmp_path,
+        pending_tasks_path=pending_path,
+    )
+
+    assert stats.scanned == 1
+    assert stats.extracted == 1
+    assert stats.skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_extract_and_store_metadata_target_mode_does_not_fallback_to_db_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
+        (prompts_dir / name).write_text("prompt", encoding="utf-8")
+
+    target_article = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
+    other_article = _make_article(content_text="600000.SH 仍需观察，谨慎一点。" * 10)
+    target_meta = _make_metadata(target_article)
+    other_meta = _make_metadata(other_article)
+
+    class _TargetOnlySession:
+        def __init__(self) -> None:
+            self.execute_calls = 0
+            self.scalar_calls = 0
+            self.get_calls = 0
+
+        async def execute(self, _query: object) -> _Result:
+            self.execute_calls += 1
+            return _Result([(other_article.id,)])
+
+        async def flush(self) -> None:
+            return None
+
+        async def commit(self) -> None:
+            return None
+
+        def add(self, _obj: object) -> None:
+            return None
+
+        async def scalar(self, _query: object) -> object | None:
+            self.scalar_calls += 1
+            if self.scalar_calls == 1:
+                return target_meta
+            if self.scalar_calls == 2:
+                return other_meta
+            return None
+
+        async def get(self, _model: type, article_id: object) -> object | None:
+            self.get_calls += 1
+            if article_id == target_article.id:
+                return target_article
+            if article_id == other_article.id:
+                return other_article
+            return None
+
+    session = _TargetOnlySession()
+
+    @asynccontextmanager
+    async def fake_session_scope() -> object:
+        yield session
+
+    async def fake_run_pipeline(**_: object) -> mod.ExtractionRunState:
+        return mod.ExtractionRunState(
+            classification_type="noise",
+            mode="fallback_heuristic",
+            success=True,
+        )
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+    monkeypatch.setattr(mod, "_run_article_extraction_pipeline", fake_run_pipeline)
+
+    config = SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None))
+    pending_path = tmp_path / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
+
+    stats = await mod.extract_and_store_metadata(
+        config=config,
+        base_dir=tmp_path,
+        pending_tasks_path=pending_path,
+        target_article_ids=[target_article.id],
+    )
+
+    assert stats.scanned == 1
+    assert stats.extracted == 1
+    assert session.execute_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_process_article_isolated_respects_cancel_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
+        (prompts_dir / name).write_text("prompt", encoding="utf-8")
+
+    article = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
+
+    async def cancel_check() -> bool:
+        return True
+
+    @asynccontextmanager
+    async def fake_session_scope() -> object:
+        class _Session:
+            async def get(self, _model: type, _id: object) -> object | None:
+                raise AssertionError("session.get should not be reached when cancelled early")
+
+        yield _Session()
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+
+    with pytest.raises(JobControlInterrupted):
+        await mod._process_article_isolated(
+            article_id=article.id,
+            version="v1",
+            llm_provider="llm",
+            client=SimpleNamespace(is_enabled=lambda: True),
+            prompts_dir=prompts_dir,
+            pending_path=tmp_path / "pending.jsonl",
+            error_log_path=tmp_path / "error.log",
+            checkpoint_path=tmp_path / "checkpoint.jsonl",
+            cancel_check=cancel_check,
+        )

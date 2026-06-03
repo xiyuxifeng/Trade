@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from src.rule_pool.repository import RulePoolRepository
-from src.rule_pool.models import RulePool
+from src.rule_pool.models import ArticleClassification, RulePool, TradeSample
 from src.rule_pool.schemas import (
     MappingStatus,
     ReviewStatus,
@@ -163,6 +163,7 @@ class TestRulePoolRepository:
         assert mock_rule.mapping_status == MappingStatus.MAPPED.value
         assert mock_rule.mapped_by == "test_user"
         assert mock_rule.mapped_at is not None
+        assert mock_rule.mapped_at.tzinfo is not None
         mock_session.flush.assert_called_once()
 
     @pytest.mark.asyncio
@@ -204,6 +205,7 @@ class TestRulePoolRepository:
         assert mock_rule.review_status == ReviewStatus.APPROVED.value
         assert mock_rule.reviewed_by == "reviewer_001"
         assert mock_rule.reviewed_at is not None
+        assert mock_rule.reviewed_at.tzinfo is not None
         mock_session.flush.assert_called_once()
 
     @pytest.mark.asyncio
@@ -255,6 +257,7 @@ class TestRulePoolRepository:
 
         assert result is True
         assert mock_rule.backtest_triggered_at is not None
+        assert mock_rule.backtest_triggered_at.tzinfo is not None
         assert mock_rule.backtest_hits == 70
         assert mock_rule.backtest_misses == 30
         assert mock_rule.backtest_samples == 100
@@ -338,6 +341,14 @@ class TestRulePoolRepository:
 
 class TestRulePoolRepositoryConversion:
     """测试 RulePoolRepository 的 ORM <-> Schema 转换方法"""
+
+    def test_primary_key_defaults_use_uuid4(self):
+        """rule_pool 相关表的主键默认值必须是 uuid4。"""
+        for table in (RulePool.__table__, TradeSample.__table__, ArticleClassification.__table__):
+            default_fn = table.c.id.default.arg
+            assert callable(default_fn)
+            assert getattr(default_fn, "__name__", None) == "uuid4"
+            assert getattr(default_fn, "__module__", None) == "uuid"
 
     def test_to_orm_model(self):
         """测试 _to_orm_model 方法"""

@@ -125,6 +125,7 @@ class PipelineService(BaseService):
         force: bool = False,
         skip_crawl: bool = False,
         from_step: str | None = None,
+        until_step: str | None = None,
         use_db: bool = False,
         retry_failed: bool = False,
         new_version: str | None = None,
@@ -139,6 +140,7 @@ class PipelineService(BaseService):
             force=force,
             skip_crawl=skip_crawl,
             from_step=from_step,
+            until_step=until_step,
             use_db=use_db,
             retry_failed=retry_failed,
             process_version=new_version or "v1",
@@ -168,7 +170,10 @@ class PipelineService(BaseService):
         new_version: str | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
-        """执行 pipeline 的单步或从指定步骤开始的链路。"""
+        """执行 pipeline 的单步。
+
+        这里的语义是只运行当前 step，不继续执行后续步骤，方便调试和定点恢复。
+        """
         return await self.run_pipeline(
             profile_id=profile_id,
             config_path=config_path,
@@ -176,6 +181,7 @@ class PipelineService(BaseService):
             force=force,
             skip_crawl=False,
             from_step=step,
+            until_step=step,
             use_db=use_db,
             retry_failed=retry_failed,
             new_version=new_version,

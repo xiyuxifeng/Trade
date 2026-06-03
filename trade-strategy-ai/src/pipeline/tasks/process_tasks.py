@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone as TZ, UTC
 from pathlib import Path
 from typing import Any, Callable, Awaitable
@@ -11,6 +11,7 @@ from typing import Any, Callable, Awaitable
 from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
+from src.services.job_control import JobControlInterrupted
 
 _logger = get_logger(__name__)
 
@@ -23,11 +24,25 @@ class ProcessTasksStats:
     failed: int = 0
     dead: int = 0
     duration_ms: int = 0
+    failure_details: list[dict[str, Any]] = field(default_factory=list)
+    fatal_error: str | None = None
+    fatal_error_type: str | None = None
+    fatal_task_id: str | None = None
+    fatal_task_type: str | None = None
 
 
 TaskHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 TASK_HANDLERS: dict[str, TaskHandler] = {}
+
+
+class ProcessFatalError(RuntimeError):
+    """表示当前 process job 应立即中止的不可恢复错误。"""
+
+    def __init__(self, message: str, *, task: dict[str, Any] | None = None, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.task = task or {}
+        self.details = details or {}
 
 
 def register_handler(task_type: str, handler: TaskHandler) -> None:
@@ -160,10 +175,12 @@ async def _should_skip_metadata_extracted(details: dict[str, Any]) -> bool:
     except (ValueError, TypeError):
         return False
 
+    version = details.get("version")
     async with session_scope() as session:
-        meta = await session.scalar(
-            select(ArticleMetadata).where(ArticleMetadata.article_id == article_uuid)
-        )
+        query = select(ArticleMetadata).where(ArticleMetadata.article_id == article_uuid)
+        if isinstance(version, str) and version:
+            query = query.where(ArticleMetadata.version == version)
+        meta = await session.scalar(query)
         return meta is not None and meta.processed_at is not None
 
 
@@ -195,6 +212,8 @@ async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -
         try:
             await handler(details)
             return True, False
+        except ProcessFatalError:
+            raise
         except Exception as exc:
             last_error = exc
             if attempt < MAX_RETRIES - 1:
@@ -208,7 +227,13 @@ PENDING_PATH = resolve_project_path("data/processed/pipeline/pending_tasks.jsonl
 FAILED_PATH = resolve_project_path("data/processed/pipeline/failed_tasks.jsonl")
 
 
-def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "v1") -> dict[str, TaskHandler]:
+def _create_handlers(
+    config: AppConfig,
+    *,
+    force: bool = False,
+    version: str = "v1",
+    cancel_check: Callable[[], Awaitable[bool]] | None = None,
+) -> dict[str, TaskHandler]:
     """Create handler closures that explicitly capture config.
 
     Each handler is a local async function that closes over the config
@@ -219,13 +244,64 @@ def _create_handlers(config: AppConfig, *, force: bool = False, version: str = "
         from src.agents.data_agent.skills.extract_article_metadata import (
             extract_and_store_metadata,
         )
+        from src.db.session import session_scope
+        from src.models.article_metadata import ArticleMetadata
+        from sqlalchemy import select
+        from uuid import UUID
 
-        await extract_and_store_metadata(
+        article_id_str = details.get("article_id")
+        if not isinstance(article_id_str, str) or not article_id_str:
+            raise ValueError("article_ingested task missing article_id")
+        stats = await extract_and_store_metadata(
             config=config,
             base_dir=resolve_project_path("."),
             force=force,
             version=version,
+            target_article_ids=[UUID(article_id_str)],
+            cancel_check=cancel_check,
         )
+        fatal_error = getattr(stats, "fatal_error", None)
+        if fatal_error:
+            raise ProcessFatalError(
+                fatal_error,
+                task={"type": "article_ingested", "details": details},
+                details={
+                    "error_type": getattr(stats, "fatal_error_type", None),
+                    "article_id": getattr(stats, "fatal_article_id", None) or article_id_str,
+                    "failure_details": getattr(stats, "failure_details", []),
+                },
+            )
+        if int(getattr(stats, "failed", 0) or 0) > 0:
+            raise ProcessFatalError(
+                f"article metadata extraction returned failures: failed={int(getattr(stats, 'failed', 0) or 0)}",
+                task={"type": "article_ingested", "details": details},
+                details={
+                    "article_id": article_id_str,
+                    "failure_details": getattr(stats, "failure_details", []),
+                },
+            )
+        async with session_scope() as session:
+            persisted_meta = await session.scalar(
+                select(ArticleMetadata).where(
+                    ArticleMetadata.article_id == UUID(article_id_str),
+                    ArticleMetadata.version == version,
+                )
+            )
+        if persisted_meta is None or persisted_meta.processed_at is None:
+            raise ProcessFatalError(
+                "article metadata was not persisted after extraction",
+                task={"type": "article_ingested", "details": details},
+                details={
+                    "article_id": article_id_str,
+                    "version": version,
+                    "stats": {
+                        "processed": getattr(stats, "processed", None),
+                        "extracted": getattr(stats, "extracted", None),
+                        "skipped": getattr(stats, "skipped", None),
+                        "failed": getattr(stats, "failed", None),
+                    },
+                },
+            )
 
     async def handle_article_metadata_extracted(details: dict[str, Any]) -> None:
         from src.persona.cluster_builder import build_clusters_from_db
@@ -288,7 +364,7 @@ async def _rebuild_pending_tasks(pending_path: Path, version: str) -> None:
     from src.db.session import session_scope
     from src.models.blog_article import BlogArticle
     from src.models.article_metadata import ArticleMetadata
-    from sqlalchemy import select, or_
+    from sqlalchemy import and_, or_, select
 
     pending_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -299,7 +375,13 @@ async def _rebuild_pending_tasks(pending_path: Path, version: str) -> None:
                 select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
                        BlogArticle.author_name, BlogArticle.source_url,
                        BlogArticle.content_hash, BlogArticle.raw_payload)
-                .outerjoin(ArticleMetadata, ArticleMetadata.article_id == BlogArticle.id)
+                .outerjoin(
+                    ArticleMetadata,
+                    and_(
+                        ArticleMetadata.article_id == BlogArticle.id,
+                        ArticleMetadata.version == version,
+                    ),
+                )
                 .where(or_(
                     ArticleMetadata.id.is_(None),
                     ArticleMetadata.processed_at.is_(None)
@@ -353,6 +435,7 @@ async def run_process_tasks(
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     overall_current: int | None = None,
     overall_total: int | None = None,
+    cancel_check: Callable[[], Awaitable[bool]] | None = None,
 ) -> ProcessTasksStats:
     start = time.monotonic()
     stats = ProcessTasksStats()
@@ -400,9 +483,65 @@ async def run_process_tasks(
 
     failed_ids = {t.get("task_id") for t in alive_failed}
 
-    handlers = _create_handlers(config, force=force, version=version)
+    handlers = _create_handlers(config, force=force, version=version, cancel_check=cancel_check)
+    remaining_tasks: list[dict[str, Any]] = []
+
+    def _track_failure(
+        task: dict[str, Any],
+        *,
+        fatal: bool,
+        error_message: str | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        """更新失败队列与统计。"""
+        task_id = task.get("task_id")
+        now = datetime.now(UTC).isoformat()
+        detail = {
+            "task_id": task_id,
+            "task_type": task.get("type"),
+            "fatal": fatal,
+            "retryable": not fatal,
+            "error": error_message,
+            "error_type": error_type,
+        }
+        details = task.get("details", {})
+        if isinstance(details, dict):
+            detail.update({
+                "article_id": details.get("article_id"),
+                "source_url": details.get("source_url"),
+            })
+        stats.failure_details.append(detail)
+
+        matching = [t for t in alive_failed if t.get("task_id") == task_id]
+        if matching:
+            existing = matching[0]
+            existing["retry_count"] = existing.get("retry_count", 0) + 1
+            existing["failed_at"] = now
+            existing["error"] = error_message
+            existing["error_type"] = error_type
+            existing["fatal"] = fatal
+            if fatal:
+                existing["fatal_error"] = error_message
+                existing["fatal_error_type"] = error_type
+            if existing["retry_count"] >= MAX_RETRY_COUNT:
+                dead_failed.append(existing)
+                alive_failed.remove(existing)
+                stats.dead += 1
+        else:
+            new_failed = dict(task)
+            new_failed["failed_at"] = now
+            new_failed["retry_count"] = 1
+            new_failed["error"] = error_message
+            new_failed["error_type"] = error_type
+            new_failed["fatal"] = fatal
+            if fatal:
+                new_failed["fatal_error"] = error_message
+                new_failed["fatal_error_type"] = error_type
+            alive_failed.append(new_failed)
 
     for index, task in enumerate(unique_tasks, start=1):
+        if cancel_check is not None and await cancel_check():
+            raise JobControlInterrupted("cancel")
         task_id = task.get("task_id")
         if task_id in failed_ids:
             if progress_callback is not None and total > 0:
@@ -428,7 +567,40 @@ async def run_process_tasks(
                 )
             continue
 
-        success, skipped = await _process_one(task, handlers)
+        try:
+            success, skipped = await _process_one(task, handlers)
+        except ProcessFatalError as exc:
+            error_message = str(exc)
+            error_type = str(exc.details.get("error_type") or "") or None
+            stats.failed += 1
+            stats.fatal_error = error_message
+            stats.fatal_error_type = error_type
+            stats.fatal_task_id = task_id
+            stats.fatal_task_type = task.get("type")
+            _track_failure(task, fatal=True, error_message=error_message, error_type=error_type)
+            remaining_tasks = unique_tasks[index:]
+            if progress_callback is not None and total > 0:
+                details = task.get("details", {})
+                progress_callback(
+                    {
+                        "job_type": "pipeline-run",
+                        "stage": "process",
+                        "current": overall_current if overall_current is not None else index,
+                        "total": overall_total if overall_total is not None else total,
+                        "percent": round(((overall_current if overall_current is not None else index) / (overall_total if overall_total else total)) * 100, 2) if (overall_total or total) else 0.0,
+                        "remaining": max((overall_total if overall_total is not None else total) - (overall_current if overall_current is not None else index), 0),
+                        "current_step": f"process:{details.get('article_id') or task_id or task.get('type')}",
+                        "current_trade_date": None,
+                        "current_dataset": task.get("type"),
+                        "status": "error",
+                        "error": error_message,
+                        "sub_current": index,
+                        "sub_total": total,
+                        "sub_percent": round((index / total) * 100, 2) if total else 0.0,
+                        "sub_remaining": max(total - index, 0),
+                    }
+                )
+            break
         if progress_callback is not None and total > 0:
             details = task.get("details", {})
             progress_callback(
@@ -455,30 +627,18 @@ async def run_process_tasks(
                 stats.processed += 1
         else:
             stats.failed += 1
-            # Update retry metadata for this task
-            matching = [t for t in alive_failed if t.get("task_id") == task_id]
-            if matching:
-                existing = matching[0]
-                existing["retry_count"] = existing.get("retry_count", 0) + 1
-                if existing["retry_count"] >= MAX_RETRY_COUNT:
-                    # Move to dead
-                    dead_failed.append(existing)
-                    alive_failed.remove(existing)
-                    stats.dead += 1
-                # else: stays in alive_failed for retry
-            else:
-                # New failure - add with metadata
-                new_failed = dict(task)
-                new_failed["failed_at"] = datetime.now(UTC).isoformat()
-                new_failed["retry_count"] = 1
-                alive_failed.append(new_failed)
+            _track_failure(task, fatal=False, error_message="task failed", error_type=None)
+
+    if stats.fatal_error:
+        _save_tasks(p_path, remaining_tasks)
+    else:
+        _save_tasks(p_path, [])
 
     # Save updated failed tasks
     _save_failed_with_metadata(f_path, alive_failed)
     # Save dead tasks discovered during processing
     if dead_failed:
         _save_failed_with_metadata(d_path, dead_failed)
-    _save_tasks(p_path, [])
 
     stats.duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -492,7 +652,7 @@ async def run_process_tasks(
             name="run_process_tasks",
             status="success" if stats.failed == 0 else "failed",
             duration_seconds=stats.duration_ms / 1000.0,
-            error=f"{stats.failed} failed" if stats.failed > 0 else None,
+            error=stats.fatal_error or (f"{stats.failed} failed" if stats.failed > 0 else None),
         )
         snap.add_result(result)
         record_pipeline_snapshot(snap.finalize())

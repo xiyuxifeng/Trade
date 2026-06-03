@@ -69,6 +69,7 @@ def _build_data_pipeline_handlers(
 	retry_failed: bool,
 	audit: AuditService,
 	from_step: str | None = None,
+	until_step: str | None = None,
 	use_db: bool = False,
 	process_version: str = "v1",
 	progress_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -77,6 +78,7 @@ def _build_data_pipeline_handlers(
 
 	Args:
 		from_step: 从指定步骤开始执行，之前的步骤会被跳过。可选值: crawl, clean, validate, store, stock_info_update, process, export, cleanup
+		until_step: 从指定步骤结束执行，之后的步骤会被跳过。可选值同上。
 		use_db: 是否使用数据库模式存储原始数据（Crawl → raw_articles 表）
 	"""
 	# 步骤优先级
@@ -84,13 +86,20 @@ def _build_data_pipeline_handlers(
 
 	def _should_skip(step_name: str) -> bool:
 		"""判断是否应该跳过某个步骤。"""
-		if from_step is None:
-			return False
-		if from_step not in STEP_ORDER:
-			raise ValueError(f"Invalid from_step: {from_step}. Must be one of {STEP_ORDER}")
-		from_index = STEP_ORDER.index(from_step)
 		current_index = STEP_ORDER.index(step_name)
-		return current_index < from_index
+		if from_step is not None:
+			if from_step not in STEP_ORDER:
+				raise ValueError(f"Invalid from_step: {from_step}. Must be one of {STEP_ORDER}")
+			from_index = STEP_ORDER.index(from_step)
+			if current_index < from_index:
+				return True
+		if until_step is not None:
+			if until_step not in STEP_ORDER:
+				raise ValueError(f"Invalid until_step: {until_step}. Must be one of {STEP_ORDER}")
+			until_index = STEP_ORDER.index(until_step)
+			if current_index > until_index:
+				return True
+		return False
 
 	active_steps = [step for step in STEP_ORDER if not _should_skip(step)]
 	active_total = len(active_steps)
@@ -227,6 +236,10 @@ def _build_data_pipeline_handlers(
 			overall_total=active_total,
 		)
 		context["process_stats"] = result
+		if getattr(result, "fatal_error", None) or int(getattr(result, "failed", 0) or 0) > 0:
+			failed_count = int(getattr(result, "failed", 0) or 0)
+			fatal_error = getattr(result, "fatal_error", None)
+			raise RuntimeError(fatal_error or f"process completed with failures: failed={failed_count}")
 		return result
 
 	async def _export(context: dict[str, Any]) -> ExportResult:
@@ -332,6 +345,7 @@ async def _run_data_pipeline_graph(
 	force: bool = False,
 	skip_crawl: bool = False,
 	from_step: str | None = None,
+	until_step: str | None = None,
 	use_db: bool = False,
 	retry_failed: bool = False,
 	process_version: str = "v1",
@@ -369,6 +383,7 @@ async def _run_data_pipeline_graph(
 			retry_failed=retry_failed,
 			audit=audit,
 			from_step=from_step,
+			until_step=until_step,
 			use_db=use_db,
 			process_version=process_version,
 			progress_callback=progress_callback,
@@ -388,6 +403,7 @@ async def run_pipeline(
 	force: bool = False,
 	skip_crawl: bool = False,
 	from_step: str | None = None,
+	until_step: str | None = None,
 	use_db: bool = False,
 	retry_failed: bool = False,
 	process_version: str = "v1",
@@ -400,6 +416,7 @@ async def run_pipeline(
 		force=force,
 		skip_crawl=skip_crawl,
 		from_step=from_step,
+		until_step=until_step,
 		use_db=use_db,
 		retry_failed=retry_failed,
 		process_version=process_version,

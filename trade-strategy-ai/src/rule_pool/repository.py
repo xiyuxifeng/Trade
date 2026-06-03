@@ -1,7 +1,7 @@
 """rule_pool Repository：RulePool ORM 与 RulePoolItem schema 的转换与持久化"""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -112,7 +112,7 @@ class RulePoolRepository:
 
         orm_obj.mapping_status = MappingStatus.MAPPED.value
         orm_obj.mapped_by = mapped_by
-        orm_obj.mapped_at = datetime.now()
+        orm_obj.mapped_at = datetime.now(UTC)
 
         # 更新 extraction_layer 中的 mapped_condition
         extraction_layer = orm_obj.extraction_layer or {}
@@ -150,7 +150,7 @@ class RulePoolRepository:
 
         orm_obj.review_status = review_status.value
         orm_obj.reviewed_by = reviewed_by
-        orm_obj.reviewed_at = datetime.now()
+        orm_obj.reviewed_at = datetime.now(UTC)
 
         await self.session.flush()
         return True
@@ -200,7 +200,7 @@ class RulePoolRepository:
 
         orm_obj.review_status = decision.value
         orm_obj.reviewed_by = "auto_review"
-        orm_obj.reviewed_at = datetime.now()
+        orm_obj.reviewed_at = datetime.now(UTC)
 
         # 将审核原因写入 extraction_layer 的扩展字段
         extraction = dict(orm_obj.extraction_layer or {})
@@ -239,7 +239,7 @@ class RulePoolRepository:
             return False
 
         orm_obj.backtest_result = backtest_result.model_dump(mode="json")
-        orm_obj.backtest_triggered_at = datetime.now()
+        orm_obj.backtest_triggered_at = datetime.now(UTC)
         orm_obj.backtest_hits = backtest_result.hit_trades
         orm_obj.backtest_misses = backtest_result.miss_trades
         orm_obj.backtest_samples = backtest_result.sample_count

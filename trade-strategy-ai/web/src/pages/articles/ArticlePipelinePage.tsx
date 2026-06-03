@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/layout/page-header';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast';
 import { EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
@@ -621,6 +622,10 @@ export function ArticleRunPage() {
       });
     },
     onSuccess: async (data) => {
+      toast({
+        title: '文章抓取任务已提交',
+        description: `Job ${data.job.id} 已创建，正在打开详情页。`,
+      });
       setMessage('文章处理已提交，正在跳转到 Job Detail。');
       setSubmittedJobId(data.job.id);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -854,8 +859,22 @@ export function ArticleRunPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button onClick={() => runMutation.mutate()} disabled={!canSubmit || runMutation.isPending}>
-                    {runMutation.isPending ? '提交中' : '运行步骤 Job'}
+                  <Button
+                    aria-busy={runMutation.isPending}
+                    onClick={() => runMutation.mutate()}
+                    disabled={!canSubmit || runMutation.isPending}
+                  >
+                    {runMutation.isPending ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent"
+                        />
+                        提交中
+                      </>
+                    ) : (
+                      '运行步骤 Job'
+                    )}
                   </Button>
                   <Button
                     variant="secondary"
@@ -1852,6 +1871,10 @@ export function ArticleMaintenancePage() {
       });
     },
     onSuccess: async (data) => {
+      toast({
+        title: '文章维护任务已提交',
+        description: `Job ${data.job.id} 已创建，正在打开详情页。`,
+      });
       setMessage('文章维护任务已提交，正在跳转到 Job Detail。');
       setSubmittedJobId(data.job.id);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -2070,10 +2093,21 @@ export function ArticleMaintenancePage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
                     variant={cleanup ? 'destructive' : 'default'}
+                    aria-busy={runMutation.isPending}
                     onClick={() => runMutation.mutate()}
                     disabled={!canSubmit || runMutation.isPending}
                   >
-                    {runMutation.isPending ? '提交中' : '运行维护'}
+                    {runMutation.isPending ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent"
+                        />
+                        提交中
+                      </>
+                    ) : (
+                      '运行维护'
+                    )}
                   </Button>
                   <Button
                     variant="secondary"

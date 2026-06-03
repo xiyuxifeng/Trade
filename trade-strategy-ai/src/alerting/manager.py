@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.common.logger import get_logger
 from src.alerting.models import AlertEvent, AlertLevel, AlertRule, create_alert
+from src.alerting.db import AlertHistoryRepository
 from src.alerting.notifiers import AlertNotifier
+from src.db.session import session_scope
 
 if TYPE_CHECKING:
     from src.pipeline.dashboard_models import DashboardStats, QualityMetrics
@@ -234,24 +237,32 @@ class AlertManager:
         status: str,
         session,
     ) -> None:
-        """持久化告警到 DB。"""
-        from src.alerting.db import AlertHistoryRepository
+        """持久化告警到 DB。
 
+        说明：
+        - 这里不复用外层传入的 session，避免告警持久化和业务事务互相抢占同一个 AsyncSession。
+        - 持久化任务使用独立 session_scope，自带提交边界。
+        """
         repo = AlertHistoryRepository()
         now = datetime.now(timezone.utc)
 
-        # 同步持久化（在已有的事件循环外调用时需处理）
+        # 同步持久化（在已有的事件循环外调用时直接执行；在事件循环内则后台调度）
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 如果已在事件循环中，用 create_task
-                asyncio.create_task(
-                    self._async_persist(alert, channel, status, repo, now, session)
-                )
-            else:
-                asyncio.run(self._async_persist(alert, channel, status, repo, now, session))
+            asyncio.get_running_loop()
         except RuntimeError:
-            asyncio.run(self._async_persist(alert, channel, status, repo, now, session))
+            asyncio.run(self._async_persist(alert, channel, status, repo, now))
+            return
+
+        task = asyncio.create_task(self._async_persist(alert, channel, status, repo, now))
+        task.add_done_callback(self._log_async_persist_error)
+
+    def _log_async_persist_error(self, task: asyncio.Task[None]) -> None:
+        """记录后台告警持久化任务中的异常。"""
+        with suppress(asyncio.CancelledError):
+            try:
+                task.result()
+            except Exception:
+                logger.exception("alert persistence task failed")
 
     async def _async_persist(
         self,
@@ -260,27 +271,25 @@ class AlertManager:
         status: str,
         repo: "AlertHistoryRepository",
         now: datetime,
-        session,
     ) -> None:
         """异步持久化告警。"""
-        from src.alerting.db import AlertHistory
-
-        record = await repo.insert(
-            session=session,
-            alert_id=alert.id,
-            level=alert.level.value,
-            title=alert.title,
-            message=alert.message,
-            channel=channel,
-            tags=alert.tags,
-            alert_metadata=alert.metadata,
-            aggregation_key=alert.metadata.get("aggregation_key") if alert.metadata else None,
-            aggregated_count=alert.metadata.get("aggregated_count", 1) if alert.metadata else 1,
-            aggregation_window_start=datetime.fromisoformat(alert.metadata["aggregation_window_start"])
-            if alert.metadata and "aggregation_window_start" in alert.metadata else None,
-        )
-        if status == "sent":
-            await repo.update_status(session, record.id, "sent", sent_at=now)
+        async with session_scope() as session:
+            record = await repo.insert(
+                session=session,
+                alert_id=alert.id,
+                level=alert.level.value,
+                title=alert.title,
+                message=alert.message,
+                channel=channel,
+                tags=alert.tags,
+                alert_metadata=alert.metadata,
+                aggregation_key=alert.metadata.get("aggregation_key") if alert.metadata else None,
+                aggregated_count=alert.metadata.get("aggregated_count", 1) if alert.metadata else 1,
+                aggregation_window_start=datetime.fromisoformat(alert.metadata["aggregation_window_start"])
+                if alert.metadata and "aggregation_window_start" in alert.metadata else None,
+            )
+            if status == "sent":
+                await repo.update_status(session, record.id, "sent", sent_at=now)
 
     def send_test_alert(
         self,

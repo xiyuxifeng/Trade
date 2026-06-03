@@ -460,6 +460,17 @@ class JobService(BaseService):
         await session.flush()
         return event
 
+    async def _latest_heartbeat_audit_at(self, session: Any, *, job_id: UUID) -> datetime | None:
+        """返回指定 Job 最近一次心跳审计时间。"""
+        stmt = (
+            select(JobAuditEvent.event_at)
+            .where(JobAuditEvent.job_id == job_id, JobAuditEvent.operation == "heartbeat")
+            .order_by(JobAuditEvent.event_at.desc(), JobAuditEvent.created_at.desc(), JobAuditEvent.id.desc())
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def _persist(self, session: Any, job: Job) -> None:
         """刷新并写回数据库。"""
         job.updated_at = datetime.now(UTC)
@@ -948,18 +959,25 @@ class JobService(BaseService):
         """把 Job 标记为 failed。"""
         session_scope = self._ensure_session_factory()
         now = datetime.now(UTC)
+        retryable = True
+        if isinstance(error, dict):
+            retryable_value = error.get("retryable")
+            if isinstance(retryable_value, bool):
+                retryable = retryable_value
         async with session_scope() as session:
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
-            if increment_retry:
+            if not retryable:
+                job.retry_count = max(int(job.retry_count or 0), int(job.max_retries or 0))
+            elif increment_retry:
                 job.retry_count += 1
             job.status = JobStatus.failed.value
             job.error = error if isinstance(error, dict) else {"message": error}
             job.result = None
             job.finished_at = now
             job.cancel_requested = False
-            if job.retry_count < job.max_retries:
+            if retryable and job.retry_count < job.max_retries:
                 backoff_seconds = max(0, int(job.retry_backoff_seconds or 0))
                 job.scheduled_at = now + timedelta(seconds=backoff_seconds)
             else:
@@ -1275,16 +1293,20 @@ class JobService(BaseService):
                 )
             job.heartbeat_at = now
             await self._persist(session, job)
-            await self._record_job_audit(
-                session=session,
-                job=job,
-                operation="heartbeat",
-                actor=worker_id or job.created_by,
-                audit_source=audit_source,
-                params_summary=job.params,
-                payload={"worker_id": worker_id, "lock_token": lock_token},
-                event_at=now,
-            )
+            last_heartbeat_audit_at = await self._latest_heartbeat_audit_at(session, job_id=job.id)
+            if last_heartbeat_audit_at is not None and last_heartbeat_audit_at.tzinfo is None:
+                last_heartbeat_audit_at = last_heartbeat_audit_at.replace(tzinfo=UTC)
+            if last_heartbeat_audit_at is None or now - last_heartbeat_audit_at >= timedelta(hours=1):
+                await self._record_job_audit(
+                    session=session,
+                    job=job,
+                    operation="heartbeat",
+                    actor=worker_id or job.created_by,
+                    audit_source=audit_source,
+                    params_summary=job.params,
+                    payload={"worker_id": worker_id, "lock_token": lock_token},
+                    event_at=now,
+                )
 
         return ServiceResult(status="ok", message="job heartbeat updated", payload={"job": self._serialize_job(job)})
 

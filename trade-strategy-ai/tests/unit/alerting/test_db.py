@@ -9,6 +9,16 @@ from src.alerting.models import AlertEvent, AlertLevel
 class TestAlertHistoryRepository:
     """AlertHistoryRepository 测试。"""
 
+    def test_alert_history_time_columns_use_timezone(self):
+        """AlertHistory 的时间列应使用带时区时间戳。"""
+        from src.alerting.db import AlertHistory
+
+        assert AlertHistory.__table__.c.aggregation_window_start.type.timezone is True
+        assert AlertHistory.__table__.c.sent_at.type.timezone is True
+        assert AlertHistory.__table__.c.acknowledged_at.type.timezone is True
+        assert AlertHistory.__table__.c.resolved_at.type.timezone is True
+        assert AlertHistory.__table__.c.created_at.type.timezone is True
+
     @pytest.mark.asyncio
     async def test_insert_saves_alert(self):
         """insert() 正确保存告警到 DB"""
@@ -16,8 +26,9 @@ class TestAlertHistoryRepository:
 
         mock_session = AsyncMock()
         mock_session.add = MagicMock()
-        mock_session.commit = AsyncMock()
+        mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
+        mock_session.commit = AsyncMock()
 
         repo = AlertHistoryRepository()
         record = await repo.insert(
@@ -34,7 +45,8 @@ class TestAlertHistoryRepository:
         )
 
         mock_session.add.assert_called_once()
-        mock_session.commit.assert_called_once()
+        mock_session.flush.assert_called_once()
+        mock_session.commit.assert_not_called()
         assert record.alert_id == "test-alert-001"
         assert record.level == "WARNING"
 
@@ -66,6 +78,7 @@ class TestAlertHistoryRepository:
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_record
         mock_session.execute.return_value = mock_result
+        mock_session.flush = AsyncMock()
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
@@ -77,7 +90,8 @@ class TestAlertHistoryRepository:
         )
 
         assert record.status == "sent"
-        mock_session.commit.assert_called_once()
+        mock_session.flush.assert_called_once()
+        mock_session.commit.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_record(self):

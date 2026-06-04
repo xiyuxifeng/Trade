@@ -16,11 +16,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import verify_api_key
-from api.schemas import ArticleFilterOptionsResponse, ArticleResponse
+from api.schemas import ArticleFilterOptionsResponse, ArticleQualitySummaryResponse, ArticleResponse
 from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
+from src.services.config_profile_service import ConfigProfileService
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
@@ -101,6 +102,96 @@ def _collect_trader_ids(rows, config: Any | None) -> list[str]:
             trader_values.append(mapped_trader_id)
 
     return _normalize_strings(trader_values)
+
+
+def _collect_profile_trader_ids(config: Any) -> list[str]:
+    """提取当前 Profile 作用范围内的 trader_id。"""
+    trader_ids: list[str] = []
+
+    traders = getattr(config, "traders", None) or []
+    for trader in traders:
+        if getattr(trader, "enabled", True) and getattr(trader, "trader_id", None):
+            trader_ids.append(str(getattr(trader, "trader_id")))
+
+    sources = getattr(getattr(config, "crawl", None), "sources", None) or []
+    for source in sources:
+        if not getattr(source, "enabled", True):
+            continue
+        if getattr(source, "trader_id", None):
+            trader_ids.append(str(getattr(source, "trader_id")))
+
+    return _normalize_strings(trader_ids)
+
+
+def _collect_profile_author_ids(config: Any) -> list[str]:
+    """提取当前 Profile 作用范围内的 author_id。"""
+    author_ids: list[str] = []
+
+    sources = getattr(getattr(config, "crawl", None), "sources", None) or []
+    for source in sources:
+        if getattr(source, "enabled", True) and getattr(source, "author_id", None):
+            author_ids.append(str(getattr(source, "author_id")))
+
+    return _normalize_strings(author_ids)
+
+
+def _build_profile_article_scope_condition(config: Any):
+    """构建当前 Profile 对应的文章筛选条件。"""
+    trader_ids = _collect_profile_trader_ids(config)
+    author_ids = _collect_profile_author_ids(config)
+    conditions = []
+
+    for trader_id in trader_ids:
+        condition = _build_trader_id_condition(trader_id, config)
+        if condition is not None:
+            conditions.append(condition)
+
+    if author_ids:
+        conditions.append(BlogArticle.author_id.in_(author_ids))
+
+    if not conditions:
+        return None
+
+    return or_(*conditions)
+
+
+def _summarize_quality_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """把文章明细压缩成质量摘要。"""
+    total = len(rows)
+    with_summary = 0
+    with_tags = 0
+    with_hash = 0
+    with_author = 0
+    latest_crawled_at = None
+
+    for row in rows:
+        summary = row.get("summary")
+        tags = row.get("tags")
+        content_hash = row.get("content_hash")
+        author_id = row.get("author_id")
+        author_name = row.get("author_name")
+        crawled_at = row.get("crawled_at")
+
+        if isinstance(summary, str) and summary.strip():
+            with_summary += 1
+        if isinstance(tags, list) and len(tags) > 0:
+            with_tags += 1
+        if isinstance(content_hash, str) and content_hash.strip():
+            with_hash += 1
+        if bool(author_name) or bool(author_id):
+            with_author += 1
+        if isinstance(crawled_at, datetime):
+            if latest_crawled_at is None or crawled_at > latest_crawled_at:
+                latest_crawled_at = crawled_at
+
+    return {
+        "total": total,
+        "with_summary": with_summary,
+        "with_tags": with_tags,
+        "with_hash": with_hash,
+        "with_author": with_author,
+        "latest_crawled_at": latest_crawled_at,
+    }
 
 
 def _apply_article_filters(
@@ -278,6 +369,44 @@ async def list_article_filter_options(
             "sources": sources,
             "trader_ids": trader_ids,
         }
+
+
+@router.get("/quality", response_model=ArticleQualitySummaryResponse)
+async def get_article_quality_summary(
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """返回当前 Profile 范围内的文章质量全量摘要。"""
+    service = ConfigProfileService()
+    profile_id = service.resolve_runtime_profile_id()
+    runtime = await service.load_profile_runtime_config(profile_id)
+    trader_ids = _collect_profile_trader_ids(runtime.config)
+    author_ids = _collect_profile_author_ids(runtime.config)
+    scope_condition = _build_profile_article_scope_condition(runtime.config)
+
+    session_factory = async_session_factory()
+    async with session_factory() as session:
+        query = select(
+            BlogArticle.author_id,
+            BlogArticle.author_name,
+            BlogArticle.summary,
+            BlogArticle.tags,
+            BlogArticle.content_hash,
+            BlogArticle.crawled_at,
+        )
+        if scope_condition is None:
+            rows = []
+        else:
+            result = await session.execute(query.where(scope_condition).order_by(BlogArticle.crawled_at.desc()))
+            rows = result.mappings().all()
+
+    summary = _summarize_quality_rows([dict(row) for row in rows])
+    return {
+        "profile_id": runtime.profile_id,
+        "profile_snapshot_id": runtime.profile_snapshot_id,
+        "trader_ids": trader_ids,
+        "author_ids": author_ids,
+        **summary,
+    }
 
 
 def _author_to_trader_id(config: Any, author_id: str) -> str | None:

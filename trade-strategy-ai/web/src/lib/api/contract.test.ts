@@ -13,9 +13,10 @@ import {
   stopArticlePipelineSchedule,
 } from './pipelines';
 import { listArtifacts, listArtifactFilterOptions, getArtifact, downloadArtifact } from './artifacts';
-import { listArticleFilterOptions, listArticles } from './articles';
+import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from './articles';
 import {
   getArticleMetadataSummary,
+  listArticleMetadataArticles,
   listArticleMetadataSummary,
   selectArticleMetadataVersion,
 } from './article-metadata';
@@ -112,7 +113,14 @@ describe('UI API client contract', () => {
       published_after: '2026-05-01T00:00:00Z',
       published_before: '2026-05-10T23:59:59Z',
     });
+    await getArticleQualitySummary();
     await listArticleMetadataSummary(['article-1', 'article-2']);
+    await listArticleMetadataArticles({
+      page: 2,
+      page_size: 20,
+      selection_status: 'unselected',
+      search: 'Article',
+    });
     await getArticleMetadataSummary('article-1');
     await selectArticleMetadataVersion('article-1', {
       selected_schema_version: 'v2',
@@ -234,7 +242,9 @@ describe('UI API client contract', () => {
     expect(calls.some((call) => call.url.startsWith('/api/ui/v1/market/ohlcv/stop') && call.method === 'POST')).toBe(true);
     expect(findCall('/articles?page=2&page_size=20&author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
     expect(findCall('/articles/filter-options?author_id=author-1&source=tgb&trader_id=trader-1&published_after=2026-05-01T00%3A00%3A00Z&published_before=2026-05-10T23%3A59%3A59Z')).toBeTruthy();
+    expect(findCall('/articles/quality')).toBeTruthy();
     expect(findCall('/api/ui/v1/article-metadata/summary?article_ids=article-1&article_ids=article-2')).toBeTruthy();
+    expect(findCall('/api/ui/v1/article-metadata/articles?page=2&page_size=20&selection_status=unselected&search=Article')).toBeTruthy();
     expect(findCall('/api/ui/v1/article-metadata/articles/article-1')).toBeTruthy();
     expectJsonBody('/api/ui/v1/article-metadata/articles/article-1/select', 'POST', {
       selected_schema_version: 'v2',

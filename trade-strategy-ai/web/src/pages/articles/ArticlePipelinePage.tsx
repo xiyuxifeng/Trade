@@ -10,9 +10,9 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast';
-import { EmptyState, ErrorState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
+import { EmptyState, ErrorState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
-import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
+import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -24,11 +24,12 @@ import {
   stopArticlePipelineSchedule,
 } from '@/lib/api/pipelines';
 import {
-  listArticleMetadataSummary,
+  getArticleMetadataSummary,
+  listArticleMetadataArticles,
   selectArticleMetadataVersion,
 } from '@/lib/api/article-metadata';
-import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleRecord } from '@/types/articles';
-import type { ArticleMetadataResolutionListResponse } from '@/types/article-metadata';
+import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleQualitySummaryResponse } from '@/types/articles';
+import type { ArticleMetadataListResponse } from '@/types/article-metadata';
 import type { JobRecord, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import type { ArticlePipelineRunParams, ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
@@ -78,7 +79,7 @@ const workspaceSections = [
   {
     title: '处理结果',
     description: '文章结构化产物。',
-    purpose: '查看最近一次处理的结构化输出、样本结果，并为每篇文章选择当前生效的 metadata 版本。',
+    purpose: '管理文章 metadata 版本选择，按状态筛选并查看候选版本详情。',
     path: '/articles/results',
   },
   {
@@ -90,6 +91,7 @@ const workspaceSections = [
 ] as const;
 
 const articlePipelineJobType = 'pipeline-run';
+const articlePipelineJobTypes = ['crawl', 'clean', 'validate', 'store', 'process', 'pipeline-run', 'pipeline-step'] as const;
 
 const articleSubpages = {
   '/articles/run': {
@@ -105,7 +107,7 @@ const articleSubpages = {
   '/articles/quality': {
     title: '数据质量',
     description: '查看文章质量信号和结果概览。',
-    summary: '结合文章列表和最近 Job 汇总质量信号。',
+    summary: '基于当前 Profile 的文章全量数据统计摘要、标签、去重和新鲜度。',
   },
   '/articles/jobs': {
     title: '最近任务',
@@ -114,8 +116,8 @@ const articleSubpages = {
   },
   '/articles/results': {
     title: '处理结果',
-    description: '查看文章处理后的结构化结果，并选择当前生效的 metadata 版本。',
-    summary: '展示最近 Job 的结构化输出、样本文章与元数据版本选择。',
+    description: '查看文章列表并选择当前生效的 metadata 版本。',
+    summary: '按选择状态浏览文章并管理 metadata 版本选择，左侧列表和右侧详情独立滚动。',
   },
   '/articles/maintenance': {
     title: '高级维护',
@@ -255,7 +257,7 @@ function isArticlePipelineJob(job: JobRecord) {
   const result = job.result as JobResultPayload | null;
   const workflowRun = result?.workflow_run ?? undefined;
   const workflowId = workflowRun ? String(workflowRun.workflow_id ?? '') : '';
-  return job.job_type === articlePipelineJobType && (Boolean(params?.profile_id) || workflowId === 'article_pipeline');
+  return articlePipelineJobTypes.includes(job.job_type as (typeof articlePipelineJobTypes)[number]) && (Boolean(params?.profile_id) || workflowId === 'article_pipeline');
 }
 
 function getWorkflowRun(job: JobRecord) {
@@ -312,78 +314,24 @@ function getJobDurationMs(job: JobRecord) {
   return typeof durationMs === 'number' ? durationMs : null;
 }
 
-function getJobResultPayload(job: JobRecord) {
-  const workflowRun = getWorkflowRun(job);
-  const stepResults = getWorkflowRunSteps(job) as Array<Record<string, unknown>>;
-  const processStep = stepResults.find((step) => String(step.step_name ?? step.step_id ?? '') === 'process');
-  const validateStep = stepResults.find((step) => String(step.step_name ?? step.step_id ?? '') === 'validate');
-  const cleanStep = stepResults.find((step) => String(step.step_name ?? step.step_id ?? '') === 'clean');
-  return {
-    workflowRun,
-    stepResults,
-    processStep,
-    validateStep,
-    cleanStep,
-  };
-}
-
-function latestArticleJob(jobs: JobRecord[]) {
-  return jobs
-    .filter(isArticlePipelineJob)
-    .slice()
-    .sort((left, right) => (right.created_at || '').localeCompare(left.created_at || ''))[0] ?? null;
-}
-
-function countBy<T>(items: T[], getter: (item: T) => string | null | undefined) {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    const key = getter(item) || '';
-    if (!key) continue;
-    counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  return counts;
-}
-
-function duplicateHashCount(articles: ArticleRecord[]) {
-  let duplicates = 0;
-  const counts = countBy(articles, (article) => article.content_hash);
-  counts.forEach((count) => {
-    if (count > 1) {
-      duplicates += count - 1;
-    }
-  });
-  return duplicates;
-}
-
-function qualityCoverage(articles: ArticleRecord[]) {
-  const total = articles.length;
-  const withSummary = articles.filter((article) => Boolean(article.summary?.trim())).length;
-  const withTags = articles.filter((article) => article.tags.length > 0).length;
-  const withHash = articles.filter((article) => Boolean(article.content_hash?.trim())).length;
-  const withAuthor = articles.filter((article) => Boolean(article.author_name || article.author_id)).length;
-  const duplicateCountValue = duplicateHashCount(articles);
-  const latestCrawledAt = articles.reduce<string | null>((latest, article) => {
-    if (!article.crawled_at) return latest;
-    return !latest || article.crawled_at > latest ? article.crawled_at : latest;
-  }, null);
-
-  return {
-    total,
-    withSummary,
-    withTags,
-    withHash,
-    withAuthor,
-    duplicateCount: duplicateCountValue,
-    latestCrawledAt,
-  };
-}
-
-function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+  size = 'default',
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  size?: 'default' | 'compact';
+}) {
+  const valueClassName = size === 'compact' ? 'mt-1 text-lg font-semibold tracking-tight text-slate-950' : 'mt-2 text-2xl font-semibold tracking-tight text-slate-950';
+  const hintClassName = size === 'compact' ? 'mt-1 text-xs leading-5 text-slate-600' : 'mt-2 text-sm leading-6 text-slate-600';
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
-      {hint ? <p className="mt-2 text-sm leading-6 text-slate-600">{hint}</p> : null}
+      <p className={valueClassName}>{value}</p>
+      {hint ? <p className={hintClassName}>{hint}</p> : null}
     </div>
   );
 }
@@ -1234,12 +1182,30 @@ export function ArticleJobsPage() {
 
   const jobsQuery = useQuery<ArticleJobsResponse, ApiError>({
     queryKey: ['articles', 'jobs', statusFilter],
-    queryFn: () =>
-      listJobs({
-        job_type: articlePipelineJobType,
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        limit: 25,
-      }),
+    queryFn: async () => {
+      const responses = await Promise.all(
+        articlePipelineJobTypes.map((jobType) =>
+          listJobs({
+            job_type: jobType,
+            status: statusFilter === 'all' ? undefined : statusFilter,
+            limit: 25,
+          }),
+        ),
+      );
+      const items = responses
+        .flatMap((response) => response.items ?? [])
+        .filter(isArticlePipelineJob)
+        .slice()
+        .sort((left, right) => (right.created_at || '').localeCompare(left.created_at || ''));
+      const total = items.length;
+      return {
+        count: total,
+        total,
+        skip: 0,
+        limit: total,
+        items,
+      };
+    },
     staleTime: 20_000,
   });
 
@@ -1295,7 +1261,7 @@ export function ArticleJobsPage() {
           {jobs.length === 0 ? (
             <EmptyState
               title="暂无文章任务"
-              description="当前没有匹配到 article_pipeline 的最近任务。"
+              description="当前没有匹配到文章相关的最近任务。"
               actionLabel="返回工作台"
               onAction={() => navigate('/articles')}
             />
@@ -1315,10 +1281,10 @@ export function ArticleJobsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard label="当前阶段" value={getJobStage(job)} />
-                    <MetricCard label="创建时间" value={formatTimestamp(job.created_at)} />
-                    <MetricCard label="耗时" value={formatDuration(getJobDurationMs(job))} />
-                    <MetricCard label="工作流状态" value={getJobWorkflowStatus(job)} />
+                <MetricCard size="compact" label="当前阶段" value={getJobStage(job)} />
+                <MetricCard size="compact" label="创建时间" value={formatTimestamp(job.created_at)} />
+                <MetricCard size="compact" label="耗时" value={formatDuration(getJobDurationMs(job))} />
+                <MetricCard size="compact" label="工作流状态" value={getJobWorkflowStatus(job)} />
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -1344,43 +1310,26 @@ export function ArticleJobsPage() {
 
 export function ArticleQualityPage() {
   const navigate = useNavigate();
-  const articlesQuery = useQuery<ArticleListResponse, ApiError>({
+  const qualityQuery = useQuery<ArticleQualitySummaryResponse, ApiError>({
     queryKey: ['articles', 'quality'],
-    queryFn: () => listArticles({ page: 1, page_size: 50 }),
-    staleTime: 20_000,
+    queryFn: getArticleQualitySummary,
+    staleTime: 30_000,
   });
 
-  const jobsQuery = useQuery<ArticleJobsResponse, ApiError>({
-    queryKey: ['articles', 'quality-jobs'],
-    queryFn: () => listJobs({ job_type: articlePipelineJobType, limit: 10 }),
-    staleTime: 20_000,
-  });
+  const summary = qualityQuery.data ?? null;
 
-  const articles = articlesQuery.data?.items ?? [];
-  const latestJob = latestArticleJob(jobsQuery.data?.items ?? []);
-  const coverage = useMemo(() => qualityCoverage(articles), [articles]);
-  const latestJobPayload = latestJob ? getJobResultPayload(latestJob) : null;
-
-  if (articlesQuery.isLoading || jobsQuery.isLoading) {
+  if (qualityQuery.isLoading) {
     return (
       <ArticlePageShell title={articleSubpages['/articles/quality'].title} description={articleSubpages['/articles/quality'].description} summary={articleSubpages['/articles/quality'].summary}>
-        <ArticleLoadingState label="正在加载数据质量" description="正在读取文章列表和最近文章 Job。" />
+        <ArticleLoadingState label="正在加载数据质量" description="正在读取当前 Profile 的文章全量质量摘要。" />
       </ArticlePageShell>
     );
   }
 
-  if (articlesQuery.error) {
+  if (qualityQuery.error) {
     return (
       <ArticlePageShell title={articleSubpages['/articles/quality'].title} description={articleSubpages['/articles/quality'].description} summary={articleSubpages['/articles/quality'].summary}>
-        <ArticleErrorState error={articlesQuery.error} title="文章质量加载失败" onRetry={() => void articlesQuery.refetch()} />
-      </ArticlePageShell>
-    );
-  }
-
-  if (jobsQuery.error) {
-    return (
-      <ArticlePageShell title={articleSubpages['/articles/quality'].title} description={articleSubpages['/articles/quality'].description} summary={articleSubpages['/articles/quality'].summary}>
-        <ArticleErrorState error={jobsQuery.error} title="文章质量加载失败" onRetry={() => void jobsQuery.refetch()} />
+        <ArticleErrorState error={qualityQuery.error} title="文章质量加载失败" onRetry={() => void qualityQuery.refetch()} />
       </ArticlePageShell>
     );
   }
@@ -1388,44 +1337,46 @@ export function ArticleQualityPage() {
   return (
     <ArticlePageShell title={articleSubpages['/articles/quality'].title} description={articleSubpages['/articles/quality'].description} summary={articleSubpages['/articles/quality'].summary}>
       <div className="space-y-6">
-        <SectionCard title="质量概览" description="结合文章列表和最近一次文章 Job 计算当前质量信号。">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <MetricCard label="文章总数" value={coverage.total} hint="直接读取文章列表接口。"/>
-            <MetricCard label="有摘要" value={coverage.withSummary} hint="可快速判断文章是否完成整理。"/>
-            <MetricCard label="有标签" value={coverage.withTags} hint="用于观察结构化分类覆盖。"/>
-            <MetricCard label="有内容 Hash" value={coverage.withHash} hint="用于检查去重和重复抓取。"/>
-            <MetricCard label="重复文章数" value={coverage.duplicateCount} hint="按 content_hash 粗略统计重复记录。"/>
-            <MetricCard label="最近抓取时间" value={formatTimestamp(coverage.latestCrawledAt)} hint="帮助判断数据是否新鲜。" />
-          </div>
-        </SectionCard>
-
-        <SectionCard title="最近一次文章 Job" description="展示最近一次 article_pipeline 的执行状态和流程输出。">
-          {latestJob ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Job ID" value={latestJob.id} />
-                <MetricCard label="Profile" value={getJobProfileId(latestJob)} />
-                <MetricCard label="状态" value={latestJob.status} />
-                <MetricCard label="阶段" value={getJobStage(latestJob)} />
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-2">
-                <JsonViewer value={latestJobPayload?.stepResults ?? []} title="Step Results" />
-                <JsonViewer value={latestJob.artifacts ?? []} title="Job Artifacts" />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <MetricCard label="clean step" value={latestJobPayload?.cleanStep ? String(latestJobPayload.cleanStep.step_name ?? latestJobPayload.cleanStep.step_id ?? '已记录') : '未记录'} />
-                <MetricCard label="validate step" value={latestJobPayload?.validateStep ? String(latestJobPayload.validateStep.step_name ?? latestJobPayload.validateStep.step_id ?? '已记录') : '未记录'} />
-              </div>
+        <SectionCard title="统计范围" description="当前 Profile 的文章质量统计范围，不关联最近 Job。">
+          {summary ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <MetricCard size="compact" label="Profile ID" value={summary.profile_id} />
+              <MetricCard size="compact" label="Snapshot ID" value={summary.profile_snapshot_id ?? '未记录'} />
+              <MetricCard
+                size="compact"
+                label="Profile 作用域"
+                value={
+                  [
+                    summary.trader_ids.length > 0 ? `trader: ${summary.trader_ids.join('、')}` : null,
+                    summary.author_ids.length > 0 ? `author: ${summary.author_ids.join('、')}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' | ') || '未配置'
+                }
+              />
             </div>
           ) : (
             <EmptyState
-              title="暂无文章 Job"
-              description="还没有找到 article_pipeline 的执行记录。"
+              title="暂无统计范围"
+              description="当前 Profile 没有可用于文章统计的 trader 或 author 范围。"
               actionLabel="返回工作台"
               onAction={() => navigate('/articles')}
             />
+          )}
+        </SectionCard>
+
+        <SectionCard title="质量概览" description="基于当前 Profile 的文章全量数据统计摘要、标签、去重和新鲜度。">
+          {summary && summary.total > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <MetricCard size="compact" label="文章总数" value={summary.total} hint="读取当前 Profile 范围内的全量文章。"/>
+              <MetricCard size="compact" label="有摘要" value={summary.with_summary} hint="可快速判断文章是否完成整理。"/>
+              <MetricCard size="compact" label="有标签" value={summary.with_tags} hint="用于观察结构化分类覆盖。"/>
+              <MetricCard size="compact" label="有内容 Hash" value={summary.with_hash} hint="用于检查去重和重复抓取。"/>
+              <MetricCard size="compact" label="有作者信息" value={summary.with_author} hint="用于检查作者元数据覆盖。"/>
+              <MetricCard size="compact" label="最近抓取时间" value={formatTimestamp(summary.latest_crawled_at)} hint="帮助判断数据是否新鲜。" />
+            </div>
+          ) : (
+            <EmptyState title="暂无文章数据" description="当前 Profile 范围内还没有可统计的文章。请先完成文章抓取，再查看质量概览。" actionLabel="返回工作台" onAction={() => navigate('/articles')} />
           )}
         </SectionCard>
       </div>
@@ -1437,54 +1388,75 @@ export function ArticleResultsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
+  const [selectionStatusFilter, setSelectionStatusFilter] = useState<'all' | 'selected' | 'unselected'>('unselected');
+  const [searchInput, setSearchInput] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [selectedMetadataVersions, setSelectedMetadataVersions] = useState<Record<string, string>>({});
-  const articlesQuery = useQuery<ArticleListResponse, ApiError>({
-    queryKey: ['articles', 'results'],
-    queryFn: () => listArticles({ page: 1, page_size: 10 }),
-    staleTime: 20_000,
-  });
 
-  const jobsQuery = useQuery<ArticleJobsResponse, ApiError>({
-    queryKey: ['articles', 'results-jobs'],
-    queryFn: () => listJobs({ job_type: articlePipelineJobType, limit: 10 }),
+  const articlesQuery = useQuery<ArticleMetadataListResponse, ApiError>({
+    queryKey: ['article-metadata', 'list', selectionStatusFilter, page, searchInput],
+    queryFn: () =>
+      listArticleMetadataArticles({
+        page,
+        page_size: 8,
+        selection_status: selectionStatusFilter,
+        search: searchInput.trim() || undefined,
+      }),
     staleTime: 20_000,
   });
 
   const articles = articlesQuery.data?.items ?? [];
-  const articleIds = useMemo(() => articles.slice(0, 5).map((article) => article.id), [articles]);
-  const latestJob = latestArticleJob(jobsQuery.data?.items ?? []);
-  const latestJobPayload = latestJob ? getJobResultPayload(latestJob) : null;
-  const articleMetadataSummaryQueryKey = useMemo(() => ['article-metadata', 'summary', articleIds.join(',')], [articleIds]);
-  const articleMetadataQuery = useQuery<ArticleMetadataResolutionListResponse, ApiError>({
-    queryKey: articleMetadataSummaryQueryKey,
-    queryFn: () => listArticleMetadataSummary(articleIds),
-    enabled: articleIds.length > 0,
-    staleTime: 20_000,
-  });
-  const articleMetadataById = useMemo(() => {
-    return new Map((articleMetadataQuery.data?.items ?? []).map((item) => [item.article_id, item]));
-  }, [articleMetadataQuery.data?.items]);
+  const totalCount = articlesQuery.data?.total ?? 0;
+  const totalPages = articlesQuery.data?.pages ?? 0;
+  const articlesQueryError = articlesQuery.error as ApiError | null;
+  const retryArticlesQuery = () => void articlesQuery.refetch();
+  const selectedArticle = useMemo(() => {
+    if (!selectedArticleId) {
+      return articles[0] ?? null;
+    }
+    return articles.find((item) => item.article_id === selectedArticleId) ?? articles[0] ?? null;
+  }, [articles, selectedArticleId]);
 
   useEffect(() => {
-    const items = articleMetadataQuery.data?.items ?? [];
-    if (items.length === 0) {
+    if (articles.length === 0) {
+      if (selectedArticleId !== null) {
+        setSelectedArticleId(null);
+      }
+      return;
+    }
+    if (!selectedArticleId || !articles.some((item) => item.article_id === selectedArticleId)) {
+      setSelectedArticleId(articles[0].article_id);
+    }
+  }, [articles, selectedArticleId]);
+
+  const detailQuery = useQuery({
+    queryKey: ['article-metadata', 'detail', selectedArticle?.article_id],
+    queryFn: () => getArticleMetadataSummary(selectedArticle?.article_id ?? ''),
+    enabled: Boolean(selectedArticle?.article_id),
+    staleTime: 20_000,
+  });
+
+  useEffect(() => {
+    const detail = detailQuery.data;
+    if (!detail) {
       return;
     }
     setSelectedMetadataVersions((current) => {
-      const next = { ...current };
-      items.forEach((resolution) => {
-        if (next[resolution.article_id]) {
-          return;
-        }
-        next[resolution.article_id] =
-          resolution.selected_schema_version ??
-          resolution.recommended_schema_version ??
-          resolution.candidates[0]?.schema_version ??
-          '';
-      });
-      return next;
+      if (current[detail.article_id]) {
+        return current;
+      }
+      const nextVersion =
+        detail.selected_schema_version ??
+        detail.recommended_schema_version ??
+        detail.candidates[0]?.schema_version ??
+        '';
+      return {
+        ...current,
+        [detail.article_id]: nextVersion,
+      };
     });
-  }, [articleMetadataQuery.data?.items]);
+  }, [detailQuery.data]);
 
   const selectMetadataMutation = useMutation({
     mutationFn: async (payload: { articleId: string; selectedSchemaVersion: string }) => {
@@ -1499,42 +1471,41 @@ export function ArticleResultsPage() {
         ...current,
         [resolution.article_id]: resolution.selected_schema_version ?? '',
       }));
-      queryClient.setQueryData<ArticleMetadataResolutionListResponse | undefined>(articleMetadataSummaryQueryKey, (current) => {
-        if (!current) {
-          return current;
-        }
-        return {
-          ...current,
-          items: current.items.map((item) => (item.article_id === resolution.article_id ? resolution : item)),
-        };
-      });
-      await articleMetadataQuery.refetch();
+      queryClient.setQueryData(['article-metadata', 'detail', resolution.article_id], resolution);
+      await queryClient.invalidateQueries({ queryKey: ['article-metadata', 'list'] });
     },
     onError: (error: unknown) => {
       setMessage(getErrorMessage(error));
     },
   });
-  const resultHighlights = useMemo(() => {
-    const payload = latestJobPayload?.processStep?.output_json;
-    if (!payload || typeof payload !== 'object') {
-      return [];
-    }
-    const record = payload as Record<string, unknown>;
-    return [
-      { label: 'extracted_concepts', value: Array.isArray(record.extracted_concepts) ? record.extracted_concepts.length : 0 },
-      { label: 'trading_symbols', value: Array.isArray(record.trading_symbols) ? record.trading_symbols.length : 0 },
-      { label: 'strategy_rules', value: Array.isArray(record.strategy_rules) ? record.strategy_rules.length : 0 },
-      { label: 'preconditions', value: Array.isArray(record.preconditions) ? record.preconditions.length : 0 },
-      { label: 'comment_insights', value: Array.isArray(record.comment_insights) ? record.comment_insights.length : 0 },
-      { label: 'sentiment_score', value: record.sentiment_score ?? '未记录' },
-      { label: 'confidence_score', value: record.confidence_score ?? '未记录' },
-    ];
-  }, [latestJobPayload?.processStep?.output_json]);
 
-  if (articlesQuery.isLoading || jobsQuery.isLoading) {
+  const selectedVersion =
+    (selectedArticle?.article_id ? selectedMetadataVersions[selectedArticle.article_id] : '') ||
+    detailQuery.data?.selected_schema_version ||
+    detailQuery.data?.recommended_schema_version ||
+    detailQuery.data?.candidates[0]?.schema_version ||
+    '';
+  const selectedCandidate = detailQuery.data?.candidates.find((candidate) => candidate.schema_version === selectedVersion) ?? null;
+  const isSelectedRecommended = selectedVersion === detailQuery.data?.recommended_schema_version;
+  const isSelectedEffective = selectedVersion === detailQuery.data?.effective_schema_version;
+
+  const hasPrevPage = page > 1;
+  const hasNextPage = totalPages > 0 && page < totalPages;
+
+  const updateFilter = (nextFilter: typeof selectionStatusFilter) => {
+    setSelectionStatusFilter(nextFilter);
+    setPage(1);
+  };
+
+  const updateSearch = (value: string) => {
+    setSearchInput(value);
+    setPage(1);
+  };
+
+  if (articlesQuery.isLoading) {
     return (
       <ArticlePageShell title={articleSubpages['/articles/results'].title} description={articleSubpages['/articles/results'].description} summary={articleSubpages['/articles/results'].summary}>
-        <ArticleLoadingState label="正在加载处理结果" description="正在读取文章结果和最近一次文章 Job。" />
+        <ArticleLoadingState label="正在加载处理结果" description="正在读取文章列表和版本选择状态。" />
       </ArticlePageShell>
     );
   }
@@ -1547,160 +1518,277 @@ export function ArticleResultsPage() {
     );
   }
 
-  if (jobsQuery.error) {
-    return (
-      <ArticlePageShell title={articleSubpages['/articles/results'].title} description={articleSubpages['/articles/results'].description} summary={articleSubpages['/articles/results'].summary}>
-        <ArticleErrorState error={jobsQuery.error} title="处理结果加载失败" onRetry={() => void jobsQuery.refetch()} />
-      </ArticlePageShell>
-    );
-  }
-
   return (
-    <ArticlePageShell title={articleSubpages['/articles/results'].title} description={articleSubpages['/articles/results'].description} summary={articleSubpages['/articles/results'].summary}>
+    <ArticlePageShell
+      title={articleSubpages['/articles/results'].title}
+      description={articleSubpages['/articles/results'].description}
+      summary="以文章为中心管理 metadata 版本，左侧筛选文章，右侧查看并切换候选版本。"
+    >
       <div className="space-y-6">
         {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
 
-        <SectionCard title="结构化结果摘要" description="展示最近一次文章 Job 中可消费的结构化输出。">
-          {latestJob ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {resultHighlights.map((item) => (
-                <MetricCard key={item.label} label={item.label} value={String(item.value)} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="暂无结构化结果" description="还没有找到 article_pipeline 的执行记录。" />
-          )}
-        </SectionCard>
+        <SectionCard title="版本管理" description="按选择状态和关键词筛选文章，左侧列表与右侧详情独立滚动。">
+          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm">
+              <div className="border-b border-slate-200 bg-white/80 p-4 backdrop-blur">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                      <p className="text-base font-semibold tracking-tight text-slate-950">文章列表</p>
+                      <p className="mt-1 text-xs text-slate-600">浏览未选择和已选择的文章，点击即可切换右侧详情。</p>
+                  </div>
+                  <Badge variant="info">{totalCount} 篇</Badge>
+                </div>
 
-        <SectionCard
-          title="元数据版本选择"
-          description="同一篇文章可以保留多个候选版本，这里只设置当前生效版本；后续策略生成和回测只消费这一版。"
-          action={
-            <Button variant="outline" size="sm" onClick={() => void articleMetadataQuery.refetch()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              刷新版本
-            </Button>
-          }
-        >
-          {articleMetadataQuery.isLoading ? (
-            <LoadingState label="正在加载元数据版本" description="正在读取文章候选版本和当前选择。" />
-          ) : articleMetadataQuery.error ? (
-            <ArticleErrorState error={articleMetadataQuery.error} title="元数据版本加载失败" onRetry={() => void articleMetadataQuery.refetch()} />
-          ) : articleIds.length === 0 ? (
-            <EmptyState title="暂无可选择文章" description="当前没有可用于版本选择的文章。" actionLabel="返回工作台" onAction={() => navigate('/articles')} />
-          ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {articles.slice(0, 5).map((article) => {
-                const resolution = articleMetadataById.get(article.id);
-                if (!resolution) {
-                  return (
-                    <div key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <p className="font-medium text-slate-950">{article.title}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
-                      </p>
-                      <EmptyState
-                        title="暂无 metadata 候选"
-                        description="这篇文章还没有生成可供选择的 metadata 版本。"
-                        actionLabel="查看处理结果"
-                        onAction={() => navigate('/articles/results')}
-                      />
-                    </div>
-                  );
-                }
-
-                const selectedVersion =
-                  selectedMetadataVersions[article.id] ??
-                  resolution.selected_schema_version ??
-                  resolution.recommended_schema_version ??
-                  resolution.candidates[0]?.schema_version ??
-                  '';
-                const selectedCandidate = resolution.candidates.find((candidate) => candidate.schema_version === selectedVersion) ?? null;
-                const isSelectedRecommended = selectedVersion === resolution.recommended_schema_version;
-                const isSelectedEffective = selectedVersion === resolution.effective_schema_version;
-
-                return (
-                  <div key={article.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-950">{article.title}</p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
-                        </p>
-                        <p className="mt-1 break-all text-xs text-slate-500">{article.source_url}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={isSelectedEffective ? 'success' : 'default'}>当前：{selectedVersion || '未设置'}</Badge>
-                        <Badge variant={isSelectedRecommended ? 'info' : 'default'}>推荐：{resolution.recommended_schema_version ?? '无'}</Badge>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <MetricCard label="当前模式" value={resolution.selection_mode ?? '未记录'} hint={resolution.selection_reason ?? '暂无选择说明'} />
-                      <MetricCard
-                        label="推荐评分"
-                        value={formatScore(resolution.recommended_score)}
-                        hint={resolution.recommended_reason ?? '暂无推荐说明'}
-                      />
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      <label className="text-sm font-medium text-slate-900" htmlFor={`article-metadata-version-${article.id}`}>
-                        选择当前使用版本
-                      </label>
-                      <Select
-                        id={`article-metadata-version-${article.id}`}
-                        value={selectedVersion}
-                        onChange={(event) =>
-                          setSelectedMetadataVersions((current) => ({
-                            ...current,
-                            [article.id]: event.target.value,
-                          }))
-                        }
-                      >
-                        {resolution.candidates.map((candidate) => (
-                          <option key={candidate.schema_version} value={candidate.schema_version}>
-                            {candidate.schema_version} · score {formatScore(candidate.score)}
-                          </option>
-                        ))}
-                      </Select>
-                      <p className="text-xs leading-6 text-slate-500">回测和策略生成将只消费当前选中的版本。</p>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {[
+                    { key: 'all', label: '全部' },
+                    { key: 'unselected', label: '未选择' },
+                    { key: 'selected', label: '已选择' },
+                  ].map((item) => {
+                    const active = selectionStatusFilter === item.key;
+                    return (
                       <Button
+                        key={item.key}
+                        variant={active ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() =>
-                          selectMetadataMutation.mutate({
-                            articleId: article.id,
-                            selectedSchemaVersion: selectedVersion,
-                          })
-                        }
-                        disabled={!selectedVersion || selectMetadataMutation.isPending}
+                        onClick={() => updateFilter(item.key as typeof selectionStatusFilter)}
                       >
-                        {selectMetadataMutation.isPending ? '保存中' : '设为当前版本'}
+                        {item.label}
                       </Button>
-                      {resolution.warning ? <p className="text-xs leading-6 text-amber-700">{resolution.warning}</p> : null}
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  <label className="text-sm font-medium text-slate-900" htmlFor="article-metadata-search">
+                    搜索
+                  </label>
+                  <Input
+                    id="article-metadata-search"
+                    value={searchInput}
+                    onChange={(event) => updateSearch(event.target.value)}
+                    placeholder="标题 / 作者 / 来源 / URL"
+                  />
+                </div>
+              </div>
+
+              <div className="max-h-[calc(100vh-330px)] overflow-y-auto p-4">
+                {articlesQuery.isLoading ? (
+                  <LoadingState label="正在加载文章列表" description="正在读取当前页文章和选择状态。" />
+                ) : articlesQueryError ? (
+                  <ArticleErrorState error={articlesQueryError} title="文章列表加载失败" onRetry={retryArticlesQuery} />
+                ) : articles.length === 0 ? (
+                  <EmptyState
+                    title="没有匹配的文章"
+                    description="当前筛选条件下没有文章，尝试切换状态或清空搜索关键词。"
+                    actionLabel="返回工作台"
+                    onAction={() => navigate('/articles')}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {articles.map((article) => {
+                      const active = article.article_id === selectedArticle?.article_id;
+                      const statusVariant = article.selection_status === 'selected' ? 'success' : 'warning';
+                      return (
+                        <button
+                          key={article.article_id}
+                          type="button"
+                          onClick={() => setSelectedArticleId(article.article_id)}
+                          className={`w-full rounded-2xl border p-4 text-left transition ${
+                            active
+                              ? 'border-sky-400 bg-white shadow-md ring-2 ring-sky-200'
+                              : 'border-slate-200 bg-white hover:border-sky-200 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-950">{article.title}</p>
+                              <p className="mt-1 text-xs text-slate-600">
+                                {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
+                              </p>
+                            </div>
+                            <Badge variant={statusVariant}>{article.selection_status === 'selected' ? '已选择' : '未选择'}</Badge>
+                          </div>
+                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{article.summary ?? '暂无摘要'}</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {article.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="info">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {article.tags.length > 3 ? <Badge variant="default">+{article.tags.length - 3}</Badge> : null}
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                            <span>{formatTimestamp(article.published_at)}</span>
+                            <span>当前：{article.selected_schema_version ?? '未设置'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600">
+                <span>
+                  第 {page} / {totalPages || 1} 页
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={!hasPrevPage}>
+                    上一页
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPage((current) => current + 1)} disabled={!hasNextPage}>
+                    下一页
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold tracking-tight text-slate-950">当前文章详情</p>
+                    <p className="mt-1 text-xs text-slate-600">展示当前选中的文章卡片内容和候选版本。</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedArticle ? (
+                      <Badge variant={selectedArticle.selection_status === 'selected' ? 'success' : 'warning'}>
+                        {selectedArticle.selection_status === 'selected' ? '已选择' : '未选择'}
+                      </Badge>
+                    ) : null}
+                    {detailQuery.data?.selection_mode ? <Badge variant="info">{detailQuery.data.selection_mode}</Badge> : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-h-[calc(100vh-330px)] overflow-y-auto p-5">
+                {!selectedArticle ? (
+                  <EmptyState title="请选择一篇文章" description="从左侧列表选择文章后，右侧会展示可编辑的 metadata 版本和候选信息。" />
+                ) : detailQuery.isLoading ? (
+                  <LoadingState label="正在加载文章详情" description="正在读取当前文章的版本候选和选择信息。" />
+                ) : detailQuery.error ? (
+                  <ArticleErrorState error={detailQuery.error} title="文章详情加载失败" onRetry={() => void detailQuery.refetch()} />
+                ) : detailQuery.data ? (
+                  <div className="space-y-6">
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-lg font-semibold tracking-tight text-slate-950">{selectedArticle.title}</p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            {selectedArticle.author_name ?? selectedArticle.author_id ?? '未记录'} · {selectedArticle.source}
+                          </p>
+                          <p className="mt-1 break-all text-[11px] text-slate-500">{selectedArticle.source_url}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(selectedArticle.source_url, '_blank', 'noopener,noreferrer')}
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            打开原文
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <MetricCard size="compact" label="发布时间" value={formatTimestamp(selectedArticle.published_at)} />
+                        <MetricCard size="compact" label="抓取时间" value={formatTimestamp(selectedArticle.crawled_at)} />
+                        <MetricCard size="compact" label="当前版本" value={detailQuery.data.selected_schema_version ?? '未设置'} />
+                        <MetricCard size="compact" label="推荐版本" value={detailQuery.data.recommended_schema_version ?? '无'} />
+                      </div>
+
+                      <div className="mt-4">
+                        <p className="text-xs font-medium text-slate-900">摘要</p>
+                        <p className="mt-2 text-xs leading-6 text-slate-700">{selectedArticle.summary ?? '暂无摘要'}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {selectedArticle.tags.length > 0 ? (
+                            selectedArticle.tags.map((tag) => (
+                              <Badge key={tag} variant="info">
+                                {tag}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge variant="default">暂无标签</Badge>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold tracking-tight text-slate-950">元数据版本选择</p>
+                          <p className="mt-1 text-xs text-slate-600">回测和策略生成只消费当前选中的版本。</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={isSelectedEffective ? 'success' : 'default'}>当前：{selectedVersion || '未设置'}</Badge>
+                          <Badge variant={isSelectedRecommended ? 'info' : 'default'}>推荐：{detailQuery.data.recommended_schema_version ?? '无'}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        <label className="text-sm font-medium text-slate-900" htmlFor={`article-metadata-version-${selectedArticle.article_id}`}>
+                          选择当前使用版本
+                        </label>
+                        <Select
+                          id={`article-metadata-version-${selectedArticle.article_id}`}
+                          value={selectedVersion}
+                          onChange={(event) =>
+                            setSelectedMetadataVersions((current) => ({
+                              ...current,
+                              [selectedArticle.article_id]: event.target.value,
+                            }))
+                          }
+                        >
+                          {detailQuery.data.candidates.map((candidate) => (
+                            <option key={candidate.schema_version} value={candidate.schema_version}>
+                              {candidate.schema_version} · score {formatScore(candidate.score)}
+                            </option>
+                          ))}
+                        </Select>
+                        <p className="text-xs leading-6 text-slate-500">选择后会同步更新左侧列表状态，并保留可回溯的候选快照。</p>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            selectMetadataMutation.mutate({
+                              articleId: selectedArticle.article_id,
+                              selectedSchemaVersion: selectedVersion,
+                            })
+                          }
+                          disabled={!selectedVersion || selectMetadataMutation.isPending}
+                        >
+                          {selectMetadataMutation.isPending ? '保存中' : '设为当前版本'}
+                        </Button>
+                        {detailQuery.data.selection_reason ? (
+                          <p className="text-xs leading-6 text-slate-500">选择说明：{detailQuery.data.selection_reason}</p>
+                        ) : null}
+                        {detailQuery.data.warning ? <p className="text-xs leading-6 text-amber-700">{detailQuery.data.warning}</p> : null}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">候选详情</p>
-                      <div className="mt-3 space-y-3">
-                        {resolution.candidates.map((candidate) => {
+                      <div className="mt-4 space-y-3">
+                        {detailQuery.data.candidates.map((candidate) => {
                           const active = candidate.schema_version === selectedVersion;
-                          const recommended = candidate.schema_version === resolution.recommended_schema_version;
+                          const recommended = candidate.schema_version === detailQuery.data?.recommended_schema_version;
                           return (
-                            <div key={candidate.schema_version} className="rounded-xl border border-slate-200 bg-white p-3">
+                            <div key={candidate.schema_version} className="rounded-2xl border border-slate-200 bg-white p-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant={active ? 'success' : 'default'}>{active ? '当前选中' : '候选'}</Badge>
                                 {recommended ? <Badge variant="info">系统推荐</Badge> : null}
                                 <Badge variant="default">{candidate.schema_version}</Badge>
-                                <span className="text-xs text-slate-500">score {formatScore(candidate.score)}</span>
+                                <span className="text-[11px] text-slate-500">score {formatScore(candidate.score)}</span>
                               </div>
-                              <p className="mt-2 text-sm leading-6 text-slate-700">
+                              <p className="mt-2 text-xs leading-5 text-slate-700">
                                 {candidate.score_reasons.length > 0 ? candidate.score_reasons.join('；') : '暂无评分说明'}
                               </p>
-                              <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                              <div className="mt-3 grid gap-2 text-[11px] text-slate-500 md:grid-cols-2">
                                 <span>处理时间：{candidate.processed_at ?? '未记录'}</span>
                                 <span>
                                   provider/model：{candidate.provider ?? '未记录'} / {candidate.model ?? '未记录'}
@@ -1715,46 +1803,25 @@ export function ArticleResultsPage() {
                         })}
                       </div>
                       {selectedCandidate ? (
-                        <p className="mt-3 text-xs leading-6 text-slate-500">
+                        <p className="mt-3 text-[11px] leading-5 text-slate-500">
                           当前选中版本：{selectedCandidate.schema_version}，处理评分 {formatScore(selectedCandidate.score)}。
                         </p>
                       ) : null}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </SectionCard>
-
-        <div className="grid gap-6">
-          <SectionCard title="最新 process 输出" description="这里直接展示最近一次 process step 的输出结果。">
-            {latestJobPayload?.processStep ? <JsonViewer value={latestJobPayload.processStep.output_json ?? {}} title="Process Output" /> : <EmptyState title="暂无 process 输出" description="最近一次文章 Job 未暴露 process step 输出。" />}
-          </SectionCard>
-
-          <SectionCard title="结果样本" description="文章列表中的内容可与结构化输出一起用于验收。">
-            {articles.length === 0 ? (
-              <EmptyState title="暂无文章样本" description="当前没有可展示的文章结果。" actionLabel="返回工作台" onAction={() => navigate('/articles')} />
-            ) : (
-              <div className="space-y-3">
-                {articles.slice(0, 5).map((article) => (
-                  <div key={article.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-medium text-slate-950">{article.title}</p>
-                    <p className="mt-1 text-sm text-slate-600">{article.author_name ?? article.author_id ?? '未记录'} · {article.source}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">{article.summary ?? '暂无摘要'}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {article.tags.map((tag) => (
-                        <Badge key={tag} variant="info">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                ) : (
+                  <EmptyState title="暂无文章详情" description="当前文章没有可展示的候选版本。" />
+                )}
               </div>
-            )}
-          </SectionCard>
-        </div>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm text-slate-600">
+              说明：左侧只负责文章筛选和选择状态切换，右侧只负责当前文章的 metadata 版本确认和候选对比。
+            </p>
+          </div>
+        </SectionCard>
       </div>
     </ArticlePageShell>
   );

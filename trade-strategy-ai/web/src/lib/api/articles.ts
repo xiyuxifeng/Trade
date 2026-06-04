@@ -1,5 +1,5 @@
 import { fetchRootJson } from './http';
-import type { ArticleFilterOptionsResponse, ArticleListResponse } from '@/types/articles';
+import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleQualitySummaryResponse } from '@/types/articles';
 
 type ArticleListQuery = {
   page?: number;
@@ -35,4 +35,8 @@ export function listArticleFilterOptions(query: ArticleFilterOptionsQuery = {}) 
   });
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return fetchRootJson<ArticleFilterOptionsResponse>(`/articles/filter-options${suffix}`);
+}
+
+export function getArticleQualitySummary() {
+  return fetchRootJson<ArticleQualitySummaryResponse>('/articles/quality');
 }

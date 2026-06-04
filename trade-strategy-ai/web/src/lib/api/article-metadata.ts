@@ -1,5 +1,6 @@
 import { fetchJson } from './http';
 import type {
+  ArticleMetadataListResponse,
   ArticleMetadataResolution,
   ArticleMetadataResolutionListResponse,
   ArticleMetadataSelectRequest,
@@ -14,6 +15,23 @@ export function listArticleMetadataSummary(articleIds: string[]) {
   });
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return fetchJson<ArticleMetadataResolutionListResponse>(`/article-metadata/summary${suffix}`);
+}
+
+export function listArticleMetadataArticles(query: {
+  page?: number;
+  page_size?: number;
+  selection_status?: 'all' | 'selected' | 'unselected';
+  search?: string;
+} = {}) {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+    params.set(key, String(value));
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchJson<ArticleMetadataListResponse>(`/article-metadata/articles${suffix}`);
 }
 
 export function getArticleMetadataSummary(articleId: string) {

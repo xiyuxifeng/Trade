@@ -39,3 +39,16 @@ class ArticleFilterOptionsResponse(BaseModel):
     author_ids: list[str]
     sources: list[str]
     trader_ids: list[str]
+
+
+class ArticleQualitySummaryResponse(BaseModel):
+    profile_id: str
+    profile_snapshot_id: str | None = None
+    trader_ids: list[str]
+    author_ids: list[str]
+    total: int
+    with_summary: int
+    with_tags: int
+    with_hash: int
+    with_author: int
+    latest_crawled_at: datetime | None = None

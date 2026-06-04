@@ -30,3 +30,16 @@ export type ArticleFilterOptionsResponse = {
   sources: string[];
   trader_ids: string[];
 };
+
+export type ArticleQualitySummaryResponse = {
+  profile_id: string;
+  profile_snapshot_id: string | null;
+  trader_ids: string[];
+  author_ids: string[];
+  total: number;
+  with_summary: number;
+  with_tags: number;
+  with_hash: number;
+  with_author: number;
+  latest_crawled_at: string | null;
+};

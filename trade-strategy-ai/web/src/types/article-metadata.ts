@@ -39,6 +39,35 @@ export type ArticleMetadataResolutionListResponse = {
   items: ArticleMetadataResolution[];
 };
 
+export type ArticleMetadataListItem = {
+  article_id: string;
+  title: string;
+  author_name: string | null;
+  author_id: string | null;
+  source: string;
+  source_url: string;
+  published_at: string | null;
+  crawled_at: string;
+  summary: string | null;
+  tags: string[];
+  selection_status: 'selected' | 'unselected';
+  selected_schema_version: string | null;
+  selected_by: string | null;
+  selected_at: string | null;
+  selection_mode: string | null;
+  selection_reason: string | null;
+  recommended_schema_version: string | null;
+  effective_schema_version: string | null;
+};
+
+export type ArticleMetadataListResponse = {
+  items: ArticleMetadataListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
 export type ArticleMetadataSelectRequest = {
   selected_schema_version: string;
   selected_by?: string;

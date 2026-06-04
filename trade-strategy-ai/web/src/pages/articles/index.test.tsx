@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { listArticleMetadataSummary, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
-import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
+import { getArticleMetadataSummary, listArticleMetadataArticles, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
+import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -16,15 +16,18 @@ import {
   stopArticlePipelineSchedule,
 } from '@/lib/api/pipelines';
 import { toast } from '@/components/ui/toast';
+import type { ArticleMetadataListResponse } from '@/types/article-metadata';
 import type { PipelineDetailResponse } from '@/types/pipeline';
 
 vi.mock('@/lib/api/articles', () => ({
+  getArticleQualitySummary: vi.fn(),
   listArticleFilterOptions: vi.fn(),
   listArticles: vi.fn(),
 }));
 
 vi.mock('@/lib/api/article-metadata', () => ({
-  listArticleMetadataSummary: vi.fn(),
+  getArticleMetadataSummary: vi.fn(),
+  listArticleMetadataArticles: vi.fn(),
   selectArticleMetadataVersion: vi.fn(),
 }));
 
@@ -50,8 +53,10 @@ vi.mock('@/components/ui/toast', () => ({
 }));
 
 const mockedListProfiles = vi.mocked(listProfiles);
-const mockedListArticleMetadataSummary = vi.mocked(listArticleMetadataSummary);
+const mockedGetArticleMetadataSummary = vi.mocked(getArticleMetadataSummary);
+const mockedListArticleMetadataArticles = vi.mocked(listArticleMetadataArticles);
 const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
+const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListJobs = vi.mocked(listJobs);
@@ -311,62 +316,136 @@ function buildArticleFilterOptions() {
   };
 }
 
-function buildArticleMetadataSummary() {
+function buildArticleMetadataList(): ArticleMetadataListResponse {
   return {
     items: [
       {
-        article_id: 'article-1',
+        article_id: 'article-2',
+        title: 'Article Two',
+        author_name: 'Bob',
+        author_id: 'author-2',
+        source: 'xhs',
+        source_url: 'https://example.com/article-2',
+        published_at: '2026-05-11T08:00:00Z',
+        crawled_at: '2026-05-11T09:00:00Z',
+        summary: 'summary two',
+        tags: ['momentum'],
+        selection_status: 'unselected',
         selected_schema_version: 'v1',
         selected_by: 'system',
-        selected_at: '2026-05-10T10:00:00Z',
+        selected_at: '2026-05-11T10:00:00Z',
         selection_mode: 'auto',
-        selection_score: 4.5,
         selection_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
         recommended_schema_version: 'v1',
-        recommended_score: 4.5,
-        recommended_reason: '自动推荐：当前候选即最优候选',
         effective_schema_version: 'v1',
-        effective_score: 4.5,
-        effective_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
-        warning: null,
-        candidates: [
-          {
-            schema_version: 'v1',
-            score: 4.5,
-            score_reasons: ['已完成处理', 'provider=openai', 'model=gpt-5'],
-            processed_at: '2026-05-10T10:00:00Z',
-            provider: 'openai',
-            model: 'gpt-5',
-            article_type: 'rule',
-            extraction_version: 'v1',
-            sentiment_score: 0.8,
-            confidence_score: 0.9,
-            extracted_concepts_count: 3,
-            trading_symbols_count: 2,
-            strategy_rules_count: 1,
-            preconditions_count: 1,
-            comment_insights_count: 1,
-            raw_llm_output_keys: 4,
-          },
-          {
-            schema_version: 'v2',
-            score: 4.1,
-            score_reasons: ['已完成处理', 'provider=claude', 'model=sonnet'],
-            processed_at: '2026-05-10T10:20:00Z',
-            provider: 'claude',
-            model: 'sonnet',
-            article_type: 'rule',
-            extraction_version: 'v2',
-            sentiment_score: 0.7,
-            confidence_score: 0.85,
-            extracted_concepts_count: 2,
-            trading_symbols_count: 1,
-            strategy_rules_count: 1,
-            preconditions_count: 1,
-            comment_insights_count: 1,
-            raw_llm_output_keys: 3,
-          },
-        ],
+      },
+      {
+        article_id: 'article-1',
+        title: 'Article One',
+        author_name: 'Alice',
+        author_id: 'author-1',
+        source: 'tgb',
+        source_url: 'https://example.com/article-1',
+        published_at: '2026-05-10T08:00:00Z',
+        crawled_at: '2026-05-10T09:00:00Z',
+        summary: 'summary one',
+        tags: ['trend', 'alpha'],
+        selection_status: 'selected',
+        selected_schema_version: 'v1',
+        selected_by: 'web',
+        selected_at: '2026-05-10T10:00:00Z',
+        selection_mode: 'manual',
+        selection_reason: '用户手动确认',
+        recommended_schema_version: 'v1',
+        effective_schema_version: 'v1',
+      },
+    ],
+    total: 2,
+    page: 1,
+    page_size: 8,
+    pages: 1,
+  };
+}
+
+function buildArticleMetadataListForStatus(
+  selectionStatus: 'all' | 'selected' | 'unselected' | undefined,
+): ArticleMetadataListResponse {
+  if (selectionStatus === 'selected') {
+    return {
+      items: [buildArticleMetadataList().items[1]],
+      total: 1,
+      page: 1,
+      page_size: 8,
+      pages: 1,
+    };
+  }
+
+  if (selectionStatus === 'unselected') {
+    return {
+      items: [buildArticleMetadataList().items[0]],
+      total: 1,
+      page: 1,
+      page_size: 8,
+      pages: 1,
+    };
+  }
+
+  return buildArticleMetadataList();
+}
+
+function buildArticleMetadataDetail(articleId: string) {
+  const selectedSchemaVersion = articleId === 'article-1' ? 'v2' : 'v1';
+  return {
+    article_id: articleId,
+    selected_schema_version: selectedSchemaVersion,
+    selected_by: articleId === 'article-1' ? 'web' : 'system',
+    selected_at: '2026-05-10T10:00:00Z',
+    selection_mode: articleId === 'article-1' ? 'manual' : 'auto',
+    selection_score: articleId === 'article-1' ? 4.1 : 4.5,
+    selection_reason: articleId === 'article-1' ? '用户手动确认' : '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
+    recommended_schema_version: 'v1',
+    recommended_score: 4.5,
+    recommended_reason: '自动推荐：当前候选即最优候选',
+    effective_schema_version: selectedSchemaVersion,
+    effective_score: articleId === 'article-1' ? 4.1 : 4.5,
+    effective_reason: articleId === 'article-1' ? '用户手动确认' : '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
+    warning: null,
+    candidates: [
+      {
+        schema_version: 'v1',
+        score: 4.5,
+        score_reasons: ['已完成处理', 'provider=openai', 'model=gpt-5'],
+        processed_at: '2026-05-10T10:00:00Z',
+        provider: 'openai',
+        model: 'gpt-5',
+        article_type: 'rule',
+        extraction_version: 'v1',
+        sentiment_score: 0.8,
+        confidence_score: 0.9,
+        extracted_concepts_count: 3,
+        trading_symbols_count: 2,
+        strategy_rules_count: 1,
+        preconditions_count: 1,
+        comment_insights_count: 1,
+        raw_llm_output_keys: 4,
+      },
+      {
+        schema_version: 'v2',
+        score: 4.1,
+        score_reasons: ['已完成处理', 'provider=claude', 'model=sonnet'],
+        processed_at: '2026-05-10T10:20:00Z',
+        provider: 'claude',
+        model: 'sonnet',
+        article_type: 'rule',
+        extraction_version: 'v2',
+        sentiment_score: 0.7,
+        confidence_score: 0.85,
+        extracted_concepts_count: 2,
+        trading_symbols_count: 1,
+        strategy_rules_count: 1,
+        preconditions_count: 1,
+        comment_insights_count: 1,
+        raw_llm_output_keys: 3,
       },
     ],
   };
@@ -429,6 +508,118 @@ function buildJobList() {
         runtime_state: null,
       },
     ],
+  };
+}
+
+function buildJobListForType(jobType: string) {
+  if (jobType === 'pipeline-run') {
+    return buildJobList();
+  }
+
+  if (jobType === 'crawl') {
+    return {
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 10,
+      items: [
+        {
+          id: 'job-article-crawl',
+          job_type: 'crawl',
+          status: 'success',
+          params: { profile_id: 'default', max_articles: 5 },
+          result: null,
+          error: null,
+          artifacts: [],
+          created_by: 'web',
+          idempotency_key: null,
+          retry_count: 0,
+          max_retries: 0,
+          retry_backoff_seconds: 0,
+          timeout_seconds: null,
+          cancel_requested: false,
+          cancel_requested_at: null,
+          worker_id: null,
+          lock_token: null,
+          lock_acquired_at: null,
+          heartbeat_at: null,
+          scheduled_at: null,
+          started_at: '2026-05-10T07:50:00Z',
+          finished_at: '2026-05-10T07:55:00Z',
+          audit_events: [],
+          created_at: '2026-05-10T07:50:00Z',
+          updated_at: '2026-05-10T07:55:00Z',
+          runtime_state: null,
+        },
+      ],
+    };
+  }
+
+  if (jobType === 'pipeline-step') {
+    return {
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 10,
+      items: [
+        {
+          id: 'job-article-step',
+          job_type: 'pipeline-step',
+          status: 'success',
+          params: { profile_id: 'default', step: 'process', force: false },
+          result: {
+            workflow_run: {
+              workflow_id: 'article_pipeline',
+              workflow_params: { profile_id: 'default' },
+              run_context: { status: 'success', duration_ms: 830 },
+              step_results: [
+                {
+                  step_name: 'process',
+                  output_json: {
+                    extracted_concepts: ['breakout'],
+                    trading_symbols: ['TSLA'],
+                    strategy_rules: ['rule-step'],
+                    preconditions: ['volume'],
+                    comment_insights: ['momentum'],
+                    sentiment_score: 0.75,
+                    confidence_score: 0.82,
+                  },
+                },
+              ],
+            },
+          },
+          error: null,
+          artifacts: [],
+          created_by: 'web',
+          idempotency_key: null,
+          retry_count: 0,
+          max_retries: 0,
+          retry_backoff_seconds: 0,
+          timeout_seconds: null,
+          cancel_requested: false,
+          cancel_requested_at: null,
+          worker_id: null,
+          lock_token: null,
+          lock_acquired_at: null,
+          heartbeat_at: null,
+          scheduled_at: null,
+          started_at: '2026-05-10T09:00:00Z',
+          finished_at: '2026-05-10T09:10:00Z',
+          audit_events: [],
+          created_at: '2026-05-10T09:00:00Z',
+          updated_at: '2026-05-10T09:10:00Z',
+          runtime_state: null,
+        },
+      ],
+    };
+  }
+
+  return {
+    count: 0,
+    total: 0,
+    skip: 0,
+    limit: 10,
+    items: [],
   };
 }
 
@@ -624,75 +815,91 @@ describe('ArticlesPage', () => {
   });
 
   it('renders the recent job page with article pipeline jobs', async () => {
-    mockedListJobs.mockResolvedValue(buildJobList());
+    mockedListJobs.mockImplementation(async (request?: { job_type?: string }) =>
+      buildJobListForType(String(request?.job_type ?? '')),
+    );
 
     renderWithRouter([{ path: '/articles/jobs', element: <ArticleJobsPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/jobs']);
 
     expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
     expect(await screen.findByText('job-article-1')).toBeInTheDocument();
-    expect(screen.getByText(/Profile:\s*default/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '打开 Job Detail' })).toBeInTheDocument();
+    expect(await screen.findByText('job-article-crawl')).toBeInTheDocument();
+    expect(await screen.findByText('job-article-step')).toBeInTheDocument();
+    expect(screen.getAllByText(/Profile:\s*default/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: '打开 Job Detail' })).toHaveLength(3);
   });
 
-  it('renders the quality page with coverage metrics and latest job output', async () => {
-    mockedListArticles.mockResolvedValue(buildArticleList());
-    mockedListJobs.mockResolvedValue(buildJobList());
+  it('renders the quality page with full profile-scoped quality metrics', async () => {
+    mockedGetArticleQualitySummary.mockResolvedValue({
+      profile_id: 'default',
+      profile_snapshot_id: 'snapshot-1',
+      trader_ids: ['trader_a', 'trader_b'],
+      author_ids: ['author-4'],
+      total: 3,
+      with_summary: 2,
+      with_tags: 2,
+      with_hash: 3,
+      with_author: 3,
+      latest_crawled_at: '2026-05-10T10:30:00Z',
+    });
 
     renderWithRouter([{ path: '/articles/quality', element: <ArticleQualityPage /> }], ['/articles/quality']);
 
     expect(await screen.findByRole('heading', { name: '数据质量' })).toBeInTheDocument();
-    expect(await screen.findByText('job-article-1')).toBeInTheDocument();
-    expect(screen.getByText('最近一次文章 Job')).toBeInTheDocument();
+    expect(await screen.findByText('Profile ID')).toBeInTheDocument();
+    expect(await screen.findByText('Profile 作用域')).toBeInTheDocument();
+    expect(screen.getByText('质量概览')).toBeInTheDocument();
+    expect(screen.queryByText('最近一次文章 Job')).not.toBeInTheDocument();
   });
 
-  it('renders the results page with structured process output', async () => {
-    mockedListArticles.mockResolvedValue(buildArticleList());
-    mockedListJobs.mockResolvedValue(buildJobList());
-    mockedListArticleMetadataSummary.mockResolvedValue(buildArticleMetadataSummary());
+  it('renders the results page with selectable article list and detail panel', async () => {
+    mockedListArticleMetadataArticles.mockImplementation(async (request?: { selection_status?: 'all' | 'selected' | 'unselected' }) =>
+      buildArticleMetadataListForStatus(request?.selection_status),
+    );
+    mockedGetArticleMetadataSummary.mockImplementation(async (articleId: string) => buildArticleMetadataDetail(articleId));
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
     expect(await screen.findByRole('heading', { name: '处理结果' })).toBeInTheDocument();
-    expect(await screen.findByText('Article One')).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: '元数据版本选择' })).toBeInTheDocument();
-    expect(await screen.findByText('当前：v1')).toBeInTheDocument();
-    expect(await screen.findByText('推荐：v1')).toBeInTheDocument();
-    expect(screen.getByText('Process Output')).toBeInTheDocument();
-    expect(screen.getByText('最新 process 输出')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '设为当前版本' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '未选择' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '已选择' })).toBeInTheDocument();
+    expect((await screen.findAllByText('Article Two')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('当前文章详情')).toBeInTheDocument();
+    expect(await screen.findByText('元数据版本选择')).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: '已选择' }));
+    expect((await screen.findAllByText('Article One')).length).toBeGreaterThan(0);
   });
 
   it('submits the selected article metadata version from the results page', async () => {
     const user = userEvent.setup();
-    mockedListArticles.mockResolvedValue(buildArticleList());
-    mockedListJobs.mockResolvedValue(buildJobList());
-    mockedListArticleMetadataSummary.mockResolvedValue(buildArticleMetadataSummary());
+    mockedListArticleMetadataArticles.mockImplementation(async (request?: { selection_status?: 'all' | 'selected' | 'unselected' }) =>
+      buildArticleMetadataListForStatus(request?.selection_status),
+    );
+    mockedGetArticleMetadataSummary.mockImplementation(async (articleId: string) => buildArticleMetadataDetail(articleId));
     mockedSelectArticleMetadataVersion.mockResolvedValue({
-      article_id: 'article-1',
+      ...buildArticleMetadataDetail('article-2'),
+      article_id: 'article-2',
       selected_schema_version: 'v2',
       selected_by: 'web',
       selected_at: '2026-05-10T11:00:00Z',
       selection_mode: 'manual',
       selection_score: 4.1,
       selection_reason: '用户手动确认',
-      recommended_schema_version: 'v1',
-      recommended_score: 4.5,
-      recommended_reason: '自动推荐：当前候选即最优候选',
       effective_schema_version: 'v2',
       effective_score: 4.1,
       effective_reason: '用户手动确认',
-      warning: null,
-      candidates: buildArticleMetadataSummary().items[0].candidates,
     });
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
-    await screen.findByRole('heading', { name: '元数据版本选择' });
+    await screen.findByText('元数据版本选择');
+    expect((await screen.findAllByText('Article Two')).length).toBeGreaterThan(0);
     await user.selectOptions(await screen.findByLabelText('选择当前使用版本'), 'v2');
     await user.click(screen.getByRole('button', { name: '设为当前版本' }));
 
     await waitFor(() => {
-      expect(mockedSelectArticleMetadataVersion).toHaveBeenCalledWith('article-1', {
+      expect(mockedSelectArticleMetadataVersion).toHaveBeenCalledWith('article-2', {
         selected_schema_version: 'v2',
         selected_by: 'web',
       });

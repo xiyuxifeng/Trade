@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import AsyncIterator
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -16,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from api.dependencies import verify_api_key
 from api.main import app
 from api.routes import articles as article_routes
+from api.routers.ui import article_metadata as article_metadata_routes
 from src.models.blog_article import BlogArticle
+from src.models.article_metadata_selection import ArticleMetadataSelection
 
 
 @pytest_asyncio.fixture
@@ -42,6 +45,7 @@ async def article_session_factory(tmp_path) -> AsyncIterator[async_sessionmaker[
 
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: BlogArticle.__table__.create(bind=sync_conn, checkfirst=True))
+        await conn.run_sync(lambda sync_conn: ArticleMetadataSelection.__table__.create(bind=sync_conn, checkfirst=True))
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -55,6 +59,7 @@ async def _seed_articles(session_factory: async_sessionmaker[AsyncSession]) -> N
         session.add_all(
             [
                 BlogArticle(
+                    id=UUID("11111111-1111-1111-1111-111111111111"),
                     source="tgb",
                     source_url="https://example.com/article-1",
                     title="Article One",
@@ -65,14 +70,15 @@ async def _seed_articles(session_factory: async_sessionmaker[AsyncSession]) -> N
                     content_text="hello article content",
                     summary="summary one",
                     tags=["trend", "alpha"],
-                    content_hash="hash-1",
-                    view_count=10,
-                    like_count=2,
-                    bookmark_count=1,
-                    comment_count=3,
-                    raw_payload={},
+                content_hash="hash-1",
+                view_count=10,
+                like_count=2,
+                bookmark_count=1,
+                comment_count=3,
+                raw_payload={"trader_id": "trader_a"},
                 ),
                 BlogArticle(
+                    id=UUID("22222222-2222-2222-2222-222222222222"),
                     source="xhs",
                     source_url="https://example.com/article-2",
                     title="Article Two",
@@ -88,9 +94,25 @@ async def _seed_articles(session_factory: async_sessionmaker[AsyncSession]) -> N
                     like_count=1,
                     bookmark_count=0,
                     comment_count=0,
-                    raw_payload={"trader_id": "trader_b"},
+                raw_payload={"trader_id": "trader_c"},
                 ),
             ]
+        )
+        session.add(
+            ArticleMetadataSelection(
+                selection_id="selection-article-1",
+                article_id=UUID("11111111-1111-1111-1111-111111111111"),
+                selected_schema_version="v1",
+                recommended_schema_version="v1",
+                selection_mode="manual",
+                selection_score=4.5,
+                recommended_score=4.5,
+                selection_reason="用户手动确认",
+                recommended_reason="自动推荐：当前候选即最优候选",
+                selected_by="web",
+                selected_at=datetime(2026, 5, 10, 10, 0, tzinfo=UTC),
+                candidate_versions_json=[],
+            )
         )
         await session.commit()
 
@@ -145,7 +167,7 @@ async def test_article_filter_options_survive_config_load_failure(
     assert response.json() == {
         "author_ids": ["author-1", "author-2"],
         "sources": ["tgb", "xhs"],
-        "trader_ids": ["trader_b"],
+        "trader_ids": ["trader_a", "trader_c"],
     }
 
 
@@ -165,3 +187,124 @@ async def test_article_list_still_returns_json_for_api_clients(
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
     assert response.json()["items"][0]["title"] == "Article Two"
+
+
+@pytest.mark.asyncio
+async def test_article_quality_summary_filters_by_current_profile(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """文章质量摘要应只统计当前 Profile 范围内的数据。"""
+    await _seed_articles(article_session_factory)
+
+    async with article_session_factory() as session:
+        session.add(
+            BlogArticle(
+                source="tgb",
+                source_url="https://example.com/article-3",
+                title="Article Three",
+                author_name="Carol",
+                author_id="author-3",
+                published_at=datetime(2026, 5, 12, 8, 0, tzinfo=UTC),
+                crawled_at=datetime(2026, 5, 12, 9, 0, tzinfo=UTC),
+                content_text="third article content",
+                summary=None,
+                tags=[],
+                content_hash="hash-3",
+                view_count=1,
+                like_count=0,
+                bookmark_count=0,
+                comment_count=0,
+                raw_payload={"trader_id": "trader_a"},
+            )
+        )
+        await session.commit()
+
+    monkeypatch.setattr(article_routes, "async_session_factory", lambda: article_session_factory)
+    monkeypatch.setattr(article_routes.ConfigProfileService, "resolve_runtime_profile_id", lambda self, preferred=None: "profile-1")
+
+    async def _load_runtime_config(self, profile_id: str):  # noqa: ANN001
+        assert profile_id == "profile-1"
+        return SimpleNamespace(
+            profile_id="profile-1",
+            profile_snapshot_id="snapshot-1",
+            config=SimpleNamespace(
+                traders=[
+                    SimpleNamespace(trader_id="trader_a", enabled=True),
+                ],
+                crawl=SimpleNamespace(
+                    sources=[
+                        SimpleNamespace(author_id="author-4", trader_id="trader_b", enabled=True),
+                    ]
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(article_routes.ConfigProfileService, "load_profile_runtime_config", _load_runtime_config)
+
+    response = await client.get("/articles/quality")
+    assert response.status_code == 200
+    assert response.json() == {
+        "profile_id": "profile-1",
+        "profile_snapshot_id": "snapshot-1",
+        "trader_ids": ["trader_a", "trader_b"],
+        "author_ids": ["author-4"],
+        "total": 2,
+        "with_summary": 1,
+        "with_tags": 1,
+        "with_hash": 2,
+        "with_author": 2,
+        "latest_crawled_at": "2026-05-12T09:00:00",
+    }
+
+
+@pytest.mark.asyncio
+async def test_article_metadata_list_filters_by_selection_status_search_and_page(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """文章元数据列表应支持按选择状态、搜索和分页筛选。"""
+    await _seed_articles(article_session_factory)
+
+    async with article_session_factory() as session:
+        session.add(
+            BlogArticle(
+                id=UUID("33333333-3333-3333-3333-333333333333"),
+                source="tgb",
+                source_url="https://example.com/article-3",
+                title="Article Three",
+                author_name="Carol",
+                author_id="author-3",
+                published_at=datetime(2026, 5, 12, 8, 0, tzinfo=UTC),
+                crawled_at=datetime(2026, 5, 12, 9, 0, tzinfo=UTC),
+                content_text="third article content",
+                summary="summary three",
+                tags=["macro"],
+                content_hash="hash-3",
+                view_count=1,
+                like_count=0,
+                bookmark_count=0,
+                comment_count=0,
+                raw_payload={"trader_id": "trader_b"},
+            )
+        )
+        await session.commit()
+
+    monkeypatch.setattr(article_metadata_routes, "async_session_factory", lambda: article_session_factory)
+
+    response = await client.get("/api/ui/v1/article-metadata/articles?selection_status=unselected&page=1&page_size=1&search=Two")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["pages"] == 1
+    assert body["page"] == 1
+    assert body["page_size"] == 1
+    assert body["items"][0]["article_id"] == "22222222-2222-2222-2222-222222222222"
+    assert body["items"][0]["selection_status"] == "unselected"
+    assert body["items"][0]["title"] == "Article Two"
+
+    selected_response = await client.get("/api/ui/v1/article-metadata/articles?selection_status=selected")
+    assert selected_response.status_code == 200
+    assert selected_response.json()["items"][0]["article_id"] == "11111111-1111-1111-1111-111111111111"

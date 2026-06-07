@@ -36,6 +36,13 @@ async def _resolve_profile_id(preferred: str | None = None) -> str:
     return ConfigProfileService().resolve_runtime_profile_id(preferred)
 
 
+async def _resolve_profile_runtime(preferred: str | None = None):
+    """在主事件循环里解析 Profile runtime，避免把 DB 访问丢进线程。"""
+    runtime_profile_id = await _resolve_profile_id(preferred)
+    runtime = await ConfigProfileService().load_profile_runtime_config(runtime_profile_id)
+    return runtime_profile_id, runtime
+
+
 @router.post("/kaipan/fetch", dependencies=[Depends(verify_api_key)])
 async def fetch_kaipan(
     trade_date: str | None = None,
@@ -44,16 +51,16 @@ async def fetch_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """抓取 Kaipan 数据并同步标准化。"""
-    runtime_profile_id = await _resolve_profile_id(profile_id)
-    result = await asyncio.to_thread(service.fetch, profile_id=runtime_profile_id, trade_date=trade_date, slot=slot)
+    runtime_profile_id, runtime = await _resolve_profile_runtime(profile_id)
+    result = await asyncio.to_thread(service.fetch, runtime=runtime, profile_id=runtime_profile_id, trade_date=trade_date, slot=slot)
     return result.payload
 
 
 @router.get("/kaipan/status", dependencies=[Depends(verify_api_key)])
 async def kaipan_status(profile_id: str | None = None, service: KaipanService = Depends(get_kaipan_service)):
     """返回最新可用的 Kaipan 时间槽状态。"""
-    runtime_profile_id = await _resolve_profile_id(profile_id)
-    result = await asyncio.to_thread(service.status, profile_id=runtime_profile_id)
+    runtime_profile_id, runtime = await _resolve_profile_runtime(profile_id)
+    result = await asyncio.to_thread(service.status, runtime=runtime, profile_id=runtime_profile_id)
     return result.payload
 
 
@@ -64,9 +71,10 @@ async def normalize_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """仅执行标准化。"""
-    runtime_profile_id = await _resolve_profile_id(profile_id)
+    runtime_profile_id, runtime = await _resolve_profile_runtime(profile_id)
     result = await asyncio.to_thread(
         service.normalize,
+        runtime=runtime,
         profile_id=runtime_profile_id,
         trade_date=request.trade_date,
         slot=request.slot,
@@ -81,9 +89,10 @@ async def run_kaipan(
     service: KaipanService = Depends(get_kaipan_service),
 ):
     """构建或启动 Kaipan 调度计划。"""
-    runtime_profile_id = await _resolve_profile_id(profile_id)
+    runtime_profile_id, runtime = await _resolve_profile_runtime(profile_id)
     result = await asyncio.to_thread(
         service.run,
+        runtime=runtime,
         profile_id=runtime_profile_id,
         start_scheduler=request.start_scheduler,
         block=request.block,
@@ -94,6 +103,6 @@ async def run_kaipan(
 @router.post("/kaipan/stop", dependencies=[Depends(verify_api_key)])
 async def stop_kaipan(profile_id: str | None = None, service: KaipanService = Depends(get_kaipan_service)):
     """停止 Kaipan 调度器。"""
-    runtime_profile_id = await _resolve_profile_id(profile_id)
-    result = await asyncio.to_thread(service.stop, profile_id=runtime_profile_id)
+    runtime_profile_id, runtime = await _resolve_profile_runtime(profile_id)
+    result = await asyncio.to_thread(service.stop, runtime=runtime, profile_id=runtime_profile_id)
     return result.payload

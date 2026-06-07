@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 import pytest
@@ -12,7 +13,10 @@ from httpx import ASGITransport, AsyncClient
 from api.dependencies import verify_api_key
 from api.main import app
 from api.routers.ui.kaipan import get_kaipan_service
+from src.common.config import AppConfig
 from src.services.base import ServiceResult
+from src.services.config_profile_service import ConfigProfileService
+from src.services.runtime_config import ProfileRuntimeConfig
 
 
 @dataclass
@@ -24,6 +28,7 @@ class _FakeKaipanService:
         *,
         profile_id: str | None = None,
         config_path: str | None = None,
+        runtime: Any | None = None,
         trade_date: str | None = None,
         slot: str = "all",
     ) -> ServiceResult:
@@ -32,6 +37,7 @@ class _FakeKaipanService:
                 "action": "fetch",
                 "profile_id": profile_id,
                 "config_path": config_path,
+                "runtime": runtime,
                 "trade_date": trade_date,
                 "slot": slot,
             }
@@ -50,8 +56,8 @@ class _FakeKaipanService:
             },
         )
 
-    def status(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
-        self.calls.append({"action": "status", "profile_id": profile_id, "config_path": config_path})
+    def status(self, *, profile_id: str | None = None, config_path: str | None = None, runtime: Any | None = None) -> ServiceResult:
+        self.calls.append({"action": "status", "profile_id": profile_id, "config_path": config_path, "runtime": runtime})
         return ServiceResult(
             status="ok",
             message="latest slot 2026-05-09_17-30",
@@ -72,6 +78,7 @@ class _FakeKaipanService:
         *,
         profile_id: str | None = None,
         config_path: str | None = None,
+        runtime: Any | None = None,
         trade_date: str | None = None,
         slot: str = "all",
     ) -> ServiceResult:
@@ -80,6 +87,7 @@ class _FakeKaipanService:
                 "action": "normalize",
                 "profile_id": profile_id,
                 "config_path": config_path,
+                "runtime": runtime,
                 "trade_date": trade_date,
                 "slot": slot,
             }
@@ -102,6 +110,7 @@ class _FakeKaipanService:
         *,
         profile_id: str | None = None,
         config_path: str | None = None,
+        runtime: Any | None = None,
         start_scheduler: bool = False,
         block: bool = False,
     ) -> ServiceResult:
@@ -110,6 +119,7 @@ class _FakeKaipanService:
                 "action": "run",
                 "profile_id": profile_id,
                 "config_path": config_path,
+                "runtime": runtime,
                 "start_scheduler": start_scheduler,
                 "block": block,
             }
@@ -128,8 +138,8 @@ class _FakeKaipanService:
             },
         )
 
-    def stop(self, *, profile_id: str | None = None, config_path: str | None = None) -> ServiceResult:
-        self.calls.append({"action": "stop", "profile_id": profile_id, "config_path": config_path})
+    def stop(self, *, profile_id: str | None = None, config_path: str | None = None, runtime: Any | None = None) -> ServiceResult:
+        self.calls.append({"action": "stop", "profile_id": profile_id, "config_path": config_path, "runtime": runtime})
         return ServiceResult(
             status="ok",
             message="kaipan scheduler stopped",
@@ -145,12 +155,20 @@ class _FakeKaipanService:
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     fake_service = _FakeKaipanService()
+    fake_runtime = ProfileRuntimeConfig(profile_id="default", config=AppConfig(), base_dir=Path("/tmp/project"))
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: "test-key"
         app.dependency_overrides[get_kaipan_service] = lambda: fake_service
+        monkeypatch.setattr(ConfigProfileService, "resolve_runtime_profile_id", lambda self, preferred=None: "default")
+
+        async def _load_profile_runtime_config(self, profile_id: str):
+            del self, profile_id
+            return fake_runtime
+
+        monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _load_profile_runtime_config)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac

@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from src.alerting.models import AlertEvent, AlertLevel
+from src.common.config import AppConfig
 from src.pipeline.dashboard_models import DashboardReport
+from src.services.runtime_config import ProfileRuntimeConfig
 
 
 @dataclass
@@ -255,6 +257,27 @@ def test_kaipan_service_can_start_and_stop_scheduler(tmp_path: Path, monkeypatch
 	assert stop_result.status == "ok"
 	assert stop_result.payload["started"] is False
 	assert status_stopped.payload["scheduler_started"] is False
+
+
+def test_kaipan_service_uses_injected_runtime_without_profile_db_access(tmp_path: Path, monkeypatch) -> None:
+	"""KaipanService 传入 runtime 时不应再次触发 Profile DB 加载。"""
+	from src.services.kaipan_service import KaipanService
+
+	runtime = ProfileRuntimeConfig(profile_id="default", config=AppConfig(), base_dir=tmp_path)
+
+	def _should_not_be_called(*args, **kwargs):
+		raise AssertionError("profile loader should not be called when runtime is injected")
+
+	monkeypatch.setattr(KaipanService, "_load_profile_runtime", _should_not_be_called)
+	service = KaipanService(
+		provider_factory=lambda **kwargs: _FakeProvider(calls=[]),
+		normalizer_factory=lambda **kwargs: _FakeNormalizer(),
+	)
+
+	result = service.status(runtime=runtime)
+
+	assert result.status == "partial"
+	assert result.payload["profile_id"] == "default"
 
 
 def test_dashboard_service_build_report(tmp_path: Path) -> None:

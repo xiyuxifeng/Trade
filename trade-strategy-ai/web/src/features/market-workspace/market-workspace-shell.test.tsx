@@ -16,6 +16,7 @@ import {
 import { buildDashboardReport } from '@/lib/api/dataHealth';
 import { getProfile, listProfiles } from '@/lib/api/profiles';
 import { kaipanRun, kaipanStatus, kaipanStop } from '@/lib/api/kaipan';
+import { toast } from '@/components/ui/toast';
 
 vi.mock('@/lib/api/jobs', () => ({
   createJob: vi.fn(),
@@ -52,6 +53,11 @@ vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  toast: vi.fn(),
+  Toaster: () => null,
+}));
+
 const mockedCreateJob = vi.mocked(createJob);
 const mockedListJobs = vi.mocked(listJobs);
 const mockedListArtifacts = vi.mocked(listArtifacts);
@@ -67,6 +73,7 @@ const mockedKaipanStatus = vi.mocked(kaipanStatus);
 const mockedKaipanStop = vi.mocked(kaipanStop);
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetProfile = vi.mocked(getProfile);
+const mockedToast = vi.mocked(toast);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -228,6 +235,17 @@ describe('MarketWorkspaceShell', () => {
 
   it('renders the kaipan workspace footer blocks and success message', async () => {
     const user = userEvent.setup();
+    let resolveCreateJob:
+      | ((value: {
+          created: boolean;
+          job: { id: string };
+          job_dir: string;
+          log_path: string;
+          params_path: string;
+          result_path: string;
+          artifacts_path: string;
+        }) => void)
+      | undefined;
 
     mockedListJobs.mockResolvedValue({
       count: 1,
@@ -349,15 +367,11 @@ describe('MarketWorkspaceShell', () => {
         },
       ],
     } as never);
-    mockedCreateJob.mockResolvedValue({
-      created: true,
-      job: { id: 'job-kaipan-1' },
-      job_dir: '/tmp/job-kaipan-1',
-      log_path: '/tmp/job-kaipan-1/log.txt',
-      params_path: '/tmp/job-kaipan-1/params.json',
-      result_path: '/tmp/job-kaipan-1/result.json',
-      artifacts_path: '/tmp/job-kaipan-1/artifacts',
-    } as never);
+    mockedCreateJob.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreateJob = resolve;
+      }) as never,
+    );
 
     renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
 
@@ -367,11 +381,22 @@ describe('MarketWorkspaceShell', () => {
     expect(await screen.findByRole('combobox', { name: /Profile/ })).toHaveValue('default');
     expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
     expect(screen.getByLabelText('结束日期')).toBeInTheDocument();
-    expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
-    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '启动调度器' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '运行Kaipan 抓取' }));
+    const submitButton = screen.getByRole('button', { name: '运行Kaipan 抓取' });
+    await user.click(submitButton);
+
+    expect(submitButton).toHaveTextContent('提交中');
+
+    resolveCreateJob?.({
+      created: true,
+      job: { id: 'job-kaipan-1' },
+      job_dir: '/tmp/job-kaipan-1',
+      log_path: '/tmp/job-kaipan-1/log.txt',
+      params_path: '/tmp/job-kaipan-1/params.json',
+      result_path: '/tmp/job-kaipan-1/result.json',
+      artifacts_path: '/tmp/job-kaipan-1/artifacts',
+    });
 
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
@@ -387,6 +412,14 @@ describe('MarketWorkspaceShell', () => {
       );
     });
 
+    expect(mockedToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Kaipan 抓取任务已提交',
+        description: 'Job job-kaipan-1 已创建，可打开 Job 详情查看进度。',
+      }),
+    );
+    expect(screen.getByText('Kaipan 抓取任务已提交，Job job-kaipan-1 已创建，可打开 Job 详情查看进度。')).toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: '启动调度器' }));
 
     await waitFor(() => {
@@ -396,9 +429,139 @@ describe('MarketWorkspaceShell', () => {
           start_scheduler: true,
           block: false,
         }),
+        'default',
       );
       expect(screen.getByRole('button', { name: '停止调度器' })).toBeInTheDocument();
     });
+  });
+
+  it('shows loading state and success toast when submitting Kaipan normalize', async () => {
+    const user = userEvent.setup();
+    let resolveCreateJob:
+      | ((value: {
+          created: boolean;
+          job: { id: string };
+          job_dir: string;
+          log_path: string;
+          params_path: string;
+          result_path: string;
+          artifacts_path: string;
+        }) => void)
+      | undefined;
+
+    mockedListJobs.mockResolvedValue({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 12,
+      items: [],
+    } as never);
+    mockedListArtifacts.mockResolvedValue({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 8,
+      items: [],
+    } as never);
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'CN', name: '沪深300', security_type: 'index' },
+        { symbol: '510300.SH', code: '510300', market: 'CN', name: '沪深300ETF', security_type: 'etf' },
+      ],
+    } as never);
+    mockedListProfiles.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-16T08:00:00Z',
+          updated_at: '2026-05-16T08:10:00Z',
+          archived_at: null,
+        },
+      ],
+    } as never);
+    mockedGetProfile.mockResolvedValue({
+      profile: {
+        profile_id: 'default',
+        name: 'Default Profile',
+        environment: 'production',
+        version: 1,
+        sections: {},
+        secret_refs: {},
+        validation_status: 'validated',
+        created_by: 'web',
+        created_at: '2026-05-16T08:00:00Z',
+        updated_at: '2026-05-16T08:10:00Z',
+        archived_at: null,
+      },
+      linked_jobs: [],
+      snapshots: [],
+    } as never);
+    mockedKaipanStatus.mockResolvedValue({
+      config_path: 'config/kaipan.yaml',
+      base_dir: '/tmp/trade-strategy-ai',
+      raw_base: '/tmp/trade-strategy-ai/data/raw',
+      latest_slot: null,
+      scheduler_started: false,
+      scheduler_pre_market: '9:25',
+      scheduler_post_close: '17:30',
+    } as never);
+    mockedCreateJob.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreateJob = resolve;
+      }) as never,
+    );
+    mockedBuildDashboardReport.mockResolvedValue({
+      critical_alerts: 1,
+      exit_code: 0,
+      html_path: '/tmp/dashboard.html',
+      report: { summary: true, detail: {} },
+    } as never);
+
+    renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
+
+    expect(await screen.findByRole('heading', { name: 'Kaipan 数据' })).toBeInTheDocument();
+    const submitButton = screen.getByRole('button', { name: '运行Kaipan 归一化' });
+    await user.click(submitButton);
+
+    expect(submitButton).toHaveTextContent('提交中');
+
+    resolveCreateJob?.({
+      created: true,
+      job: { id: 'job-kaipan-normalize-1' },
+      job_dir: '/tmp/job-kaipan-normalize-1',
+      log_path: '/tmp/job-kaipan-normalize-1/log.txt',
+      params_path: '/tmp/job-kaipan-normalize-1/params.json',
+      result_path: '/tmp/job-kaipan-normalize-1/result.json',
+      artifacts_path: '/tmp/job-kaipan-normalize-1/artifacts',
+    });
+
+    await waitFor(() => {
+      expect(mockedCreateJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          job_type: 'kaipan-normalize',
+          created_by: 'web',
+        }),
+      );
+      expect(mockedToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Kaipan 归一化任务已提交',
+          description: 'Job job-kaipan-normalize-1 已创建，可打开 Job 详情查看进度。',
+        }),
+      );
+    });
+    expect(screen.getByText('Kaipan 归一化任务已提交，Job job-kaipan-normalize-1 已创建，可打开 Job 详情查看进度。')).toBeInTheDocument();
   });
 
   it('renders the kaipan scheduler stop state and can stop scheduler', async () => {

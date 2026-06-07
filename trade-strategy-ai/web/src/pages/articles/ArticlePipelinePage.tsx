@@ -1528,7 +1528,7 @@ export function ArticleResultsPage() {
         {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
 
         <SectionCard title="版本管理" description="按选择状态和关键词筛选文章，左侧列表与右侧详情独立滚动。">
-          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm">
               <div className="border-b border-slate-200 bg-white/80 p-4 backdrop-blur">
                 <div className="flex items-start justify-between gap-3">
@@ -1644,7 +1644,7 @@ export function ArticleResultsPage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="self-start overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>

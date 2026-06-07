@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast';
 import { PageHeader } from '@/components/layout/page-header';
 import { ErrorState } from '@/components/state/ErrorState';
 import { formatLocalDateInputOffset } from '@/lib/date';
@@ -470,6 +471,15 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
     },
     onSuccess: (result, jobType) => {
       setSubmissionJobId(result.job.id);
+      if (jobType === 'kaipan-fetch' || jobType === 'kaipan-normalize') {
+        const title = jobType === 'kaipan-fetch' ? 'Kaipan 抓取任务已提交' : 'Kaipan 归一化任务已提交';
+        setSubmissionMessage(`${title}，Job ${result.job.id} 已创建，可打开 Job 详情查看进度。`);
+        toast({
+          title,
+          description: `Job ${result.job.id} 已创建，可打开 Job 详情查看进度。`,
+        });
+        return;
+      }
       setSubmissionMessage(`任务已生成：${jobType}，可打开 Job 详情查看进度。`);
     },
     onSettled: () => {

@@ -17,6 +17,7 @@ from src.services.config_profile_service import ConfigProfileService
 from src.providers.kaipan_normalizer import KaipanNormalizer
 from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
 from src.services.base import BaseService, ServiceResult
+from src.services.runtime_config import ProfileRuntimeConfig
 
 
 def _project_base_dir(config_path: Path) -> Path:
@@ -88,6 +89,10 @@ class KaipanService(BaseService):
     def _load_profile_runtime(self, profile_id: str) -> dict[str, Any]:
         """加载 Profile 运行时配置并计算工作目录。"""
         runtime = asyncio.run(ConfigProfileService().load_profile_runtime_config(profile_id))
+        return self._runtime_from_profile(runtime)
+
+    def _runtime_from_profile(self, runtime: ProfileRuntimeConfig) -> dict[str, Any]:
+        """把 ProfileRuntimeConfig 转成 Kaipan 内部使用的运行时字典。"""
         cfg = runtime.config
         base_dir = runtime.base_dir
         data_root = base_dir / cfg.kaipan.data_dir
@@ -110,8 +115,13 @@ class KaipanService(BaseService):
         *,
         profile_id: str | None = None,
         config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
     ) -> dict[str, Any]:
         """按 Profile 优先加载运行时，兼容旧 config_path。"""
+        if runtime is not None:
+            runtime_dict = self._runtime_from_profile(runtime)
+            runtime_dict["config_path"] = None
+            return runtime_dict
         resolved_profile_id = str(profile_id).strip() if isinstance(profile_id, str) and profile_id.strip() else None
         if resolved_profile_id is not None:
             runtime = self._load_profile_runtime(resolved_profile_id)
@@ -303,6 +313,7 @@ class KaipanService(BaseService):
         *,
         profile_id: str | None = None,
         config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
         trade_date: str | date | None = None,
         start_date: str | date | None = None,
         end_date: str | date | None = None,
@@ -311,7 +322,7 @@ class KaipanService(BaseService):
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """抓取指定交易日或区间的数据并执行标准化。"""
-        runtime = self._load_runtime_context(profile_id=profile_id, config_path=config_path)
+        runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
         try:
             slots_to_fetch = self._expand_slots(slot)
             trade_dates = self._resolve_trade_dates(trade_date=trade_date, start_date=start_date, end_date=end_date)
@@ -320,13 +331,13 @@ class KaipanService(BaseService):
                 status="error",
                 message=str(exc),
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
                 },
             )
-        provider = self._create_provider(runtime)
-        normalizer = self._create_normalizer(runtime)
+        provider = self._create_provider(runtime_context)
+        normalizer = self._create_normalizer(runtime_context)
         total_steps = sum(
             len(self._fetchers_for_slot(provider, current_slot)) + len(self._NORMALIZE_DATASETS)
             for _trade_day in trade_dates
@@ -429,10 +440,10 @@ class KaipanService(BaseService):
             status="ok",
             message="kaipan fetch completed",
             payload={
-                "profile_id": runtime.get("profile_id"),
-                "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                "base_dir": str(runtime["base_dir"]),
+                "profile_id": runtime_context.get("profile_id"),
+                "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                "base_dir": str(runtime_context["base_dir"]),
                 "trade_date": trade_dates[0].isoformat() if len(trade_dates) == 1 else None,
                 "start_date": trade_dates[0].isoformat(),
                 "end_date": trade_dates[-1].isoformat(),
@@ -449,6 +460,7 @@ class KaipanService(BaseService):
         *,
         profile_id: str | None = None,
         config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
         trade_date: str | date | None = None,
         start_date: str | date | None = None,
         end_date: str | date | None = None,
@@ -457,7 +469,7 @@ class KaipanService(BaseService):
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
         """仅执行 normalize，可覆盖单日或区间。"""
-        runtime = self._load_runtime_context(profile_id=profile_id, config_path=config_path)
+        runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
         try:
             slots = tuple(self._expand_slots(slot))
             trade_dates = self._resolve_trade_dates(trade_date=trade_date, start_date=start_date, end_date=end_date)
@@ -466,12 +478,12 @@ class KaipanService(BaseService):
                 status="error",
                 message=str(exc),
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
                 },
             )
-        normalizer = self._create_normalizer(runtime)
+        normalizer = self._create_normalizer(runtime_context)
         total_steps = len(self._NORMALIZE_DATASETS) * len(slots) * len(trade_dates)
         current_step = 0
         runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
@@ -529,10 +541,10 @@ class KaipanService(BaseService):
             status="ok",
             message="kaipan normalize completed",
             payload={
-                "profile_id": runtime.get("profile_id"),
-                "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                "base_dir": str(runtime["base_dir"]),
+                "profile_id": runtime_context.get("profile_id"),
+                "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                "base_dir": str(runtime_context["base_dir"]),
                 "trade_date": trade_dates[0].isoformat() if len(trade_dates) == 1 else None,
                 "start_date": trade_dates[0].isoformat(),
                 "end_date": trade_dates[-1].isoformat(),
@@ -543,20 +555,26 @@ class KaipanService(BaseService):
             },
         )
 
-    def status(self, *, profile_id: str | None = None, config_path: str | Path | None = None) -> ServiceResult:
+    def status(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
+    ) -> ServiceResult:
         """查看最近一次抓取状态。"""
-        runtime = self._load_runtime_context(profile_id=profile_id, config_path=config_path)
-        raw_base = runtime["raw_dir"]
+        runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
+        raw_base = runtime_context["raw_dir"]
         scheduler_state = self._scheduler_snapshot()
         if not raw_base.exists():
             return ServiceResult(
                 status="partial",
                 message="no data yet",
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                    "base_dir": str(runtime["base_dir"]),
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                    "base_dir": str(runtime_context["base_dir"]),
                     "raw_base": str(raw_base),
                     "latest_slot": None,
                     "scheduler_started": scheduler_state["started"],
@@ -583,10 +601,10 @@ class KaipanService(BaseService):
             status="ok" if latest else "partial",
             message=f"latest slot {latest}" if latest else "no data yet",
             payload={
-                "profile_id": runtime.get("profile_id"),
-                "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                "base_dir": str(runtime["base_dir"]),
+                "profile_id": runtime_context.get("profile_id"),
+                "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                "base_dir": str(runtime_context["base_dir"]),
                 "raw_base": str(raw_base),
                 "latest_slot": latest,
                 "scheduler_started": scheduler_state["started"],
@@ -600,12 +618,13 @@ class KaipanService(BaseService):
         *,
         profile_id: str | None = None,
         config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
         start_scheduler: bool = False,
         block: bool = False,
     ) -> ServiceResult:
         """构建 Kaipan 调度计划或启动调度器。"""
-        runtime = self._load_runtime_context(profile_id=profile_id, config_path=config_path)
-        cfg = runtime["config"].kaipan
+        runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
+        cfg = runtime_context["config"].kaipan
         pre_market = cfg.fetch_schedule.get("pre_market", "9:25")
         post_close = cfg.fetch_schedule.get("post_close", "17:30")
         scheduler_state = self._scheduler_snapshot()
@@ -615,13 +634,13 @@ class KaipanService(BaseService):
                 status="ok",
                 message="kaipan scheduler plan prepared",
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                    "base_dir": str(runtime["base_dir"]),
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                    "base_dir": str(runtime_context["base_dir"]),
                     "pre_market": pre_market,
                     "post_close": post_close,
-                    "data_root": str(runtime["data_root"]),
+                    "data_root": str(runtime_context["data_root"]),
                     "scheduler_started": scheduler_state["started"],
                 },
             )
@@ -631,10 +650,10 @@ class KaipanService(BaseService):
                 status="partial",
                 message="kaipan scheduler already running",
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                    "base_dir": str(runtime["base_dir"]),
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                    "base_dir": str(runtime_context["base_dir"]),
                     "pre_market": scheduler_state["pre_market"] or pre_market,
                     "post_close": scheduler_state["post_close"] or post_close,
                     "started": True,
@@ -643,7 +662,7 @@ class KaipanService(BaseService):
 
         def _run_fetch(slot: str) -> None:
             td = date.today()
-            self.fetch(profile_id=profile_id, config_path=config_path, trade_date=td, slot=slot)
+            self.fetch(profile_id=profile_id, config_path=config_path, runtime=runtime, trade_date=td, slot=slot)
 
         scheduler = BackgroundScheduler()
         pre_hour, pre_min = map(int, pre_market.split(":"))
@@ -656,7 +675,7 @@ class KaipanService(BaseService):
             cls._scheduler = scheduler
             cls._scheduler_pre_market = pre_market
             cls._scheduler_post_close = post_close
-            cls._scheduler_config_path = runtime["config_path"]
+            cls._scheduler_config_path = runtime_context["config_path"]
 
         if block:
             signal.signal(signal.SIGINT, lambda *_: scheduler.shutdown())
@@ -667,10 +686,10 @@ class KaipanService(BaseService):
             status="ok",
             message="kaipan scheduler started",
             payload={
-                "profile_id": runtime.get("profile_id"),
-                "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                "base_dir": str(runtime["base_dir"]),
+                "profile_id": runtime_context.get("profile_id"),
+                "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                "base_dir": str(runtime_context["base_dir"]),
                 "pre_market": pre_market,
                 "post_close": post_close,
                 "started": True,
@@ -678,19 +697,25 @@ class KaipanService(BaseService):
             },
         )
 
-    def stop(self, *, profile_id: str | None = None, config_path: str | Path | None = None) -> ServiceResult:
+    def stop(
+        self,
+        *,
+        profile_id: str | None = None,
+        config_path: str | Path | None = None,
+        runtime: ProfileRuntimeConfig | None = None,
+    ) -> ServiceResult:
         """停止当前 Kaipan 调度器。"""
-        runtime = self._load_runtime_context(profile_id=profile_id, config_path=config_path)
+        runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
         scheduler_state = self._scheduler_snapshot()
         if not scheduler_state["started"]:
             return ServiceResult(
                 status="partial",
                 message="kaipan scheduler is not running",
                 payload={
-                    "profile_id": runtime.get("profile_id"),
-                    "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                    "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                    "base_dir": str(runtime["base_dir"]),
+                    "profile_id": runtime_context.get("profile_id"),
+                    "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                    "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                    "base_dir": str(runtime_context["base_dir"]),
                     "started": False,
                     "pre_market": scheduler_state["pre_market"],
                     "post_close": scheduler_state["post_close"],
@@ -701,10 +726,10 @@ class KaipanService(BaseService):
             status="ok",
             message="kaipan scheduler stopped",
             payload={
-                "profile_id": runtime.get("profile_id"),
-                "profile_snapshot_id": runtime.get("profile_snapshot_id"),
-                "config_path": str(runtime["config_path"]) if runtime.get("config_path") is not None else None,
-                "base_dir": str(runtime["base_dir"]),
+                "profile_id": runtime_context.get("profile_id"),
+                "profile_snapshot_id": runtime_context.get("profile_snapshot_id"),
+                "config_path": str(runtime_context["config_path"]) if runtime_context.get("config_path") is not None else None,
+                "base_dir": str(runtime_context["base_dir"]),
                 "started": False,
                 "pre_market": scheduler_state["pre_market"],
                 "post_close": scheduler_state["post_close"],

@@ -139,7 +139,7 @@ describe('HistoryPage', () => {
     renderWithRouter([{ path: '/strategies/history', element: <HistoryPage /> }], ['/strategies/history']);
 
     expect(await screen.findByRole('heading', { name: '运行历史' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '返回策略首页' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回兼容入口' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /job-build-1/ })).toBeInTheDocument();
     expect(await screen.findByRole('combobox', { name: '状态' })).toHaveValue('');
     expect(screen.getByRole('combobox', { name: '状态' })).toHaveValue('');

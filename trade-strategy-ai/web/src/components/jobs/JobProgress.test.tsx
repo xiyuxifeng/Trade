@@ -30,13 +30,13 @@ describe('JobProgress', () => {
     );
 
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
-    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getByText('步骤进度 2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getByText(/剩余 2/)).toBeInTheDocument();
     expect(screen.getByText('子进度 3 / 6 · 50%')).toBeInTheDocument();
-    expect(screen.getByText('部分完成')).toBeInTheDocument();
+    expect(screen.getByText('步骤部分完成')).toBeInTheDocument();
   });
 
-  it('shows a completion summary instead of raw fraction for success progress', () => {
+  it('shows step-oriented summary for success progress without implying terminal success', () => {
     render(
       <JobProgress
         progress={{
@@ -58,11 +58,11 @@ describe('JobProgress', () => {
       />,
     );
 
-    expect(screen.getByText('已完成 · 实际处理 1 条')).toBeInTheDocument();
-    expect(screen.getByText('本次上限 5 条，实际完成 1 条')).toBeInTheDocument();
-    expect(screen.getByText('正常')).toBeInTheDocument();
-    expect(screen.getByText('剩余 0')).toBeInTheDocument();
-    expect(screen.queryByText('1 / 5 · 20%')).not.toBeInTheDocument();
-    expect(screen.queryByText('剩余 4')).not.toBeInTheDocument();
+    expect(screen.getByText('步骤进度 1 / 5 · 20%')).toBeInTheDocument();
+    expect(screen.getByText('当前步骤已完成，任务终态请看上方 Job 状态。')).toBeInTheDocument();
+    expect(screen.getByText('步骤完成')).toBeInTheDocument();
+    expect(screen.getByText('剩余 4')).toBeInTheDocument();
+    expect(screen.queryByText('已完成 · 实际处理 1 条')).not.toBeInTheDocument();
+    expect(screen.queryByText('本次上限 5 条，实际完成 1 条')).not.toBeInTheDocument();
   });
 });

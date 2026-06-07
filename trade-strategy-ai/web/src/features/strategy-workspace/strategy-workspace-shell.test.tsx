@@ -198,15 +198,15 @@ describe('StrategyWorkspaceShell', () => {
       '/strategies/regime-selection',
     );
     expect(
-      screen.getByText('在 Web 中构建策略版本、运行盘前和盘后任务，并通过任务详情、产物和报告追踪结果。'),
+      screen.getByText('这里保留旧工作台的兼容访问，主流程已拆分到文章、回测、盘前、盘后和市场上下文入口。'),
     ).toBeInTheDocument();
     expect((await screen.findAllByText('snap-2')).length).toBeGreaterThan(0);
-    expect(await screen.findByText('来源文章 metadata 版本')).toBeInTheDocument();
+    expect(await screen.findByText('来源文章版本信息')).toBeInTheDocument();
     expect(screen.getByText('article-1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /盘前运行/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /盘后运行/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '候选版本' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '生成候选版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /盘前分析/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /盘后复盘/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '候选规则版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '生成候选规则版本' })).toBeInTheDocument();
     expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
     expect(mockedCreateJob).not.toHaveBeenCalled();
   });

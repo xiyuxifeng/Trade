@@ -205,16 +205,16 @@ export function MarketSnapshotBrowserShell() {
     <main className="page-stack">
       <PageHeader
         kicker="市场数据"
-        title="市场快照"
-        description="浏览快照、查看质量报告和派生特征，并直接跳转到快照构建任务与数据集。"
+        title="市场上下文快照"
+        description="浏览市场上下文快照、查看质量报告和派生特征，并直接跳转到市场上下文构建任务与数据集。"
         actionLabel="返回市场数据"
         onAction={() => navigate('/market')}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
         <SectionCard
-          title="快照入口"
-          description="市场数据是快照的正式主入口，盘前准备仅保留快捷构建入口。"
+          title="市场上下文入口"
+          description="市场数据是市场上下文快照的正式主入口，盘前准备仅保留快捷构建入口。"
           className="border-slate-200 bg-white"
         >
           <div className="grid grid-cols-2 gap-2">
@@ -222,20 +222,20 @@ export function MarketSnapshotBrowserShell() {
               className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
               to={snapshotBuildLink}
             >
-              <span>构建快照</span>
+              <span>构建市场上下文</span>
             </Link>
             <Link
               className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
               to={snapshotJobLink}
             >
-              <span>查看 snapshot-build</span>
+              <span>查看市场上下文构建任务</span>
               <span className="mt-1 text-xs font-normal text-slate-500">任务列表</span>
             </Link>
             <Link
               className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
               to={artifactCenterLink}
             >
-              <span>查看快照产物</span>
+              <span>查看市场上下文产物</span>
             </Link>
             <Link
               className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
@@ -248,12 +248,12 @@ export function MarketSnapshotBrowserShell() {
 
         <SectionCard
           title="版本切换"
-          description="选择当前 snapshot 的特征版本和规则版本。"
+          description="选择当前市场上下文快照的特征版本和规则版本。"
           className="border-slate-200 bg-white"
         >
           <div className="grid gap-4">
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">feature_version</span>
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">特征版本</span>
               <select
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
                 value={selectedFeatureVersion ?? ''}
@@ -278,7 +278,7 @@ export function MarketSnapshotBrowserShell() {
               </select>
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">regime_version</span>
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">状态版本</span>
               <select
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none transition-colors focus:border-sky-400"
                 value={selectedRegimeVersion ?? ''}

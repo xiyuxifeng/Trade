@@ -168,7 +168,7 @@ describe('Strategy lifecycle pages', () => {
     expect(await screen.findByLabelText('Profile')).toHaveValue('default');
     expect(screen.getByLabelText('Profile')).toHaveValue('default');
     expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('000300.SH');
-    expect(screen.getByLabelText('Strategy date')).toBeInTheDocument();
+    expect(screen.getByLabelText('分析日期')).toBeInTheDocument();
     expect(screen.getByLabelText('Snapshot start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Snapshot end date')).toBeInTheDocument();
     expect(screen.getByLabelText('Snapshot slot')).toHaveValue('17-30');
@@ -177,18 +177,18 @@ describe('Strategy lifecycle pages', () => {
     expect(screen.getByLabelText('Snapshot offline')).not.toBeChecked();
     expect(screen.getByLabelText('Run force')).not.toBeChecked();
     expect(screen.getByLabelText('Export HTML')).not.toBeChecked();
-    expect(screen.getByRole('button', { name: '提交快照构建' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '提交盘前运行' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '提交市场上下文准备' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '提交盘前分析' })).toBeInTheDocument();
     expect(screen.getByText('页面默认选中沪深300；如需其他口径，可在这里切换。')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Strategy date'), { target: { value: '2026-05-22' } });
+    fireEvent.change(screen.getByLabelText('分析日期'), { target: { value: '2026-05-22' } });
     fireEvent.change(screen.getByLabelText('Snapshot start date'), { target: { value: '2026-05-20' } });
     fireEvent.change(screen.getByLabelText('Snapshot end date'), { target: { value: '2026-05-22' } });
     fireEvent.change(screen.getByLabelText('Snapshot slot'), { target: { value: '17-30' } });
     fireEvent.change(screen.getByLabelText('Snapshot type'), { target: { value: 'all' } });
     fireEvent.click(screen.getByLabelText('Snapshot force'));
     fireEvent.click(screen.getByLabelText('Snapshot offline'));
-    fireEvent.click(screen.getByRole('button', { name: '提交快照构建' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交市场上下文准备' }));
 
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
@@ -213,7 +213,7 @@ describe('Strategy lifecycle pages', () => {
     fireEvent.change(screen.getByLabelText('Benchmark 选择'), { target: { value: '000905.SH' } });
     fireEvent.click(screen.getByLabelText('Run force'));
     fireEvent.click(screen.getByLabelText('Export HTML'));
-    fireEvent.click(screen.getByRole('button', { name: '提交盘前运行' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交盘前分析' }));
 
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
@@ -234,7 +234,7 @@ describe('Strategy lifecycle pages', () => {
   it.each([
     {
       initialPath: '/strategies/pre-market',
-      heading: '盘前准备',
+      heading: '盘前分析',
     },
     {
       initialPath: '/strategies/after-close',
@@ -443,12 +443,12 @@ describe('Strategy lifecycle pages', () => {
     );
 
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /返回策略工作台/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /返回概览/ })).toBeInTheDocument();
 
     if (initialPath === '/strategies/pre-market') {
-      expect(await screen.findByRole('button', { name: '提交盘前运行' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /查看 snapshot-build/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
-      expect(screen.getByRole('link', { name: /查看 run-pre-market/ })).toHaveAttribute('href', '/jobs?job_type=run-pre-market');
+      expect(await screen.findByRole('button', { name: '提交盘前分析' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /查看市场上下文准备/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
+      expect(screen.getByRole('link', { name: /查看盘前分析/ })).toHaveAttribute('href', '/jobs?job_type=run-pre-market');
       expect(
         await screen.findByRole('heading', {
           name: '最近任务',

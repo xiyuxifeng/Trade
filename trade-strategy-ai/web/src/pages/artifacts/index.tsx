@@ -38,7 +38,7 @@ function mapLabel(value: string, mapping: Record<string, string>) {
 }
 
 const JOB_TYPE_LABELS: Record<string, string> = {
-  'snapshot-build': '快照构建',
+  'snapshot-build': '市场上下文准备',
   'strategy-build': '策略构建',
   'run-pre-market': '盘前运行',
   'run-after-close': '盘后运行',

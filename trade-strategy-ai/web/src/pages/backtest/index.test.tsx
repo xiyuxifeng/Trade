@@ -392,7 +392,7 @@ describe('BacktestPage', () => {
 
     renderWithRouter([{ path: '/backtest', element: <BacktestPage /> }], ['/backtest']);
 
-    expect(screen.getByRole('link', { name: '进入 Regime 回测' })).toHaveAttribute('href', '/backtest/regime');
+    expect(screen.getByRole('link', { name: '进入市场状态回测' })).toHaveAttribute('href', '/backtest/regime');
     expect(screen.getByRole('link', { name: '打开任务中心' })).toHaveAttribute('href', '/jobs');
     expect(await screen.findByRole('heading', { name: '回测参数' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行回测' })).toBeInTheDocument();
@@ -402,12 +402,12 @@ describe('BacktestPage', () => {
     await waitFor(() => {
       expect(profileSelect).toHaveValue('default');
       expect(screen.getByLabelText('交易员 ID')).toHaveValue('trader_a');
-      expect(screen.getByLabelText('策略版本 ID')).toHaveValue('sv-1');
+      expect(screen.getByLabelText('规则版本 ID')).toHaveValue('sv-1');
     });
     expect(screen.getByLabelText('回测模式')).toHaveValue('full');
     expect(screen.getByText('仅使用快照数据')).toBeInTheDocument();
     expect(screen.getByText('统一回测评分口径')).toBeInTheDocument();
-    expect(await screen.findByText('策略版本来源')).toBeInTheDocument();
+    expect(await screen.findByText('规则版本来源')).toBeInTheDocument();
     expect(screen.getByText('article-1')).toBeInTheDocument();
     expect(screen.getByText('当前版本评分原因')).toBeInTheDocument();
     expect(
@@ -436,7 +436,7 @@ describe('BacktestPage', () => {
     });
     await user.selectOptions(screen.getByLabelText('Profile'), 'default');
     await user.selectOptions(screen.getByLabelText('交易员 ID'), 'trader_a');
-    await user.selectOptions(screen.getByLabelText('策略版本 ID'), 'sv-1');
+    await user.selectOptions(screen.getByLabelText('规则版本 ID'), 'sv-1');
     await user.type(screen.getByLabelText('标的列表'), '000001.SZ, 000002.SZ');
     await user.click(screen.getByRole('button', { name: '运行回测' }));
 

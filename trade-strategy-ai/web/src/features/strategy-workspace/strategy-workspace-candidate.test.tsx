@@ -194,16 +194,16 @@ describe('StrategyWorkspaceCandidate', () => {
       ['/'],
     );
 
-    expect(await screen.findByRole('heading', { name: '候选版本' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '生成候选版本' }));
-    expect(await screen.findByRole('heading', { name: '确认生成候选版本' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '候选规则版本' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '生成候选规则版本' }));
+    expect(await screen.findByRole('heading', { name: '确认生成候选规则版本' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '确认生成' }));
 
-    expect(await screen.findByText('候选版本已生成: candidate-2')).toBeInTheDocument();
+    expect(await screen.findByText('候选规则版本已生成: candidate-2')).toBeInTheDocument();
     expect(await screen.findByText('candidate-2')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '相关产物链接' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '确认生成候选版本' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '确认生成候选规则版本' })).not.toBeInTheDocument();
     expect(mockedCreateOptimizeCandidateVersion).toHaveBeenCalledTimes(1);
   });
 });

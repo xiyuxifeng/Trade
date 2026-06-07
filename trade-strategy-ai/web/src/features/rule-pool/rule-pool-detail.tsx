@@ -559,7 +559,7 @@ export function RulePoolDetailPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="适用性画像" description="按 Regime-aware Backtest 结果生成规则适用/禁用画像，并支持 Web 审核。">
+        <SectionCard title="适用性画像" description="按市场状态回测结果生成规则适用/禁用画像，并支持 Web 审核。">
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-2 text-sm text-slate-700">

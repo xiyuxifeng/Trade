@@ -136,16 +136,18 @@ describe('MarketPage', () => {
 
     renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
 
-    expect(await screen.findByRole('heading', { name: '市场数据' })).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: /快照浏览/ })).toBeInTheDocument();
-    expect(screen.getByText('快照总数')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '市场上下文' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole('link').some((link) => link.getAttribute('href') === '/market/snapshots')).toBe(true);
+    });
+    expect(screen.getByText('市场上下文快照总数')).toBeInTheDocument();
     expect(screen.getByText('数据集总数')).toBeInTheDocument();
     expect(screen.getAllByText('最近失败任务').length).toBeGreaterThan(0);
     expect(screen.getByText('OHLCV 前置预检')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '检查并更新股票基础信息' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /快照浏览/ })).toHaveAttribute('href', '/market/snapshots');
+    expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/market/snapshots')).toHaveAttribute('href', '/market/snapshots');
     expect(screen.getByRole('link', { name: /数据集浏览/ })).toHaveAttribute('href', '/market/datasets');
-    expect(screen.getByRole('link', { name: /进入 Kaipan 页面/ })).toHaveAttribute('href', '/market/kaipan');
+    expect(screen.getByRole('link', { name: /进入市场数据页/ })).toHaveAttribute('href', '/market/kaipan');
     expect(screen.getByRole('link', { name: /进入 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
     expect(screen.getByRole('link', { name: /查看 Job 详情/ })).toHaveAttribute('href', '/jobs/job-1');
     expect(screen.getByRole('link', { name: /查看产物中心/ })).toHaveAttribute('href', '/artifacts');
@@ -235,7 +237,7 @@ describe('MarketPage', () => {
 
     renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
 
-    expect(await screen.findByRole('heading', { name: '市场数据' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '市场上下文' })).toBeInTheDocument();
     expect(await screen.findByText('OHLCV 前置预检')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '检查并更新股票基础信息' }));
 

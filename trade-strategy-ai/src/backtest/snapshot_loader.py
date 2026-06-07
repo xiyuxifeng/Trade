@@ -2,7 +2,7 @@
 
 职责：
 - 只读历史快照和历史策略版本，不调用实时 provider
-- 提供 market_context 加载（market_universe 从快照文件，ohlcv/indicators 从 DB）
+- 提供 market_context 加载（candidate_pool / market_snapshot / ohlcv / indicators）
 - 提供 strategy_version 加载
 - 支持 compatibility_fallback（EvidencePack）
 """
@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from src.common.logger import get_logger
 from src.db.repositories.market_regime_repository import MarketRegimeRepository
 from src.models.ohlcv_bar import OHLCVBar
+from src.services.market_snapshot_service import MarketSnapshotService
 
 if TYPE_CHECKING:
     from src.backtest.schemas import MarketContextSnapshot
@@ -48,20 +49,28 @@ class SnapshotLoader:
     def __init__(
         self,
         snapshot_service: Any = None,
+        market_snapshot_service: MarketSnapshotService | None = None,
         strategy_repo: Any = None,
         regime_repository: Any = None,
         indicator_service: Any = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
         use_evidence_pack_fallback: bool = False,
         use_snapshot_only: bool = True,
+        config_path: str | None = None,
+        market_universe_slot: str = "09-25",
+        market_snapshot_slot: str = "17-30",
     ) -> None:
         self.snapshot_service = snapshot_service
+        self.market_snapshot_service = market_snapshot_service
         self.strategy_repo = strategy_repo
         self.regime_repository = regime_repository
         self.indicator_service = indicator_service
         self.session_factory = session_factory
         self.use_evidence_pack_fallback = use_evidence_pack_fallback
         self.use_snapshot_only = use_snapshot_only
+        self.config_path = config_path
+        self.market_universe_slot = market_universe_slot
+        self.market_snapshot_slot = market_snapshot_slot
 
     async def _load_snapshot(self, trade_date: date, slot: str) -> Any:
         """兼容同步/异步 snapshot_service.load 调用（仅用于 market_universe）。"""
@@ -71,6 +80,15 @@ class SnapshotLoader:
         if inspect.iscoroutinefunction(loader):
             return await loader(trade_date.isoformat(), slot=slot)
         return loader(trade_date.isoformat(), slot=slot)
+
+    async def _load_market_snapshot(self, trade_date: date, slot: str) -> Any:
+        """兼容同步/异步 market_snapshot_service.load_market_snapshot 调用。"""
+        if self.market_snapshot_service is None or not self.config_path:
+            return None
+        loader = self.market_snapshot_service.load_market_snapshot
+        if inspect.iscoroutinefunction(loader):
+            return await loader(config_path=self.config_path, trade_date=trade_date.isoformat(), slot=slot)
+        return loader(config_path=self.config_path, trade_date=trade_date.isoformat(), slot=slot)
 
     async def _load_ohlcv_from_db(
         self, trade_date: date, symbols: list[str]
@@ -184,11 +202,12 @@ class SnapshotLoader:
         """加载市场上下文快照。
 
         加载顺序：
-        1. market_universe 快照（从 JSON 文件）
-        2. ohlcv_1d bars（从 DB ohlcv_bars 表）
-        3. indicators（从 DB indicators 表，首次计算并缓存）
-        4. market_regime（按 trade_date + regime_version 读取，若提供）
-        4. 兜底：EvidencePack
+        1. candidate_pool（market_universe，按 market_universe_slot 读取）
+        2. market_snapshot（按 market_snapshot_slot 读取）
+        3. ohlcv_1d bars（从 DB ohlcv_bars 表）
+        4. indicators（从 DB indicators 表，首次计算并缓存）
+        5. market_regime（按 trade_date + regime_version 读取，若提供）
+        6. 兜底：EvidencePack
 
         Args:
             trade_date: 交易日期
@@ -198,32 +217,73 @@ class SnapshotLoader:
         Returns:
             MarketContextSnapshot 字典
         """
+        # COMPATIBILITY ONLY:
+        # candidate_pool / market_snapshot 是内部过渡字段，
+        # 这里只允许作为统一市场上下文的组成部分，不允许再向外拆成新的主入口。
         compatibility_fallback = False
         listing_dates: dict[str, str] = {}
+        source_refs: list[str] = []
 
-        # 1. 加载 market_universe 快照
+        # 1. 加载 candidate_pool / market_universe 快照
+        # 兼容读取：用于回测上下文与旧数据回放，不再作为独立对外入口。
         market_universe = None
+        candidate_pool = None
         if self.snapshot_service is not None:
             try:
-                market_universe = await self._load_snapshot(trade_date, "market_universe")
+                market_universe = await self._load_snapshot(trade_date, self.market_universe_slot)
+                candidate_pool = market_universe
+                if market_universe is not None:
+                    source_refs.append(f"data/market_universe/snapshots/{trade_date.isoformat()}/{self.market_universe_slot}.json")
             except Exception as e:
-                logger.exception("快照加载失败: slot=market_universe, date=%s, error=%s", trade_date, e)
+                logger.exception(
+                    "快照加载失败: slot=%s, date=%s, error=%s",
+                    self.market_universe_slot,
+                    trade_date,
+                    e,
+                )
+
+        # 2. 加载结构化 market_snapshot
+        # 兼容读取：最终对外统一语义仍是“市场上下文快照”。
+        market_snapshot = None
+        if self.market_snapshot_service is not None and self.config_path:
+            try:
+                market_snapshot = await self._load_market_snapshot(trade_date, self.market_snapshot_slot)
+                if market_snapshot is not None:
+                    source_refs.append(
+                        f"data/processed/market_snapshot/{trade_date.isoformat()}/{self.market_snapshot_slot}/snapshot.json"
+                    )
+            except Exception as e:
+                logger.exception(
+                    "market_snapshot 加载失败: slot=%s, date=%s, error=%s",
+                    self.market_snapshot_slot,
+                    trade_date,
+                    e,
+                )
+
+        if candidate_pool is None and market_snapshot is not None:
+            metadata = getattr(market_snapshot, "metadata", None)
+            if isinstance(metadata, dict):
+                derived_candidate_pool = metadata.get("candidate_pool")
+                if derived_candidate_pool is not None:
+                    candidate_pool = derived_candidate_pool
+                    market_universe = derived_candidate_pool
+                    source_refs.append("market_snapshot.metadata.candidate_pool")
 
         load_symbols = list(dict.fromkeys([*symbols, benchmark_symbol] if benchmark_symbol else symbols))
 
-        # 2. 从 DB 加载 ohlcv_1d
+        # 3. 从 DB 加载 ohlcv_1d
         bars_by_symbol = await self._load_ohlcv_from_db(trade_date, load_symbols)
 
         if benchmark_symbol and benchmark_symbol not in bars_by_symbol:
             raise ValueError(f"benchmark_symbol {benchmark_symbol} has no OHLCV bars in db for trade_date={trade_date}")
 
-        # 3. 从 DB 加载 indicators（首次计算并缓存）
+        # 4. 从 DB 加载 indicators（首次计算并缓存）
         indicators_by_symbol = await self._load_indicators_from_db(trade_date, load_symbols)
 
-        # 3.5. 加载指定版本的 Market Regime（若提供）
+        # 5. 加载指定版本的 Market Regime（若提供）
         market_regime = await self._load_market_regime_from_db(trade_date, regime_version)
 
-        # 4. 兜底：EvidencePack（仅在快照缺失时用于兼容补洞）
+        # 6. 兜底：EvidencePack（仅在快照缺失时用于兼容补洞）
         if market_universe is None and self.use_evidence_pack_fallback:
             compatibility_fallback = True
             logger.info(
@@ -236,11 +296,13 @@ class SnapshotLoader:
             "bars_by_symbol": bars_by_symbol,
             "indicators_by_symbol": indicators_by_symbol,
             "market_universe": market_universe,
+            "candidate_pool": candidate_pool,
+            "market_snapshot": market_snapshot,
             "benchmark_symbol": benchmark_symbol,
             "topic_snapshot": None,
             "market_regime": market_regime,
             "market_regime_version": regime_version,
-            "source_refs": [],
+            "source_refs": source_refs,
             "compatibility_fallback": compatibility_fallback,
             "listing_dates": listing_dates,
         }

@@ -255,7 +255,9 @@ export function StrategyWorkspaceShell() {
       </div>
 
       <PageHeader
-        description="在 Web 中构建策略版本、运行盘前和盘后任务，并通过任务详情、产物和报告追踪结果。"
+        kicker="兼容入口"
+        title="规则工作台（兼容入口）"
+        description="这里保留旧工作台的兼容访问，主流程已拆分到文章、回测、盘前、盘后和市场上下文入口。"
       />
 
       {submissionMessage ? (
@@ -313,7 +315,7 @@ export function StrategyWorkspaceShell() {
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">策略日期</span>
+                    <span className="text-sm font-medium text-slate-700">执行日期</span>
                     <Input
                       className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                       onChange={(event) => setStrategyDate(event.target.value)}
@@ -338,14 +340,14 @@ export function StrategyWorkspaceShell() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <SummaryTile label="策略任务" value={strategyJobCount} />
-                  <SummaryTile label="策略版本" value={versionCount} />
+                  <SummaryTile label="兼容任务" value={strategyJobCount} />
+                  <SummaryTile label="规则版本" value={versionCount} />
                   <SummaryTile label="相关产物" value={artifactCount} />
                 </div>
               </>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                当前没有可用 profile。请先导入或创建 profile，再继续提交策略任务。
+                当前没有可用 profile。请先导入或创建 profile，再继续提交兼容入口任务。
               </div>
             )}
           </CardContent>

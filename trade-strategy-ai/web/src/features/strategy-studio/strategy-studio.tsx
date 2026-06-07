@@ -33,7 +33,7 @@ import type {
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
-  return 'Strategy Studio 数据加载失败';
+  return '规则工作台数据加载失败';
 }
 
 function formatNumber(value: number | null | undefined, digits = 2) {
@@ -324,7 +324,7 @@ export function StrategyStudio() {
         trader_id: selectedVersion.trader_id,
         rule_id: ruleId,
         current_status: 'snapshot_review',
-        suggestion: '保留当前规则并生成候选版本',
+        suggestion: '保留当前规则并生成候选规则版本',
         confidence: 0.5,
         basis: JSON.stringify(snapshot),
       };
@@ -334,7 +334,7 @@ export function StrategyStudio() {
   const candidateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedVersion) {
-        throw new Error('请先选择一个策略版本');
+        throw new Error('请先选择一个规则版本');
       }
       const payload: CandidateCreateRequest = {
         parent_version_id: selectedVersion.version_id,
@@ -347,7 +347,7 @@ export function StrategyStudio() {
       return createCandidateVersion(payload);
     },
     onSuccess: async (result) => {
-      setStatusMessage(`候选版本已生成: ${result.item.version_id}`);
+      setStatusMessage(`候选规则版本已生成: ${result.item.version_id}`);
       setErrorMessage(null);
       await queryClient.invalidateQueries({ queryKey: ['strategy-studio'] });
     },
@@ -451,16 +451,16 @@ export function StrategyStudio() {
 
   const refreshAll = async () => {
     await queryClient.invalidateQueries({ queryKey: ['strategy-studio'] });
-    setStatusMessage('已刷新 Strategy Studio 数据');
+    setStatusMessage('已刷新规则工作台数据');
     setErrorMessage(null);
   };
 
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略工作室"
-        title="策略工作室"
-        description="在一站式工作区中浏览策略版本、生成候选版本并审核规则池。"
+        kicker="规则工作台"
+        title="规则工作台"
+        description="在一站式工作区中浏览规则版本、生成候选规则版本并审核规则池。"
         actionLabel="全部刷新"
         onAction={() => {
           void refreshAll();
@@ -476,8 +476,8 @@ export function StrategyStudio() {
       )}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="版本总数" value={summary.totalVersions} accent="text-sky-300" />
-        <MetricCard title="候选版本" value={summary.candidateVersions} />
+        <MetricCard title="规则版本总数" value={summary.totalVersions} accent="text-sky-300" />
+        <MetricCard title="候选规则版本" value={summary.candidateVersions} />
         <MetricCard title="规则总数" value={summary.totalRules} />
         <MetricCard title="已批准 / 待处理" value={`${summary.approvedRules} / ${summary.pendingRules}`} accent="text-emerald-300" />
       </section>
@@ -485,7 +485,7 @@ export function StrategyStudio() {
       <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)_400px]">
         <Card>
           <CardHeader>
-            <CardTitle>策略版本</CardTitle>
+            <CardTitle>规则版本</CardTitle>
             <CardDescription>按交易员、日期、版本状态和版本类型过滤。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -501,7 +501,7 @@ export function StrategyStudio() {
                 />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
-                <span>策略日期</span>
+                <span>规则日期</span>
                 <Input aria-label="Strategy date" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-300">
@@ -557,27 +557,27 @@ export function StrategyStudio() {
                   />
                 ))
               ) : (
-                <EmptyPanel title="当前筛选范围内暂无策略版本。" description="调整 trader、日期、状态或版本类型后重试。" />
+                <EmptyPanel title="当前筛选范围内暂无规则版本。" description="调整 trader、日期、状态或版本类型后重试。" />
               )}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>所选版本与优化</CardTitle>
-            <CardDescription>检查所选版本，预览候选负载，并生成候选版本。</CardDescription>
+            <CardHeader>
+            <CardTitle>所选规则版本与优化</CardTitle>
+            <CardDescription>检查所选规则版本，预览候选负载，并生成候选规则版本。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {!selectedVersion ? (
-              <EmptyPanel title="请选择一个策略版本。" description="左侧选中版本后，这里会显示详情、规则快照和候选版本生成入口。" />
+              <EmptyPanel title="请选择一个规则版本。" description="左侧选中版本后，这里会显示详情、规则快照和候选规则版本生成入口。" />
             ) : (
               <>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <MetricCard title="版本" value={selectedVersion.version_id} accent="text-sky-300" />
+                  <MetricCard title="规则版本" value={selectedVersion.version_id} accent="text-sky-300" />
                   <MetricCard title="状态" value={selectedVersion.status} />
                   <MetricCard title="优化建议" value={selectedVersion.recommendations.length} />
-                  <MetricCard title="规则快照" value={selectedVersion.rules_snapshot.length} />
+                  <MetricCard title="规则预览" value={selectedVersion.rules_snapshot.length} />
                 </div>
 
                 <Tabs defaultValue="summary">
@@ -589,7 +589,7 @@ export function StrategyStudio() {
                   <TabsContent value="summary" className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                        <h4 className="text-sm font-semibold text-slate-100">版本元数据</h4>
+                        <h4 className="text-sm font-semibold text-slate-100">规则版本元数据</h4>
                         <dl className="mt-3 space-y-2 text-sm text-slate-300">
                           <div className="flex items-center justify-between gap-3"><dt>交易员</dt><dd>{selectedVersion.trader_id}</dd></div>
                           <div className="flex items-center justify-between gap-3"><dt>日期</dt><dd>{selectedVersion.strategy_date}</dd></div>
@@ -604,8 +604,8 @@ export function StrategyStudio() {
                         <dl className="mt-3 space-y-2 text-sm text-slate-300">
                           <div className="flex items-center justify-between gap-3"><dt>来源文章</dt><dd>{selectedVersion.source_article_ids.length}</dd></div>
                           <div className="flex items-center justify-between gap-3"><dt>证据引用</dt><dd>{selectedVersion.evidence_refs.length}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>规则快照</dt><dd>{selectedVersion.rules_snapshot.length}</dd></div>
-                          <div className="flex items-center justify-between gap-3"><dt>是否有快照</dt><dd>{selectedVersion.rules_snapshot.length > 0 ? '是' : '否'}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>规则预览</dt><dd>{selectedVersion.rules_snapshot.length}</dd></div>
+                          <div className="flex items-center justify-between gap-3"><dt>是否有预览</dt><dd>{selectedVersion.rules_snapshot.length > 0 ? '是' : '否'}</dd></div>
                         </dl>
                       </div>
                     </div>
@@ -666,8 +666,8 @@ export function StrategyStudio() {
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-100">候选版本生成</h4>
-                      <p className="text-sm text-slate-500">使用所选版本快照作为候选基准。</p>
+                      <h4 className="text-sm font-semibold text-slate-100">候选规则版本生成</h4>
+                      <p className="text-sm text-slate-500">使用所选规则版本快照作为候选基准。</p>
                     </div>
                     <Button
                       onClick={() => {
@@ -675,7 +675,7 @@ export function StrategyStudio() {
                       }}
                       disabled={candidateMutation.isPending}
                     >
-                      {candidateMutation.isPending ? '正在生成...' : '生成候选版本'}
+                      {candidateMutation.isPending ? '正在生成...' : '生成候选规则版本'}
                     </Button>
                   </div>
                   <label className="space-y-2 text-sm text-slate-300">
@@ -684,7 +684,7 @@ export function StrategyStudio() {
                       aria-label="Candidate notes"
                       value={candidateNotes}
                       onChange={(event) => setCandidateNotes(event.target.value)}
-                      placeholder="输入候选版本备注，或留空以使用服务默认值。"
+                      placeholder="输入候选规则版本备注，或留空以使用服务默认值。"
                     />
                   </label>
                   <div className="rounded-xl border border-slate-800/70 bg-slate-950/50 p-3 text-xs text-slate-400" data-testid="strategy-candidate-preview">

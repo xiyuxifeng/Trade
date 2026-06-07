@@ -110,7 +110,7 @@ describe('StrategyWorkspaceHistory', () => {
       ['/strategies'],
     );
 
-    expect(screen.getByText('正在加载策略任务历史')).toBeInTheDocument();
+    expect(screen.getByText('正在加载兼容入口任务历史')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no strategy jobs', () => {
@@ -124,7 +124,7 @@ describe('StrategyWorkspaceHistory', () => {
       ['/strategies'],
     );
 
-    expect(screen.getByText(/暂无策略任务/)).toBeInTheDocument();
+    expect(screen.getByText(/暂无兼容入口任务/)).toBeInTheDocument();
   });
 
   it('navigates to job detail from a strategy job row', async () => {

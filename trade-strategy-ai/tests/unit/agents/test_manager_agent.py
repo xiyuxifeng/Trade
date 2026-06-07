@@ -296,6 +296,107 @@ async def test_run_after_close_writes_canonical_topic_tags(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_run_pre_market_persists_market_context_snapshot(tmp_path: Path) -> None:
+    """验证盘前日报会同时持久化市场上下文快照和候选池快照。"""
+    config = _make_config()
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
+    day = date(2026, 4, 20)
+
+    manager._load_market_context_snapshot = MagicMock(
+        return_value=(
+            {"source": "market_context", "trade_date": day.isoformat()},
+            MarketUniverse(trade_date=day.isoformat(), slot="09-25"),
+        )
+    )
+
+    from types import SimpleNamespace
+
+    fake_result = SimpleNamespace(
+        ideas=[
+            TradeIdea(
+                trader_id="trader_a",
+                as_of_date=day,
+                symbol="000001.SZ",
+                entry=TradeEntry(type="limit", price=10.0),
+                target_price=10.5,
+                stop_loss_price=9.7,
+            )
+        ],
+        strategy_version_id="trader_a:2026-04-20:released:v1",
+        missing_symbol_tasks=[],
+    )
+
+    with patch(
+        "src.agents.manager_agent.premarket_service.PreMarketService.run_for_trader",
+        new=AsyncMock(return_value=fake_result),
+    ), patch.object(manager, "_record_ideas_as_signals", new=AsyncMock(return_value=None)):
+        report = await manager.run_pre_market(as_of_date=day, force=True)
+
+    payload = report.model_dump()
+    assert payload["market_context_snapshot"] is not None
+    assert payload["market_context_snapshot"]["source"] == "market_context"
+    assert payload["market_universe_snapshot"] is not None
+    assert payload["market_universe_snapshot"]["trade_date"] == day.isoformat()
+    assert payload["market_universe_snapshot"]["slot"] == "09-25"
+
+
+@pytest.mark.asyncio
+async def test_run_after_close_prefers_market_context_snapshot_for_tags(tmp_path: Path) -> None:
+    """验证盘后复盘优先使用市场上下文快照构建 topic tags。"""
+    config = _make_config()
+    manager = ManagerAgent(config=config, base_dir=tmp_path)
+    manager.memory_store = _make_memory_store_stub()
+    day = date(2026, 4, 20)
+
+    report = DailyReport(
+        as_of_date=day,
+        ideas=[
+            TradeIdea(
+                trader_id="trader_a",
+                as_of_date=day,
+                symbol="000001.SZ",
+                entry=TradeEntry(type="limit", price=10.0),
+                source_topic_ids=["AI算力|concept"],
+            )
+        ],
+        highlights=["seed"],
+        market_context_snapshot={"provider": "market_context"},
+        market_universe_snapshot={"provider": "market_universe"},
+    )
+    manager._daily_report_path(day).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+    from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
+
+    evidence_pack = EvidencePack(
+        idea_id=report.ideas[0].idea_id,
+        trade_date=str(day),
+        trade_idea=report.ideas[0],
+        signal_context=None,
+        market_data=MarketDataSnapshot(
+            bars=[],
+            entry_price=10.0,
+            target_price=10.5,
+            stop_loss_price=9.7,
+        ),
+    )
+
+    with patch("src.agents.manager_agent.agent.session_scope", _mock_session_scope), \
+        patch("src.agents.manager_agent.agent.RankingService.add_entry_from_metrics"), \
+        patch("src.agents.manager_agent.agent.RankingService.generate_ranking_and_save"), \
+        patch("src.agents.manager_agent.agent.run_incremental_data_completion", new=AsyncMock(return_value=None)), \
+        patch.object(manager, "_generate_evidence_pack", new_callable=AsyncMock, return_value=evidence_pack), \
+        patch(
+            "src.agents.manager_agent.agent.build_topic_tags",
+            return_value=(["tag"], "market_context", {"market_context": ["AI算力|concept"]}),
+        ) as build_tags:
+        await manager.run_after_close(as_of_date=day, force=True)
+
+    build_tags.assert_called_once()
+    assert build_tags.call_args.args[1] == {"provider": "market_context"}
+
+
+@pytest.mark.asyncio
 async def test_manager_records_ideas_as_signals(tmp_path: Path) -> None:
     """P4-025: 验证 ManagerAgent 将交易想法记录为信号版本"""
     config = _make_config()

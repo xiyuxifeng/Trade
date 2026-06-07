@@ -60,7 +60,7 @@ export function JobTable({
             <TableHead>Job ID</TableHead>
             <TableHead>任务类型</TableHead>
             <TableHead>状态</TableHead>
-            <TableHead>进度</TableHead>
+            <TableHead>步骤进度</TableHead>
             <TableHead>创建者</TableHead>
             <TableHead>创建时间</TableHead>
             <TableHead>开始时间</TableHead>

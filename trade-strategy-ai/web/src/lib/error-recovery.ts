@@ -214,11 +214,11 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     'job-detail': '任务详情',
     profiles: '配置列表',
     'profile-detail': '配置详情',
-    market: '市场快照浏览器',
+    market: '市场上下文',
     artifacts: '产物中心',
     'artifact-detail': '产物详情',
     'artifact-filter-options': '产物筛选',
-    strategy: '策略工作台',
+    strategy: '规则工作台（兼容入口）',
     backtest: '回测中心',
     'backtest-results': '回测结果',
     'backtest-detail': '回测详情',
@@ -245,13 +245,13 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     case 'config missing':
       return {
         title: '配置缺失',
-        description: '页面依赖的配置或 snapshot 没有找到。',
+        description: '页面依赖的配置或市场上下文快照没有找到。',
         suggestion: '先检查 Profile，再重新打开页面。',
       };
     case 'provider unavailable':
       if (page === 'market') {
         return {
-          title: '市场快照浏览器暂不可用',
+          title: '市场上下文暂不可用',
           description: '后端服务或 provider 当前无法响应。',
           suggestion: '请稍后重试，或先确认上游服务状态。',
         };
@@ -372,8 +372,8 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请稍后刷新页面，或前往配置管理继续查看。',
         },
         market: {
-          title: '快照不存在',
-          description: '系统没有找到该 Market Snapshot。',
+          title: '市场上下文快照不存在',
+          description: '系统没有找到该市场上下文快照。',
           suggestion: '请检查 snapshot_id 是否正确，或返回列表重新筛选。',
         },
         artifacts: {
@@ -387,9 +387,9 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请检查 artifact_id 是否正确，或返回产物列表重新选择。',
         },
         strategy: {
-          title: '策略工作台暂不可用',
-          description: '当前策略工作台没有返回可展示的数据。',
-          suggestion: '请稍后重试，或切换到 Profile 与 Job 页面继续排查。',
+          title: '规则工作台（兼容入口）暂不可用',
+          description: '当前规则工作台兼容入口没有返回可展示的数据。',
+          suggestion: '请稍后重试，或切换到盘前分析、盘后复盘与任务中心继续排查。',
         },
         'backtest': {
           title: '回测中心暂不可用',

@@ -3,23 +3,22 @@ import { mainNavigation, navigationGroups } from './navigation';
 
 describe('navigation contract', () => {
   it('keeps the formal sidebar free of legacy entries', () => {
-    expect(navigationGroups.map((group) => group.title)).toEqual(['正式入口', '业务工作台', '配置与管理']);
+    expect(navigationGroups.map((group) => group.title)).toEqual(['正式入口', '主流程', '辅助入口']);
     expect(mainNavigation.map((item) => item.path)).toEqual([
       '/dashboard',
       '/jobs',
-      '/alerts',
       '/articles',
-      '/market',
-      '/strategies',
-      '/persona',
       '/backtest',
-      '/rule-pool',
+      '/strategies/pre-market',
+      '/strategies/after-close',
+      '/market',
       '/artifacts',
       '/profiles',
       '/system',
     ]);
-    expect(mainNavigation.find((item) => item.path === '/rule-pool')?.description).toBe('规则池审核中心');
-    expect(mainNavigation.find((item) => item.path === '/persona')?.description).toBe('交易风格画像与行为规则');
+    expect(mainNavigation.find((item) => item.path === '/articles')?.description).toBe('导入文章、提取规则、查看结果');
+    expect(mainNavigation.find((item) => item.path === '/backtest')?.description).toBe('验证规则、沉淀画像并查看回测结果');
+    expect(mainNavigation.find((item) => item.path === '/market')?.description).toBe('查看统一市场上下文和数据资产');
   });
 
 });

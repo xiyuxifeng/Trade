@@ -408,7 +408,7 @@ function ArticlePageShell({
   description,
   summary,
   children,
-  actionLabel = '返回文章工作台',
+  actionLabel = '返回文章与规则',
 }: {
   title: string;
   description: string;
@@ -466,7 +466,7 @@ function ArticleErrorState({
 export function ArticleWorkspacePage() {
   return (
     <main className="page-stack">
-      <PageHeader kicker="文章" title="文章工作台" description="请选择一个入口开始处理文章数据。" />
+      <PageHeader kicker="文章与规则" title="文章与规则" description="请选择一个入口开始导入文章并提取规则。" />
 
       <section className="grid gap-6">
         <Card className="border-sky-200 bg-sky-50/70">
@@ -476,7 +476,7 @@ export function ArticleWorkspacePage() {
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
             <MetricCard label="当前入口" value="文章" />
-            <MetricCard label="当前页面" value="工作台首页" />
+            <MetricCard label="当前页面" value="文章与规则首页" />
             <MetricCard label="输入模型" value="Profile" />
           </CardContent>
         </Card>
@@ -705,7 +705,7 @@ export function ArticleRunPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader kicker="文章" title="抓取与处理" description="按 step 生成 job，支持 Force、增量处理和每日定时调度。" actionLabel="返回文章工作台" onAction={() => navigate('/articles')} />
+      <PageHeader kicker="文章与规则" title="文章导入与处理" description="按 step 生成 job，支持 Force、增量处理和每日定时调度。" actionLabel="返回文章与规则" onAction={() => navigate('/articles')} />
 
       {message ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div>
@@ -1233,7 +1233,7 @@ export function ArticleJobsPage() {
   return (
     <ArticlePageShell title={articleSubpages['/articles/jobs'].title} description={articleSubpages['/articles/jobs'].description} summary={articleSubpages['/articles/jobs'].summary}>
       <div className="space-y-6">
-        <SectionCard title="任务筛选" description="仅查看文章工作台相关的 Job。">
+        <SectionCard title="任务筛选" description="仅查看文章与规则相关的 Job。">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="article-job-status">
@@ -1966,7 +1966,7 @@ export function ArticleMaintenancePage() {
 
   return (
     <main className="page-stack">
-      <PageHeader kicker="文章" title="高级维护" description="仅用于失败恢复、重跑、任务修复和数据修复。" actionLabel="返回文章工作台" onAction={() => navigate('/articles')} />
+      <PageHeader kicker="文章与规则" title="高级维护" description="仅用于失败恢复、重跑、任务修复和数据修复。" actionLabel="返回文章与规则" onAction={() => navigate('/articles')} />
 
       {message ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div>

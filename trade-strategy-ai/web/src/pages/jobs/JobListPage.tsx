@@ -90,6 +90,30 @@ export function JobListPage() {
   const total = jobsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page + 1, totalPages);
+  const statusCounts = useMemo(() => {
+    const fallback = {
+      pending: 0,
+      running: 0,
+      paused: 0,
+      success: 0,
+      failed: 0,
+      cancelled: 0,
+    };
+    const rawCounts = jobsQuery.data?.status_counts;
+    if (rawCounts) {
+      return {
+        ...fallback,
+        ...rawCounts,
+      };
+    }
+
+    return jobs.reduce((acc, job) => {
+      if (job.status in acc) {
+        acc[job.status as keyof typeof acc] += 1;
+      }
+      return acc;
+    }, { ...fallback });
+  }, [jobs, jobsQuery.data?.status_counts]);
 
   const summary = useMemo(() => {
     const running = jobs.filter((item) => item.status === 'running').length;
@@ -124,10 +148,10 @@ export function JobListPage() {
   if (!canViewJobs) {
     return (
       <main className="page-stack">
-        <PageHeader kicker="任务" title="任务列表" description="查看系统中已记录的任务执行历史。" />
+        <PageHeader kicker="任务中心" title="任务中心" description="统一查看任务状态、进度、日志、产物和操作。" />
         <section className="page-card">
-          <p className="text-lg font-semibold text-slate-900">没有权限访问任务列表</p>
-          <p className="mt-2 text-sm text-slate-600">当前身份为 {principal.role}，查看任务列表至少需要 viewer 权限。</p>
+          <p className="text-lg font-semibold text-slate-900">没有权限访问任务中心</p>
+          <p className="mt-2 text-sm text-slate-600">当前身份为 {principal.role}，查看任务中心至少需要 viewer 权限。</p>
         </section>
       </main>
     );
@@ -136,8 +160,8 @@ export function JobListPage() {
   return (
     <main className="page-stack">
       {/* <PageHeader
-        kicker="任务"
-        title="任务列表"
+        kicker="任务中心"
+        title="任务中心"
         description="查看最近的任务记录，按状态、任务类型和创建者筛选，并跳转到任务详情。"
       /> */}
 
@@ -202,6 +226,39 @@ export function JobListPage() {
                 <p className="mt-2 text-2xl font-semibold text-rose-600">
                   {summary.running} / {summary.failed}
                 </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">状态分布</p>
+                <p className="text-xs text-slate-500">统计范围：当前筛选条件下的全部任务。</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">待处理</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-700">{statusCounts.pending ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">运行中</p>
+                  <p className="mt-2 text-2xl font-semibold text-sky-700">{statusCounts.running ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已暂停</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-700">{statusCounts.paused ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">成功</p>
+                  <p className="mt-2 text-2xl font-semibold text-emerald-700">{statusCounts.success ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">失败</p>
+                  <p className="mt-2 text-2xl font-semibold text-rose-600">{statusCounts.failed ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">已取消</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-700">{statusCounts.cancelled ?? 0}</p>
+                </div>
               </div>
             </div>
 

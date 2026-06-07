@@ -222,14 +222,14 @@ describe('MarketSnapshotsPage', () => {
 
     renderWithRouter([{ path: '/market/snapshots', element: <MarketSnapshotsPage /> }], ['/market/snapshots?snapshot_id=snap-001&trade_date=2026-05-16&market=CN']);
 
-    expect(await screen.findByRole('heading', { name: '市场快照' })).toBeInTheDocument();
-    expect(await screen.findByText('快照入口')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '构建快照' })).toHaveAttribute('href', '/strategies/pre-market');
-    expect(screen.getByRole('link', { name: '查看 snapshot-build 任务列表' })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { name: '市场上下文快照' })).toBeInTheDocument();
+    expect(await screen.findByText('市场上下文入口')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '构建市场上下文' })).toHaveAttribute('href', '/strategies/pre-market');
+    expect(screen.getByRole('link', { name: /查看市场上下文构建任务/ })).toHaveAttribute(
       'href',
       '/jobs?job_type=snapshot-build',
     );
-    expect(screen.getByRole('link', { name: '查看快照产物' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看市场上下文产物' })).toHaveAttribute(
       'href',
       '/artifacts?jobType=snapshot-build&date=2026-05-16&source=market-snapshot-browser',
     );
@@ -281,7 +281,7 @@ describe('MarketSnapshotsPage', () => {
 
     renderWithRouter([{ path: '/market/snapshots', element: <MarketSnapshotsPage /> }], ['/market/snapshots']);
 
-    expect(await screen.findByText('快照入口')).toBeInTheDocument();
+    expect(await screen.findByText('市场上下文入口')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看数据集' })).toHaveAttribute('href', '/market/datasets?market=CN');
   });
 
@@ -295,6 +295,6 @@ describe('MarketSnapshotsPage', () => {
 
     renderWithRouter([{ path: '/market/snapshots', element: <MarketSnapshotsPage /> }], ['/market/snapshots?snapshot_id=snap-003&trade_date=2026-05-16&market=CN']);
 
-    expect(await screen.findByText('没有权限访问市场快照浏览器')).toBeInTheDocument();
+    expect(await screen.findByText('没有权限访问市场上下文')).toBeInTheDocument();
   });
 });

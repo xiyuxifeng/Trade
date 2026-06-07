@@ -35,16 +35,16 @@ function stepLabel(progress: JobProgressRecord) {
 
 function statusLabel(status: string | null | undefined) {
   if (!status) {
-    return '进行中';
+    return '步骤进行中';
   }
   const mapping: Record<string, string> = {
-    success: '正常',
-    partial: '部分完成',
-    error: '异常',
-    missing: '缺失',
-    running: '运行中',
+    success: '步骤完成',
+    partial: '步骤部分完成',
+    error: '步骤异常',
+    missing: '步骤缺失',
+    running: '步骤进行中',
   };
-  return mapping[status] ?? status;
+  return mapping[status] ?? '步骤进行中';
 }
 
 export function JobProgress({
@@ -57,16 +57,21 @@ export function JobProgress({
   className?: HTMLAttributes<HTMLDivElement>['className'];
 }) {
   const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
-  const isCompleted = progress.status === 'success';
-  const displayPercent = isCompleted ? 100 : percent;
-  const displayRemaining = isCompleted ? 0 : progress.remaining;
-  const mainLine = isCompleted
-    ? `已完成 · 实际处理 ${progress.current} 条`
-    : `${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
+  const displayPercent = percent;
+  const displayRemaining = progress.remaining;
+  const mainLine = `步骤进度 ${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
   const summaryLine =
-    isCompleted && progress.total > progress.current
-      ? `本次上限 ${progress.total} 条，实际完成 ${progress.current} 条`
-      : null;
+    progress.status === 'success'
+      ? '当前步骤已完成，任务终态请看上方 Job 状态。'
+      : progress.status === 'running'
+        ? '当前步骤仍在执行中。'
+        : progress.status === 'partial'
+          ? '当前步骤仅部分完成，请结合 Job 状态判断最终结果。'
+          : progress.status === 'error'
+            ? '当前步骤出现异常，请查看错误信息。'
+            : progress.status === 'missing'
+              ? '当前步骤缺少必要数据，请检查输入。'
+              : null;
   const subLine =
     progress.sub_total !== undefined && progress.sub_total !== null
       ? `子进度 ${progress.sub_current ?? 0} / ${progress.sub_total} · ${formatPercent(progress.sub_percent)}`

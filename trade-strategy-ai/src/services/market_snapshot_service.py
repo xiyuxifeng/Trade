@@ -12,6 +12,7 @@ from typing import Any, Callable
 from src.common.config import load_app_config
 from src.models.market_snapshot import MarketSnapshot, MarketSnapshotBuildContext, MarketSnapshotSection
 from src.providers.kaipan_provider import KaipanAuth, KaipanProvider
+from src.market_universe.snapshot_service import SnapshotService as UniverseSnapshotService
 from src.services.base import BaseService, ServiceResult
 from src.services.config_service import ConfigService
 from src.services.market_data_storage_service import MarketDataStorageService
@@ -127,6 +128,20 @@ class MarketSnapshotService(BaseService):
             "summary": directory / "snapshot.summary.json",
             "quality": directory / "snapshot.quality.json",
         }
+
+    def _candidate_pool_root(self, *, base_dir: Path, loaded: Any) -> Path:
+        """返回候选池快照根目录。"""
+        data_cfg = getattr(loaded.config, "data", None)
+        snapshot_dir = getattr(data_cfg, "market_universe_snapshot_dir", "data/market_universe/snapshots")
+        snapshot_root = Path(snapshot_dir).expanduser()
+        if snapshot_root.is_absolute():
+            return snapshot_root.resolve()
+        return (base_dir / snapshot_root).resolve()
+
+    def _load_candidate_pool(self, *, base_dir: Path, loaded: Any, trade_date: str, slot: str) -> Any | None:
+        """加载同日期/时段的候选池快照。"""
+        candidate_pool_service = UniverseSnapshotService(base_dir=self._candidate_pool_root(base_dir=base_dir, loaded=loaded))
+        return candidate_pool_service.load(trade_date, slot)
 
     def _snapshot_id(self, *, trade_date: str, slot: str, market: str, data_version: str, sections: dict[str, MarketSnapshotSection]) -> str:
         """生成稳定的 snapshot_id。"""
@@ -250,6 +265,12 @@ class MarketSnapshotService(BaseService):
         provider = self._create_provider(loaded=loaded, base_dir=base_dir)
         if not benchmark_symbol:
             raise ValueError("benchmark_symbol is required")
+        candidate_pool = self._load_candidate_pool(
+            base_dir=base_dir,
+            loaded=loaded,
+            trade_date=trade_date,
+            slot=slot,
+        )
         registry = self._build_registry(
             provider=provider,
             base_dir=base_dir,
@@ -319,6 +340,12 @@ class MarketSnapshotService(BaseService):
                 "offline": offline,
                 "section_order": list(sections.keys()),
                 "benchmark_symbol": benchmark_symbol,
+                "candidate_pool_slot": slot,
+                "candidate_pool_path": str(
+                    self._candidate_pool_root(base_dir=base_dir, loaded=loaded) / trade_date / f"{slot}.json"
+                ),
+                # 兼容字段：仅供内部加载器 / 回测复用，不作为新的对外快照入口。
+                "candidate_pool": candidate_pool,
             },
         )
 

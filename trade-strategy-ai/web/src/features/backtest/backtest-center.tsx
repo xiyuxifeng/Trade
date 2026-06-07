@@ -209,6 +209,9 @@ export function BacktestCenter() {
     limit: 8,
   });
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
+  const [submittingJobType, setSubmittingJobType] = useState<'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check' | null>(null);
+  const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
+  const [submissionJobId, setSubmissionJobId] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [lastJob, setLastJob] = useState<JobRecord | null>(null);
 
@@ -356,12 +359,20 @@ export function BacktestCenter() {
 
   async function runBacktest(jobType: 'backtest-run' | 'backtest-validate-rules' | 'backtest-reproducibility-check') {
     setSubmissionError(null);
+    setSubmissionMessage(null);
+    setSubmissionJobId(null);
+    setSubmittingJobType(jobType);
     const submission = buildSubmission(form);
     const params = buildJobRequest(jobType, submission);
 
     try {
       const result = await createJob(params);
-      setLastJob((result as { job?: JobRecord }).job ?? null);
+      const job = (result as { job?: JobRecord }).job ?? null;
+      setLastJob(job);
+      setSubmissionJobId(job?.id ?? null);
+      if (job?.id) {
+        setSubmissionMessage(`回测任务已提交，Job ${job.id} 已创建，可打开 Job 详情查看进度。`);
+      }
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       await queryClient.invalidateQueries({ queryKey: ['backtest-center', 'results'] });
       setResultQuery({
@@ -373,6 +384,10 @@ export function BacktestCenter() {
       });
     } catch (error) {
       setSubmissionError(error instanceof Error ? error.message : '回测任务提交失败');
+      setSubmissionMessage(null);
+      setSubmissionJobId(null);
+    } finally {
+      setSubmittingJobType(null);
     }
   }
 
@@ -388,7 +403,7 @@ export function BacktestCenter() {
     return (
       <main className="page-stack">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-lg font-semibold text-slate-900">没有权限访问回测中心</p>
+          <p className="text-lg font-semibold text-slate-900">没有权限访问回测与画像</p>
           <p className="mt-2 text-sm text-slate-600">当前身份为 {principal.role}，查看回测至少需要 viewer 权限。</p>
         </section>
       </main>
@@ -400,12 +415,43 @@ export function BacktestCenter() {
 
   return (
     <main className="page-stack">
+      {submissionMessage ? (
+        <Card className="border-sky-200 bg-sky-50 text-sky-900 shadow-sm">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="font-medium">{submissionMessage}</p>
+              <p className="text-sm text-sky-700">
+                {submissionJobId ? '任务已通过 Job Center 创建，不需要 CLI。' : '任务已进入 Job Center。'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {submissionJobId ? (
+                <a
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-sky-200 bg-white px-4 text-sm font-medium text-sky-800 transition-colors hover:bg-sky-50"
+                  href={`/jobs/${submissionJobId}`}
+                >
+                  打开 Job 详情
+                </a>
+              ) : null}
+              <Button variant="outline" className="border-sky-200 bg-white text-sky-800 hover:bg-sky-50" onClick={() => setSubmissionMessage(null)}>
+                关闭
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+      {submissionError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          回测任务提交失败：{submissionError}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-start gap-3">
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
           to="/backtest/regime"
         >
-          进入 Regime 回测
+          进入市场状态回测
         </Link>
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -415,7 +461,11 @@ export function BacktestCenter() {
         </Link>
       </div>
 
-      <PageHeader />
+      <PageHeader
+        kicker="回测与画像"
+        title="回测与画像"
+        description="验证规则可信度，并沉淀交易员画像。"
+      />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.55fr)]">
         <Card className="border-slate-200 bg-white shadow-sm">
@@ -423,7 +473,7 @@ export function BacktestCenter() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-slate-950">回测参数</CardTitle>
-                <CardDescription className="text-slate-600">选择 trader、日期范围、策略版本和运行模式。</CardDescription>
+                <CardDescription className="text-slate-600">选择交易员、日期范围、规则版本和运行模式。</CardDescription>
               </div>
               <Button
                 variant="outline"
@@ -474,19 +524,19 @@ export function BacktestCenter() {
                   source="strategy"
                   value={form.traderId}
                 />
-                <p className="text-xs text-slate-500">来源于策略版本全量交易员集合，不再依赖当前页已加载的数据。</p>
-                {strategyVersionsQuery.isError ? <p className="text-xs text-rose-600">策略版本列表加载失败，请稍后重试。</p> : null}
+                <p className="text-xs text-slate-500">来源于规则版本全集，不再依赖当前页已加载的数据。</p>
+                {strategyVersionsQuery.isError ? <p className="text-xs text-rose-600">规则版本列表加载失败，请稍后重试。</p> : null}
               </label>
               <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本 ID</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">规则版本 ID</span>
                 <Select
-                  aria-label="策略版本 ID"
+                  aria-label="规则版本 ID"
                   className="border-slate-200 bg-white text-slate-900"
                   value={form.strategyVersionId}
                   onChange={(event) => setForm((current) => ({ ...current, strategyVersionId: event.target.value }))}
                   disabled={strategyVersionsQuery.isLoading || filteredVersionItems.length === 0}
                 >
-                  {filteredVersionItems.length === 0 ? <option value="">暂无可用策略版本</option> : null}
+                  {filteredVersionItems.length === 0 ? <option value="">暂无可用规则版本</option> : null}
                   {filteredVersionItems.map((item: StrategyVersionSummaryItem) => (
                     <option key={item.version_id} value={item.version_id}>
                       {item.version_id}
@@ -575,12 +625,22 @@ export function BacktestCenter() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <Button onClick={() => void runBacktest('backtest-run')}>运行回测</Button>
-              <Button variant="outline" onClick={() => void runBacktest('backtest-validate-rules')}>
-                验证规则
+              <Button disabled={Boolean(submittingJobType)} onClick={() => void runBacktest('backtest-run')}>
+                {submittingJobType === 'backtest-run' ? '提交中' : '运行回测'}
               </Button>
-              <Button variant="secondary" onClick={() => void runBacktest('backtest-reproducibility-check')}>
-                可复现性检查
+              <Button
+                variant="outline"
+                disabled={Boolean(submittingJobType)}
+                onClick={() => void runBacktest('backtest-validate-rules')}
+              >
+                {submittingJobType === 'backtest-validate-rules' ? '提交中' : '验证规则'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={Boolean(submittingJobType)}
+                onClick={() => void runBacktest('backtest-reproducibility-check')}
+              >
+                {submittingJobType === 'backtest-reproducibility-check' ? '提交中' : '可复现性检查'}
               </Button>
             </div>
 
@@ -588,13 +648,13 @@ export function BacktestCenter() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本来源</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">规则版本来源</p>
                       <p className="mt-2 text-sm font-medium text-slate-900">{selectedStrategyVersionDetail.version_id}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         {selectedStrategyVersionDetail.trader_id} · {selectedStrategyVersionDetail.strategy_date} · {selectedStrategyVersionDetail.status}
                       </p>
                       <p className="mt-2 text-xs text-slate-500">
-                        这里仅展示该策略版本引用的来源文章 metadata 版本；回测仍只消费已选中的策略版本，不在此处切换版本。
+                        这里仅展示该规则版本引用的来源文章版本信息；回测仍只消费已选中的规则版本，不在此处切换版本。
                       </p>
                     </div>
                     <Badge variant="info">{sourceArticleIds.length} 篇来源文章</Badge>
@@ -635,17 +695,14 @@ export function BacktestCenter() {
                       );
                     })
                   ) : (
-                    <p className="text-sm text-slate-600">该策略版本没有来源文章。</p>
+                    <p className="text-sm text-slate-600">该规则版本没有来源文章。</p>
                   )}
                 </div>
-                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章 metadata 版本…</p> : null}
-                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章 metadata 版本加载失败，请稍后重试。</p> : null}
+                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章版本信息…</p> : null}
+                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章版本信息加载失败，请稍后重试。</p> : null}
               </div>
             ) : null}
 
-            {submissionError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{submissionError}</div>
-            ) : null}
             {benchmarkOptionsQuery.isError ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                 Benchmark 选项加载失败，当前回退到默认沪深300。

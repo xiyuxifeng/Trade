@@ -260,26 +260,26 @@ describe('StrategiesPage', () => {
 
     renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
 
-    expect(await screen.findByRole('heading', { name: '策略工作台' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '规则工作台（兼容入口）' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        '策略工作台用于管理每日策略运行、策略版本构建和策略优化。日常使用优先进入盘前准备和盘后复盘；当 Profile、规则池、市场状态或候选版本变化时，再构建新的策略版本。',
+        '盘前分析和盘后复盘已拆分到独立入口，这里仅保留兼容访问。',
       ),
     ).toBeInTheDocument();
     expect(await screen.findByText('今日运行')).toBeInTheDocument();
-    expect(screen.getByText('策略构建')).toBeInTheDocument();
-    expect(screen.getByText('策略优化')).toBeInTheDocument();
+    expect(screen.getByText('规则构建')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '候选规则版本' })).toBeInTheDocument();
     expect(screen.getByText('追踪与排查')).toBeInTheDocument();
     expect(await screen.findByText('默认配置 · default')).toBeInTheDocument();
     expect(screen.queryByText('config_path')).not.toBeInTheDocument();
     expect(screen.getByText('最近失败任务（2）')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /盘前准备/ })).toHaveAttribute('href', '/strategies/pre-market');
+    expect(screen.getByRole('link', { name: /盘前分析/ })).toHaveAttribute('href', '/strategies/pre-market');
     expect(screen.getByRole('link', { name: /盘后复盘/ })).toHaveAttribute('href', '/strategies/after-close');
     expect(screen.getByRole('link', { name: /规则选择/ })).toHaveAttribute('href', '/strategies/regime-selection');
-    expect(screen.getByRole('link', { name: /构建策略版本/ })).toHaveAttribute('href', '/strategies/versions');
-    expect(screen.getByRole('link', { name: /候选版本/ })).toHaveAttribute('href', '/strategies/candidates');
+    expect(screen.getByRole('link', { name: /构建规则版本/ })).toHaveAttribute('href', '/strategies/versions');
+    expect(screen.getByRole('link', { name: /候选规则版本/ })).toHaveAttribute('href', '/strategies/candidates');
     expect(screen.getByRole('link', { name: /运行历史/ })).toHaveAttribute('href', '/strategies/history');
-    expect(screen.getByRole('link', { name: /最新 snapshot-build Job/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
+    expect(screen.getByRole('link', { name: /最新市场上下文准备 Job/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
     expect(screen.getByRole('link', { name: /最新盘前 Job/ })).toHaveAttribute('href', '/jobs?job_type=run-pre-market');
     expect(screen.getByRole('link', { name: /最新盘后 Job/ })).toHaveAttribute('href', '/jobs?job_type=run-after-close');
     expect(screen.getByRole('link', { name: /最近失败任务/ })).toHaveAttribute('href', '/strategies/history?status=failed');
@@ -297,7 +297,7 @@ describe('StrategiesPage', () => {
 
     renderWithRouter([{ path: '/strategies', element: <StrategiesPage /> }], ['/strategies']);
 
-    expect(await screen.findByText('没有权限访问策略工作台')).toBeInTheDocument();
+    expect(await screen.findByText('没有权限访问规则工作台（兼容入口）')).toBeInTheDocument();
     expect(screen.getByText('请切换到有权限的账号，或联系管理员调整权限。')).toBeInTheDocument();
   });
 });

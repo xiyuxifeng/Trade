@@ -69,14 +69,14 @@ const RUNNERS: MarketWorkspaceRunner[] = [
   {
     jobType: 'market-state-build',
     title: '市场状态构建',
-    description: '生成当天的 Market State 快照。',
+    description: '生成当天的市场状态快照。',
     badge: '状态',
   },
   {
     jobType: 'snapshot-build',
-    title: '快照构建',
-    description: '构建结构化 Market Snapshot，并输出 summary / quality report。',
-    badge: '快照',
+    title: '市场上下文构建',
+    description: '构建统一市场上下文快照，并输出摘要和质量报告。',
+    badge: '上下文',
   },
 ];
 
@@ -100,8 +100,8 @@ type MarketWorkspaceModeConfig = {
 
 const MARKET_WORKSPACE_MODE_CONFIG: Record<MarketWorkspaceMode, MarketWorkspaceModeConfig> = {
   all: {
-    title: '市场数据工作台',
-    description: '在 Web 中运行和查看市场数据链路，保持与正式交付版一致的浅色中文工作台风格。',
+    title: '市场上下文工作台',
+    description: '在 Web 中运行和查看市场上下文链路，保持与正式交付版一致的浅色中文工作台风格。',
     paramsTitle: '运行参数',
     paramsDescription: '这些参数会被运行按钮复用，提交时仍走 Job Center。',
     jobFilter: RUNTIME_JOB_TYPES,
@@ -111,8 +111,8 @@ const MARKET_WORKSPACE_MODE_CONFIG: Record<MarketWorkspaceMode, MarketWorkspaceM
     showOhlcvCards: false,
   },
   kaipan: {
-    title: 'Kaipan 数据',
-    description: '抓取、归一化并检查 Kaipan 数据健康状况。',
+    title: '市场数据健康',
+    description: '查看 Kaipan 抓取、归一化与数据健康状态。',
     paramsTitle: '任务参数',
     paramsDescription: '只保留 Kaipan 抓取和归一化需要的参数，使用交易日期范围和 slot 提交。',
     jobFilter: new Set(['kaipan-fetch', 'kaipan-normalize', 'kaipan-run']),
@@ -482,6 +482,22 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
       }
       setSubmissionMessage(`任务已生成：${jobType}，可打开 Job 详情查看进度。`);
     },
+    onError: (error, jobType) => {
+      const message = error instanceof Error ? error.message : '提交失败，请稍后重试。';
+      const title =
+        jobType === 'kaipan-fetch'
+          ? 'Kaipan 抓取任务提交失败'
+          : jobType === 'kaipan-normalize'
+            ? 'Kaipan 归一化任务提交失败'
+            : `任务 ${jobType} 提交失败`;
+      setSubmissionJobId(null);
+      setSubmissionMessage(`${title}：${message}`);
+      toast({
+        title,
+        description: message,
+        variant: 'destructive',
+      });
+    },
     onSettled: () => {
       setSubmittingJobType(null);
     },
@@ -558,7 +574,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
 
   return (
     <main className="page-stack">
-      <PageHeader kicker="市场数据" title={modeConfig.title} description={modeConfig.description} />
+      <PageHeader kicker="市场上下文" title={modeConfig.title} description={modeConfig.description} />
 
       {submissionMessage ? (
         <Card className="border-sky-200 bg-sky-50 text-sky-900 shadow-sm">
@@ -870,15 +886,15 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             </CardHeader>
             <CardContent className="grid gap-3">
               <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/snapshots">
-                <p className="text-sm font-medium text-slate-950">市场快照</p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">查看快照浏览和构建入口。</p>
+                <p className="text-sm font-medium text-slate-950">市场上下文快照</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">查看市场上下文快照列表和构建入口。</p>
               </a>
               <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/datasets">
                 <p className="text-sm font-medium text-slate-950">市场数据集</p>
                 <p className="mt-1 text-sm leading-6 text-slate-600">查看数据集浏览和详情。</p>
               </a>
               <a className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" href="/market/kaipan">
-                <p className="text-sm font-medium text-slate-950">Kaipan 数据</p>
+                <p className="text-sm font-medium text-slate-950">市场数据健康</p>
                 <p className="mt-1 text-sm leading-6 text-slate-600">进入 Kaipan 抓取与调度页面。</p>
               </a>
             </CardContent>
@@ -964,11 +980,11 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
               {[
-                { label: '市场快照', href: '/market/snapshots' },
+                { label: '市场上下文快照', href: '/market/snapshots' },
                 { label: '数据集', href: '/market/datasets' },
-                { label: 'Kaipan 数据', href: '/market/kaipan' },
+                { label: '市场数据健康', href: '/market/kaipan' },
                 { label: 'OHLCV 行情', href: '/market/ohlcv' },
-                { label: '策略工作台', href: '/strategies' },
+                { label: '盘前分析', href: '/strategies/pre-market' },
                 { label: '产物中心', href: '/artifacts' },
               ].map((item) => (
                 <a
@@ -985,7 +1001,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
           <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
             <CardHeader>
               <CardTitle className="text-slate-900">工作台说明</CardTitle>
-              <CardDescription className="text-slate-500">市场数据工作台只负责提交和复盘，不承担 provider 实现。</CardDescription>
+              <CardDescription className="text-slate-500">市场上下文工作台只负责提交和复盘，不承担 provider 实现。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-slate-600">
               <p>1. 通过 Job Center 提交任务，避免 CLI 和 UI 之间出现两套正式入口。</p>

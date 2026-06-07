@@ -414,8 +414,8 @@ export function BacktestsCenter() {
     <main className="page-stack">
       <PageHeader
         kicker="回测"
-        title="回测中心"
-        description="浏览存储的回测结果，提交回测相关任务，并检查报告、规则验证和复现性检查。"
+        title="回测与画像"
+        description="浏览回测结果，提交规则验证和复现性检查，并查看画像相关结果。"
         actionLabel="打开任务"
         onAction={() => navigate('/jobs')}
       />
@@ -447,7 +447,7 @@ export function BacktestsCenter() {
                   />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">
-                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本</span>
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-500">规则版本</span>
                   <Input value={strategyVersionId} onChange={(event) => setStrategyVersionId(event.target.value)} placeholder="sv-1" />
                 </label>
                 <label className="space-y-2 text-sm text-slate-300">

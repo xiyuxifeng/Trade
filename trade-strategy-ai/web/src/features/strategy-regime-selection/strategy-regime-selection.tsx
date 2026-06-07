@@ -78,6 +78,11 @@ function formatNumber(value: number | null | undefined, digits = 2) {
   return value.toFixed(digits);
 }
 
+function formatRegimeText(value: string | null | undefined, fallback = '无说明') {
+  if (!value) return fallback;
+  return value.replaceAll('Market Regime', '市场状态').replaceAll('market regime', '市场状态');
+}
+
 function toSelectionPayload(value: StrategyVersionDetailItem['regime_selection']): RegimeSelectionPayload | null {
   if (!value || typeof value !== 'object') return null;
   return value as RegimeSelectionPayload;
@@ -105,7 +110,7 @@ function SelectionRecordCard({
         <div>
           <p className="text-base font-medium text-slate-950">{record.rule_id ?? '未命名规则'}</p>
           <p className="mt-1 text-sm text-slate-600">
-            画像版本 {record.applicability_profile_version ?? '未记录'}
+            适用画像版本 {record.applicability_profile_version ?? '未记录'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -125,7 +130,7 @@ function SelectionRecordCard({
           <p className="mt-1 font-medium text-slate-950">{record.sample_count ?? 'n/a'}</p>
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-slate-700">{record.reason ?? '无说明'}</p>
+      <p className="mt-3 text-sm leading-6 text-slate-700">{formatRegimeText(record.reason)}</p>
       {record.evidence?.length ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {record.evidence.slice(0, 6).map((item) => (
@@ -207,8 +212,8 @@ export function StrategyRegimeSelectionWorkspace() {
     <main className="page-stack">
       <PageHeader
         title="规则选择"
-        description="用于在策略构建前查看规则为什么被选中、跳过或阻断，并回溯到 market regime 和适用性画像版本。"
-        actionLabel="返回策略首页"
+        description="用于在规则构建前查看规则为什么被选中、跳过或阻断，并回溯到市场状态与适用性画像版本。"
+        actionLabel="返回规则工作台"
         onAction={() => {
           navigate('/strategies');
         }}
@@ -217,8 +222,8 @@ export function StrategyRegimeSelectionWorkspace() {
       <section className="grid gap-4 xl:grid-cols-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-slate-950">策略版本</CardTitle>
-            <CardDescription className="text-slate-600">选择需要查看的版本。</CardDescription>
+            <CardTitle className="text-slate-950">规则版本</CardTitle>
+            <CardDescription className="text-slate-600">选择需要查看的规则版本。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <label className="space-y-2 text-sm text-slate-700">
@@ -232,7 +237,7 @@ export function StrategyRegimeSelectionWorkspace() {
               />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
-              <span>策略日期</span>
+              <span>规则日期</span>
               <Input aria-label="Strategy date" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
@@ -285,7 +290,7 @@ export function StrategyRegimeSelectionWorkspace() {
                   ))}
                 </div>
               ) : (
-                <EmptyState title="暂无策略版本。" description="调整 trader、日期或版本类型后重试。" />
+                <EmptyState title="暂无规则版本。" description="调整 trader、日期或版本类型后重试。" />
               )}
             </div>
           </CardContent>
@@ -393,11 +398,11 @@ export function StrategyRegimeSelectionWorkspace() {
                 <div className="grid gap-4 xl:grid-cols-2">
                   <Card className="border-slate-200 bg-white shadow-sm">
                     <CardHeader>
-                      <CardTitle className="text-slate-950">Selection reason</CardTitle>
-                      <CardDescription className="text-slate-600">说明本次选择的默认策略。</CardDescription>
+                      <CardTitle className="text-slate-950">选择原因</CardTitle>
+                      <CardDescription className="text-slate-600">说明本次选择的默认规则逻辑。</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm leading-6 text-slate-700">{regimeSelection?.selection_reason ?? '未记录'}</p>
+                      <p className="text-sm leading-6 text-slate-700">{formatRegimeText(regimeSelection?.selection_reason, '未记录')}</p>
                       {regimeSelection?.evidence?.length ? (
                         <div className="mt-4 flex flex-wrap gap-2">
                           {regimeSelection.evidence.map((item) => (
@@ -412,7 +417,7 @@ export function StrategyRegimeSelectionWorkspace() {
 
                   <Card className="border-slate-200 bg-white shadow-sm">
                     <CardHeader>
-                      <CardTitle className="text-slate-950">Override audit</CardTitle>
+                      <CardTitle className="text-slate-950">覆盖审计</CardTitle>
                       <CardDescription className="text-slate-600">只有显式 override 时才会出现。</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -428,7 +433,7 @@ export function StrategyRegimeSelectionWorkspace() {
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
                             <p className="text-xs uppercase tracking-[0.16em] text-slate-500">reason</p>
-                            <p className="mt-1 break-all text-slate-950">{regimeSelection.override.reason ?? '未记录'}</p>
+                            <p className="mt-1 break-all text-slate-950">{formatRegimeText(regimeSelection.override.reason, '未记录')}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
                             <p className="text-xs uppercase tracking-[0.16em] text-slate-500">timestamp</p>
@@ -445,13 +450,13 @@ export function StrategyRegimeSelectionWorkspace() {
                 {regimeSelection?.warnings?.length ? (
                   <Card className="border-amber-200 bg-amber-50 shadow-sm">
                     <CardHeader>
-                      <CardTitle className="text-amber-950">Warnings</CardTitle>
+                      <CardTitle className="text-amber-950">提示</CardTitle>
                       <CardDescription className="text-amber-800">构建过程中记录的缺失或降级信息。</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {regimeSelection.warnings.map((item) => (
                         <p key={item} className="text-sm leading-6 text-amber-900">
-                          {item}
+                          {formatRegimeText(item, item)}
                         </p>
                       ))}
                     </CardContent>
@@ -459,7 +464,7 @@ export function StrategyRegimeSelectionWorkspace() {
                 ) : null}
               </div>
             ) : (
-              <EmptyState title="请选择一个策略版本。" description="选择版本后，这里会展示 selected / skipped / blocked 规则及审计字段。" />
+                <EmptyState title="请选择一个规则版本。" description="选择版本后，这里会展示选中、跳过、阻断的规则及审计字段。" />
             )}
           </SectionCard>
         </div>

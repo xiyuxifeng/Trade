@@ -19,22 +19,22 @@ type StrategyActionConfig = {
 const STRATEGY_ACTIONS: StrategyActionConfig[] = [
   {
     jobType: 'strategy-build',
-    label: '构建策略版本',
-    confirmTitle: '确认构建策略版本',
-    description: '生成正式策略版本并保留版本链。',
+    label: '构建规则版本',
+    confirmTitle: '确认构建规则版本',
+    description: '生成正式规则版本并保留版本链。',
     highlight: '版本',
   },
   {
     jobType: 'run-pre-market',
-    label: '盘前运行',
-    confirmTitle: '确认盘前运行',
+    label: '盘前分析',
+    confirmTitle: '确认盘前分析',
     description: '基于最新 profile snapshot 执行盘前流程。',
     highlight: '盘前',
   },
   {
     jobType: 'run-after-close',
-    label: '盘后运行',
-    confirmTitle: '确认盘后运行',
+    label: '盘后复盘',
+    confirmTitle: '确认盘后复盘',
     description: '基于最新 profile snapshot 执行盘后流程。',
     highlight: '盘后',
   },
@@ -105,14 +105,14 @@ export function StrategyWorkspaceActions({
       await queryClient.invalidateQueries({ queryKey: ['strategy-workspace'] });
     },
     onError: (error) => {
-      setSubmissionError(getWorkspaceErrorMessage(error, '策略任务提交失败'));
+      setSubmissionError(getWorkspaceErrorMessage(error, '兼容入口任务提交失败'));
     },
   });
 
   return (
     <SectionCard
-      title="策略提交入口"
-      description="所有动作都通过正式任务提交，结果会在任务详情、产物和报告中追踪。候选版本在下方候选区生成与审核。"
+      title="兼容入口提交"
+      description="所有动作都通过正式任务提交，结果会在任务详情、产物和报告中追踪。候选规则版本在下方候选区生成与审核。"
       action={<Badge variant="info" className="w-fit">流程动作</Badge>}
     >
       <div className="space-y-4">
@@ -142,7 +142,7 @@ export function StrategyWorkspaceActions({
         {submissionError ? (
           <ErrorState
             category="job failed"
-            title="策略任务提交失败"
+            title="兼容入口任务提交失败"
             description="提交执行任务时返回了错误。"
             suggestion="请先查看错误详情，再确认是否重新提交。"
             detail={submissionError}
@@ -157,7 +157,7 @@ export function StrategyWorkspaceActions({
         <ConfirmDialog
           open={Boolean(selectedAction)}
           onOpenChange={(open) => !open && setSelectedAction(null)}
-          title={selectedAction?.confirmTitle ?? '确认策略任务'}
+          title={selectedAction?.confirmTitle ?? '确认兼容入口任务'}
           description="本操作会通过正式任务提交到后端，执行后可在任务详情、产物和报告中查看结果。"
           confirmLabel={mutation.isPending ? '提交中' : '确认提交'}
           confirmDisabled={mutation.isPending || !selectedAction || !canSubmit}

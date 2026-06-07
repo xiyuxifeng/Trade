@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
 import type { SystemDashboardFailedJob, SystemDashboardResponse, SystemStatusResponse } from '@/types/system';
@@ -12,14 +12,6 @@ function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return '健康仪表盘加载失败';
-}
-
-function statusVariant(status: string | null | undefined) {
-  const normalized = String(status ?? '').toLowerCase();
-  if (normalized === 'ok' || normalized === 'healthy' || normalized === 'success') return 'success';
-  if (normalized === 'warning' || normalized === 'partial') return 'warning';
-  if (normalized === 'error' || normalized === 'failed' || normalized === 'critical') return 'destructive';
-  return 'info';
 }
 
 function SummaryCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
@@ -39,7 +31,7 @@ function SystemComponentRow({ label, status, detail }: { label: string; status?:
         <p className="font-medium text-slate-950">{label}</p>
         <p className="text-xs text-slate-500">{detail ?? 'n/a'}</p>
       </div>
-      <Badge variant={statusVariant(status)}>{status ?? 'n/a'}</Badge>
+      <StatusBadge value={status ?? 'n/a'} />
     </div>
   );
 }
@@ -52,7 +44,7 @@ function FailedJobRow({ job }: { job: SystemDashboardFailedJob }) {
           <p className="font-semibold text-slate-950">{job.id}</p>
           <p className="text-xs text-slate-500">{job.job_type}</p>
         </div>
-        <Badge variant="destructive">{job.status}</Badge>
+        <StatusBadge value={job.status} />
       </div>
       <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
         <p>耗时：{job.duration_seconds ?? 'n/a'} s</p>

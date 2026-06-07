@@ -141,7 +141,7 @@ describe('RegimeRuleSelectionPage', () => {
       expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
     });
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Regime-aware 规则选择' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: '规则选择' })).toBeInTheDocument();
     expect((await screen.findAllByText('sel-001')).length).toBeGreaterThan(1);
     expect(screen.getByText('snap-1')).toBeInTheDocument();
     expect(screen.getByText('market-regime-v3')).toBeInTheDocument();

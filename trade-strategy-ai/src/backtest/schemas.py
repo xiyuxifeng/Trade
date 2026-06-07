@@ -65,12 +65,17 @@ class MarketContextSnapshot(TypedDict, total=False):
     """市场上下文快照（由 SnapshotLoader.load_market_context 返回）。
 
     属性说明见 snapshot_loader.py；此 TypedDict 为下游模块提供类型约束。
+    兼容字段说明：
+    - candidate_pool / market_universe / market_snapshot 仅用于内部过渡与回放兼容
+    - 不得将其扩展为新的对外一级概念或并列入口
     """
 
     trade_date: str  # YYYY-MM-DD
     bars_by_symbol: dict[str, list[dict[str, Any]]]
     indicators_by_symbol: dict[str, dict[str, Any]]
     market_universe: Any
+    candidate_pool: Any
+    market_snapshot: Any
     benchmark_symbol: str | None
     topic_snapshot: Any
     market_regime: Any

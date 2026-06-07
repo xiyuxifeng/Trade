@@ -15,7 +15,7 @@ import { buildErrorRecoveryState } from '@/lib/error-recovery';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { listProfiles } from '@/lib/api/profiles';
 import type { JobArtifactRef, JobRecord } from '@/types/jobs';
-import { formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strategy-workspace-utils';
+import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strategy-workspace-utils';
 import { StrategyWorkspaceHistory } from './strategy-workspace-history';
 
 type SubmissionState = {
@@ -252,7 +252,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
       <div className="space-y-4">
         <EmptyState
           title="暂无盘后结果。"
-          description="提交 run-after-close 后，这里会展示最近结果、归因、表现和产物。"
+          description="提交盘后复盘后，这里会展示最近结果、归因、表现和产物。"
         />
       </div>
     );
@@ -415,7 +415,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   <SummaryTile
                     label="来源 Job"
                     value={latestJob.id}
-                    detail={`job_type ${latestJob.job_type} · ${latestJob.status}`}
+                    detail={`${describeStrategyWorkspaceJobType(latestJob.job_type)} · ${latestJob.status}`}
                   />
                   <SummaryTile
                     label="来源日期"
@@ -535,13 +535,13 @@ function StrategyAfterCloseBody() {
   if (isLoading) {
     return (
       <main className="page-stack">
-        <PageHeader
-          kicker="策略"
-          title="盘后复盘"
-          description="盘后复盘页负责展示结果、归因、表现与产物。"
-          actionLabel="返回策略工作台"
+      <PageHeader
+        kicker="盘后复盘"
+        title="盘后复盘"
+        description="盘后复盘页负责展示结果、归因、表现与产物。"
+        actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
         <LoadingState label="正在加载盘后复盘" description="正在读取 Profile、盘后任务和最近结果。" />
@@ -553,12 +553,12 @@ function StrategyAfterCloseBody() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
+          kicker="盘后复盘"
           title="盘后复盘"
           description="盘后复盘页负责展示结果、归因、表现与产物。"
-          actionLabel="返回策略工作台"
+          actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
         <ErrorState
@@ -577,12 +577,12 @@ function StrategyAfterCloseBody() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
+          kicker="盘后复盘"
           title="盘后复盘"
           description="盘后复盘页负责展示结果、归因、表现与产物。"
-          actionLabel="返回策略工作台"
+          actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
         <EmptyState
@@ -600,12 +600,12 @@ function StrategyAfterCloseBody() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略"
+        kicker="盘后复盘"
         title="盘后复盘"
         description="盘后复盘页负责展示后端结果、信号归因、今日表现与产物链接。"
-        actionLabel="返回策略工作台"
+        actionLabel="返回概览"
         onAction={() => {
-          navigate('/strategies');
+          navigate('/dashboard');
         }}
       />
 
@@ -636,7 +636,7 @@ function StrategyAfterCloseBody() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <SectionCard
           title="盘后执行"
-          description="选择 Profile 和执行日期，提交 run-after-close，运行结果会回到任务详情。"
+          description="选择 Profile 和执行日期，提交盘后复盘任务，结果会回到任务详情。"
         >
           <form
             className="space-y-4"
@@ -733,7 +733,7 @@ function StrategyAfterCloseBody() {
         ) : (
           <EmptyState
             title="暂无盘后任务。"
-            description="提交 run-after-close 后，这里会显示最近执行记录。"
+            description="提交盘后复盘任务后，这里会显示最近执行记录。"
           />
         )}
       </SectionCard>

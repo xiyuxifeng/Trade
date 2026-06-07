@@ -99,12 +99,12 @@ export function MarketSnapshotBrowserDetail({
 
   return (
     <SectionCard
-      title="快照详情"
-      description={snapshotId ? '右侧保持当前快照详情，切换列表筛选后如果快照仍然存在会继续保留。' : '请选择一个 snapshot 查看详情。'}
+      title="市场上下文快照详情"
+      description={snapshotId ? '右侧保持当前市场上下文快照详情，切换列表筛选后如果快照仍然存在会继续保留。' : '请选择一个市场上下文快照查看详情。'}
       className="border-slate-200 bg-white"
     >
       {isLoading ? (
-        <LoadingState label="正在加载快照详情" description="包括 snapshot、sections、quality report 和 regime features。" />
+        <LoadingState label="正在加载快照详情" description="包括快照、sections、质量报告和市场状态特征。" />
       ) : errorState ? (
         <ErrorState
           {...errorState}
@@ -113,10 +113,10 @@ export function MarketSnapshotBrowserDetail({
       ) : detail && selectedSnapshot ? (
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryItem label="Snapshot" value={selectedSnapshot.snapshot_id} />
-            <SummaryItem label="Trade Date" value={selectedSnapshot.trade_date ?? '未记录'} />
-            <SummaryItem label="Market" value={selectedSnapshot.market} />
-            <SummaryItem label="Data Version" value={selectedSnapshot.data_version} />
+            <SummaryItem label="快照ID" value={selectedSnapshot.snapshot_id} />
+            <SummaryItem label="交易日" value={selectedSnapshot.trade_date ?? '未记录'} />
+            <SummaryItem label="市场" value={selectedSnapshot.market} />
+            <SummaryItem label="数据版本" value={selectedSnapshot.data_version} />
           </div>
 
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
@@ -147,7 +147,7 @@ export function MarketSnapshotBrowserDetail({
             <JsonViewer value={quality?.quality_report ?? detail.quality_report ?? {}} title="质量报告" />
           </div>
 
-          <SectionCard title="Sections" description="展示当前 snapshot 的 section 摘要与缺失信息。">
+          <SectionCard title="分段内容" description="展示当前市场上下文快照的 section 摘要与缺失信息。">
             {sections.length ? (
               <div className="space-y-3">
                 {sections.map((section) => (
@@ -162,10 +162,10 @@ export function MarketSnapshotBrowserDetail({
                       <StatusBadge value={section.quality_status} />
                     </div>
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      <SummaryItem label="Record Count" value={section.record_count} />
-                      <SummaryItem label="Missing Reason" value={section.missing_reason ?? '无'} />
+                      <SummaryItem label="记录数" value={section.record_count} />
+                      <SummaryItem label="缺失原因" value={section.missing_reason ?? '无'} />
                       <SummaryItem
-                        label="Storage Ref"
+                        label="存储引用"
                         value={typeof section.storage_ref?.source === 'string' ? section.storage_ref.source : 'db'}
                       />
                     </div>
@@ -173,7 +173,7 @@ export function MarketSnapshotBrowserDetail({
                 ))}
               </div>
             ) : (
-              <EmptyState title="暂无 sections" description="这个 snapshot 还没有可展示的 section 摘要。" />
+              <EmptyState title="暂无分段内容" description="这个市场上下文快照还没有可展示的 section 摘要。" />
             )}
           </SectionCard>
 
@@ -187,7 +187,7 @@ export function MarketSnapshotBrowserDetail({
           />
         </div>
       ) : (
-        <EmptyState title="请选择一个 snapshot" description="点击左侧 snapshot 列表中的任意一项查看详情。" />
+        <EmptyState title="请选择一个市场上下文快照" description="点击左侧列表中的任意一项查看详情。" />
       )}
     </SectionCard>
   );

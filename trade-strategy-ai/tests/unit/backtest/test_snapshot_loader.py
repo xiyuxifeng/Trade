@@ -108,6 +108,71 @@ class TestSnapshotLoaderInterface:
         assert result["market_regime_version"] == "market-regime-v1"
 
     @pytest.mark.asyncio
+    async def test_load_market_context_combines_market_snapshot_and_candidate_pool(self, tmp_path):
+        """loader 应同时加载结构化 market_snapshot 和候选池快照。"""
+        from src.backtest.snapshot_loader import SnapshotLoader
+
+        class _MarketSnapshot:
+            def __init__(self, metadata: dict[str, Any]):
+                self.metadata = metadata
+
+        class _MarketSnapshotService:
+            def __init__(self, snapshot: _MarketSnapshot):
+                self.snapshot = snapshot
+                self.calls: list[tuple[str, str, str]] = []
+
+            def load_market_snapshot(self, *, config_path: str | None, trade_date: str, slot: str = "17-30"):
+                self.calls.append((config_path or "", trade_date, slot))
+                return self.snapshot
+
+        candidate_pool = {"trade_date": "2026-04-01", "slot": "09-25", "hot_topics": []}
+        market_snapshot = _MarketSnapshot(metadata={"candidate_pool": candidate_pool})
+
+        class _SessionContext:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class _SessionFactory:
+            def __call__(self):
+                return _SessionContext()
+
+        mock_repo = AsyncMock()
+        mock_repo.list_regimes.return_value = []
+
+        config_path = tmp_path / "config" / "app.yaml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+        snapshot_service = AsyncMock()
+        snapshot_service.load.return_value = None
+        market_snapshot_service = _MarketSnapshotService(market_snapshot)
+
+        loader = SnapshotLoader(
+            snapshot_service=snapshot_service,
+            market_snapshot_service=market_snapshot_service,
+            session_factory=_SessionFactory(),
+            regime_repository=mock_repo,
+            config_path=str(config_path),
+        )
+        loader._load_ohlcv_from_db = AsyncMock(return_value={})
+        loader._load_indicators_from_db = AsyncMock(return_value={})
+
+        result = await loader.load_market_context(
+            trade_date=date(2026, 4, 1),
+            symbols=["000001.SZ"],
+        )
+
+        snapshot_service.load.assert_awaited_once_with("2026-04-01", slot="09-25")
+        assert market_snapshot_service.calls == [(str(config_path), "2026-04-01", "17-30")]
+        assert result["market_snapshot"] is market_snapshot
+        assert result["candidate_pool"] == candidate_pool
+        assert result["market_universe"] == candidate_pool
+        assert "market_snapshot.metadata.candidate_pool" in result["source_refs"]
+
+    @pytest.mark.asyncio
     async def test_load_market_context_requires_existing_benchmark_symbol(self):
         """当 benchmark_symbol 未落库时，loader 应显式失败。"""
         from src.backtest.snapshot_loader import SnapshotLoader
@@ -217,7 +282,7 @@ class TestSnapshotLoaderWithMockedService:
         )
 
         # 现在只读取 market_universe，ohlcv / indicators 由 DB 侧加载
-        mock_service.load.assert_awaited_once_with("2026-04-01", slot="market_universe")
+        mock_service.load.assert_awaited_once_with("2026-04-01", slot="09-25")
         assert result["market_universe"] is None
         assert result["bars_by_symbol"] == {}
         assert result["indicators_by_symbol"] == {}

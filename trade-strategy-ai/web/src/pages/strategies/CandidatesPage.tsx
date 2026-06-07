@@ -139,28 +139,28 @@ export function StrategyCandidatesPage() {
   const permissionDenied = isWorkspacePermissionDenied(pageError);
 
   if (profilesQuery.isLoading) {
-    return (
-      <main className="page-stack">
+      return (
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="候选版本"
-          description="策略优化：生成候选版本、审核并追踪发布结果。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="候选规则版本"
+          description="在兼容入口中生成候选规则版本、审核并追踪结果。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
-        <LoadingState label="正在加载候选版本页" description="正在读取 Profile 与策略版本。" />
+        <LoadingState label="正在加载候选规则版本页" description="正在读取 Profile 与规则版本。" />
       </main>
     );
   }
 
   if (pageError) {
-    return (
-      <main className="page-stack">
+      return (
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="候选版本"
-          description="策略优化：生成候选版本、审核并追踪发布结果。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="候选规则版本"
+          description="在兼容入口中生成候选规则版本、审核并追踪结果。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <ErrorState
@@ -181,18 +181,18 @@ export function StrategyCandidatesPage() {
   }
 
   if (profileItems.length === 0) {
-    return (
+      return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="候选版本"
-          description="策略优化：生成候选版本、审核并追踪发布结果。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="候选规则版本"
+          description="在兼容入口中生成候选规则版本、审核并追踪结果。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <EmptyState
           title="暂无可用 Profile。"
-          description="先到配置管理创建或导入 Profile，再回到这里生成候选版本。"
+          description="先到配置管理创建或导入 Profile，再回到这里生成候选规则版本。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -203,10 +203,10 @@ export function StrategyCandidatesPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略"
-        title="候选版本"
-        description="生成、审核和追踪候选版本，只保留 Profile 入口。"
-        actionLabel="返回策略首页"
+        kicker="兼容入口"
+        title="候选规则版本"
+        description="生成、审核和追踪候选规则版本，只保留 Profile 入口。"
+        actionLabel="返回兼容入口"
         onAction={() => navigate('/strategies')}
       />
 
@@ -217,7 +217,7 @@ export function StrategyCandidatesPage() {
               运行参数
             </Badge>
             <CardTitle className="mt-2 text-slate-950">trader / date / profile</CardTitle>
-            <CardDescription className="text-slate-600">候选版本页面只使用 Profile、交易员和策略日期。</CardDescription>
+            <CardDescription className="text-slate-600">候选规则版本页面只使用 Profile、交易员和执行日期。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -232,7 +232,7 @@ export function StrategyCandidatesPage() {
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">策略日期</span>
+                <span className="text-sm font-medium text-slate-700">执行日期</span>
                 <Input
                   className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                   onChange={(event) => setDraftStrategyDate(event.target.value)}

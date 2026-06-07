@@ -32,6 +32,15 @@ export type JobRecord = {
   profile_snapshot?: JobProfileSnapshot | null;
 };
 
+export type JobStatusCounts = {
+  pending: number;
+  running: number;
+  paused: number;
+  success: number;
+  failed: number;
+  cancelled: number;
+};
+
 export type JobDefinitionSummary = {
   job_type: string;
   title: string;
@@ -163,6 +172,7 @@ export type JobsListResponse = {
   skip: number;
   limit: number;
   items: JobRecord[];
+  status_counts?: Partial<JobStatusCounts>;
 };
 
 export type JobDetailResponse = {

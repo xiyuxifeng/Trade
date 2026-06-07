@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PencilLine, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api/http';
@@ -42,9 +42,7 @@ function LinkedJobCard({ job, onOpen }: { job: ProfileLinkedJob; onOpen: () => v
               <CardTitle className="text-base text-slate-900">{job.job_id}</CardTitle>
               <CardDescription className="text-slate-600">任务类型：{job.job_type}</CardDescription>
             </div>
-            <Badge variant={job.status === 'success' ? 'success' : job.status === 'failed' ? 'destructive' : 'info'}>
-              {job.status}
-            </Badge>
+            <StatusBadge value={job.status} />
           </div>
         </CardHeader>
         <CardContent className="text-sm text-slate-600">

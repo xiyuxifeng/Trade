@@ -24,29 +24,29 @@ export function MarketRegimePanel({ regime, isLoading, errorState }: MarketRegim
 
   return (
     <SectionCard
-      title="Market Regime"
-      description="展示由 Market Snapshot 计算出的最终市场状态画像。"
+      title="市场状态画像"
+      description="展示由市场上下文快照计算出的最终市场状态判断。"
       className="border-slate-200 bg-white"
     >
       {isLoading ? (
-        <LoadingState label="正在加载 Market Regime" description="正在拉取 regime 列表和详情。" />
+        <LoadingState label="正在加载市场状态画像" description="正在拉取市场状态列表和详情。" />
       ) : errorState ? (
         errorState
       ) : !regimeBody ? (
-        <EmptyState title="暂无 Market Regime" description="当前快照尚未生成最终 regime，或后端暂时没有可用结果。" />
+        <EmptyState title="暂无市场状态画像" description="当前快照尚未生成最终市场状态，或后端暂时没有可用结果。" />
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryItem label="Snapshot" value={regimeBody.snapshot_id} />
-            <SummaryItem label="Trade Date" value={regimeBody.trade_date} />
-            <SummaryItem label="Market" value={regimeBody.market} />
-            <SummaryItem label="Regime Version" value={regimeBody.regime_version} />
-            <SummaryItem label="Feature Version" value={regimeBody.source_feature_version} />
-            <SummaryItem label="Primary Label" value={regimeBody.primary_label} />
-            <SummaryItem label="Confidence" value={Number(regimeBody.confidence).toFixed(2)} />
+            <SummaryItem label="快照ID" value={regimeBody.snapshot_id} />
+            <SummaryItem label="交易日" value={regimeBody.trade_date} />
+            <SummaryItem label="市场" value={regimeBody.market} />
+            <SummaryItem label="状态版本" value={regimeBody.regime_version} />
+            <SummaryItem label="特征版本" value={regimeBody.source_feature_version} />
+            <SummaryItem label="主标签" value={regimeBody.primary_label} />
+            <SummaryItem label="置信度" value={Number(regimeBody.confidence).toFixed(2)} />
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Quality</p>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">质量状态</p>
                 <p className="mt-1 break-all text-sm text-slate-800">{regimeBody.quality_status}</p>
               </div>
               <StatusBadge value={regimeBody.quality_status} />
@@ -61,7 +61,7 @@ export function MarketRegimePanel({ regime, isLoading, errorState }: MarketRegim
 
           {warnings.length ? (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Warnings</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">提示</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
@@ -73,7 +73,7 @@ export function MarketRegimePanel({ regime, isLoading, errorState }: MarketRegim
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-950">Labels</p>
+                <p className="text-sm font-semibold text-slate-950">标签与证据</p>
                 <p className="text-xs text-slate-500">主状态与结构标签的证据。</p>
               </div>
             </div>
@@ -110,7 +110,7 @@ export function MarketRegimePanel({ regime, isLoading, errorState }: MarketRegim
             </div>
           </div>
 
-          <JsonViewer value={features} title="Regime Features" />
+          <JsonViewer value={features} title="市场状态特征" />
         </div>
       )}
     </SectionCard>

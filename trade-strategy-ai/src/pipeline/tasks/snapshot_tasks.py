@@ -7,7 +7,9 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from src.common.config import AppConfig
@@ -20,6 +22,85 @@ from src.market_universe.snapshot_service import SnapshotService
 from src.market_universe.schemas import MarketUniverse
 
 logger = get_logger(__name__)
+
+
+def _normalized_snapshot_path(dataset: str, trade_date: str, slot: str) -> Path:
+    """返回 Kaipan 标准化快照路径。"""
+    return (
+        resolve_project_path("data/kaipan/snapshots")
+        / dataset
+        / f"{trade_date}_{slot}"
+        / f"{dataset}.json"
+    )
+
+
+def _load_normalized_snapshot(dataset: str, trade_date: str, slot: str) -> dict[str, Any] | None:
+    """优先读取 Kaipan 标准化快照。"""
+    path = _normalized_snapshot_path(dataset, trade_date, slot)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        logger.warning("标准化快照读取失败: dataset=%s, path=%s", dataset, path)
+        return None
+
+
+def _build_hot_topics_payload_from_normalized(normalized: dict[str, Any], trade_date: str, slot: str) -> dict[str, Any]:
+    """把标准化 hot_topics 快照转换为 provider payload。"""
+    topics: list[dict[str, Any]] = []
+    for kind, records in normalized.items():
+        if kind == "meta" or not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            topics.append({"kind": kind, **record})
+    meta = normalized.get("meta", {}) if isinstance(normalized.get("meta"), dict) else {}
+    return {
+        "trade_date": meta.get("trade_date", trade_date),
+        "slot": meta.get("slot", slot),
+        "topics": topics,
+        "sources": [str(_normalized_snapshot_path("hot_topics", trade_date, slot))],
+    }
+
+
+def _build_topic_constituents_payload_from_normalized(normalized: dict[str, Any], trade_date: str, slot: str) -> dict[str, Any]:
+    """把标准化 topic_constituents 快照转换为 provider payload。"""
+    constituents: list[dict[str, Any]] = []
+    for kind, records in normalized.items():
+        if kind == "meta" or not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            constituents.append({"kind": kind, **record})
+    meta = normalized.get("meta", {}) if isinstance(normalized.get("meta"), dict) else {}
+    return {
+        "trade_date": meta.get("trade_date", trade_date),
+        "slot": meta.get("slot", slot),
+        "constituents": constituents,
+        "sources": [str(_normalized_snapshot_path("topic_constituents", trade_date, slot))],
+    }
+
+
+def _build_strong_symbols_payload_from_normalized(normalized: dict[str, Any], trade_date: str, slot: str) -> dict[str, Any]:
+    """把标准化 strong_symbols 快照转换为 provider payload。"""
+    symbols: list[dict[str, Any]] = []
+    for kind, records in normalized.items():
+        if kind == "meta" or not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            symbols.append({"kind": kind, **record})
+    meta = normalized.get("meta", {}) if isinstance(normalized.get("meta"), dict) else {}
+    return {
+        "trade_date": meta.get("trade_date", trade_date),
+        "slot": meta.get("slot", slot),
+        "symbols": symbols,
+        "sources": [str(_normalized_snapshot_path("strong_symbols", trade_date, slot))],
+    }
 
 
 def _build_provider(config: AppConfig, *, offline: bool = False):
@@ -87,22 +168,22 @@ async def handle_hot_topics_snapshot(
         logger.debug("热点快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
-    try:
-        raw_payload = provider.fetch_hot_topics(trade_date=trade_date, slot=slot, offline=offline)
-        logger.info(
-            "热点快照获取成功: date=%s, slot=%s, topics=%d",
-            trade_date_str,
-            slot,
-            len(raw_payload) if raw_payload else 0,
+    normalized_payload = _load_normalized_snapshot("hot_topics", trade_date_str, slot)
+    if normalized_payload is not None:
+        logger.info("热点快照使用标准化产物: date=%s, slot=%s", trade_date_str, slot)
+        raw_payload = _build_hot_topics_payload_from_normalized(normalized_payload, trade_date_str, slot)
+    else:
+        if provider is None:
+            logger.warning(
+                "热点快照跳过: date=%s, slot=%s, 原因=标准化产物缺失且 provider 不可用",
+                trade_date_str,
+                slot,
+            )
+            return
+        raise RuntimeError(
+            f"标准化快照缺失: dataset=hot_topics, date={trade_date_str}, slot={slot}. "
+            "snapshot-build must run after kaipan-normalize."
         )
-    except Exception as e:
-        logger.warning(
-            "热点快照获取失败: date=%s, slot=%s, error=%s",
-            trade_date_str,
-            slot,
-            e,
-        )
-        raise
 
     builder = HotTopicsBuilder()
     hot_topics_payload = builder.build(raw_payload)
@@ -170,22 +251,22 @@ async def handle_topic_constituents_snapshot(
         logger.debug("题材成分快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
-    try:
-        raw_payload = provider.fetch_topic_constituents(trade_date=trade_date, slot=slot, offline=offline)
-        logger.info(
-            "题材成分快照获取成功: date=%s, slot=%s, constituents=%d",
-            trade_date_str,
-            slot,
-            len(raw_payload) if raw_payload else 0,
+    normalized_payload = _load_normalized_snapshot("topic_constituents", trade_date_str, slot)
+    if normalized_payload is not None:
+        logger.info("题材成分快照使用标准化产物: date=%s, slot=%s", trade_date_str, slot)
+        raw_payload = _build_topic_constituents_payload_from_normalized(normalized_payload, trade_date_str, slot)
+    else:
+        if provider is None:
+            logger.warning(
+                "题材成分快照跳过: date=%s, slot=%s, 原因=标准化产物缺失且 provider 不可用",
+                trade_date_str,
+                slot,
+            )
+            return
+        raise RuntimeError(
+            f"标准化快照缺失: dataset=topic_constituents, date={trade_date_str}, slot={slot}. "
+            "snapshot-build must run after kaipan-normalize."
         )
-    except Exception as e:
-        logger.warning(
-            "题材成分快照获取失败: date=%s, slot=%s, error=%s",
-            trade_date_str,
-            slot,
-            e,
-        )
-        raise
 
     resolver = ConstituentsResolver()
     constituents_payload = resolver.build(raw_payload)
@@ -252,22 +333,22 @@ async def handle_strong_symbols_snapshot(
         logger.debug("强势池快照跳过（已存在）: date=%s, slot=%s", trade_date_str, slot)
         return
 
-    try:
-        raw_payload = provider.fetch_strong_symbols(trade_date=trade_date, slot=slot, offline=offline)
-        logger.info(
-            "强势池快照获取成功: date=%s, slot=%s, symbols=%d",
-            trade_date_str,
-            slot,
-            len(raw_payload) if raw_payload else 0,
+    normalized_payload = _load_normalized_snapshot("strong_symbols", trade_date_str, slot)
+    if normalized_payload is not None:
+        logger.info("强势池快照使用标准化产物: date=%s, slot=%s", trade_date_str, slot)
+        raw_payload = _build_strong_symbols_payload_from_normalized(normalized_payload, trade_date_str, slot)
+    else:
+        if provider is None:
+            logger.warning(
+                "强势池快照跳过: date=%s, slot=%s, 原因=标准化产物缺失且 provider 不可用",
+                trade_date_str,
+                slot,
+            )
+            return
+        raise RuntimeError(
+            f"标准化快照缺失: dataset=strong_symbols, date={trade_date_str}, slot={slot}. "
+            "snapshot-build must run after kaipan-normalize."
         )
-    except Exception as e:
-        logger.warning(
-            "强势池快照获取失败: date=%s, slot=%s, error=%s",
-            trade_date_str,
-            slot,
-            e,
-        )
-        raise
 
     selector = StrongSymbolsSelector()
     strong_symbols_payload = selector.build(raw_payload)

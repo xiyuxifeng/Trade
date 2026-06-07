@@ -88,8 +88,6 @@ function FlowLinkTile({ item }: { item: QuickLink }) {
 export function StrategyWorkspaceHomePage() {
   const navigate = useNavigate();
   const today = formatLocalDateInputOffset(0);
-  const pageDescription =
-    '策略工作台用于管理每日策略运行、策略版本构建和策略优化。日常使用优先进入盘前准备和盘后复盘；当 Profile、规则池、市场状态或候选版本变化时，再构建新的策略版本。';
 
   const profilesQuery = useQuery({
     queryKey: ['strategy-home', 'profiles'],
@@ -202,26 +200,26 @@ export function StrategyWorkspaceHomePage() {
   const latestFailedJob = sortJobsByCreatedAtDesc(failedJobs)[0] ?? null;
 
   const todayRunLinks: QuickLink[] = [
-    { label: '盘前准备', to: '/strategies/pre-market', description: '构建候选池快照并运行盘前' },
+    { label: '盘前分析', to: '/strategies/pre-market', description: '查看盘前建议与市场上下文' },
     { label: '盘后复盘', to: '/strategies/after-close', description: '查看盘后结果、归因和产物' },
   ];
 
   const strategyBuildLinks: QuickLink[] = [
-    { label: '规则选择', to: '/strategies/regime-selection', description: '根据当前 Market Regime 选择适用规则' },
-    { label: '构建策略版本', to: '/strategies/versions', description: '提交 strategy-build 并查看版本结果' },
+    { label: '规则选择', to: '/strategies/regime-selection', description: '根据当前市场状态选择适用规则' },
+    { label: '构建规则版本', to: '/strategies/versions', description: '提交规则版本构建并查看结果' },
   ];
 
   const strategyOptimizationLinks: QuickLink[] = [
-    { label: '候选版本', to: '/strategies/candidates', description: '生成与审核候选版本' },
+    { label: '候选规则版本', to: '/strategies/candidates', description: '生成与审核候选规则版本' },
   ];
 
-  const traceLinks: QuickLink[] = [{ label: '运行历史', to: '/strategies/history', description: '查看最近策略执行历史' }];
+  const traceLinks: QuickLink[] = [{ label: '运行历史', to: '/strategies/history', description: '查看最近兼容入口执行历史' }];
 
   if (isLoading) {
     return (
       <main className="page-stack">
-        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
-        <LoadingState label="正在加载策略摘要" description="正在读取 Profile、策略版本和最近任务。" />
+        <PageHeader kicker="兼容入口" title="规则工作台（兼容入口）" description="盘前分析和盘后复盘已拆分到独立入口，这里仅保留兼容访问。" />
+        <LoadingState label="正在加载兼容入口摘要" description="正在读取 Profile、规则版本和最近任务。" />
       </main>
     );
   }
@@ -229,7 +227,7 @@ export function StrategyWorkspaceHomePage() {
   if (queryError) {
     return (
       <main className="page-stack">
-        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
+        <PageHeader kicker="兼容入口" title="规则工作台（兼容入口）" description="盘前分析和盘后复盘已拆分到独立入口，这里仅保留兼容访问。" />
         <ErrorState
           {...buildErrorRecoveryState(queryError, 'strategy')}
           onRetry={permissionDenied ? undefined : () => {
@@ -252,10 +250,10 @@ export function StrategyWorkspaceHomePage() {
   if (profileCount === 0) {
     return (
       <main className="page-stack">
-        <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
+        <PageHeader kicker="兼容入口" title="规则工作台（兼容入口）" description="盘前分析和盘后复盘已拆分到独立入口，这里仅保留兼容访问。" />
         <EmptyState
           title="暂无可用 Profile。"
-          description="请先导入或创建正式 Profile，再返回策略首页查看摘要与入口。"
+          description="请先导入或创建正式 Profile，再返回主流程入口查看盘前与盘后页面。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -265,7 +263,7 @@ export function StrategyWorkspaceHomePage() {
 
   return (
     <main className="page-stack">
-      <PageHeader kicker="策略" title="策略工作台" description={pageDescription} />
+      <PageHeader kicker="兼容入口" title="规则工作台（兼容入口）" description="盘前分析和盘后复盘已拆分到独立入口，这里仅保留兼容访问。" />
 
       <section className="grid gap-4">
         <Card className="border-slate-200 bg-white shadow-sm">
@@ -275,7 +273,7 @@ export function StrategyWorkspaceHomePage() {
             </Badge>
             <CardTitle className="mt-2 text-slate-950">日常使用从这里开始</CardTitle>
             <CardDescription className="text-slate-600">
-              日常使用从这里开始；不一定每天都需要重新构建策略版本。
+              日常使用从这里开始；不一定每天都需要重新构建规则版本。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -287,8 +285,8 @@ export function StrategyWorkspaceHomePage() {
                 value={currentProfileLabel}
               />
               <SummaryTile
-                detail="默认使用当前日期作为策略首页的展示日期。"
-                label="策略日期"
+                detail="默认使用当前日期作为盘前 / 盘后展示日期。"
+                label="分析日期"
                 value={today}
               />
               <SummaryTile label="失败任务总数" value={String(failedJobCount)} />
@@ -304,11 +302,11 @@ export function StrategyWorkspaceHomePage() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              策略构建
+              规则构建
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">规则选择 / 构建策略版本</CardTitle>
-            <CardDescription className="text-slate-600">
-              当规则、Profile、Snapshot 或 Market Regime 变化时使用。
+            <CardTitle className="mt-2 text-slate-950">规则选择 / 构建规则版本</CardTitle>
+              <CardDescription className="text-slate-600">
+              当规则、Profile、市场上下文快照或市场状态变化时使用。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -323,11 +321,11 @@ export function StrategyWorkspaceHomePage() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              策略优化
+              候选规则版本
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">候选版本</CardTitle>
-            <CardDescription className="text-slate-600">
-              候选版本需要先人工审核，审核通过后再执行 Release，才会成为 released 策略版本，用于后续构建和运行选择。
+            <CardTitle className="mt-2 text-slate-950">候选规则版本</CardTitle>
+              <CardDescription className="text-slate-600">
+              候选规则版本需要先人工审核，审核通过后再执行 Release，才会成为已发布规则版本，用于后续构建和运行选择。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -345,8 +343,8 @@ export function StrategyWorkspaceHomePage() {
               追踪与排查
             </Badge>
             <CardTitle className="mt-2 text-slate-950">运行历史</CardTitle>
-            <CardDescription className="text-slate-600">
-              查看 strategy-build、run-pre-market、run-after-close 等任务，作为排查入口。
+              <CardDescription className="text-slate-600">
+              查看规则构建、盘前分析和盘后复盘等任务，作为排查入口。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -357,10 +355,10 @@ export function StrategyWorkspaceHomePage() {
             </div>
             <div className="space-y-3">
               <JobSummaryRow
-                emptyLabel="尚无 snapshot-build 任务。"
+                emptyLabel="尚无市场上下文准备任务。"
                 href="/jobs?job_type=snapshot-build"
                 job={latestSnapshotBuildJob}
-                label="最新 snapshot-build Job"
+                label="最新市场上下文准备 Job"
               />
               <JobSummaryRow
                 emptyLabel="尚无盘前任务。"
@@ -375,10 +373,10 @@ export function StrategyWorkspaceHomePage() {
                 label="最新盘后 Job"
               />
               <JobSummaryRow
-                emptyLabel="尚无 strategy-build 任务。"
+                emptyLabel="尚无规则构建任务。"
                 href="/jobs?job_type=strategy-build"
                 job={latestStrategyBuildJob}
-                label="最新 strategy-build Job"
+                label="最新规则构建 Job"
               />
               <JobSummaryRow
                 emptyLabel="暂无失败任务。"

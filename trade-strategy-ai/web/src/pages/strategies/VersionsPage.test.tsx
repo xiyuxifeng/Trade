@@ -204,21 +204,21 @@ describe('VersionsPage', () => {
 
     renderWithRouter([{ path: '/strategies/versions', element: <VersionsPage /> }], ['/strategies/versions']);
 
-    expect(await screen.findByRole('heading', { name: '策略版本' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '返回策略首页' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '规则版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回兼容入口' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '搜索' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /构建策略版本/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /构建规则版本/ })).toBeInTheDocument();
     expect((await screen.findAllByText('trader_a_2026-05-16_released')).length).toBeGreaterThan(0);
     expect(screen.getByText('latest released version')).toBeInTheDocument();
-    expect(await screen.findByText('来源文章 metadata 版本')).toBeInTheDocument();
+    expect(await screen.findByText('来源文章版本信息')).toBeInTheDocument();
     expect(screen.getByText('article-1')).toBeInTheDocument();
     expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
     expect(mockedListArticleMetadataSummary).toHaveBeenCalledWith(['article-1']);
 
-    fireEvent.change(screen.getByLabelText('策略日期'), { target: { value: '2026-05-16' } });
+    fireEvent.change(screen.getByLabelText('执行日期'), { target: { value: '2026-05-16' } });
     await user.click(screen.getByRole('button', { name: '搜索' }));
-    await user.click(screen.getByRole('button', { name: /构建策略版本/ }));
+    await user.click(screen.getByRole('button', { name: /构建规则版本/ }));
     await user.click(screen.getByRole('button', { name: '确认提交' }));
 
     await waitFor(() => {

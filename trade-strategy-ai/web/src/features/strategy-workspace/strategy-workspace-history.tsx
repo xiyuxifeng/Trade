@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { formatWorkspaceTimestamp, isStrategyWorkspaceJobType } from './strategy-workspace-utils';
+import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isStrategyWorkspaceJobType } from './strategy-workspace-utils';
 import type { JobRecord } from '@/types/jobs';
 
 function describeStrategyJob(job: JobRecord) {
@@ -38,8 +38,8 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
 
   return (
     <SectionCard
-      title="策略任务历史"
-      description="仅展示策略工作台相关 Job，包括 `snapshot-build`、`strategy-build`、`run-pre-market` 和 `run-after-close`。"
+      title="兼容入口任务历史"
+      description="仅展示盘前/盘后兼容入口相关 Job，不再强调内部 job type。"
       action={
         <div className="flex flex-wrap gap-2">
           <Link
@@ -55,7 +55,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
       }
     >
       {isLoading ? (
-        <LoadingState label="正在加载策略任务历史" description="稍后会展示最近的策略执行记录。" />
+        <LoadingState label="正在加载兼容入口任务历史" description="稍后会展示最近的执行记录。" />
       ) : error ? (
         <ErrorState {...buildErrorRecoveryState(error, 'strategy')} onRetry={onRetry} />
       ) : strategyJobs.length ? (
@@ -70,7 +70,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-base font-medium text-slate-950">{job.id}</p>
-                  <p className="mt-1 text-sm text-slate-600">{job.job_type}</p>
+                  <p className="mt-1 text-sm text-slate-600">{describeStrategyWorkspaceJobType(job.job_type)}</p>
                 </div>
                 <StatusBadge value={job.status} />
               </div>
@@ -88,8 +88,8 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
         </div>
       ) : (
         <EmptyState
-          title="暂无策略任务。"
-          description="提交 `snapshot-build`、`strategy-build`、`run-pre-market` 或 `run-after-close` 后，这里会展示最近执行记录。"
+          title="暂无兼容入口任务。"
+          description="提交市场上下文准备、规则版本构建、盘前分析或盘后复盘后，这里会展示最近执行记录。"
         />
       )}
     </SectionCard>

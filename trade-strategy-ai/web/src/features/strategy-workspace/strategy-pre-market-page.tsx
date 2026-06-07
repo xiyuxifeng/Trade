@@ -17,7 +17,7 @@ import { formatLocalDateInputOffset } from '@/lib/date';
 import type { JobRecord } from '@/types/jobs';
 import type { MarketBenchmarkOption } from '@/types/market';
 import type { ProfileRecord } from '@/types/profile';
-import { formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strategy-workspace-utils';
+import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strategy-workspace-utils';
 
 type SubmissionType = 'snapshot-build' | 'run-pre-market';
 
@@ -272,15 +272,15 @@ export function StrategyPreMarketPage() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="盘前准备"
-          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
-          actionLabel="返回策略工作台"
+          kicker="盘前分析"
+          title="盘前分析"
+          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
-        <LoadingState label="正在加载盘前准备" description="正在读取 Profile、盘前任务和最近执行记录。" />
+        <LoadingState label="正在加载盘前分析" description="正在读取 Profile、盘前任务和最近执行记录。" />
       </main>
     );
   }
@@ -289,12 +289,12 @@ export function StrategyPreMarketPage() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="盘前准备"
-          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
-          actionLabel="返回策略工作台"
+          kicker="盘前分析"
+          title="盘前分析"
+          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
         <ErrorState
@@ -313,17 +313,17 @@ export function StrategyPreMarketPage() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="盘前准备"
-          description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
-          actionLabel="返回策略工作台"
+          kicker="盘前分析"
+          title="盘前分析"
+          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          actionLabel="返回概览"
           onAction={() => {
-            navigate('/strategies');
+            navigate('/dashboard');
           }}
         />
         <EmptyState
           title="暂无可用 Profile。"
-          description="请先导入或创建正式 Profile，再返回盘前准备页提交 snapshot-build 与 run-pre-market。"
+          description="请先导入或创建正式 Profile，再返回盘前分析页提交盘前准备与盘前分析任务。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -334,12 +334,12 @@ export function StrategyPreMarketPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略"
-        title="盘前准备"
-        description="盘前准备页通过 Profile 与快照构建、盘前运行承接正式提交。"
-        actionLabel="返回策略工作台"
+        kicker="盘前分析"
+        title="盘前分析"
+        description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+        actionLabel="返回概览"
         onAction={() => {
-          navigate('/strategies');
+          navigate('/dashboard');
         }}
       />
 
@@ -360,7 +360,7 @@ export function StrategyPreMarketPage() {
       {submissionState ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
           <p className="font-medium">
-            {submissionState.jobType === 'snapshot-build' ? '快照构建已提交' : '盘前运行已提交'}
+              {submissionState.jobType === 'snapshot-build' ? '市场上下文准备已提交' : '盘前分析已提交'}
           </p>
           <p className="mt-1 break-all">Job ID: {submissionState.jobId}</p>
           <div className="mt-3 flex flex-wrap gap-3">
@@ -380,7 +380,7 @@ export function StrategyPreMarketPage() {
               <Badge variant="info" className="w-fit">
                 基础设置
               </Badge>
-              <CardTitle className="mt-2 text-slate-950">Profile / 策略日期 / Benchmark</CardTitle>
+              <CardTitle className="mt-2 text-slate-950">Profile / 分析日期 / Benchmark</CardTitle>
               <CardDescription className="text-slate-600">
               Benchmark 默认选中沪深300，可在页面下拉中手动切换。
               </CardDescription>
@@ -398,8 +398,8 @@ export function StrategyPreMarketPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Strategy date</p>
-                <Input aria-label="Strategy date" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">分析日期</p>
+                <Input aria-label="分析日期" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark 选择</p>
@@ -425,7 +425,7 @@ export function StrategyPreMarketPage() {
             <Badge variant="info" className="w-fit">
               流程入口
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">快照构建与 Job 工作台</CardTitle>
+            <CardTitle className="mt-2 text-slate-950">市场上下文准备与任务中心</CardTitle>
             <CardDescription className="text-slate-600">执行结果、日志、产物和失败重试都在任务列表和任务详情查看。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -437,15 +437,15 @@ export function StrategyPreMarketPage() {
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
               to="/jobs?job_type=snapshot-build"
             >
-              <p className="text-sm font-medium text-slate-950">查看 snapshot-build</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的快照构建任务。</p>
+              <p className="text-sm font-medium text-slate-950">查看市场上下文准备</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的市场上下文准备任务。</p>
             </Link>
             <Link
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
               to="/jobs?job_type=run-pre-market"
             >
-              <p className="text-sm font-medium text-slate-950">查看 run-pre-market</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的盘前运行任务。</p>
+              <p className="text-sm font-medium text-slate-950">查看盘前分析</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的盘前分析任务。</p>
             </Link>
           </CardContent>
         </Card>
@@ -455,9 +455,9 @@ export function StrategyPreMarketPage() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              snapshot-build
+              市场上下文准备
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">提交快照构建</CardTitle>
+            <CardTitle className="mt-2 text-slate-950">提交市场上下文准备</CardTitle>
             <CardDescription className="text-slate-600">
               `date / start_date / end_date / slot / snapshot_type / force / offline` 都可直接提交。
             </CardDescription>
@@ -511,7 +511,7 @@ export function StrategyPreMarketPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              该动作会默认使用当前 `Strategy date`，如果 `Start date` 和 `End date` 同时填写则优先提交区间快照。
+              该动作会默认使用当前“分析日期”，如果 `Start date` 和 `End date` 同时填写则优先提交区间市场上下文准备。
             </div>
 
             <Button
@@ -519,7 +519,7 @@ export function StrategyPreMarketPage() {
               disabled={!selectedProfileId || submissionMutation.isPending}
               onClick={handleSubmitSnapshot}
             >
-              {submissionMutation.isPending ? '提交中' : '提交快照构建'}
+              {submissionMutation.isPending ? '提交中' : '提交市场上下文准备'}
             </Button>
           </CardContent>
         </Card>
@@ -527,16 +527,16 @@ export function StrategyPreMarketPage() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <Badge variant="info" className="w-fit">
-              run-pre-market
+              市场上下文准备
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">提交盘前运行</CardTitle>
-            <CardDescription className="text-slate-600">`as_of_date / force / export_html` 为盘前运行的正式参数。</CardDescription>
+              <CardTitle className="mt-2 text-slate-950">提交盘前分析</CardTitle>
+              <CardDescription className="text-slate-600">`as_of_date / force / export_html` 为盘前分析的正式参数。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">as_of_date</p>
               <p className="mt-2 break-all text-base font-semibold text-slate-950">{strategyDate || '未选择'}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">盘前运行默认采用当前的 Strategy date。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">盘前分析默认采用当前的分析日期。</p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -571,15 +571,15 @@ export function StrategyPreMarketPage() {
               disabled={!selectedProfileId || submissionMutation.isPending}
               onClick={handleSubmitRun}
             >
-              {submissionMutation.isPending ? '提交中' : '提交盘前运行'}
+              {submissionMutation.isPending ? '提交中' : '提交盘前分析'}
             </Button>
           </CardContent>
         </Card>
       </section>
 
-      <SectionCard
+        <SectionCard
         title="最近任务"
-        description="这里只展示与盘前相关的最近任务，详细日志、产物和失败重试都以任务列表为准。"
+        description="这里只展示与盘前分析相关的最近任务，详细日志、产物和失败重试都以任务列表为准。"
       >
         {jobs.length ? (
           <div className="grid gap-3">
@@ -592,7 +592,7 @@ export function StrategyPreMarketPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-medium text-slate-950">{job.id}</p>
-                    <p className="mt-1 text-sm text-slate-600">{job.job_type}</p>
+                    <p className="mt-1 text-sm text-slate-600">{describeStrategyWorkspaceJobType(job.job_type)}</p>
                   </div>
                   <StatusBadge value={job.status} />
                 </div>
@@ -611,7 +611,7 @@ export function StrategyPreMarketPage() {
         ) : (
           <EmptyState
             title="暂无盘前任务。"
-            description="提交 snapshot-build 或 run-pre-market 后，这里会显示最近任务。"
+            description="提交市场上下文准备或盘前分析后，这里会显示最近任务。"
             actionLabel="查看任务列表"
             onAction={() => {
               navigate('/jobs');

@@ -110,7 +110,7 @@ export function StrategyWorkspaceArtifacts({
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       <SectionCard
-        title="最近策略版本"
+        title="最近规则版本"
         description="查看版本链、发布日期和推荐数量，继续追踪正式输出。"
         action={
           <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetryVersions} variant="outline">
@@ -119,7 +119,7 @@ export function StrategyWorkspaceArtifacts({
         }
       >
         {isVersionsLoading ? (
-          <LoadingState label="正在加载策略版本" description="稍后会显示版本链、发布日期和推荐数量。" />
+          <LoadingState label="正在加载规则版本" description="稍后会显示版本链、发布日期和推荐数量。" />
         ) : versionsError ? (
           <ErrorState {...buildErrorRecoveryState(versionsError, 'strategy')} onRetry={onRetryVersions} />
         ) : versionItems.length ? (
@@ -153,7 +153,7 @@ export function StrategyWorkspaceArtifacts({
             ))}
           </div>
         ) : (
-          <EmptyState title="暂无策略版本。" description="选择 trader 并提交构建后，版本链会在这里显示。" />
+          <EmptyState title="暂无规则版本。" description="选择 trader 并提交构建后，版本链会在这里显示。" />
         )}
       </SectionCard>
 
@@ -176,7 +176,7 @@ export function StrategyWorkspaceArtifacts({
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <MetaCard label="版本 ID" value={selectedVersion.version_id} />
                 <MetaCard label="交易员" value={selectedVersion.trader_id} />
-                <MetaCard label="策略日期" value={selectedVersion.strategy_date} />
+                <MetaCard label="执行日期" value={selectedVersion.strategy_date} />
                 <MetaCard label="版本类型" value={selectedVersion.version_type} />
                 <MetaCard label="状态" value={selectedVersion.status} />
                 <MetaCard label="发布时间" value={formatWorkspaceTimestamp(selectedVersion.released_at)} />
@@ -201,8 +201,8 @@ export function StrategyWorkspaceArtifacts({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-950">Regime-aware selection</p>
-                    <p className="mt-1 text-sm text-slate-600">展示构建策略版本时附带的市场状态与规则选择摘要。</p>
+                    <p className="text-sm font-medium text-slate-950">规则适用性摘要</p>
+                    <p className="mt-1 text-sm text-slate-600">展示构建规则版本时附带的市场状态与规则选择摘要。</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge value={regimeSelection.quality_status ? String(regimeSelection.quality_status) : 'info'} />
@@ -264,8 +264,8 @@ export function StrategyWorkspaceArtifacts({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-950">来源文章 metadata 版本</p>
-                    <p className="mt-1 text-sm text-slate-600">展示这条策略版本从哪些文章候选版本生成，便于回溯上游 LLM 结果。</p>
+                    <p className="text-sm font-medium text-slate-950">来源文章版本信息</p>
+                    <p className="mt-1 text-sm text-slate-600">展示这条规则版本从哪些文章候选版本生成，便于回溯上游结果。</p>
                   </div>
                   <StatusBadge value={sourceArticleIds.length ? 'info' : 'default'} label={`${sourceArticleIds.length} 篇来源文章`} />
                 </div>
@@ -306,18 +306,18 @@ export function StrategyWorkspaceArtifacts({
                     <p className="text-sm text-slate-600">暂无来源文章。</p>
                   )}
                 </div>
-                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章 metadata 版本…</p> : null}
-                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章 metadata 版本加载失败，请稍后重试。</p> : null}
+                {sourceMetadataQuery.isLoading ? <p className="mt-3 text-xs text-slate-500">正在读取来源文章版本信息…</p> : null}
+                {sourceMetadataQuery.error ? <p className="mt-3 text-xs text-rose-600">来源文章版本信息加载失败，请稍后重试。</p> : null}
               </div>
             </div>
           ) : (
-            <EmptyState title="请选择一个策略版本。" description="这里会展示结果解释、推荐、证据包和规则快照。" />
+            <EmptyState title="请选择一个规则版本。" description="这里会展示结果解释、推荐、证据包和规则快照。" />
           )}
         </SectionCard>
 
         <SectionCard
           title="报告与证据包产物"
-          description="这里展示和策略链路相关的报告、ranking 和 evidence 产物，最终查看以 Artifact Center 为准。"
+          description="这里展示和规则链路相关的报告、ranking 和 evidence 产物，最终查看以 Artifact Center 为准。"
           action={
             <div className="flex flex-wrap gap-2">
               <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={onRetryArtifacts} variant="outline">
@@ -330,7 +330,7 @@ export function StrategyWorkspaceArtifacts({
           }
         >
           {isArtifactsLoading ? (
-            <LoadingState label="正在加载策略产物" description="稍后会展示和策略链路相关的报告、ranking 和 evidence 产物。" />
+            <LoadingState label="正在加载规则产物" description="稍后会展示和规则链路相关的报告、ranking 和 evidence 产物。" />
           ) : artifactsError ? (
             <ErrorState {...buildErrorRecoveryState(artifactsError, 'strategy')} onRetry={onRetryArtifacts} />
           ) : relevantArtifacts.length ? (
@@ -354,7 +354,7 @@ export function StrategyWorkspaceArtifacts({
               ))}
             </div>
           ) : (
-            <EmptyState title="暂无可识别的策略报告或证据产物。" description="完成策略任务后，这里会展示最新产物入口。" />
+          <EmptyState title="暂无可识别的规则报告或证据产物。" description="完成规则构建、盘前分析或盘后复盘后，这里会展示最新产物入口。" />
           )}
         </SectionCard>
       </div>

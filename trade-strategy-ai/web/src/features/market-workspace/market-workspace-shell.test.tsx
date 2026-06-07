@@ -214,11 +214,11 @@ describe('MarketWorkspaceShell', () => {
 
     renderWithRouter([{ path: '/market', element: <MarketWorkspaceShell /> }], ['/market']);
 
-    expect(await screen.findByRole('heading', { name: '市场数据工作台' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '市场上下文工作台' })).toBeInTheDocument();
     expect(screen.getByText('运行指定任务')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '运行快照构建' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '运行市场上下文构建' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '运行快照构建' }));
+    await user.click(screen.getByRole('button', { name: '运行市场上下文构建' }));
 
     await waitFor(() => {
       expect(mockedCreateJob).toHaveBeenCalledWith(
@@ -375,7 +375,7 @@ describe('MarketWorkspaceShell', () => {
 
     renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
 
-    expect(await screen.findByRole('heading', { name: 'Kaipan 数据' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '市场数据健康' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dashboard report' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '最近产物' })).toBeInTheDocument();
     expect(await screen.findByRole('combobox', { name: /Profile/ })).toHaveValue('default');
@@ -432,6 +432,118 @@ describe('MarketWorkspaceShell', () => {
         'default',
       );
       expect(screen.getByRole('button', { name: '停止调度器' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows a failure message when submitting a market job fails', async () => {
+    const user = userEvent.setup();
+
+    mockedListJobs.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 12,
+      items: [],
+    } as never);
+    mockedListArtifacts.mockResolvedValue({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 8,
+      items: [],
+    } as never);
+    mockedListBenchmarkOptions.mockResolvedValue({
+      count: 2,
+      items: [
+        { symbol: '000300.SH', code: '000300', market: 'CN', name: '沪深300', security_type: 'index' },
+        { symbol: '510300.SH', code: '510300', market: 'CN', name: '沪深300ETF', security_type: 'etf' },
+      ],
+    } as never);
+    mockedBuildDashboardReport.mockResolvedValue({
+      critical_alerts: 1,
+      exit_code: 0,
+      html_path: '/tmp/dashboard.html',
+      report: { summary: true, detail: {} },
+    } as never);
+    mockedListProfiles.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 50,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-16T08:00:00Z',
+          updated_at: '2026-05-16T08:10:00Z',
+          archived_at: null,
+        },
+      ],
+    } as never);
+    mockedGetProfile.mockResolvedValue({
+      profile: {
+        profile_id: 'default',
+        name: 'Default Profile',
+        environment: 'production',
+        version: 1,
+        sections: {},
+        secret_refs: {},
+        validation_status: 'validated',
+        created_by: 'web',
+        created_at: '2026-05-16T08:00:00Z',
+        updated_at: '2026-05-16T08:10:00Z',
+        archived_at: null,
+      },
+      linked_jobs: [],
+      snapshots: [],
+    } as never);
+    mockedKaipanStatus.mockResolvedValue({
+      config_path: 'config/kaipan.yaml',
+      base_dir: '/tmp/trade-strategy-ai',
+      raw_base: '/tmp/trade-strategy-ai/data/raw',
+      latest_slot: null,
+      scheduler_started: false,
+      scheduler_pre_market: '9:25',
+      scheduler_post_close: '17:30',
+    } as never);
+    let rejectCreateJob:
+      | ((reason?: unknown) => void)
+      | undefined;
+    mockedCreateJob.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectCreateJob = reject;
+      }) as never,
+    );
+
+    renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
+
+    expect(await screen.findByRole('heading', { name: '市场数据健康' })).toBeInTheDocument();
+    const submitButton = screen.getByRole('button', { name: '运行Kaipan 抓取' });
+    const clickPromise = user.click(submitButton);
+
+    await waitFor(() => {
+      expect(submitButton).toHaveTextContent('提交中');
+      expect(submitButton).toBeDisabled();
+    });
+
+    rejectCreateJob?.(new Error('create job failed'));
+    await clickPromise;
+
+    await waitFor(() => {
+      expect(screen.getByText('Kaipan 抓取任务提交失败：create job failed')).toBeInTheDocument();
+      expect(mockedToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Kaipan 抓取任务提交失败',
+          description: 'create job failed',
+          variant: 'destructive',
+        }),
+      );
     });
   });
 
@@ -531,7 +643,7 @@ describe('MarketWorkspaceShell', () => {
 
     renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
 
-    expect(await screen.findByRole('heading', { name: 'Kaipan 数据' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '市场数据健康' })).toBeInTheDocument();
     const submitButton = screen.getByRole('button', { name: '运行Kaipan 归一化' });
     await user.click(submitButton);
 

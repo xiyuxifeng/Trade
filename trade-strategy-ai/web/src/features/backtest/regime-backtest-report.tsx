@@ -467,7 +467,7 @@ export function RegimeBacktestReportWorkspace() {
             </TabsList>
             <TabsContent value="report" className="mt-4">
               {reportQuery.isLoading ? (
-                <LoadingState label="正在加载报告" description="Regime-aware backtest report rendering..." />
+                <LoadingState label="正在加载报告" description="正在渲染市场状态回测报告…" />
               ) : (
                 <ArtifactPreview kind="markdown" content={reportQuery.data ?? ''} title="Regime Backtest Report" />
               )}

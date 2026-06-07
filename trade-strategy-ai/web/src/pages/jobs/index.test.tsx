@@ -192,7 +192,8 @@ describe('JobsPage', () => {
     expect(await screen.findByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('pipeline-run')).toBeInTheDocument();
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
-    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getByText('步骤进度 2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getByText('当前步骤已完成，任务终态请看上方 Job 状态。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
 
@@ -287,6 +288,6 @@ describe('JobsPage', () => {
         },
       },
     );
-    expect(await screen.findByText('没有权限访问任务列表')).toBeInTheDocument();
+    expect(await screen.findByText('没有权限访问任务中心')).toBeInTheDocument();
   });
 });

@@ -16,27 +16,25 @@ const formalNavigationGroups: NavGroup[] = [
   {
     title: '正式入口',
     items: [
-      { label: '仪表盘', path: '/dashboard', description: '系统运行状态与入口摘要' },
-      { label: '任务', path: '/jobs', description: '长时间运行的任务中心' },
-      { label: '告警', path: '/alerts', description: '告警历史、确认和测试入口' },
+      { label: '概览', path: '/dashboard', description: '主流程概览与系统摘要' },
+      { label: '任务中心', path: '/jobs', description: '统一查看任务状态、日志和结果' },
     ],
   },
   {
-    title: '业务工作台',
+    title: '主流程',
     items: [
-      { label: '文章', path: '/articles', description: '文章工作台入口' },
-      { label: '市场数据', path: '/market', description: '市场数据总览与入口' },
-      { label: '策略', path: '/strategies', description: '策略状态摘要与工作台入口' },
-      { label: 'Persona', path: '/persona', description: '交易风格画像与行为规则' },
-      { label: '回测', path: '/backtest', description: '回测正式工作台' },
-      { label: '规则池', path: '/rule-pool', description: '规则池审核中心' },
-      { label: '产物', path: '/artifacts', description: '日志、下载文件与输出结果' },
+      { label: '文章与规则', path: '/articles', description: '导入文章、提取规则、查看结果' },
+      { label: '回测与画像', path: '/backtest', description: '验证规则、沉淀画像并查看回测结果' },
+      { label: '盘前分析', path: '/strategies/pre-market', description: '结合当天市场上下文生成盘前建议' },
+      { label: '盘后复盘', path: '/strategies/after-close', description: '对照盘前判断复盘当天结果' },
+      { label: '市场上下文', path: '/market', description: '查看统一市场上下文和数据资产' },
     ],
   },
   {
-    title: '配置与管理',
+    title: '辅助入口',
     items: [
-      { label: '配置管理', path: '/profiles', description: '正式 Profile 配置入口' },
+      { label: '产物中心', path: '/artifacts', description: '日志、下载文件与输出结果' },
+      { label: '配置与管理', path: '/profiles', description: '正式 Profile 配置入口' },
       { label: '系统管理', path: '/system', description: '系统健康、审计与运维入口', minRole: 'admin' },
     ],
   },

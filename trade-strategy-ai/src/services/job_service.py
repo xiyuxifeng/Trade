@@ -669,6 +669,19 @@ class JobService(BaseService):
                 count_stmt = count_stmt.where(*conditions)
             total = int((await session.execute(count_stmt)).scalar() or 0)
 
+            status_count_stmt = select(Job.status, func.count()).select_from(Job)
+            if conditions:
+                status_count_stmt = status_count_stmt.where(*conditions)
+            status_count_stmt = status_count_stmt.group_by(Job.status)
+            status_rows = await session.execute(status_count_stmt)
+            # Seed every known JobStatus so new/legacy jobs are always represented in the summary.
+            status_counts: dict[str, int] = {item.value: 0 for item in JobStatus}
+            for status_value, count in status_rows.all():
+                normalized_status = str(status_value or "").strip()
+                if not normalized_status:
+                    continue
+                status_counts[normalized_status] = int(count or 0)
+
             stmt = select(Job)
             stmt = stmt.options(selectinload(Job.audit_events))
             if conditions:
@@ -687,6 +700,7 @@ class JobService(BaseService):
                 "skip": skip,
                 "limit": limit,
                 "items": items,
+                "status_counts": status_counts,
             },
         )
 

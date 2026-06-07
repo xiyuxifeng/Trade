@@ -194,9 +194,9 @@ describe('StrategyWorkspaceArtifacts', () => {
 
     expect(screen.getByText('版本详情与证据包')).toBeInTheDocument();
     expect(screen.getByText('strategy_report.html')).toBeInTheDocument();
-    expect(screen.getByText('Regime-aware selection')).toBeInTheDocument();
+    expect(screen.getByText('规则适用性摘要')).toBeInTheDocument();
     expect(screen.getByText('sel-001')).toBeInTheDocument();
-    expect(await screen.findByText('来源文章 metadata 版本')).toBeInTheDocument();
+    expect(await screen.findByText('来源文章版本信息')).toBeInTheDocument();
     expect(screen.getByText('article-1')).toBeInTheDocument();
     expect(screen.getByText('当前版本评分原因')).toBeInTheDocument();
 

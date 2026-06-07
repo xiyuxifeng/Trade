@@ -109,9 +109,9 @@ export function MarketPage() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="市场数据"
-          title="市场数据"
-          description="市场数据总览：从这里进入快照、数据集、Kaipan 和 OHLCV 子页面。"
+          kicker="市场上下文"
+          title="市场上下文"
+          description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
         />
         <LoadingState label="正在加载市场总览" description="正在读取快照、数据集、任务和产物概览。" />
       </main>
@@ -122,9 +122,9 @@ export function MarketPage() {
     return (
       <main className="page-stack">
         <PageHeader
-          kicker="市场数据"
-          title="市场数据"
-          description="市场数据总览：从这里进入快照、数据集、Kaipan 和 OHLCV 子页面。"
+          kicker="市场上下文"
+          title="市场上下文"
+          description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
         />
         <ErrorState
           {...buildErrorRecoveryState(pageError, 'market')}
@@ -142,9 +142,9 @@ export function MarketPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="市场数据"
-        title="市场数据"
-        description="市场数据总览：从这里进入快照、数据集、Kaipan 和 OHLCV 子页面。"
+        kicker="市场上下文"
+        title="市场上下文"
+        description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -153,7 +153,7 @@ export function MarketPage() {
           value={latestSnapshot ? latestSnapshot.quality_status || 'n/a' : '暂无'}
           hint={latestSnapshot ? `${latestSnapshot.trade_date} · ${latestSnapshot.market} · ${latestSnapshot.snapshot_id}` : '暂无快照记录'}
         />
-        <StatTile label="快照总数" value={snapshotsQuery.data?.page.total ?? 0} hint="当前可浏览的市场快照数量" />
+        <StatTile label="市场上下文快照总数" value={snapshotsQuery.data?.page.total ?? 0} hint="当前可浏览的市场上下文快照数量" />
         <StatTile label="数据集总数" value={datasetsQuery.data?.page.total ?? 0} hint="当前可浏览的市场数据集数量" />
         <StatTile label="最近失败任务" value={failedJobs.length} hint="最近失败的市场相关 Job" />
       </section>
@@ -227,29 +227,28 @@ export function MarketPage() {
       </SectionCard>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="市场快照" description="浏览快照、构建快照、查看 snapshot-build 任务和产物。">
+        <SectionCard title="市场上下文快照" description="浏览快照、查看相关任务和产物。">
           <div className="grid gap-3 md:grid-cols-2">
-            <QuickLink label="快照浏览" href="/market/snapshots" description="查看快照列表、详情、质量与派生特征。" />
-            <QuickLink label="构建快照" href="/strategies/pre-market" description="提交 snapshot-build 和盘前准备任务。" />
-            <QuickLink label="查看 snapshot-build 任务" href="/jobs?job_type=snapshot-build" description="查看最近的快照构建任务。" />
-            <QuickLink label="查看快照产物" href="/artifacts?jobType=snapshot-build&source=market-snapshot-browser" description="浏览快照构建产物与报告。" />
+          <QuickLink label="市场上下文快照" href="/market/snapshots" description="查看市场上下文快照列表、详情、质量与派生特征。" />
+            <QuickLink label="查看市场上下文构建任务" href="/jobs?job_type=snapshot-build" description="查看最近的市场上下文构建任务。" />
+            <QuickLink label="查看市场上下文产物" href="/artifacts?jobType=snapshot-build&source=market-snapshot-browser" description="浏览市场上下文构建产物与报告。" />
           </div>
         </SectionCard>
 
         <SectionCard title="市场数据集" description="浏览数据集并查看关联回链。">
           <div className="grid gap-3 md:grid-cols-2">
             <QuickLink label="数据集浏览" href="/market/datasets" description="查看市场数据集、分页样本与详情。" />
-            <QuickLink label="前往快照" href="/market/snapshots" description="从数据集回到对应快照视图。" />
+          <QuickLink label="返回快照视图" href="/market/snapshots" description="从数据集回到对应市场上下文快照。" />
             <QuickLink label="查看最新数据集" href={latestDataset ? `/market/datasets?trade_date=${latestDataset.trade_date}&market=${latestDataset.market}&dataset_id=${encodeURIComponent(latestDataset.dataset_id)}` : '/market/datasets'} description="直接打开当前最新数据集记录。" />
             <QuickLink label="产物中心" href="/artifacts" description="查看数据集相关产物与导出文件。" />
           </div>
         </SectionCard>
 
-        <SectionCard title="Kaipan 数据" description="手动抓取、归一化和健康检查都在子页面里完成。">
-          <QuickLink label="进入 Kaipan 页面" href="/market/kaipan" description="抓取、归一化、任务历史和健康检查都在这里。" />
+        <SectionCard title="市场数据健康" description="手动抓取、归一化和健康检查都在子页面里完成。">
+          <QuickLink label="进入市场数据页" href="/market/kaipan" description="抓取、归一化、任务历史和健康检查都在这里。" />
         </SectionCard>
 
-        <SectionCard title="OHLCV 行情" description="抓取、回灌和最近任务都集中在子页面。">
+        <SectionCard title="OHLCV 数据" description="抓取、回灌和最近任务都集中在子页面。">
           <QuickLink label="进入 OHLCV 页面" href="/market/ohlcv" description="增量、区间、指定 symbols 和最近任务都在这里。" />
         </SectionCard>
       </section>

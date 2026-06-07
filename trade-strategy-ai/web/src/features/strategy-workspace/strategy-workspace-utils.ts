@@ -4,8 +4,19 @@ import type { ProfileDetailResponse, ProfileSnapshotRecord } from '@/types/profi
 export const STRATEGY_WORKSPACE_JOB_TYPES = ['snapshot-build', 'strategy-build', 'run-pre-market', 'run-after-close'] as const;
 export type StrategyWorkspaceJobType = (typeof STRATEGY_WORKSPACE_JOB_TYPES)[number];
 
+const STRATEGY_WORKSPACE_JOB_LABELS: Record<StrategyWorkspaceJobType, string> = {
+  'snapshot-build': '市场上下文准备',
+  'strategy-build': '规则版本构建',
+  'run-pre-market': '盘前分析',
+  'run-after-close': '盘后复盘',
+};
+
 export function isStrategyWorkspaceJobType(jobType: string): jobType is StrategyWorkspaceJobType {
   return (STRATEGY_WORKSPACE_JOB_TYPES as readonly string[]).includes(jobType);
+}
+
+export function describeStrategyWorkspaceJobType(jobType: string) {
+  return isStrategyWorkspaceJobType(jobType) ? STRATEGY_WORKSPACE_JOB_LABELS[jobType] : jobType;
 }
 
 export function sortSnapshotsByCapturedAt(snapshots: ProfileSnapshotRecord[]) {

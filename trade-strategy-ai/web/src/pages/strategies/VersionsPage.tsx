@@ -169,28 +169,28 @@ export function StrategyVersionsPage() {
   const permissionDenied = isWorkspacePermissionDenied(pageError);
 
   if (profilesQuery.isLoading) {
-    return (
-      <main className="page-stack">
+      return (
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="策略版本"
-          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="规则版本"
+          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
-        <LoadingState label="正在加载策略版本页" description="正在读取 Profile、策略版本与产物。" />
+        <LoadingState label="正在加载规则版本页" description="正在读取 Profile、规则版本与产物。" />
       </main>
     );
   }
 
   if (pageError) {
     return (
-      <main className="page-stack">
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="策略版本"
-          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="规则版本"
+          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <ErrorState
@@ -213,17 +213,17 @@ export function StrategyVersionsPage() {
 
   if (profileItems.length === 0) {
     return (
-      <main className="page-stack">
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
-          title="策略版本"
-          description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
-          actionLabel="返回策略首页"
+          kicker="兼容入口"
+          title="规则版本"
+          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <EmptyState
           title="暂无可用 Profile。"
-          description="先到配置管理创建或导入 Profile，再回到这里构建策略版本。"
+          description="先到配置管理创建或导入 Profile，再回到这里构建规则版本。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -234,10 +234,10 @@ export function StrategyVersionsPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略"
-        title="策略版本"
-        description="构建策略版本：把 Profile、交易员和策略日期固化成正式版本。"
-        actionLabel="返回策略首页"
+        kicker="兼容入口"
+        title="规则版本"
+        description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
+        actionLabel="返回兼容入口"
         onAction={() => navigate('/strategies')}
       />
 
@@ -268,7 +268,7 @@ export function StrategyVersionsPage() {
               运行参数
             </Badge>
             <CardTitle className="mt-2 text-slate-950">trader / date / profile</CardTitle>
-            <CardDescription className="text-slate-600">构建入口只使用 Profile、交易员和策略日期。</CardDescription>
+            <CardDescription className="text-slate-600">构建入口只使用 Profile、交易员和执行日期。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
@@ -283,7 +283,7 @@ export function StrategyVersionsPage() {
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">策略日期</span>
+                <span className="text-sm font-medium text-slate-700">执行日期</span>
                 <Input
                   className="border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                   onChange={(event) => setDraftStrategyDate(event.target.value)}
@@ -308,9 +308,9 @@ export function StrategyVersionsPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <SummaryTile label="策略版本" value={versionItems.length} />
+              <SummaryTile label="规则版本" value={versionItems.length} />
               <SummaryTile label="最新版本" value={versionItems[0]?.version_id ?? '暂无'} />
-              <SummaryTile label="最新快照" value={latestSnapshot?.snapshot_id ?? '暂无'} />
+              <SummaryTile label="最新市场上下文快照" value={latestSnapshot?.snapshot_id ?? '暂无'} />
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -326,7 +326,7 @@ export function StrategyVersionsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-600">
-        下方会展示该策略版本引用的来源文章 metadata 版本选择结果，用于回溯和复核；这里仅展示选择结果，不在页面内重新切换版本。
+        下方会展示该规则版本引用的来源文章版本选择结果，用于回溯和复核；这里仅展示选择结果，不在页面内重新切换版本。
       </section>
 
       <StrategyWorkspaceActions

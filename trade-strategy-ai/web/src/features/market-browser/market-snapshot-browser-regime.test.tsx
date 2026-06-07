@@ -63,8 +63,8 @@ describe('MarketRegimePanel', () => {
       />,
     );
 
-    expect(screen.getByText('Market Regime')).toBeInTheDocument();
-    expect(screen.getByText('Primary Label')).toBeInTheDocument();
+    expect(screen.getByText('市场状态画像')).toBeInTheDocument();
+    expect(screen.getByText('主标签')).toBeInTheDocument();
     expect(screen.getByText('strong_bull', { selector: 'p.text-base.font-semibold.text-slate-950' })).toBeInTheDocument();
     expect(screen.getByText('0.86')).toBeInTheDocument();
     expect(screen.getByText('trend')).toBeInTheDocument();

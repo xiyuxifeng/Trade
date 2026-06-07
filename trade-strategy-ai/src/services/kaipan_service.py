@@ -321,7 +321,7 @@ class KaipanService(BaseService):
         runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ServiceResult:
-        """抓取指定交易日或区间的数据并执行标准化。"""
+        """抓取指定交易日或区间的数据。"""
         runtime_context = self._load_runtime_context(profile_id=profile_id, config_path=config_path, runtime=runtime)
         try:
             slots_to_fetch = self._expand_slots(slot)
@@ -337,9 +337,8 @@ class KaipanService(BaseService):
                 },
             )
         provider = self._create_provider(runtime_context)
-        normalizer = self._create_normalizer(runtime_context)
         total_steps = sum(
-            len(self._fetchers_for_slot(provider, current_slot)) + len(self._NORMALIZE_DATASETS)
+            len(self._fetchers_for_slot(provider, current_slot))
             for _trade_day in trade_dates
             for current_slot in slots_to_fetch
         )
@@ -353,10 +352,9 @@ class KaipanService(BaseService):
         for trade_day in trade_dates:
             trade_day_key = trade_day.isoformat()
             day_slot_results: dict[str, Any] = {}
-            day_normalize_results: dict[str, Any] = {}
             date_results[trade_day_key] = {
                 "slot_results": day_slot_results,
-                "normalize_results": day_normalize_results,
+                "normalize_results": {},
             }
 
             for current_slot in slots_to_fetch:
@@ -404,37 +402,6 @@ class KaipanService(BaseService):
                                 },
                             }
                         )
-                def _on_normalize_step(step_payload: dict[str, Any]) -> None:
-                    nonlocal current_step
-                    current_step += 1
-                    dataset_name = step_payload.get("dataset")
-                    if progress_callback is not None:
-                        progress_callback(
-                            {
-                                "job_type": "kaipan-fetch",
-                                "stage": "normalize",
-                                "current": current_step,
-                                "total": total_steps,
-                                "percent": round((current_step / total_steps) * 100, 2) if total_steps else 0.0,
-                                "remaining": max(total_steps - current_step, 0),
-                                "current_step": f"normalize:{dataset_name}" if dataset_name else "normalize",
-                                "current_trade_date": str(step_payload.get("trade_date") or trade_day_key),
-                                "current_slot": str(step_payload.get("slot") or current_slot),
-                                "current_dataset": str(dataset_name) if dataset_name else None,
-                                "status": str(step_payload.get("status") or "unknown"),
-                                "error": str(step_payload["error"]) if step_payload.get("error") else None,
-                                "runtime_state": {
-                                    "schema_version": 1,
-                                    "checkpoint": {
-                                        "step_index": current_step,
-                                        "date_results": date_results,
-                                    },
-                                },
-                            }
-                        )
-
-                normalize_results = normalizer.normalize_date(trade_day_key, slots=(current_slot,), progress_callback=_on_normalize_step)
-                day_normalize_results[current_slot] = normalize_results.get(current_slot, {})
 
         return ServiceResult(
             status="ok",

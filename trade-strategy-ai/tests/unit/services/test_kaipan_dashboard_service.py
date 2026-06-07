@@ -79,7 +79,7 @@ kaipan:
 
 
 def test_kaipan_service_fetch_normalize_status_and_run(tmp_path: Path) -> None:
-	"""KaipanService 应支持 fetch / normalize / status / run。"""
+	"""KaipanService 应支持 fetch / normalize / status / run，且职责分离。"""
 	from src.services.kaipan_service import KaipanService
 
 	config_path = tmp_path / "config" / "app.yaml"
@@ -98,8 +98,9 @@ def test_kaipan_service_fetch_normalize_status_and_run(tmp_path: Path) -> None:
 
 	assert fetch_result.status == "ok"
 	assert "normalize_results" in fetch_result.payload
+	assert fetch_result.payload["normalize_results"] == {}
 	assert len(fetch_result.payload["slot_results"]["09-25"]["success"]) == 12
-	assert normalizer.calls[0] == ("2026-04-23", ("09-25",))
+	assert normalizer.calls == [("2026-04-23", ("17-30",))]
 	assert normalize_result.payload["slots"] == ["17-30"]
 	assert status_result.status == "partial"
 	assert status_result.payload["scheduler_started"] is False
@@ -141,6 +142,8 @@ def test_kaipan_service_supports_date_range_progress(tmp_path: Path) -> None:
 	assert fetch_result.status == "ok"
 	assert fetch_result.payload["trade_dates"] == ["2026-04-23", "2026-04-24"]
 	assert fetch_result.payload["date_results"]["2026-04-23"]["slot_results"]["09-25"]["fetchers"][0] == "market_sentiment"
+	assert "normalize_results" in fetch_result.payload["date_results"]["2026-04-23"]
+	assert fetch_result.payload["date_results"]["2026-04-23"]["normalize_results"] == {}
 	assert fetch_progress[0]["current_trade_date"] == "2026-04-23"
 	assert fetch_progress[-1]["current"] == fetch_progress[-1]["total"]
 	assert normalize_result.status == "ok"

@@ -627,8 +627,8 @@ describe('ArticlesPage', () => {
   it('renders workspace entry cards that link to article subpages', async () => {
     renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
 
-    expect(await screen.findByRole('heading', { name: '文章工作台' })).toBeInTheDocument();
-    expect(screen.getByText('请选择一个入口开始处理文章数据。')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '文章与规则' })).toBeInTheDocument();
+    expect(screen.getByText('请选择一个入口开始导入文章并提取规则。')).toBeInTheDocument();
     expect(screen.queryByText('迁移说明')).not.toBeInTheDocument();
     expect(screen.queryByText('导出入口')).not.toBeInTheDocument();
     expect(screen.queryByText('当前状态')).not.toBeInTheDocument();
@@ -673,7 +673,7 @@ describe('ArticlesPage', () => {
 
     renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
 
-    expect(await screen.findByRole('heading', { name: '抓取与处理' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '文章导入与处理' })).toBeInTheDocument();
     expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
     expect(screen.getByLabelText('Profile')).toHaveValue('default');
     expect(await screen.findByLabelText('Step')).toBeInTheDocument();
@@ -758,7 +758,7 @@ describe('ArticlesPage', () => {
 
     renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }], ['/articles/run']);
 
-    expect(await screen.findByRole('heading', { name: '抓取与处理' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '文章导入与处理' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '启动定时任务' })).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('触发时间'));

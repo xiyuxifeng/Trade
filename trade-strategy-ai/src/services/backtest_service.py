@@ -231,6 +231,7 @@ def _default_engine_factory(
     from src.indicators.indicator_service import IndicatorService
     from src.market_data.strategy_repo_adapter import StrategyRepoAdapter
     from src.market_universe.snapshot_service import SnapshotService
+    from src.services.market_snapshot_service import MarketSnapshotService
 
     snapshot_base_dir = config.data.market_universe_snapshot_dir
     if not snapshot_base_dir:
@@ -242,10 +243,13 @@ def _default_engine_factory(
     session_factory = get_session_factory()
     loader = SnapshotLoader(
         snapshot_service=SnapshotService(base_dir=snapshot_base_dir),
+        market_snapshot_service=MarketSnapshotService(),
         strategy_repo=StrategyRepoAdapter(),
         indicator_service=IndicatorService(session_factory),
         session_factory=session_factory,
         use_snapshot_only=use_snapshot_only,
+        config_path=str(loaded.config_path),
+        market_universe_slot=getattr(config.stage4, "market_universe_slot", "09-25"),
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)
 

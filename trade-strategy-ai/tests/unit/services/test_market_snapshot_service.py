@@ -234,6 +234,58 @@ def test_market_snapshot_service_writes_snapshot_summary_and_quality_reports(tmp
     assert result.payload["quality_report"]["overall_status"] == "ok"
 
 
+def test_market_snapshot_service_embeds_candidate_pool_metadata(tmp_path: Path) -> None:
+    """MarketSnapshotService 应把同日候选池嵌入到 metadata 中。"""
+    from datetime import datetime
+
+    from src.market_universe.schemas import HotTopic, HotTopicsPayload, MarketUniverse
+    from src.market_universe.snapshot_service import SnapshotService as UniverseSnapshotService
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    universe_service = UniverseSnapshotService(base_dir=tmp_path / "data" / "market_universe" / "snapshots")
+    universe_service.save(
+        MarketUniverse(
+            trade_date="2026-05-16",
+            slot="17-30",
+            hot_topics=HotTopicsPayload(
+                trade_date="2026-05-16",
+                slot="17-30",
+                topics=[HotTopic(kind="concept", topic_id="topic-a", topic_name="主题A")],
+                sources=["kaipan"],
+                fetched_at=datetime(2026, 5, 16, 17, 30),
+            ),
+        )
+    )
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    result = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="17-30",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.payload["snapshot"]["metadata"]["candidate_pool"] is not None
+    assert result.payload["snapshot"]["metadata"]["candidate_pool"]["trade_date"] == "2026-05-16"
+    assert result.payload["snapshot"]["metadata"]["candidate_pool"]["slot"] == "17-30"
+
+
 def test_market_snapshot_service_includes_10_5_sections(tmp_path: Path) -> None:
     """MarketSnapshotService 应把 10.5 section 一起写入 snapshot。"""
     from src.services.market_snapshot_service import MarketSnapshotService

@@ -92,28 +92,28 @@ export function StrategyHistoryPage() {
   };
 
   if (jobsQuery.isLoading) {
-    return (
-      <main className="page-stack">
+      return (
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
+          kicker="兼容入口"
           title="运行历史"
-          description="筛选策略工作台相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回策略首页"
+          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
-        <LoadingState label="正在加载策略历史" description="稍后会展示策略构建、快照、盘前和盘后任务。" />
+        <LoadingState label="正在加载兼容入口历史" description="稍后会展示市场上下文准备、规则版本构建、盘前分析和盘后复盘任务。" />
       </main>
     );
   }
 
   if (queryError) {
-    return (
-      <main className="page-stack">
+      return (
+        <main className="page-stack">
         <PageHeader
-          kicker="策略"
+          kicker="兼容入口"
           title="运行历史"
-          description="筛选策略工作台相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回策略首页"
+          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <ErrorState
@@ -125,18 +125,18 @@ export function StrategyHistoryPage() {
   }
 
   if (strategyJobs.length === 0) {
-    return (
+      return (
       <main className="page-stack">
         <PageHeader
-          kicker="策略"
+          kicker="兼容入口"
           title="运行历史"
-          description="筛选策略工作台相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回策略首页"
+          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
+          actionLabel="返回兼容入口"
           onAction={() => navigate('/strategies')}
         />
         <EmptyState
-          title="暂无策略运行历史。"
-          description="提交 snapshot-build、strategy-build、run-pre-market 或 run-after-close 后，这里会出现历史记录。"
+          title="暂无兼容入口运行历史。"
+          description="提交市场上下文准备、规则版本构建、盘前分析或盘后复盘后，这里会出现历史记录。"
           actionLabel="进入任务列表"
           onAction={() => navigate('/jobs')}
         />
@@ -147,10 +147,10 @@ export function StrategyHistoryPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="策略"
+        kicker="兼容入口"
         title="运行历史"
-        description="筛选策略工作台相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-        actionLabel="返回策略首页"
+        description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
+        actionLabel="返回兼容入口"
         onAction={() => navigate('/strategies')}
       />
 

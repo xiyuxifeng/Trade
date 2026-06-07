@@ -93,8 +93,10 @@ class DailyReport(BaseModel):
     # NTL-S4-008: 盘前报告级策略版本追溯
     strategy_version_ids: list[str] = Field(default_factory=list)  # 本次生成所用的策略版本 ID 列表
 
-    # 新增：候选池快照（供盘后使用，NTL-S5-006 前置依赖）
+    # 兼容字段：候选池快照（仅用于盘后/回放兼容与内部桥接，不作为新的对外入口）
     market_universe_snapshot: dict[str, Any] | None = None
+    # 统一市场上下文快照（对外唯一主语义；盘前 / 盘后 / 回测共用）
+    market_context_snapshot: dict[str, Any] | None = None
 
 
 class EvaluationRequest(BaseModel):

@@ -205,16 +205,16 @@ describe('CandidatesPage', () => {
 
     renderWithRouter([{ path: '/strategies/candidates', element: <CandidatesPage /> }], ['/strategies/candidates']);
 
-    expect(await screen.findByRole('heading', { name: '候选版本' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '返回策略首页' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '候选规则版本' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回兼容入口' })).toBeInTheDocument();
     expect(await screen.findByText('trader_a_2026-05-16_released')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: '生成候选版本' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '生成候选规则版本' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '搜索' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
     expect(mockedListTraderOptions).toHaveBeenCalledWith({ source: 'strategy' });
 
     await user.click(screen.getByRole('button', { name: '搜索' }));
-    await user.click(screen.getByRole('button', { name: '生成候选版本' }));
+    await user.click(screen.getByRole('button', { name: '生成候选规则版本' }));
     await user.click(screen.getByRole('button', { name: '确认生成' }));
 
     await waitFor(() => {

@@ -30,16 +30,16 @@ export function MarketSnapshotBrowserRegimeFeatures({
   return (
     <SectionCard
       title="市场状态特征"
-      description="展示从 Market Snapshot 派生的 regime features。"
+      description="展示从市场上下文快照派生的市场状态特征。"
       className="border-slate-200 bg-white"
     >
       {isLoading ? (
-        <LoadingState label="正在加载 regime features" description="特征列表和详情正在并行加载。" />
+        <LoadingState label="正在加载市场状态特征" description="特征列表和详情正在并行加载。" />
       ) : errorState ? (
         errorState
       ) : !items.length ? (
         <EmptyState
-          title="暂无 regime features"
+          title="暂无市场状态特征"
           description="当前快照没有可用的派生特征，或者后端尚未生成相关数据。"
         />
       ) : (
@@ -59,9 +59,9 @@ export function MarketSnapshotBrowserRegimeFeatures({
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <FeatureSummaryRow label="available" value={item.available_feature_count} />
-                <FeatureSummaryRow label="partial" value={item.partial_feature_count} />
-                <FeatureSummaryRow label="missing" value={item.missing_feature_count} />
+                <FeatureSummaryRow label="可用特征" value={item.available_feature_count} />
+                <FeatureSummaryRow label="部分可用" value={item.partial_feature_count} />
+                <FeatureSummaryRow label="缺失特征" value={item.missing_feature_count} />
               </div>
 
               {index === 0 && detail ? (

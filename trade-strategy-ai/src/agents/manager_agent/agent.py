@@ -24,7 +24,7 @@ import json
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.agents.data_agent.agent import DataAgent
 from src.agents.trader_agent.agent import TraderAgent
@@ -62,7 +62,9 @@ from src.market_data.service import MarketDataCache
 from src.market_data.ohlcv_service import OHLCVService
 from src.db.session import get_session_factory
 from src.market_universe import build_topic_tags
+from src.market_universe.schemas import MarketUniverse
 from src.market_universe.snapshot_service import SnapshotService
+from src.services.market_snapshot_service import MarketSnapshotService
 from src.pipeline.completion import run_incremental_data_completion
 from src.db.repositories import SignalRepository
 from src.evaluation.evaluation_context_service import EvaluationContextService
@@ -117,6 +119,7 @@ class ManagerAgent:
         # Stage 4 新增 service（NTL-S4-006）
         self.strategy_library_service = StrategyLibraryService()
         self.snapshot_service = SnapshotService()
+        self.market_snapshot_service = MarketSnapshotService()
         self.evaluation_context_service = EvaluationContextService(
             data_agent=self.data_agent,
             strategy_library_service=self.strategy_library_service,
@@ -151,6 +154,50 @@ class ManagerAgent:
         if p.is_absolute():
             return p
         return self.base_dir / p
+
+    def _load_market_context_snapshot(
+        self,
+        *,
+        as_of_date: date,
+    ) -> tuple[dict[str, Any] | None, MarketUniverse | None]:
+        """加载统一市场上下文快照与候选池快照。"""
+        market_context_snapshot: dict[str, Any] | None = None
+        market_universe_snapshot: MarketUniverse | None = None
+
+        config_path = self._resolve_path("config/app.yaml")
+        slot = self.config.stage4.market_universe_slot
+
+        if config_path is not None and config_path.exists():
+            try:
+                loaded_snapshot = self.market_snapshot_service.load_market_snapshot(
+                    config_path=config_path,
+                    trade_date=as_of_date.isoformat(),
+                    slot=slot,
+                )
+            except Exception as e:  # noqa: BLE001
+                self.logger.exception(
+                    "failed to load market context snapshot: date=%s, slot=%s, error=%s",
+                    as_of_date,
+                    slot,
+                    e,
+                )
+                loaded_snapshot = None
+
+            if loaded_snapshot is not None:
+                market_context_snapshot = loaded_snapshot.to_dict()
+
+        if market_universe_snapshot is None and self.config.stage4.enable:
+            try:
+                candidate_pool = self.snapshot_service.load(as_of_date.isoformat(), slot)
+                if candidate_pool is not None:
+                    market_universe_snapshot = candidate_pool
+            except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+                self.logger.exception("failed to load market universe snapshot fallback: %s", e)
+
+        if market_context_snapshot is None and market_universe_snapshot is not None:
+            market_context_snapshot = asdict(market_universe_snapshot)
+
+        return market_context_snapshot, market_universe_snapshot
 
     def _guess_instrument_focus(self, symbol: str) -> InstrumentFocus:
         """根据股票代码判断 instrument 类型（保守估算）。"""
@@ -506,22 +553,17 @@ class ManagerAgent:
             payload = read_json(report_path)
             return DailyReport.model_validate(payload)
 
-        # === Stage 4 路径：尝试加载候选池快照（所有 trader 共享同一快照）===
+        # === Stage 4 路径：尝试加载统一市场上下文快照（所有 trader 共享同一快照）===
         # NTL-S4-009: stage4.enable 控制是否使用新版盘前链路
-        market_universe = None
-        if self.config.stage4.enable:
-            try:
-                slot = self.config.stage4.market_universe_slot
-                market_universe = self.snapshot_service.load(as_of_date.isoformat(), slot)
-            except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
-                self.logger.exception("failed to load market universe snapshot, Stage 4 path disabled: %s", e)
-                self._append_task(
-                    AgentTask(
-                        type="data_missing",
-                        title="Market universe snapshot load failed",
-                        details={"error": str(e), "date": as_of_date.isoformat()},
-                    )
+        market_context_snapshot, market_universe = self._load_market_context_snapshot(as_of_date=as_of_date)
+        if self.config.stage4.enable and market_context_snapshot is None and market_universe is None:
+            self._append_task(
+                AgentTask(
+                    type="data_missing",
+                    title="Market context snapshot load failed",
+                    details={"date": as_of_date.isoformat(), "slot": self.config.stage4.market_universe_slot},
                 )
+            )
 
         ideas = []
         used_strategy_version_ids: list[str] = []  # NTL-S4-008: 追踪本次使用的策略版本
@@ -587,7 +629,8 @@ class ManagerAgent:
             ideas=ideas,
             highlights=highlights,
             strategy_version_ids=list(dict.fromkeys(used_strategy_version_ids)),  # NTL-S4-008: 去重后保留顺序
-            market_universe_snapshot=asdict(market_universe) if market_universe else None,
+            market_universe_snapshot=asdict(market_universe) if market_universe is not None else None,
+            market_context_snapshot=market_context_snapshot,
         )
 
         # Optional: persona style routing (Phase 1 MVP)
@@ -739,7 +782,7 @@ class ManagerAgent:
 
         流程：
         1. 检查是否已有 evaluation（存在且非 force 则直接返回）
-        2. 加载 DailyReport 获取盘前 ideas 和 market_universe_snapshot
+        2. 加载 DailyReport 获取盘前 ideas 和 market_context_snapshot
         3. 获取最新价格（通过 DataAgent）
         4. 对每个 idea 计算 return_pct，判断是否达到 min_expected_return
         5. 根据 return_pct 创建 success_case/failure_case memory
@@ -771,6 +814,7 @@ class ManagerAgent:
             )
 
         daily_report = DailyReport.model_validate(read_json(report_path))
+        market_context_snapshot = daily_report.market_context_snapshot or daily_report.market_universe_snapshot
 
         symbols = sorted({i.symbol for i in daily_report.ideas})
         req = DataRequest(trader_id="manager", symbols=symbols, fields=["last_price"])
@@ -935,7 +979,7 @@ class ManagerAgent:
 
             # NTL-S5-006 前置：构建 canonical tags
             canonical_tags, topic_source, raw_topic_ids = build_topic_tags(
-                idea.source_topic_ids, daily_report.market_universe_snapshot
+                idea.source_topic_ids, market_context_snapshot
             )
 
             await self.memory_store.append(
@@ -970,7 +1014,7 @@ class ManagerAgent:
                     return_pct=return_pct,
                     threshold=min_ret,
                     trigger_reason=trigger_reason,
-                    market_universe_snapshot=daily_report.market_universe_snapshot,
+                    market_universe_snapshot=market_context_snapshot,
                 )
                 memory_id = str(memory.memory_id)
 

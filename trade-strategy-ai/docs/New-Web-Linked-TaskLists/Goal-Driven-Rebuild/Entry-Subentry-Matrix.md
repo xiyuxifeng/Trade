@@ -92,7 +92,7 @@
 | `/rule-pool` | 保留或并入回测结果页，若保留则替换为 `规则审核` |
 | `/rule-pool/:ruleId` | 保留，作为规则审核详情 |
 | `/persona` | 保留，替换为 `交易员画像` |
-| `/strategies/regime-selection` | 替换或并入回测/画像流程，不作为独立一级入口 |
+| `/strategies/regime-selection` | 废弃为主入口，能力并入回测/画像流程，不作为独立一级入口 |
 
 结论：
 
@@ -121,7 +121,7 @@
 | 子入口 | 处理 |
 |---|---|
 | `/strategies/pre-market` | 保留，替换为 `盘前分析` |
-| `/strategies` | 替换为盘前分析概览或废弃为主入口 |
+| `/strategies` | 废弃为主入口，仅保留兼容跳转，不进入主导航 |
 | `/workflows/pre-market` | 废弃为主入口，仅保留兼容跳转 |
 | `/workflows/pre-market/run` | 废弃为主入口，仅保留兼容跳转 |
 

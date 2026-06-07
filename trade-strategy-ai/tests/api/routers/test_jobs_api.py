@@ -83,7 +83,12 @@ class _FakeJobService:
 
     async def list_jobs(self, **kwargs: Any) -> Any:
         items = list(self.jobs.values())
-        return _service_result({"count": len(items), "total": len(items), "skip": 0, "limit": 50, "items": items})
+        status_counts = {status: 0 for status in ("pending", "running", "paused", "success", "failed", "cancelled")}
+        for job in items:
+            status = str(job.get("status") or "").strip()
+            if status in status_counts:
+                status_counts[status] += 1
+        return _service_result({"count": len(items), "total": len(items), "skip": 0, "limit": 50, "items": items, "status_counts": status_counts})
 
     async def get_job(self, job_id: str) -> Any:
         job = self.jobs.get(job_id)
@@ -284,6 +289,7 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
     assert listed.status_code == 200
     assert listed.json()["items"][0]["id"] == job_id
     assert listed.json()["items"][0]["progress"] is None
+    assert listed.json()["status_counts"]["pending"] == 1
 
     detail = await client.get(f"/api/ui/v1/jobs/{job_id}")
     assert detail.status_code == 200

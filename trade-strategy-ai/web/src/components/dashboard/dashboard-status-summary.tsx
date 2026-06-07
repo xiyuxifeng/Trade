@@ -109,7 +109,7 @@ export function DashboardStatusSummary() {
         />
         <MetricCard label="失败任务" value={failedJobs} note={`成功任务 ${acknowledgedJobs}`} tone={failedJobs ? 'text-rose-600' : 'text-slate-900'} />
         <MetricCard label="产物数量" value={artifacts.length} note={artifacts[0]?.kind ? `最新类型 · ${artifacts[0].kind}` : '暂无最新产物'} tone="text-sky-600" />
-        <MetricCard label="告警摘要" value={alerts.length} note="重点告警状态栏会显示这些记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
+        <MetricCard label="重点告警" value={alerts.length} note="状态栏会显示最近需要关注的记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
         <MetricCard label="目录提示" value={warnings} note={warnings ? '有目录需要检查' : '关键目录正常'} tone={warnings ? 'text-amber-600' : 'text-emerald-600'} />
         <MetricCard
           label="Profile 运行态"
@@ -128,7 +128,7 @@ export function DashboardStatusSummary() {
           tone="text-indigo-600"
         />
         <MetricCard
-          label="工作流"
+          label="最近任务"
           value={jobs[0]?.job_type ?? '暂无'}
           note={jobs[0]?.id ? `最近任务 ${jobs[0].id}` : '暂无最近任务'}
           tone="text-violet-600"
@@ -139,32 +139,79 @@ export function DashboardStatusSummary() {
 }
 
 export function DashboardQuickLinks() {
+  const primaryLinks = [
+    {
+      label: '文章与规则',
+      path: '/articles',
+      description: '导入文章，提取规则，查看规则结果。',
+    },
+    {
+      label: '回测与画像',
+      path: '/backtest',
+      description: '验证规则可信度，沉淀交易员画像。',
+    },
+    {
+      label: '盘前分析',
+      path: '/strategies/pre-market',
+      description: '结合当天市场上下文输出盘前建议。',
+    },
+    {
+      label: '盘后复盘',
+      path: '/strategies/after-close',
+      description: '对照盘前判断复盘当天结果。',
+    },
+    {
+      label: '市场上下文',
+      path: '/market',
+      description: '查看统一市场上下文、快照和数据资产。',
+    },
+  ];
+
+  const secondaryLinks = [
+    { label: '任务中心', path: '/jobs' },
+    { label: '产物中心', path: '/artifacts' },
+    { label: '配置与管理', path: '/profiles' },
+    { label: '系统管理', path: '/system' },
+  ];
+
   return (
     <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
       <CardHeader>
-        <CardTitle className="text-slate-900">快速入口</CardTitle>
-        <CardDescription>低优先级辅助入口，不打断系统状态扫描。</CardDescription>
+        <CardTitle className="text-slate-900">主流程入口</CardTitle>
+        <CardDescription>按“文章 -> 规则 -> 回测 -> 画像 -> 盘前 -> 盘后”的顺序进入。</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-3">
-        {[
-          { label: '任务中心', path: '/jobs' },
-          { label: '告警中心', path: '/alerts' },
-          { label: '配置管理', path: '/profiles' },
-          { label: '市场数据', path: '/market' },
-          { label: '策略工作台', path: '/strategies' },
-          { label: 'Persona', path: '/persona' },
-          { label: '系统审计', path: '/system/audit' },
-          { label: '产物中心', path: '/artifacts' },
-        ].map((item) => (
+      <CardContent className="space-y-6">
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {primaryLinks.map((item) => (
             <Link
-              className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+              className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-300 hover:bg-sky-50/70"
               key={item.path}
               to={item.path}
             >
-              {item.label}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-slate-900">{item.label}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                </div>
+                <span className="text-sm font-medium text-sky-700 transition-transform group-hover:translate-x-0.5">进入</span>
+              </div>
             </Link>
           ))}
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-slate-900">辅助入口</p>
+          <div className="flex flex-wrap gap-3">
+            {secondaryLinks.map((item) => (
+              <Link
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+                key={item.path}
+                to={item.path}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>

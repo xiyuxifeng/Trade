@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -96,6 +96,7 @@ export function JobDetailPage() {
     staleTime: 60_000,
   });
   const jobDefinition = jobDefinitionQuery.data ?? null;
+  const [rerunError, setRerunError] = useState<string | null>(null);
 
   const logsQuery = useQuery({
     queryKey: ['job-logs', jobId],
@@ -109,6 +110,7 @@ export function JobDetailPage() {
       if (!detail) {
         throw new Error('No job selected');
       }
+      setRerunError(null);
       return createJob({
         job_type: detail.job_type,
         params: detail.params as Record<string, unknown>,
@@ -125,6 +127,9 @@ export function JobDetailPage() {
       if (data.job?.id) {
         navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
       }
+    },
+    onError: (error) => {
+      setRerunError(error instanceof Error ? error.message : '重新运行任务失败');
     },
   });
 
@@ -269,6 +274,12 @@ export function JobDetailPage() {
         </div>
       </div>
 
+      {rerunError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {rerunError}
+        </div>
+      ) : null}
+
       {runningRefresh ? (
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           任务仍在运行，页面会自动刷新状态。
@@ -300,7 +311,7 @@ export function JobDetailPage() {
               </div>
               {detail.progress ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">执行进度</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">步骤进度</p>
                   <JobProgress progress={detail.progress} className="mt-3" />
                 </div>
               ) : null}

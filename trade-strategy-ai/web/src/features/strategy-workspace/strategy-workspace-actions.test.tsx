@@ -48,8 +48,8 @@ describe('StrategyWorkspaceActions', () => {
       ['/'],
     );
 
-    await user.click(screen.getByRole('button', { name: /构建策略版本/ }));
-    expect(screen.getByRole('dialog', { name: '确认构建策略版本' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /构建规则版本/ }));
+    expect(screen.getByRole('dialog', { name: '确认构建规则版本' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '确认提交' }));
 
@@ -102,7 +102,7 @@ describe('StrategyWorkspaceActions', () => {
       ['/'],
     );
 
-    await user.click(screen.getByRole('button', { name: /构建策略版本/ }));
+    await user.click(screen.getByRole('button', { name: /构建规则版本/ }));
     await user.click(screen.getByRole('button', { name: '确认提交' }));
 
     const pendingButton = await screen.findByRole('button', { name: '提交中' });
@@ -114,7 +114,7 @@ describe('StrategyWorkspaceActions', () => {
     resolveJob({ created: true, job: { id: 'job-strategy-2' } });
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: '确认构建策略版本' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: '确认构建规则版本' })).not.toBeInTheDocument();
     });
   });
 
@@ -150,8 +150,8 @@ describe('StrategyWorkspaceActions', () => {
       ['/'],
     );
 
-    await user.click(screen.getByRole('button', { name: /盘前运行/ }));
-    expect(screen.getByRole('dialog', { name: '确认盘前运行' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /盘前分析/ }));
+    expect(screen.getByRole('dialog', { name: '确认盘前分析' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '确认提交' }));
 

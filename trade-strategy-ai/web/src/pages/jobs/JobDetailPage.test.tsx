@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { screen, waitFor } from '@testing-library/react';
 import { ApiError } from '@/lib/api/http';
-import { getJob, getJobDefinition, getJobLogs } from '@/lib/api/jobs';
+import { createJob, getJob, getJobDefinition, getJobLogs } from '@/lib/api/jobs';
 import { renderWithRouter } from '@/test/test-utils';
 import { JobDetailPage } from './JobDetailPage';
 
@@ -20,6 +21,7 @@ vi.mock('@/lib/api/jobs', () => ({
 const mockedGetJob = vi.mocked(getJob);
 const mockedGetJobDefinition = vi.mocked(getJobDefinition);
 const mockedGetJobLogs = vi.mocked(getJobLogs);
+const mockedCreateJob = vi.mocked(createJob);
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -160,9 +162,9 @@ describe('JobDetailPage', () => {
 
     expect(await screen.findByText('执行报告')).toBeInTheDocument();
     expect(screen.getAllByText('成功').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('执行进度')).toBeInTheDocument();
+    expect(screen.getByText('步骤进度')).toBeInTheDocument();
     expect(screen.getByText('normalize:hot_topics')).toBeInTheDocument();
-    expect(screen.getByText('2 / 4 · 50%')).toBeInTheDocument();
+    expect(screen.getByText('步骤进度 2 / 4 · 50%')).toBeInTheDocument();
     expect(screen.getAllByText('Profile 导入来源')).toHaveLength(2);
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '预览' })).toBeInTheDocument();
@@ -278,6 +280,92 @@ describe('JobDetailPage', () => {
     expect(await screen.findByRole('button', { name: '重试' })).toBeInTheDocument();
     expect(screen.getByText('该任务未产生任何产物。')).toBeInTheDocument();
     expect(screen.getByText('脱敏配置快照')).toBeInTheDocument();
+  });
+
+  it('shows rerun submission failure feedback', async () => {
+    const user = userEvent.setup();
+    mockedGetJobDefinition.mockResolvedValue({
+      job_type: 'pipeline-run',
+      title: 'Pipeline Run',
+      service_name: 'pipeline',
+      handler_name: 'pipeline_run',
+      permission: 'operator',
+      risk: 'medium',
+      can_retry: true,
+      can_pause: true,
+      can_resume: true,
+      can_cancel: true,
+      can_run_concurrently: false,
+      concurrency_group: 'pipeline',
+      requires_confirmation: false,
+      runnable: true,
+      description: 'desc',
+      param_schema: {},
+    });
+    mockedGetJob.mockResolvedValue({
+      job: {
+        id: 'job-3',
+        job_type: 'pipeline-run',
+        status: 'failed',
+        params: { config_path: '/Users/example/project/config/app.yaml' },
+        result: null,
+        error: { type: 'runner_error', message: 'handler failed' },
+        artifacts: [],
+        created_by: 'web',
+        idempotency_key: null,
+        retry_count: 0,
+        max_retries: 3,
+        retry_backoff_seconds: 0,
+        timeout_seconds: null,
+        cancel_requested: false,
+        cancel_requested_at: null,
+        worker_id: 'worker-1',
+        lock_token: null,
+        lock_acquired_at: '2026-05-09T08:00:00Z',
+        heartbeat_at: '2026-05-09T08:01:00Z',
+        scheduled_at: null,
+        started_at: '2026-05-09T08:00:00Z',
+        finished_at: '2026-05-09T08:05:00Z',
+        audit_events: [],
+        created_at: '2026-05-09T08:00:00Z',
+        updated_at: '2026-05-09T08:05:00Z',
+        runtime_state: null,
+        config_snapshot_path: '/tmp/job-3/config_snapshot.json',
+        config_snapshot: null,
+      },
+      job_dir: '/tmp/job-3',
+      log_path: '/tmp/job-3/job.log',
+      params_path: '/tmp/job-3/params.json',
+      result_path: '/tmp/job-3/result.json',
+      artifacts_path: '/tmp/job-3/artifacts.json',
+    });
+    mockedGetJobLogs.mockResolvedValue({
+      job_id: 'job-3',
+      log_path: '/tmp/job-3/job.log',
+      count: 0,
+      items: [],
+    });
+    let rejectCreateJob:
+      | ((reason?: unknown) => void)
+      | undefined;
+    mockedCreateJob.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectCreateJob = reject;
+      }) as never,
+    );
+
+    renderWithRouter([{ path: '/jobs/:jobId', element: <JobDetailPage /> }], ['/jobs/job-3']);
+
+    expect(await screen.findByRole('button', { name: '重新运行任务' })).toBeInTheDocument();
+    const clickPromise = user.click(screen.getByRole('button', { name: '重新运行任务' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '重新运行中' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '重新运行中' })).toBeDisabled();
+    });
+    rejectCreateJob?.(new Error('rerun failed'));
+    await clickPromise;
+
+    expect(await screen.findByText('rerun failed')).toBeInTheDocument();
   });
 
   it('renders not found and permission denied states', async () => {

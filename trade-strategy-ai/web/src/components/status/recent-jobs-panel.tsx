@@ -1,7 +1,7 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { cn } from '@/lib/utils';
 import { useRecentJobs } from '@/features/jobs/use-recent-jobs';
@@ -14,19 +14,6 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
   return '无法加载最近任务';
-}
-
-function statusVariant(status: string) {
-  if (status === 'success') {
-    return 'success';
-  }
-  if (status === 'failed' || status === 'cancelled') {
-    return 'destructive';
-  }
-  if (status === 'running' || status === 'pending') {
-    return 'info';
-  }
-  return 'warning';
 }
 
 function formatTimestamp(value: string | null) {
@@ -83,7 +70,7 @@ export function RecentJobsPanel() {
                   <p className="font-medium text-slate-900">{job.job_type}</p>
                   <p className="text-xs text-slate-500">{job.id}</p>
                 </div>
-                <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
+                <StatusBadge value={job.status} />
               </div>
 
               <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">

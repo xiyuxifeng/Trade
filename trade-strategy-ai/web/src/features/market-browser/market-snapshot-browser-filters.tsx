@@ -23,12 +23,12 @@ export function MarketSnapshotBrowserFilters({
   return (
     <SectionCard
       title="筛选条件"
-      description="按交易日、市场和质量状态筛选 Market Snapshot，点击搜索后才会生效。"
+      description="按交易日、市场和质量状态筛选市场上下文快照，点击搜索后才会生效。"
       className="border-slate-200 bg-white"
     >
       <div className="grid gap-3 lg:grid-cols-3">
         <label className="space-y-2">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">trade_date</span>
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">交易日</span>
           <Input
             type="date"
             value={tradeDate}
@@ -36,11 +36,11 @@ export function MarketSnapshotBrowserFilters({
           />
         </label>
         <label className="space-y-2">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">market</span>
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">市场</span>
           <Input value={market} onChange={(event) => onChange({ market: event.target.value })} placeholder="CN" />
         </label>
         <label className="space-y-2">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">quality_status</span>
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">质量状态</span>
           <Select value={qualityStatus} onChange={(event) => onChange({ qualityStatus: event.target.value })}>
             <option value="">全部</option>
             <option value="success">成功</option>

@@ -1,19 +1,12 @@
 import { Link } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/kit';
 import { useRecentJobs } from '@/features/jobs/use-recent-jobs';
 
 function formatTimestamp(value: string | null) {
   if (!value) return '未记录';
   return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-}
-
-function statusVariant(status: string) {
-  if (status === 'success') return 'success';
-  if (status === 'failed' || status === 'cancelled') return 'destructive';
-  if (status === 'running' || status === 'pending') return 'warning';
-  return 'default';
 }
 
 export function DashboardRecentJobsPanel() {
@@ -63,7 +56,7 @@ export function DashboardRecentJobsPanel() {
                   <p className="font-semibold text-slate-900">{job.job_type}</p>
                   <p className="break-all text-xs text-slate-500">{job.id}</p>
                 </div>
-                <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
+                <StatusBadge value={job.status} />
               </div>
               <div className="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
                 <div>创建者：{job.created_by}</div>

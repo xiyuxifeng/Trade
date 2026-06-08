@@ -21,11 +21,12 @@ function statusVariant(status: string) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    return error.message;
+    if (error.status === 401 || error.status === 403) return '当前账号没有权限查看系统状态。';
+    return '系统状态加载失败，请稍后重试。';
   }
 
   if (error instanceof Error) {
-    return error.message;
+    return '系统状态加载失败，请稍后重试。';
   }
 
   if (typeof error === 'object' && error !== null && 'message' in error) {

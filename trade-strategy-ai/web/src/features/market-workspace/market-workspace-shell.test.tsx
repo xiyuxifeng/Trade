@@ -376,7 +376,7 @@ describe('MarketWorkspaceShell', () => {
     renderWithRouter([{ path: '/market/kaipan', element: <MarketKaipanWorkspaceShell /> }], ['/market/kaipan']);
 
     expect(await screen.findByRole('heading', { name: '市场数据健康' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Dashboard report' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '数据健康报告' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '最近产物' })).toBeInTheDocument();
     expect(await screen.findByRole('combobox', { name: /Profile/ })).toHaveValue('default');
     expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
@@ -541,7 +541,6 @@ describe('MarketWorkspaceShell', () => {
         expect.objectContaining({
           title: 'Kaipan 抓取任务提交失败',
           description: 'create job failed',
-          variant: 'destructive',
         }),
       );
     });

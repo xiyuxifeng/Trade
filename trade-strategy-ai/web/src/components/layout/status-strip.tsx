@@ -4,10 +4,11 @@ type StatusStripProps = {
   title: string;
   description: string;
   path: string;
+  kind?: 'canonical' | 'compat';
   className?: string;
 };
 
-export function StatusStrip({ title, description, path, className }: StatusStripProps) {
+export function StatusStrip({ title, description, path, kind = 'canonical', className }: StatusStripProps) {
   return (
     <div className={cn('status-strip', className)}>
       <div className="status-strip-left">
@@ -17,8 +18,8 @@ export function StatusStrip({ title, description, path, className }: StatusStrip
         </div>
       </div>
       <div className="status-strip-right">
-        <span>Route</span>
-        <code>{path}</code>
+        {kind === 'compat' ? <span>兼容访问</span> : <span>Route</span>}
+        {kind === 'compat' ? <code>历史链接</code> : <code>{path}</code>}
       </div>
     </div>
   );

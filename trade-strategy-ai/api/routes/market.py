@@ -49,7 +49,7 @@ async def get_latest_market(
         bar = result.scalar_one_or_none()
 
         if bar is None:
-            raise HTTPException(status_code=404, detail="Market data not found")
+            raise HTTPException(status_code=404, detail="未找到可用的市场数据")
 
         return MarketResponse.model_validate(_bar_to_response(bar))
 

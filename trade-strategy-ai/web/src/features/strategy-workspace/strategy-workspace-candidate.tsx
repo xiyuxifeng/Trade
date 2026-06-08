@@ -239,7 +239,7 @@ export function StrategyWorkspaceCandidate({
     },
     onError: (error) => {
       setStatusMessage(null);
-      setErrorMessage(error instanceof Error ? error.message : '候选审核提交失败');
+      setErrorMessage(error instanceof Error ? '候选审核提交失败，请稍后重试。' : '候选审核提交失败，请稍后重试。');
     },
   });
 
@@ -264,7 +264,7 @@ export function StrategyWorkspaceCandidate({
   return (
     <SectionCard
       title="候选规则版本"
-      description="在兼容入口中生成候选规则版本、比较父版本并提交审核任务。"
+      description="生成候选规则版本、比较父版本并提交审核任务。"
       action={<Badge variant="info">{candidateVersionItems.length} 个候选</Badge>}
     >
       <div className="space-y-4">

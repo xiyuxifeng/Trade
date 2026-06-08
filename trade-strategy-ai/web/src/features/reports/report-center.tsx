@@ -19,9 +19,13 @@ import {
 import type { DailyReportDetail, EvaluationResultDetail, ReportKind, ReportSummaryItem } from '@/types/reports';
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return '报表数据加载失败';
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return '当前账号没有权限查看报表。';
+    if (error.status === 404) return '未找到可用的报表数据。';
+    return '报表数据加载失败，请稍后重试。';
+  }
+  if (error instanceof Error) return '报表数据加载失败，请稍后重试。';
+  return '报表数据加载失败，请稍后重试。';
 }
 
 function formatTimestamp(value: string) {
@@ -82,7 +86,7 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="daily-report-id">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">报告 ID (Report ID)</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">报告 ID</p>
           <p className="mt-2 break-all text-sm text-slate-100">{report.report_id}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -90,18 +94,18 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
           <p className="mt-2 text-sm text-slate-100">{formatTimestamp(report.generated_at)}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">交易想法 (Ideas)</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">交易想法</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{report.ideas.length}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">策路版本</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">策略版本</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{report.strategy_version_ids.length}</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">核心亮点 (Highlights)</h4>
+          <h4 className="text-sm font-semibold text-slate-100">核心亮点</h4>
           {report.highlights.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {report.highlights.map((item) => (
@@ -116,7 +120,7 @@ function DailyDetails({ detail }: { detail: DailyReportDetail }) {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">风险提示 (Risks)</h4>
+          <h4 className="text-sm font-semibold text-slate-100">风险提示</h4>
           {report.risks.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {report.risks.map((item) => (
@@ -140,7 +144,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4" data-testid="evaluation-result-id">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">结果 ID (Result ID)</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">结果 ID</p>
           <p className="mt-2 break-all text-sm text-slate-100">{result.result_id}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -152,14 +156,14 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
           <p className="mt-2 text-2xl font-semibold text-slate-100">{result.evaluations.length}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">证据包 (Evidence)</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">证据包</p>
           <p className="mt-2 text-2xl font-semibold text-slate-100">{result.evidence_pack_refs.length}</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">总结 (Summary)</h4>
+          <h4 className="text-sm font-semibold text-slate-100">总结</h4>
           {result.summary.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {result.summary.map((item) => (
@@ -191,7 +195,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">复盘说明 (Postmortem)</h4>
+          <h4 className="text-sm font-semibold text-slate-100">复盘说明</h4>
           {result.postmortem_notes.length ? (
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {result.postmortem_notes.map((item) => (
@@ -206,7 +210,7 @@ function EvaluationDetails({ detail }: { detail: EvaluationResultDetail }) {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-100">评分特征 (Ranking)</h4>
+          <h4 className="text-sm font-semibold text-slate-100">评分特征</h4>
           <pre
             className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200"
             data-testid="daily-report-ranking-json"
@@ -291,7 +295,7 @@ export function ReportCenter() {
   }, [kind, reports.length, selectedDate]);
 
   const detail = detailQuery.data;
-  const previewHtml = htmlQuery.data ?? '<div style="padding:24px;font-family:sans-serif;color:#0f172a">HTML 预览加载中...</div>';
+  const previewHtml = htmlQuery.data ?? '<div style="padding:24px;font-family:sans-serif;color:#0f172a">网页预览加载中...</div>';
 
   return (
     <main className="page-stack">
@@ -464,8 +468,8 @@ export function ReportCenter() {
               <div className="space-y-4">
                 <Tabs className="w-full" defaultValue="html" onValueChange={(value) => setPreviewMode(value as 'html' | 'json')} value={previewMode}>
                   <TabsList>
-                    <TabsTrigger value="html">HTML 预览</TabsTrigger>
-                    <TabsTrigger value="json">JSON 详情</TabsTrigger>
+                    <TabsTrigger value="html">网页预览</TabsTrigger>
+                    <TabsTrigger value="json">结构化详情</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="html">
@@ -479,7 +483,7 @@ export function ReportCenter() {
                         {getErrorMessage(htmlQuery.error)}
                       </div>
                     ) : (
-                      <ArtifactPreview content={previewHtml} kind="html" title="HTML 预览" />
+                      <ArtifactPreview content={previewHtml} kind="html" title="网页预览" />
                     )}
                   </TabsContent>
 

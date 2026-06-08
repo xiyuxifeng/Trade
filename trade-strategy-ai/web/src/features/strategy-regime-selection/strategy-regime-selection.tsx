@@ -67,13 +67,13 @@ const decisionLabelMap: Record<string, { label: string; variant: 'default' | 'su
 };
 
 function formatDate(value: string | null | undefined) {
-  if (!value) return 'n/a';
+  if (!value) return '暂无';
   return dayjs(value).format('YYYY-MM-DD HH:mm');
 }
 
 function formatNumber(value: number | null | undefined, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return 'n/a';
+    return '暂无';
   }
   return value.toFixed(digits);
 }
@@ -117,17 +117,17 @@ function SelectionRecordCard({
           <Badge variant={decisionLabelMap[record.decision ?? '']?.variant ?? 'default'}>
             {decisionLabelMap[record.decision ?? '']?.label ?? record.decision ?? '未知'}
           </Badge>
-          {record.override_applied ? <Badge variant="info">override</Badge> : null}
+          {record.override_applied ? <Badge variant="info">人工覆盖</Badge> : null}
         </div>
       </div>
       <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">score</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">评分</p>
           <p className="mt-1 font-medium text-slate-950">{formatNumber(record.score, 3)}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">sample_count</p>
-          <p className="mt-1 font-medium text-slate-950">{record.sample_count ?? 'n/a'}</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">样本数</p>
+          <p className="mt-1 font-medium text-slate-950">{record.sample_count ?? '暂无'}</p>
         </div>
       </div>
       <p className="mt-3 text-sm leading-6 text-slate-700">{formatRegimeText(record.reason)}</p>
@@ -198,14 +198,14 @@ export function StrategyRegimeSelectionWorkspace() {
     variant: 'default' as const,
   };
   const traceItems = [
-    { label: 'selection_id', value: regimeSelection?.selection_id ?? '未记录' },
-    { label: 'snapshot_id', value: regimeSelection?.snapshot_id ?? '未记录' },
-    { label: 'market_regime_version', value: regimeSelection?.market_regime_version ?? '未记录' },
-    { label: 'source_feature_version', value: regimeSelection?.source_feature_version ?? '未记录' },
-    { label: 'applicability_profile_version', value: regimeSelection?.applicability_profile_version ?? '未记录' },
-    { label: 'selected_by', value: regimeSelection?.selected_by ?? '未记录' },
-    { label: 'confidence', value: formatNumber(regimeSelection?.confidence, 3) },
-    { label: 'quality_status', value: regimeSelection?.quality_status ?? '未记录' },
+    { label: '选择 ID', value: regimeSelection?.selection_id ?? '未记录' },
+    { label: '快照 ID', value: regimeSelection?.snapshot_id ?? '未记录' },
+    { label: '市场状态版本', value: regimeSelection?.market_regime_version ?? '未记录' },
+    { label: '特征版本', value: regimeSelection?.source_feature_version ?? '未记录' },
+    { label: '适用画像版本', value: regimeSelection?.applicability_profile_version ?? '未记录' },
+    { label: '选择来源', value: regimeSelection?.selected_by ?? '未记录' },
+    { label: '置信度', value: formatNumber(regimeSelection?.confidence, 3) },
+    { label: '质量状态', value: regimeSelection?.quality_status ?? '未记录' },
   ];
 
   return (
@@ -213,10 +213,8 @@ export function StrategyRegimeSelectionWorkspace() {
       <PageHeader
         title="规则选择"
         description="用于在规则构建前查看规则为什么被选中、跳过或阻断，并回溯到市场状态与适用性画像版本。"
-        actionLabel="返回规则工作台"
-        onAction={() => {
-          navigate('/strategies');
-        }}
+        actionLabel="返回回测与画像"
+        onAction={() => navigate('/backtest')}
       />
 
       <section className="grid gap-4 xl:grid-cols-4">
@@ -227,9 +225,9 @@ export function StrategyRegimeSelectionWorkspace() {
           </CardHeader>
           <CardContent className="space-y-4">
             <label className="space-y-2 text-sm text-slate-700">
-              <span>交易员 ID</span>
+              <span>交易员</span>
               <TraderIdSelect
-                ariaLabel="Trader ID"
+                ariaLabel="交易员"
                 className="border-slate-200 bg-white text-slate-900"
                 onChange={setTraderId}
                 source="strategy"
@@ -237,12 +235,12 @@ export function StrategyRegimeSelectionWorkspace() {
               />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
-              <span>规则日期</span>
-              <Input aria-label="Strategy date" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
+                <span>规则日期</span>
+              <Input aria-label="规则日期" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               <span>状态</span>
-              <Select aria-label="Version status" value={versionStatus} onChange={(event) => setVersionStatus(event.target.value)}>
+              <Select aria-label="版本状态" value={versionStatus} onChange={(event) => setVersionStatus(event.target.value)}>
                 <option value="">全部</option>
                 <option value="draft">草稿</option>
                 <option value="released">已发布</option>
@@ -251,7 +249,7 @@ export function StrategyRegimeSelectionWorkspace() {
             </label>
             <label className="space-y-2 text-sm text-slate-700">
               <span>版本类型</span>
-              <Select aria-label="Version type" value={versionType} onChange={(event) => setVersionType(event.target.value)}>
+              <Select aria-label="版本类型" value={versionType} onChange={(event) => setVersionType(event.target.value)}>
                 <option value="">全部</option>
                 <option value="manual">手动</option>
                 <option value="candidate">候选</option>
@@ -290,7 +288,7 @@ export function StrategyRegimeSelectionWorkspace() {
                   ))}
                 </div>
               ) : (
-                <EmptyState title="暂无规则版本。" description="调整 trader、日期或版本类型后重试。" />
+                <EmptyState title="暂无规则版本。" description="调整交易员、日期或版本类型后重试。" />
               )}
             </div>
           </CardContent>
@@ -302,8 +300,8 @@ export function StrategyRegimeSelectionWorkspace() {
             description="当前版本的规则选择结果与回溯字段。"
             action={
               <div className="flex gap-2">
-                {/* <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/strategies')}>
-                  策略工作台
+                {/* <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/backtest')}>
+                  回测与画像
                 </Button> */}
                 <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate('/rule-pool')}>
                   规则池
@@ -312,7 +310,7 @@ export function StrategyRegimeSelectionWorkspace() {
             }
           >
             {versionDetailQuery.isLoading ? (
-              <LoadingState label="正在加载选择结果" description="稍后会显示 selected / skipped / blocked 与审计信息。" />
+              <LoadingState label="正在加载选择结果" description="稍后会显示已选中、已跳过和已阻断的规则以及审计信息。" />
             ) : versionDetailQuery.error ? (
               <ErrorState {...buildErrorRecoveryState(versionDetailQuery.error, 'strategy')} onRetry={() => void versionDetailQuery.refetch()} />
             ) : selectedVersion ? (
@@ -360,36 +358,36 @@ export function StrategyRegimeSelectionWorkspace() {
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-3">
-                  <SectionCard title={`Selected rules (${selectedRules.length})`} description="默认可用的候选规则。">
+                  <SectionCard title={`已选中规则 (${selectedRules.length})`} description="默认可用的候选规则。">
                     <div className="space-y-3">
                       {selectedRules.length ? (
                         selectedRules.map((record, index) => (
                           <SelectionRecordCard key={`${record.rule_id ?? 'selected'}-${index}`} record={record} tone="selected" />
                         ))
                       ) : (
-                        <EmptyState title="暂无 selected rules。" description="当前版本没有进入 selected_rules 的规则。" />
+                        <EmptyState title="暂无已选中规则。" description="当前版本没有进入已选中规则列表的规则。" />
                       )}
                     </div>
                   </SectionCard>
-                  <SectionCard title={`Skipped rules (${skippedRules.length})`} description="当前 regime 下没有匹配到有效画像。">
+                  <SectionCard title={`已跳过规则 (${skippedRules.length})`} description="当前市场状态下没有匹配到有效画像。">
                     <div className="space-y-3">
                       {skippedRules.length ? (
                         skippedRules.map((record, index) => (
                           <SelectionRecordCard key={`${record.rule_id ?? 'skipped'}-${index}`} record={record} tone="skipped" />
                         ))
                       ) : (
-                        <EmptyState title="暂无 skipped rules。" description="当前版本没有被跳过的规则。" />
+                        <EmptyState title="暂无已跳过规则。" description="当前版本没有被跳过的规则。" />
                       )}
                     </div>
                   </SectionCard>
-                  <SectionCard title={`Blocked rules (${blockedRules.length})`} description="默认排除，除非显式 override。">
+                  <SectionCard title={`已阻断规则 (${blockedRules.length})`} description="默认排除，除非显式人工覆盖。">
                     <div className="space-y-3">
                       {blockedRules.length ? (
                         blockedRules.map((record, index) => (
                           <SelectionRecordCard key={`${record.rule_id ?? 'blocked'}-${index}`} record={record} tone="blocked" />
                         ))
                       ) : (
-                        <EmptyState title="暂无 blocked rules。" description="当前版本没有被阻断的规则。" />
+                        <EmptyState title="暂无已阻断规则。" description="当前版本没有被阻断的规则。" />
                       )}
                     </div>
                   </SectionCard>
@@ -418,30 +416,30 @@ export function StrategyRegimeSelectionWorkspace() {
                   <Card className="border-slate-200 bg-white shadow-sm">
                     <CardHeader>
                       <CardTitle className="text-slate-950">覆盖审计</CardTitle>
-                      <CardDescription className="text-slate-600">只有显式 override 时才会出现。</CardDescription>
+                      <CardDescription className="text-slate-600">只有显式人工覆盖时才会出现。</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {regimeSelection?.override ? (
                         <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">operator</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">操作人</p>
                             <p className="mt-1 break-all text-slate-950">{regimeSelection.override.operator ?? '未记录'}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">risk_level</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">风险等级</p>
                             <p className="mt-1 break-all text-slate-950">{regimeSelection.override.risk_level ?? '未记录'}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">reason</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">原因</p>
                             <p className="mt-1 break-all text-slate-950">{formatRegimeText(regimeSelection.override.reason, '未记录')}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">timestamp</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">时间</p>
                             <p className="mt-1 break-all text-slate-950">{formatDate(regimeSelection.override.timestamp)}</p>
                           </div>
                         </div>
                       ) : (
-                        <EmptyState title="未启用 override。" description="当前选择遵循默认 applicable 优先、neutral 低权重补充、blocked 默认排除。" />
+                        <EmptyState title="未启用人工覆盖。" description="当前选择遵循默认适用优先、低权重补充、阻断默认排除。" />
                       )}
                     </CardContent>
                   </Card>
@@ -463,9 +461,9 @@ export function StrategyRegimeSelectionWorkspace() {
                   </Card>
                 ) : null}
               </div>
-            ) : (
-                <EmptyState title="请选择一个规则版本。" description="选择版本后，这里会展示选中、跳过、阻断的规则及审计字段。" />
-            )}
+                ) : (
+                  <EmptyState title="请选择一个规则版本。" description="选择版本后，这里会展示已选中、已跳过、已阻断的规则及审计字段。" />
+                )}
           </SectionCard>
         </div>
       </section>

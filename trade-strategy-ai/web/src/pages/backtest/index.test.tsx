@@ -398,7 +398,7 @@ describe('BacktestPage', () => {
     expect(screen.getByRole('button', { name: '运行回测' })).toBeInTheDocument();
     expect(screen.getByText('最近结果')).toBeInTheDocument();
     expect(screen.getByText('最近任务')).toBeInTheDocument();
-    const profileSelect = await screen.findByLabelText('Profile');
+    const profileSelect = await screen.findByLabelText('画像');
     await waitFor(() => {
       expect(profileSelect).toHaveValue('default');
       expect(screen.getByLabelText('交易员 ID')).toHaveValue('trader_a');
@@ -414,9 +414,9 @@ describe('BacktestPage', () => {
       screen.getByText('按 MFE / MAE / return_pct 计算，并包含 T+1 与涨跌停约束。当前为固定口径，不提供切换。'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('标的列表')).toHaveValue('');
-    expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('000300.SH');
+    expect(screen.getByLabelText('基准指数选择')).toHaveValue('000300.SH');
     expect(screen.queryByLabelText('配置路径')).not.toBeInTheDocument();
-    expect(screen.queryByText('当前 Profile')).not.toBeInTheDocument();
+    expect(screen.queryByText('当前画像')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(mockedListBacktestResults).toHaveBeenCalled();
@@ -430,11 +430,11 @@ describe('BacktestPage', () => {
     expect((await screen.findAllByText('result-1')).length).toBeGreaterThan(0);
     expect(screen.getByText('最近 fingerprint')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Profile'), 'alt');
+    await user.selectOptions(screen.getByLabelText('画像'), 'alt');
     await waitFor(() => {
       expect(mockedGetProfile).toHaveBeenCalledWith('alt');
     });
-    await user.selectOptions(screen.getByLabelText('Profile'), 'default');
+    await user.selectOptions(screen.getByLabelText('画像'), 'default');
     await user.selectOptions(screen.getByLabelText('交易员 ID'), 'trader_a');
     await user.selectOptions(screen.getByLabelText('规则版本 ID'), 'sv-1');
     await user.type(screen.getByLabelText('标的列表'), '000001.SZ, 000002.SZ');

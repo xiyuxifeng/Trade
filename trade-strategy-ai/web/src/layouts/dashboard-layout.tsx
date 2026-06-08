@@ -12,16 +12,19 @@ import { useAuth } from '@/features/auth/auth-context';
 function resolveCurrentRoute(pathname: string) {
   const exactMatch = allNavigationItems.find((item) => item.path === pathname);
   if (exactMatch) {
-    return exactMatch;
+    return { ...exactMatch, kind: 'canonical' as const };
   }
 
   const matched = resolveRouteByPathname(pathname);
   const visibleRoute = allNavigationItems.find((item) => item.path === matched.path || item.label === matched.label);
-  return visibleRoute ?? {
-    label: matched.label,
-    path: matched.path,
-    description: matched.description,
-  };
+  return visibleRoute
+    ? { ...visibleRoute, kind: 'canonical' as const }
+    : {
+        label: matched.label,
+        path: matched.path,
+        description: matched.description,
+        kind: matched.kind,
+      };
 }
 
 export function DashboardLayout() {
@@ -100,6 +103,7 @@ export function DashboardLayout() {
           description={currentRoute.description}
           path={currentRoute.path}
           title={currentRoute.label}
+          kind={currentRoute.kind}
         />
 
         <div className="dashboard-content">

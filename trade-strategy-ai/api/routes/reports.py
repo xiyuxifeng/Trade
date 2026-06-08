@@ -60,7 +60,7 @@ async def get_daily_report(
     path = _daily_report_path(output_dir, as_of_date)
 
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Daily report for {as_of_date} not found")
+        raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘前日报")
 
     data = read_json(path)
     report = DailyReport.model_validate(data)
@@ -127,14 +127,14 @@ async def export_daily_report(
     if format == "html":
         path = _daily_report_html_path(output_dir, as_of_date)
         if not path.exists():
-            raise HTTPException(status_code=404, detail=f"Daily report HTML for {as_of_date} not found")
+            raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘前日报 HTML 文件")
         content = path.read_bytes()
         media_type = "text/html"
         filename = f"daily_report_{as_of_date.isoformat()}.html"
     else:
         path = _daily_report_path(output_dir, as_of_date)
         if not path.exists():
-            raise HTTPException(status_code=404, detail=f"Daily report for {as_of_date} not found")
+            raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘前日报")
         content = path.read_bytes()
         media_type = "application/json"
         filename = f"daily_report_{as_of_date.isoformat()}.json"
@@ -158,7 +158,7 @@ async def get_evaluation_result(
     path = _evaluation_path(output_dir, as_of_date)
 
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Evaluation result for {as_of_date} not found")
+        raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘后考核结果")
 
     data = read_json(path)
     result = EvaluationResult.model_validate(data)
@@ -225,14 +225,14 @@ async def export_evaluation_result(
     if format == "html":
         path = _evaluation_html_path(output_dir, as_of_date)
         if not path.exists():
-            raise HTTPException(status_code=404, detail=f"Evaluation HTML for {as_of_date} not found")
+            raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘后考核 HTML 文件")
         content = path.read_bytes()
         media_type = "text/html"
         filename = f"evaluation_{as_of_date.isoformat()}.html"
     else:
         path = _evaluation_path(output_dir, as_of_date)
         if not path.exists():
-            raise HTTPException(status_code=404, detail=f"Evaluation result for {as_of_date} not found")
+            raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的盘后考核结果")
         content = path.read_bytes()
         media_type = "application/json"
         filename = f"evaluation_{as_of_date.isoformat()}.json"
@@ -260,7 +260,7 @@ async def get_persona_route(
     path = _persona_route_path(output_dir, as_of_date)
 
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Persona route for {as_of_date} not found")
+        raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的画像路由结果")
 
     data = read_json(path)
     return data
@@ -319,7 +319,7 @@ async def export_persona_route(
     path = _persona_route_path(output_dir, as_of_date)
 
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Persona route for {as_of_date} not found")
+        raise HTTPException(status_code=404, detail=f"未找到 {as_of_date} 的画像路由结果")
 
     content = path.read_bytes()
     buffer = BytesIO(content)

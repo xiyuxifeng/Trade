@@ -248,18 +248,18 @@ def create_app() -> FastAPI:
         async def web_spa_fallback(path: str):
             """本机静态页面回退入口。"""
             if _is_reserved_local_path(path):
-                raise HTTPException(status_code=404, detail="not found")
+                raise HTTPException(status_code=404, detail="未找到页面")
 
             candidate = (local_web_static_dir / path).resolve()
             try:
                 candidate.relative_to(local_web_static_dir.resolve())
             except ValueError as exc:
-                raise HTTPException(status_code=404, detail="not found") from exc
+                raise HTTPException(status_code=404, detail="未找到页面") from exc
 
             if candidate.exists() and candidate.is_file():
                 return FileResponse(candidate)
             if Path(path).suffix:
-                raise HTTPException(status_code=404, detail="not found")
+                raise HTTPException(status_code=404, detail="未找到页面")
             return FileResponse(local_web_index)
 
     return app

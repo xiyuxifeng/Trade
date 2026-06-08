@@ -40,11 +40,20 @@ export function formatWorkspaceTimestamp(value: string | null | undefined) {
 
 export function getWorkspaceErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
-    return error.message;
+    if (error.status === 401 || error.status === 403) {
+      return '当前账号没有权限执行该操作。';
+    }
+    if (error.status === 404) {
+      return '未找到相关数据，请返回上一页重新选择。';
+    }
+    if (error.status >= 500) {
+      return fallback;
+    }
+    return fallback;
   }
 
   if (error instanceof Error) {
-    return error.message;
+    return fallback;
   }
 
   return fallback;

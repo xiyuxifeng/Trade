@@ -172,13 +172,13 @@ export function StrategyVersionsPage() {
       return (
         <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则构建"
           title="规则版本"
-          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="把画像、交易员和执行日期固化成可追踪的规则版本。"
+          actionLabel="返回概览"
+          onAction={() => navigate('/dashboard')}
         />
-        <LoadingState label="正在加载规则版本页" description="正在读取 Profile、规则版本与产物。" />
+        <LoadingState label="正在加载规则版本页" description="正在读取画像、规则版本与产物。" />
       </main>
     );
   }
@@ -187,11 +187,11 @@ export function StrategyVersionsPage() {
     return (
         <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则构建"
           title="规则版本"
-          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="把画像、交易员和执行日期固化成可追踪的规则版本。"
+          actionLabel="返回概览"
+          onAction={() => navigate('/dashboard')}
         />
         <ErrorState
           {...buildErrorRecoveryState(pageError, 'strategy')}
@@ -215,15 +215,15 @@ export function StrategyVersionsPage() {
     return (
         <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则构建"
           title="规则版本"
-          description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="把画像、交易员和执行日期固化成可追踪的规则版本。"
+          actionLabel="返回概览"
+          onAction={() => navigate('/dashboard')}
         />
         <EmptyState
-          title="暂无可用 Profile。"
-          description="先到配置管理创建或导入 Profile，再回到这里构建规则版本。"
+          title="暂无可用画像。"
+          description="先到配置管理创建或导入画像，再回到这里构建规则版本。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -234,11 +234,11 @@ export function StrategyVersionsPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="兼容入口"
+        kicker="规则构建"
         title="规则版本"
-        description="构建规则版本：把 Profile、交易员和执行日期固化成正式版本。"
-        actionLabel="返回兼容入口"
-        onAction={() => navigate('/strategies')}
+        description="把画像、交易员和执行日期固化成可追踪的规则版本。"
+        actionLabel="返回概览"
+        onAction={() => navigate('/dashboard')}
       />
 
       {submissionMessage ? (
@@ -267,15 +267,15 @@ export function StrategyVersionsPage() {
             <Badge variant="info" className="w-fit">
               运行参数
             </Badge>
-            <CardTitle className="mt-2 text-slate-950">trader / date / profile</CardTitle>
-            <CardDescription className="text-slate-600">构建入口只使用 Profile、交易员和执行日期。</CardDescription>
+            <CardTitle className="mt-2 text-slate-950">交易员、日期和画像</CardTitle>
+            <CardDescription className="text-slate-600">构建入口只使用画像、交易员和执行日期。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Trader ID</span>
+                <span className="text-sm font-medium text-slate-700">交易员</span>
                 <TraderIdSelect
-                  ariaLabel="Trader ID"
+                  ariaLabel="交易员"
                   className="border-slate-200 bg-white text-slate-900"
                   onChange={setDraftTraderId}
                   source="strategy"
@@ -292,7 +292,7 @@ export function StrategyVersionsPage() {
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Profile</span>
+                <span className="text-sm font-medium text-slate-700">画像</span>
                 <Select
                   className="border-slate-200 bg-white text-slate-900"
                   onChange={(event) => setDraftSelectedProfileId(event.target.value)}

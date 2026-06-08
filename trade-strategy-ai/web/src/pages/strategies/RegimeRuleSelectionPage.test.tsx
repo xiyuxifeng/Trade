@@ -152,5 +152,8 @@ describe('RegimeRuleSelectionPage', () => {
     expect(screen.getByText('人工放行')).toBeInTheDocument();
     expect(screen.getByText('weak_bear 下默认阻断')).toBeInTheDocument();
     expect(screen.getByText('strong_bull 下适用')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /已选中规则/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /已跳过规则/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /已阻断规则/ })).toBeInTheDocument();
   });
 });

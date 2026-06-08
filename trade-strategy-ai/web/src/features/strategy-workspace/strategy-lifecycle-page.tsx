@@ -113,30 +113,9 @@ function formatPercent(value: number | null | undefined) {
 
 function describeJobError(error: JobRecord['error']) {
   if (!error) {
-    return '未提供错误信息';
+    return '任务失败，请稍后重试。';
   }
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  const parts: string[] = [];
-  if (typeof error.message === 'string' && error.message.trim()) {
-    parts.push(error.message.trim());
-  }
-  if (typeof error.code === 'string' && error.code.trim()) {
-    parts.push(`code=${error.code.trim()}`);
-  }
-  if (typeof error.detail === 'string' && error.detail.trim()) {
-    parts.push(error.detail.trim());
-  } else if (error.detail && typeof error.detail === 'object') {
-    parts.push(JSON.stringify(error.detail));
-  }
-
-  if (!parts.length && typeof error.retryable === 'boolean') {
-    parts.push(error.retryable ? 'retryable=true' : 'retryable=false');
-  }
-
-  return parts.length ? parts.join(' · ') : '未提供错误信息';
+  return '任务失败，请稍后重试。';
 }
 
 function summarizeJob(job: JobRecord) {
@@ -147,10 +126,10 @@ function summarizeJob(job: JobRecord) {
   const exportHtml = typeof params.export_html === 'boolean' ? params.export_html : null;
 
   return [
-    profileId ? `profile ${profileId}` : null,
-    asOfDate ? `as_of ${asOfDate}` : null,
-    force !== null ? `force ${force ? 'true' : 'false'}` : null,
-    exportHtml !== null ? `export_html ${exportHtml ? 'true' : 'false'}` : null,
+    profileId ? `画像 ${profileId}` : null,
+    asOfDate ? `分析日期 ${asOfDate}` : null,
+    force !== null ? `强制 ${force ? '是' : '否'}` : null,
+    exportHtml !== null ? `导出网页 ${exportHtml ? '是' : '否'}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -420,7 +399,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   <SummaryTile
                     label="来源日期"
                     value={jobAsOfDate(latestJob) ?? resultPayload?.as_of_date ?? '未记录'}
-                    detail={latestJob.profile_snapshot?.profile_id ? `profile ${latestJob.profile_snapshot.profile_id}` : '来源 profile 未记录'}
+                    detail={latestJob.profile_snapshot?.profile_id ? `来源画像 ${latestJob.profile_snapshot.profile_id}` : '来源画像未记录'}
                   />
                 </div>
 
@@ -459,7 +438,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
         <div className="space-y-4">
           <EmptyState
             title="暂无可展示的盘后结果。"
-            description="最近盘后 Job 还没有写入结构化 result，或当前 Profile 下暂时没有可用记录。"
+            description="最近盘后 Job 还没有写入结构化 result，或当前画像下暂时没有可用记录。"
           />
         </div>
       )}
@@ -528,7 +507,7 @@ function StrategyAfterCloseBody() {
     },
     onError: (error) => {
       setSubmissionState(null);
-      setSubmissionError(error instanceof Error ? error.message : '盘后复盘提交失败');
+      setSubmissionError('盘后复盘提交失败，请稍后重试。');
     },
   });
 
@@ -544,7 +523,7 @@ function StrategyAfterCloseBody() {
             navigate('/dashboard');
           }}
         />
-        <LoadingState label="正在加载盘后复盘" description="正在读取 Profile、盘后任务和最近结果。" />
+        <LoadingState label="正在加载盘后复盘" description="正在读取画像、盘后任务和最近结果。" />
       </main>
     );
   }
@@ -586,8 +565,8 @@ function StrategyAfterCloseBody() {
           }}
         />
         <EmptyState
-          title="暂无可用 Profile。"
-          description="先到配置管理创建或导入 Profile，再提交盘后复盘。"
+          title="暂无可用画像。"
+          description="先到配置管理创建或导入画像，再提交盘后复盘。"
           actionLabel="前往配置管理"
           onAction={() => {
             navigate('/profiles');
@@ -636,7 +615,7 @@ function StrategyAfterCloseBody() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <SectionCard
           title="盘后执行"
-          description="选择 Profile 和执行日期，提交盘后复盘任务，结果会回到任务详情。"
+          description="选择画像和执行日期，提交盘后复盘任务，结果会回到任务详情。"
         >
           <form
             className="space-y-4"
@@ -652,9 +631,9 @@ function StrategyAfterCloseBody() {
           >
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Profile</span>
+                <span className="text-sm font-medium text-slate-700">画像</span>
                 <Select
-                  aria-label="Profile"
+                  aria-label="画像"
                   value={formState.profileId}
                   onChange={(event) => setFormState((current) => ({ ...current, profileId: event.target.value }))}
                 >
@@ -680,24 +659,24 @@ function StrategyAfterCloseBody() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="force"
+                  aria-label="强制执行"
                   checked={formState.force}
                   className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   onChange={(event) => setFormState((current) => ({ ...current, force: event.target.checked }))}
                   type="checkbox"
                 />
-                <span>force</span>
+                <span>强制</span>
               </label>
 
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="export_html"
+                  aria-label="导出网页"
                   checked={formState.exportHtml}
                   className="size-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   onChange={(event) => setFormState((current) => ({ ...current, exportHtml: event.target.checked }))}
                   type="checkbox"
                 />
-                <span>export_html</span>
+                <span>导出网页</span>
               </label>
             </div>
 
@@ -717,7 +696,7 @@ function StrategyAfterCloseBody() {
 
         <SectionCard
           title="最近盘后结果"
-          description="仅展示当前 Profile 对应的最近盘后 Job 结果。"
+          description="仅展示当前画像对应的最近盘后 Job 结果。"
           action={<StatusBadge value={latestJob?.status ?? 'pending'} />}
         >
           <ResultSummaryCard latestJob={latestJob} />

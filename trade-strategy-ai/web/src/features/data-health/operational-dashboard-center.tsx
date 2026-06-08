@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,9 +10,12 @@ import { getSystemDashboard, getSystemStatus } from '@/lib/api/system';
 import type { SystemDashboardFailedJob, SystemDashboardResponse, SystemStatusResponse } from '@/types/system';
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return '健康仪表盘加载失败';
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return '当前账号没有权限查看系统健康信息。';
+    return '系统健康信息加载失败，请稍后重试。';
+  }
+  if (error instanceof Error) return '系统健康信息加载失败，请稍后重试。';
+  return '系统健康信息加载失败，请稍后重试。';
 }
 
 function SummaryCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
@@ -98,7 +102,7 @@ export function OperationalDashboardCenter() {
       <section className="space-y-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardTitle className="text-slate-950">系统健康总览</CardTitle>
             <CardDescription className="text-slate-600">正在读取系统健康状态。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -116,7 +120,7 @@ export function OperationalDashboardCenter() {
       <section className="space-y-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardTitle className="text-slate-950">系统健康总览</CardTitle>
             <CardDescription className="text-slate-600">当前健康状态接口请求失败。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -142,7 +146,7 @@ export function OperationalDashboardCenter() {
       <section className="space-y-4">
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
+            <CardTitle className="text-slate-950">系统健康总览</CardTitle>
             <CardDescription className="text-slate-600">暂无可显示的数据。</CardDescription>
           </CardHeader>
         </Card>
@@ -162,8 +166,8 @@ export function OperationalDashboardCenter() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-slate-950">Health Check Dashboard</CardTitle>
-              <CardDescription className="text-slate-600">API、DB、worker、queue、provider、storage 与配置校验摘要。</CardDescription>
+              <CardTitle className="text-slate-950">系统健康总览</CardTitle>
+              <CardDescription className="text-slate-600">接口、数据库、任务队列、上游服务、存储和配置校验摘要。</CardDescription>
             </div>
             <Button
               variant="outline"
@@ -179,10 +183,10 @@ export function OperationalDashboardCenter() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard title="API status" value={status.status} detail="系统状态接口返回值" />
-            <SummaryCard title="DB status" value={status.database.status} detail={`latency ${status.database.latency_ms ?? 'n/a'} ms`} />
-            <SummaryCard title="Worker status" value={dashboard.worker.status} detail={dashboard.worker.current_job_id ?? 'no current job'} />
-            <SummaryCard title="Job queue" value={dashboard.status} detail="综合健康结果" />
+            <SummaryCard title="接口状态" value={status.status} detail="系统状态接口返回值" />
+            <SummaryCard title="数据库状态" value={status.database.status} detail={`延迟 ${status.database.latency_ms ?? 'n/a'} ms`} />
+            <SummaryCard title="任务执行状态" value={dashboard.worker.status} detail={dashboard.worker.current_job_id ?? '当前没有任务在执行'} />
+            <SummaryCard title="任务队列" value={dashboard.status} detail="综合健康结果" />
           </div>
 
           {configIssues.length ? (

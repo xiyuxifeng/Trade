@@ -43,14 +43,18 @@ function summarizeJobParams(job: JobRecord) {
   const asOfDate = typeof params.as_of_date === 'string' ? params.as_of_date : null;
 
   return [
-    profileId ? `profile ${profileId}` : null,
-    benchmarkSymbol ? `benchmark ${benchmarkSymbol}` : null,
-    date ? `date ${date}` : null,
-    startDate && endDate ? `${startDate} ~ ${endDate}` : null,
-    asOfDate ? `as_of ${asOfDate}` : null,
+    profileId ? `画像 ${profileId}` : null,
+    benchmarkSymbol ? `基准指数 ${benchmarkSymbol}` : null,
+    date ? `日期 ${date}` : null,
+    startDate && endDate ? `起始日期 ${startDate} ~ 结束日期 ${endDate}` : null,
+    asOfDate ? `分析日期 ${asOfDate}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function getJobErrorMessage(_: unknown) {
+  return '任务失败，请稍后重试。';
 }
 
 function buildSnapshotParams({
@@ -274,13 +278,13 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="盘前分析"
           title="盘前分析"
-          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
             navigate('/dashboard');
           }}
         />
-        <LoadingState label="正在加载盘前分析" description="正在读取 Profile、盘前任务和最近执行记录。" />
+        <LoadingState label="正在加载盘前分析" description="正在读取画像、盘前任务和最近执行记录。" />
       </main>
     );
   }
@@ -291,7 +295,7 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="盘前分析"
           title="盘前分析"
-          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
             navigate('/dashboard');
@@ -315,15 +319,15 @@ export function StrategyPreMarketPage() {
         <PageHeader
           kicker="盘前分析"
           title="盘前分析"
-          description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
+          description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
             navigate('/dashboard');
           }}
         />
         <EmptyState
-          title="暂无可用 Profile。"
-          description="请先导入或创建正式 Profile，再返回盘前分析页提交盘前准备与盘前分析任务。"
+          title="暂无可用画像。"
+          description="请先导入或创建正式画像，再返回盘前分析页提交盘前准备与盘前分析任务。"
           actionLabel="前往配置管理"
           onAction={() => navigate('/profiles')}
         />
@@ -332,14 +336,14 @@ export function StrategyPreMarketPage() {
   }
 
   return (
-    <main className="page-stack">
-      <PageHeader
-        kicker="盘前分析"
-        title="盘前分析"
-        description="盘前分析页通过 Profile 与市场上下文生成当天的关注建议。"
-        actionLabel="返回概览"
-        onAction={() => {
-          navigate('/dashboard');
+      <main className="page-stack">
+        <PageHeader
+          kicker="盘前分析"
+          title="盘前分析"
+          description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
+          actionLabel="返回概览"
+          onAction={() => {
+            navigate('/dashboard');
         }}
       />
 
@@ -380,16 +384,16 @@ export function StrategyPreMarketPage() {
               <Badge variant="info" className="w-fit">
                 基础设置
               </Badge>
-              <CardTitle className="mt-2 text-slate-950">Profile / 分析日期 / Benchmark</CardTitle>
+              <CardTitle className="mt-2 text-slate-950">画像、分析日期和基准指数</CardTitle>
               <CardDescription className="text-slate-600">
-              Benchmark 默认选中沪深300，可在页面下拉中手动切换。
+              基准指数默认选中沪深300，可在页面下拉中手动切换。
               </CardDescription>
             </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile</p>
-                <Select aria-label="Profile" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">画像</p>
+                <Select aria-label="画像" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
                   {profileItems.map((profile: ProfileRecord) => (
                     <option key={profile.profile_id} value={profile.profile_id}>
                       {profile.name} · {profile.profile_id} · v{profile.version}
@@ -402,8 +406,8 @@ export function StrategyPreMarketPage() {
                 <Input aria-label="分析日期" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
               </div>
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark 选择</p>
-                <Select aria-label="Benchmark 选择" value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">基准指数选择</p>
+                <Select aria-label="基准指数选择" value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
                   {benchmarkOptions.map((item: MarketBenchmarkOption) => (
                     <option key={item.symbol} value={item.symbol}>
                       {item.name} ({item.symbol})
@@ -412,7 +416,7 @@ export function StrategyPreMarketPage() {
                 </Select>
                 <p className="text-xs text-slate-500">页面默认选中沪深300；如需其他口径，可在这里切换。</p>
                 {benchmarkOptionsQuery.isError ? (
-                  <p className="text-xs text-amber-600">Benchmark 选项加载失败，当前回退到默认沪深300。</p>
+                  <p className="text-xs text-amber-600">基准指数选项加载失败，当前回退到默认沪深300。</p>
                 ) : null}
               </div>
             </div>
@@ -459,30 +463,30 @@ export function StrategyPreMarketPage() {
             </Badge>
             <CardTitle className="mt-2 text-slate-950">提交市场上下文准备</CardTitle>
             <CardDescription className="text-slate-600">
-              `date / start_date / end_date / slot / snapshot_type / force / offline` 都可直接提交。
+              分析日期、起始日期、结束日期、时段、快照类型、强制、离线都可直接提交。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-2 text-sm text-slate-700">
-                <span>Start date</span>
-                <Input aria-label="Snapshot start date" type="date" value={snapshotStartDate} onChange={(event) => setSnapshotStartDate(event.target.value)} />
+                <span>起始日期</span>
+                <Input aria-label="起始日期" type="date" value={snapshotStartDate} onChange={(event) => setSnapshotStartDate(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-700">
-                <span>End date</span>
-                <Input aria-label="Snapshot end date" type="date" value={snapshotEndDate} onChange={(event) => setSnapshotEndDate(event.target.value)} />
+                <span>结束日期</span>
+                <Input aria-label="结束日期" type="date" value={snapshotEndDate} onChange={(event) => setSnapshotEndDate(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-700">
-                <span>Slot</span>
-                <Input aria-label="Snapshot slot" value={snapshotSlot} onChange={(event) => setSnapshotSlot(event.target.value)} />
+                <span>时段</span>
+                <Input aria-label="时段" value={snapshotSlot} onChange={(event) => setSnapshotSlot(event.target.value)} />
               </label>
               <label className="space-y-2 text-sm text-slate-700">
-                <span>Snapshot type</span>
-                <Select aria-label="Snapshot type" value={snapshotType} onChange={(event) => setSnapshotType(event.target.value)}>
-                  <option value="all">all</option>
-                  <option value="hot_topics">hot_topics</option>
-                  <option value="topic_constituents">topic_constituents</option>
-                  <option value="strong_symbols">strong_symbols</option>
+                <span>快照类型</span>
+                <Select aria-label="快照类型" value={snapshotType} onChange={(event) => setSnapshotType(event.target.value)}>
+                  <option value="all">全量</option>
+                  <option value="hot_topics">热点主题</option>
+                  <option value="topic_constituents">主题成分</option>
+                  <option value="strong_symbols">强势标的</option>
                 </Select>
               </label>
             </div>
@@ -490,28 +494,28 @@ export function StrategyPreMarketPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="Snapshot force"
+                  aria-label="强制提交"
                   checked={snapshotForce}
                   className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   type="checkbox"
                   onChange={(event) => setSnapshotForce(event.target.checked)}
                 />
-                <span>Force</span>
+                <span>强制</span>
               </label>
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="Snapshot offline"
+                  aria-label="离线模式"
                   checked={snapshotOffline}
                   className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   type="checkbox"
                   onChange={(event) => setSnapshotOffline(event.target.checked)}
                 />
-                <span>Offline</span>
+                <span>离线</span>
               </label>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              该动作会默认使用当前“分析日期”，如果 `Start date` 和 `End date` 同时填写则优先提交区间市场上下文准备。
+              该动作会默认使用当前“分析日期”，如果“起始日期”和“结束日期”同时填写则优先提交区间市场上下文准备。
             </div>
 
             <Button
@@ -529,12 +533,12 @@ export function StrategyPreMarketPage() {
             <Badge variant="info" className="w-fit">
               市场上下文准备
             </Badge>
-              <CardTitle className="mt-2 text-slate-950">提交盘前分析</CardTitle>
-              <CardDescription className="text-slate-600">`as_of_date / force / export_html` 为盘前分析的正式参数。</CardDescription>
+            <CardTitle className="mt-2 text-slate-950">提交盘前分析</CardTitle>
+            <CardDescription className="text-slate-600">分析日期、强制、导出网页为盘前分析的正式参数。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">as_of_date</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">分析日期</p>
               <p className="mt-2 break-all text-base font-semibold text-slate-950">{strategyDate || '未选择'}</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">盘前分析默认采用当前的分析日期。</p>
             </div>
@@ -542,23 +546,23 @@ export function StrategyPreMarketPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="Run force"
+                  aria-label="强制执行"
                   checked={runForce}
                   className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   type="checkbox"
                   onChange={(event) => setRunForce(event.target.checked)}
                 />
-                <span>Force</span>
+                <span>强制</span>
               </label>
               <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 <input
-                  aria-label="Export HTML"
+                  aria-label="导出网页"
                   checked={runExportHtml}
                   className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400"
                   type="checkbox"
                   onChange={(event) => setRunExportHtml(event.target.checked)}
                 />
-                <span>Export HTML</span>
+                <span>导出网页</span>
               </label>
             </div>
 
@@ -602,7 +606,7 @@ export function StrategyPreMarketPage() {
                 </div>
                 {job.error ? (
                   <p className="mt-3 text-sm text-rose-700">
-                    {typeof job.error === 'string' ? job.error : job.error.message ?? '任务失败'}
+                    {getJobErrorMessage(job.error)}
                   </p>
                 ) : null}
               </Link>

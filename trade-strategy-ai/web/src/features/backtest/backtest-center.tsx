@@ -136,6 +136,17 @@ function buildJobRequest(jobType: 'backtest-run' | 'backtest-validate-rules' | '
   };
 }
 
+function getSubmissionErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return '当前账号没有权限提交回测任务。';
+    if (error.status === 400) return '回测参数不完整或不合法，请检查后重试。';
+    if (error.status === 404) return '未找到可用的回测数据，请返回上一步重新选择。';
+    return '回测任务提交失败，请稍后重试。';
+  }
+
+  return '回测任务提交失败，请稍后重试。';
+}
+
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -173,7 +184,7 @@ function ResultRow({
         <Badge variant="info">{summary?.total_trades ?? 0} 笔</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-        {item.benchmark_symbol ? <span className="rounded-full border border-slate-200 px-2 py-1">Benchmark {item.benchmark_symbol}</span> : null}
+        {item.benchmark_symbol ? <span className="rounded-full border border-slate-200 px-2 py-1">基准指数 {item.benchmark_symbol}</span> : null}
         <span className="rounded-full border border-slate-200 px-2 py-1">胜率 {formatPct(summary?.win_rate)}</span>
         <span className="rounded-full border border-slate-200 px-2 py-1">平均收益 {formatPct(summary?.avg_return_pct)}</span>
       </div>
@@ -383,7 +394,7 @@ export function BacktestCenter() {
         limit: 8,
       });
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : '回测任务提交失败');
+      setSubmissionError(getSubmissionErrorMessage(error));
       setSubmissionMessage(null);
       setSubmissionJobId(null);
     } finally {
@@ -396,8 +407,8 @@ export function BacktestCenter() {
   const resultPayload = getResultPayload(lastJob);
   const benchmarkOptions = benchmarkOptionsQuery.data?.items ?? [];
   const profileConfigPathHint = selectedProfileSnapshot
-    ? `已绑定最新 Profile snapshot：${selectedProfileSnapshot.snapshot_id}`
-    : '配置上下文将从所选 Profile 的最新 snapshot 自动解析。';
+    ? `已绑定最新画像快照：${selectedProfileSnapshot.snapshot_id}`
+    : '配置上下文将从所选画像的最新快照自动解析。';
 
   if (!canViewBacktest) {
     return (
@@ -496,15 +507,15 @@ export function BacktestCenter() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Profile</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">画像</span>
                 <Select
-                  aria-label="Profile"
+                  aria-label="画像"
                   className="border-slate-200 bg-white text-slate-900"
                   value={form.profileId}
                   onChange={(event) => setForm((current) => ({ ...current, profileId: event.target.value }))}
                   disabled={profilesQuery.isLoading || profileItems.length === 0}
                 >
-                  {profileItems.length === 0 ? <option value="">暂无可用 Profile</option> : null}
+                  {profileItems.length === 0 ? <option value="">暂无可用画像</option> : null}
                   {profileItems.map((profile: ProfileRecord) => (
                     <option key={profile.profile_id} value={profile.profile_id}>
                       {profile.name} ({profile.profile_id})
@@ -512,8 +523,8 @@ export function BacktestCenter() {
                   ))}
                 </Select>
                 <p className="text-xs text-slate-500">{profileConfigPathHint}</p>
-                {profilesQuery.isError ? <p className="text-xs text-rose-600">Profile 列表加载失败，请稍后重试。</p> : null}
-                {selectedProfileDetailQuery.isError ? <p className="text-xs text-rose-600">Profile 详情加载失败，当前无法预览最新 snapshot。</p> : null}
+                {profilesQuery.isError ? <p className="text-xs text-rose-600">画像列表加载失败，请稍后重试。</p> : null}
+                {selectedProfileDetailQuery.isError ? <p className="text-xs text-rose-600">画像详情加载失败，当前无法预览最新快照。</p> : null}
               </label>
               <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">交易员 ID</span>
@@ -577,9 +588,9 @@ export function BacktestCenter() {
                 <p className="text-xs text-slate-500">使用逗号或空格分隔，留空表示全部标的。</p>
               </label>
               <label className="space-y-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Benchmark</span>
+                <span className="text-xs uppercase tracking-[0.16em] text-slate-500">基准指数</span>
                 <Select
-                  aria-label="Benchmark 选择"
+                  aria-label="基准指数选择"
                   className="border-slate-200 bg-white text-slate-900"
                   value={form.benchmarkSymbol}
                   onChange={(event) => setForm((current) => ({ ...current, benchmarkSymbol: event.target.value }))}
@@ -594,7 +605,7 @@ export function BacktestCenter() {
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-slate-500">默认使用沪深300，可按回测口径切换指数基准。</p>
+                <p className="text-xs text-slate-500">默认使用沪深300，可按回测口径切换基准指数。</p>
               </label>
               <label className="space-y-2">
                 <span className="text-xs uppercase tracking-[0.16em] text-slate-500">回测模式</span>
@@ -606,7 +617,7 @@ export function BacktestCenter() {
                 >
                   <option value="full">全量</option>
                   <option value="replay">重放</option>
-                  <option value="rule_validation">规则验真</option>
+                  <option value="rule_validation">规则验证</option>
                 </Select>
               </label>
             </div>
@@ -651,7 +662,7 @@ export function BacktestCenter() {
                       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">规则版本来源</p>
                       <p className="mt-2 text-sm font-medium text-slate-900">{selectedStrategyVersionDetail.version_id}</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {selectedStrategyVersionDetail.trader_id} · {selectedStrategyVersionDetail.strategy_date} · {selectedStrategyVersionDetail.status}
+                        交易员 {selectedStrategyVersionDetail.trader_id} · 分析日期 {selectedStrategyVersionDetail.strategy_date} · 状态 {selectedStrategyVersionDetail.status}
                       </p>
                       <p className="mt-2 text-xs text-slate-500">
                         这里仅展示该规则版本引用的来源文章版本信息；回测仍只消费已选中的规则版本，不在此处切换版本。
@@ -705,7 +716,7 @@ export function BacktestCenter() {
 
             {benchmarkOptionsQuery.isError ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                Benchmark 选项加载失败，当前回退到默认沪深300。
+                基准指数选项加载失败，当前回退到默认沪深300。
               </div>
             ) : null}
           </CardContent>
@@ -719,7 +730,7 @@ export function BacktestCenter() {
             </CardHeader>
             <CardContent className="space-y-3">
               <MetricCard label="当前结果" value={selectedResult?.result_id ?? '未选择结果'} />
-              <MetricCard label="当前 Benchmark" value={form.benchmarkSymbol || DEFAULT_BENCHMARK_SYMBOL} />
+              <MetricCard label="当前基准指数" value={form.benchmarkSymbol || DEFAULT_BENCHMARK_SYMBOL} />
               <MetricCard label="最近 fingerprint" value={fingerprint ? `${fingerprint.slice(0, 16)}…` : '提交后可见'} />
               <MetricCard label="最近任务" value={lastJob?.id ?? '暂无'} />
               <div className="flex gap-2">

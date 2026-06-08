@@ -8,9 +8,12 @@ import { buildDashboardReport } from '@/lib/api/dataHealth';
 import type { DashboardReportResponse } from '@/types/dataHealth';
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return 'Dashboard 报告加载失败';
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return '当前账号没有权限查看数据健康报告。';
+    return '数据健康报告加载失败，请稍后重试。';
+  }
+  if (error instanceof Error) return '数据健康报告加载失败，请稍后重试。';
+  return '数据健康报告加载失败，请稍后重试。';
 }
 
 function SummaryCard({
@@ -86,9 +89,9 @@ export function DataHealthCenter() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-slate-950">Dashboard report</CardTitle>
+              <CardTitle className="text-slate-950">数据健康报告</CardTitle>
               <CardDescription className="text-slate-600">
-                读取后端生成的 dashboard 报告和 HTML 产物路径，便于快速确认数据健康状况。
+                读取后端生成的数据健康报告和 HTML 产物路径，便于快速确认数据健康状况。
               </CardDescription>
             </div>
             <Button variant="outline" onClick={() => reportQuery.refetch()} disabled={reportQuery.isFetching}>
@@ -99,7 +102,7 @@ export function DataHealthCenter() {
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-600">
-              {reportQuery.isLoading ? '正在加载 dashboard...' : '报告只读展示，不在前端执行任何写入。'}
+              {reportQuery.isLoading ? '正在加载报告...' : '报告只读展示，不在前端执行任何写入。'}
             </p>
           </div>
           {reportQuery.isLoading ? (

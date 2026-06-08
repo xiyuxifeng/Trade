@@ -165,29 +165,29 @@ describe('Strategy lifecycle pages', () => {
 
     renderWithRouter([{ path: '/strategies/pre-market', element: <PreMarketPage /> }], ['/strategies/pre-market']);
 
-    expect(await screen.findByLabelText('Profile')).toHaveValue('default');
-    expect(screen.getByLabelText('Profile')).toHaveValue('default');
-    expect(screen.getByLabelText('Benchmark 选择')).toHaveValue('000300.SH');
+    expect(await screen.findByLabelText('画像')).toHaveValue('default');
+    expect(screen.getByLabelText('画像')).toHaveValue('default');
+    expect(screen.getByLabelText('基准指数选择')).toHaveValue('000300.SH');
     expect(screen.getByLabelText('分析日期')).toBeInTheDocument();
-    expect(screen.getByLabelText('Snapshot start date')).toBeInTheDocument();
-    expect(screen.getByLabelText('Snapshot end date')).toBeInTheDocument();
-    expect(screen.getByLabelText('Snapshot slot')).toHaveValue('17-30');
-    expect(screen.getByLabelText('Snapshot type')).toHaveValue('all');
-    expect(screen.getByLabelText('Snapshot force')).not.toBeChecked();
-    expect(screen.getByLabelText('Snapshot offline')).not.toBeChecked();
-    expect(screen.getByLabelText('Run force')).not.toBeChecked();
-    expect(screen.getByLabelText('Export HTML')).not.toBeChecked();
+    expect(screen.getByLabelText('起始日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('结束日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('时段')).toHaveValue('17-30');
+    expect(screen.getByLabelText('快照类型')).toHaveValue('all');
+    expect(screen.getByLabelText('强制提交')).not.toBeChecked();
+    expect(screen.getByLabelText('离线模式')).not.toBeChecked();
+    expect(screen.getByLabelText('强制执行')).not.toBeChecked();
+    expect(screen.getByLabelText('导出网页')).not.toBeChecked();
     expect(screen.getByRole('button', { name: '提交市场上下文准备' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交盘前分析' })).toBeInTheDocument();
     expect(screen.getByText('页面默认选中沪深300；如需其他口径，可在这里切换。')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('分析日期'), { target: { value: '2026-05-22' } });
-    fireEvent.change(screen.getByLabelText('Snapshot start date'), { target: { value: '2026-05-20' } });
-    fireEvent.change(screen.getByLabelText('Snapshot end date'), { target: { value: '2026-05-22' } });
-    fireEvent.change(screen.getByLabelText('Snapshot slot'), { target: { value: '17-30' } });
-    fireEvent.change(screen.getByLabelText('Snapshot type'), { target: { value: 'all' } });
-    fireEvent.click(screen.getByLabelText('Snapshot force'));
-    fireEvent.click(screen.getByLabelText('Snapshot offline'));
+    fireEvent.change(screen.getByLabelText('起始日期'), { target: { value: '2026-05-20' } });
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-05-22' } });
+    fireEvent.change(screen.getByLabelText('时段'), { target: { value: '17-30' } });
+    fireEvent.change(screen.getByLabelText('快照类型'), { target: { value: 'all' } });
+    fireEvent.click(screen.getByLabelText('强制提交'));
+    fireEvent.click(screen.getByLabelText('离线模式'));
     fireEvent.click(screen.getByRole('button', { name: '提交市场上下文准备' }));
 
     await waitFor(() => {
@@ -210,9 +210,9 @@ describe('Strategy lifecycle pages', () => {
       expect(mockedCreateJob.mock.calls[0][0].params).toHaveProperty('benchmark_symbol', '000300.SH');
     });
 
-    fireEvent.change(screen.getByLabelText('Benchmark 选择'), { target: { value: '000905.SH' } });
-    fireEvent.click(screen.getByLabelText('Run force'));
-    fireEvent.click(screen.getByLabelText('Export HTML'));
+    fireEvent.change(screen.getByLabelText('基准指数选择'), { target: { value: '000905.SH' } });
+    fireEvent.click(screen.getByLabelText('强制执行'));
+    fireEvent.click(screen.getByLabelText('导出网页'));
     fireEvent.click(screen.getByRole('button', { name: '提交盘前分析' }));
 
     await waitFor(() => {
@@ -455,7 +455,7 @@ describe('Strategy lifecycle pages', () => {
         }),
       ).toBeInTheDocument();
     } else {
-      expect(await screen.findByLabelText('Profile')).toHaveValue('default');
+      expect(await screen.findByLabelText('画像')).toHaveValue('default');
       expect(screen.getByLabelText('执行日期')).toBeInTheDocument();
       expect(await screen.findByText('盘后结果')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '提交盘后复盘' })).toBeInTheDocument();
@@ -468,8 +468,8 @@ describe('Strategy lifecycle pages', () => {
       expect(screen.getByRole('link', { name: '查看任务详情' })).toHaveAttribute('href', '/jobs/run-after-close-1');
 
       fireEvent.change(screen.getByLabelText('执行日期'), { target: { value: '2026-05-22' } });
-      fireEvent.click(screen.getByLabelText('force'));
-      fireEvent.click(screen.getByLabelText('export_html'));
+      fireEvent.click(screen.getByLabelText('强制执行'));
+      fireEvent.click(screen.getByLabelText('导出网页'));
       fireEvent.click(screen.getByRole('button', { name: '提交盘后复盘' }));
 
       await waitFor(() => {
@@ -567,8 +567,7 @@ describe('Strategy lifecycle pages', () => {
 
     expect(await screen.findByRole('heading', { name: '盘后复盘' })).toBeInTheDocument();
     expect(await screen.findByText('盘后任务失败')).toBeInTheDocument();
-    expect(screen.getByText(/原因：盘后增量数据补全失败/)).toBeInTheDocument();
-    expect(screen.getByText(/OHLCV: fetch failed/)).toBeInTheDocument();
+    expect(screen.getByText('原因：任务失败，请稍后重试。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '打开任务详情' })).toHaveAttribute('href', '/jobs/run-after-close-failed-1');
   });
 });

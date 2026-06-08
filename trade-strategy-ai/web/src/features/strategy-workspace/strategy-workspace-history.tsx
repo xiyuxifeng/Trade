@@ -14,7 +14,7 @@ function describeStrategyJob(job: JobRecord) {
   const strategyDate = typeof params.strategy_date === 'string' ? params.strategy_date : null;
   const asOfDate = typeof params.as_of_date === 'string' ? params.as_of_date : null;
 
-  return [profileId ? `profile ${profileId}` : null, traderId ? `trader ${traderId}` : null, strategyDate ? `strategy ${strategyDate}` : asOfDate ? `as_of ${asOfDate}` : null]
+  return [profileId ? `画像 ${profileId}` : null, traderId ? `交易员 ${traderId}` : null, strategyDate ? `分析日期 ${strategyDate}` : asOfDate ? `执行日期 ${asOfDate}` : null]
     .filter(Boolean)
     .join(' · ');
 }
@@ -38,8 +38,8 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
 
   return (
     <SectionCard
-      title="兼容入口任务历史"
-      description="仅展示盘前/盘后兼容入口相关 Job，不再强调内部 job type。"
+      title="运行历史"
+      description="仅展示盘前和盘后相关任务，不再强调内部任务类型。"
       action={
         <div className="flex flex-wrap gap-2">
           <Link
@@ -55,7 +55,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
       }
     >
       {isLoading ? (
-        <LoadingState label="正在加载兼容入口任务历史" description="稍后会展示最近的执行记录。" />
+        <LoadingState label="正在加载运行历史" description="稍后会展示最近的执行记录。" />
       ) : error ? (
         <ErrorState {...buildErrorRecoveryState(error, 'strategy')} onRetry={onRetry} />
       ) : strategyJobs.length ? (
@@ -88,7 +88,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
         </div>
       ) : (
         <EmptyState
-          title="暂无兼容入口任务。"
+          title="暂无运行记录。"
           description="提交市场上下文准备、规则版本构建、盘前分析或盘后复盘后，这里会展示最近执行记录。"
         />
       )}

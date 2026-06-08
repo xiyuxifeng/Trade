@@ -495,7 +495,6 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
       toast({
         title,
         description: message,
-        variant: 'destructive',
       });
     },
     onSettled: () => {

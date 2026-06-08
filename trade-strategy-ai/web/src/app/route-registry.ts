@@ -1,6 +1,6 @@
 import { matchPath } from 'react-router-dom';
 
-export type RouteKind = 'canonical';
+export type RouteKind = 'canonical' | 'compat';
 
 export type RouteRecord = {
   label: string;
@@ -14,28 +14,27 @@ export const routeRegistry: RouteRecord[] = [
   { label: '任务中心', path: '/jobs', description: '统一查看任务状态、日志和结果', kind: 'canonical' },
   { label: '任务详情', path: '/jobs/:jobId', description: '统一查看任务状态、日志和结果', kind: 'canonical' },
   { label: '重点告警', path: '/alerts', description: '查看重点告警摘要和历史记录', kind: 'canonical' },
-  { label: '工作流兼容入口', path: '/workflows', description: '旧工作流入口的兼容页', kind: 'canonical' },
-  { label: '工作流兼容入口', path: '/workflows/:workflowId/run', description: '旧工作流入口的兼容页', kind: 'canonical' },
+  { label: '工作流兼容入口', path: '/workflows', description: '旧工作流入口的兼容页', kind: 'compat' },
+  { label: '工作流兼容入口', path: '/workflows/:workflowId/run', description: '旧工作流入口的兼容页', kind: 'compat' },
   { label: '文章与规则', path: '/articles', description: '导入文章、提取规则、查看结果', kind: 'canonical' },
   { label: '文章导入与处理', path: '/articles/run', description: '导入文章并启动规则提取流程', kind: 'canonical' },
   { label: '文章列表', path: '/articles/list', description: '文章列表页面', kind: 'canonical' },
   { label: '文章质量', path: '/articles/quality', description: '文章数据质量页面', kind: 'canonical' },
-  { label: '最近任务', path: '/articles/jobs', description: '文章页历史任务入口（兼容）', kind: 'canonical' },
+  { label: '最近任务', path: '/articles/jobs', description: '文章页历史任务入口（兼容）', kind: 'compat' },
   { label: '处理结果', path: '/articles/results', description: '文章处理结果页面', kind: 'canonical' },
-  { label: '高级维护', path: '/articles/maintenance', description: '文章高级维护页面（兼容）', kind: 'canonical' },
+  { label: '高级维护', path: '/articles/maintenance', description: '文章高级维护页面（兼容）', kind: 'compat' },
   { label: '市场上下文', path: '/market', description: '查看统一市场上下文和数据资产', kind: 'canonical' },
   { label: '市场上下文快照', path: '/market/snapshots', description: '浏览统一市场上下文快照', kind: 'canonical' },
   { label: '市场数据集', path: '/market/datasets', description: '浏览市场数据集', kind: 'canonical' },
   { label: '市场数据健康', path: '/market/kaipan', description: '查看市场数据健康与抓取状态', kind: 'canonical' },
   { label: 'OHLCV 数据', path: '/market/ohlcv', description: '查看 OHLCV 数据资产', kind: 'canonical' },
-  { label: '规则工作台（兼容入口）', path: '/strategies', description: '旧规则工作台兼容入口', kind: 'canonical' },
   { label: '交易员画像', path: '/persona', description: '交易风格画像与行为规则', kind: 'canonical' },
-  { label: '规则版本', path: '/strategies/versions', description: '规则版本构建与查看', kind: 'canonical' },
-  { label: '候选规则版本', path: '/strategies/candidates', description: '候选规则版本生成与审核', kind: 'canonical' },
-  { label: '兼容入口历史', path: '/strategies/history', description: '规则工作台兼容入口历史与筛选', kind: 'canonical' },
+  { label: '规则版本', path: '/strategies/versions', description: '构建和查看规则版本', kind: 'compat' },
+  { label: '候选规则版本', path: '/strategies/candidates', description: '生成并审核候选规则版本', kind: 'compat' },
+  { label: '运行历史', path: '/strategies/history', description: '查看规则相关任务的运行记录', kind: 'compat' },
   { label: '盘前分析', path: '/strategies/pre-market', description: '盘前分析与关注对象建议', kind: 'canonical' },
   { label: '盘后复盘', path: '/strategies/after-close', description: '盘后复盘与偏差分析', kind: 'canonical' },
-  { label: '规则选择', path: '/strategies/regime-selection', description: '兼容到回测与画像流程的规则选择视图', kind: 'canonical' },
+  { label: '规则选择', path: '/strategies/regime-selection', description: '查看规则选择结果与回溯信息', kind: 'compat' },
   { label: '回测与画像', path: '/backtest', description: '验证规则、沉淀画像并查看回测结果', kind: 'canonical' },
   { label: '市场状态回测', path: '/backtest/regime', description: '市场状态回测报告', kind: 'canonical' },
   { label: '规则审核', path: '/rule-pool', description: '规则池审核中心', kind: 'canonical' },

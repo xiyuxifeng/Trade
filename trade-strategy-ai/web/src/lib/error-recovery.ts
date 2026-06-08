@@ -156,7 +156,7 @@ function getPageRoute(page: ErrorRecoveryPage) {
     case 'artifact-filter-options':
       return '/artifacts';
     case 'strategy':
-      return '/strategies';
+      return '/dashboard';
     case 'admin-audit':
     case 'admin-audit-detail':
       return '/system/audit';
@@ -218,7 +218,7 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
     artifacts: '产物中心',
     'artifact-detail': '产物详情',
     'artifact-filter-options': '产物筛选',
-    strategy: '规则工作台（兼容入口）',
+    strategy: '规则与市场分析',
     backtest: '回测中心',
     'backtest-results': '回测结果',
     'backtest-detail': '回测详情',
@@ -246,7 +246,7 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
       return {
         title: '配置缺失',
         description: '页面依赖的配置或市场上下文快照没有找到。',
-        suggestion: '先检查 Profile，再重新打开页面。',
+        suggestion: '先检查画像，再重新打开页面。',
       };
     case 'provider unavailable':
       if (page === 'market') {
@@ -387,8 +387,8 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请检查 artifact_id 是否正确，或返回产物列表重新选择。',
         },
         strategy: {
-          title: '规则工作台（兼容入口）暂不可用',
-          description: '当前规则工作台兼容入口没有返回可展示的数据。',
+          title: '规则与市场分析暂不可用',
+          description: '当前规则与市场分析页面没有返回可展示的数据。',
           suggestion: '请稍后重试，或切换到盘前分析、盘后复盘与任务中心继续排查。',
         },
         'backtest': {

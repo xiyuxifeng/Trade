@@ -59,7 +59,7 @@ describe('OperationalDashboardCenter', () => {
 
     renderWithRouter([{ path: '/data-health', element: <OperationalDashboardCenter /> }], ['/data-health']);
 
-    expect(await screen.findByText('Health Check Dashboard')).toBeInTheDocument();
+    expect(await screen.findByText('系统健康总览')).toBeInTheDocument();
     expect((await screen.findAllByText('job-failed-1')).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('stale market data')).toBeInTheDocument();
     expect(await screen.findByText('market_data')).toBeInTheDocument();

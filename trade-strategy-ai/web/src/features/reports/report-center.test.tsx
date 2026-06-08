@@ -91,10 +91,10 @@ describe('ReportCenter', () => {
     expect(await screen.findByText('盘前策略已更新')).toBeInTheDocument();
     expect(screen.getByText('成交量偏弱')).toBeInTheDocument();
 
-    const htmlFrame = await screen.findByTitle('HTML 预览');
+    const htmlFrame = await screen.findByTitle('网页预览');
     expect(htmlFrame).toHaveAttribute('srcdoc', '<h1>日报 HTML</h1>');
 
-    await user.click(screen.getByRole('button', { name: 'JSON 详情' }));
+    await user.click(screen.getByRole('button', { name: '结构化详情' }));
     expect(await screen.findByTestId('report-detail-json')).toHaveTextContent('"strategy_version_ids"');
     expect(screen.getByTestId('daily-report-id')).toHaveTextContent('11111111-1111-1111-1111-111111111111');
   });
@@ -157,7 +157,7 @@ describe('ReportCenter', () => {
 
     expect(await screen.findByText('盘后归因为晚退出场')).toBeInTheDocument();
 
-    const htmlFrame = await screen.findByTitle('HTML 预览');
+    const htmlFrame = await screen.findByTitle('网页预览');
     expect(htmlFrame).toHaveAttribute('srcdoc', '<h1>考核 HTML</h1>');
   });
 });

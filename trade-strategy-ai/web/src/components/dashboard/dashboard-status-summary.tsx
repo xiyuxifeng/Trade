@@ -178,7 +178,7 @@ export function DashboardQuickLinks() {
     <Card className="border-slate-200 bg-white shadow-sm shadow-slate-200/40">
       <CardHeader>
         <CardTitle className="text-slate-900">主流程入口</CardTitle>
-        <CardDescription>按“文章 -> 规则 -> 回测 -> 画像 -> 盘前 -> 盘后”的顺序进入。</CardDescription>
+        <CardDescription>{'按“文章 -> 规则 -> 回测 -> 画像 -> 盘前 -> 盘后”的顺序进入。'}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">

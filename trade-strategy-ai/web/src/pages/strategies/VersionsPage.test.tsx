@@ -205,7 +205,7 @@ describe('VersionsPage', () => {
     renderWithRouter([{ path: '/strategies/versions', element: <VersionsPage /> }], ['/strategies/versions']);
 
     expect(await screen.findByRole('heading', { name: '规则版本' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '返回兼容入口' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回概览' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '搜索' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重置' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /构建规则版本/ })).toBeInTheDocument();

@@ -54,12 +54,12 @@ describe('persona page', () => {
     const user = userEvent.setup();
     renderWithRouter([{ path: '/persona', element: <PersonaPage /> }], ['/persona']);
 
-    expect(await screen.findByRole('heading', { name: '交易风格画像与行为规则' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '样例聚类' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '行为规则（只读）' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '生成样例聚类文件' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '交易风格画像' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '交易风格样例' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '行为规则' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '生成交易风格样例' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '行为规则（只读）' }));
+    await user.click(screen.getByRole('button', { name: '行为规则' }));
 
     expect(await screen.findByText('交易行为标签规则')).toBeInTheDocument();
     expect(screen.getByText('追涨类（1 条）')).toBeInTheDocument();

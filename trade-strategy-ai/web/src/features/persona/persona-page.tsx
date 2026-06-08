@@ -11,9 +11,13 @@ import type { BehaviorRuleRecord } from '@/types/persona';
 import { PersonaCenter } from './persona-center';
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return '行为规则预览加载失败';
+  if (error instanceof ApiError) {
+    if (error.status === 403 || error.status === 401) return '当前账号没有权限查看行为规则。';
+    if (error.status === 404) return '未找到行为规则数据。';
+    return '行为规则加载失败，请稍后重试。';
+  }
+  if (error instanceof Error) return '行为规则加载失败，请稍后重试。';
+  return '行为规则加载失败，请稍后重试。';
 }
 
 function SummaryCard({ title, value, note }: { title: string; value: string | number; note: string }) {
@@ -120,7 +124,7 @@ function BehaviorRulesPanel() {
         category="config missing"
         title="行为规则加载失败"
         description={getErrorMessage(query.error)}
-        suggestion="检查规则文件是否存在，或直接切换回上方的样例聚类标签继续使用 Persona 的其他能力。"
+        suggestion="检查规则文件是否存在，或直接切换回上方的交易风格样例继续使用其他能力。"
         actions={[{ label: '返回仪表盘', to: '/dashboard' }]}
         onRetry={() => {
           void query.refetch();
@@ -206,17 +210,17 @@ export function PersonaPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="Persona"
-        title="交易风格画像与行为规则"
-        description="一个入口，两类能力。默认展示样例聚类，用于验证风格路由；切换到行为规则（只读）可以查看单笔交易行为标签规则和命中的依据。"
-        actionLabel="返回仪表盘"
+        kicker="画像"
+        title="交易风格画像"
+        description="查看交易风格样例和行为规则，了解系统如何归纳交易者风格。"
+        actionLabel="返回首页"
         onAction={() => navigate('/dashboard')}
       />
 
       <Tabs className="space-y-4" defaultValue="clusters">
         <TabsList className="flex w-fit gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm shadow-slate-200/40">
-          <TabsTrigger value="clusters">样例聚类</TabsTrigger>
-          <TabsTrigger value="rules">行为规则（只读）</TabsTrigger>
+          <TabsTrigger value="clusters">交易风格样例</TabsTrigger>
+          <TabsTrigger value="rules">行为规则</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clusters" className="mt-0">

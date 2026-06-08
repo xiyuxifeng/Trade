@@ -95,13 +95,13 @@ export function StrategyHistoryPage() {
       return (
         <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则记录"
           title="运行历史"
-          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="查看规则版本、盘前分析和盘后复盘的运行记录，并进入任务详情查看日志、产物和重试。"
+          actionLabel="返回任务中心"
+          onAction={() => navigate('/jobs')}
         />
-        <LoadingState label="正在加载兼容入口历史" description="稍后会展示市场上下文准备、规则版本构建、盘前分析和盘后复盘任务。" />
+        <LoadingState label="正在加载运行历史" description="稍后会展示规则版本构建、盘前分析和盘后复盘任务。" />
       </main>
     );
   }
@@ -110,11 +110,11 @@ export function StrategyHistoryPage() {
       return (
         <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则记录"
           title="运行历史"
-          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="查看规则版本、盘前分析和盘后复盘的运行记录，并进入任务详情查看日志、产物和重试。"
+          actionLabel="返回任务中心"
+          onAction={() => navigate('/jobs')}
         />
         <ErrorState
           {...buildErrorRecoveryState(queryError, 'strategy')}
@@ -128,15 +128,15 @@ export function StrategyHistoryPage() {
       return (
       <main className="page-stack">
         <PageHeader
-          kicker="兼容入口"
+          kicker="规则记录"
           title="运行历史"
-          description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-          actionLabel="返回兼容入口"
-          onAction={() => navigate('/strategies')}
+          description="查看规则版本、盘前分析和盘后复盘的运行记录，并进入任务详情查看日志、产物和重试。"
+          actionLabel="返回任务中心"
+          onAction={() => navigate('/jobs')}
         />
         <EmptyState
-          title="暂无兼容入口运行历史。"
-          description="提交市场上下文准备、规则版本构建、盘前分析或盘后复盘后，这里会出现历史记录。"
+          title="暂无规则运行历史。"
+          description="提交规则版本构建、盘前分析或盘后复盘后，这里会出现历史记录。"
           actionLabel="进入任务列表"
           onAction={() => navigate('/jobs')}
         />
@@ -147,11 +147,11 @@ export function StrategyHistoryPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="兼容入口"
+        kicker="规则记录"
         title="运行历史"
-        description="筛选兼容入口相关任务的运行历史，并跳转到任务详情查看日志、产物和重试。"
-        actionLabel="返回兼容入口"
-        onAction={() => navigate('/strategies')}
+        description="查看规则版本、盘前分析和盘后复盘的运行记录，并进入任务详情查看日志、产物和重试。"
+        actionLabel="返回任务中心"
+        onAction={() => navigate('/jobs')}
       />
 
       <section className="grid gap-4">
@@ -168,21 +168,21 @@ export function StrategyHistoryPage() {
                 <span className="text-sm font-medium text-slate-700">状态</span>
                 <Select className="border-slate-200 bg-white text-slate-900" onChange={(event) => setDraftStatusFilter(event.target.value)} value={draftStatusFilter}>
                   <option value="">全部</option>
-                  <option value="pending">pending</option>
-                  <option value="running">running</option>
-                  <option value="success">success</option>
-                  <option value="failed">failed</option>
-                  <option value="canceled">canceled</option>
+                  <option value="pending">待处理</option>
+                  <option value="running">运行中</option>
+                  <option value="success">成功</option>
+                  <option value="failed">失败</option>
+                  <option value="canceled">已取消</option>
                 </Select>
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">类型</span>
                 <Select className="border-slate-200 bg-white text-slate-900" onChange={(event) => setDraftJobTypeFilter(event.target.value)} value={draftJobTypeFilter}>
                   <option value="">全部</option>
-                  <option value="snapshot-build">snapshot-build</option>
-                  <option value="strategy-build">strategy-build</option>
-                  <option value="run-pre-market">run-pre-market</option>
-                  <option value="run-after-close">run-after-close</option>
+                  <option value="snapshot-build">快照构建</option>
+                  <option value="strategy-build">规则版本构建</option>
+                  <option value="run-pre-market">盘前分析</option>
+                  <option value="run-after-close">盘后复盘</option>
                 </Select>
               </label>
               <label className="space-y-2">

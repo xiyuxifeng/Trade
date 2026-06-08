@@ -10,6 +10,7 @@ import {
 } from '@/pages/articles';
 import { ArtifactDetailPage, ArtifactsPage } from '@/pages/artifacts';
 import { BacktestPage } from '@/pages/backtest';
+import { CandidatesPage as BacktestCandidatesPage } from '@/pages/backtest/CandidatesPage';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { AlertsPage } from '@/pages/alerts';
 import { DashboardPage } from '@/pages/dashboard';
@@ -91,6 +92,7 @@ const dashboardLayoutRoutes = [
   { path: 'alerts', element: <AlertsPage /> },
   { path: 'backtest', element: <BacktestPage /> },
   { path: 'backtest/regime', element: <RegimeBacktestReportPage /> },
+  { path: 'backtest/candidates', element: <BacktestCandidatesPage /> },
   { path: 'rule-pool', element: <RulePoolPage /> },
   { path: 'rule-pool/:ruleId', element: <RulePoolDetailPage /> },
   { path: 'artifacts', element: <ArtifactsPage /> },

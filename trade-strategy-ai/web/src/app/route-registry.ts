@@ -31,6 +31,7 @@ export const routeRegistry: RouteRecord[] = [
   { label: '盘后复盘', path: '/strategies/after-close', description: '盘后复盘与偏差分析', kind: 'canonical' },
   { label: '回测与画像', path: '/backtest', description: '验证规则、沉淀画像并查看回测结果', kind: 'canonical' },
   { label: '市场状态回测', path: '/backtest/regime', description: '市场状态回测报告', kind: 'canonical' },
+  { label: '候选版本', path: '/backtest/candidates', description: '候选规则版本生成与审核', kind: 'canonical' },
   { label: '规则审核', path: '/rule-pool', description: '规则池审核中心', kind: 'canonical' },
   { label: '规则审核', path: '/rule-pool/:ruleId', description: '规则池详情与审核', kind: 'canonical' },
   { label: '产物中心', path: '/artifacts', description: '日志、下载文件与输出结果', kind: 'canonical' },

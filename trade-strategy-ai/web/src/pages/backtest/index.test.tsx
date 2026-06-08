@@ -410,6 +410,7 @@ describe('BacktestPage', () => {
     expect(await screen.findByText('规则版本来源')).toBeInTheDocument();
     expect(screen.getByText('article-1')).toBeInTheDocument();
     expect(screen.getByText('当前版本评分原因')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '打开候选页面' })).toHaveAttribute('href', '/backtest/candidates');
     expect(
       screen.getByText('按 MFE / MAE / return_pct 计算，并包含 T+1 与涨跌停约束。当前为固定口径，不提供切换。'),
     ).toBeInTheDocument();

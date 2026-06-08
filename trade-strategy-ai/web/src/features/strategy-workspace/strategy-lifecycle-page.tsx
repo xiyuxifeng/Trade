@@ -505,7 +505,7 @@ function StrategyAfterCloseBody() {
         queryClient.invalidateQueries({ queryKey: ['jobs'] }),
       ]);
     },
-    onError: (error) => {
+    onError: () => {
       setSubmissionState(null);
       setSubmissionError('盘后复盘提交失败，请稍后重试。');
     },

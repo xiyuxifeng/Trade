@@ -16,6 +16,8 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/market/kaipan').label).toBe('市场数据健康');
     expect(resolveRouteByPathname('/market/ohlcv').label).toBe('OHLCV 数据');
     expect(resolveRouteByPathname('/backtest').label).toBe('回测与画像');
+    expect(resolveRouteByPathname('/backtest/candidates').label).toBe('候选版本');
+    expect(resolveRouteByPathname('/backtest/candidates').kind).toBe('canonical');
     expect(resolveRouteByPathname('/rule-pool').label).toBe('规则审核');
     expect(resolveRouteByPathname('/persona').label).toBe('交易员画像');
     expect(routeRegistry.some((route) => route.path === '/strategies')).toBe(false);

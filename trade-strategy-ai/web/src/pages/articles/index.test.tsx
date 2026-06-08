@@ -9,7 +9,6 @@ import { listProfiles } from '@/lib/api/profiles';
 import {
   getArticlePipeline,
   getArticlePipelineScheduleStatus,
-  runArticlePipeline,
   runArticlePipelineStep,
   startArticlePipelineSchedule,
   stopArticlePipelineSchedule,
@@ -37,7 +36,6 @@ vi.mock('@/lib/api/profiles', () => ({
 vi.mock('@/lib/api/pipelines', () => ({
   getArticlePipeline: vi.fn(),
   getArticlePipelineScheduleStatus: vi.fn(),
-  runArticlePipeline: vi.fn(),
   runArticlePipelineStep: vi.fn(),
   startArticlePipelineSchedule: vi.fn(),
   stopArticlePipelineSchedule: vi.fn(),
@@ -56,7 +54,6 @@ const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
 const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
 const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
-const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
 const mockedRunArticlePipelineStep = vi.mocked(runArticlePipelineStep);
 const mockedStartArticlePipelineSchedule = vi.mocked(startArticlePipelineSchedule);
 const mockedStopArticlePipelineSchedule = vi.mocked(stopArticlePipelineSchedule);

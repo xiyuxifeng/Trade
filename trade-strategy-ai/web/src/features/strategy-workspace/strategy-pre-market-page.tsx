@@ -53,7 +53,7 @@ function summarizeJobParams(job: JobRecord) {
     .join(' · ');
 }
 
-function getJobErrorMessage(_: unknown) {
+function getJobErrorMessage() {
   return '任务失败，请稍后重试。';
 }
 
@@ -606,7 +606,7 @@ export function StrategyPreMarketPage() {
                 </div>
                 {job.error ? (
                   <p className="mt-3 text-sm text-rose-700">
-                    {getJobErrorMessage(job.error)}
+                    {getJobErrorMessage()}
                   </p>
                 ) : null}
               </Link>

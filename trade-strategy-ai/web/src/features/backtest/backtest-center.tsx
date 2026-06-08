@@ -714,6 +714,26 @@ export function BacktestCenter() {
               </div>
             ) : null}
 
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-slate-950">高级功能：候选版本</p>
+                    <Badge variant="info">独立页面</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    候选版本生成与审核已经拆到独立页面，主回测页只保留一个轻入口。
+                  </p>
+                </div>
+                <Link
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  to="/backtest/candidates"
+                >
+                  打开候选页面
+                </Link>
+              </div>
+            </div>
+
             {benchmarkOptionsQuery.isError ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                 基准指数选项加载失败，当前回退到默认沪深300。

@@ -247,7 +247,7 @@ export function StrategyWorkspaceCandidate({
     return (
       <SectionCard title="候选规则版本" description="查看候选规则版本、提交审核并追踪父版本与审计记录。">
         <ErrorState
-          {...buildErrorRecoveryState(queryError, 'strategy')}
+          {...buildErrorRecoveryState(queryError, 'backtest')}
           onRetry={
             permissionDenied
               ? undefined
@@ -333,8 +333,8 @@ export function StrategyWorkspaceCandidate({
               {artifactsQuery.isLoading ? (
                 <LoadingState label="正在加载相关产物" description="稍后会显示候选生成和审核对应的产物链接。" />
               ) : artifactsQuery.error ? (
-                <ErrorState
-                  {...buildErrorRecoveryState(artifactsQuery.error, 'strategy')}
+              <ErrorState
+                  {...buildErrorRecoveryState(artifactsQuery.error, 'artifacts')}
                   onRetry={() => void artifactsQuery.refetch()}
                 />
               ) : candidateArtifacts.length ? (

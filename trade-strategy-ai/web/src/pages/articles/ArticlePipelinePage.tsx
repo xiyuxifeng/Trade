@@ -13,7 +13,6 @@ import { toast } from '@/components/ui/toast';
 import { EmptyState, ErrorState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
-import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import {
   getArticlePipeline,
@@ -30,26 +29,12 @@ import {
 } from '@/lib/api/article-metadata';
 import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleQualitySummaryResponse } from '@/types/articles';
 import type { ArticleMetadataListResponse } from '@/types/article-metadata';
-import type { JobRecord, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import type { ArticlePipelineRunParams, ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
 import type { WorkflowParamField, WorkflowStep } from '@/types/workflows';
 
-type ArticleJobsResponse = JobsListResponse;
 type MaintenanceMode = 'normal' | 'rebuild_pending' | 'retry_failed' | 'cleanup';
 type StepParamKey = 'force' | 'skip_crawl' | 'use_db' | 'max_articles' | 'new_version';
-type WorkflowRunResult = {
-  workflow_id?: unknown;
-  workflow_params?: Record<string, unknown> | null;
-  run_context?: {
-    status?: unknown;
-    duration_ms?: unknown;
-  } | Record<string, unknown> | null;
-  step_results?: unknown[];
-};
-type JobResultPayload = {
-  workflow_run?: WorkflowRunResult | null;
-};
 
 const workspaceSections = [
   {
@@ -71,27 +56,14 @@ const workspaceSections = [
     path: '/articles/quality',
   },
   {
-    title: '最近任务',
-    description: '文章任务与进度。',
-    purpose: '查看最近 Job 的状态和执行进度，并跳转到 Job Detail。',
-    path: '/articles/jobs',
-  },
-  {
     title: '处理结果',
     description: '文章结构化产物。',
     purpose: '管理文章 metadata 版本选择，按状态筛选并查看候选版本详情。',
     path: '/articles/results',
   },
-  {
-    title: '高级维护',
-    description: '文章维护操作。',
-    purpose: '执行重跑、失败重试和清理操作。',
-    path: '/articles/maintenance',
-  },
 ] as const;
 
 const articlePipelineJobType = 'pipeline-run';
-const articlePipelineJobTypes = ['crawl', 'clean', 'validate', 'store', 'process', 'pipeline-run', 'pipeline-step'] as const;
 
 const articleSubpages = {
   '/articles/run': {
@@ -109,20 +81,10 @@ const articleSubpages = {
     description: '查看文章质量信号和结果概览。',
     summary: '基于当前 Profile 的文章全量数据统计摘要、标签、去重和新鲜度。',
   },
-  '/articles/jobs': {
-    title: '最近任务',
-    description: '查看文章相关 Job 和执行进度。',
-    summary: '聚合最近文章 Job 的状态和执行进度。',
-  },
   '/articles/results': {
     title: '处理结果',
     description: '查看文章列表并选择当前生效的 metadata 版本。',
     summary: '按选择状态浏览文章并管理 metadata 版本选择，左侧列表和右侧详情独立滚动。',
-  },
-  '/articles/maintenance': {
-    title: '高级维护',
-    description: '失败恢复、重跑、候选版本重建和清理的维护入口。',
-    summary: '提供失败恢复、重跑、候选 metadata 版本重建和清理操作。',
   },
 } as const;
 
@@ -250,68 +212,6 @@ function mergeFilterOptions(values: string[], selected: string) {
     merged.add(normalizedSelected);
   }
   return Array.from(merged).sort((left, right) => left.localeCompare(right, 'zh-CN'));
-}
-
-function isArticlePipelineJob(job: JobRecord) {
-  const params = job.params as Record<string, unknown> | null;
-  const result = job.result as JobResultPayload | null;
-  const workflowRun = result?.workflow_run ?? undefined;
-  const workflowId = workflowRun ? String(workflowRun.workflow_id ?? '') : '';
-  return articlePipelineJobTypes.includes(job.job_type as (typeof articlePipelineJobTypes)[number]) && (Boolean(params?.profile_id) || workflowId === 'article_pipeline');
-}
-
-function getWorkflowRun(job: JobRecord) {
-  const result = job.result as JobResultPayload | null;
-  return result?.workflow_run ?? null;
-}
-
-function getWorkflowRunSteps(job: JobRecord) {
-  const workflowRun = getWorkflowRun(job);
-  const stepResults = workflowRun?.step_results;
-  return Array.isArray(stepResults) ? stepResults : [];
-}
-
-function getJobProfileId(job: JobRecord) {
-  const params = job.params as Record<string, unknown> | null;
-  if (params && typeof params.profile_id === 'string') {
-    return params.profile_id;
-  }
-  const workflowRun = getWorkflowRun(job);
-  const workflowParams = workflowRun?.workflow_params;
-  if (workflowParams && typeof workflowParams === 'object' && typeof (workflowParams as Record<string, unknown>).profile_id === 'string') {
-    return String((workflowParams as Record<string, unknown>).profile_id);
-  }
-  return '未记录';
-}
-
-function getJobStage(job: JobRecord) {
-  const workflowRun = getWorkflowRun(job);
-  if (!workflowRun) return job.job_type;
-  const stepResults = getWorkflowRunSteps(job);
-  const lastStep = stepResults.length > 0 ? (stepResults[stepResults.length - 1] as Record<string, unknown>) : null;
-  if (lastStep && typeof lastStep.step_name === 'string') {
-    return lastStep.step_name;
-  }
-  if (lastStep && typeof lastStep.step_id === 'string') {
-    return lastStep.step_id;
-  }
-  const runContext = workflowRun.run_context as Record<string, unknown> | undefined;
-  return typeof runContext?.status === 'string' ? String(runContext.status) : job.job_type;
-}
-
-function getJobWorkflowStatus(job: JobRecord) {
-  const workflowRun = getWorkflowRun(job);
-  const runContext = workflowRun?.run_context as Record<string, unknown> | undefined;
-  return typeof runContext?.status === 'string' ? String(runContext.status) : job.status;
-}
-
-function getJobDurationMs(job: JobRecord) {
-  const workflowRun = getWorkflowRun(job);
-  if (!workflowRun) return null;
-  const runContext = workflowRun.run_context;
-  if (!runContext || typeof runContext !== 'object') return null;
-  const durationMs = (runContext as Record<string, unknown>).duration_ms;
-  return typeof durationMs === 'number' ? durationMs : null;
 }
 
 function MetricCard({
@@ -1170,138 +1070,6 @@ export function ArticleListPage() {
               </Button>
             </div>
           </div>
-        </SectionCard>
-      </div>
-    </ArticlePageShell>
-  );
-}
-
-export function ArticleJobsPage() {
-  const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'success' | 'failed' | 'cancelled'>('all');
-
-  const jobsQuery = useQuery<ArticleJobsResponse, ApiError>({
-    queryKey: ['articles', 'jobs', statusFilter],
-    queryFn: async () => {
-      const responses = await Promise.all(
-        articlePipelineJobTypes.map((jobType) =>
-          listJobs({
-            job_type: jobType,
-            status: statusFilter === 'all' ? undefined : statusFilter,
-            limit: 25,
-          }),
-        ),
-      );
-      const items = responses
-        .flatMap((response) => response.items ?? [])
-        .filter(isArticlePipelineJob)
-        .slice()
-        .sort((left, right) => (right.created_at || '').localeCompare(left.created_at || ''));
-      const total = items.length;
-      return {
-        count: total,
-        total,
-        skip: 0,
-        limit: total,
-        items,
-      };
-    },
-    staleTime: 20_000,
-  });
-
-  const jobs = useMemo(() => {
-    const items = jobsQuery.data?.items ?? [];
-    return items.filter(isArticlePipelineJob);
-  }, [jobsQuery.data?.items]);
-
-  if (jobsQuery.isLoading) {
-    return (
-      <ArticlePageShell title={articleSubpages['/articles/jobs'].title} description={articleSubpages['/articles/jobs'].description} summary={articleSubpages['/articles/jobs'].summary}>
-        <ArticleLoadingState label="正在加载最近任务" description="正在读取文章相关 Job 列表。" />
-      </ArticlePageShell>
-    );
-  }
-
-  if (jobsQuery.error) {
-    return (
-      <ArticlePageShell title={articleSubpages['/articles/jobs'].title} description={articleSubpages['/articles/jobs'].description} summary={articleSubpages['/articles/jobs'].summary}>
-        <ArticleErrorState error={jobsQuery.error} title="最近任务加载失败" onRetry={() => void jobsQuery.refetch()} />
-      </ArticlePageShell>
-    );
-  }
-
-  return (
-    <ArticlePageShell title={articleSubpages['/articles/jobs'].title} description={articleSubpages['/articles/jobs'].description} summary={articleSubpages['/articles/jobs'].summary}>
-      <div className="space-y-6">
-        <SectionCard title="任务筛选" description="仅查看文章与规则相关的 Job。">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-900" htmlFor="article-job-status">
-                状态
-              </label>
-              <Select id="article-job-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
-                <option value="all">全部</option>
-                <option value="pending">pending</option>
-                <option value="running">running</option>
-                <option value="success">success</option>
-                <option value="failed">failed</option>
-                <option value="cancelled">cancelled</option>
-              </Select>
-            </div>
-            <div className="flex items-end gap-3">
-              <Button variant="outline" onClick={() => void jobsQuery.refetch()}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                刷新
-              </Button>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="最近任务" description={`共 ${jobs.length} 条文章相关 Job。`}>
-          {jobs.length === 0 ? (
-            <EmptyState
-              title="暂无文章任务"
-              description="当前没有匹配到文章相关的最近任务。"
-              actionLabel="返回工作台"
-              onAction={() => navigate('/articles')}
-            />
-          ) : (
-            <div className="grid gap-4">
-              {jobs.map((job) => (
-                <div key={job.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-950">{job.id}</p>
-                      <p className="mt-1 text-sm text-slate-600">操作类型：{job.job_type}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="info">Profile: {getJobProfileId(job)}</Badge>
-                      <StatusBadge value={job.status} />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard size="compact" label="当前阶段" value={getJobStage(job)} />
-                <MetricCard size="compact" label="创建时间" value={formatTimestamp(job.created_at)} />
-                <MetricCard size="compact" label="耗时" value={formatDuration(getJobDurationMs(job))} />
-                <MetricCard size="compact" label="工作流状态" value={getJobWorkflowStatus(job)} />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${encodeURIComponent(job.id)}`)}>
-                      打开 Job Detail
-                    </Button>
-                    <a
-                      className="inline-flex h-9 items-center rounded-lg border border-transparent px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-                      href={`/jobs/${encodeURIComponent(job.id)}`}
-                    >
-                      直接跳转
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </SectionCard>
       </div>
     </ArticlePageShell>

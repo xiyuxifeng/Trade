@@ -1,7 +1,5 @@
 export {
-  ArticleJobsPage,
   ArticleListPage,
-  ArticleMaintenancePage,
   ArticleQualityPage,
   ArticleResultsPage,
   ArticleRunPage,

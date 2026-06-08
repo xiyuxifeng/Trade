@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
-import { ArticleJobsPage, ArticleListPage, ArticleMaintenancePage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
+import { ArticleListPage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 import { getArticleMetadataSummary, listArticleMetadataArticles, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
-import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import {
   getArticlePipeline,
@@ -29,10 +28,6 @@ vi.mock('@/lib/api/article-metadata', () => ({
   getArticleMetadataSummary: vi.fn(),
   listArticleMetadataArticles: vi.fn(),
   selectArticleMetadataVersion: vi.fn(),
-}));
-
-vi.mock('@/lib/api/jobs', () => ({
-  listJobs: vi.fn(),
 }));
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -59,7 +54,6 @@ const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersio
 const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
-const mockedListJobs = vi.mocked(listJobs);
 const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
 const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
 const mockedRunArticlePipeline = vi.mocked(runArticlePipeline);
@@ -451,178 +445,6 @@ function buildArticleMetadataDetail(articleId: string) {
   };
 }
 
-function buildJobList() {
-  return {
-    count: 1,
-    total: 1,
-    skip: 0,
-    limit: 10,
-    items: [
-      {
-        id: 'job-article-1',
-        job_type: 'pipeline-run',
-        status: 'success',
-        params: { profile_id: 'default', from_step: 'process' },
-        result: {
-          workflow_run: {
-            workflow_id: 'article_pipeline',
-            workflow_params: { profile_id: 'default' },
-            run_context: { status: 'success', duration_ms: 1250 },
-            step_results: [
-              { step_name: 'clean' },
-              {
-                step_name: 'process',
-                output_json: {
-                  extracted_concepts: ['macd'],
-                  trading_symbols: ['AAPL'],
-                  strategy_rules: ['rule-1'],
-                  preconditions: ['trend'],
-                  comment_insights: ['bullish'],
-                  sentiment_score: 0.8,
-                  confidence_score: 0.9,
-                },
-              },
-            ],
-          },
-        },
-        error: null,
-        artifacts: [],
-        created_by: 'web',
-        idempotency_key: null,
-        retry_count: 0,
-        max_retries: 0,
-        retry_backoff_seconds: 0,
-        timeout_seconds: null,
-        cancel_requested: false,
-        cancel_requested_at: null,
-        worker_id: null,
-        lock_token: null,
-        lock_acquired_at: null,
-        heartbeat_at: null,
-        scheduled_at: null,
-        started_at: '2026-05-10T08:00:00Z',
-        finished_at: '2026-05-10T08:20:00Z',
-        audit_events: [],
-        created_at: '2026-05-10T08:00:00Z',
-        updated_at: '2026-05-10T08:20:00Z',
-        runtime_state: null,
-      },
-    ],
-  };
-}
-
-function buildJobListForType(jobType: string) {
-  if (jobType === 'pipeline-run') {
-    return buildJobList();
-  }
-
-  if (jobType === 'crawl') {
-    return {
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 10,
-      items: [
-        {
-          id: 'job-article-crawl',
-          job_type: 'crawl',
-          status: 'success',
-          params: { profile_id: 'default', max_articles: 5 },
-          result: null,
-          error: null,
-          artifacts: [],
-          created_by: 'web',
-          idempotency_key: null,
-          retry_count: 0,
-          max_retries: 0,
-          retry_backoff_seconds: 0,
-          timeout_seconds: null,
-          cancel_requested: false,
-          cancel_requested_at: null,
-          worker_id: null,
-          lock_token: null,
-          lock_acquired_at: null,
-          heartbeat_at: null,
-          scheduled_at: null,
-          started_at: '2026-05-10T07:50:00Z',
-          finished_at: '2026-05-10T07:55:00Z',
-          audit_events: [],
-          created_at: '2026-05-10T07:50:00Z',
-          updated_at: '2026-05-10T07:55:00Z',
-          runtime_state: null,
-        },
-      ],
-    };
-  }
-
-  if (jobType === 'pipeline-step') {
-    return {
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 10,
-      items: [
-        {
-          id: 'job-article-step',
-          job_type: 'pipeline-step',
-          status: 'success',
-          params: { profile_id: 'default', step: 'process', force: false },
-          result: {
-            workflow_run: {
-              workflow_id: 'article_pipeline',
-              workflow_params: { profile_id: 'default' },
-              run_context: { status: 'success', duration_ms: 830 },
-              step_results: [
-                {
-                  step_name: 'process',
-                  output_json: {
-                    extracted_concepts: ['breakout'],
-                    trading_symbols: ['TSLA'],
-                    strategy_rules: ['rule-step'],
-                    preconditions: ['volume'],
-                    comment_insights: ['momentum'],
-                    sentiment_score: 0.75,
-                    confidence_score: 0.82,
-                  },
-                },
-              ],
-            },
-          },
-          error: null,
-          artifacts: [],
-          created_by: 'web',
-          idempotency_key: null,
-          retry_count: 0,
-          max_retries: 0,
-          retry_backoff_seconds: 0,
-          timeout_seconds: null,
-          cancel_requested: false,
-          cancel_requested_at: null,
-          worker_id: null,
-          lock_token: null,
-          lock_acquired_at: null,
-          heartbeat_at: null,
-          scheduled_at: null,
-          started_at: '2026-05-10T09:00:00Z',
-          finished_at: '2026-05-10T09:10:00Z',
-          audit_events: [],
-          created_at: '2026-05-10T09:00:00Z',
-          updated_at: '2026-05-10T09:10:00Z',
-          runtime_state: null,
-        },
-      ],
-    };
-  }
-
-  return {
-    count: 0,
-    total: 0,
-    skip: 0,
-    limit: 10,
-    items: [],
-  };
-}
-
 describe('ArticlesPage', () => {
   it('renders workspace entry cards that link to article subpages', async () => {
     renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
@@ -637,13 +459,10 @@ describe('ArticlesPage', () => {
     expect(screen.getByText('文章浏览与筛选。')).toBeInTheDocument();
     expect(screen.getByText('文章数据质量概览。')).toBeInTheDocument();
     expect(screen.getByText('文章结构化产物。')).toBeInTheDocument();
-    expect(screen.getByText('文章维护操作。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '进入抓取与处理' })).toHaveAttribute('href', '/articles/run');
     expect(screen.getByRole('link', { name: '进入文章列表' })).toHaveAttribute('href', '/articles/list');
     expect(screen.getByRole('link', { name: '进入数据质量' })).toHaveAttribute('href', '/articles/quality');
-    expect(screen.getByRole('link', { name: '进入最近任务' })).toHaveAttribute('href', '/articles/jobs');
     expect(screen.getByRole('link', { name: '进入处理结果' })).toHaveAttribute('href', '/articles/results');
-    expect(screen.getByRole('link', { name: '进入高级维护' })).toHaveAttribute('href', '/articles/maintenance');
     expect(screen.queryByLabelText('config_path')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '运行 article_pipeline' })).not.toBeInTheDocument();
   });
@@ -814,21 +633,6 @@ describe('ArticlesPage', () => {
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument();
   });
 
-  it('renders the recent job page with article pipeline jobs', async () => {
-    mockedListJobs.mockImplementation(async (request?: { job_type?: string }) =>
-      buildJobListForType(String(request?.job_type ?? '')),
-    );
-
-    renderWithRouter([{ path: '/articles/jobs', element: <ArticleJobsPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/jobs']);
-
-    expect(await screen.findByRole('heading', { name: '最近任务' })).toBeInTheDocument();
-    expect(await screen.findByText('job-article-1')).toBeInTheDocument();
-    expect(await screen.findByText('job-article-crawl')).toBeInTheDocument();
-    expect(await screen.findByText('job-article-step')).toBeInTheDocument();
-    expect(screen.getAllByText(/Profile:\s*default/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: '打开 Job Detail' })).toHaveLength(3);
-  });
-
   it('renders the quality page with full profile-scoped quality metrics', async () => {
     mockedGetArticleQualitySummary.mockResolvedValue({
       profile_id: 'default',
@@ -907,72 +711,4 @@ describe('ArticlesPage', () => {
     expect(await screen.findByText('文章元数据版本已更新。')).toBeInTheDocument();
   });
 
-  it('renders the maintenance page and submits maintenance options', async () => {
-    const user = userEvent.setup();
-    mockedToast.mockReset();
-    mockedListProfiles.mockResolvedValue(buildProfileList());
-    let resolveRunMaintenance:
-      | ((value: {
-          workflow: { workflow_id: string; job_type: string };
-          job: { id: string; job_type: string; status: string };
-        }) => void)
-      | undefined;
-    mockedRunArticlePipeline.mockReturnValue(
-      new Promise((resolve) => {
-        resolveRunMaintenance = resolve;
-      }) as never,
-    );
-
-    renderWithRouter(
-      [{ path: '/articles/maintenance', element: <ArticleMaintenancePage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }],
-      ['/articles/maintenance'],
-    );
-
-    expect(await screen.findByRole('heading', { name: '高级维护' })).toBeInTheDocument();
-    expect(await screen.findByLabelText('Profile')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '从指定步骤开始' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /导出/i })).not.toBeInTheDocument();
-    expect(screen.queryByText('Hash：')).not.toBeInTheDocument();
-
-    await user.selectOptions(screen.getByRole('combobox', { name: '从指定步骤开始' }), 'process');
-    expect(await screen.findByLabelText('new_version（候选 metadata 版本）')).toBeInTheDocument();
-    expect(screen.queryByLabelText('max_articles')).not.toBeInTheDocument();
-
-    await user.click(screen.getByLabelText('重建 pending tasks'));
-    await user.click(screen.getByRole('button', { name: '运行维护' }));
-
-    expect(screen.getByRole('button', { name: '提交中' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '提交中' })).toHaveAttribute('aria-busy', 'true');
-
-    await waitFor(() => {
-      expect(mockedRunArticlePipeline).toHaveBeenCalledWith({
-        params: {
-          profile_id: 'default',
-          from_step: 'process',
-          force: true,
-          skip_crawl: true,
-          use_db: true,
-          rebuild_pending: true,
-        },
-        created_by: 'web',
-        confirmed: false,
-      });
-    });
-
-    await act(async () => {
-      resolveRunMaintenance?.({
-        workflow: { workflow_id: 'article_pipeline', job_type: 'pipeline-run' },
-        job: { id: 'job-maintenance-1', job_type: 'pipeline-run', status: 'pending' },
-      });
-    });
-
-    await waitFor(() => {
-      expect(mockedToast).toHaveBeenCalledWith({
-        title: '文章维护任务已提交',
-        description: 'Job job-maintenance-1 已创建，正在打开详情页。',
-      });
-    });
-
-    expect(await screen.findByText('job detail page')).toBeInTheDocument();
-  });
 });

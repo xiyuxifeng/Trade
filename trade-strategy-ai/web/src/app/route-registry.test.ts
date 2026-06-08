@@ -9,6 +9,8 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/jobs/job-1').path).toBe('/jobs/:jobId');
     expect(resolveRouteByPathname('/articles').label).toBe('文章与规则');
     expect(resolveRouteByPathname('/articles/run').label).toBe('文章导入与处理');
+    expect(routeRegistry.some((route) => route.path === '/articles/jobs')).toBe(false);
+    expect(routeRegistry.some((route) => route.path === '/articles/maintenance')).toBe(false);
     expect(resolveRouteByPathname('/market').label).toBe('市场上下文');
     expect(resolveRouteByPathname('/market/snapshots').label).toBe('市场上下文快照');
     expect(resolveRouteByPathname('/market/kaipan').label).toBe('市场数据健康');

@@ -18,12 +18,12 @@
 
 | 一级入口 | 路径保留 / 能力保留 | 对外替换 | 废弃为主入口 |
 |---|---|---|---|
-| 文章与规则 | `/articles`, `/articles/list`, `/articles/quality`, `/articles/results` | `/articles/run` 的页面表达 | `/articles/jobs`, `/articles/maintenance` |
+| 文章与规则 | `/articles`, `/articles/list`, `/articles/quality`, `/articles/results` | `/articles/run` 的页面表达 | 无 |
 | 回测与画像 | `/backtest`, `/backtest/regime`, `/rule-pool`, `/rule-pool/:ruleId`, `/persona` | `/strategies/regime-selection` 的页面表达 | `/strategies` |
 | 盘前分析 | `/strategies/pre-market` | 无 | `/strategies`, `/workflows/pre-market`, `/workflows/pre-market/run` |
 | 盘后复盘 | `/strategies/after-close` | 无 | `/workflows/after-close`, `/workflows/after-close/run` |
 | 市场上下文 | `/market`, `/market/snapshots`, `/market/datasets`, `/market/kaipan`, `/market/ohlcv` | `/market` 及其子页的对外表达 | 无 |
-| Job List | `/jobs`, `/jobs/:jobId` | 无 | `/articles/jobs` |
+| Job List | `/jobs`, `/jobs/:jobId` | 无 | 无 |
 | Dashboard | `/dashboard` | 无 | 无 |
 | 配置与管理 | `/profiles`, `/profiles/import`, `/profiles/:profileId`, `/profiles/:profileId/edit`, `/profiles/:profileId/snapshots/:snapshotId`, `/system`, `/system/audit`, `/system/users`, `/system/health`, `/system/db-migrate`, `/system/backup` | `/profiles`、`/system` 的对外表达 | `/system/restore`, `/admin`, `/admin/audit`, `/settings` |
 | 告警 | 无 | 无 | `/alerts` |
@@ -58,8 +58,8 @@
 | `/articles/list` | 保留 |
 | `/articles/quality` | 保留 |
 | `/articles/results` | 保留，作为结果查看页 |
-| `/articles/jobs` | 废弃为主入口，改为跳转 `/jobs` |
-| `/articles/maintenance` | 废弃为主入口，必要时仅作为高级维护兼容页 |
+| `/articles/jobs` | 已从正式路由移除 |
+| `/articles/maintenance` | 已从正式路由移除 |
 
 结论：
 
@@ -212,7 +212,7 @@
 |---|---|
 | `/jobs` | 保留，作为任务中心 |
 | `/jobs/:jobId` | 保留，作为 Job 详情 |
-| `/articles/jobs` | 废弃为主入口，统一跳转到 `/jobs` |
+| `/articles/jobs` | 已从正式路由移除 |
 
 结论：
 
@@ -335,8 +335,6 @@
 - `market/ohlcv`
 - `rule-pool`
 - `articles/run`
-- `articles/jobs`
-- `articles/maintenance`
 
 ### 必须废弃为主入口
 

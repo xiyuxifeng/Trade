@@ -3,9 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '@/layouts/dashboard-layout';
 import {
   ArticlesPage,
-  ArticleJobsPage,
   ArticleListPage,
-  ArticleMaintenancePage,
   ArticleQualityPage,
   ArticleResultsPage,
   ArticleRunPage,
@@ -90,9 +88,7 @@ const dashboardLayoutRoutes = [
   { path: 'articles/run', element: <ArticleRunPage /> },
   { path: 'articles/list', element: <ArticleListPage /> },
   { path: 'articles/quality', element: <ArticleQualityPage /> },
-  { path: 'articles/jobs', element: <ArticleJobsPage /> },
   { path: 'articles/results', element: <ArticleResultsPage /> },
-  { path: 'articles/maintenance', element: <ArticleMaintenancePage /> },
   { path: 'alerts', element: <AlertsPage /> },
   { path: 'backtest', element: <BacktestPage /> },
   { path: 'backtest/regime', element: <RegimeBacktestReportPage /> },

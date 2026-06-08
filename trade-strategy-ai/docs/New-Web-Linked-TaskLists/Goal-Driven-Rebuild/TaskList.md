@@ -119,8 +119,6 @@
 - `/market/datasets`
 - `/rule-pool`
 - `/articles/run`
-- `/articles/jobs`
-- `/articles/maintenance`
 - `/market/kaipan`
 - `/market/ohlcv`
 

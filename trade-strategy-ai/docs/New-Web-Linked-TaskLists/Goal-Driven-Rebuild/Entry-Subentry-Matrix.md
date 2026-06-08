@@ -19,7 +19,7 @@
 | 一级入口 | 路径保留 / 能力保留 | 对外替换 | 废弃为主入口 |
 |---|---|---|---|
 | 文章与规则 | `/articles`, `/articles/list`, `/articles/quality`, `/articles/results` | `/articles/run` 的页面表达 | 无 |
-| 回测与画像 | `/backtest`, `/backtest/regime`, `/rule-pool`, `/rule-pool/:ruleId`, `/persona` | `/strategies/regime-selection` 的页面表达 | `/strategies` |
+| 回测与画像 | `/backtest`, `/backtest/regime`, `/rule-pool`, `/rule-pool/:ruleId`, `/persona` | 无 | `/strategies` |
 | 盘前分析 | `/strategies/pre-market` | 无 | `/strategies`, `/workflows/pre-market`, `/workflows/pre-market/run` |
 | 盘后复盘 | `/strategies/after-close` | 无 | `/workflows/after-close`, `/workflows/after-close/run` |
 | 市场上下文 | `/market`, `/market/snapshots`, `/market/datasets`, `/market/kaipan`, `/market/ohlcv` | `/market` 及其子页的对外表达 | 无 |
@@ -92,7 +92,7 @@
 | `/rule-pool` | 保留或并入回测结果页，若保留则替换为 `规则审核` |
 | `/rule-pool/:ruleId` | 保留，作为规则审核详情 |
 | `/persona` | 保留，替换为 `交易员画像` |
-| `/strategies/regime-selection` | 废弃为主入口，能力并入回测/画像流程，不作为独立一级入口 |
+| `/strategies/regime-selection` | 已移除，不再保留 |
 
 结论：
 

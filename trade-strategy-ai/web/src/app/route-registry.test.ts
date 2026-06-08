@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { routeRegistry, resolveRouteByPathname } from './route-registry';
 
 describe('resolveRouteByPathname', () => {
-  it('resolves the current user-facing routes and compatibility paths', () => {
+  it('resolves the current user-facing routes and omits retired compatibility paths', () => {
     expect(resolveRouteByPathname('/dashboard').label).toBe('概览');
     expect(resolveRouteByPathname('/dashboard').description).toBe('主流程概览与系统摘要');
     expect(resolveRouteByPathname('/jobs').label).toBe('任务中心');
@@ -18,20 +18,15 @@ describe('resolveRouteByPathname', () => {
     expect(resolveRouteByPathname('/backtest').label).toBe('回测与画像');
     expect(resolveRouteByPathname('/rule-pool').label).toBe('规则审核');
     expect(resolveRouteByPathname('/persona').label).toBe('交易员画像');
-    expect(resolveRouteByPathname('/strategies').path).toBe('/dashboard');
     expect(routeRegistry.some((route) => route.path === '/strategies')).toBe(false);
-    expect(resolveRouteByPathname('/strategies/versions').label).toBe('规则版本');
-    expect(resolveRouteByPathname('/strategies/versions').kind).toBe('compat');
-    expect(resolveRouteByPathname('/strategies/candidates').label).toBe('候选规则版本');
-    expect(resolveRouteByPathname('/strategies/candidates').kind).toBe('compat');
-    expect(resolveRouteByPathname('/strategies/history').label).toBe('运行历史');
-    expect(resolveRouteByPathname('/strategies/history').kind).toBe('compat');
     expect(resolveRouteByPathname('/strategies/pre-market').label).toBe('盘前分析');
     expect(resolveRouteByPathname('/strategies/pre-market').kind).toBe('canonical');
     expect(resolveRouteByPathname('/strategies/after-close').label).toBe('盘后复盘');
     expect(resolveRouteByPathname('/strategies/after-close').kind).toBe('canonical');
-    expect(resolveRouteByPathname('/strategies/regime-selection').label).toBe('规则选择');
-    expect(resolveRouteByPathname('/strategies/regime-selection').kind).toBe('compat');
+    expect(routeRegistry.some((route) => route.path === '/strategies/versions')).toBe(false);
+    expect(routeRegistry.some((route) => route.path === '/strategies/candidates')).toBe(false);
+    expect(routeRegistry.some((route) => route.path === '/strategies/history')).toBe(false);
+    expect(routeRegistry.some((route) => route.path === '/strategies/regime-selection')).toBe(false);
     expect(resolveRouteByPathname('/artifacts').label).toBe('产物中心');
     expect(resolveRouteByPathname('/profiles').label).toBe('配置与管理');
     expect(resolveRouteByPathname('/system').label).toBe('系统管理');

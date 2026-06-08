@@ -32,8 +32,7 @@ import { DatabaseMigrationPage } from '@/pages/system/DatabaseMigrationPage';
 import { HealthPage } from '@/pages/system/HealthPage';
 import { SystemPage } from '@/pages/system';
 import { UsersPage } from '@/pages/system/UsersPage';
-import { RegimeRuleSelectionPage } from '@/pages/strategies/RegimeRuleSelectionPage';
-import { AfterClosePage, CandidatesPage, HistoryPage, PreMarketPage, VersionsPage } from '@/pages/strategies';
+import { AfterClosePage, PreMarketPage } from '@/pages/strategies';
 import { WorkflowsPage } from '@/pages/workflows';
 import { LoginPage } from '@/pages/login';
 import { RulePoolDetailPage, RulePoolPage } from '@/pages/rule-pool';
@@ -103,12 +102,8 @@ const dashboardLayoutRoutes = [
   { path: 'market/ohlcv', element: <MarketOhlcvPage /> },
   { path: 'strategies', element: <Navigate to="/dashboard" replace /> },
   { path: 'persona', element: <PersonaPage /> },
-  { path: 'strategies/versions', element: <VersionsPage /> },
-  { path: 'strategies/candidates', element: <CandidatesPage /> },
-  { path: 'strategies/history', element: <HistoryPage /> },
   { path: 'strategies/pre-market', element: <PreMarketPage /> },
   { path: 'strategies/after-close', element: <AfterClosePage /> },
-  { path: 'strategies/regime-selection', element: <RegimeRuleSelectionPage /> },
   { path: 'system', element: <SystemPage /> },
   { path: 'system/audit', element: <AuditPage /> },
   { path: 'system/users', element: <UsersPage /> },

@@ -112,19 +112,15 @@ export function DashboardStatusSummary() {
         <MetricCard label="重点告警" value={alerts.length} note="状态栏会显示最近需要关注的记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
         <MetricCard label="目录提示" value={warnings} note={warnings ? '有目录需要检查' : '关键目录正常'} tone={warnings ? 'text-amber-600' : 'text-emerald-600'} />
         <MetricCard
-          label="Profile 运行态"
+          label="运行配置"
           value={profileContext?.profile_id ?? system?.profile_id ?? '未绑定'}
-          note={
-            profileContext?.profile_snapshot_id || system?.profile_snapshot_id
-              ? `snapshot: ${profileContext?.profile_snapshot_id ?? system?.profile_snapshot_id}`
-              : '未识别运行态'
-          }
+          note={profileContext?.profile_snapshot_id || system?.profile_snapshot_id ? '已关联配置快照' : '未识别运行态'}
           tone="text-slate-900"
         />
         <MetricCard
-          label="Profile 上下文"
+          label="配置上下文"
           value={profileContext?.profile_id ?? '未绑定'}
-          note={`snapshot: ${profileContext?.profile_snapshot_id ?? '未绑定'} · source: ${profileContext?.source ?? 'unset'}`}
+          note={`来源: ${profileContext?.source ?? 'unset'} · ${profileContext?.profile_snapshot_id ? '已绑定快照' : '未绑定快照'}`}
           tone="text-indigo-600"
         />
         <MetricCard

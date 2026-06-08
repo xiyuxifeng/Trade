@@ -229,7 +229,7 @@ export function MarketPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="市场上下文快照" description="浏览快照、查看相关任务和产物。">
           <div className="grid gap-3 md:grid-cols-2">
-          <QuickLink label="市场上下文快照" href="/market/snapshots" description="查看市场上下文快照列表、详情、质量与派生特征。" />
+            <QuickLink label="市场上下文快照" href="/market/snapshots" description="查看市场上下文快照列表、详情、质量与派生特征。" />
             <QuickLink label="查看市场上下文构建任务" href="/jobs?job_type=snapshot-build" description="查看最近的市场上下文构建任务。" />
             <QuickLink label="查看市场上下文产物" href="/artifacts?jobType=snapshot-build&source=market-snapshot-browser" description="浏览市场上下文构建产物与报告。" />
           </div>
@@ -238,9 +238,7 @@ export function MarketPage() {
         <SectionCard title="市场数据集" description="浏览数据集并查看关联回链。">
           <div className="grid gap-3 md:grid-cols-2">
             <QuickLink label="数据集浏览" href="/market/datasets" description="查看市场数据集、分页样本与详情。" />
-          <QuickLink label="返回快照视图" href="/market/snapshots" description="从数据集回到对应市场上下文快照。" />
             <QuickLink label="查看最新数据集" href={latestDataset ? `/market/datasets?trade_date=${latestDataset.trade_date}&market=${latestDataset.market}&dataset_id=${encodeURIComponent(latestDataset.dataset_id)}` : '/market/datasets'} description="直接打开当前最新数据集记录。" />
-            <QuickLink label="产物中心" href="/artifacts" description="查看数据集相关产物与导出文件。" />
           </div>
         </SectionCard>
 
@@ -249,7 +247,7 @@ export function MarketPage() {
         </SectionCard>
 
         <SectionCard title="OHLCV 数据" description="抓取、回灌和最近任务都集中在子页面。">
-          <QuickLink label="进入 OHLCV 页面" href="/market/ohlcv" description="增量、区间、指定 symbols 和最近任务都在这里。" />
+          <QuickLink label="查看 OHLCV 任务" href="/jobs?job_type=ohlcv-crawl" description="查看最近的 OHLCV 抓取任务历史。" />
         </SectionCard>
       </section>
 

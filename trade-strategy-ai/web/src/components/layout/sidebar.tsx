@@ -38,7 +38,6 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
             {!collapsed && <p className="sidebar-nav-group-title">{group.title}</p>}
             {group.items.map((item) => {
               const disabled = item.minRole ? !canAccess(item.minRole) : false;
-              const isCompatibility = group.title === '兼容入口';
 
               return (
                 <NavLink
@@ -49,7 +48,6 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
                       isActive && 'sidebar-link-active',
                       disabled && 'sidebar-link-disabled',
                       collapsed && 'sidebar-link-collapsed',
-                      isCompatibility && 'sidebar-link-compatibility',
                     )
                   }
                   key={item.path}

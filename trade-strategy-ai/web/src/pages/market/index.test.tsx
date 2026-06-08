@@ -148,7 +148,7 @@ describe('MarketPage', () => {
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/market/snapshots')).toHaveAttribute('href', '/market/snapshots');
     expect(screen.getByRole('link', { name: /数据集浏览/ })).toHaveAttribute('href', '/market/datasets');
     expect(screen.getByRole('link', { name: /进入市场数据页/ })).toHaveAttribute('href', '/market/kaipan');
-    expect(screen.getByRole('link', { name: /进入 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
+    expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
     expect(screen.getByRole('link', { name: /查看 Job 详情/ })).toHaveAttribute('href', '/jobs/job-1');
     expect(screen.getByRole('link', { name: /查看产物中心/ })).toHaveAttribute('href', '/artifacts');
 
@@ -244,6 +244,6 @@ describe('MarketPage', () => {
     await waitFor(() => {
       expect(screen.getByText('股票基础信息刷新失败，请稍后重试。')).toBeInTheDocument();
     });
-    expect(screen.getByRole('link', { name: /进入 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
+    expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
   });
 });

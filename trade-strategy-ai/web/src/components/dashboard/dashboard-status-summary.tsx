@@ -13,11 +13,13 @@ function MetricCard({
   label,
   value,
   note,
+  action,
   tone = 'text-slate-100',
 }: {
   label: string;
   value: string | number;
   note?: string;
+  action?: { label: string; to: string };
   tone?: string;
 }) {
   return (
@@ -25,6 +27,14 @@ function MetricCard({
       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className={`mt-2 text-2xl font-semibold ${tone}`}>{value}</p>
       {note ? <p className="mt-2 text-xs text-slate-500">{note}</p> : null}
+      {action ? (
+        <Link
+          className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-sm font-medium text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100"
+          to={action.to}
+        >
+          {action.label}
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -109,7 +119,13 @@ export function DashboardStatusSummary() {
         />
         <MetricCard label="失败任务" value={failedJobs} note={`成功任务 ${acknowledgedJobs}`} tone={failedJobs ? 'text-rose-600' : 'text-slate-900'} />
         <MetricCard label="产物数量" value={artifacts.length} note={artifacts[0]?.kind ? `最新类型 · ${artifacts[0].kind}` : '暂无最新产物'} tone="text-sky-600" />
-        <MetricCard label="重点告警" value={alerts.length} note="状态栏会显示最近需要关注的记录" tone={alerts.length ? 'text-amber-600' : 'text-slate-900'} />
+        <MetricCard
+          label="重点告警"
+          value={alerts.length}
+          note="状态栏会显示最近需要关注的记录"
+          action={{ label: '查看全部告警', to: '/alerts' }}
+          tone={alerts.length ? 'text-amber-600' : 'text-slate-900'}
+        />
         <MetricCard label="目录提示" value={warnings} note={warnings ? '有目录需要检查' : '关键目录正常'} tone={warnings ? 'text-amber-600' : 'text-emerald-600'} />
         <MetricCard
           label="运行配置"

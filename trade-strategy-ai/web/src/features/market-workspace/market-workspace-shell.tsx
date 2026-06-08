@@ -339,13 +339,13 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
   });
   const stockInfoStatus = stockInfoStatusQuery.data;
   const stockInfoNeedsRefresh = Boolean(stockInfoStatus?.needs_refresh);
-  const stockInfoStatusMessage = stockInfoStatus?.message ?? '正在检查 stock_info 是否可用于 OHLCV 抓取。';
+  const stockInfoStatusMessage = stockInfoStatus?.message ?? '正在检查基础信息是否可用于 OHLCV 抓取。';
   const stockInfoRefreshMutation = useMutation({
     mutationFn: async () => refreshStockInfo(7),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['market-workspace', 'stock-info-status'] });
       void queryClient.invalidateQueries({ queryKey: ['market-workspace-benchmark-options'] });
-      setSubmissionMessage('股票基础信息已刷新，可继续运行 OHLCV 抓取。');
+      setSubmissionMessage('基础信息已刷新，可继续运行 OHLCV 抓取。');
       setSubmissionJobId(null);
     },
   });
@@ -785,9 +785,9 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
           <div className="space-y-4">
             <Card className="border-slate-200 bg-white/90 shadow-sm text-slate-900">
               <CardHeader>
-                <CardTitle className="text-slate-900">股票基础信息预检</CardTitle>
+                <CardTitle className="text-slate-900">基础信息预检</CardTitle>
                 <CardDescription className="text-slate-500">
-                  OHLCV 抓取前先检查 stock_info 是否覆盖常用 benchmark 且更新时间在 7 天内。若过期或缺失，请先刷新再继续。
+                  OHLCV 抓取前先检查基础信息是否覆盖常用 benchmark 且更新时间在 7 天内。若过期或缺失，请先刷新再继续。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -802,12 +802,12 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                 </div>
                 {stockInfoStatusQuery.isError ? (
                   <p className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs leading-6 text-rose-700">
-                    股票基础信息状态检查失败，请先点击“检查并更新股票基础信息”重新获取状态，再运行 OHLCV 抓取。
+                    基础信息状态检查失败，请先点击“检查并更新基础信息”重新获取状态，再运行 OHLCV 抓取。
                   </p>
                 ) : null}
                 {stockInfoNeedsRefresh ? (
                   <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-6 text-amber-700">
-                    stock_info 已过期或缺少 benchmark，OHLCV 抓取前建议先刷新基础信息。
+                    基础信息已过期或缺少 benchmark，OHLCV 抓取前建议先刷新。
                   </p>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-3">
@@ -819,9 +819,9 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
                     }}
                     disabled={stockInfoRefreshMutation.isPending}
                   >
-                    {stockInfoRefreshMutation.isPending ? '刷新中' : '检查并更新股票基础信息'}
+                    {stockInfoRefreshMutation.isPending ? '刷新中' : '检查并更新基础信息'}
                   </Button>
-                  <p className="text-xs leading-6 text-slate-500">这个按钮只刷新股票基础信息，不会创建 Job。</p>
+                  <p className="text-xs leading-6 text-slate-500">这个按钮只刷新基础信息，不会创建 Job。</p>
                 </div>
               </CardContent>
             </Card>
@@ -830,7 +830,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
               <CardHeader>
                 <CardTitle className="text-slate-900">OHLCV 抓取</CardTitle>
                 <CardDescription className="text-slate-500">
-                  直接使用左侧抓取参数提交 `ohlcv-crawl`。如果股票基础信息未通过预检，请先刷新再提交。
+                  直接使用左侧抓取参数提交 `ohlcv-crawl`。如果基础信息未通过预检，请先刷新再提交。
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

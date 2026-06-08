@@ -890,7 +890,7 @@ export function ArticleListPage() {
   return (
     <ArticlePageShell title={articleSubpages['/articles/list'].title} description={articleSubpages['/articles/list'].description} summary={articleSubpages['/articles/list'].summary}>
       <div className="space-y-6">
-        <SectionCard title="筛选条件" description="按 author / source / trader / 日期范围过滤文章结果。">
+        <SectionCard title="筛选" description="按 author / source / trader / 日期范围过滤文章。">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-900" htmlFor="article-author-id">
@@ -964,7 +964,7 @@ export function ArticleListPage() {
         </SectionCard>
 
         <SectionCard
-          title="文章结果"
+          title="结果列表"
           description={`共 ${total} 条，当前第 ${page} / ${Math.max(pages, 1)} 页。`}
           action={
             <div className="flex items-center gap-2">
@@ -1235,6 +1235,7 @@ export function ArticleResultsPage() {
 
   const hasPrevPage = page > 1;
   const hasNextPage = totalPages > 0 && page < totalPages;
+  const resultsScrollHeightClass = 'h-[calc(100vh-330px)] overflow-y-auto';
 
   const updateFilter = (nextFilter: typeof selectionStatusFilter) => {
     setSelectionStatusFilter(nextFilter);
@@ -1271,14 +1272,14 @@ export function ArticleResultsPage() {
       <div className="space-y-6">
         {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
 
-        <SectionCard title="版本管理" description="按选择状态和关键词筛选文章，左侧列表与右侧详情独立滚动。">
+        <SectionCard title="版本切换" description="按状态和关键词筛选文章，左侧列表与右侧详情使用同一滚动高度。">
           <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm">
               <div className="border-b border-slate-200 bg-white/80 p-4 backdrop-blur">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                       <p className="text-base font-semibold tracking-tight text-slate-950">文章列表</p>
-                      <p className="mt-1 text-xs text-slate-600">浏览未选择和已选择的文章，点击即可切换右侧详情。</p>
+                      <p className="mt-1 text-xs text-slate-600">筛选文章，点击卡片切换右侧详情。</p>
                   </div>
                   <Badge variant="info">{totalCount} 篇</Badge>
                 </div>
@@ -1316,7 +1317,7 @@ export function ArticleResultsPage() {
                 </div>
               </div>
 
-              <div className="max-h-[calc(100vh-330px)] overflow-y-auto p-4">
+              <div className={resultsScrollHeightClass + ' p-4'}>
                 {articlesQuery.isLoading ? (
                   <LoadingState label="正在加载文章列表" description="正在读取当前页文章和选择状态。" />
                 ) : articlesQueryError ? (
@@ -1388,12 +1389,12 @@ export function ArticleResultsPage() {
               </div>
             </div>
 
-            <div className="self-start overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold tracking-tight text-slate-950">当前文章详情</p>
-                    <p className="mt-1 text-xs text-slate-600">展示当前选中的文章卡片内容和候选版本。</p>
+                    <p className="mt-1 text-xs text-slate-600">查看当前选中文章、候选版本和切换结果。</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {selectedArticle ? (
@@ -1406,7 +1407,7 @@ export function ArticleResultsPage() {
                 </div>
               </div>
 
-              <div className="max-h-[calc(100vh-330px)] overflow-y-auto p-5">
+              <div className={resultsScrollHeightClass + ' p-5'}>
                 {!selectedArticle ? (
                   <EmptyState title="请选择一篇文章" description="从左侧列表选择文章后，右侧会展示可编辑的 metadata 版本和候选信息。" />
                 ) : detailQuery.isLoading ? (

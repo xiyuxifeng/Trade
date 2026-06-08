@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import userEvent from '@testing-library/user-event';
 import { screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/api/market', () => ({
   listMarketSnapshots: vi.fn(),
   listMarketDatasets: vi.fn(),
   getStockInfoStatus: vi.fn(),
-  refreshStockInfo: vi.fn(),
 }));
 
 vi.mock('@/lib/api/jobs', () => ({
@@ -21,12 +19,11 @@ import { renderWithRouter } from '@/test/test-utils';
 import { MarketPage } from './index';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { listJobs } from '@/lib/api/jobs';
-import { getStockInfoStatus, listMarketDatasets, listMarketSnapshots, refreshStockInfo } from '@/lib/api/market';
+import { getStockInfoStatus, listMarketDatasets, listMarketSnapshots } from '@/lib/api/market';
 
 const mockedListMarketSnapshots = vi.mocked(listMarketSnapshots);
 const mockedListMarketDatasets = vi.mocked(listMarketDatasets);
 const mockedGetStockInfoStatus = vi.mocked(getStockInfoStatus);
-const mockedRefreshStockInfo = vi.mocked(refreshStockInfo);
 const mockedListJobs = vi.mocked(listJobs);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 
@@ -42,32 +39,13 @@ beforeEach(() => {
     latest_updated_at: '2026-05-29T10:00:00+00:00',
     is_fresh: true,
     needs_refresh: false,
-    message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+    message: '基础信息已就绪，可直接用于 OHLCV 抓取',
     max_age_days: 7,
-  } as never);
-  mockedRefreshStockInfo.mockResolvedValue({
-    stock_stats: { total: 5505, inserted: 5, updated: 5500, skipped: 0 },
-    index_stats: { total: 10, inserted: 10, updated: 0, skipped: 0 },
-    status: {
-      total: 5515,
-      stock_count: 5505,
-      index_count: 10,
-      benchmark_count: 10,
-      expected_benchmark_count: 10,
-      missing_benchmark_symbols: [],
-      latest_updated_at: '2026-05-29T10:00:00+00:00',
-      is_fresh: true,
-      needs_refresh: false,
-      message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
-      max_age_days: 7,
-    },
   } as never);
 });
 
 describe('MarketPage', () => {
   it('renders market overview and entry links', async () => {
-    const user = userEvent.setup();
-
     mockedListMarketSnapshots.mockResolvedValue({
       filters: {},
       page: { total: 12, limit: 1, offset: 0, count: 1 },
@@ -140,24 +118,20 @@ describe('MarketPage', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('link').some((link) => link.getAttribute('href') === '/market/snapshots')).toBe(true);
     });
-    expect(screen.getByText('市场上下文快照总数')).toBeInTheDocument();
+    expect(screen.getByText('快照总数')).toBeInTheDocument();
     expect(screen.getByText('数据集总数')).toBeInTheDocument();
     expect(screen.getAllByText('最近失败任务').length).toBeGreaterThan(0);
-    expect(screen.getByText('OHLCV 前置预检')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '检查并更新股票基础信息' })).toBeInTheDocument();
+    expect(screen.getByText('流程状态')).toBeInTheDocument();
+    expect(screen.getAllByText('基础信息检查').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('先抓取').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('生成快照').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/market/snapshots')).toHaveAttribute('href', '/market/snapshots');
     expect(screen.getByRole('link', { name: /数据集浏览/ })).toHaveAttribute('href', '/market/datasets');
+    expect(screen.queryByRole('link', { name: /查看最新数据集/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /进入市场数据页/ })).toHaveAttribute('href', '/market/kaipan');
     expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
     expect(screen.getByRole('link', { name: /查看 Job 详情/ })).toHaveAttribute('href', '/jobs/job-1');
-    expect(screen.getByRole('link', { name: /查看产物中心/ })).toHaveAttribute('href', '/artifacts');
-
-    await user.click(screen.getByRole('button', { name: '检查并更新股票基础信息' }));
-
-    await waitFor(() => {
-      expect(mockedRefreshStockInfo).toHaveBeenCalledWith(7);
-      expect(screen.getByText('股票基础信息已刷新，可继续进入 OHLCV 页面。')).toBeInTheDocument();
-    });
+    expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/artifacts')).toHaveAttribute('href', '/artifacts');
 
     await waitFor(() => {
       expect(mockedListMarketSnapshots).toHaveBeenCalledWith({ limit: 1, offset: 0 });
@@ -166,8 +140,6 @@ describe('MarketPage', () => {
   });
 
   it('keeps market overview usable when stock info refresh fails', async () => {
-    const user = userEvent.setup();
-
     mockedListMarketSnapshots.mockResolvedValue({
       filters: {},
       page: { total: 12, limit: 1, offset: 0, count: 1 },
@@ -233,17 +205,10 @@ describe('MarketPage', () => {
         },
       ],
     } as never);
-    mockedRefreshStockInfo.mockRejectedValueOnce(new Error('refresh failed'));
-
     renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
 
     expect(await screen.findByRole('heading', { name: '市场上下文' })).toBeInTheDocument();
-    expect(await screen.findByText('OHLCV 前置预检')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '检查并更新股票基础信息' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('股票基础信息刷新失败，请稍后重试。')).toBeInTheDocument();
-    });
+    expect((await screen.findAllByText('基础信息检查')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
   });
 });

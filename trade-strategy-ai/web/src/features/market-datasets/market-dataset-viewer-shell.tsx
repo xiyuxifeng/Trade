@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ErrorState, PageHeader } from '@/components/kit';
+import { ErrorState, PageHeader, SectionCard } from '@/components/kit';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import { getMarketDataset, listMarketDatasets } from '@/lib/api/market';
 import type { MarketDatasetSummary } from '@/types/market';
@@ -129,12 +129,37 @@ export function MarketDatasetViewerShell() {
   return (
     <main className="page-stack">
       <PageHeader
-        description="在 Web 中浏览 DB 里的市场数据集、分页样本与关联回链，不把 /market 再扩成一个复合控制台。"
+        description="第 3 步：浏览数据集。查看快照派生的样本、详情和关联回链。"
       />
+
+      <SectionCard title="流程定位" description="当前阶段是浏览数据集，上一阶段是生成快照，下一步是基础信息检查。">
+        <div className="grid gap-3 md:grid-cols-4">
+          {[
+            { number: '01', label: '先抓取', active: false },
+            { number: '02', label: '生成快照', active: false },
+            { number: '03', label: '浏览数据集', active: true },
+            { number: '04', label: '基础信息检查', active: false },
+          ].map((step) => (
+            <div
+              key={step.number}
+              className={[
+                'rounded-2xl border p-4',
+                step.active ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50',
+              ].join(' ')}
+            >
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{step.number}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-950">{step.label}</p>
+              <p className="mt-1 text-xs text-slate-600">
+                {step.active ? '当前页' : step.number === '02' ? '上一步' : step.number === '04' ? '下一步' : '前后流程'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       <div className="flex flex-wrap items-center justify-start gap-3">
         <Link className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50" to="/market">
-          返回市场数据
+          返回市场上下文
         </Link>
       </div>
 
@@ -194,7 +219,7 @@ export function MarketDatasetViewerShell() {
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-sm">
                 <Link className="text-sky-700 hover:underline" to="/market">
-                  返回市场数据
+                  返回市场上下文
                 </Link>
               </div>
             </div>
@@ -264,9 +289,9 @@ export function MarketDatasetViewerShell() {
               }}
             />
 
-            <MarketDatasetViewerDetail
-              selectedDataset={selectedDataset}
-              detail={detail}
+          <MarketDatasetViewerDetail
+            selectedDataset={selectedDataset}
+            detail={detail}
               errorState={detailErrorState}
               isLoading={detailQuery.isLoading}
               onRetry={() => {

@@ -1,14 +1,14 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, LoadingState, SectionCard } from '@/components/kit';
-import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/state/ErrorState';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
+import { cn } from '@/lib/utils';
 import { listArtifacts } from '@/lib/api/artifacts';
 import { listJobs } from '@/lib/api/jobs';
-import { getStockInfoStatus, listMarketDatasets, listMarketSnapshots, refreshStockInfo } from '@/lib/api/market';
+import { getStockInfoStatus, listMarketDatasets, listMarketSnapshots } from '@/lib/api/market';
 import type { ArtifactRecord } from '@/types/artifacts';
 import type { JobRecord } from '@/types/jobs';
 import type { StockInfoStatusResponse } from '@/types/market';
@@ -30,28 +30,64 @@ function sortArtifactsByModifiedAtDesc(items: ArtifactRecord[]) {
   return [...items].sort((left, right) => (right.modified_at ?? '').localeCompare(left.modified_at ?? ''));
 }
 
-function StatTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+function FlowStepCard({
+  number,
+  title,
+  description,
+  statusLabel,
+  statusTone,
+  primaryLabel,
+  primaryHref,
+  secondaryLinks,
+}: {
+  number: string;
+  title: string;
+  description: string;
+  statusLabel: string;
+  statusTone: 'info' | 'success' | 'warning';
+  primaryLabel: string;
+  primaryHref: string;
+  secondaryLinks: readonly { label: string; href: string }[];
+}) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
-      <p className="mt-1 text-sm text-slate-600">{hint}</p>
-    </div>
-  );
-}
+    <article className="flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{number}</p>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+        </div>
+        <span
+          className={cn(
+            'inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-medium',
+            statusTone === 'success' && 'bg-emerald-50 text-emerald-700',
+            statusTone === 'info' && 'bg-sky-50 text-sky-700',
+            statusTone === 'warning' && 'bg-amber-50 text-amber-700',
+          )}
+        >
+          {statusLabel}
+        </span>
+      </div>
 
-function QuickLink({ label, href, description }: { label: string; href: string; description: string }) {
-  return (
-    <Link className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:bg-slate-50" to={href}>
-      <p className="font-medium text-slate-950">{label}</p>
-      <p className="mt-1 text-sm text-slate-600">{description}</p>
-    </Link>
+      <div className="mt-auto flex flex-wrap gap-2 pt-4">
+        <Link className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-800" to={primaryHref}>
+          {primaryLabel}
+        </Link>
+        {secondaryLinks.map((link) => (
+          <Link
+            key={link.href}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            to={link.href}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </article>
   );
 }
 
 export function MarketPage() {
-  const [stockInfoActionMessage, setStockInfoActionMessage] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   const snapshotsQuery = useQuery({
     queryKey: ['market-overview', 'snapshots'],
     queryFn: () => listMarketSnapshots({ limit: 1, offset: 0 }),
@@ -75,21 +111,6 @@ export function MarketPage() {
     queryFn: () => listArtifacts({ limit: 12 }),
     staleTime: 30_000,
   });
-  const stockInfoStatusQuery = useQuery<StockInfoStatusResponse>({
-    queryKey: ['market-overview', 'stock-info-status'],
-    queryFn: () => getStockInfoStatus(7),
-    staleTime: 30_000,
-  });
-  const stockInfoRefreshMutation = useMutation({
-    mutationFn: async () => refreshStockInfo(7),
-    onSuccess: (result) => {
-      queryClient.setQueryData(['market-overview', 'stock-info-status'], result.status);
-      setStockInfoActionMessage('股票基础信息已刷新，可继续进入 OHLCV 页面。');
-    },
-    onError: () => {
-      setStockInfoActionMessage('股票基础信息刷新失败，请稍后重试。');
-    },
-  });
 
   const marketJobs = useMemo(
     () => sortJobsByCreatedAtDesc((jobsQuery.data?.items ?? []).filter((job) => MARKET_JOB_TYPES.has(job.job_type))),
@@ -98,10 +119,68 @@ export function MarketPage() {
   const failedJobs = useMemo(() => marketJobs.filter((job) => job.status === 'failed'), [marketJobs]);
   const latestSnapshot = snapshotsQuery.data?.items?.[0] ?? null;
   const latestDataset = datasetsQuery.data?.items?.[0] ?? null;
+  const latestMarketJob = marketJobs[0] ?? null;
   const artifacts = useMemo(() => sortArtifactsByModifiedAtDesc((artifactsQuery.data?.items ?? []).slice(0, 6)), [artifactsQuery.data?.items]);
-  const stockInfoStatus = stockInfoStatusQuery.data;
-  const stockInfoIsFresh = Boolean(stockInfoStatus?.is_fresh);
-  const stockInfoNeedsRefresh = Boolean(stockInfoStatus?.needs_refresh);
+  const stockInfoStatusQuery = useQuery<StockInfoStatusResponse>({
+    queryKey: ['market-overview', 'stock-info-status'],
+    queryFn: () => getStockInfoStatus(7),
+    staleTime: 30_000,
+  });
+  const stockInfoIsFresh = Boolean(stockInfoStatusQuery.data?.is_fresh);
+  const marketFlowSteps = [
+    {
+      number: '01',
+      title: '先抓取',
+      description: '从 Kaipan 或 OHLCV 链路拉取原始市场数据，先把输入备齐。',
+      statusLabel: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? '最近有抓取任务' : '等待抓取',
+      statusTone: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? 'info' : 'warning',
+      primaryLabel: '进入市场数据页',
+      primaryHref: '/market/kaipan',
+      secondaryLinks: [
+        { label: '查看 OHLCV 任务', href: '/jobs?job_type=ohlcv-crawl' },
+        { label: '返回市场上下文', href: '/market' },
+      ],
+    },
+    {
+      number: '02',
+      title: '生成快照',
+      description: '把抓取结果收敛成统一市场上下文快照，供后续分析复用。',
+      statusLabel: latestSnapshot ? '已有最近快照' : '等待生成快照',
+      statusTone: latestSnapshot ? 'success' : 'warning',
+      primaryLabel: '打开快照页',
+      primaryHref: '/market/snapshots',
+      secondaryLinks: [
+        { label: '查看构建任务', href: '/jobs?job_type=snapshot-build' },
+        { label: '查看产物', href: '/artifacts?jobType=snapshot-build&source=market-snapshot-browser' },
+      ],
+    },
+    {
+      number: '03',
+      title: '浏览数据集',
+      description: '查看快照派生的数据集、分页样本和详情回链。',
+      statusLabel: latestDataset ? '已有最近数据集' : '等待数据集',
+      statusTone: latestDataset ? 'success' : 'warning',
+      primaryLabel: '打开数据集浏览',
+      primaryHref: '/market/datasets',
+      secondaryLinks: [
+        { label: '查看快照列表', href: '/market/snapshots' },
+        { label: '返回市场上下文', href: '/market' },
+      ],
+    },
+    {
+      number: '04',
+      title: '基础信息检查',
+      description: '先确认股票与指数基础信息是否齐备，再进入 OHLCV 抓取。',
+      statusLabel: stockInfoIsFresh ? '基础信息已就绪' : '需要检查基础信息',
+      statusTone: stockInfoIsFresh ? 'success' : 'warning',
+      primaryLabel: '前往 OHLCV 页面',
+      primaryHref: '/market/ohlcv',
+      secondaryLinks: [
+        { label: '查看任务中心', href: '/jobs?status=failed' },
+        { label: '查看产物中心', href: '/artifacts' },
+      ],
+    },
+  ] as const;
 
   const pageError = snapshotsQuery.error ?? datasetsQuery.error ?? jobsQuery.error ?? artifactsQuery.error;
 
@@ -111,7 +190,7 @@ export function MarketPage() {
         <PageHeader
           kicker="市场上下文"
           title="市场上下文"
-          description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
+          description="按正常数据流向操作：先抓取，再生成快照，再浏览数据集，最后做基础信息检查。"
         />
         <LoadingState label="正在加载市场总览" description="正在读取快照、数据集、任务和产物概览。" />
       </main>
@@ -124,7 +203,7 @@ export function MarketPage() {
         <PageHeader
           kicker="市场上下文"
           title="市场上下文"
-          description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
+          description="按正常数据流向操作：先抓取，再生成快照，再浏览数据集，最后做基础信息检查。"
         />
         <ErrorState
           {...buildErrorRecoveryState(pageError, 'market')}
@@ -144,112 +223,80 @@ export function MarketPage() {
       <PageHeader
         kicker="市场上下文"
         title="市场上下文"
-        description="从这里进入统一市场上下文、快照、数据集、Kaipan 和 OHLCV 子页面。"
+        description="按正常数据流向操作：先抓取，再生成快照，再浏览数据集，最后做基础信息检查。"
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="最近数据状态"
-          value={latestSnapshot ? latestSnapshot.quality_status || 'n/a' : '暂无'}
-          hint={latestSnapshot ? `${latestSnapshot.trade_date} · ${latestSnapshot.market} · ${latestSnapshot.snapshot_id}` : '暂无快照记录'}
-        />
-        <StatTile label="市场上下文快照总数" value={snapshotsQuery.data?.page.total ?? 0} hint="当前可浏览的市场上下文快照数量" />
-        <StatTile label="数据集总数" value={datasetsQuery.data?.page.total ?? 0} hint="当前可浏览的市场数据集数量" />
-        <StatTile label="最近失败任务" value={failedJobs.length} hint="最近失败的市场相关 Job" />
-      </section>
-
-      <SectionCard
-        title="OHLCV 前置预检"
-        description="先确认 stock_info 是否足够新鲜，再进入 OHLCV 页面抓取。这里可以直接刷新股票基础信息。"
-        action={
-          <Link className="text-sm font-medium text-sky-700 hover:underline" to="/market/ohlcv">
-            前往 OHLCV 页面
-          </Link>
-        }
-      >
-        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">检查结果</p>
-            <p className="mt-2 text-lg font-semibold text-slate-950">
-              {stockInfoStatusQuery.isLoading
-                ? '正在检查 stock_info'
-                : stockInfoStatusQuery.isError
-                  ? 'stock_info 检查失败'
-                  : stockInfoIsFresh
-                    ? 'stock_info 可直接用于 OHLCV 抓取'
-                    : 'stock_info 需要刷新'}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              {stockInfoStatusQuery.isError
-                ? '页面仍可浏览，建议稍后重试状态检查。'
-                : stockInfoStatus?.message ?? '系统会先检查股票基础信息是否覆盖常用 benchmark。'}
-            </p>
-            <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-              <p>股票：{stockInfoStatus?.stock_count ?? 0}</p>
-              <p>指数：{stockInfoStatus?.index_count ?? 0}</p>
-              <p>
-                benchmark：{stockInfoStatus?.benchmark_count ?? 0}/{stockInfoStatus?.expected_benchmark_count ?? 0}
-              </p>
-              <p>最近更新时间：{stockInfoStatus?.latest_updated_at ?? '暂无'}</p>
-            </div>
-            {stockInfoNeedsRefresh ? (
-              <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                stock_info 已过期或缺少 benchmark，建议先刷新再进入 OHLCV 页面。
-              </p>
-            ) : null}
-            {stockInfoStatusQuery.isError ? (
-              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                股票基础信息状态加载失败，但不影响其他市场页面浏览。
-              </p>
-            ) : null}
-          </div>
-
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => {
-                setStockInfoActionMessage(null);
-                stockInfoRefreshMutation.mutate();
-              }}
-              disabled={stockInfoRefreshMutation.isPending}
-            >
-              {stockInfoRefreshMutation.isPending ? '刷新中' : '检查并更新股票基础信息'}
-            </Button>
-            <p className="text-xs leading-6 text-slate-500">这个动作只刷新股票基础信息，不会创建 Job。</p>
-            {stockInfoActionMessage ? <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{stockInfoActionMessage}</p> : null}
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-              <p className="font-medium text-slate-900">建议流程</p>
-              <p className="mt-1 leading-6">先刷新基础信息，再进入 OHLCV 页面执行抓取，避免 benchmark 不全或基础信息过期。</p>
+      <section className="grid gap-2 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/40 xl:grid-cols-4">
+        {marketFlowSteps.map((step) => (
+          <div key={step.number} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{step.number}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-950">{step.title}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">{step.description}</p>
+            <div className="mt-2">
+              <span
+                className={cn(
+                  'inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium',
+                  step.statusTone === 'success' && 'bg-emerald-50 text-emerald-700',
+                  step.statusTone === 'info' && 'bg-sky-50 text-sky-700',
+                  step.statusTone === 'warning' && 'bg-amber-50 text-amber-700',
+                )}
+              >
+                {step.statusLabel}
+              </span>
             </div>
           </div>
-        </div>
-      </SectionCard>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="市场上下文快照" description="浏览快照、查看相关任务和产物。">
-          <div className="grid gap-3 md:grid-cols-2">
-            <QuickLink label="市场上下文快照" href="/market/snapshots" description="查看市场上下文快照列表、详情、质量与派生特征。" />
-            <QuickLink label="查看市场上下文构建任务" href="/jobs?job_type=snapshot-build" description="查看最近的市场上下文构建任务。" />
-            <QuickLink label="查看市场上下文产物" href="/artifacts?jobType=snapshot-build&source=market-snapshot-browser" description="浏览市场上下文构建产物与报告。" />
-          </div>
-        </SectionCard>
-
-        <SectionCard title="市场数据集" description="浏览数据集并查看关联回链。">
-          <div className="grid gap-3 md:grid-cols-2">
-            <QuickLink label="数据集浏览" href="/market/datasets" description="查看市场数据集、分页样本与详情。" />
-            <QuickLink label="查看最新数据集" href={latestDataset ? `/market/datasets?trade_date=${latestDataset.trade_date}&market=${latestDataset.market}&dataset_id=${encodeURIComponent(latestDataset.dataset_id)}` : '/market/datasets'} description="直接打开当前最新数据集记录。" />
-          </div>
-        </SectionCard>
-
-        <SectionCard title="市场数据健康" description="手动抓取、归一化和健康检查都在子页面里完成。">
-          <QuickLink label="进入市场数据页" href="/market/kaipan" description="抓取、归一化、任务历史和健康检查都在这里。" />
-        </SectionCard>
-
-        <SectionCard title="OHLCV 数据" description="抓取、回灌和最近任务都集中在子页面。">
-          <QuickLink label="查看 OHLCV 任务" href="/jobs?job_type=ohlcv-crawl" description="查看最近的 OHLCV 抓取任务历史。" />
-        </SectionCard>
+        ))}
       </section>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] xl:items-stretch">
+        <section className="grid h-full grid-rows-4 gap-4">
+          {marketFlowSteps.map((step) => (
+            <FlowStepCard
+              key={step.number}
+              number={step.number}
+              title={step.title}
+              description={step.description}
+              statusLabel={step.statusLabel}
+              statusTone={step.statusTone}
+              primaryLabel={step.primaryLabel}
+              primaryHref={step.primaryHref}
+              secondaryLinks={step.secondaryLinks}
+            />
+          ))}
+        </section>
+
+        <aside className="xl:sticky xl:top-6 xl:self-start">
+          <SectionCard className="h-full" title="流程状态" description="查看当前进度和下一步。">
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近数据状态</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{latestSnapshot ? latestSnapshot.quality_status || 'n/a' : '暂无'}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {latestSnapshot ? `${latestSnapshot.trade_date} · ${latestSnapshot.market} · ${latestSnapshot.snapshot_id}` : '暂无快照记录'}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">数据集总数</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{datasetsQuery.data?.page.total ?? 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">当前可浏览的市场数据集数量</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">快照总数</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{snapshotsQuery.data?.page.total ?? 0}</p>
+                  <p className="mt-1 text-xs text-slate-500">当前可浏览的市场上下文快照数量</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">失败任务</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{failedJobs.length}</p>
+                  <p className="mt-1 text-xs text-slate-500">最近失败的市场相关 Job</p>
+                </div>
+              </div>
+
+            </div>
+          </SectionCard>
+        </aside>
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <SectionCard

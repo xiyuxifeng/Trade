@@ -173,7 +173,7 @@ export function MarketDatasetViewerDetail({
           <EmptyState title="请选择一个数据集" description="点击左侧列表中的 dataset 进入详情查看。" />
           <div className="flex flex-wrap gap-2 text-sm">
             <Link className="text-sky-700 hover:underline" to="/market">
-              返回市场数据
+              返回市场上下文
             </Link>
             <span className="text-slate-400">·</span>
             <Link className="text-sky-700 hover:underline" to="/artifacts">

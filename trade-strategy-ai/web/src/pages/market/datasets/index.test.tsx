@@ -97,10 +97,10 @@ describe('MarketDatasetPage', () => {
       ['/market/datasets?trade_date=2026-05-16&market=CN&dataset_id=snap-001:dataset&limit=20&offset=0'],
     );
 
-    expect(await screen.findByText('在 Web 中浏览 DB 里的市场数据集、分页样本与关联回链，不把 /market 再扩成一个复合控制台。')).toBeInTheDocument();
+    expect(await screen.findByText('第 3 步：浏览数据集。查看快照派生的样本、详情和关联回链。')).toBeInTheDocument();
     expect(screen.getByText('数据集列表')).toBeInTheDocument();
     expect(screen.getByText('数据集详情')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回市场数据' })).toHaveAttribute('href', '/market');
+    expect(screen.getByRole('link', { name: '返回市场上下文' })).toHaveAttribute('href', '/market');
 
     await waitFor(() => {
       expect(mockedGetMarketDataset).toHaveBeenCalledWith('snap-001:dataset', 20, 0);

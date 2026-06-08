@@ -223,7 +223,7 @@ describe('MarketSnapshotsPage', () => {
     renderWithRouter([{ path: '/market/snapshots', element: <MarketSnapshotsPage /> }], ['/market/snapshots?snapshot_id=snap-001&trade_date=2026-05-16&market=CN']);
 
     expect(await screen.findByRole('heading', { name: '市场上下文快照' })).toBeInTheDocument();
-    expect(await screen.findByText('市场上下文入口')).toBeInTheDocument();
+    expect(await screen.findByText('流程定位')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '构建市场上下文' })).toHaveAttribute('href', '/strategies/pre-market');
     expect(screen.getByRole('link', { name: /查看市场上下文构建任务/ })).toHaveAttribute(
       'href',
@@ -233,7 +233,7 @@ describe('MarketSnapshotsPage', () => {
       'href',
       '/artifacts?jobType=snapshot-build&date=2026-05-16&source=market-snapshot-browser',
     );
-    expect(screen.getByRole('link', { name: '查看数据集' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '浏览数据集' })).toHaveAttribute(
       'href',
       '/market/datasets?trade_date=2026-05-16&market=CN',
     );
@@ -281,8 +281,8 @@ describe('MarketSnapshotsPage', () => {
 
     renderWithRouter([{ path: '/market/snapshots', element: <MarketSnapshotsPage /> }], ['/market/snapshots']);
 
-    expect(await screen.findByText('市场上下文入口')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看数据集' })).toHaveAttribute('href', '/market/datasets?market=CN');
+    expect(await screen.findByText('流程定位')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '浏览数据集' })).toHaveAttribute('href', '/market/datasets?market=CN');
   });
 
   it('shows permission denied recovery when the detail query returns 403', async () => {

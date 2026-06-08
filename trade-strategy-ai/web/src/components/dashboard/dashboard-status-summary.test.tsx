@@ -127,5 +127,6 @@ describe('DashboardStatusSummary', () => {
 
     expect(screen.queryByText('当前使用的是兜底 default Profile')).not.toBeInTheDocument();
     expect(await screen.findByText('系统健康')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看全部告警' })).toHaveAttribute('href', '/alerts');
   });
 });

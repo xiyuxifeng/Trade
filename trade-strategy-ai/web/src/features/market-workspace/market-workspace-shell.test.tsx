@@ -87,7 +87,7 @@ beforeEach(() => {
     latest_updated_at: '2026-05-29T10:00:00+00:00',
     is_fresh: true,
     needs_refresh: false,
-    message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+    message: '基础信息已就绪，可直接用于 OHLCV 抓取',
     max_age_days: 7,
   } as never);
   mockedRefreshStockInfo.mockResolvedValue({
@@ -103,7 +103,7 @@ beforeEach(() => {
       latest_updated_at: '2026-05-29T10:00:00+00:00',
       is_fresh: true,
       needs_refresh: false,
-      message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+      message: '基础信息已就绪，可直接用于 OHLCV 抓取',
       max_age_days: 7,
     },
   } as never);
@@ -1007,7 +1007,7 @@ describe('MarketWorkspaceShell', () => {
         },
       ],
     } as never);
-    mockedGetStockInfoStatus
+      mockedGetStockInfoStatus
       .mockResolvedValueOnce({
         total: 5515,
         stock_count: 5505,
@@ -1018,7 +1018,7 @@ describe('MarketWorkspaceShell', () => {
         latest_updated_at: '2026-05-20T10:00:00+00:00',
         is_fresh: false,
         needs_refresh: true,
-        message: 'stock_info 已过期或缺少 benchmark，请先刷新股票基础信息',
+        message: '基础信息已过期或缺少 benchmark，请先刷新',
         max_age_days: 7,
       } as never)
       .mockResolvedValueOnce({
@@ -1031,7 +1031,7 @@ describe('MarketWorkspaceShell', () => {
         latest_updated_at: '2026-05-29T10:00:00+00:00',
         is_fresh: true,
         needs_refresh: false,
-        message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+        message: '基础信息已就绪，可直接用于 OHLCV 抓取',
         max_age_days: 7,
       } as never);
     mockedRefreshStockInfo.mockResolvedValue({
@@ -1047,7 +1047,7 @@ describe('MarketWorkspaceShell', () => {
         latest_updated_at: '2026-05-29T10:00:00+00:00',
         is_fresh: true,
         needs_refresh: false,
-        message: 'stock_info 已就绪，可直接用于 OHLCV 抓取',
+        message: '基础信息已就绪，可直接用于 OHLCV 抓取',
         max_age_days: 7,
       },
     } as never);
@@ -1056,13 +1056,13 @@ describe('MarketWorkspaceShell', () => {
 
     expect(await screen.findByRole('heading', { name: 'OHLCV 行情' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行 OHLCV 抓取' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '检查并更新股票基础信息' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '检查并更新基础信息' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '检查并更新股票基础信息' }));
+    await user.click(screen.getByRole('button', { name: '检查并更新基础信息' }));
 
     await waitFor(() => {
       expect(mockedRefreshStockInfo).toHaveBeenCalledWith(7);
-      expect(screen.getByText(/股票基础信息已刷新，可继续运行 OHLCV 抓取。/)).toBeInTheDocument();
+      expect(screen.getByText(/基础信息已刷新，可继续运行 OHLCV 抓取。/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '运行 OHLCV 抓取' })).not.toBeDisabled();
     });
   });

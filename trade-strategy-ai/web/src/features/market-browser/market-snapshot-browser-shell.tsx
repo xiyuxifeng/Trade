@@ -206,15 +206,40 @@ export function MarketSnapshotBrowserShell() {
       <PageHeader
         kicker="市场数据"
         title="市场上下文快照"
-        description="浏览市场上下文快照、查看质量报告和派生特征，并直接跳转到市场上下文构建任务与数据集。"
-        actionLabel="返回市场数据"
+        description="第 2 步：生成快照。查看快照质量、派生特征，并跳转到数据集浏览。"
+        actionLabel="返回市场上下文"
         onAction={() => navigate('/market')}
       />
 
+      <SectionCard title="流程定位" description="当前阶段是生成快照，下一步是浏览快照派生的数据集，之后在总页做基础信息检查。">
+        <div className="grid gap-3 md:grid-cols-4">
+          {[
+            { number: '01', label: '先抓取', active: false },
+            { number: '02', label: '生成快照', active: true },
+            { number: '03', label: '浏览数据集', active: false },
+            { number: '04', label: '基础信息检查', active: false },
+          ].map((step) => (
+            <div
+              key={step.number}
+              className={[
+                'rounded-2xl border p-4',
+                step.active ? 'border-sky-300 bg-sky-50' : 'border-slate-200 bg-slate-50',
+              ].join(' ')}
+            >
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{step.number}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-950">{step.label}</p>
+              <p className="mt-1 text-xs text-slate-600">
+                {step.active ? '当前页' : step.number === '03' ? '下一步' : '前后流程'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
         <SectionCard
-          title="市场上下文入口"
-          description="市场数据是市场上下文快照的正式主入口，盘前准备仅保留快捷构建入口。"
+          title="快照入口"
+          description="这里负责生成和检查市场上下文快照，完成后再进入数据集浏览。"
           className="border-slate-200 bg-white"
         >
           <div className="grid grid-cols-2 gap-2">
@@ -241,14 +266,14 @@ export function MarketSnapshotBrowserShell() {
               className="inline-flex min-h-16 items-center justify-start rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
               to={datasetViewerLink}
             >
-              <span>查看数据集</span>
+              <span>浏览数据集</span>
             </Link>
           </div>
         </SectionCard>
 
         <SectionCard
           title="版本切换"
-          description="选择当前市场上下文快照的特征版本和规则版本。"
+          description="在查看快照后切换特征版本和状态版本。"
           className="border-slate-200 bg-white"
         >
           <div className="grid gap-4">

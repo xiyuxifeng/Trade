@@ -37,8 +37,8 @@ export function MarketSnapshotBrowserList({
 }: MarketSnapshotBrowserListProps) {
   return (
     <SectionCard
-      title="Snapshot 列表"
-      description="选择一个快照在右侧查看质量、sections 和派生特征。"
+      title="快照列表"
+      description="选择一个快照继续查看质量、sections 和派生特征。"
       className="border-slate-200 bg-white"
     >
       {isLoading ? (

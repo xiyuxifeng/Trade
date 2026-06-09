@@ -126,12 +126,20 @@ describe('MarketPage', () => {
     expect(screen.getAllByText('先抓取').length).toBeGreaterThan(0);
     expect(screen.getAllByText('生成快照').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/market/snapshots')).toHaveAttribute('href', '/market/snapshots');
+    expect(screen.getByRole('link', { name: /查看市场上下文构建任务/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
+    expect(screen.getByRole('link', { name: /查看市场上下文产物/ })).toHaveAttribute(
+      'href',
+      '/artifacts?jobType=snapshot-build&source=market-snapshot-browser',
+    );
     expect(screen.getByRole('link', { name: /数据集浏览/ })).toHaveAttribute('href', '/market/datasets');
     expect(screen.queryByRole('link', { name: /查看最新数据集/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /进入市场数据页/ })).toHaveAttribute('href', '/market/kaipan');
+    expect(screen.getByRole('link', { name: /打开 Kaipan 页面/ })).toHaveAttribute('href', '/market/kaipan');
+    expect(screen.getByRole('link', { name: /查看 OHLCV 任务/ })).toHaveAttribute('href', '/jobs?job_type=ohlcv-crawl');
+    expect(screen.getByRole('link', { name: /查看 OHLCV 产物/ })).toHaveAttribute('href', '/artifacts?jobType=ohlcv-crawl');
     expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
     expect(screen.getByRole('link', { name: /查看 Job 详情/ })).toHaveAttribute('href', '/jobs/job-1');
     expect(screen.getAllByRole('link').find((link) => link.getAttribute('href') === '/artifacts')).toHaveAttribute('href', '/artifacts');
+    expect(screen.queryByRole('link', { name: '返回市场上下文' })).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(mockedListMarketSnapshots).toHaveBeenCalledWith({ limit: 1, offset: 0 });
@@ -210,5 +218,8 @@ describe('MarketPage', () => {
     expect(await screen.findByRole('heading', { name: '市场上下文' })).toBeInTheDocument();
     expect((await screen.findAllByText('基础信息检查')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /前往 OHLCV 页面/ })).toHaveAttribute('href', '/market/ohlcv');
+    expect(screen.getByRole('link', { name: /查看 OHLCV 任务/ })).toHaveAttribute('href', '/jobs?job_type=ohlcv-crawl');
+    expect(screen.getByRole('link', { name: /查看 OHLCV 产物/ })).toHaveAttribute('href', '/artifacts?jobType=ohlcv-crawl');
+    expect(screen.getByRole('link', { name: /查看市场上下文构建任务/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
   });
 });

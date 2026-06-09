@@ -131,15 +131,12 @@ export function MarketPage() {
     {
       number: '01',
       title: '先抓取',
-      description: '从 Kaipan 或 OHLCV 链路拉取原始市场数据，先把输入备齐。',
+      description: '先把原始市场数据备齐。',
       statusLabel: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? '最近有抓取任务' : '等待抓取',
       statusTone: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? 'info' : 'warning',
-      primaryLabel: '进入市场数据页',
+      primaryLabel: '打开 Kaipan 页面',
       primaryHref: '/market/kaipan',
-      secondaryLinks: [
-        { label: '查看 OHLCV 任务', href: '/jobs?job_type=ohlcv-crawl' },
-        { label: '返回市场上下文', href: '/market' },
-      ],
+      secondaryLinks: [],
     },
     {
       number: '02',
@@ -150,8 +147,8 @@ export function MarketPage() {
       primaryLabel: '打开快照页',
       primaryHref: '/market/snapshots',
       secondaryLinks: [
-        { label: '查看构建任务', href: '/jobs?job_type=snapshot-build' },
-        { label: '查看产物', href: '/artifacts?jobType=snapshot-build&source=market-snapshot-browser' },
+        { label: '查看市场上下文构建任务', href: '/jobs?job_type=snapshot-build' },
+        { label: '查看市场上下文产物', href: '/artifacts?jobType=snapshot-build&source=market-snapshot-browser' },
       ],
     },
     {
@@ -164,7 +161,6 @@ export function MarketPage() {
       primaryHref: '/market/datasets',
       secondaryLinks: [
         { label: '查看快照列表', href: '/market/snapshots' },
-        { label: '返回市场上下文', href: '/market' },
       ],
     },
     {
@@ -176,8 +172,8 @@ export function MarketPage() {
       primaryLabel: '前往 OHLCV 页面',
       primaryHref: '/market/ohlcv',
       secondaryLinks: [
-        { label: '查看任务中心', href: '/jobs?status=failed' },
-        { label: '查看产物中心', href: '/artifacts' },
+        { label: '查看 OHLCV 任务', href: '/jobs?job_type=ohlcv-crawl' },
+        { label: '查看 OHLCV 产物', href: '/artifacts?jobType=ohlcv-crawl' },
       ],
     },
   ] as const;

@@ -27,6 +27,16 @@ const mockedGetStockInfoStatus = vi.mocked(getStockInfoStatus);
 const mockedListJobs = vi.mocked(listJobs);
 const mockedListArtifacts = vi.mocked(listArtifacts);
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockedGetStockInfoStatus.mockResolvedValue({
@@ -221,5 +231,54 @@ describe('MarketPage', () => {
     expect(screen.getByRole('link', { name: /查看 OHLCV 任务/ })).toHaveAttribute('href', '/jobs?job_type=ohlcv-crawl');
     expect(screen.getByRole('link', { name: /查看 OHLCV 产物/ })).toHaveAttribute('href', '/artifacts?jobType=ohlcv-crawl');
     expect(screen.getByRole('link', { name: /查看市场上下文构建任务/ })).toHaveAttribute('href', '/jobs?job_type=snapshot-build');
+  });
+
+  it('renders the market overview structure before all sections finish loading', async () => {
+    const deferredSnapshots = createDeferred<never>();
+    const deferredDatasets = createDeferred<never>();
+    const deferredJobs = createDeferred<never>();
+    const deferredArtifacts = createDeferred<never>();
+
+    mockedListMarketSnapshots.mockReturnValue(deferredSnapshots.promise as never);
+    mockedListMarketDatasets.mockReturnValue(deferredDatasets.promise as never);
+    mockedListJobs.mockReturnValue(deferredJobs.promise as never);
+    mockedListArtifacts.mockReturnValue(deferredArtifacts.promise as never);
+
+    renderWithRouter([{ path: '/market', element: <MarketPage /> }], ['/market']);
+
+    expect(await screen.findByRole('heading', { name: '市场上下文' })).toBeInTheDocument();
+    expect(screen.getByText('流程状态')).toBeInTheDocument();
+    expect(screen.getByText('最近失败任务')).toBeInTheDocument();
+    expect(screen.getByText('最近产物')).toBeInTheDocument();
+    expect(screen.getAllByText('先抓取').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('生成快照').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('浏览数据集').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('基础信息检查').length).toBeGreaterThan(0);
+    expect(screen.queryByText('正在加载市场总览')).not.toBeInTheDocument();
+
+    deferredSnapshots.resolve({
+      filters: {},
+      page: { total: 0, limit: 1, offset: 0, count: 0 },
+      items: [],
+    } as never);
+    deferredDatasets.resolve({
+      filters: {},
+      page: { total: 0, limit: 1, offset: 0, count: 0 },
+      items: [],
+    } as never);
+    deferredJobs.resolve({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 20,
+      items: [],
+    } as never);
+    deferredArtifacts.resolve({
+      count: 0,
+      total: 0,
+      skip: 0,
+      limit: 12,
+      items: [],
+    } as never);
   });
 });

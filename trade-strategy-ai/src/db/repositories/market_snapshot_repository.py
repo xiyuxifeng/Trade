@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot import MarketSnapshot
@@ -69,3 +69,21 @@ class MarketSnapshotRepository:
             stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
+
+    async def count_snapshots(
+        self,
+        session: AsyncSession,
+        *,
+        trade_date: date | None = None,
+        market: str | None = None,
+        quality_status: str | None = None,
+    ) -> int:
+        """统计符合条件的快照数量。"""
+        stmt = select(func.count()).select_from(MarketSnapshot)
+        if trade_date is not None:
+            stmt = stmt.where(MarketSnapshot.trade_date == trade_date)
+        if market:
+            stmt = stmt.where(MarketSnapshot.market == market)
+        if quality_status:
+            stmt = stmt.where(MarketSnapshot.quality_status == quality_status)
+        return int((await session.scalar(stmt)) or 0)

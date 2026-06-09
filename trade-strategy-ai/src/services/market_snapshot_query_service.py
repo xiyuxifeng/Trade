@@ -235,19 +235,19 @@ class MarketSnapshotQueryService(BaseService):
             )
 
         async with self._session_factory() as session:
-            snapshots = await self._snapshot_repository.list_snapshots(
-                session,
-                trade_date=normalized_trade_date,
-                market=market,
-                quality_status=quality_status,
-            )
+            if section or symbol or topic:
+                snapshots = await self._snapshot_repository.list_snapshots(
+                    session,
+                    trade_date=normalized_trade_date,
+                    market=market,
+                    quality_status=quality_status,
+                )
 
-            filtered: list[Any] = []
-            section_cache: dict[str, list[Any]] = {}
-            item_cache: dict[str, list[Any]] = {}
+                filtered: list[Any] = []
+                section_cache: dict[str, list[Any]] = {}
+                item_cache: dict[str, list[Any]] = {}
 
-            for snapshot in snapshots:
-                if section or symbol or topic:
+                for snapshot in snapshots:
                     snapshot_sections = section_cache.get(snapshot.snapshot_id)
                     if snapshot_sections is None:
                         snapshot_sections = await self._section_repository.list_by_snapshot_id(session, snapshot.snapshot_id)
@@ -264,10 +264,25 @@ class MarketSnapshotQueryService(BaseService):
                         topic=topic,
                     ):
                         continue
-                filtered.append(snapshot)
+                    filtered.append(snapshot)
 
-            total = len(filtered)
-            page_items = filtered[offset : offset + limit]
+                total = len(filtered)
+                page_items = filtered[offset : offset + limit]
+            else:
+                total = await self._snapshot_repository.count_snapshots(
+                    session,
+                    trade_date=normalized_trade_date,
+                    market=market,
+                    quality_status=quality_status,
+                )
+                page_items = await self._snapshot_repository.list_snapshots(
+                    session,
+                    trade_date=normalized_trade_date,
+                    market=market,
+                    quality_status=quality_status,
+                    limit=limit,
+                    offset=offset,
+                )
             return ServiceResult(
                 status="ok",
                 message="market snapshot list loaded",
@@ -467,15 +482,22 @@ class MarketSnapshotQueryService(BaseService):
             )
 
         async with self._session_factory() as session:
-            datasets = await self._dataset_repository.list_datasets(
+            total = await self._dataset_repository.count_datasets(
                 session,
                 trade_date=normalized_trade_date,
                 market=market,
                 dataset_type=dataset_type,
                 quality_status=quality_status,
             )
-
-        page_items = datasets[offset : offset + limit]
+            page_items = await self._dataset_repository.list_datasets(
+                session,
+                trade_date=normalized_trade_date,
+                market=market,
+                dataset_type=dataset_type,
+                quality_status=quality_status,
+                limit=limit,
+                offset=offset,
+            )
         return ServiceResult(
             status="ok",
             message="market dataset list loaded",
@@ -486,7 +508,7 @@ class MarketSnapshotQueryService(BaseService):
                     "dataset_type": dataset_type,
                     "quality_status": quality_status,
                 },
-                "page": self._page_payload(total=len(datasets), limit=limit, offset=offset, count=len(page_items)),
+                "page": self._page_payload(total=total, limit=limit, offset=offset, count=len(page_items)),
                 "items": [dataset.to_dict() for dataset in page_items],
             },
         )

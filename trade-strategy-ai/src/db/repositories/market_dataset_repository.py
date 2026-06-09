@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_dataset import MarketDataset
@@ -65,3 +65,24 @@ class MarketDatasetRepository:
             stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
+
+    async def count_datasets(
+        self,
+        session: AsyncSession,
+        *,
+        trade_date: date | None = None,
+        market: str | None = None,
+        dataset_type: str | None = None,
+        quality_status: str | None = None,
+    ) -> int:
+        """统计符合条件的数据集数量。"""
+        stmt = select(func.count()).select_from(MarketDataset)
+        if trade_date is not None:
+            stmt = stmt.where(MarketDataset.trade_date == trade_date)
+        if market:
+            stmt = stmt.where(MarketDataset.market == market)
+        if dataset_type:
+            stmt = stmt.where(MarketDataset.dataset_type == dataset_type)
+        if quality_status:
+            stmt = stmt.where(MarketDataset.quality_status == quality_status)
+        return int((await session.scalar(stmt)) or 0)

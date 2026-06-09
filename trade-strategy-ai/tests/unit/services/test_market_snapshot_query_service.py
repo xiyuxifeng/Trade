@@ -205,6 +205,64 @@ async def test_list_snapshots_returns_empty_page_for_no_match(market_snapshot_qu
 
 
 @pytest.mark.asyncio()
+async def test_list_snapshots_uses_requested_page_window() -> None:
+    from types import SimpleNamespace
+
+    from src.services.market_snapshot_query_service import MarketSnapshotQueryService
+
+    calls: list[dict[str, object]] = []
+
+    class _SnapshotRepository:
+        async def list_snapshots(self, session, **kwargs):  # noqa: ANN001
+            calls.append(kwargs)
+            return [
+                SimpleNamespace(
+                    snapshot_id="snap-002",
+                    trade_date=date(2026, 5, 17),
+                    market="HK",
+                    data_version="v1",
+                    quality_status="partial",
+                    created_at=datetime(2026, 5, 17, 8, 0, tzinfo=UTC),
+                    section_count=1,
+                    available_section_count=1,
+                    partial_section_count=0,
+                    missing_section_count=0,
+                    profile_id="default",
+                ),
+            ]
+
+        async def count_snapshots(self, session, **kwargs):  # noqa: ANN001
+            calls.append({"count": kwargs})
+            return 2
+
+    class _EmptySession:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    service = MarketSnapshotQueryService(
+        session_factory=lambda: _EmptySession(),
+        snapshot_repository=_SnapshotRepository(),
+        section_repository=object(),
+        item_repository=object(),
+        dataset_repository=object(),
+        quality_repository=object(),
+    )
+
+    result = await service.list_snapshots(trade_date="2026-05-17", market="HK", limit=1, offset=1)
+
+    assert result.status == "ok"
+    assert result.payload["page"]["total"] == 2
+    assert result.payload["page"]["offset"] == 1
+    assert result.payload["items"][0]["snapshot_id"] == "snap-002"
+    assert calls[0]["count"] == {"trade_date": date(2026, 5, 17), "market": "HK", "quality_status": None}
+    assert calls[1]["limit"] == 1
+    assert calls[1]["offset"] == 1
+
+
+@pytest.mark.asyncio()
 async def test_get_snapshot_detail_returns_sections_quality_and_dataset(market_snapshot_query_session_factory) -> None:
     from src.services.market_snapshot_query_service import MarketSnapshotQueryService
 
@@ -259,6 +317,73 @@ async def test_get_dataset_detail_returns_items(market_snapshot_query_session_fa
     assert result.payload["snapshot"]["snapshot_id"] == "snap-001"
     assert result.payload["page"]["total"] == 3
     assert result.payload["page"]["count"] == 1
+
+
+@pytest.mark.asyncio()
+async def test_list_datasets_uses_requested_page_window() -> None:
+    from types import SimpleNamespace
+
+    from src.services.market_snapshot_query_service import MarketSnapshotQueryService
+
+    calls: list[dict[str, object]] = []
+
+    class _DatasetRepository:
+        async def list_datasets(self, session, **kwargs):  # noqa: ANN001
+            calls.append(kwargs)
+            class _DatasetRecord(SimpleNamespace):
+                def to_dict(self):  # noqa: ANN001
+                    return self.__dict__
+
+            return [
+                _DatasetRecord(
+                    dataset_id="snap-002:dataset",
+                    dataset_type="market_snapshot",
+                    trade_date=date(2026, 5, 17),
+                    market="HK",
+                    source="snapshot-build",
+                    storage_ref={"snapshot_id": "snap-002"},
+                    snapshot_id="snap-002",
+                    profile_id="default",
+                    quality_status="partial",
+                    created_at=datetime(2026, 5, 17, 9, 0, tzinfo=UTC),
+                    updated_at=datetime(2026, 5, 17, 9, 10, tzinfo=UTC),
+                ),
+            ]
+
+        async def count_datasets(self, session, **kwargs):  # noqa: ANN001
+            calls.append({"count": kwargs})
+            return 2
+
+    class _EmptySession:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    service = MarketSnapshotQueryService(
+        session_factory=lambda: _EmptySession(),
+        snapshot_repository=object(),
+        section_repository=object(),
+        item_repository=object(),
+        dataset_repository=_DatasetRepository(),
+        quality_repository=object(),
+    )
+
+    result = await service.list_datasets(trade_date="2026-05-17", market="HK", limit=1, offset=1)
+
+    assert result.status == "ok"
+    assert result.payload["page"]["total"] == 2
+    assert result.payload["page"]["offset"] == 1
+    assert result.payload["items"][0]["dataset_id"] == "snap-002:dataset"
+    assert calls[0]["count"] == {
+        "trade_date": date(2026, 5, 17),
+        "market": "HK",
+        "dataset_type": None,
+        "quality_status": None,
+    }
+    assert calls[1]["limit"] == 1
+    assert calls[1]["offset"] == 1
 
 
 @pytest.mark.asyncio()

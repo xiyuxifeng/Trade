@@ -102,13 +102,13 @@ export function MarketPage() {
 
   const jobsQuery = useQuery({
     queryKey: ['market-overview', 'jobs'],
-    queryFn: () => listJobs({ limit: 20 }),
+    queryFn: () => listJobs({ limit: 10 }),
     staleTime: 30_000,
   });
 
   const artifactsQuery = useQuery({
     queryKey: ['market-overview', 'artifacts'],
-    queryFn: () => listArtifacts({ limit: 12 }),
+    queryFn: () => listArtifacts({ limit: 6 }),
     staleTime: 30_000,
   });
 
@@ -127,13 +127,26 @@ export function MarketPage() {
     staleTime: 30_000,
   });
   const stockInfoIsFresh = Boolean(stockInfoStatusQuery.data?.is_fresh);
+  const snapshotsLoading = snapshotsQuery.isLoading;
+  const datasetsLoading = datasetsQuery.isLoading;
+  const jobsLoading = jobsQuery.isLoading;
+  const artifactsLoading = artifactsQuery.isLoading;
+  const stockInfoLoading = stockInfoStatusQuery.isLoading;
   const marketFlowSteps = [
     {
       number: '01',
       title: '先抓取',
       description: '先把原始市场数据备齐。',
-      statusLabel: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? '最近有抓取任务' : '等待抓取',
-      statusTone: latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run' ? 'info' : 'warning',
+      statusLabel: jobsLoading
+        ? '正在加载任务'
+        : latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run'
+          ? '最近有抓取任务'
+          : '等待抓取',
+      statusTone: jobsLoading
+        ? 'info'
+        : latestMarketJob?.job_type === 'ohlcv-crawl' || latestMarketJob?.job_type === 'kaipan-run'
+          ? 'info'
+          : 'warning',
       primaryLabel: '打开 Kaipan 页面',
       primaryHref: '/market/kaipan',
       secondaryLinks: [],
@@ -142,8 +155,8 @@ export function MarketPage() {
       number: '02',
       title: '生成快照',
       description: '把抓取结果收敛成统一市场上下文快照，供后续分析复用。',
-      statusLabel: latestSnapshot ? '已有最近快照' : '等待生成快照',
-      statusTone: latestSnapshot ? 'success' : 'warning',
+      statusLabel: snapshotsLoading ? '正在加载快照' : latestSnapshot ? '已有最近快照' : '等待生成快照',
+      statusTone: snapshotsLoading ? 'info' : latestSnapshot ? 'success' : 'warning',
       primaryLabel: '打开快照页',
       primaryHref: '/market/snapshots',
       secondaryLinks: [
@@ -155,8 +168,8 @@ export function MarketPage() {
       number: '03',
       title: '浏览数据集',
       description: '查看快照派生的数据集、分页样本和详情回链。',
-      statusLabel: latestDataset ? '已有最近数据集' : '等待数据集',
-      statusTone: latestDataset ? 'success' : 'warning',
+      statusLabel: datasetsLoading ? '正在加载数据集' : latestDataset ? '已有最近数据集' : '等待数据集',
+      statusTone: datasetsLoading ? 'info' : latestDataset ? 'success' : 'warning',
       primaryLabel: '打开数据集浏览',
       primaryHref: '/market/datasets',
       secondaryLinks: [
@@ -167,8 +180,8 @@ export function MarketPage() {
       number: '04',
       title: '基础信息检查',
       description: '先确认股票与指数基础信息是否齐备，再进入 OHLCV 抓取。',
-      statusLabel: stockInfoIsFresh ? '基础信息已就绪' : '需要检查基础信息',
-      statusTone: stockInfoIsFresh ? 'success' : 'warning',
+      statusLabel: stockInfoLoading ? '正在检查基础信息' : stockInfoIsFresh ? '基础信息已就绪' : '需要检查基础信息',
+      statusTone: stockInfoLoading ? 'info' : stockInfoIsFresh ? 'success' : 'warning',
       primaryLabel: '前往 OHLCV 页面',
       primaryHref: '/market/ohlcv',
       secondaryLinks: [
@@ -177,42 +190,6 @@ export function MarketPage() {
       ],
     },
   ] as const;
-
-  const pageError = snapshotsQuery.error ?? datasetsQuery.error ?? jobsQuery.error ?? artifactsQuery.error;
-
-  if (snapshotsQuery.isLoading || datasetsQuery.isLoading || jobsQuery.isLoading || artifactsQuery.isLoading) {
-    return (
-      <main className="page-stack">
-        <PageHeader
-          kicker="市场上下文"
-          title="市场上下文"
-          description="按正常数据流向操作：先抓取，再生成快照，再浏览数据集，最后做基础信息检查。"
-        />
-        <LoadingState label="正在加载市场总览" description="正在读取快照、数据集、任务和产物概览。" />
-      </main>
-    );
-  }
-
-  if (pageError) {
-    return (
-      <main className="page-stack">
-        <PageHeader
-          kicker="市场上下文"
-          title="市场上下文"
-          description="按正常数据流向操作：先抓取，再生成快照，再浏览数据集，最后做基础信息检查。"
-        />
-        <ErrorState
-          {...buildErrorRecoveryState(pageError, 'market')}
-          onRetry={() => {
-            void snapshotsQuery.refetch();
-            void datasetsQuery.refetch();
-            void jobsQuery.refetch();
-            void artifactsQuery.refetch();
-          }}
-        />
-      </main>
-    );
-  }
 
   return (
     <main className="page-stack">
@@ -264,27 +241,47 @@ export function MarketPage() {
         <aside className="xl:sticky xl:top-6 xl:self-start">
           <SectionCard className="h-full" title="流程状态" description="查看当前进度和下一步。">
             <div className="space-y-3">
+              {snapshotsQuery.error || datasetsQuery.error || jobsQuery.error || artifactsQuery.error ? (
+                <ErrorState
+                  {...buildErrorRecoveryState(
+                    snapshotsQuery.error ?? datasetsQuery.error ?? jobsQuery.error ?? artifactsQuery.error,
+                    'market',
+                  )}
+                  onRetry={() => {
+                    void snapshotsQuery.refetch();
+                    void datasetsQuery.refetch();
+                    void jobsQuery.refetch();
+                    void artifactsQuery.refetch();
+                  }}
+                />
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近数据状态</p>
-                  <p className="mt-1 text-base font-semibold text-slate-950">{latestSnapshot ? latestSnapshot.quality_status || 'n/a' : '暂无'}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">
+                    {snapshotsLoading ? '加载中' : latestSnapshot ? latestSnapshot.quality_status || 'n/a' : '暂无'}
+                  </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {latestSnapshot ? `${latestSnapshot.trade_date} · ${latestSnapshot.market} · ${latestSnapshot.snapshot_id}` : '暂无快照记录'}
+                    {snapshotsLoading
+                      ? '正在读取最近快照概览'
+                      : latestSnapshot
+                        ? `${latestSnapshot.trade_date} · ${latestSnapshot.market} · ${latestSnapshot.snapshot_id}`
+                        : '暂无快照记录'}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">数据集总数</p>
-                  <p className="mt-1 text-base font-semibold text-slate-950">{datasetsQuery.data?.page.total ?? 0}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{datasetsLoading ? '加载中' : datasetsQuery.data?.page.total ?? 0}</p>
                   <p className="mt-1 text-xs text-slate-500">当前可浏览的市场数据集数量</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">快照总数</p>
-                  <p className="mt-1 text-base font-semibold text-slate-950">{snapshotsQuery.data?.page.total ?? 0}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{snapshotsLoading ? '加载中' : snapshotsQuery.data?.page.total ?? 0}</p>
                   <p className="mt-1 text-xs text-slate-500">当前可浏览的市场上下文快照数量</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">失败任务</p>
-                  <p className="mt-1 text-base font-semibold text-slate-950">{failedJobs.length}</p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">{jobsLoading ? '加载中' : failedJobs.length}</p>
                   <p className="mt-1 text-xs text-slate-500">最近失败的市场相关 Job</p>
                 </div>
               </div>
@@ -300,7 +297,16 @@ export function MarketPage() {
           description="仅显示最需要处理的市场相关失败任务。"
           action={<Link className="text-sm font-medium text-sky-700 hover:underline" to="/jobs?status=failed">查看任务中心</Link>}
         >
-          {failedJobs.length ? (
+          {jobsLoading ? (
+            <LoadingState label="正在加载最近任务" description="稍后会显示最近提交的市场任务和执行结果。" />
+          ) : jobsQuery.error ? (
+            <ErrorState
+              {...buildErrorRecoveryState(jobsQuery.error, 'market')}
+              onRetry={() => {
+                void jobsQuery.refetch();
+              }}
+            />
+          ) : failedJobs.length ? (
             <div className="space-y-3">
               {failedJobs.slice(0, 4).map((job) => (
                 <div key={job.id} className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
@@ -324,7 +330,16 @@ export function MarketPage() {
           description="查看市场链路生成的快照、报告和导出文件。"
           action={<Link className="text-sm font-medium text-sky-700 hover:underline" to="/artifacts">查看产物中心</Link>}
         >
-          {artifacts.length ? (
+          {artifactsLoading ? (
+            <LoadingState label="正在加载最近产物" description="稍后会显示市场链路生成的快照、报告和导出文件。" />
+          ) : artifactsQuery.error ? (
+            <ErrorState
+              {...buildErrorRecoveryState(artifactsQuery.error, 'market')}
+              onRetry={() => {
+                void artifactsQuery.refetch();
+              }}
+            />
+          ) : artifacts.length ? (
             <div className="max-h-72 space-y-3 overflow-auto pr-1">
               {artifacts.map((artifact) => (
                 <div key={artifact.artifact_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

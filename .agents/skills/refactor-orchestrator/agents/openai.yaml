@@ -1,0 +1,7 @@
+interface:
+  display_name: "Refactor Orchestrator"
+  short_description: "Plan and coordinate staged repository refactors"
+  default_prompt: "Use the refactor-orchestrator skill. Choose and explicitly spawn configured custom subagents according to the Skill rules, do not rely on implicit delegation, and use the minimum viable number of agents."
+
+policy:
+  allow_implicit_invocation: false

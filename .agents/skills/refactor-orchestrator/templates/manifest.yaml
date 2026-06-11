@@ -1,0 +1,17 @@
+stage: STAGE_ID
+title: STAGE_TITLE
+baseline_commit: ""
+planner_model: gpt-5.5
+reviewer_model: gpt-5.5
+state: planning
+
+tasks:
+  - id: TASK_ID
+    title: TASK_TITLE
+    risk: M2
+    agent: refactor_executor_mini
+    depends_on: []
+    parallel_safe: false
+    allowed_paths: []
+    forbidden_paths: []
+    status: pending

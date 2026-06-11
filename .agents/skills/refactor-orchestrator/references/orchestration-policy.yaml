@@ -1,0 +1,32 @@
+version: 1
+
+defaults:
+  max_fix_rounds: 3
+  default_explorer_count: 0
+  default_executor_count: 1
+  max_explorers_per_batch: 3
+  max_executors_per_batch: 3
+  max_depth: 1
+  require_actual_diff_review: true
+  require_verification_evidence: true
+  prefer_minimum_viable_lanes: true
+
+fallback:
+  mode: single-controller
+  trigger_when:
+    - native_subagents_unavailable
+    - subagent_model_unverifiable
+    - runtime_permissions_unverifiable
+  behavior:
+    - generate_task_cards
+    - stop_before_implicit_delegation
+    - provide_manual_codex_commands
+    - preserve_stage_state
+
+artifacts:
+  preserve_each_round: true
+  required:
+    - result.md
+    - review.md
+    - tests.log
+    - changes.diff

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { login } from '@/lib/api/auth';
 import { setAuthToken } from '@/lib/api/http';
@@ -7,8 +7,37 @@ import type { CurrentPrincipal } from '@/types/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
+type LoginLocationState = {
+  from?: {
+    pathname?: unknown;
+    search?: unknown;
+    hash?: unknown;
+  };
+};
+
+function getSafeReturnPath(state: unknown) {
+  const from = (state as LoginLocationState | null)?.from;
+  const pathname = typeof from?.pathname === 'string' ? from.pathname : '';
+
+  if (!pathname.startsWith('/') || pathname.startsWith('//') || pathname.includes('\\')) {
+    return '/';
+  }
+
+  const search =
+    typeof from?.search === 'string' && (from.search === '' || from.search.startsWith('?'))
+      ? from.search
+      : '';
+  const hash =
+    typeof from?.hash === 'string' && (from.hash === '' || from.hash.startsWith('#'))
+      ? from.hash
+      : '';
+
+  return `${pathname}${search}${hash}`;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,7 +63,7 @@ export function LoginPage() {
       };
       queryClient.setQueryData(['auth', 'me'], principal);
 
-      navigate('/', { replace: true });
+      navigate(getSafeReturnPath(location.state), { replace: true });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '登录失败';
       setError(message);

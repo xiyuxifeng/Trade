@@ -3,10 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/features/auth/auth-context';
+import type { PrincipalRole } from '@/types/auth';
 
 type TopbarProps = {
   title: string;
   onMenuClick: () => void;
+};
+
+const roleLabels: Record<PrincipalRole, string> = {
+  anonymous: '访客',
+  viewer: '只读用户',
+  operator: '操作员',
+  admin: '管理员',
 };
 
 export function Topbar({ title, onMenuClick }: TopbarProps) {
@@ -23,7 +31,7 @@ export function Topbar({ title, onMenuClick }: TopbarProps) {
       <div className="topbar-left">
         <Button className="topbar-menu-button" variant="ghost" onClick={onMenuClick} size="sm">
           <Menu className="h-4 w-4" />
-          Menu
+          打开导航
         </Button>
         <div>
           <h2 className="topbar-title">{title}</h2>
@@ -36,10 +44,10 @@ export function Topbar({ title, onMenuClick }: TopbarProps) {
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>{principal.username || principal.api_key_label || principal.source}</span>
               <Badge variant={principal.role === 'admin' ? 'success' : principal.role === 'operator' ? 'info' : 'default'}>
-                {principal.role}
+                {roleLabels[principal.role]}
               </Badge>
             </span>
-            <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="登出">
+            <Button variant="ghost" size="sm" onClick={handleLogoutClick} title="退出登录">
               <LogOut className="h-4 w-4" />
             </Button>
           </>

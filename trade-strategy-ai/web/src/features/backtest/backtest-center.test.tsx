@@ -247,7 +247,7 @@ describe('BacktestCenter', () => {
     await clickPromise;
 
     await waitFor(() => {
-      expect(screen.getByText('回测任务提交失败：backtest failed')).toBeInTheDocument();
+      expect(screen.getByText('回测任务提交失败：回测任务提交失败，请稍后重试。')).toBeInTheDocument();
     });
   });
 });

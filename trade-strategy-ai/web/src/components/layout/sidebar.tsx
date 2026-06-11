@@ -23,16 +23,16 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
       )}
     >
       <div className="sidebar-brand">
-        <div className="sidebar-brand-mark">TSAI</div>
+        <div className="sidebar-brand-mark">策</div>
         {!collapsed && (
           <div>
-            <p className="sidebar-brand-title">trade-strategy-ai</p>
-            <p className="sidebar-brand-subtitle">Web control console</p>
+            <p className="sidebar-brand-title">交易策略助手</p>
+            <p className="sidebar-brand-subtitle">研究、验证与每日决策</p>
           </div>
         )}
       </div>
 
-      <nav className="sidebar-nav" aria-label="Primary">
+      <nav className="sidebar-nav" aria-label="主要功能">
         {navigationGroups.map((group) => (
           <div key={group.title} className="sidebar-nav-group">
             {!collapsed && <p className="sidebar-nav-group-title">{group.title}</p>}
@@ -61,12 +61,12 @@ export function Sidebar({ open = true, mobile = false, collapsed = false, onNavi
                   tabIndex={disabled ? -1 : undefined}
                   to={item.path}
                   end={item.path === '/'}
-                  title={disabled ? `需要 ${item.minRole} 权限` : item.description}
+                  title={disabled ? '当前账号无权访问' : item.description}
                 >
                   <span className="sidebar-link-label">{item.label}</span>
                   {!collapsed && (
                     <span className="sidebar-link-description">
-                      {disabled ? `需要 ${item.minRole} 权限` : item.description}
+                      {disabled ? '当前账号无权访问' : item.description}
                     </span>
                   )}
                 </NavLink>

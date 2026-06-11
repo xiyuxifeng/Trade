@@ -8,7 +8,7 @@ type StatusStripProps = {
   className?: string;
 };
 
-export function StatusStrip({ title, description, path, kind = 'canonical', className }: StatusStripProps) {
+export function StatusStrip({ title, description, kind = 'canonical', className }: StatusStripProps) {
   return (
     <div className={cn('status-strip', className)}>
       <div className="status-strip-left">
@@ -18,8 +18,8 @@ export function StatusStrip({ title, description, path, kind = 'canonical', clas
         </div>
       </div>
       <div className="status-strip-right">
-        {kind === 'compat' ? <span>兼容访问</span> : <span>Route</span>}
-        {kind === 'compat' ? <code>历史链接</code> : <code>{path}</code>}
+        <span>{kind === 'compat' ? '历史入口' : '正式入口'}</span>
+        <span>{kind === 'compat' ? '该入口仅用于兼容已有链接' : '当前功能'}</span>
       </div>
     </div>
   );

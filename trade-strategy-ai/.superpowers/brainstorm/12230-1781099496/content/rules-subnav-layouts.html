@@ -1,0 +1,122 @@
+<h2>“规则与回测”子入口怎么布局？</h2>
+<p class="subtitle">重点不是把所有内容放进一页，而是让用户始终知道当前位置和下一步。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f4f0e6;color:#17342d;min-height:390px">
+      <div style="display:grid;grid-template-columns:92px 1fr;gap:10px">
+        <aside style="border-radius:16px;background:#17342d;color:#f4f0e6;padding:13px 9px;font-size:10px">
+          <strong style="display:block;margin-bottom:18px">交易研究台</strong>
+          <div style="display:grid;gap:12px">
+            <span>首页</span><span>研究中心</span><b style="color:#f2c66d">规则与回测</b>
+            <span>作者画像</span><span>策略中心</span><span>每日交易</span><span>系统管理</span>
+          </div>
+        </aside>
+        <main>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;padding:5px 0 12px;border-bottom:1px solid #cfc6ae;font-size:10px">
+            <b style="background:#17342d;color:white;padding:7px 10px;border-radius:999px">待审核规则 12</b>
+            <span style="padding:7px 10px">正式规则 38</span>
+            <span style="padding:7px 10px">回测实验</span>
+            <span style="padding:7px 10px">回测结果</span>
+          </div>
+          <div style="margin-top:14px">
+            <small>规则与回测 · 第 1 步</small>
+            <h3 style="font-size:22px;margin:6px 0">审核候选规则</h3>
+            <p style="font-size:10px">确认规则证据、条件完整性和可回测状态。</p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;margin-top:12px">
+            <section style="background:white;border-radius:14px;padding:13px">
+              <b>待审核规则</b>
+              <div style="display:grid;gap:8px;margin-top:10px;font-size:10px">
+                <div style="border:1px solid #ded6c4;border-radius:10px;padding:9px">放量突破前高 <span style="float:right">需要确认</span></div>
+                <div style="border:1px solid #ded6c4;border-radius:10px;padding:9px">缩量回踩均线 <span style="float:right">建议通过</span></div>
+                <div style="border:1px solid #ded6c4;border-radius:10px;padding:9px">题材情绪转强 <span style="float:right">数据受限</span></div>
+              </div>
+            </section>
+            <aside style="background:#fff1e6;border-radius:14px;padding:12px;font-size:10px">
+              <b>下一步</b>
+              <p>审核通过后，规则进入待回测。</p>
+              <button style="border:0;border-radius:999px;background:#c6563a;color:white;padding:8px 10px">审核所选规则</button>
+            </aside>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 一级侧栏 + 页面内分段导航（推荐）</h3>
+      <p>一级导航保持稳定，进入业务域后使用紧凑横向子导航。每个子页独立路由，详情页仍保留业务上下文。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f4f0e6;color:#17342d;min-height:390px">
+      <div style="display:grid;grid-template-columns:82px 135px 1fr;gap:8px">
+        <aside style="border-radius:16px;background:#17342d;color:#f4f0e6;padding:12px 8px;font-size:9px">
+          <strong>交易研究台</strong><div style="display:grid;gap:11px;margin-top:18px"><span>首页</span><span>研究中心</span><b style="color:#f2c66d">规则与回测</b><span>作者画像</span><span>策略中心</span></div>
+        </aside>
+        <aside style="border-radius:16px;background:#e8e0cd;padding:12px;font-size:10px">
+          <b>规则与回测</b>
+          <div style="display:grid;gap:8px;margin-top:14px">
+            <span style="background:white;border-radius:8px;padding:8px">待审核规则</span>
+            <span style="padding:8px">正式规则</span>
+            <span style="padding:8px">回测实验</span>
+            <span style="padding:8px">回测结果</span>
+          </div>
+        </aside>
+        <main style="background:white;border-radius:16px;padding:14px">
+          <small>第 1 步</small><h3 style="font-size:21px;margin:7px 0">审核候选规则</h3>
+          <p style="font-size:10px">左侧二级栏始终显示全部子入口。</p>
+          <div style="border-top:1px solid #ddd;margin-top:14px;padding-top:12px;font-size:10px">
+            <b>规则列表</b>
+            <p>放量突破前高</p><p>缩量回踩均线</p><p>题材情绪转强</p>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 双层侧栏</h3>
+      <p>层级最明确，适合超复杂后台；但占用横向空间，移动端需要两级抽屉，普通用户更容易产生“管理系统”感。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f4f0e6;color:#17342d;min-height:390px">
+      <div style="border-radius:16px;background:#17342d;color:white;padding:12px;font-size:10px">交易研究台　 首页　研究中心　<b style="color:#f2c66d">规则与回测</b>　作者画像　策略中心　每日交易</div>
+      <main style="margin-top:12px">
+        <small>规则与回测</small><h3 style="font-size:23px;margin:6px 0">从候选规则到验证结论</h3>
+        <p style="font-size:10px">选择当前需要处理的工作。</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px">
+          <div style="background:white;border-radius:14px;padding:15px"><b>待审核规则</b><p style="font-size:10px">12 条等待确认</p></div>
+          <div style="background:white;border-radius:14px;padding:15px"><b>正式规则</b><p style="font-size:10px">38 条可查看</p></div>
+          <div style="background:white;border-radius:14px;padding:15px"><b>回测实验</b><p style="font-size:10px">配置并开始验证</p></div>
+          <div style="background:white;border-radius:14px;padding:15px"><b>回测结果</b><p style="font-size:10px">查看全周期和市场状态表现</p></div>
+        </div>
+      </main>
+    </div>
+    <div class="card-body">
+      <h3>C. 业务域入口大厅</h3>
+      <p>首次进入易理解，但每次切换都要返回大厅，增加操作路径；也容易退化为 TaskList 禁止的“工具入口列表”。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>推荐 A 的路由</h4>
+    <ul>
+      <li><code>/rules/review</code> 待审核规则</li>
+      <li><code>/rules/library</code> 正式规则</li>
+      <li><code>/rules/backtests</code> 回测实验</li>
+      <li><code>/rules/results</code> 回测结果</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>详情页行为</h4>
+    <ul>
+      <li>规则详情保留“规则与回测”子导航</li>
+      <li>返回时回到原列表和筛选状态</li>
+      <li>移动端子导航横向滚动或使用选择器</li>
+      <li>每页只突出一个主要下一步</li>
+    </ul>
+  </div>
+</div>

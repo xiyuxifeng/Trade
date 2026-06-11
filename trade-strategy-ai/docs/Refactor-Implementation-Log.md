@@ -88,3 +88,49 @@
   - 未注册 legacy 模块仍可能被脚本或未来误注册，删除前必须做引用和部署检查。
   - 回测所有调用路径是否绝对禁止实时 Provider 尚需 Stage 6 运行测试证明，本审计不再把该结论写成已验证事实。
 - 验收结论：Stage 0 的任务级验收已满足，可以进入 Stage 1；本次 Review 未开始 Stage 1。Stage 1 开始后仍必须独立满足其出口条件。
+
+## RT-S1-001 重构导航和路由
+
+- Task ID：`RT-S1-001`
+- 状态：`[x] 已完成`
+- 修改范围：
+  - 新增前端集中路由配置及其测试。
+  - Router、Sidebar、导航导出和 Route Registry 改为从集中配置派生。
+  - 增加认证返回路径和路由级权限测试。
+  - 将共享导航外壳中的英文品牌、菜单、角色和路由路径改为普通用户可理解的中文表达。
+  - 修正一条在既有错误归一化逻辑更新后未同步的回测测试断言；未修改回测业务实现。
+- 关键设计决定：
+  - 七个正式一级入口固定为首页、研究中心、规则与回测、作者画像、策略中心、每日交易、系统管理。
+  - 49 条 Stage 0 审计路径全部在同一配置中显式标记为 `canonical` 或 `compat`，并记录目标入口、兼容模式、保留 Stage 和退役条件。
+  - `/dashboard` 和 `/articles` 使用兼容重定向；仍承载真实能力的历史深链继续保留，不在主导航展示。
+  - Stage 1 尚未迁移完成的正式子入口只展示真实迁移说明、当前可用入口和返回路径，不挂载工程表单，不使用 Mock 冒充业务完成。
+  - `/` 继续渲染现有真实首页；首页业务重构留给 `RT-S1-003`。
+  - 系统状态、配置、数据和运行概览允许已认证用户查看；审计、用户、数据库迁移和备份恢复继续由管理员权限保护。
+  - 未认证访问保留 pathname、query 和 hash，登录后只恢复经过内部路径校验的地址，拒绝外部返回地址。
+- 数据库迁移：无。
+- 兼容处理：
+  - 保留迁移矩阵要求继续存在的历史路由和动态深链。
+  - 普通用户主导航不再出现 Job、Workflow、Artifact、Pipeline、Provider、Schema 或 CLI。
+  - 历史入口在共享状态条中标记为“历史入口”，不展示内部路径。
+- 已运行测试：
+  - `pnpm test -- src/components/layout/sidebar.test.tsx src/components/layout/status-strip.test.tsx src/components/layout/topbar.test.tsx src/app/route-config.test.tsx src/app/router-auth.test.tsx src/app/navigation.test.ts src/app/route-registry.test.ts src/pages/login/index.test.tsx src/features/backtest/backtest-center.test.tsx`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `pnpm build`
+  - `pnpm test`
+  - `git diff --check`
+  - 主导航开发术语静态搜索。
+- 测试结果：
+  - 受影响测试 9 个文件、46 个测试全部通过。
+  - 完整前端测试 77 个文件、218 个测试全部通过。
+  - TypeScript、ESLint、Vite 生产构建和 Git whitespace 检查通过。
+  - 本地 Vite 服务启动成功。
+- 未完成项：
+  - `RT-S1-002` 统一页面体验未开始。
+  - `RT-S1-003` 首页改造未开始。
+  - 当前会话没有可用的应用内浏览器，未执行桌面和移动端视觉点击验收。
+- 已知风险：
+  - 新正式子入口当前是迁移说明页；后续必须在原正式路径内完成业务适配，不能长期停留为说明页。
+  - 兼容页面内部仍存在 Job、Artifact、旧路径和工程参数；它们只能通过历史深链访问，并需按迁移矩阵在后续 Stage 收口。
+  - 桌面和移动端实际视觉布局仍需在具备浏览器环境时补充人工验收。
+- 验收结论：`RT-S1-001` 的导航、集中路由、兼容映射、权限、中文命名和未完成页面说明要求已满足，可以标记任务级完成。Stage 1 尚未完成，不开始 `RT-S1-002`、`RT-S1-003` 或后续 Stage。

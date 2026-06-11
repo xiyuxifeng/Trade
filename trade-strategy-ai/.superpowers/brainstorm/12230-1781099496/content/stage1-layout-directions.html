@@ -1,0 +1,104 @@
+<h2>Stage 1 首页与导航方向</h2>
+<p class="subtitle">三种方案都使用真实业务状态，不引入新的领域事实源。请选择更符合产品定位的方向。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f4f0e6;color:#17342d;min-height:390px">
+      <div style="display:grid;grid-template-columns:92px 1fr;gap:12px">
+        <aside style="border-radius:18px;background:#17342d;color:#f4f0e6;padding:14px 10px">
+          <strong style="display:block;font-size:12px;margin-bottom:22px">交易研究台</strong>
+          <div style="display:grid;gap:13px;font-size:10px">
+            <b style="color:#f2c66d">首页</b><span>研究中心</span><span>规则与回测</span>
+            <span>作者画像</span><span>策略中心</span><span>每日交易</span><span>系统管理</span>
+          </div>
+        </aside>
+        <main>
+          <div style="border-radius:18px;padding:20px;background:linear-gradient(135deg,#fff8e8,#e7efe7);border:1px solid #d9d1ba">
+            <small>2026年6月10日 · 今日工作台</small>
+            <h3 style="font-size:24px;margin:8px 0">先完成盘前数据检查</h3>
+            <p style="font-size:11px">历史行情已就绪，盘前市场数据仍缺少 2 项。</p>
+            <button style="border:0;border-radius:999px;background:#c6563a;color:white;padding:8px 13px">补齐数据并生成盘前计划</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px">
+            <div style="background:white;border-radius:14px;padding:10px"><small>数据状态</small><b style="display:block">部分缺失</b></div>
+            <div style="background:white;border-radius:14px;padding:10px"><small>市场状态</small><b style="display:block">震荡偏强</b></div>
+            <div style="background:white;border-radius:14px;padding:10px"><small>当前策略</small><b style="display:block">趋势突破 V3</b></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.25fr .75fr;gap:8px;margin-top:10px">
+            <div style="background:white;border-radius:14px;padding:12px"><b>今日流程</b><p style="font-size:10px">数据检查 → 市场判断 → 盘前计划 → 盘后复盘</p></div>
+            <div style="background:#fff1e6;border-radius:14px;padding:12px"><b>待处理 4</b><p style="font-size:10px">规则审核 3 · 失败运行 1</p></div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 编辑型工作台（推荐）</h3>
+      <p>温暖纸张色、深绿导航和单一强动作。首页优先回答“下一步做什么”，状态信息作为证据辅助。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#edf3f5;color:#102a35;min-height:390px">
+      <div style="border-radius:16px;background:#fff;padding:12px;display:flex;justify-content:space-between;font-size:10px">
+        <strong>交易策略研究</strong><span>首页　研究　规则　画像　策略　每日交易　系统</span>
+      </div>
+      <div style="margin-top:10px;border-radius:18px;background:#0c4a5a;color:white;padding:18px">
+        <small>今日状态</small><h3 style="font-size:23px;margin:8px 0">盘前计划尚未生成</h3>
+        <p style="font-size:11px">完成市场数据更新后即可生成。</p>
+        <button style="border:0;border-radius:8px;background:#f2b84b;color:#17313a;padding:8px 13px">更新并继续</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px">
+        <div style="background:white;padding:12px;border-radius:12px"><small>行情</small><b style="display:block">已就绪</b></div>
+        <div style="background:white;padding:12px;border-radius:12px"><small>盘前</small><b style="display:block">待生成</b></div>
+        <div style="background:white;padding:12px;border-radius:12px"><small>盘后</small><b style="display:block">已完成</b></div>
+        <div style="background:white;padding:12px;border-radius:12px"><small>待办</small><b style="display:block">4 项</b></div>
+      </div>
+      <div style="background:white;border-radius:14px;margin-top:10px;padding:13px">
+        <b>业务流程</b>
+        <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:10px">
+          <span>文章研究</span><span>规则审核</span><span>历史回测</span><span>策略发布</span><span>每日交易</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 横向门户</h3>
+      <p>顶部主导航、卡片式状态总览。桌面信息密度高，但移动端导航和后续二级页面组织更复杂。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f7f7f3;color:#262626;min-height:390px">
+      <div style="display:flex;gap:8px;font-size:10px;margin-bottom:12px">
+        <strong style="margin-right:auto">策略助手</strong><span>研究</span><span>规则</span><span>画像</span><span>策略</span><span>每日交易</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="grid-row:span 2;border:1px solid #222;border-radius:18px;padding:20px">
+          <small>下一步</small><h3 style="font-size:28px;margin:10px 0">生成今日盘前计划</h3>
+          <p style="font-size:11px">系统已完成数据检查。当前市场状态：震荡偏强。</p>
+          <button style="border:1px solid #222;background:#222;color:white;padding:9px 13px;border-radius:999px">查看并生成</button>
+        </div>
+        <div style="border:1px solid #ccc;border-radius:18px;padding:14px"><small>当前策略</small><b style="display:block;font-size:17px">趋势突破 V3</b></div>
+        <div style="border:1px solid #ccc;border-radius:18px;padding:14px"><small>昨日复盘</small><b style="display:block;font-size:17px">已完成</b></div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid #bbb;padding-top:12px">
+        <b>待处理事项</b>
+        <p style="font-size:10px">03 条规则等待审核　·　01 条策略建议待查看　·　00 个失败任务</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 极简决策页</h3>
+      <p>最少视觉元素，突出一个每日动作。清晰但对首次用户解释完整业务流程的能力较弱。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>共同保留</h4>
+    <ul><li>七个正式主导航</li><li>旧路由集中重定向</li><li>真实 API 状态</li><li>统一加载、空、错误、部分可用状态</li></ul>
+  </div>
+  <div class="cons">
+    <h4>共同排除</h4>
+    <ul><li>Job、Workflow、Artifact 主导航</li><li>技术路径与内部类型</li><li>静态假数据</li><li>另建一套页面注册表</li></ul>
+  </div>
+</div>

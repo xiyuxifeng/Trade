@@ -1,0 +1,90 @@
+# Trade Strategy AI 重构实施记录
+
+## RT-S0-001 现状审计
+
+- Task ID：`RT-S0-001`
+- 状态：`[x] 已完成`
+- 修改范围：新增现状审计文档；未修改核心业务代码、数据库和 Prompt。
+- 关键设计决定：
+  - 以当前代码注册关系、ORM、迁移和 Prompt 加载点为事实，不沿用历史审计结论。
+  - 将 JobService、市场数据模型、回测 snapshot-only 原则和运行审计列为可复用基础。
+  - 将前端多入口、API 重复端点、Prompt 双链、画像多模型和策略按日建模列为主要重构风险。
+  - 主 TaskList 与较早重构方案的 Stage 0 定义不一致时，按主 TaskList 只执行审计，不实施导航改造。
+- 数据库迁移：无。
+- 兼容处理：本轮仅记录现有 legacy 与兼容入口，不改变行为。
+- 已运行测试：
+  - Alembic heads 检查。
+  - FastAPI 实际路由注册清单加载。
+  - JobDefinition、WorkflowDefinition、PipelineSpec 注册清单加载。
+  - SQLAlchemy metadata 表清单加载。
+  - 文档路径、绝对路径和 Git diff 检查。
+- 测试结果：
+  - Alembic 单一 head：`2026_06_03_0001`。
+  - FastAPI 注册 163 个路由。
+  - 注册 33 个 JobDefinition、2 个 WorkflowDefinition、4 个 Runtime Bridge PipelineSpec；另有 1 个未注册的 `market_data` PipelineSpec。
+  - 源码声明 40 张 ORM 表；迁移环境和运行时导入范围并不完全一致。
+- 未完成项：未连接生产数据库统计实际数据量和质量；该项进入 Stage 2 数据迁移盘点。
+- 已知风险：
+  - 本地 Python 启动时出现受沙箱限制的 CPU/sysctl 警告，不影响注册清单输出。
+  - 当前工作区已有用户未提交修改，本任务未覆盖。
+- 验收结论：现状审计覆盖 TaskList 要求，可作为后续 Stage 的代码事实基线。
+
+## RT-S0-002 迁移矩阵
+
+- Task ID：`RT-S0-002`
+- 状态：`[x] 已完成`
+- 修改范围：新增迁移矩阵文档；未修改核心业务代码、数据库和 Prompt。
+- 关键设计决定：
+  - 所有旧前端入口都必须映射到业务新入口或系统管理。
+  - Jobs、Workflows、Artifacts 只保留为运行底座或高级详情，不继续作为普通用户主导航。
+  - 迁移矩阵按主 TaskList Stage 指定兼容截止点，Stage 12 统一完成旧入口退役。
+  - 任何兼容层必须满足统一退役门禁，禁止长期形成第二套正式事实源。
+- 数据库迁移：无；已列出 Stage 2 需要执行的数据迁移对象和验证方法。
+- 兼容处理：定义旧路由、API、Schema、Prompt 和文件事实源的兼容期限与退役条件。
+- 已运行测试：
+  - 迁移矩阵覆盖检查。
+  - 文档绝对路径检查。
+  - Markdown 基础结构检查。
+  - Git diff 检查。
+- 测试结果：迁移矩阵覆盖现有能力、前端入口、API、Schema、Prompt、数据和执行定义。
+- 未完成项：后续 Stage 尚未实施，本任务没有开始 Stage 1。
+- 已知风险：具体数据迁移量和异常数据类型需在 Stage 2 基于实际数据库生成迁移报告。
+- 验收结论：迁移矩阵已明确处置、新入口、保留 Stage、最终删除与退役条件，满足 RT-S0-002 验收。
+
+## Stage 0 严格 Review
+
+- Task ID：`RT-S0-001`、`RT-S0-002`
+- 状态：`[x] 已完成`
+- 修改范围：复核并修正现状审计、迁移矩阵和实施记录；未修改核心业务代码、数据库、Prompt 或运行行为。
+- 关键设计决定：
+  - `docs/bak` 不作为事实依据；所有结论必须由当前注册代码、运行时装配、ORM 声明、迁移和调用点确认。
+  - 区分实际注册入口、源码中未注册 legacy、迁移遗留对象，避免把“文件存在”误判为正式能力。
+  - 将前端路由更正为 49 条记录，将 Prompt 文件更正为 19 个，并补充硬编码分类 Prompt。
+  - 将数据库口径更正为源码声明 40 张 ORM 表，并记录迁移环境未导入全部 ORM、迁移存在无 ORM 历史表的风险。
+  - 将调度口径扩展为 CLI、Pipeline、文章、规则回测、OHLCV、Kaipan 六类并存实现。
+  - 为全部注册 API 家族、33 个 Job、2 个 Workflow、5 个 Pipeline 和六类调度入口补充目标与退役条件。
+- 数据库迁移：无。
+- 兼容处理：仅补充兼容对象、目标入口和退役门禁，不改变现有兼容行为。
+- 已运行测试：
+  - FastAPI `app.routes` 全量加载与 endpoint 模块归属检查。
+  - 前端 `router.tsx` 路由记录计数及逐项覆盖检查。
+  - 全源码 `__tablename__` 清单与 SQLAlchemy metadata 导入检查。
+  - Alembic migration env、create/drop table 和 head 检查。
+  - JobDefinition runnable 清单、WorkflowDefinition、Runtime Bridge 和孤立 PipelineSpec 检查。
+  - Prompt 文件计数、生产 Prompt 加载点和硬编码 Prompt 搜索。
+  - APScheduler/BlockingScheduler 全源码搜索。
+  - API Router 注册/未注册对照和前端孤立实现引用检查。
+  - 文档绝对路径、Markdown 结构、迁移矩阵覆盖和 Git diff 检查。
+- 测试结果：
+  - FastAPI 163 条注册路由全部可归属到注册模块。
+  - 前端 49 条路由记录均有目标入口；通配 404 已补入矩阵。
+  - 33 个 Job、2 个 Workflow、4 个已注册 Pipeline 和 1 个孤立 Pipeline 均已列入矩阵。
+  - 19 个 Prompt 文件及 1 个硬编码分类 Prompt 均已列入审计和迁移矩阵。
+  - 未发现本轮修改核心业务代码。
+- 未完成项：未连接实际部署数据库核对迁移遗留表和数据量；该项已明确进入 Stage 2，不阻塞 Stage 0 的代码现状审计。
+- 已知风险：
+  - Alembic migration env 未导入全部 ORM，后续迁移前必须先修复并测试 autogenerate 范围。
+  - 调度器多为进程内状态，统一前可能重复启动或状态漂移。
+  - 未注册 legacy 模块仍可能被脚本或未来误注册，删除前必须做引用和部署检查。
+  - 回测所有调用路径是否绝对禁止实时 Provider 尚需 Stage 6 运行测试证明，本审计不再把该结论写成已验证事实。
+- 验收结论：Stage 0 的任务级验收已满足，可以进入 Stage 1；本次 Review 未开始 Stage 1。Stage 1 开始后仍必须独立满足其出口条件。

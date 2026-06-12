@@ -1,389 +1,342 @@
 ---
 name: refactor-orchestrator
 description: >
-  Orchestrate staged software refactors with a GPT-5.5 parent agent and
-  GPT-5.4 mini subagents. Use for repository audits, staged plans,
-  bounded implementation task cards, dependency-aware delegation,
-  mechanical verification, semantic review, migration control, and
-  final stage acceptance.
+  Orchestrate staged software refactors with a parent agent and bounded custom
+  subagents. Use for repository audits, contract freezing, dependency-aware
+  task cards, cost-aware delegation, mechanical verification, semantic review,
+  migration control, and final stage acceptance.
 ---
 
 # Refactor Orchestrator
 
 ## Purpose
 
-Coordinate a staged refactor without placing architecture decisions,
-implementation, testing, and acceptance into one long agent context.
-
-Default execution model:
+Coordinate complex refactors without forcing architecture, implementation,
+verification, and acceptance into one long parent context.
 
 ```text
-GPT-5.5 parent agent
-├── refactor_explorer_mini: optional read-only investigation
-├── refactor_executor_mini: bounded implementation + tests
-└── GPT-5.5 parent: semantic review + stage acceptance
+Parent agent
+├── optional refactor-explorer-mini: bounded read-only investigation
+├── optional refactor-executor-mini: bounded implementation and tests
+└── Parent agent: semantic review and acceptance
 ```
 
-This Skill is project-agnostic. Project-specific paths, task lists, contracts,
-test commands, and acceptance criteria must be discovered from the target
-repository or explicitly provided by the user.
+This Skill is project-agnostic. Project paths, task IDs, domain contracts,
+commands, and acceptance criteria must come from the target repository or the
+user.
+
+The Skill optimizes for total project cost and correctness, not for maximizing
+subagent count. A delegated workflow can consume more tokens than a comparable
+single-agent task, so delegation must be justified.
 
 ## Required inputs
 
 Before planning, identify:
 
-- repository root
-- repository instructions, including `AGENTS.md` or equivalent
+- repository root and applicable `AGENTS.md` files
 - source task list, issue, specification, or requested stage
-- current branch and baseline commit
-- project test, lint, typecheck, migration, and build commands
-- applicable architecture or product documents
-- previous stage handoff, if any
+- current branch, baseline commit, and dirty worktree
+- applicable architecture, product, migration, and compatibility documents
+- test, lint, typecheck, build, migration, and E2E commands
+- previous handoff or review evidence, when present
 
-If no formal task list exists, create a temporary stage plan from the user's
-request and current repository evidence.
+If no formal task list exists, create a temporary bounded plan from the user
+request and repository evidence.
+
+## Explicit delegation decision
+
+The Parent must explicitly decide whether delegation is justified.
+
+```text
+Explicitly decide whether delegation is justified under this Skill.
+If justified, explicitly spawn the selected configured subagent or subagents.
+If not justified, proceed with the Parent only and record that zero subagents
+were selected.
+Do not rely on implicit delegation.
+```
+
+Zero subagents is a valid deliberate decision. Do not spawn an agent merely
+because the Skill is active.
+
+## Delegation eligibility gate
+
+Before delegating an implementation task, all of these must be true:
+
+- the objective and expected output are bounded
+- allowed and forbidden paths can be stated
+- dependencies are complete
+- public contracts are frozen, or the task is read-only investigation
+- verification commands and escalation conditions are known
+
+Do not delegate unresolved architecture, source-of-truth selection, migration
+policy, authorization policy, or unspecified algorithm semantics.
+
+## Delegation benefit gate
+
+After eligibility is satisfied, delegate only when at least one benefit is
+material and the expected benefit exceeds coordination and context-transfer
+cost:
+
+1. substantial read-heavy context can be isolated from the Parent
+2. bounded routine work can be performed by a lower-cost agent
+3. independent work can safely run in parallel with non-overlapping write sets
+4. delegation materially reduces high-cost rework risk
+
+If no benefit condition is satisfied, the Parent performs the task directly.
 
 ## Agent bootstrap
 
-Before spawning subagents:
+Before the first delegated task in a repository, and after relevant Codex or
+configuration changes:
 
-1. Verify these project-level agent files exist:
+1. verify these files exist:
    - `.codex/agents/refactor-explorer-mini.toml`
    - `.codex/agents/refactor-executor-mini.toml`
-2. Verify both explicitly declare `model = "gpt-5.4-mini"`.
-3. Verify Explorer defaults to `read-only`.
-4. Verify Executor defaults to `workspace-write`.
-5. Confirm the parent session was started with GPT-5.5 when that model policy is required.
-   If the active parent model cannot be verified, state the assumption and do not claim
-   that the GPT-5.5 + mini policy is enforced.
-6. Do not silently replace either subagent with the parent model.
-7. Keep subagent depth at 1. Do not allow subagents to create subagents.
-8. Treat sandbox settings in custom-agent TOML as defaults. Runtime permission overrides
-   on the parent session may supersede them. For strict read-only investigation, confirm
-   the spawned Explorer's effective permissions and do not run the parent with unrestricted
-   write permissions such as a full-access/yolo mode.
+2. verify their declared model and default permissions
+3. keep subagent depth at 1
+4. do not silently substitute the Parent model for a configured child
+5. treat TOML permissions as intent; runtime overrides may supersede them
 
-If the files are missing, report the missing bootstrap configuration and create
-them only when the current task authorizes repository file changes.
+Missing bootstrap files should be reported and created only when repository
+changes are authorized.
 
-## Explicit delegation rule
+## Runtime truth policy
 
-The parent agent must:
+Evidence is mandatory for:
 
-```text
-Choose and explicitly spawn the configured custom subagents according
-to this Skill's delegation rules.
-Do not rely on implicit delegation.
-Use the minimum viable number of agents.
-```
+- commands and tests that are reported as executed
+- diffs and files reported as changed
+- migrations reported as applied or verified
+- acceptance criteria reported as satisfied
+- task or stage completion
 
-This does not require spawning subagents for every task. When the minimum
-viable number is zero, the parent should complete the local task directly.
-When delegation is appropriate, the parent must explicitly spawn the named
-custom agent rather than merely suggesting that a subagent could be used.
+Runtime metadata is different:
 
-## Parent-agent responsibilities
+- report exact model identity, effective permissions, or spawning details only
+  when runtime evidence supports the claim
+- otherwise omit the detail or mark it `unknown`/`not independently verified`
+- inability to verify optional runtime metadata does not by itself block a
+  normal task
 
-The GPT-5.5 parent agent owns:
+Use single-controller fallback only when native spawning is unavailable, child
+creation fails, or a required permission boundary cannot be guaranteed. Merely
+failing to confirm an exact child model name does not require fallback if the
+child actually ran; report the model as unverified.
 
-- scope interpretation
-- repository-level investigation strategy
-- architecture and source-of-truth decisions
-- domain, API, data, version, migration, and rollback contracts
-- dependency graph and execution batches
-- task risk classification
-- deciding which tasks may be delegated
-- review of actual code diff and verification output
-- stage exit decision
-- updating the authoritative task list only after acceptance
+For strict read-only work, if effective read-only permission cannot be trusted,
+do not spawn that Explorer. Perform the investigation in the Parent or use an
+approved alternative.
 
-The parent must not delegate unresolved architecture decisions to mini.
+## Parent responsibilities
 
-## Subagent responsibilities
+The Parent owns:
 
-### `refactor_explorer_mini`
+- scope interpretation and repository investigation strategy
+- architecture and official source-of-truth decisions
+- domain, API, schema, version, migration, rollback, and compatibility contracts
+- risk classification and dependency batches
+- the delegation decision and budget justification
+- Task Cards
+- inspection of the actual shared worktree and combined diff
+- semantic review and final task/stage acceptance
+- authoritative status updates only after acceptance
 
-Use only when meaningful repository investigation is needed.
+The Parent must not delegate final acceptance.
 
-Good uses:
-- locate current routes, APIs, models, jobs, workflows, schemas, prompts, tests
+## Explorer responsibilities
+
+Use `refactor-explorer-mini` only for meaningful read-heavy investigation:
+
+- locate routes, APIs, models, jobs, workflows, schemas, prompts, and tests
 - trace call and data flow
 - find legacy or duplicate paths
-- identify current source-of-truth
-- inspect migration history
-- inspect affected references before deletion
+- inspect migration history or deletion references
+- classify test failures or large logs
 
-Avoid spawning Explorer when:
-- the exact files and call chain are already known
-- the task is a small, isolated edit
-- the parent can answer by reading a few files directly
+Avoid Explorer when exact files and call chains are already known or the Parent
+can answer by reading a few files.
 
-### `refactor_executor_mini`
+Explorer reads:
 
-Use only after the task has a frozen boundary.
+- its Task Card
+- applicable repository instructions
+- explicitly scoped files and tests
+
+It should not reread unrelated global documents unless the Task Card requires
+it or a contradiction must be escalated.
+
+## Executor responsibilities
+
+Use `refactor-executor-mini` only after the task boundary is frozen.
 
 Good uses:
-- bounded CRUD and API implementation
-- UI components and pages based on an approved contract
-- ORM and migration implementation after design approval
-- deterministic scripts
-- tests, fixtures, lint, type checks, and local mechanical fixes
-- reference cleanup after deletion has been approved
-- documentation updates tied to completed behavior
 
-Do not delegate:
-- unresolved domain modeling
-- source-of-truth selection
-- public contract redesign
-- migration policy decisions
-- security or authorization policy decisions
-- algorithm semantics that are not fully specified
-- final acceptance
+- bounded CRUD, API, UI, scripts, fixtures, and tests
+- mechanical migration implementation after Parent design approval
+- reference cleanup after deletion approval
+- documentation tied to completed behavior
 
-## Risk classification
+Executor reads:
+
+- its Task Card
+- applicable root and nested `AGENTS.md`
+- explicitly scoped implementation files
+- directly affected tests and frozen contract references
+
+The Task Card controls scope; current code and tests remain implementation facts.
+Contradictions must be escalated to the Parent rather than guessed around.
+
+## Risk and assurance mapping
 
 Classify each task:
 
-### M1 — mini-led
+### M1 — local and reversible
 
-Use when:
-- goal and files are clear
-- contract is stable
-- change is local and reversible
-- test command is known
+- clear goal and files
+- stable contract
+- known tests
 
-Flow:
-`Executor mini → parent batch review`
+Default execution intensity: lean.
+Typical flow: Parent direct or one Executor, then Parent review.
 
-### M2 — parent design, mini implementation
+### M2 — cross-layer but contractable
 
-Use when:
-- implementation is mechanical after a contract decision
-- change crosses layers but interfaces can be frozen first
+- interfaces can be frozen first
+- implementation is mechanical after Parent decisions
 
-Flow:
-`Parent contract → Executor mini → parent semantic review`
+Default execution intensity: standard.
+Typical flow: Parent contract → one Executor by default → Parent semantic review.
 
-### M3 — parent-led
+### M3 — high-risk or irreversible
 
-Use when:
-- architecture, migration, security, time semantics, source-of-truth,
-  or irreversible deletion is involved
+- architecture, migration, security, authorization, time semantics,
+  source-of-truth, or destructive deletion
 - failure could corrupt data or create duplicate official systems
 
-Flow:
-`Parent implementation/review`, with mini only for tightly bounded support.
+Default execution intensity: assurance.
+Typical flow: Parent-led work, with mini only for tightly bounded support.
 
-## Stage workflow
+The Parent may override the default intensity only with a written reason.
 
-### Phase 1 — Understand
+## Agent budget
 
-1. Read the selected stage or request.
-2. Read repository rules.
-3. Inspect the current branch and uncommitted changes.
-4. Identify existing implementation and facts.
-5. Spawn 0–3 Explorer mini agents only for independent, non-overlapping
-   investigations.
-6. Wait for all explorers in the current investigation batch.
-7. Consolidate verified evidence.
+Default soft budget:
 
-### Phase 2 — Decide and freeze
+```text
+Normal task:             0–1 subagent
+Independent write work:  up to 2 Executors
+Large read-only audit:   up to 3 Explorers
+```
 
-The parent defines:
+Exceeding the default budget requires explicit Parent justification.
+This is a soft budget, not a universal hard cap.
 
-- target behavior
-- retained, migrated, merged, and retired paths
-- official source-of-truth
-- approved public contracts
-- data and version relationships
-- migration, rollback, and compatibility rules
-- dependency order
-- acceptance evidence
+Prefer read-heavy delegation before parallel writes. Parallel implementation is
+allowed only when paths and public contracts do not overlap.
 
-Write durable decisions to a contract or stage-plan file when the work spans
-multiple subagents.
+## Task Card
 
-### Phase 3 — Create task cards
+Every delegated Task Card must include:
 
-Every delegated task card must include:
-
-- task ID and title
-- risk level
-- single objective
+- task ID, title, risk level, and single objective
 - prerequisites and dependency IDs
 - baseline commit or upstream handoff
-- required reading
-- approved contracts
-- allowed paths
-- forbidden paths
+- applicable instructions and required reading
+- approved/frozen contracts
+- allowed and forbidden paths
 - implementation requirements
 - test, lint, build, and migration commands
 - acceptance criteria
 - escalation conditions
 - required structured handoff
 
-Do not spawn a subagent with only a broad instruction such as
-"implement this stage".
+Do not send a child only a broad instruction such as `implement this stage`.
+Do not require every child to reread the full repository TaskList and all global
+design documents.
 
-### Phase 4 — Execute by dependency batch
+## Workflow
 
-1. Spawn only tasks whose prerequisites are complete.
-2. Parallelize only tasks that do not change the same files or contracts.
-3. Limit normal batches to 1–3 Executor agents.
-4. Wait for every agent in the batch.
-5. Inspect the shared workspace and actual diff.
-6. Resolve conflicts before starting the next batch.
-7. Do not rely solely on an agent's completion claim.
+### 1. Understand
 
-### Phase 5 — Review
+- read the selected task and repository rules
+- inspect branch, baseline, dirty changes, and current implementation
+- use 0–3 Explorers only for independent investigations that pass the gates
+- consolidate verified evidence
 
-The GPT-5.5 parent reviews:
+### 2. Decide and freeze
 
-- behavior against the original requirement
-- frontend/backend/database/runtime contract consistency
-- migration and rollback correctness, when persistent data or durable contracts are affected
-- source-of-truth uniqueness
-- traceability and reproducibility
-- error and partial-state handling
-- test quality, not only test pass status
-- legacy retirement conditions
-- unrelated changes and scope drift
+The Parent defines target behavior, official facts, retained/migrated/retired
+paths, public contracts, data relationships, migration/rollback rules,
+dependency order, and acceptance evidence.
 
-Classify findings:
-- BLOCKER
-- HIGH
-- MEDIUM
-- LOW
+Write durable contracts when multiple agents or sessions depend on them.
 
-Clear BLOCKER and required HIGH findings before stage acceptance.
+### 3. Create Task Cards
 
-### Phase 6 — Stage acceptance
+Create only cards whose boundaries and prerequisites are ready.
 
-A stage is complete only when:
+### 4. Execute by dependency batch
 
-- the externally observable user or system flow works
-- all relevant layers agree
-- required tests actually ran and passed
-- migration/compatibility behavior is verified when applicable
-- no unexplained blocker remains
-- no duplicate official entry point/schema/source-of-truth was introduced
-- documentation and handoff are updated
-- the result is reviewable and reproducible
+- start only ready tasks
+- parallelize only non-overlapping work
+- wait for the batch
+- inspect the shared worktree and actual diff
+- resolve conflicts before the next batch
+- never accept only a child completion message
 
-Do not mark a stage complete merely because implementation tasks returned
-`completed`.
+### 5. Review
 
-## Synchronization model
+The Parent reviews behavior, cross-layer consistency, migrations, source-of-truth
+uniqueness, traceability, errors and partial states, test quality, retirement
+conditions, unrelated changes, and scope drift.
 
-Agents synchronize through:
+Classify findings as BLOCKER, HIGH, MEDIUM, or LOW. Clear BLOCKER and required
+HIGH findings before acceptance.
 
-1. Parent-to-child task messages.
-2. Shared repository files and Git diff.
-3. Durable stage plan, contract, task card, and handoff files.
-4. Structured child result messages.
-5. Parent-controlled dependency batches.
+### 6. Accept
 
-Subagents do not automatically share the parent's full reasoning context.
-Always pass the necessary approved facts and file references explicitly.
+A task or stage is complete only when the observable flow works, relevant layers
+agree, required verification actually ran, migration/compatibility behavior is
+verified when applicable, no unexplained blocker remains, no duplicate official
+fact source was introduced, and documentation/handoff is current.
 
-Use the parent as the coordination hub:
+## Parallel safety
 
-```text
-child reports conflict
-→ parent decides
-→ parent updates contract/task card
-→ parent sends new instruction
-```
+Parallel execution requires all of:
 
-Avoid direct, uncontrolled contract negotiation between subagents.
-
-## Parallel-safety rules
-
-Parallel execution is allowed only when all are true:
-
-- allowed paths do not overlap, or overlap is explicitly read-only
-- tasks do not modify the same public contract
+- allowed paths do not overlap, or overlap is read-only
+- public contracts are not modified by multiple tasks
 - neither task depends on the other's uncommitted output
 - integration order is known
 - rollback is possible
 
-Use serial execution for:
-- domain model → migration → API/schema
-- shared database tables
-- shared routing or state stores
-- schema and generated clients
-- deletions and compatibility removal
+Always serialize domain model → migration → API/schema → generated/frontend
+types → integration tests, shared routes/state stores, and deletion/compatibility
+removal.
 
-## Token-efficiency rules
+## Context and token efficiency
 
-- Do not spawn an Explorer for a known, local task.
-- Combine implementation, tests, and mechanical self-review in Executor.
-- Do not send entire repository history to subagents.
-- Pass only relevant task cards, contracts, files, and upstream handoffs.
-- Keep logs summarized; retain exact failing commands and key errors.
-- Use one parent Stage session rather than one permanent project session.
-- Use independent GPT-5.5 review for very large or high-risk stages when the
-  parent planning session has become too long.
-- Prefer 1–3 meaningful subagents over many tiny subagents.
-
-## Required artifacts
-
-For substantial stages, use:
-
-```text
-<state-root>/<stage-id>/
-├── stage-plan.md
-├── manifest.yaml
-├── contracts/
-├── tasks/
-├── handoffs/
-└── reviews/
-```
-
-Default `<state-root>`:
-- `.codex/refactor-state/` for temporary execution records, or
-- a project documentation path when records must be versioned.
-
-Use templates bundled with this Skill.
-
-
-## Minimum viable lanes
-
-Use the fewest agents that can safely complete the work.
-
-Defaults:
-
-```text
-Known local task:
-0 Explorer
-1 Executor
-
-Unknown cross-module task:
-1–3 Explorer agents
-then 1 Executor by default
-
-Parallel implementation:
-only when paths and contracts do not overlap
-```
-
-Do not spawn agents merely because subagents are available.
+- the Parent reads global instructions and architecture documents
+- children receive Task Cards, applicable instructions, frozen contracts,
+  scoped files, tests, and upstream handoffs
+- do not send full repository history or unrelated global documents to children
+- combine implementation, tests, and mechanical self-review in one Executor
+- summarize logs while retaining exact failing commands and key errors
+- use one Parent session per bounded stage or task group, not one permanent
+  project session
+- prefer one meaningful child over many tiny children
 
 ## Runtime probe
 
-Before the first delegated task in a repository or after a Codex upgrade:
+Run before the first delegated task in a repository and after Codex/agent
+configuration changes:
 
-1. Run:
-   `bash .agents/skills/refactor-orchestrator/scripts/runtime-probe.sh`
-2. Confirm in the active session:
-   - parent model is GPT-5.5
-   - this Skill is discovered
-   - custom agents are discovered
-   - native subagent spawning is available
-   - spawned agents use GPT-5.4 mini
-   - Explorer effective permissions are read-only
-3. Record the result using `templates/runtime-probe-report.md`.
+```bash
+bash .agents/skills/refactor-orchestrator/scripts/runtime-probe.sh
+```
 
-A static configuration file is not proof that the runtime used the expected model or permission.
+The probe checks expected readiness, not proof of actual child model or effective
+permissions. Record only verified runtime facts.
 
 ## Fix-round limit
 
@@ -395,64 +348,37 @@ Round 2: targeted correction
 Round 3: final bounded correction
 ```
 
-After three failed or incomplete rounds:
+After three failed or incomplete rounds, stop, mark the task blocked, preserve
+artifacts, and return control to the Parent or user. Do not broaden scope to
+force completion.
 
-- stop spawning fixes
-- mark the task blocked
-- preserve all artifacts
-- return control to GPT-5.5 or the user
-- do not broaden scope to force completion
+## Artifacts
 
-The parent may set a lower limit for expensive or risky work.
-
-## Per-round artifacts
-
-For every implementation or fix round, preserve:
+For substantial work, use:
 
 ```text
-artifacts/<task-id>/
-├── <task-id>.round-<n>.changes.diff
-├── <task-id>.round-<n>.tests.log
-├── <task-id>.round-<n>.status.txt
-├── <task-id>.round-<n>.result.md
-└── <task-id>.round-<n>.review.md
+.codex/refactor-state/<stage-id>/
+├── stage-plan.md
+├── manifest.yaml
+├── contracts/
+├── tasks/
+├── handoffs/
+├── reviews/
+└── artifacts/
 ```
 
-Use:
-
-```bash
-bash .agents/skills/refactor-orchestrator/scripts/capture-round-artifacts.sh <task-id> <round>
-```
-
-Artifacts provide evidence for review and allow work to resume without replaying the full conversation.
+For every implementation/fix round, preserve diff, tests, status, result, and
+review evidence when practical. Use the bundled templates and scripts.
 
 ## Single-controller fallback
 
-If native subagents are unavailable, custom-agent models cannot be verified,
-or runtime permissions cannot be trusted:
+Use fallback when native subagents are unavailable, child spawning fails, or a
+required permission boundary cannot be guaranteed:
 
-1. Keep GPT-5.5 as the only active controller.
-2. Produce the same Stage plan, contracts, task cards, and handoffs.
-3. Do not pretend that mini subagents were used.
-4. Generate explicit commands for manual mini sessions, for example:
+1. keep the Parent as the only active controller
+2. produce the same plan, contracts, Task Cards, and handoffs
+3. do not pretend mini subagents were used
+4. execute directly, provide manual mini-session commands, or defer
+5. return all diffs and evidence to the Parent for review
 
-```bash
-codex -m gpt-5.4-mini
-```
-
-5. Execute each task card in a separate mini session or defer execution.
-6. Return completed diffs and handoffs to a GPT-5.5 review session.
-
-Fallback preserves the workflow but may reduce automation.
-
-## Runtime truth rule
-
-Never claim:
-
-- a subagent was spawned
-- a specific model was used
-- a sandbox was enforced
-- tests passed
-- a task completed
-
-unless runtime evidence exists.
+Fallback preserves the workflow but reduces automation.

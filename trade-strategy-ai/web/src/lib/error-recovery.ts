@@ -156,19 +156,19 @@ function getPageRoute(page: ErrorRecoveryPage) {
     case 'artifact-filter-options':
       return '/artifacts';
     case 'strategy':
-      return '/dashboard';
+      return '/strategies';
     case 'admin-audit':
     case 'admin-audit-detail':
       return '/system/audit';
     default:
-      return '/dashboard';
+      return '/';
   }
 }
 
 function getPageHomeRoute(page: ErrorRecoveryPage) {
   switch (page) {
     case 'jobs':
-      return '/dashboard';
+      return '/';
     case 'job-detail':
       return '/jobs';
     case 'backtest':
@@ -176,24 +176,24 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
     case 'backtest-detail':
     case 'backtest-report':
     case 'backtest-validation':
-      return '/dashboard';
+      return '/';
     case 'profiles':
-      return '/dashboard';
+      return '/';
     case 'profile-detail':
       return '/profiles';
     case 'market':
-      return '/dashboard';
+      return '/';
     case 'artifacts':
     case 'artifact-detail':
     case 'artifact-filter-options':
-      return '/dashboard';
+      return '/';
     case 'strategy':
-      return '/dashboard';
+      return '/';
     case 'admin-audit':
     case 'admin-audit-detail':
-      return '/dashboard';
+      return '/';
     default:
-      return '/dashboard';
+      return '/';
   }
 }
 

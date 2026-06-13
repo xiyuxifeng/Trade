@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 
 from api.dependencies import describe_api_key
-from api.routers import alerts, backtest_results, rankings, reports, snapshots, strategy_versions
+from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
 from api.routers.ui import auth_router as ui_auth_router
 from api.routers.ui import imports_router as ui_imports_router
@@ -35,6 +35,7 @@ from api.routers.ui import persona_router as ui_persona_router
 from api.routers.ui import snapshots_router as ui_snapshots_router
 from api.routers.ui import rule_pool_router as ui_rule_pool_router
 from api.routers.ui import signals_router as ui_signals_router
+from api.routers.ui import settings_router as ui_settings_router
 from api.routers.ui import strategy_studio_router as ui_strategy_studio_router
 from api.routers.ui import system_router as ui_system_router
 from api.routers.ui.workflows import router as ui_workflows_router
@@ -179,6 +180,7 @@ def create_app() -> FastAPI:
     app.include_router(rankings.router)
     app.include_router(backtest_results.router)
     app.include_router(alerts.router)
+    app.include_router(run.router)
     app.include_router(ui_system_router)
     app.include_router(ui_legacy_system_router)
     app.include_router(ui_auth_router)
@@ -189,6 +191,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_artifacts_router)
     app.include_router(ui_market_router)
     app.include_router(ui_profiles_router)
+    app.include_router(ui_settings_router)
     app.include_router(ui_ops_router)
     app.include_router(ui_optimize_router)
     app.include_router(ui_traders_router)

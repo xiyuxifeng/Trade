@@ -14,7 +14,7 @@ import { getStrategyVersion, listStrategyVersions } from '@/lib/api/strategyStud
 import { StrategyWorkspaceCandidate } from '@/features/strategy-workspace';
 import type { StrategyVersionSummaryItem } from '@/types/strategyStudio';
 
-export function BacktestCandidatesPage() {
+export function BacktestCandidatesPage({ productMode = false }: { productMode?: boolean } = {}) {
   const navigate = useNavigate();
   const { canAccess, principal } = useAuth();
   const [traderId, setTraderId] = useState('');
@@ -98,6 +98,54 @@ export function BacktestCandidatesPage() {
           }
         />
       </main>
+    );
+  }
+
+  if (productMode) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>作者</span>
+            <TraderIdSelect
+              ariaLabel="作者"
+              className="border-slate-200 bg-white text-slate-900"
+              onChange={(value) => setTraderId(value)}
+              source="strategy"
+              value={traderId}
+            />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>候选来源版本</span>
+            <Select
+              aria-label="候选来源版本"
+              value={strategyVersionId}
+              onChange={(event) => setStrategyVersionId(event.target.value)}
+              disabled={filteredVersionItems.length === 0}
+            >
+              {filteredVersionItems.length === 0 ? <option value="">暂无可用版本</option> : null}
+              {filteredVersionItems.map((item) => (
+                <option key={item.version_id} value={item.version_id}>
+                  {item.strategy_date} · {item.status}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+        {strategyVersionsQuery.isLoading || selectedVersionLoading ? (
+          <LoadingState label="正在加载候选版本" description="正在读取当前可用的真实候选来源。" />
+        ) : selectedVersion ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="font-medium text-slate-950">当前候选来源</p>
+            <p className="mt-2 text-sm text-slate-700">
+              分析日期 {selectedVersion.strategy_date} · 当前状态 {selectedVersion.status}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">候选生成与审核仍使用现有真实版本数据；正式发布和回滚能力尚未建立。</p>
+          </div>
+        ) : (
+          <EmptyState title="暂无候选来源" description="当前作者没有可用于生成候选的真实版本。" />
+        )}
+      </div>
     );
   }
 

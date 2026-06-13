@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/layout/page-header';
+import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast';
@@ -31,6 +32,18 @@ import type { ArticleMetadataListResponse } from '@/types/article-metadata';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import type { ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
 import type { WorkflowParamField, WorkflowStep } from '@/types/workflows';
+
+type ProductNavigationTargets = {
+  back: string;
+  library: string;
+  add: string;
+  results: string;
+};
+
+type ResearchModeProps = {
+  productMode?: boolean;
+  navigationTargets?: Partial<ProductNavigationTargets>;
+};
 
 const workspaceSections = [
   {
@@ -88,6 +101,34 @@ function getErrorMessage(error: unknown) {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return '请求失败';
+}
+
+function isPermissionDenied(error: unknown) {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+function isUnavailable(error: unknown) {
+  return error instanceof ApiError && error.status >= 500;
+}
+
+function resolveAvailability({
+  loading,
+  error,
+  empty,
+  partial,
+}: {
+  loading: boolean;
+  error: unknown;
+  empty?: boolean;
+  partial?: boolean;
+}): Exclude<import('@/components/layout/business-page-shell').PageAvailability, 'ready'> | 'ready' {
+  if (loading) return 'loading';
+  if (isPermissionDenied(error)) return 'permission_denied';
+  if (isUnavailable(error)) return 'unavailable';
+  if (error) return 'error';
+  if (partial) return 'partial';
+  if (empty) return 'empty';
+  return 'ready';
 }
 
 function createStepDefaults(step: WorkflowStep | null) {
@@ -367,7 +408,7 @@ export function ArticleWorkspacePage() {
   );
 }
 
-export function ArticleRunPage() {
+export function ArticleRunPage({ productMode = false, navigationTargets }: ResearchModeProps = {}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -413,10 +454,10 @@ export function ArticleRunPage() {
   }, [steps, selectedStepId]);
 
   useEffect(() => {
-    if (submittedJobId) {
+    if (!productMode && submittedJobId) {
       navigate(`/jobs/${encodeURIComponent(submittedJobId)}`);
     }
-  }, [navigate, submittedJobId]);
+  }, [navigate, productMode, submittedJobId]);
 
   const selectedProfile = useMemo<ProfileRecord | null>(() => {
     return profiles.find((profile) => profile.profile_id === selectedProfileId) ?? null;
@@ -447,11 +488,15 @@ export function ArticleRunPage() {
     },
     onSuccess: async (data) => {
       toast({
-        title: '文章抓取任务已提交',
-        description: `Job ${data.job.id} 已创建，正在打开详情页。`,
+        title: productMode ? '文章已添加' : '文章抓取任务已提交',
+        description: productMode ? '文章导入已完成，正在打开提取结果。' : `Job ${data.job.id} 已创建，正在打开详情页。`,
       });
-      setMessage('文章处理已提交，正在跳转到 Job Detail。');
-      setSubmittedJobId(data.job.id);
+      setMessage(productMode ? '文章已添加，正在打开提取结果。' : '文章处理已提交，正在跳转到 Job Detail。');
+      if (productMode) {
+        navigate(navigationTargets?.results ?? '/research/results');
+      } else {
+        setSubmittedJobId(data.job.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (error: unknown) => {
@@ -507,6 +552,97 @@ export function ArticleRunPage() {
   const selectedStepJobType = selectedStep?.required_job_type ?? articlePipelineJobType;
   const scheduleDisabled = !selectedProfileId || !scheduleTime.trim() || isLoading || !!loadError || startScheduleMutation.isPending;
   const scheduleStopDisabled = !scheduleActive || stopScheduleMutation.isPending;
+
+  if (productMode) {
+    const availability = resolveAvailability({
+      loading: profilesQuery.isLoading || pipelineQuery.isLoading,
+      error: profilesQuery.error ?? pipelineQuery.error ?? null,
+      empty: !profilesQuery.isLoading && !profilesQuery.error && profiles.length === 0,
+    });
+
+    const nextAction = {
+      label: '查看提取结果',
+      to: navigationTargets?.results ?? '/research/results',
+    };
+    const recoveryAction =
+      availability === 'permission_denied'
+        ? { label: '返回研究首页', to: navigationTargets?.back ?? '/research' }
+        : availability === 'unavailable' || availability === 'error'
+          ? { label: '重新加载', to: navigationTargets?.add ?? '/research/add' }
+          : undefined;
+
+    return (
+      <ProductPageAdapter
+        title="添加文章"
+        queryState={availability}
+        purpose="把新文章导入文章库，并继续进入提取结果查看结构化内容。"
+        inputDescription="先选择当前文章配置，再选择导入方式，系统会按现有能力自动完成文章处理。"
+        processingDescription="系统将调用现有文章导入链路完成抓取、清洗、校验和入库；不需要理解内部实现步骤。"
+        outputDescription="返回已导入文章的处理结果和后续可查看的提取内容。"
+        businessAction={nextAction}
+        recoveryAction={recoveryAction}
+        currentStep={selectedStep ? `当前导入方式：${selectedStep.title}` : undefined}
+        prerequisites={[
+          {
+            label: '文章配置',
+            status: selectedProfile ? 'ready' : 'empty',
+            detail: selectedProfile ? selectedProfile.name : '请先选择一个可用配置。',
+          },
+          {
+            label: '导入方式',
+            status: selectedStep ? 'ready' : 'empty',
+            detail: selectedStep ? selectedStep.description : '请选择一个导入方式。',
+          },
+        ]}
+        input={
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900" htmlFor="research-article-profile">
+                当前配置
+              </label>
+              <Select id="research-article-profile" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
+                {profiles.map((profile) => (
+                  <option key={profile.profile_id} value={profile.profile_id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500">{selectedProfile ? selectedProfile.environment : '请先选择可用配置。'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900" htmlFor="research-article-step">
+                导入方式
+              </label>
+              <Select id="research-article-step" value={selectedStepId} onChange={(event) => setSelectedStepId(event.target.value)}>
+                {steps.map((step) => (
+                  <option key={step.step_id} value={step.step_id}>
+                    {step.title}
+                  </option>
+                ))}
+              </Select>
+              {selectedStep ? <p className="text-xs text-slate-500">{selectedStep.description}</p> : null}
+            </div>
+          </div>
+        }
+        progress={<span>系统将按当前选择自动推进，不要求你填写内部参数。</span>}
+        output={
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <MetricCard label="可用配置" value={String(profiles.length)} hint="用于导入文章的业务配置数量。" />
+              <MetricCard label="导入方式" value={String(steps.length)} hint="可选择的文章处理方式。" />
+            </div>
+            {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">说明</p>
+              <p className="mt-2 leading-6">选择配置和导入方式后，系统会自动完成文章处理，并把结果送到提取结果页。</p>
+            </div>
+          </div>
+        }
+        help="导入完成后，下一步通常是查看提取结果并确认当前版本。"
+      />
+    );
+  }
 
   function renderStepField(name: string, field: WorkflowParamField) {
     const fieldId = `article-run-${selectedStep?.step_id ?? 'step'}-${name}`;
@@ -807,7 +943,7 @@ export function ArticleRunPage() {
   );
 }
 
-export function ArticleListPage() {
+export function ArticleListPage({ productMode = false, navigationTargets }: ResearchModeProps = {}) {
   const navigate = useNavigate();
   const [authorId, setAuthorId] = useState('');
   const [source, setSource] = useState('');
@@ -865,6 +1001,123 @@ export function ArticleListPage() {
       crawledText: formatTimestamp(article.crawled_at),
     }));
   }, [articles]);
+
+  if (productMode) {
+    const availability = resolveAvailability({
+      loading: articlesQuery.isLoading || filterOptionsQuery.isLoading,
+      error: articlesQuery.error ?? null,
+      empty: !articlesQuery.isLoading && !articlesQuery.error && tableRows.length === 0,
+      partial: !articlesQuery.isLoading && !articlesQuery.error && Boolean(filterOptionsQuery.error),
+    });
+    const nextAction = {
+      label: '添加文章',
+      to: navigationTargets?.add ?? '/research/add',
+    };
+    const recoveryAction =
+      availability === 'permission_denied'
+        ? { label: '返回研究首页', to: navigationTargets?.back ?? '/research' }
+        : availability === 'unavailable' || availability === 'error'
+          ? { label: '重新加载', to: navigationTargets?.library ?? '/research/articles' }
+          : undefined;
+
+    return (
+      <ProductPageAdapter
+        title="文章库"
+        queryState={availability}
+        purpose="查看已导入文章、确认来源和筛选范围，并继续到添加文章或提取结果。"
+        inputDescription="选择作者编号、来源、交易员和时间范围，缩小当前文章库的查看范围。"
+        processingDescription="系统会读取文章库并应用当前筛选条件；如果只有部分辅助信息可用，会明确标记为部分完成。"
+        outputDescription="返回文章条目、摘要、发布时间、标签和原文链接。"
+        businessAction={nextAction}
+        recoveryAction={recoveryAction}
+        stateTitle={availability === 'partial' ? '部分完成' : undefined}
+        stateDescription={availability === 'partial' ? '文章列表可用，但部分筛选选项尚未准备好。' : undefined}
+        result={
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <MetricCard label="文章总数" value={String(total)} hint="当前筛选条件下可查看的文章数量。" />
+              <MetricCard label="作者选项" value={String(authorOptions.length)} hint="可用于进一步收窄查看范围。" />
+              <MetricCard label="来源选项" value={String(sourceOptions.length)} hint="用于定位文章来源。" />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-900">作者编号</p>
+                <p className="text-sm text-slate-600">{authorId || '全部'}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-900">来源</p>
+                <p className="text-sm text-slate-600">{source || '全部'}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-900">交易员编号</p>
+                <p className="text-sm text-slate-600">{traderId || '全部'}</p>
+              </div>
+            </div>
+
+            {tableRows.length === 0 ? (
+              <EmptyState
+                title="暂无内容"
+                description="当前条件下没有文章，请调整筛选条件或先添加文章。"
+                actionLabel="添加文章"
+                onAction={() => navigate(navigationTargets?.add ?? '/research/add')}
+              />
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">标题</th>
+                      <th className="px-4 py-3">作者 / 来源</th>
+                      <th className="px-4 py-3">时间</th>
+                      <th className="px-4 py-3">标签 / 互动</th>
+                      <th className="px-4 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {tableRows.map((article) => (
+                      <tr key={article.id} className="align-top">
+                        <td className="px-4 py-4">
+                          <p className="font-medium text-slate-950">{article.title}</p>
+                          <p className="mt-1 break-all text-xs text-slate-500">{article.source_url}</p>
+                        </td>
+                        <td className="px-4 py-4 text-slate-700">
+                          <p>{article.author_name ?? article.author_id ?? '未记录'}</p>
+                          <p className="mt-1 text-xs text-slate-500">{article.source}</p>
+                        </td>
+                        <td className="px-4 py-4 text-slate-700">
+                          <p>发布时间：{article.publishedText}</p>
+                          <p className="mt-1 text-xs text-slate-500">抓取：{article.crawledText}</p>
+                        </td>
+                        <td className="px-4 py-4 text-slate-700">
+                          <p>标签：{article.tagText}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            评论 {article.comment_count} · 点赞 {article.like_count} · 收藏 {article.bookmark_count}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <a
+                            className="inline-flex h-9 min-w-24 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                            href={article.source_url}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            查看原文
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        }
+        help="页面只展示业务信息，不暴露内部处理参数。"
+      />
+    );
+  }
 
   if (articlesQuery.isLoading) {
     return (
@@ -1128,7 +1381,7 @@ export function ArticleQualityPage() {
   );
 }
 
-export function ArticleResultsPage() {
+export function ArticleResultsPage({ productMode = false, navigationTargets }: ResearchModeProps = {}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
@@ -1210,7 +1463,7 @@ export function ArticleResultsPage() {
       });
     },
     onSuccess: async (resolution) => {
-      setMessage('文章元数据版本已更新。');
+      setMessage(productMode ? '文章提取结果已更新。' : '文章元数据版本已更新。');
       setSelectedMetadataVersions((current) => ({
         ...current,
         [resolution.article_id]: resolution.selected_schema_version ?? '',
@@ -1246,6 +1499,280 @@ export function ArticleResultsPage() {
     setSearchInput(value);
     setPage(1);
   };
+
+  if (productMode) {
+    const availability = resolveAvailability({
+      loading: articlesQuery.isLoading || (Boolean(selectedArticle?.article_id) && detailQuery.isLoading && !detailQuery.data),
+      error: articlesQuery.error ?? null,
+      empty: !articlesQuery.isLoading && !articlesQuery.error && articles.length === 0,
+      partial: !articlesQuery.isLoading && !articlesQuery.error && Boolean(detailQuery.error),
+    });
+    const recoveryAction =
+      availability === 'permission_denied'
+        ? { label: '返回研究首页', to: navigationTargets?.back ?? '/research' }
+        : availability === 'unavailable' || availability === 'error' || availability === 'partial'
+          ? { label: '重新加载', to: navigationTargets?.results ?? '/research/results' }
+          : undefined;
+
+    return (
+      <ProductPageAdapter
+        title="提取结果"
+        queryState={availability}
+        purpose="查看文章提取后的结构化结果，确认当前使用版本，并在必要时切换到更合适的结果版本。"
+        inputDescription="按状态、关键词和文章标题筛选结果，再选择一篇文章查看详细信息。"
+        processingDescription="系统会读取已提取的文章结果，并加载当前可用的版本候选。"
+        outputDescription="返回文章列表、当前版本、推荐版本和候选结果。"
+        businessAction={{
+          label: '返回文章库',
+          to: navigationTargets?.library ?? '/research/articles',
+        }}
+        recoveryAction={recoveryAction}
+        stateTitle={availability === 'partial' ? '部分完成' : undefined}
+        stateDescription={availability === 'partial' ? '文章列表可用，但当前选中文章的详细结果还未完全就绪。' : undefined}
+        input={
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-900" htmlFor="research-results-status">
+                结果状态
+              </label>
+              <Select
+                id="research-results-status"
+                value={selectionStatusFilter}
+                onChange={(event) => updateFilter(event.target.value as typeof selectionStatusFilter)}
+              >
+                <option value="all">全部</option>
+                <option value="unselected">未选择</option>
+                <option value="selected">已选择</option>
+              </Select>
+            </div>
+            <div className="space-y-2 md:col-span-1 xl:col-span-2">
+              <label className="text-sm font-medium text-slate-900" htmlFor="research-results-search">
+                搜索文章
+              </label>
+              <Input
+                id="research-results-search"
+                value={searchInput}
+                onChange={(event) => updateSearch(event.target.value)}
+                placeholder="标题 / 作者 / 来源 / URL"
+              />
+            </div>
+          </div>
+        }
+        progress={<span>当前列表与详情来自真实结果，切换文章后会重新加载详细内容。</span>}
+        output={
+          <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm">
+              <div className="border-b border-slate-200 bg-white/80 p-4 backdrop-blur">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold tracking-tight text-slate-950">文章列表</p>
+                    <p className="mt-1 text-xs text-slate-600">从左侧选择文章，右侧会展示当前版本和候选结果。</p>
+                  </div>
+                  <Badge variant="info">{totalCount} 篇</Badge>
+                </div>
+              </div>
+              <div className={resultsScrollHeightClass + ' p-4'}>
+                {articles.length === 0 ? (
+                  <EmptyState title="暂无内容" description="当前筛选条件下没有提取结果。" actionLabel="返回文章库" onAction={() => navigate(navigationTargets?.library ?? '/research/articles')} />
+                ) : (
+                  <div className="space-y-3">
+                    {articles.map((article) => {
+                      const active = article.article_id === selectedArticle?.article_id;
+                      const statusVariant = article.selection_status === 'selected' ? 'success' : 'warning';
+                      return (
+                        <button
+                          key={article.article_id}
+                          type="button"
+                          onClick={() => setSelectedArticleId(article.article_id)}
+                          className={`w-full rounded-2xl border p-4 text-left transition ${
+                            active
+                              ? 'border-sky-400 bg-white shadow-md ring-2 ring-sky-200'
+                              : 'border-slate-200 bg-white hover:border-sky-200 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-950">{article.title}</p>
+                              <p className="mt-1 text-xs text-slate-600">
+                                {article.author_name ?? article.author_id ?? '未记录'} · {article.source}
+                              </p>
+                            </div>
+                            <Badge variant={statusVariant}>{article.selection_status === 'selected' ? '已选择' : '未选择'}</Badge>
+                          </div>
+                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{article.summary ?? '暂无摘要'}</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {article.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="info">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {article.tags.length > 3 ? <Badge variant="default">+{article.tags.length - 3}</Badge> : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold tracking-tight text-slate-950">当前文章详情</p>
+                    <p className="mt-1 text-xs text-slate-600">确认当前使用版本，再决定是否切换到其他候选版本。</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedArticle ? (
+                      <Badge variant={selectedArticle.selection_status === 'selected' ? 'success' : 'warning'}>
+                        {selectedArticle.selection_status === 'selected' ? '已选择' : '未选择'}
+                      </Badge>
+                    ) : null}
+                    {detailQuery.data?.selection_mode ? (
+                      <Badge variant="info">{detailQuery.data.selection_mode === 'manual' ? '手动确认' : '系统推荐'}</Badge>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className={resultsScrollHeightClass + ' p-5'}>
+                {!selectedArticle ? (
+                  <EmptyState title="请选择一篇文章" description="从左侧选择文章后，右侧会展示详细结果和候选版本。" />
+                ) : detailQuery.isLoading ? (
+                  <LoadingState label="正在加载文章详情" description="正在读取当前文章的结果版本和候选信息。" />
+                ) : detailQuery.error ? (
+                  <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-medium text-amber-950">当前文章的详细结果暂时不可用。</p>
+                    <p className="text-sm text-amber-900">系统仍然保留列表，你可以稍后重试或选择其他文章。</p>
+                  </div>
+                ) : detailQuery.data ? (
+                  <div className="space-y-6">
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-lg font-semibold tracking-tight text-slate-950">{selectedArticle.title}</p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            {selectedArticle.author_name ?? selectedArticle.author_id ?? '未记录'} · {selectedArticle.source}
+                          </p>
+                          <p className="mt-1 break-all text-[11px] text-slate-500">{selectedArticle.source_url}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(selectedArticle.source_url, '_blank', 'noopener,noreferrer')}
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            打开原文
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <MetricCard size="compact" label="发布时间" value={formatTimestamp(selectedArticle.published_at)} />
+                        <MetricCard size="compact" label="抓取时间" value={formatTimestamp(selectedArticle.crawled_at)} />
+                        <MetricCard size="compact" label="当前版本" value={detailQuery.data.selected_schema_version ?? '未设置'} />
+                        <MetricCard size="compact" label="推荐版本" value={detailQuery.data.recommended_schema_version ?? '无'} />
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold tracking-tight text-slate-950">版本选择</p>
+                          <p className="mt-1 text-xs text-slate-600">回测和后续使用只会消费当前选中的版本。</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={isSelectedEffective ? 'success' : 'default'}>当前：{selectedVersion || '未设置'}</Badge>
+                          <Badge variant={isSelectedRecommended ? 'info' : 'default'}>推荐：{detailQuery.data.recommended_schema_version ?? '无'}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        <label className="text-sm font-medium text-slate-900" htmlFor={`article-metadata-version-${selectedArticle.article_id}`}>
+                          选择当前使用版本
+                        </label>
+                        <Select
+                          id={`article-metadata-version-${selectedArticle.article_id}`}
+                          value={selectedVersion}
+                          onChange={(event) =>
+                            setSelectedMetadataVersions((current) => ({
+                              ...current,
+                              [selectedArticle.article_id]: event.target.value,
+                            }))
+                          }
+                        >
+                          {detailQuery.data.candidates.map((candidate) => (
+                            <option key={candidate.schema_version} value={candidate.schema_version}>
+                              {candidate.schema_version} · 评分 {formatScore(candidate.score)}
+                            </option>
+                          ))}
+                        </Select>
+                        <p className="text-xs leading-6 text-slate-500">切换后会保留可回溯的候选信息。</p>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            selectMetadataMutation.mutate({
+                              articleId: selectedArticle.article_id,
+                              selectedSchemaVersion: selectedVersion,
+                            })
+                          }
+                          disabled={!selectedVersion || selectMetadataMutation.isPending}
+                        >
+                          {selectMetadataMutation.isPending ? '保存中' : '设为当前版本'}
+                        </Button>
+                        {detailQuery.data.selection_reason ? (
+                          <p className="text-xs leading-6 text-slate-500">选择说明：{detailQuery.data.selection_reason}</p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">候选结果</p>
+                      <div className="mt-4 space-y-3">
+                        {detailQuery.data.candidates.map((candidate) => {
+                          const active = candidate.schema_version === selectedVersion;
+                          const recommended = candidate.schema_version === detailQuery.data?.recommended_schema_version;
+                          return (
+                            <div key={candidate.schema_version} className="rounded-2xl border border-slate-200 bg-white p-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={active ? 'success' : 'default'}>{active ? '当前选中' : '候选'}</Badge>
+                                {recommended ? <Badge variant="info">系统推荐</Badge> : null}
+                                <Badge variant="default">{candidate.schema_version}</Badge>
+                                <span className="text-[11px] text-slate-500">评分 {formatScore(candidate.score)}</span>
+                              </div>
+                              <p className="mt-2 text-xs leading-5 text-slate-700">
+                                {candidate.score_reasons.length > 0 ? candidate.score_reasons.join('；') : '暂无评分说明'}
+                              </p>
+                              <div className="mt-3 grid gap-2 text-[11px] text-slate-500 md:grid-cols-2">
+                                <span>处理时间：{candidate.processed_at ?? '未记录'}</span>
+                                <span>概念数：{candidate.extracted_concepts_count}</span>
+                                <span>标的数：{candidate.trading_symbols_count}</span>
+                                <span>规则数：{candidate.strategy_rules_count}</span>
+                                <span>前置条件数：{candidate.preconditions_count}</span>
+                                <span>评论洞察数：{candidate.comment_insights_count}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState title="暂无内容" description="当前文章没有可展示的提取结果。" />
+                )}
+              </div>
+            </div>
+          </div>
+        }
+        help="你只需要确认当前版本是否合适，系统会保留候选与处理说明。"
+      />
+    );
+  }
 
   if (articlesQuery.isLoading) {
     return (

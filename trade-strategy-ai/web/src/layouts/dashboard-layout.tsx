@@ -1,8 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { allNavigationItems } from '@/app/navigation';
-import { resolveRouteByPathname } from '@/app/route-registry';
+import { resolveRoute } from '@/app/route-config';
+import { SectionNav } from '@/components/layout/section-nav';
 import { Sidebar } from '@/components/layout/sidebar';
 import { StatusStrip } from '@/components/layout/status-strip';
 import { Topbar } from '@/components/layout/topbar';
@@ -10,21 +10,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-context';
 
 function resolveCurrentRoute(pathname: string) {
-  const exactMatch = allNavigationItems.find((item) => item.path === pathname);
-  if (exactMatch) {
-    return { ...exactMatch, kind: 'canonical' as const };
-  }
-
-  const matched = resolveRouteByPathname(pathname);
-  const visibleRoute = allNavigationItems.find((item) => item.path === matched.path || item.label === matched.label);
-  return visibleRoute
-    ? { ...visibleRoute, kind: 'canonical' as const }
-    : {
-        label: matched.label,
-        path: matched.path,
-        description: matched.description,
-        kind: matched.kind,
-      };
+  return resolveRoute(pathname) ?? resolveRoute('*');
 }
 
 export function DashboardLayout() {
@@ -95,16 +81,17 @@ export function DashboardLayout() {
 
       <div className="dashboard-main">
         <Topbar
-          title={currentRoute.label}
+          title={currentRoute?.label ?? '页面未找到'}
           onMenuClick={() => setMobileNavOpen((current) => !current)}
         />
 
         <StatusStrip
-          description={currentRoute.description}
-          path={currentRoute.path}
-          title={currentRoute.label}
-          kind={currentRoute.kind}
+          description={currentRoute?.description ?? '请求的页面不存在或入口已经迁移。'}
+          title={currentRoute?.label ?? '页面未找到'}
+          kind={currentRoute?.kind}
         />
+
+        {currentRoute?.parentId ? <SectionNav parentId={currentRoute.parentId} /> : null}
 
         <div className="dashboard-content">
           <Outlet />

@@ -5,6 +5,7 @@ import os
 from fastapi import APIRouter, Depends
 
 from api.dependencies import verify_api_key
+from src.common.config import ConfigError
 from src.services.config_profile_service import ConfigProfileService
 from src.services.system_service import SystemService
 
@@ -67,7 +68,23 @@ async def get_legacy_system_status(_: str = Depends(verify_api_key)) -> dict[str
 async def _build_system_status() -> dict[str, object]:
     """构建系统状态响应体。"""
     profile_id = await _resolve_profile_id()
-    runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+    try:
+        runtime = await ConfigProfileService().load_profile_runtime_config(profile_id)
+    except ConfigError:
+        return {
+            "status": "partial",
+            "profile_context": _profile_context(),
+            "profile_id": profile_id,
+            "profile_snapshot_id": None,
+            "project_root": None,
+            "run_mode": None,
+            "database": {
+                "status": "unavailable",
+                "message": "系统运行配置暂不可用，无法检查数据库状态。",
+            },
+            "directories": None,
+            "warnings": ["系统运行配置暂不可用，无法确认数据库和目录状态。"],
+        }
     service = SystemService()
     db_result = await service.check_database()
     dir_result = await service.check_key_directories(profile_id=profile_id)

@@ -59,9 +59,37 @@ export type SystemDashboardFailedJob = {
   heartbeat_at?: string | null;
 };
 
+export type HomeBusinessStatusValue =
+  | 'ready'
+  | 'pending'
+  | 'complete'
+  | 'blocked'
+  | 'partial'
+  | 'unavailable';
+
+export type HomeBusinessStatus = {
+  status: HomeBusinessStatusValue;
+  value: string | number | boolean | null;
+  label: string;
+  detail: string;
+  source: string;
+  updated_at: string | null;
+  target_path: string;
+  unavailable_reason: string | null;
+};
+
 export type SystemDashboardResponse = {
   status: 'ok' | 'partial' | 'error';
   generated_at: string;
+  business_date: string | null;
+  is_trading_day: boolean | null;
+  latest_trading_day: string | null;
+  business_status: Record<string, HomeBusinessStatus>;
+  next_action: {
+    id: string;
+    label: string;
+    target_path: string;
+  };
   profile_id?: string | null;
   profile_snapshot_id?: string | null;
   health: {

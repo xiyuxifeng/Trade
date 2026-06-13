@@ -11,6 +11,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from src.services.config_profile_service import ConfigProfileService
+from src.common.config import ConfigError
 from api.main import app
 from api.dependencies import verify_api_key
 
@@ -84,3 +85,29 @@ async def test_legacy_system_status_route_still_works(client: AsyncClient) -> No
     response = await client.get("/api/ui/system/status")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_system_status_reports_partial_when_runtime_secrets_are_unavailable(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fail_runtime_config(self, profile_id: str):  # noqa: ANN001
+        del self, profile_id
+        raise ConfigError("missing runtime secrets")
+
+    monkeypatch.setattr(
+        ConfigProfileService,
+        "load_profile_runtime_config",
+        _fail_runtime_config,
+        raising=True,
+    )
+
+    response = await client.get("/api/ui/v1/system/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "partial"
+    assert payload["database"]["status"] == "unavailable"
+    assert payload["directories"] is None
+    assert payload["warnings"] == ["系统运行配置暂不可用，无法确认数据库和目录状态。"]

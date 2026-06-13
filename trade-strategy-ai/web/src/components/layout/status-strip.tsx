@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils';
 type StatusStripProps = {
   title: string;
   description: string;
-  path: string;
   kind?: 'canonical' | 'compat';
   className?: string;
 };

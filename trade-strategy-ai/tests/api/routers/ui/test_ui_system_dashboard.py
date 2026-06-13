@@ -40,6 +40,26 @@ class _FakeSystemService:
                     "freshness": {"sources": [{"source": "market_data", "entity_type": "market", "is_stale": True}]},
                     "alerts": {"critical": 1, "warning": 0, "latest": [{"level": "critical", "title": "stale market data"}]},
                     "traces": [{"job_id": "job-failed-1", "request_context": {"path": "/api/ui/v1/jobs", "method": "POST"}}],
+                    "business_date": "2026-06-10",
+                    "is_trading_day": True,
+                    "latest_trading_day": "2026-06-10",
+                    "business_status": {
+                        "pending_rules": {
+                            "status": "ready",
+                            "value": 3,
+                            "label": "有 3 条规则待审核",
+                            "detail": "审核后才能进入正式规则库。",
+                            "source": "rule_pool",
+                            "updated_at": None,
+                            "target_path": "/rules/review",
+                            "unavailable_reason": None,
+                        }
+                    },
+                    "next_action": {
+                        "id": "review_rules",
+                        "label": "审核候选规则",
+                        "target_path": "/rules/review",
+                    },
                 }
             },
         )()
@@ -67,3 +87,6 @@ async def test_system_dashboard_returns_operational_summary(client: AsyncClient)
     payload = response.json()
     assert payload["failed_jobs"][0]["id"] == "job-failed-1"
     assert payload["alerts"]["critical"] == 1
+    assert payload["business_date"] == "2026-06-10"
+    assert payload["business_status"]["pending_rules"]["value"] == 3
+    assert payload["next_action"]["target_path"] == "/rules/review"

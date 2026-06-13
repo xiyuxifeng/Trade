@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArtifactPreview } from '@/components/artifacts/artifact-preview';
-import { JsonViewer } from '@/components/kit';
+import { JsonViewer, LoadingState } from '@/components/kit';
 import { PageHeader } from '@/components/layout/page-header';
 import { ErrorState } from '@/components/state/ErrorState';
 import { TraderIdSelect } from '@/components/inputs/trader-id-select';
@@ -192,7 +192,7 @@ function ResultRow({
   );
 }
 
-export function BacktestCenter() {
+export function BacktestCenter({ productMode = false }: { productMode?: boolean } = {}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { canAccess, principal } = useAuth();
@@ -423,6 +423,104 @@ export function BacktestCenter() {
 
   const submission = buildSubmission(form);
   const currentFilters = `交易员 ${resultQuery.traderId || '全部'} · ${resultQuery.dateFrom} ~ ${resultQuery.dateTo}`;
+
+  if (productMode) {
+    const unavailableInput =
+      profilesQuery.isLoading
+      || strategyVersionsQuery.isLoading
+      || benchmarkOptionsQuery.isLoading
+      || !form.profileId
+      || !form.strategyVersionId
+      || benchmarkOptions.length === 0;
+
+    return (
+      <div className="space-y-4">
+        {submissionError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+            <p className="font-medium">回测提交失败</p>
+            <p className="mt-1">{submissionError}</p>
+          </div>
+        ) : null}
+        {submissionMessage ? (
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+            回测已提交。结果生成后会自动进入最近结果列表。
+          </div>
+        ) : null}
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>画像</span>
+            <Select
+              aria-label="画像"
+              value={form.profileId}
+              onChange={(event) => setForm((current) => ({ ...current, profileId: event.target.value }))}
+            >
+              {profileItems.length === 0 ? <option value="">暂无可用画像</option> : null}
+              {profileItems.map((profile) => (
+                <option key={profile.profile_id} value={profile.profile_id}>
+                  {profile.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>规则版本</span>
+            <Select
+              aria-label="规则版本"
+              value={form.strategyVersionId}
+              onChange={(event) => setForm((current) => ({ ...current, strategyVersionId: event.target.value }))}
+            >
+              {filteredVersionItems.length === 0 ? <option value="">暂无可用规则版本</option> : null}
+              {filteredVersionItems.map((item) => (
+                <option key={item.version_id} value={item.version_id}>
+                  {item.strategy_date} · {item.status}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>开始日期</span>
+            <Input type="date" value={form.dateFrom} onChange={(event) => setForm((current) => ({ ...current, dateFrom: event.target.value }))} />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>结束日期</span>
+            <Input type="date" value={form.dateTo} onChange={(event) => setForm((current) => ({ ...current, dateTo: event.target.value }))} />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700 md:col-span-2">
+            <span>基准指数</span>
+            <Select
+              aria-label="基准指数选择"
+              value={form.benchmarkSymbol}
+              onChange={(event) => setForm((current) => ({ ...current, benchmarkSymbol: event.target.value }))}
+            >
+              {benchmarkOptions.length === 0 ? <option value="">暂无可用基准</option> : null}
+              {benchmarkOptions.map((item) => (
+                <option key={item.symbol} value={item.symbol}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+        <Button disabled={Boolean(submittingJobType) || unavailableInput} onClick={() => void runBacktest('backtest-run')}>
+          {submittingJobType ? '提交中' : '开始回测'}
+        </Button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="font-medium text-slate-950">最近回测结果</p>
+          {resultsQuery.isLoading ? (
+            <LoadingState label="正在加载回测结果" description="正在读取已保存的真实结果。" />
+          ) : results.length ? (
+            <div className="mt-3 space-y-3">
+              {results.map((item) => (
+                <ResultRow key={item.result_id} active={item.result_id === selectedResultId} item={item} onSelect={() => setSelectedResultId(item.result_id)} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">当前范围暂无回测结果，不会显示为零或成功。</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="page-stack">

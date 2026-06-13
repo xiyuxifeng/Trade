@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { DashboardPage } from '@/pages/dashboard';
+import { AuthProvider } from '@/features/auth/auth-context';
 import {
   AUDITED_LEGACY_PATHS,
   canonicalRoutes,
@@ -166,26 +167,36 @@ describe('route config', () => {
     }
   });
 
-  it('uses an honest migration notice instead of mounting legacy engineering pages at new formal routes', () => {
+  it('mounts the formal business contract at new product routes', () => {
     const route = resolveRoute('/research/articles');
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          {route?.element}
-        </MemoryRouter>
+        <AuthProvider
+          initialPrincipal={{
+            role: 'viewer',
+            api_key_label: null,
+            authenticated: true,
+            source: 'session',
+            username: 'viewer',
+          }}
+        >
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            {route?.element}
+          </MemoryRouter>
+        </AuthProvider>
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole('heading', { name: '文章库入口迁移中' })).toBeInTheDocument();
-    expect(screen.getByText(/当前真实能力仍在兼容入口中/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '前往当前可用入口' })).toHaveAttribute('href', '/articles/list');
-    expect(screen.getByRole('link', { name: '返回研究中心' })).toHaveAttribute('href', '/research');
+    expect(screen.getByRole('heading', { name: '文章库' })).toBeInTheDocument();
+    for (const heading of ['页面用途', '输入', '处理状态', '输出', '下一步']) {
+      expect(screen.getByText(heading)).toBeInTheDocument();
+    }
   });
 
-  it('uses the migration entry component for every new formal page in Task 1', () => {
-    const migrationPaths = [
+  it('uses concrete page components for every formal page in Session B', () => {
+    const formalPagePaths = [
       '/research/articles',
       '/research/add',
       '/research/results',
@@ -204,10 +215,9 @@ describe('route config', () => {
       '/system/data',
       '/system/runs',
     ];
-    const migrationEntryType = (resolveRoute('/research/articles')?.element as ReactElement).type;
-
-    for (const path of migrationPaths) {
-      expect((resolveRoute(path)?.element as ReactElement).type, path).toBe(migrationEntryType);
+    for (const path of formalPagePaths) {
+      const elementType = (resolveRoute(path)?.element as ReactElement).type;
+      expect(typeof elementType, path).toBe('function');
     }
   });
 

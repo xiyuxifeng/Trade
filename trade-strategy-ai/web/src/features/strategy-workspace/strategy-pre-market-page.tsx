@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { PageHeader } from '@/components/layout/page-header';
+import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
 import { createJob, listJobs } from '@/lib/api/jobs';
@@ -20,6 +21,11 @@ import type { ProfileRecord } from '@/types/profile';
 import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from './strategy-workspace-utils';
 
 type SubmissionType = 'snapshot-build' | 'run-pre-market';
+
+type StrategyPreMarketPageProps = {
+  productMode?: boolean;
+  navigationTarget?: string;
+};
 
 const DEFAULT_BENCHMARK_SYMBOL = '000300.SH';
 const DEFAULT_BENCHMARK_NAME = '沪深300';
@@ -123,7 +129,7 @@ function buildRunParams({
   return params;
 }
 
-export function StrategyPreMarketPage() {
+export function StrategyPreMarketPage({ productMode = false, navigationTarget = '/daily' }: StrategyPreMarketPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const today = useMemo(() => formatLocalDateInputOffset(0), []);
@@ -172,6 +178,9 @@ export function StrategyPreMarketPage() {
     if (items.some((item) => item.symbol === defaultSymbol)) {
       return items;
     }
+    if (!benchmarkOptionsQuery.error) {
+      return items;
+    }
     return [
       {
         symbol: defaultSymbol,
@@ -182,7 +191,7 @@ export function StrategyPreMarketPage() {
       } satisfies MarketBenchmarkOption,
       ...items,
     ];
-  }, [benchmarkOptionsQuery.data?.items]);
+  }, [benchmarkOptionsQuery.data?.items, benchmarkOptionsQuery.error]);
   const jobs = useMemo(
     () => sortJobsByCreatedAtDesc([...(snapshotJobsQuery.data?.items ?? []), ...(runJobsQuery.data?.items ?? [])]),
     [runJobsQuery.data?.items, snapshotJobsQuery.data?.items],
@@ -197,7 +206,7 @@ export function StrategyPreMarketPage() {
     }
   }, [profileItems, selectedProfileId]);
 
-  const loading = profilesQuery.isLoading || snapshotJobsQuery.isLoading || runJobsQuery.isLoading;
+  const loading = profilesQuery.isLoading || benchmarkOptionsQuery.isLoading || snapshotJobsQuery.isLoading || runJobsQuery.isLoading;
   const error = profilesQuery.error ?? snapshotJobsQuery.error ?? runJobsQuery.error;
   const permissionDenied = isWorkspacePermissionDenied(error);
 
@@ -233,7 +242,7 @@ export function StrategyPreMarketPage() {
   });
 
   const handleSubmitSnapshot = () => {
-    if (!selectedProfileId) {
+    if (!selectedProfileId || benchmarkOptions.length === 0) {
       return;
     }
     setSubmissionError(null);
@@ -255,7 +264,7 @@ export function StrategyPreMarketPage() {
   };
 
   const handleSubmitRun = () => {
-    if (!selectedProfileId) {
+    if (!selectedProfileId || benchmarkOptions.length === 0) {
       return;
     }
     setSubmissionError(null);
@@ -272,6 +281,151 @@ export function StrategyPreMarketPage() {
     });
   };
 
+  if (productMode) {
+    const selectedProfile = profileItems.find((profile) => profile.profile_id === selectedProfileId) ?? profileItems[0] ?? null;
+    const latestSnapshotJob = snapshotJobsQuery.data?.items?.[0] ?? null;
+    const latestRunJob = runJobsQuery.data?.items?.[0] ?? null;
+    const hasPartialBenchmarkFallback = Boolean(benchmarkOptionsQuery.error);
+    const queryState = loading
+      ? 'loading'
+      : permissionDenied
+        ? 'permission_denied'
+        : error
+          ? 'error'
+          : hasPartialBenchmarkFallback
+            ? 'partial'
+            : profileItems.length === 0
+              ? 'empty'
+              : benchmarkOptions.length === 0
+                ? 'unavailable'
+              : 'ready';
+
+    return (
+      <ProductPageAdapter
+        title="今日盘前"
+        queryState={queryState}
+        purpose="根据今日画像、市场上下文和最新盘前结果，整理可执行的盘前分析。"
+        inputDescription="需要当前可用画像、执行日期和基准指数。"
+        processingDescription="系统会先整理盘前市场数据，再提交今日盘前分析。"
+        outputDescription="输出今日盘前分析结果、最近提交状态和下一步操作。"
+        input={
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-2 text-sm text-slate-700">
+              <span>目标画像</span>
+              <Select aria-label="目标画像" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
+                {profileItems.map((profile: ProfileRecord) => (
+                  <option key={profile.profile_id} value={profile.profile_id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span>执行日期</span>
+              <Input aria-label="执行日期" type="date" value={strategyDate} onChange={(event) => setStrategyDate(event.target.value)} />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span>基准指数</span>
+              <Select aria-label="基准指数" value={benchmarkSymbol} onChange={(event) => setBenchmarkSymbol(event.target.value)}>
+                {benchmarkOptions.map((item: MarketBenchmarkOption) => (
+                  <option key={item.symbol} value={item.symbol}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+        }
+        businessAction={{ label: '开始盘前分析', onClick: handleSubmitRun }}
+        stateTitle={hasPartialBenchmarkFallback ? '部分完成' : undefined}
+        stateDescription={hasPartialBenchmarkFallback ? '基准指数选项暂时缺失，页面已回退到默认基准。' : undefined}
+        impact={hasPartialBenchmarkFallback ? '你仍然可以继续查看和提交盘前分析，但部分基准选项不可见。' : undefined}
+        recoveryAction={
+          hasPartialBenchmarkFallback
+            ? { label: '返回今日总览', to: navigationTarget }
+            : queryState !== 'ready'
+              ? { label: '返回今日总览', to: navigationTarget }
+              : undefined
+        }
+        result={
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">目标画像</p>
+                <p className="mt-2 text-sm font-medium text-slate-950">{selectedProfile?.name ?? '未选择'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">执行日期</p>
+                <p className="mt-2 text-sm font-medium text-slate-950">{strategyDate || '未选择'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">基准指数</p>
+                <p className="mt-2 text-sm font-medium text-slate-950">
+                  {benchmarkOptionsQuery.error
+                    ? '默认基准，其他选项暂不可用'
+                    : benchmarkOptions.find((item) => item.symbol === benchmarkSymbol)?.name ?? '未选择'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-left text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!selectedProfileId || submissionMutation.isPending}
+                onClick={handleSubmitSnapshot}
+                type="button"
+              >
+                整理今日盘前数据
+              </button>
+              <a
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+                href={navigationTarget}
+              >
+                返回今日总览
+              </a>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近盘前分析</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {latestRunJob ? <StatusBadge value={latestRunJob.status} /> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">暂无记录</span>}
+                  <span className="text-sm text-slate-600">
+                    {latestRunJob ? formatWorkspaceTimestamp(latestRunJob.created_at) : '暂无最近结果'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {latestRunJob?.result && typeof latestRunJob.result === 'object' && Array.isArray((latestRunJob.result as { summary?: string[] }).summary)
+                    ? (latestRunJob.result as { summary?: string[] }).summary!.slice(0, 2).join(' · ')
+                    : '提交今日盘前分析后，这里会展示最近结果。'}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">最近市场数据整理</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {latestSnapshotJob ? <StatusBadge value={latestSnapshotJob.status} /> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">暂无记录</span>}
+                  <span className="text-sm text-slate-600">
+                    {latestSnapshotJob ? formatWorkspaceTimestamp(latestSnapshotJob.created_at) : '暂无最近结果'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {latestSnapshotJob?.status === 'success'
+                    ? '市场上下文已整理完成。'
+                    : latestSnapshotJob?.status === 'failed'
+                      ? '市场数据整理失败，请查看影响后重试。'
+                      : latestSnapshotJob
+                        ? '市场数据正在整理，完成前不会显示为可用。'
+                        : '整理今日盘前数据后，这里会展示最近状态。'}
+                </p>
+              </div>
+            </div>
+          </div>
+        }
+      />
+    );
+  }
+
   if (loading) {
     return (
       <main className="page-stack">
@@ -281,7 +435,7 @@ export function StrategyPreMarketPage() {
           description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <LoadingState label="正在加载盘前分析" description="正在读取画像、盘前任务和最近执行记录。" />
@@ -298,7 +452,7 @@ export function StrategyPreMarketPage() {
           description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <ErrorState
@@ -322,7 +476,7 @@ export function StrategyPreMarketPage() {
           description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <EmptyState
@@ -343,7 +497,7 @@ export function StrategyPreMarketPage() {
           description="盘前分析页通过画像与市场上下文生成当天的关注建议。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
         }}
       />
 

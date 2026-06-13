@@ -8,7 +8,6 @@ describe('StatusStrip', () => {
       <StatusStrip
         title="研究中心"
         description="导入文章、查看文章并处理规则提取结果。"
-        path="/research"
       />,
     );
 
@@ -22,7 +21,6 @@ describe('StatusStrip', () => {
       <StatusStrip
         title="文章处理旧入口"
         description="继续使用现有文章导入和处理能力。"
-        path="/articles/run"
         kind="compat"
       />,
     );

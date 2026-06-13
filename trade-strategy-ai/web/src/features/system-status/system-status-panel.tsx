@@ -39,7 +39,7 @@ function getErrorMessage(error: unknown) {
   return '无法获取系统状态';
 }
 
-export function SystemStatusPanel() {
+export function SystemStatusPanel({ productMode = false }: { productMode?: boolean } = {}) {
   const { data, error, isLoading, refetch, isFetching } = useSystemStatus();
 
   if (isLoading) {
@@ -94,6 +94,44 @@ export function SystemStatusPanel() {
   const runtimeProfileId = profileContext?.profile_id ?? data.profile_id ?? null;
   const runtimeProfileSnapshotId = profileContext?.profile_snapshot_id ?? data.profile_snapshot_id ?? null;
   const isBootstrapDefault = isBootstrapDefaultProfile(runtimeProfileId, runtimeProfileSnapshotId);
+
+  if (productMode) {
+    const unavailableDirectories = directoryEntries.filter(([, info]) => !info.exists).length;
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>业务可用状态</CardTitle>
+              <CardDescription>检查当前服务和关键依赖是否支持业务操作。</CardDescription>
+            </div>
+            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? '刷新中' : '刷新状态'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">核心服务</p>
+            <p className="mt-2 font-medium text-slate-950">{data.database.status === 'ok' ? '可用' : data.database.status === 'warning' ? '部分可用' : '不可用'}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">当前画像</p>
+            <p className="mt-2 font-medium text-slate-950">{runtimeProfileId ? '已绑定' : '未绑定'}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">依赖检查</p>
+            <p className="mt-2 font-medium text-slate-950">{unavailableDirectories ? `${unavailableDirectories} 项需处理` : '全部可用'}</p>
+          </div>
+          {data.warnings.length ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-3">
+              当前有 {data.warnings.length} 项依赖异常，受影响操作应在修复后重试。
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { PageHeader } from '@/components/layout/page-header';
+import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { ArtifactPanel } from '@/components/artifacts/artifact-panel';
 import { EmptyState, JsonViewer, LoadingState, SectionCard, StatusBadge } from '@/components/kit';
 import { ErrorState } from '@/components/state/ErrorState';
@@ -21,6 +22,11 @@ import { StrategyWorkspaceHistory } from './strategy-workspace-history';
 type SubmissionState = {
   jobId: string;
   submittedAt: string;
+};
+
+type StrategyAfterClosePageProps = {
+  productMode?: boolean;
+  navigationTarget?: string;
 };
 
 type AfterCloseEvaluation = {
@@ -111,6 +117,28 @@ function formatPercent(value: number | null | undefined) {
   return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
+function describeEvaluationStatus(status: string | undefined) {
+  const labels: Record<string, string> = {
+    ok: '已完成',
+    success: '已完成',
+    insufficient_sample: '样本不足',
+    failed: '处理失败',
+    unavailable: '当前不可用',
+    pending: '等待处理',
+    running: '处理中',
+  };
+  return status ? labels[status] ?? '状态待确认' : '状态未记录';
+}
+
+function describeFallbackReason(reason: string | null | undefined) {
+  const labels: Record<string, string> = {
+    provider_unavailable: '数据来源暂不可用',
+    missing_data: '数据不完整',
+    insufficient_sample: '样本不足',
+  };
+  return reason ? labels[reason] ?? '存在未说明的数据降级' : null;
+}
+
 function describeJobError(error: JobRecord['error']) {
   if (!error) {
     return '任务失败，请稍后重试。';
@@ -118,7 +146,7 @@ function describeJobError(error: JobRecord['error']) {
   return '任务失败，请稍后重试。';
 }
 
-function summarizeJob(job: JobRecord) {
+function summarizeJob(job: JobRecord, productMode = false) {
   const profileId = jobProfileId(job);
   const asOfDate = jobAsOfDate(job);
   const params = job.params ?? {};
@@ -126,10 +154,10 @@ function summarizeJob(job: JobRecord) {
   const exportHtml = typeof params.export_html === 'boolean' ? params.export_html : null;
 
   return [
-    profileId ? `画像 ${profileId}` : null,
+    !productMode && profileId ? `画像 ${profileId}` : null,
     asOfDate ? `分析日期 ${asOfDate}` : null,
-    force !== null ? `强制 ${force ? '是' : '否'}` : null,
-    exportHtml !== null ? `导出网页 ${exportHtml ? '是' : '否'}` : null,
+    !productMode && force !== null ? `强制 ${force ? '是' : '否'}` : null,
+    !productMode && exportHtml !== null ? `导出网页 ${exportHtml ? '是' : '否'}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -160,7 +188,18 @@ function buildAfterCloseRequest({
   };
 }
 
-function buildPerformanceStats(evaluations: AfterCloseEvaluation[]) {
+function buildPerformanceStats(evaluations: AfterCloseEvaluation[] | null) {
+  if (!evaluations) {
+    return {
+      total: null,
+      wins: null,
+      losses: null,
+      average: null,
+      best: null,
+      worst: null,
+    };
+  }
+
   const validReturns = evaluations
     .map((item) => item.return_pct)
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
@@ -199,9 +238,9 @@ function ResultRow({ evaluation }: { evaluation: AfterCloseEvaluation }) {
         <div>
           <p className="text-base font-medium text-slate-950">{evaluation.symbol ?? '未知标的'}</p>
           <p className="mt-1 text-sm text-slate-600">
-            {evaluation.status ?? 'unknown'}
-            {evaluation.partial_data ? ' · partial' : ''}
-            {evaluation.fallback_reason ? ` · ${evaluation.fallback_reason}` : ''}
+            {describeEvaluationStatus(evaluation.status)}
+            {evaluation.partial_data ? ' · 部分数据' : ''}
+            {evaluation.fallback_reason ? ` · ${describeFallbackReason(evaluation.fallback_reason)}` : ''}
           </p>
         </div>
         <Badge variant="info">{formatPercent(evaluation.return_pct)}</Badge>
@@ -219,11 +258,17 @@ function ResultRow({ evaluation }: { evaluation: AfterCloseEvaluation }) {
   );
 }
 
-function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
+function ResultSummaryCard({ latestJob, productMode = false }: { latestJob: JobRecord | null; productMode?: boolean }) {
   const resultPayload = getAfterCloseJobResult(latestJob);
   const resultDetail = getAfterCloseResultDetail(latestJob);
-  const evaluations = resultDetail?.evaluations ?? [];
+  const evaluations = Array.isArray(resultDetail?.evaluations) ? resultDetail.evaluations : null;
   const stats = buildPerformanceStats(evaluations);
+  const evaluationsCount =
+    typeof resultPayload?.evaluations_count === 'number'
+      ? resultPayload.evaluations_count
+      : evaluations
+        ? evaluations.length
+        : null;
   const failed = latestJob?.status === 'failed';
 
   if (!latestJob) {
@@ -243,29 +288,35 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
           <p className="font-medium">盘后任务失败</p>
           <p className="mt-1 break-words text-rose-800">原因：{describeJobError(latestJob.error)}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs/${encodeURIComponent(latestJob.id)}`}>
-              打开任务详情
-            </Link>
-            <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs?job_type=run-after-close`}>
-              查看任务列表
-            </Link>
-          </div>
+          {!productMode ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs/${encodeURIComponent(latestJob.id)}`}>
+                打开任务详情
+              </Link>
+              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs?job_type=run-after-close`}>
+                查看任务列表
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label="Job ID" value={latestJob.id} detail={summarizeJob(latestJob)} />
+        <SummaryTile
+          label={productMode ? '最近结果' : 'Job ID'}
+          value={productMode ? describeStrategyWorkspaceJobType(latestJob.job_type) : latestJob.id}
+          detail={productMode ? summarizeJob(latestJob, true) : summarizeJob(latestJob)}
+        />
         <SummaryTile label="状态" value={<StatusBadge value={latestJob.status} />} detail={formatWorkspaceTimestamp(latestJob.created_at)} />
         <SummaryTile
-          label="执行日期"
+          label={productMode ? '复盘日期' : '执行日期'}
           value={resultPayload?.as_of_date ?? jobAsOfDate(latestJob) ?? '未记录'}
-          detail={resultPayload?.html_path ? `HTML ${resultPayload.html_path}` : '未导出 HTML'}
+          detail={resultPayload?.html_path && !productMode ? `HTML ${resultPayload.html_path}` : '当前结果已生成'}
         />
         <SummaryTile
-          label="评估数"
-          value={String(resultPayload?.evaluations_count ?? evaluations.length)}
-          detail={resultDetail?.result_id ? `Result ${resultDetail.result_id}` : '暂无结果 ID'}
+          label={productMode ? '复盘数' : '评估数'}
+          value={evaluationsCount === null ? '未记录' : String(evaluationsCount)}
+          detail={productMode ? '展示当前可用的最近复盘结果。' : resultDetail?.result_id ? `Result ${resultDetail.result_id}` : '暂无结果 ID'}
         />
       </div>
 
@@ -278,8 +329,8 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <SummaryTile label="总评估数" value={stats.total} />
-                  <SummaryTile label="正收益" value={stats.wins} detail={`负收益 ${stats.losses}`} />
+                  <SummaryTile label="总评估数" value={stats.total ?? '未记录'} />
+                  <SummaryTile label="正收益" value={stats.wins ?? '未记录'} detail={stats.losses === null ? '负收益未记录' : `负收益 ${stats.losses}`} />
                   <SummaryTile label="平均收益" value={formatPercent(stats.average)} />
                   <SummaryTile label="最佳 / 最差" value={`${formatPercent(stats.best)} / ${formatPercent(stats.worst)}`} />
                 </div>
@@ -297,7 +348,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   </div>
                 ) : null}
 
-                {evaluations.length ? (
+                {evaluations?.length ? (
                   <div className="space-y-3">
                     <p className="text-sm font-medium text-slate-950">最近评估明细</p>
                     <div className="space-y-3">
@@ -318,16 +369,18 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <SummaryTile label="有效评估" value={stats.total} />
-                  <SummaryTile label="胜率" value={stats.total ? `${Math.round((stats.wins / stats.total) * 100)}%` : '未记录'} />
+                  <SummaryTile label="有效评估" value={stats.total ?? '未记录'} />
+                  <SummaryTile label="胜率" value={stats.total && stats.wins !== null ? `${Math.round((stats.wins / stats.total) * 100)}%` : '未记录'} />
                   <SummaryTile label="平均收益" value={formatPercent(stats.average)} />
                   <SummaryTile label="收益区间" value={`${formatPercent(stats.best)} / ${formatPercent(stats.worst)}`} />
                 </div>
 
-                <JsonViewer
-                  title="ranking_features"
-                  value={resultDetail.ranking_features ?? {}}
-                />
+                {!productMode ? (
+                  <JsonViewer
+                    title="ranking_features"
+                    value={resultDetail.ranking_features ?? {}}
+                  />
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -339,7 +392,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Failure categories</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">失败归因</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {resultDetail.failure_categories?.length ? (
                       resultDetail.failure_categories.map((item) => (
@@ -354,7 +407,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                 </div>
 
                 <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Postmortem notes</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">复盘说明</p>
                   {resultDetail.postmortem_notes?.length ? (
                     <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
                       {resultDetail.postmortem_notes.map((item) => (
@@ -368,7 +421,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   )}
                 </div>
 
-                <div>
+                {!productMode ? <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Evidence pack refs</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {resultDetail.evidence_pack_refs?.length ? (
@@ -381,11 +434,11 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                       <span className="text-sm text-slate-600">暂无证据包引用。</span>
                     )}
                   </div>
-                </div>
+                </div> : null}
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 bg-white shadow-sm">
+            {!productMode ? <Card className="border-slate-200 bg-white shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg text-slate-950">产物与来源</CardTitle>
               </CardHeader>
@@ -403,35 +456,41 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
                   />
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-                    to={`/jobs/${encodeURIComponent(latestJob.id)}`}
-                  >
-                    查看任务详情
-                  </Link>
-                  <Link
-                    className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-                    to={`/artifacts?jobId=${encodeURIComponent(latestJob.id)}`}
-                  >
-                    前往产物中心
-                  </Link>
-                </div>
+                {!productMode ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+                      to={`/jobs/${encodeURIComponent(latestJob.id)}`}
+                    >
+                      查看任务详情
+                    </Link>
+                    <Link
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+                      to={`/artifacts?jobId=${encodeURIComponent(latestJob.id)}`}
+                    >
+                      前往产物中心
+                    </Link>
+                  </div>
+                ) : null}
 
                 {resultPayload?.html_path ? (
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">导出 HTML</p>
                     <p className="mt-2 break-all text-slate-950">{resultPayload.html_path}</p>
                   </div>
-                ) : (
+                ) : !productMode ? (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                     当前结果未导出 HTML。
                   </div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    当前复盘结果已就绪。
+                  </div>
                 )}
 
-                <ArtifactPanel artifacts={(latestJob.artifacts ?? []) as JobArtifactRef[]} />
+                {!productMode ? <ArtifactPanel artifacts={(latestJob.artifacts ?? []) as JobArtifactRef[]} /> : null}
               </CardContent>
-            </Card>
+            </Card> : null}
           </div>
         </div>
       ) : (
@@ -446,7 +505,7 @@ function ResultSummaryCard({ latestJob }: { latestJob: JobRecord | null }) {
   );
 }
 
-function StrategyAfterCloseBody() {
+function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/daily' }: StrategyAfterClosePageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const today = useMemo(() => formatLocalDateInputOffset(0), []);
@@ -511,6 +570,79 @@ function StrategyAfterCloseBody() {
     },
   });
 
+  if (productMode) {
+    const hasPartialData = false;
+    const queryState = isLoading ? 'loading' : permissionDenied ? 'permission_denied' : queryError ? 'error' : !hasProfiles ? 'empty' : hasPartialData ? 'partial' : 'ready';
+    const selectedProfile = profileItems.find((item) => item.profile_id === formState.profileId) ?? profileItems[0] ?? null;
+    const latestProductJob = visibleJobs[0] ?? null;
+
+    return (
+      <ProductPageAdapter
+        title="今日盘后"
+        queryState={queryState}
+        purpose="复盘今日执行结果，整理收盘后的观察、归因和下一步优化建议。"
+        inputDescription="需要当前可用画像和盘后复盘日期。"
+        processingDescription="系统会根据今日结果整理复盘内容，并保留最近复盘记录。"
+        outputDescription="输出今日盘后复盘摘要、最近结果和下一步操作。"
+        input={
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-700">
+              <span>目标画像</span>
+              <Select
+                aria-label="目标画像"
+                value={formState.profileId}
+                onChange={(event) => setFormState((current) => ({ ...current, profileId: event.target.value }))}
+              >
+                {profileItems.map((profile) => (
+                  <option key={profile.profile_id} value={profile.profile_id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="space-y-2 text-sm text-slate-700">
+              <span>复盘日期</span>
+              <Input
+                aria-label="复盘日期"
+                type="date"
+                value={formState.asOfDate}
+                onChange={(event) => setFormState((current) => ({ ...current, asOfDate: event.target.value }))}
+              />
+            </label>
+
+          </div>
+        }
+        businessAction={{ label: '生成盘后复盘', onClick: () => void submissionMutation.mutateAsync(formState) }}
+        result={
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">目标画像</p>
+                <p className="mt-2 text-sm font-medium text-slate-950">{selectedProfile?.name ?? '未选择'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">复盘日期</p>
+                <p className="mt-2 text-sm font-medium text-slate-950">{formState.asOfDate}</p>
+              </div>
+            </div>
+
+            <ResultSummaryCard latestJob={latestProductJob} productMode />
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
+                to={navigationTarget}
+              >
+                返回今日总览
+              </Link>
+            </div>
+          </div>
+        }
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <main className="page-stack">
@@ -520,7 +652,7 @@ function StrategyAfterCloseBody() {
         description="盘后复盘页负责展示结果、归因、表现与产物。"
         actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <LoadingState label="正在加载盘后复盘" description="正在读取画像、盘后任务和最近结果。" />
@@ -537,7 +669,7 @@ function StrategyAfterCloseBody() {
           description="盘后复盘页负责展示结果、归因、表现与产物。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <ErrorState
@@ -561,7 +693,7 @@ function StrategyAfterCloseBody() {
           description="盘后复盘页负责展示结果、归因、表现与产物。"
           actionLabel="返回概览"
           onAction={() => {
-            navigate('/dashboard');
+            navigate('/daily');
           }}
         />
         <EmptyState
@@ -584,7 +716,7 @@ function StrategyAfterCloseBody() {
         description="盘后复盘页负责展示后端结果、信号归因、今日表现与产物链接。"
         actionLabel="返回概览"
         onAction={() => {
-          navigate('/dashboard');
+          navigate('/daily');
         }}
       />
 
@@ -720,6 +852,6 @@ function StrategyAfterCloseBody() {
   );
 }
 
-export function StrategyAfterClosePage() {
-  return <StrategyAfterCloseBody />;
+export function StrategyAfterClosePage(props: StrategyAfterClosePageProps) {
+  return <StrategyAfterCloseBody {...props} />;
 }

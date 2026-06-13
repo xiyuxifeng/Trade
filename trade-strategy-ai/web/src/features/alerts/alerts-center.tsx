@@ -559,9 +559,9 @@ export function AlertsCenter() {
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm shadow-slate-200/40">
-        <span>从 Dashboard 的重点告警卡片也可以跳转到这里继续处理。</span>
-        <Link className="inline-flex items-center gap-2 font-medium text-sky-700 hover:text-sky-800" to="/dashboard">
-          返回仪表盘
+        <span>从首页的失败运行状态也可以进入这里继续处理。</span>
+        <Link className="inline-flex items-center gap-2 font-medium text-sky-700 hover:text-sky-800" to="/">
+          返回首页
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>

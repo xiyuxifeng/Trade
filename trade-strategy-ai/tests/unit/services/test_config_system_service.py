@@ -81,7 +81,7 @@ data:
 
     service = SystemService(db_checker=_FakeDbChecker())
     db_result = asyncio.run(service.check_database())
-    dir_result = service.check_key_directories(config_path)
+    dir_result = asyncio.run(service.check_key_directories(config_path=config_path))
 
     assert db_result.status == "ok"
     assert db_result.payload["database"]["status"] == "ok"
@@ -111,7 +111,7 @@ data:
     (tmp_path / "data").mkdir()
 
     service = SystemService()
-    dir_result = service.check_key_directories(config_path)
+    dir_result = asyncio.run(service.check_key_directories(config_path=config_path))
 
     assert dir_result.status == "partial"
     assert "logs" in dir_result.warnings

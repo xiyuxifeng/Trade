@@ -13,6 +13,7 @@ from src.services.dashboard_service import DashboardService
 from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 from src.services.job_service import JobService
+from src.services.home_dashboard_service import HomeDashboardService, build_unavailable_business_status
 
 
 def _to_plain(value: Any) -> Any:
@@ -48,11 +49,13 @@ class SystemService(BaseService):
         health_service: HealthCheckService | None = None,
         job_service: JobService | None = None,
         dashboard_service: DashboardService | None = None,
+        home_dashboard_service: HomeDashboardService | None = None,
     ) -> None:
         self._db_checker = db_checker or DatabaseHealthChecker()
         self._health_service = health_service or HealthCheckService(db_checker=self._db_checker)
         self._job_service = job_service or JobService()
         self._dashboard_service = dashboard_service or DashboardService()
+        self._home_dashboard_service = home_dashboard_service or HomeDashboardService()
 
     async def check_database(self) -> ServiceResult:
         """检查数据库连接状态。"""
@@ -159,6 +162,7 @@ class SystemService(BaseService):
         report = dashboard_report_result.payload.get("report", {}) if dashboard_report_result.status == "ok" else {}
 
         failed_job_entries = [self._build_failed_job_entry(job) for job in failed_jobs]
+        failed_runs_fact = failed_job_entries if failed_jobs_result.status == "ok" else None
         running_job_entry = self._build_worker_entry(running_jobs)
         duration_summary = self._build_duration_summary(success_jobs)
         freshness_summary = self._build_freshness_summary(report)
@@ -176,25 +180,48 @@ class SystemService(BaseService):
         }
         health_payload.update({name: _to_plain(component) for name, component in detailed.components.items()})
 
+        payload = {
+            "status": status,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "profile_id": resolved_profile_id,
+            "profile_snapshot_id": profile_snapshot_id,
+            "config_path": str(config_file) if config_file is not None else None,
+            "base_dir": str(base_dir),
+            "health": health_payload,
+            "worker": running_job_entry,
+            "failed_jobs": failed_job_entries,
+            "duration_summary": duration_summary,
+            "freshness": freshness_summary,
+            "alerts": alerts_summary,
+            "traces": trace_entries,
+            "report": _to_plain(report),
+        }
+        try:
+            business = await self._home_dashboard_service.build_summary(
+                profile_id=resolved_profile_id,
+                failed_runs=failed_runs_fact,
+            )
+            payload.update({key: value for key, value in business.items() if key != "status"})
+            if business.get("status") != "ok":
+                status = "partial"
+                payload["status"] = status
+        except Exception as exc:
+            status = "partial"
+            payload["status"] = status
+            payload["business_date"] = None
+            payload["is_trading_day"] = None
+            payload["latest_trading_day"] = None
+            payload["business_status"] = build_unavailable_business_status(
+                "首页业务状态聚合暂不可用。",
+                failed_runs_fact,
+            )
+            payload["next_action"] = {"id": "view_status", "label": "查看今日状态", "target_path": "/daily/overview"}
+            payload.setdefault("warnings", []).append(f"home dashboard unavailable: {exc}")
+
         return ServiceResult(
             status=status,
             message="dashboard summary built",
-            payload={
-                "status": status,
-                "generated_at": datetime.now(UTC).isoformat(),
-                "profile_id": resolved_profile_id,
-                "profile_snapshot_id": profile_snapshot_id,
-                "config_path": str(config_file) if config_file is not None else None,
-                "base_dir": str(base_dir),
-                "health": health_payload,
-                "worker": running_job_entry,
-                "failed_jobs": failed_job_entries,
-                "duration_summary": duration_summary,
-                "freshness": freshness_summary,
-                "alerts": alerts_summary,
-                "traces": trace_entries,
-                "report": _to_plain(report),
-            },
+            payload=payload,
         )
 
     def _build_failed_job_entry(self, job: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,209 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from '@/features/auth/auth-context';
+
+vi.mock('@/pages/articles', () => ({
+  ArticleLibraryPage: () => <div data-testid="article-list">真实文章列表</div>,
+  ArticleAddPage: () => <div data-testid="article-add">真实文章导入</div>,
+  ArticleExtractionResultsPage: () => <div data-testid="article-results">真实提取结果</div>,
+  ArticleListPage: () => <div data-testid="article-list">真实文章列表</div>,
+  ArticleRunPage: () => <div data-testid="article-add">真实文章导入</div>,
+  ArticleResultsPage: () => <div data-testid="article-results">真实提取结果</div>,
+}));
+
+vi.mock('@/pages/rule-pool', () => ({
+  RulePoolPage: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="rule-pool-product">真实规则列表</div> : <div data-testid="rule-pool">兼容规则列表</div>,
+}));
+
+vi.mock('@/pages/backtest', () => ({
+  BacktestPage: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="backtest-product">真实回测能力</div> : <div data-testid="backtest">兼容回测能力</div>,
+}));
+
+vi.mock('@/pages/backtest/RegimeBacktestReportPage', () => ({
+  RegimeBacktestReportPage: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="regime-backtest-product">真实分市场状态结果</div> : <div data-testid="regime-backtest">兼容分市场状态结果</div>,
+}));
+
+vi.mock('@/pages/backtest/CandidatesPage', () => ({
+  CandidatesPage: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="strategy-candidates-product">真实候选版本</div> : <div data-testid="strategy-candidates">兼容候选版本</div>,
+}));
+
+vi.mock('@/pages/persona', () => ({
+  PersonaPage: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="persona-product">现有画像能力</div> : <div data-testid="persona">兼容画像能力</div>,
+}));
+
+vi.mock('@/features/system-status/system-status-panel', () => ({
+  SystemStatusPanel: ({ productMode }: { productMode?: boolean }) =>
+    productMode ? <div data-testid="system-status-product">真实系统状态</div> : <div data-testid="system-status">兼容系统状态</div>,
+}));
+
+vi.mock('@/lib/api/profiles', () => ({
+  listProfiles: vi.fn().mockResolvedValue({
+    count: 1,
+    total: 1,
+    skip: 0,
+    limit: 50,
+    items: [{
+      profile_id: 'profile-1',
+      name: '正式配置',
+      environment: 'production',
+      version: 1,
+      sections: {},
+      secret_refs: {},
+      validation_status: 'validated',
+      created_by: 'test',
+      created_at: '2026-06-13T00:00:00Z',
+      updated_at: '2026-06-13T00:00:00Z',
+      archived_at: null,
+    }],
+  }),
+}));
+
+vi.mock('@/lib/api/system', () => ({
+  getSystemDashboard: vi.fn().mockResolvedValue({
+    status: 'partial',
+    generated_at: '2026-06-13T00:00:00Z',
+    health: { overall: 'warning', issues: [] },
+    worker: {
+      status: 'warning',
+      heartbeat_at: null,
+      heartbeat_age_minutes: null,
+      current_job_id: null,
+    },
+    failed_jobs: [],
+    duration_summary: {
+      average_seconds: null,
+      p95_seconds: null,
+      recent_jobs: [],
+    },
+    freshness: {
+      sources: [{
+        source: 'saved-data',
+        entity_type: '历史行情',
+        last_updated: '2026-06-12T00:00:00Z',
+        freshness_hours: 24,
+        is_stale: true,
+      }],
+    },
+    alerts: {
+      critical: 1,
+      warning: 2,
+      latest: [],
+    },
+    traces: [],
+  }),
+}));
+
+import {
+  ResearchAddPage,
+  ResearchArticlesPage,
+  ResearchResultsPage,
+} from './research';
+import {
+  RulesBacktestsPage,
+  RulesLibraryPage,
+  RulesReviewPage,
+  RulesResultsPage,
+} from './rules';
+import { AuthorsPage } from './authors';
+import {
+  StrategyCandidatesPage,
+  StrategyOverviewPage,
+} from './strategies';
+import {
+  SystemConfigurationPage,
+  SystemDataPage,
+  SystemRunsPage,
+  SystemStatusPage,
+} from './system';
+
+afterEach(cleanup);
+
+function renderPage(element: ReactNode, role: 'viewer' | 'admin' = 'viewer') {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider
+        initialPrincipal={{
+          role,
+          api_key_label: null,
+          authenticated: true,
+          source: 'session',
+          username: role,
+        }}
+      >
+        <MemoryRouter>{element}</MemoryRouter>
+      </AuthProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe('formal product entry pages', () => {
+  it.each([
+    [<ResearchArticlesPage />, 'article-list'],
+    [<ResearchAddPage />, 'article-add'],
+    [<ResearchResultsPage />, 'article-results'],
+    [<RulesReviewPage />, 'rule-pool-product'],
+    [<RulesLibraryPage />, 'rule-pool-product'],
+    [<RulesBacktestsPage />, 'backtest-product'],
+    [<RulesResultsPage />, 'regime-backtest-product'],
+    [<StrategyCandidatesPage />, 'strategy-candidates-product'],
+    [<SystemStatusPage />, 'system-status-product'],
+  ])('mounts the existing real capability', (page, testId) => {
+    renderPage(page);
+    expect(screen.getByTestId(testId)).toBeInTheDocument();
+  });
+
+  it('connects result and system pages to truthful real capability summaries', async () => {
+    renderPage(<RulesResultsPage />);
+    expect(screen.getByTestId('regime-backtest-product')).toBeInTheDocument();
+    cleanup();
+
+    renderPage(<SystemDataPage />);
+    expect(await screen.findByText('历史行情')).toBeInTheDocument();
+    expect(screen.getByText('需要更新')).toBeInTheDocument();
+    cleanup();
+
+    renderPage(<SystemRunsPage />);
+    expect(await screen.findByText('失败处理')).toBeInTheDocument();
+    expect(screen.getByText('严重告警')).toBeInTheDocument();
+    expect(screen.getByText('一般提醒')).toBeInTheDocument();
+  });
+
+  it('does not invent author profile or strategy version counts', () => {
+    renderPage(<AuthorsPage />);
+    expect(screen.getByTestId('persona-product')).toBeInTheDocument();
+    expect(screen.getAllByText(/正式三层画像尚未建立/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/共 \d+ 个正式画像/)).not.toBeInTheDocument();
+    cleanup();
+
+    renderPage(<StrategyOverviewPage />);
+    expect(screen.getByTestId('strategy-candidates-product')).toBeInTheDocument();
+    expect(screen.getAllByText(/正式策略版本尚未建立/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/共 \d+ 个正式策略/)).not.toBeInTheDocument();
+  });
+
+  it('does not require the administrator technical-details slot for formal real capabilities', () => {
+    renderPage(<RulesReviewPage />);
+    expect(screen.queryByText('管理员查看技术细节')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rule-pool-product')).toBeInTheDocument();
+  });
+
+  it('connects system configuration to saved records without exposing technical fields', async () => {
+    renderPage(<SystemConfigurationPage />);
+    expect(await screen.findByText('正式配置')).toBeInTheDocument();
+    expect(screen.getByText('校验状态：已校验')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看现有配置' })).toHaveAttribute('href', '/profiles');
+  });
+});

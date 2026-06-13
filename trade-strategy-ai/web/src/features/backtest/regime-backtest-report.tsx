@@ -76,10 +76,12 @@ function ResultRow({
   item,
   active,
   onSelect,
+  productMode = false,
 }: {
   item: BacktestListItem;
   active: boolean;
   onSelect: () => void;
+  productMode?: boolean;
 }) {
   const summary = getSummary(item);
   return (
@@ -100,9 +102,9 @@ function ResultRow({
         <Badge variant="info">{summary?.total_trades ?? 0} 笔</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-        {item.benchmark_symbol ? <span className="rounded-full border border-slate-200 px-2 py-1">Benchmark {item.benchmark_symbol}</span> : null}
-        {item.regime_version ? <span className="rounded-full border border-slate-200 px-2 py-1">Regime {item.regime_version}</span> : null}
-        {item.source_feature_version ? <span className="rounded-full border border-slate-200 px-2 py-1">Feature {item.source_feature_version}</span> : null}
+        {item.benchmark_symbol ? <span className="rounded-full border border-slate-200 px-2 py-1">基准 {item.benchmark_symbol}</span> : null}
+        {!productMode && item.regime_version ? <span className="rounded-full border border-slate-200 px-2 py-1">Regime {item.regime_version}</span> : null}
+        {!productMode && item.source_feature_version ? <span className="rounded-full border border-slate-200 px-2 py-1">Feature {item.source_feature_version}</span> : null}
         <span className="rounded-full border border-slate-200 px-2 py-1">胜率 {formatPct(summary?.win_rate)}</span>
         <span className="rounded-full border border-slate-200 px-2 py-1">平均收益 {formatPct(summary?.avg_return_pct)}</span>
       </div>
@@ -119,9 +121,14 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
   );
 }
 
-function RegimeMetricsTable({ metrics }: { metrics: RegimeBacktestMetric[] }) {
+function RegimeMetricsTable({ metrics, productMode = false }: { metrics: RegimeBacktestMetric[]; productMode?: boolean }) {
   if (!metrics.length) {
-    return <EmptyState title="暂无分 regime 数据" description="当前回测结果没有 regime 分桶信息，可能仍是旧版本或样本不足。" />;
+    return (
+      <EmptyState
+        title={productMode ? '暂无分市场状态数据' : '暂无分 regime 数据'}
+        description={productMode ? '当前回测结果没有分市场状态信息，可能是样本不足或结果尚未生成。' : '当前回测结果没有 regime 分桶信息，可能仍是旧版本或样本不足。'}
+      />
+    );
   }
 
   return (
@@ -129,7 +136,7 @@ function RegimeMetricsTable({ metrics }: { metrics: RegimeBacktestMetric[] }) {
       <table className="w-full border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
-            <th className="px-4 py-3 font-medium">Regime</th>
+            <th className="px-4 py-3 font-medium">{productMode ? '市场状态' : 'Regime'}</th>
             <th className="px-4 py-3 font-medium">样本</th>
             <th className="px-4 py-3 font-medium">胜率</th>
             <th className="px-4 py-3 font-medium">平均收益</th>
@@ -165,12 +172,12 @@ function RegimeMetricsTable({ metrics }: { metrics: RegimeBacktestMetric[] }) {
   );
 }
 
-function RuleRegimeBlock({ ruleId, metrics }: { ruleId: string; metrics: RegimeBacktestMetric[] }) {
+function RuleRegimeBlock({ ruleId, metrics, productMode = false }: { ruleId: string; metrics: RegimeBacktestMetric[]; productMode?: boolean }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h4 className="text-sm font-semibold text-slate-950">{ruleId}</h4>
-        <Badge variant="info">{metrics.length} 个 regime</Badge>
+        <Badge variant="info">{metrics.length} 个{productMode ? '市场状态' : ' regime'}</Badge>
       </div>
       <div className="mt-4 space-y-3">
         {metrics.map((metric) => (
@@ -193,22 +200,27 @@ function RuleRegimeBlock({ ruleId, metrics }: { ruleId: string; metrics: RegimeB
   );
 }
 
-function RuleRegimeBreakdown({ ruleMetrics }: { ruleMetrics: Record<string, RegimeBacktestMetric[]> }) {
+function RuleRegimeBreakdown({ ruleMetrics, productMode = false }: { ruleMetrics: Record<string, RegimeBacktestMetric[]>; productMode?: boolean }) {
   const entries = Object.entries(ruleMetrics);
   if (!entries.length) {
-    return <EmptyState title="暂无规则分桶数据" description="当前回测结果没有按规则分桶的 regime metrics。" />;
+    return (
+      <EmptyState
+        title="暂无规则分桶数据"
+        description={productMode ? '当前回测结果没有按规则划分的市场状态数据。' : '当前回测结果没有按规则分桶的 regime metrics。'}
+      />
+    );
   }
 
   return (
     <div className="space-y-4">
       {entries.map(([ruleId, metrics]) => (
-        <RuleRegimeBlock key={ruleId} ruleId={ruleId} metrics={metrics} />
+        <RuleRegimeBlock key={ruleId} ruleId={ruleId} metrics={metrics} productMode={productMode} />
       ))}
     </div>
   );
 }
 
-export function RegimeBacktestReportWorkspace() {
+export function RegimeBacktestReportWorkspace({ productMode = false }: { productMode?: boolean } = {}) {
   const navigate = useNavigate();
   const today = useMemo(() => dayjs().format('YYYY-MM-DD'), []);
   const defaultStart = useMemo(() => shiftDate(today, 30), [today]);
@@ -263,6 +275,24 @@ export function RegimeBacktestReportWorkspace() {
   const permissionDenied = queryError instanceof ApiError && (queryError.status === 401 || queryError.status === 403);
 
   if (queryError) {
+    if (productMode) {
+      return (
+        <ErrorState
+          category={permissionDenied ? 'permission denied' : 'network error'}
+          title={permissionDenied ? '当前账号无权查看回测结果' : '回测结果加载失败'}
+          description={permissionDenied ? '权限不足，当前结果不会展示。' : '已保存的回测结果暂时不可用。'}
+          suggestion={permissionDenied ? '请联系管理员申请回测结果查看权限。' : '请稍后重试；如持续失败，请检查回测结果服务。'}
+          onRetry={
+            permissionDenied
+              ? undefined
+              : () => {
+                  void resultsQuery.refetch();
+                  void detailQuery.refetch();
+                }
+          }
+        />
+      );
+    }
     return (
       <main className="page-stack">
         <div className="flex flex-wrap items-center justify-start gap-3">
@@ -293,6 +323,60 @@ export function RegimeBacktestReportWorkspace() {
   const summary = detail ? getSummary(detail) : null;
   const regimeMetrics = getRegimeMetrics(detail);
   const ruleMetrics = getRuleRegimeMetrics(detail);
+
+  if (productMode) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>开始日期</span>
+            <Input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} />
+          </label>
+          <label className="space-y-2 text-sm text-slate-700">
+            <span>结束日期</span>
+            <Input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} />
+          </label>
+          <div className="flex items-end">
+            <Button variant="outline" onClick={() => void resultsQuery.refetch()}>刷新结果</Button>
+          </div>
+        </div>
+        {resultsQuery.isLoading ? (
+          <LoadingState label="正在加载回测结果" description="正在读取已保存的全周期和分市场状态结果。" />
+        ) : results.length ? (
+          <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="space-y-3">
+              {results.map((item) => (
+                <ResultRow key={item.result_id} item={item} active={item.result_id === selectedResultIdResolved} onSelect={() => setSelectedResultId(item.result_id)} productMode />
+              ))}
+            </div>
+            <div className="space-y-4">
+              {!detail ? (
+                <LoadingState label="正在加载结果详情" description="正在读取当前结果。" />
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <SummaryCard label="总交易数" value={summary ? formatNumber(summary.total_trades) : '未记录'} />
+                    <SummaryCard label="胜率" value={summary ? formatPct(summary.win_rate) : '未记录'} />
+                    <SummaryCard label="平均收益" value={summary ? formatPct(summary.avg_return_pct) : '未记录'} />
+                  </div>
+                  <div>
+                    <p className="mb-3 font-medium text-slate-950">分市场状态表现</p>
+                    <RegimeMetricsTable metrics={regimeMetrics} productMode />
+                  </div>
+                  <div>
+                    <p className="mb-3 font-medium text-slate-950">规则适用表现</p>
+                    <RuleRegimeBreakdown ruleMetrics={ruleMetrics} productMode />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <EmptyState title="暂无回测结果" description="当前范围没有已保存结果，不会用空集合或成功状态代替。" />
+        )}
+      </div>
+    );
+  }
 
   return (
     <main className="page-stack">

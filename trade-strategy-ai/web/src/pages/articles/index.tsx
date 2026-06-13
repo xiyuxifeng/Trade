@@ -1,4 +1,7 @@
 export {
+  ArticleListPage as ArticleLibraryPage,
+  ArticleResultsPage as ArticleExtractionResultsPage,
+  ArticleRunPage as ArticleAddPage,
   ArticleListPage,
   ArticleQualityPage,
   ArticleResultsPage,

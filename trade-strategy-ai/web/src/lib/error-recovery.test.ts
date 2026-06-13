@@ -9,7 +9,7 @@ describe('buildErrorRecoveryState', () => {
     expect(state.category).toBe('permission denied');
     expect(state.retryable).toBe(false);
     expect(state.actions.some((action) => action.to === '/profiles')).toBe(true);
-    expect(state.actions.some((action) => action.to === '/dashboard')).toBe(true);
+    expect(state.actions.some((action) => action.to === '/')).toBe(true);
   });
 
   it('maps artifact missing errors to artifact and job recovery paths', () => {

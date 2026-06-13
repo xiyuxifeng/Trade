@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, waitFor } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { Outlet, RouterProvider, createMemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { AuthProvider } from '@/features/auth/auth-context';
@@ -85,7 +85,7 @@ describe('router authentication and authorization', () => {
     });
   });
 
-  it('redirects viewer system entry to status and blocks admin subroutes', async () => {
+  it('keeps viewer on an admin route and explains the permission boundary', async () => {
     const testRoutes = authenticatedRoutes.map((route) => {
       if (route.path === '/system/status') {
         return { ...route, element: <div>系统状态</div> };
@@ -109,7 +109,7 @@ describe('router authentication and authorization', () => {
       },
     );
 
-    renderRouter(
+    const view = renderRouter(
       <RouterProvider router={router} future={{ v7_startTransition: true }} />,
       {
         role: 'viewer',
@@ -119,17 +119,10 @@ describe('router authentication and authorization', () => {
       },
     );
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/system/status'));
-
-    await act(async () => {
-      await router.navigate('/system');
-    });
-    await waitFor(() => expect(router.state.location.pathname).toBe('/system/status'));
-
-    await act(async () => {
-      await router.navigate('/system/status');
-    });
-    expect(router.state.location.pathname).toBe('/system/status');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/system/audit'));
+    expect(await view.findByRole('heading', { name: '当前账号无权访问' })).toBeInTheDocument();
+    expect(view.getAllByText('此页面仅向管理员开放。')).toHaveLength(2);
+    expect(view.getByRole('link', { name: '返回系统状态' })).toHaveAttribute('href', '/system/status');
   });
 
   for (const role of ['viewer', 'operator'] as const) {
@@ -196,7 +189,7 @@ describe('router authentication and authorization', () => {
       authenticatedPrincipal('viewer'),
     );
 
-    await waitFor(() => expect(view.getByRole('heading', { name: '系统状态入口迁移中' })).toBeInTheDocument());
+    await waitFor(() => expect(view.getByRole('heading', { level: 1, name: '系统状态' })).toBeInTheDocument());
     expect(view.queryByRole('heading', { name: '页面未找到' })).not.toBeInTheDocument();
   });
 });

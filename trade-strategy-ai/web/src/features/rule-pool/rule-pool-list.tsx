@@ -134,7 +134,7 @@ function FilterSelect({
   );
 }
 
-export function RulePoolListPage() {
+export function RulePoolListPage({ productMode = false }: { productMode?: boolean } = {}) {
   const navigate = useNavigate();
   const [draftFilters, setDraftFilters] = useState<RulePoolQuery>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<RulePoolQuery>(DEFAULT_FILTERS);
@@ -200,11 +200,13 @@ export function RulePoolListPage() {
 
   return (
     <main className="page-stack">
-      <PageHeader
-        kicker="正式入口"
-        title="规则池审核中心"
-        description="查看规则列表、回测证据与审核入口，并在规则详情页完成审核和回测操作。"
-      />
+      {!productMode ? (
+        <PageHeader
+          kicker="正式入口"
+          title="规则池审核中心"
+          description="查看规则列表、回测证据与审核入口，并在规则详情页完成审核和回测操作。"
+        />
+      ) : null}
 
       <SectionCard
         title="规则筛选"

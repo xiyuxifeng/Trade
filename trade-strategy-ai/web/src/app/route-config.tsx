@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { Link, Navigate, matchPath } from 'react-router-dom';
+import { Navigate, matchPath } from 'react-router-dom';
 import type { PrincipalRole } from '@/types/auth';
+import type { PageAvailability } from '@/components/layout/business-page-shell';
+import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import {
   ArticleListPage,
   ArticleQualityPage,
@@ -9,10 +11,12 @@ import {
 } from '@/pages/articles';
 import { AlertsPage } from '@/pages/alerts';
 import { ArtifactDetailPage, ArtifactsPage } from '@/pages/artifacts';
+import { AuthorsPage } from '@/pages/authors';
 import { BacktestPage } from '@/pages/backtest';
 import { CandidatesPage as BacktestCandidatesPage } from '@/pages/backtest/CandidatesPage';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { DashboardPage } from '@/pages/dashboard';
+import { DailyAfterClosePage, DailyOverviewPage, DailyPreMarketPage } from '@/pages/daily';
 import { JobsPage } from '@/pages/jobs';
 import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { LoginPage } from '@/pages/login';
@@ -27,8 +31,30 @@ import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
 import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
 import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
 import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
+import {
+  ResearchAddPage,
+  ResearchArticlesPage,
+  ResearchResultsPage,
+} from '@/pages/research';
 import { RulePoolDetailPage, RulePoolPage } from '@/pages/rule-pool';
-import { AfterClosePage, PreMarketPage } from '@/pages/strategies';
+import {
+  AfterClosePage,
+  PreMarketPage,
+  StrategyCandidatesPage,
+  StrategyOverviewPage,
+} from '@/pages/strategies';
+import {
+  RulesBacktestsPage,
+  RulesLibraryPage,
+  RulesResultsPage,
+  RulesReviewPage,
+} from '@/pages/rules';
+import {
+  SystemConfigurationPage,
+  SystemDataPage,
+  SystemRunsPage,
+  SystemStatusPage,
+} from '@/pages/system';
 import { AuditPage } from '@/pages/system/AuditPage';
 import { BackupPage } from '@/pages/system/BackupPage';
 import { DatabaseMigrationPage } from '@/pages/system/DatabaseMigrationPage';
@@ -58,6 +84,8 @@ export type ProductRoute = {
   minRole?: PrincipalRole;
   visibleInNavigation?: boolean;
   legacy?: LegacyRouteMetadata;
+  renderMode?: 'page' | 'redirect';
+  renderWithAvailability?: (availability: PageAvailability) => ReactNode;
 };
 
 export type NavigationItem = {
@@ -161,35 +189,6 @@ function NotFoundPage() {
   );
 }
 
-function MigrationEntry({
-  title,
-  purpose,
-  legacyPath,
-  parentPath,
-  parentLabel,
-}: {
-  title: string;
-  purpose: string;
-  legacyPath: string;
-  parentPath: string;
-  parentLabel: string;
-}) {
-  return (
-    <main className="page-stack">
-      <section className="page-card">
-        <p className="page-kicker">入口迁移中</p>
-        <h1>{title}入口迁移中</h1>
-        <p>{purpose}</p>
-        <p>当前真实能力仍在兼容入口中，本页面仅说明正式入口位置，不代表业务能力已经迁移完成。</p>
-        <div className="flex flex-wrap gap-3">
-          <Link to={legacyPath}>前往当前可用入口</Link>
-          <Link to={parentPath}>返回{parentLabel}</Link>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 export const routeConfig: ProductRoute[] = [
   {
     id: 'login',
@@ -218,6 +217,7 @@ export const routeConfig: ProductRoute[] = [
     label: '研究中心',
     description: '导入文章、查看文章并处理规则提取结果。',
     element: redirect('/research/articles'),
+    renderMode: 'redirect',
     primary: true,
   },
   {
@@ -226,15 +226,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/research/articles',
     label: '文章库',
     description: '查看已导入文章及其处理状态。',
-    element: (
-      <MigrationEntry
-        title="文章库"
-        purpose="文章库用于查看已导入文章及其处理状态。"
-        legacyPath="/articles/list"
-        parentPath="/research"
-        parentLabel="研究中心"
-      />
-    ),
+    element: <ResearchArticlesPage />,
+    renderWithAvailability: (availability) => <ResearchArticlesPage availability={availability} />,
     parentId: 'research',
   },
   {
@@ -243,15 +236,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/research/add',
     label: '添加文章',
     description: '导入文章并启动现有结构化处理流程。',
-    element: (
-      <MigrationEntry
-        title="添加文章"
-        purpose="添加文章用于导入内容并进入后续结构化处理。"
-        legacyPath="/articles/run"
-        parentPath="/research"
-        parentLabel="研究中心"
-      />
-    ),
+    element: <ResearchAddPage />,
+    renderWithAvailability: (availability) => <ResearchAddPage availability={availability} />,
     parentId: 'research',
   },
   {
@@ -260,15 +246,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/research/results',
     label: '提取结果',
     description: '查看文章结构化和规则提取结果。',
-    element: (
-      <MigrationEntry
-        title="提取结果"
-        purpose="提取结果用于查看文章结构化和候选规则结果。"
-        legacyPath="/articles/results"
-        parentPath="/research"
-        parentLabel="研究中心"
-      />
-    ),
+    element: <ResearchResultsPage />,
+    renderWithAvailability: (availability) => <ResearchResultsPage availability={availability} />,
     parentId: 'research',
   },
   {
@@ -278,6 +257,7 @@ export const routeConfig: ProductRoute[] = [
     label: '规则与回测',
     description: '审核规则、运行回测并查看验证结果。',
     element: redirect('/rules/review'),
+    renderMode: 'redirect',
     primary: true,
   },
   {
@@ -286,15 +266,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/rules/review',
     label: '待审核规则',
     description: '审核从文章中提取的候选规则。',
-    element: (
-      <MigrationEntry
-        title="待审核规则"
-        purpose="待审核规则用于确认候选规则是否可以进入正式规则流程。"
-        legacyPath="/rule-pool"
-        parentPath="/rules"
-        parentLabel="规则与回测"
-      />
-    ),
+    element: <RulesReviewPage />,
+    renderWithAvailability: (availability) => <RulesReviewPage availability={availability} />,
     parentId: 'rules',
   },
   {
@@ -303,15 +276,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/rules/library',
     label: '正式规则',
     description: '查看当前规则库和规则详情。',
-    element: (
-      <MigrationEntry
-        title="正式规则"
-        purpose="正式规则用于查看通过审核和验证的规则版本。"
-        legacyPath="/rule-pool"
-        parentPath="/rules"
-        parentLabel="规则与回测"
-      />
-    ),
+    element: <RulesLibraryPage />,
+    renderWithAvailability: (availability) => <RulesLibraryPage availability={availability} />,
     parentId: 'rules',
   },
   {
@@ -320,15 +286,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/rules/backtests',
     label: '回测实验',
     description: '使用现有真实能力创建和查看回测。',
-    element: (
-      <MigrationEntry
-        title="回测实验"
-        purpose="回测实验用于验证规则在固定历史数据上的表现。"
-        legacyPath="/backtest"
-        parentPath="/rules"
-        parentLabel="规则与回测"
-      />
-    ),
+    element: <RulesBacktestsPage />,
+    renderWithAvailability: (availability) => <RulesBacktestsPage availability={availability} />,
     parentId: 'rules',
   },
   {
@@ -337,15 +296,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/rules/results',
     label: '回测结果',
     description: '查看全周期和分市场状态回测结果。',
-    element: (
-      <MigrationEntry
-        title="回测结果"
-        purpose="回测结果用于查看全周期和分市场状态验证结果。"
-        legacyPath="/backtest/regime"
-        parentPath="/rules"
-        parentLabel="规则与回测"
-      />
-    ),
+    element: <RulesResultsPage />,
+    renderWithAvailability: (availability) => <RulesResultsPage availability={availability} />,
     parentId: 'rules',
   },
   {
@@ -354,15 +306,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/authors',
     label: '作者画像',
     description: '查看作者文章方法与现有画像证据。',
-    element: (
-      <MigrationEntry
-        title="作者画像"
-        purpose="作者画像用于汇总文章表达的方法、规则证据和后续验证结果。"
-        legacyPath="/persona"
-        parentPath="/"
-        parentLabel="首页"
-      />
-    ),
+    element: <AuthorsPage />,
+    renderWithAvailability: (availability) => <AuthorsPage availability={availability} />,
     primary: true,
   },
   {
@@ -371,15 +316,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/strategies',
     label: '策略中心',
     description: '查看策略候选版本和当前策略能力。',
-    element: (
-      <MigrationEntry
-        title="策略中心"
-        purpose="策略中心后续用于创建、验证、发布和回滚正式策略版本。"
-        legacyPath="/backtest/candidates"
-        parentPath="/"
-        parentLabel="首页"
-      />
-    ),
+    element: <StrategyOverviewPage />,
+    renderWithAvailability: (availability) => <StrategyOverviewPage availability={availability} />,
     primary: true,
     legacy: legacy(
       '/strategies',
@@ -395,15 +333,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/strategies/candidates',
     label: '候选版本',
     description: '查看现有真实策略候选版本。',
-    element: (
-      <MigrationEntry
-        title="候选版本"
-        purpose="候选版本用于查看尚未发布的策略草稿和调整建议。"
-        legacyPath="/backtest/candidates"
-        parentPath="/strategies"
-        parentLabel="策略中心"
-      />
-    ),
+    element: <StrategyCandidatesPage />,
+    renderWithAvailability: (availability) => <StrategyCandidatesPage availability={availability} />,
     parentId: 'strategies',
   },
   {
@@ -413,6 +344,7 @@ export const routeConfig: ProductRoute[] = [
     label: '每日交易',
     description: '查看今日总览、盘前计划和盘后复盘。',
     element: redirect('/daily/overview'),
+    renderMode: 'redirect',
     primary: true,
   },
   {
@@ -421,15 +353,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/daily/overview',
     label: '今日总览',
     description: '查看每日交易当前状态和可执行入口。',
-    element: (
-      <MigrationEntry
-        title="今日总览"
-        purpose="今日总览后续用于汇总盘前准备、盘中关注和盘后复盘状态。"
-        legacyPath="/strategies/pre-market"
-        parentPath="/daily"
-        parentLabel="每日交易"
-      />
-    ),
+    element: <DailyOverviewPage />,
+    renderWithAvailability: (availability) => <DailyOverviewPage availability={availability} />,
     parentId: 'daily',
   },
   {
@@ -438,15 +363,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/daily/pre-market',
     label: '今日盘前',
     description: '使用现有真实能力生成和查看盘前分析。',
-    element: (
-      <MigrationEntry
-        title="今日盘前"
-        purpose="今日盘前后续用于生成、检查和批准当日交易计划。"
-        legacyPath="/strategies/pre-market"
-        parentPath="/daily"
-        parentLabel="每日交易"
-      />
-    ),
+    element: <DailyPreMarketPage />,
+    renderWithAvailability: (availability) => <DailyPreMarketPage availability={availability} />,
     parentId: 'daily',
   },
   {
@@ -455,15 +373,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/daily/after-close',
     label: '今日盘后',
     description: '使用现有真实能力执行和查看盘后复盘。',
-    element: (
-      <MigrationEntry
-        title="今日盘后"
-        purpose="今日盘后后续用于复盘当日结果并形成独立优化建议。"
-        legacyPath="/strategies/after-close"
-        parentPath="/daily"
-        parentLabel="每日交易"
-      />
-    ),
+    element: <DailyAfterClosePage />,
+    renderWithAvailability: (availability) => <DailyAfterClosePage availability={availability} />,
     parentId: 'daily',
   },
   {
@@ -473,6 +384,7 @@ export const routeConfig: ProductRoute[] = [
     label: '系统管理',
     description: '查看系统状态并管理数据、配置和权限。',
     element: redirect('/system/status'),
+    renderMode: 'redirect',
     primary: true,
     legacy: legacy('/system/status', 'redirect', '长期保留', RETIREMENT.system, false),
   },
@@ -482,15 +394,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/system/status',
     label: '系统状态',
     description: '查看系统运行状态和关键依赖。',
-    element: (
-      <MigrationEntry
-        title="系统状态"
-        purpose="系统状态用于查看服务、数据和运行依赖是否可用。"
-        legacyPath="/system/health"
-        parentPath="/system"
-        parentLabel="系统管理"
-      />
-    ),
+    element: <SystemStatusPage />,
+    renderWithAvailability: (availability) => <SystemStatusPage availability={availability} />,
     parentId: 'system',
   },
   {
@@ -499,15 +404,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/system/configuration',
     label: '配置管理',
     description: '管理系统运行所需配置。',
-    element: (
-      <MigrationEntry
-        title="配置管理"
-        purpose="配置管理用于维护系统运行需要的受控配置。"
-        legacyPath="/profiles"
-        parentPath="/system"
-        parentLabel="系统管理"
-      />
-    ),
+    element: <SystemConfigurationPage />,
+    renderWithAvailability: (availability) => <SystemConfigurationPage availability={availability} />,
     parentId: 'system',
   },
   {
@@ -516,15 +414,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/system/data',
     label: '数据管理',
     description: '查看市场数据状态和维护入口。',
-    element: (
-      <MigrationEntry
-        title="数据管理"
-        purpose="数据管理用于检查、补齐和维护研究与回测所需数据。"
-        legacyPath="/market"
-        parentPath="/system"
-        parentLabel="系统管理"
-      />
-    ),
+    element: <SystemDataPage />,
+    renderWithAvailability: (availability) => <SystemDataPage availability={availability} />,
     parentId: 'system',
   },
   {
@@ -533,15 +424,8 @@ export const routeConfig: ProductRoute[] = [
     path: '/system/runs',
     label: '运行与告警',
     description: '查看系统运行记录和失败原因。',
-    element: (
-      <MigrationEntry
-        title="运行与告警"
-        purpose="运行与告警用于查看业务运行状态、失败影响和处理入口。"
-        legacyPath="/jobs"
-        parentPath="/system"
-        parentLabel="系统管理"
-      />
-    ),
+    element: <SystemRunsPage />,
+    renderWithAvailability: (availability) => <SystemRunsPage availability={availability} />,
     parentId: 'system',
   },
   {
@@ -551,6 +435,7 @@ export const routeConfig: ProductRoute[] = [
     label: '首页旧入口',
     description: '旧首页入口已迁移到产品首页。',
     element: redirect('/'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/', 'redirect', 'Stage 1', RETIREMENT.dashboard),
   },
@@ -641,6 +526,7 @@ export const routeConfig: ProductRoute[] = [
     label: '盘前流程旧入口',
     description: '旧盘前流程入口已迁移。',
     element: redirect('/daily/pre-market'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/daily/pre-market', 'redirect', 'Stage 9', RETIREMENT.strategy),
   },
@@ -651,6 +537,7 @@ export const routeConfig: ProductRoute[] = [
     label: '盘前执行旧入口',
     description: '旧盘前执行入口已迁移。',
     element: redirect('/daily/pre-market'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/daily/pre-market', 'redirect', 'Stage 9', RETIREMENT.strategy),
   },
@@ -661,6 +548,7 @@ export const routeConfig: ProductRoute[] = [
     label: '盘后流程旧入口',
     description: '旧盘后流程入口已迁移。',
     element: redirect('/daily/after-close'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/daily/after-close', 'redirect', 'Stage 10', RETIREMENT.strategy),
   },
@@ -671,6 +559,7 @@ export const routeConfig: ProductRoute[] = [
     label: '盘后执行旧入口',
     description: '旧盘后执行入口已迁移。',
     element: redirect('/daily/after-close'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/daily/after-close', 'redirect', 'Stage 10', RETIREMENT.strategy),
   },
@@ -691,6 +580,7 @@ export const routeConfig: ProductRoute[] = [
     label: '研究中心旧入口',
     description: '旧文章入口已迁移到研究中心。',
     element: redirect('/research/articles'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/research/articles', 'redirect', 'Stage 1', RETIREMENT.research),
   },
@@ -957,6 +847,7 @@ export const routeConfig: ProductRoute[] = [
     label: '系统管理旧入口',
     description: '旧管理入口已迁移到系统管理。',
     element: redirect('/system/status'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/system/status', 'redirect', 'Stage 12', RETIREMENT.redirects),
   },
@@ -967,6 +858,7 @@ export const routeConfig: ProductRoute[] = [
     label: '审计旧入口',
     description: '旧审计入口已迁移。',
     element: redirect('/system/audit'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/system/audit', 'redirect', 'Stage 12', RETIREMENT.redirects),
   },
@@ -977,6 +869,7 @@ export const routeConfig: ProductRoute[] = [
     label: '恢复旧入口',
     description: '旧恢复入口已迁移到备份恢复。',
     element: redirect('/system/backup'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/system/backup', 'redirect', 'Stage 12', RETIREMENT.redirects),
   },
@@ -987,6 +880,7 @@ export const routeConfig: ProductRoute[] = [
     label: '配置旧入口',
     description: '旧配置入口已迁移到系统管理。',
     element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
     legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
@@ -1017,6 +911,31 @@ export const primaryNavigation = routeConfig
 
 export const canonicalRoutes = routeConfig.filter((route) => route.kind === 'canonical');
 export const compatibilityRoutes = routeConfig.filter((route) => route.kind === 'compat');
+
+export function renderRouteWithAvailability(route: ProductRoute, availability: PageAvailability) {
+  if (route.renderMode === 'redirect') {
+    return null;
+  }
+  if (route.renderWithAvailability) {
+    return route.renderWithAvailability(availability);
+  }
+
+  const nextPath = route.legacy?.targetPath && route.legacy.targetPath !== '*'
+    ? route.legacy.targetPath
+    : '/';
+
+  return (
+    <ProductPageAdapter
+      title={route.label}
+      queryState={availability}
+      purpose={route.description}
+      inputDescription="输入来自当前页面连接的真实业务记录。"
+      processingDescription="系统按当前可用性展示处理状态，不用默认值替代缺失事实。"
+      outputDescription="输出只展示已经确认的结果；不可用内容会明确说明影响。"
+      businessAction={{ label: nextPath === '/' ? '返回首页' : '前往正式入口', to: nextPath }}
+    />
+  );
+}
 
 export function getSectionNavigation(parentId: string) {
   return routeConfig

@@ -141,6 +141,53 @@ class _FakeDashboardService:
         )
 
 
+@dataclass
+class _FakeHomeDashboardService:
+    async def build_summary(self, *, profile_id: str | None, failed_runs: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "status": "ok",
+            "business_date": "2026-06-10",
+            "is_trading_day": True,
+            "latest_trading_day": "2026-06-10",
+            "business_status": {
+                "pending_rules": {
+                    "status": "ready",
+                    "value": 3,
+                    "label": "有 3 条规则待审核",
+                    "detail": "审核后才能进入正式规则库。",
+                    "source": "rule_pool",
+                    "updated_at": None,
+                    "target_path": "/rules/review",
+                    "unavailable_reason": None,
+                }
+            },
+            "next_action": {
+                "id": "review_rules",
+                "label": "审核候选规则",
+                "target_path": "/rules/review",
+            },
+        }
+
+
+@dataclass
+class _FailingHomeDashboardService:
+    async def build_summary(self, *, profile_id: str | None, failed_runs: list[dict[str, Any]]) -> dict[str, Any]:
+        raise RuntimeError("home facts unavailable")
+
+
+class _FailedJobQueryService(_FakeJobService):
+    async def list_jobs(self, *, status=None, job_type=None, created_by=None, skip=0, limit=50) -> ServiceResult:
+        if status == "failed":
+            return ServiceResult(status="error", message="failed jobs unavailable", payload={})
+        return await super().list_jobs(
+            status=status,
+            job_type=job_type,
+            created_by=created_by,
+            skip=skip,
+            limit=limit,
+        )
+
+
 @pytest.mark.asyncio
 async def test_build_dashboard_summary_combines_health_jobs_freshness_and_alerts() -> None:
     """系统 Dashboard 汇总应聚合健康、任务、新鲜度和告警信息。"""
@@ -150,6 +197,7 @@ async def test_build_dashboard_summary_combines_health_jobs_freshness_and_alerts
         health_service=_FakeHealthService(),
         job_service=_FakeJobService(),
         dashboard_service=_FakeDashboardService(),
+        home_dashboard_service=_FakeHomeDashboardService(),
     )
 
     result = await service.build_dashboard_summary()
@@ -163,3 +211,65 @@ async def test_build_dashboard_summary_combines_health_jobs_freshness_and_alerts
     assert result.payload["alerts"]["critical"] == 1
     assert result.payload["traces"][0]["request_context"]["path"] == "/api/ui/v1/jobs"
     assert result.payload["traces"][0]["request_context"]["client_host"] == "127.0.0.1"
+    assert result.payload["business_date"] == "2026-06-10"
+    assert result.payload["business_status"]["pending_rules"]["value"] == 3
+
+
+@pytest.mark.asyncio
+async def test_build_dashboard_summary_preserves_unavailable_business_states_when_home_facts_fail() -> None:
+    from src.services.system_service import SystemService
+
+    service = SystemService(
+        health_service=_FakeHealthService(),
+        job_service=_FakeJobService(),
+        dashboard_service=_FakeDashboardService(),
+        home_dashboard_service=_FailingHomeDashboardService(),
+    )
+
+    result = await service.build_dashboard_summary()
+
+    assert result.status == "partial"
+    assert len(result.payload["business_status"]) == 9
+    assert result.payload["business_status"]["pending_rules"]["status"] == "unavailable"
+    assert result.payload["business_status"]["pending_rules"]["value"] is None
+
+
+@pytest.mark.asyncio
+async def test_build_dashboard_summary_does_not_report_zero_failed_runs_when_query_fails() -> None:
+    from src.services.home_dashboard_service import HomeDashboardService
+    from src.services.system_service import SystemService
+
+    service = SystemService(
+        health_service=_FakeHealthService(),
+        job_service=_FailedJobQueryService(),
+        dashboard_service=_FakeDashboardService(),
+        home_dashboard_service=HomeDashboardService(
+            calendar=object(),
+            status_source=type(
+                "_StatusSource",
+                (),
+                {
+                    "load": staticmethod(
+                        lambda **_: {
+                            "data_readiness": {
+                                "status": "ready",
+                                "value": True,
+                                "label": "今日数据已就绪",
+                                "detail": "数据状态已确认。",
+                                "source": "test",
+                                "updated_at": None,
+                                "target_path": "/system/data",
+                                "unavailable_reason": None,
+                            }
+                        }
+                    )
+                },
+            )(),
+        ),
+    )
+
+    result = await service.build_dashboard_summary()
+
+    assert result.status == "partial"
+    assert result.payload["business_status"]["failed_runs"]["status"] == "unavailable"
+    assert result.payload["business_status"]["failed_runs"]["value"] is None

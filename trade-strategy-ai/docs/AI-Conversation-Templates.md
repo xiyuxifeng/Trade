@@ -1,8 +1,8 @@
 # Trade Strategy AI 重构对话模板与模型执行指南
 
-> 建议作为仓库中的唯一 AI 执行入口。  
-> 建议最终路径：`trade-strategy-ai/docs/AI-Conversation-Templates.md`  
-> 适用范围：`Trade-Refactor-TaskList.md` 的 Stage 2～Stage 12  
+> 建议作为仓库中的唯一 AI 执行入口。
+> 建议最终路径：`trade-strategy-ai/docs/AI-Conversation-Templates.md`
+> 适用范围：`Trade-Refactor-TaskList.md` 的 Stage 2～Stage 12
 > 当前状态依据：Stage 0、Stage 1 已完成；当前下一步为 `RT-S2-001`
 
 ---

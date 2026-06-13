@@ -52,6 +52,21 @@ docs/refactor-implementation-logs/README.md
 5. 新 Stage 开始时创建 `docs/refactor-implementation-logs/stage-<n>.md`。
 6. Stage Gate 完成后，在 Stage 日志追加最终验收，并同步主实施日志。
 
+如果旧 Prompt 或历史文档只写了：
+
+```text
+Update Refactor-Implementation-Log.md
+```
+
+必须按本文件解释为：
+
+```text
+详细实施、Review 和验证记录 → 当前 stage-<n>.md
+当前状态、阻塞项、下一步和索引 → Refactor-Implementation-Log.md
+```
+
+不得继续把全部详细历史追加到主实施日志。
+
 ## 状态权威性
 
 - `docs/Trade-Refactor-TaskList.md`：Task 定义、顺序和正式验收条件的权威来源。

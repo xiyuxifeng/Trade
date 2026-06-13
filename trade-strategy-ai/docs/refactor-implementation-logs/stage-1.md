@@ -3,15 +3,15 @@
 ## Stage 摘要
 
 - Stage：`Stage 1 产品信息架构与统一页面框架`
-- 当前状态：`[-] 进行中`
+- 当前状态：`[x] 已完成`
 - Task：`RT-S1-001`、`RT-S1-002`、`RT-S1-003`
 - 代码与机械验收：已完成 Parent Review，未发现剩余代码 BLOCKER 或 required HIGH。
-- 当前阻塞：缺少桌面 `1440×900`、移动 `390×844` 的真实浏览器视觉、交互和控制台证据。
-- 下一步：补齐浏览器验收后重新执行 Stage 1 Gate 接受判断；在此之前不得进入 Stage 2。
+- UI 验收：用户已完成检查并确认当前 UI 可接受。
+- 最终结论：Stage 1 已满足当前以功能实现和基本可用性为主的出口条件，允许进入 Stage 2。
 
 ## RT-S1-001 重构导航和路由
 
-- 状态：任务实现已通过；Stage 级状态仍为 `[-]`。
+- 状态：`[x] 已完成并接受`。
 - 修改范围：
   - 新增集中路由配置及测试。
   - Router、Sidebar、导航导出和 Route Registry 从集中配置派生。
@@ -26,13 +26,12 @@
   - 受影响测试 9 个文件、46 个测试通过。
   - 完整前端测试 77 个文件、218 个测试通过。
   - typecheck、lint、build、`git diff --check` 通过。
-- 当时未完成：统一页面体验、首页改造和浏览器视觉验收。
 
 ## RT-S1-002 建立统一页面体验
 
 ### Session A：共享框架和布局
 
-- 状态：完成实现，任务保持 `[-]`。
+- 状态：完成实现。
 - 新增：`BusinessPageShell`、`SectionNav`、`CompatibilityNotice`、`ProductPageAdapter` 及测试。
 - `DashboardLayout` 使用集中路由元数据和二级导航。
 - `StatusStrip` 删除无业务价值的路径参数。
@@ -73,7 +72,7 @@
   - 受控接入现有分市场状态结果组件。
   - 非 `ready`/`partial` 状态不再显示主要业务动作。
 - 验证摘要：19 个文件、109 个测试通过；typecheck 和 `git diff --check` 通过。
-- 结论：仍有 BLOCKER 和 required HIGH，不允许进入 `RT-S1-003`。
+- 结论：当时仍有 BLOCKER 和 required HIGH，不允许进入 `RT-S1-003`。
 
 ### Parent 复审问题修复
 
@@ -91,11 +90,11 @@
 - 验证摘要：
   - 最终聚焦测试 19 个文件、113 个测试通过。
   - typecheck 和 `git diff --check` 通过。
-- 结论：原 BLOCKER、required HIGH 和 MEDIUM 已修复；从代码阻断角度允许进入 `RT-S1-003`，但 Stage Gate 尚未满足。
+- 结论：原 BLOCKER、required HIGH 和 MEDIUM 已修复；允许进入 `RT-S1-003`。
 
 ## RT-S1-003 首页改造
 
-- 状态：实现和 Parent Review 已通过；Stage 级状态仍为 `[-]`。
+- 状态：`[x] 已完成并接受`。
 - 委派：零子代理。首页聚合事实、API 契约和状态优先级相互依赖，由 Parent 直接实现。
 - 修改范围：
   - 新增只读 `HomeDashboardService`，聚合已保存市场快照、盘前盘后运行、规则池、已发布策略、市场状态和失败运行。
@@ -113,11 +112,11 @@
   - 后端聚焦测试 `10 passed`。
   - 前端 11 个文件、31 个测试通过。
   - typecheck 和 `git diff --check` 通过。
-- 结论：代码范围、增量 API 契约、真实首页状态和聚焦回归通过；Stage Gate 尚未完成。
+- 结论：代码范围、增量 API 契约、真实首页状态和聚焦回归通过。
 
 ## Stage 1 Parent 总验收
 
-- 状态：`[-] 进行中`
+- 状态：`[x] 已完成并接受`
 - 委派：零子代理；最终接受判断由 Parent 完成。
 - Parent 修复：
   - 失败运行查询失败不再转换为空列表，首页改为真实 `unavailable`。
@@ -140,16 +139,18 @@
   - Web E2E：1 passed。
   - `git diff --check` 通过。
   - 静态门禁确认 `/dashboard` 生产引用仅存在于集中兼容配置；无迁移、Prompt 或 Stage 2 文件变更。
-- 未完成项：
-  - 桌面 `1440×900` 和移动 `390×844` 的真实视觉与交互验收。
-  - 浏览器控制台无 React 错误、资源错误和请求循环的证据。
+- 用户 UI 验收：
+  - 用户已完成 Stage 1 UI 检查，并明确确认当前 UI 可接受。
+  - 当前重构以功能实现和基本可用性为主；视觉一致性和非关键响应式细节转入 UI backlog。
+  - 未发现会阻止页面或核心流程使用的 UI 问题。
 - 残余风险：
-  - React Router v7 future flag warning。
-  - 后端存在既有异步数据库连接清理 RuntimeWarning。
-  - 仓库级后端全量测试曾在 11 分钟后中止；定向修复后的相关套件已通过，但不能声称仓库后端全量通过。
+  - React Router v7 future flag warning，非阻塞。
+  - 后端存在既有异步数据库连接清理 RuntimeWarning，非阻塞。
+  - 仓库级后端全量测试曾在 11 分钟后中止；定向修复后的相关套件已通过，不能声称仓库后端全量通过。
   - 工作区存在用户已有的 `.codex/config.toml`、AI 模板和运行时文件差异。
 - 最终验收结论：
   - 已清除代码 BLOCKER 和 required HIGH。
-  - 因缺少真实 Browser 视觉、交互和控制台证据，Stage 1 尚未满足全部出口条件。
-  - `RT-S1-001`、`RT-S1-002`、`RT-S1-003` 的 Stage 级状态保持 `[-]`。
-  - 不允许进入 Stage 2。
+  - 功能、契约、自动验证、基本可用性和用户 UI 检查满足 Stage 1 当前出口条件。
+  - `RT-S1-001`、`RT-S1-002`、`RT-S1-003` 标记为 `[x]`。
+  - Stage 1 标记为 `[x]`。
+  - 允许进入 Stage 2。

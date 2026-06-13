@@ -1,427 +1,79 @@
-# Trade Strategy AI 重构实施记录
+# Trade Strategy AI 重构实施状态
 
-## RT-S0-001 现状审计
+本文件只保存当前状态、Task 索引、阻塞项、下一步和 Stage 日志链接。
 
-- Task ID：`RT-S0-001`
-- 状态：`[x] 已完成`
-- 修改范围：新增现状审计文档；未修改核心业务代码、数据库和 Prompt。
-- 关键设计决定：
-  - 以当前代码注册关系、ORM、迁移和 Prompt 加载点为事实，不沿用历史审计结论。
-  - 将 JobService、市场数据模型、回测 snapshot-only 原则和运行审计列为可复用基础。
-  - 将前端多入口、API 重复端点、Prompt 双链、画像多模型和策略按日建模列为主要重构风险。
-  - 主 TaskList 与较早重构方案的 Stage 0 定义不一致时，按主 TaskList 只执行审计，不实施导航改造。
-- 数据库迁移：无。
-- 兼容处理：本轮仅记录现有 legacy 与兼容入口，不改变行为。
-- 已运行测试：
-  - Alembic heads 检查。
-  - FastAPI 实际路由注册清单加载。
-  - JobDefinition、WorkflowDefinition、PipelineSpec 注册清单加载。
-  - SQLAlchemy metadata 表清单加载。
-  - 文档路径、绝对路径和 Git diff 检查。
-- 测试结果：
-  - Alembic 单一 head：`2026_06_03_0001`。
-  - FastAPI 注册 163 个路由。
-  - 注册 33 个 JobDefinition、2 个 WorkflowDefinition、4 个 Runtime Bridge PipelineSpec；另有 1 个未注册的 `market_data` PipelineSpec。
-  - 源码声明 40 张 ORM 表；迁移环境和运行时导入范围并不完全一致。
-- 未完成项：未连接生产数据库统计实际数据量和质量；该项进入 Stage 2 数据迁移盘点。
-- 已知风险：
-  - 本地 Python 启动时出现受沙箱限制的 CPU/sysctl 警告，不影响注册清单输出。
-  - 当前工作区已有用户未提交修改，本任务未覆盖。
-- 验收结论：现状审计覆盖 TaskList 要求，可作为后续 Stage 的代码事实基线。
+详细历史记录位于：
 
-## RT-S0-002 迁移矩阵
+```text
+trade-strategy-ai/docs/refactor-implementation-logs/
+```
 
-- Task ID：`RT-S0-002`
-- 状态：`[x] 已完成`
-- 修改范围：新增迁移矩阵文档；未修改核心业务代码、数据库和 Prompt。
-- 关键设计决定：
-  - 所有旧前端入口都必须映射到业务新入口或系统管理。
-  - Jobs、Workflows、Artifacts 只保留为运行底座或高级详情，不继续作为普通用户主导航。
-  - 迁移矩阵按主 TaskList Stage 指定兼容截止点，Stage 12 统一完成旧入口退役。
-  - 任何兼容层必须满足统一退役门禁，禁止长期形成第二套正式事实源。
-- 数据库迁移：无；已列出 Stage 2 需要执行的数据迁移对象和验证方法。
-- 兼容处理：定义旧路由、API、Schema、Prompt 和文件事实源的兼容期限与退役条件。
-- 已运行测试：
-  - 迁移矩阵覆盖检查。
-  - 文档绝对路径检查。
-  - Markdown 基础结构检查。
-  - Git diff 检查。
-- 测试结果：迁移矩阵覆盖现有能力、前端入口、API、Schema、Prompt、数据和执行定义。
-- 未完成项：后续 Stage 尚未实施，本任务没有开始 Stage 1。
-- 已知风险：具体数据迁移量和异常数据类型需在 Stage 2 基于实际数据库生成迁移报告。
-- 验收结论：迁移矩阵已明确处置、新入口、保留 Stage、最终删除与退役条件，满足 RT-S0-002 验收。
+日志管理规则见：
 
-## Stage 0 严格 Review
+- [重构实施日志管理规则](refactor-implementation-logs/README.md)
 
-- Task ID：`RT-S0-001`、`RT-S0-002`
-- 状态：`[x] 已完成`
-- 修改范围：复核并修正现状审计、迁移矩阵和实施记录；未修改核心业务代码、数据库、Prompt 或运行行为。
-- 关键设计决定：
-  - `docs/bak` 不作为事实依据；所有结论必须由当前注册代码、运行时装配、ORM 声明、迁移和调用点确认。
-  - 区分实际注册入口、源码中未注册 legacy、迁移遗留对象，避免把“文件存在”误判为正式能力。
-  - 将前端路由更正为 49 条记录，将 Prompt 文件更正为 19 个，并补充硬编码分类 Prompt。
-  - 将数据库口径更正为源码声明 40 张 ORM 表，并记录迁移环境未导入全部 ORM、迁移存在无 ORM 历史表的风险。
-  - 将调度口径扩展为 CLI、Pipeline、文章、规则回测、OHLCV、Kaipan 六类并存实现。
-  - 为全部注册 API 家族、33 个 Job、2 个 Workflow、5 个 Pipeline 和六类调度入口补充目标与退役条件。
-- 数据库迁移：无。
-- 兼容处理：仅补充兼容对象、目标入口和退役门禁，不改变现有兼容行为。
-- 已运行测试：
-  - FastAPI `app.routes` 全量加载与 endpoint 模块归属检查。
-  - 前端 `router.tsx` 路由记录计数及逐项覆盖检查。
-  - 全源码 `__tablename__` 清单与 SQLAlchemy metadata 导入检查。
-  - Alembic migration env、create/drop table 和 head 检查。
-  - JobDefinition runnable 清单、WorkflowDefinition、Runtime Bridge 和孤立 PipelineSpec 检查。
-  - Prompt 文件计数、生产 Prompt 加载点和硬编码 Prompt 搜索。
-  - APScheduler/BlockingScheduler 全源码搜索。
-  - API Router 注册/未注册对照和前端孤立实现引用检查。
-  - 文档绝对路径、Markdown 结构、迁移矩阵覆盖和 Git diff 检查。
-- 测试结果：
-  - FastAPI 163 条注册路由全部可归属到注册模块。
-  - 前端 49 条路由记录均有目标入口；通配 404 已补入矩阵。
-  - 33 个 Job、2 个 Workflow、4 个已注册 Pipeline 和 1 个孤立 Pipeline 均已列入矩阵。
-  - 19 个 Prompt 文件及 1 个硬编码分类 Prompt 均已列入审计和迁移矩阵。
-  - 未发现本轮修改核心业务代码。
-- 未完成项：未连接实际部署数据库核对迁移遗留表和数据量；该项已明确进入 Stage 2，不阻塞 Stage 0 的代码现状审计。
-- 已知风险：
-  - Alembic migration env 未导入全部 ORM，后续迁移前必须先修复并测试 autogenerate 范围。
-  - 调度器多为进程内状态，统一前可能重复启动或状态漂移。
-  - 未注册 legacy 模块仍可能被脚本或未来误注册，删除前必须做引用和部署检查。
-  - 回测所有调用路径是否绝对禁止实时 Provider 尚需 Stage 6 运行测试证明，本审计不再把该结论写成已验证事实。
-- 验收结论：Stage 0 的任务级验收已满足，可以进入 Stage 1；本次 Review 未开始 Stage 1。Stage 1 开始后仍必须独立满足其出口条件。
+## 当前状态
 
-## RT-S1-001 重构导航和路由
+- 当前 Stage：`Stage 1 产品信息架构与统一页面框架`
+- Stage 状态：`[-] 进行中`
+- 当前 Task：`Stage 1 Gate 补充浏览器视觉、交互与控制台证据`
+- 下一步：在可用 Browser 环境中完成桌面 `1440×900`、移动 `390×844` 的视觉与交互验收，并检查控制台 React 错误、资源错误和请求循环；随后重新执行 Stage 1 最终接受判断。
+- 是否允许进入 Stage 2：**否**。
 
-- Task ID：`RT-S1-001`
-- 状态：`[x] 已完成`
-- 修改范围：
-  - 新增前端集中路由配置及其测试。
-  - Router、Sidebar、导航导出和 Route Registry 改为从集中配置派生。
-  - 增加认证返回路径和路由级权限测试。
-  - 将共享导航外壳中的英文品牌、菜单、角色和路由路径改为普通用户可理解的中文表达。
-  - 修正一条在既有错误归一化逻辑更新后未同步的回测测试断言；未修改回测业务实现。
-- 关键设计决定：
-  - 七个正式一级入口固定为首页、研究中心、规则与回测、作者画像、策略中心、每日交易、系统管理。
-  - 49 条 Stage 0 审计路径全部在同一配置中显式标记为 `canonical` 或 `compat`，并记录目标入口、兼容模式、保留 Stage 和退役条件。
-  - `/dashboard` 和 `/articles` 使用兼容重定向；仍承载真实能力的历史深链继续保留，不在主导航展示。
-  - Stage 1 尚未迁移完成的正式子入口只展示真实迁移说明、当前可用入口和返回路径，不挂载工程表单，不使用 Mock 冒充业务完成。
-  - `/` 继续渲染现有真实首页；首页业务重构留给 `RT-S1-003`。
-  - 系统状态、配置、数据和运行概览允许已认证用户查看；审计、用户、数据库迁移和备份恢复继续由管理员权限保护。
-  - 未认证访问保留 pathname、query 和 hash，登录后只恢复经过内部路径校验的地址，拒绝外部返回地址。
-- 数据库迁移：无。
-- 兼容处理：
-  - 保留迁移矩阵要求继续存在的历史路由和动态深链。
-  - 普通用户主导航不再出现 Job、Workflow、Artifact、Pipeline、Provider、Schema 或 CLI。
-  - 历史入口在共享状态条中标记为“历史入口”，不展示内部路径。
-- 已运行测试：
-  - `pnpm test -- src/components/layout/sidebar.test.tsx src/components/layout/status-strip.test.tsx src/components/layout/topbar.test.tsx src/app/route-config.test.tsx src/app/router-auth.test.tsx src/app/navigation.test.ts src/app/route-registry.test.ts src/pages/login/index.test.tsx src/features/backtest/backtest-center.test.tsx`
-  - `pnpm typecheck`
-  - `pnpm lint`
-  - `pnpm build`
-  - `pnpm test`
-  - `git diff --check`
-  - 主导航开发术语静态搜索。
-- 测试结果：
-  - 受影响测试 9 个文件、46 个测试全部通过。
-  - 完整前端测试 77 个文件、218 个测试全部通过。
-  - TypeScript、ESLint、Vite 生产构建和 Git whitespace 检查通过。
-  - 本地 Vite 服务启动成功。
-- 未完成项：
-  - `RT-S1-002` 统一页面体验未开始。
-  - `RT-S1-003` 首页改造未开始。
-  - 当前会话没有可用的应用内浏览器，未执行桌面和移动端视觉点击验收。
-- 已知风险：
-  - 新正式子入口当前是迁移说明页；后续必须在原正式路径内完成业务适配，不能长期停留为说明页。
-  - 兼容页面内部仍存在 Job、Artifact、旧路径和工程参数；它们只能通过历史深链访问，并需按迁移矩阵在后续 Stage 收口。
-  - 桌面和移动端实际视觉布局仍需在具备浏览器环境时补充人工验收。
-- 验收结论：`RT-S1-001` 的导航、集中路由、兼容映射、权限、中文命名和未完成页面说明要求已满足，可以标记任务级完成。Stage 1 尚未完成，不开始 `RT-S1-002`、`RT-S1-003` 或后续 Stage。
+## 当前阻塞项
 
-## RT-S1-002 建立统一页面体验
+- `BLOCKER`：缺少桌面和移动端实际 Browser 视觉、交互证据。
+- `BLOCKER`：缺少浏览器控制台无 React 错误、资源错误和请求循环的证据。
 
-- Task ID：`RT-S1-002`
-- 状态：`[-] 进行中`
-- 本次范围：Session A，仅实现共享页面框架和共享布局；未装配全部领域页面。
-- 修改范围：
-  - 新增 `BusinessPageShell`、`SectionNav`、`CompatibilityNotice`、`ProductPageAdapter` 及组件测试。
-  - `DashboardLayout` 直接使用集中路由配置提供页面元数据，并按 `parentId` 接入二级导航。
-  - `StatusStrip` 删除无业务价值的路径参数。
-  - 路由权限不足时保留原访问路径并显示明确的无权限原因、影响和返回动作，不再静默跳转。
-- 关键设计决定：
-  - `PageAvailability` 固定为 `ready`、`loading`、`empty`、`error`、`partial`、`permission_denied`、`unavailable`。
-  - 页面框架固定表达页面用途、输入、处理状态、输出和下一步；当前步骤、前置条件、帮助和管理员详情按需显示。
-  - `ProductPageAdapter` 只接收业务状态、业务动作和真实结果；技术详情默认折叠，并明确标记为管理员内容。
-  - `SectionNav` 只从 `route-config.tsx` 派生，并使用同一配置中的最低权限过滤入口。
-  - 兼容提示只消费集中路由配置中的目标入口、保留阶段和退役条件，不建立第二套兼容事实源。
-- 数据库迁移：无。
-- 兼容处理：
-  - 本次未删除或重定向新的历史入口。
-  - 新增兼容提示组件，但历史领域页面的逐页装配留给 Session B。
-- 已运行测试：
-  - 共享组件定向测试：`pnpm test -- src/components/layout/business-page-shell.test.tsx src/components/layout/section-nav.test.tsx src/components/layout/compatibility-notice.test.tsx src/components/layout/product-page-adapter.test.tsx src/components/layout/sidebar.test.tsx src/components/layout/status-strip.test.tsx`
-  - 权限和布局组合测试。
-  - `pnpm typecheck`
-  - `pnpm lint`
-  - `pnpm build`
-  - `pnpm test`
-  - `git diff --check`
-- 测试结果：
-  - 共享组件定向测试：6 个文件、22 个测试通过。
-  - 权限和布局组合测试：8 个文件、46 个测试通过。
-  - 完整前端测试：82 个文件、239 个测试通过。
-  - TypeScript、ESLint 和 Vite 生产构建通过；构建转换 1788 个模块。
-  - 应用内 Browser 当前不可用，未完成桌面和移动端实际视觉验收。
-- 未完成项：
-  - Session B 尚未把全部正式领域页面接入 `ProductPageAdapter` 和 `BusinessPageShell`。
-  - 七个一级入口、正式二级入口、历史兼容页、参数化详情页和系统管理页的五项信息与六类状态覆盖矩阵尚未完成。
-  - 历史入口的逐页兼容提示和真实业务结果装配尚未完成。
-  - 桌面和移动端视觉验收尚未完成。
-- 已知风险：
-  - 新共享组件尚未在全部领域页面使用，当前不能据此判定统一页面体验已经覆盖主流程。
-  - React Router 测试仍输出 v7 future flag 警告，不影响本次测试结果。
-  - 工作区存在本任务范围外的未提交改动，本次未覆盖或回退。
-- 验收结论：Session A 的共享框架和共享布局已形成并通过机械验证，但 `RT-S1-002` 的逐页装配、状态矩阵和视觉验收尚未完成，任务保持 `[-] 进行中`。未开始 `RT-S1-003` 或 Stage 2。
+代码、定向回归、前端全量测试、typecheck、lint、build、受影响后端套件、OpenAPI 合同、Web E2E 和静态迁移门禁已通过当前 Stage 的 Parent Review；但不能替代真实 Browser Gate。
 
-### Session B：正式领域页面装配
+## Task 状态
 
-- Task ID：`RT-S1-002`
-- 状态：`[-] 进行中`
-- 本次范围：装配研究、规则与回测、作者画像、策略、每日交易和适用系统页面；未修改首页，未开始 `RT-S1-003` 或 Stage 2。
-- 委派：
-  - 使用 2 个边界独立的 `refactor_executor_mini`，角色配置固定为 `gpt-5.4-mini`、中等推理。
-  - 研究 Executor 只负责研究正式页、文章旧页产品模式和 scoped tests。
-  - 每日交易 Executor 只负责每日正式页、盘前/盘后旧页产品模式和 scoped tests。
-  - Parent 保留 `route-config.tsx`、共享公共契约、规则/作者/策略/系统页面、跨域测试、补丁复核和最终验收。
-  - Parent 复核后修正了每日页面的不可达 `partial` 状态、盘后正式页残留的“强制”和内部结果字段，以及 Executor 测试 lint 问题。
-- 修改范围：
-  - `route-config.tsx` 继续作为路由、导航、权限、元数据和兼容信息的单一事实源；17 个 canonical 子页面由迁移说明替换为正式页面组件。
-  - 研究中心复用真实文章列表、导入、提取结果查询和版本选择动作，并通过 `productMode` 隐藏工程参数和技术导航。
-  - 待审核规则、正式规则、回测实验和回测结果接入统一页面契约；未迁移的分市场状态结果明确标记为 `unavailable`。
-  - 作者画像和策略中心明确说明正式三层画像及 `StrategyVersion` 尚未建立，不展示虚构数量或发布状态。
-  - 今日总览、今日盘前和今日盘后复用真实查询、提交动作和结果组件；正式模式不要求访问 `/jobs`、`/workflows`、`/artifacts` 或 `/market/*`。
-  - 系统状态复用现有状态查询；配置、数据和运行页面按当前真实迁移边界标记 `partial` 或 `unavailable`。
-  - 兼容路径和默认旧页面行为继续保留，未删除历史深链。
-- 关键设计决定：
-  - 正式页面继续使用 `PageAvailability` 七态，并固定表达页面用途、输入、处理状态、输出和下一步。
-  - 旧领域组件只通过可选产品模式隐藏工程参数、改写业务导航和提升真实状态；默认模式不变。
-  - 无法把旧组件状态完整提升到包装层的页面保守标记为 `partial`，未迁移能力标记为 `unavailable`，不冒充 `ready`。
-  - 缺失基准选项只允许显示“默认基准，其他选项暂不可用”，不得伪装为完整可用选项。
-- 数据库迁移：无。
-- 兼容处理：
-  - 保留 `/articles/*`、`/rule-pool`、`/backtest*`、`/persona`、`/strategies/*`、`/profiles`、`/jobs`、`/workflows`、`/artifacts` 和 `/market*` 的既有兼容定义。
-  - 正式旅程只使用 `/research/*`、`/rules/*`、`/authors`、`/strategies*` 和 `/daily/*`。
-- 已运行测试：
-  - 指定定向测试：`pnpm test -- src/pages/product-entry-pages.test.tsx src/pages/product-page-state-matrix.test.tsx src/app/product-journey.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/articles/index.test.tsx src/pages/rule-pool/index.test.tsx src/pages/backtest/index.test.tsx src/pages/strategies/lifecycle.test.tsx src/pages/system/index.test.tsx`
-  - `pnpm typecheck`
-  - `pnpm lint`
-  - `pnpm build`
-  - `pnpm test`
-  - `git diff --check`
-- 测试结果：
-  - 指定定向测试：9 个文件、45 个测试通过。
-  - TypeScript 类型检查通过。
-  - ESLint 通过。
-  - Vite 生产构建通过，转换 1797 个模块。
-  - 完整前端测试：87 个文件、268 个测试通过。
-  - Git whitespace 检查通过。
-  - 测试仍输出 React Router v7 future flag 警告，不影响通过结果。
-- 视觉验证：
-  - 本地 Vite 服务已成功启动在 `http://localhost:5173/`。
-  - 应用内 Browser 明确返回不可用，未完成桌面和移动端视觉验证；未使用该缺失证据宣称通过。
-- 未完成项：
-  - `RT-S1-003` 首页改造未开始。
-  - Stage 1 共享视觉验收、完整 E2E、迁移门禁和最终工作区检查未完成。
-  - 历史兼容页逐页退役和后续领域模型迁移不在本 Session 范围。
-- 已知风险：
-  - 作者、规则、策略和系统部分页面仍通过折叠管理员区承载旧真实组件；普通业务区不展示工程参数，但后续需要继续收敛管理员详情。
-  - 研究正式导入页仍会在后台读取旧链路定义，但正式页面不展示内部步骤和参数。
-  - 今日总览使用前端本地日期；后续如建立统一业务日期源需再迁移。
-  - 桌面和移动端实际布局尚无 Browser 证据。
-- 验收结论：Session B 自检时认为正式业务旅程的路由接线、真实能力复用、兼容保留和机械回归已通过；后续 Parent 严格审查发现正式规则、作者、策略、回测结果和系统页面仍未向普通用户提供安全的真实业务能力，并且逐页状态矩阵未按实施计划从集中路由配置派生。该结论已被下方 Parent 复审覆盖，`RT-S1-002` 继续保持 `[-] 进行中`，不得开始 `RT-S1-003` 或 Stage 2。
+| Task | 当前状态 | 实施结论 | 详细记录 |
+| --- | --- | --- | --- |
+| RT-S0-001 | `[x]` | 现状审计已接受 | [Stage 0](refactor-implementation-logs/stage-0.md) |
+| RT-S0-002 | `[x]` | 迁移矩阵已接受 | [Stage 0](refactor-implementation-logs/stage-0.md) |
+| RT-S1-001 | `[-]` | Task 实现通过，等待 Stage 1 Browser Gate | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S1-002 | `[-]` | BLOCKER/HIGH 已修复，等待 Stage 1 Browser Gate | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S1-003 | `[-]` | 首页实现与聚焦回归通过，等待 Stage 1 Browser Gate | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S2-001 | `[ ]` | 未开始；Stage 1 通过前不得启动 | 尚未创建 Stage 2 日志 |
 
-### Parent 严格复审与有限修复
+## Stage 状态
 
-- Task ID：`RT-S1-002`
-- 状态：`[-] 进行中`
-- 审查范围：仅审查 Session A/B 当前工作区实现、完整差异和 RT-S1-002 定向测试；未开始 `RT-S1-003` 或 Stage 2。
-- 委派：零子代理。最终验收必须由 Parent 完成，本次审查与有限修复不存在可独立交付且能降低风险的子任务。
-- 已确认事项：
-  - `route-config.tsx` 仍是路由、导航、权限、页面元数据和兼容信息的单一事实源；未发现新增重复路由配置、Service 或 API。
-  - 正式研究页和每日交易页已连接现有真实查询与动作；兼容路径继续保留。
-  - 当前差异未包含 `RT-S1-003` 首页聚合 Service 或 Stage 2 领域模型、数据库、迁移和 Prompt 变更。
-- 审查发现：
-  - `HIGH`：`ProductPageAdapter` 原先只折叠管理员技术详情，没有角色门槛，普通账号可以展开旧组件并看到工程术语、数据库名或内部路径。已修复为仅 `admin` 可渲染该区域。
-  - `HIGH`：每日总览和盘前页把空基准列表显示为默认基准并标记就绪，把无最近记录显示为等待中；盘后结果字段缺失时显示为零。已修复为空基准 `unavailable`、无记录“暂无记录”、缺失统计“未记录”，并按真实运行状态描述盘前数据整理。
-  - `HIGH`：`/rules/results` 没有装配实施计划指定的现有分市场状态结果组件。已接回现有组件，但只在管理员技术区显示，普通用户安全产品模式仍未完成。
-  - `BLOCKER`：规则审核、正式规则、回测实验、回测结果、作者画像、策略候选及适用系统页面的真实旧能力仅存在于管理员技术区，普通用户正式页面仍主要是静态边界说明，不能完成实施计划要求的真实业务操作。需要为旧组件拆分安全的 `product` 模式或复用其真实 Hook、动作和结果组件。
-  - `HIGH`：`product-page-state-matrix.test.tsx` 只验证一个通用 Adapter，没有从 `route-config.tsx` 派生所有实际渲染页面，也没有逐页覆盖正式页、兼容页、参数化详情、运行详情、系统页和中文 404。当前测试通过不能证明逐页六态验收通过。
-  - `MEDIUM`：盘后正式结果明细仍直接展示后端 `status`、`partial` 和 `fallback_reason` 值，可能出现英文或内部状态文本，需要补业务中文映射。
-- 有限修复：
-  - 为管理员技术详情增加 `admin` 权限门槛，并补普通用户不可见、管理员可见测试。
-  - 修正每日总览、盘前和盘后的空值、无记录、缺失统计及状态描述。
-  - 将现有分市场状态回测结果组件接入 `/rules/results` 的受控管理员区域。
-  - 非 `ready`、非 `partial` 状态不再展示主要业务动作，避免加载、错误、空、无权限或不可用时仍可提交。
-- 已运行测试：
-  - 首次新增断言红灯：3 个文件、24 个测试中 21 通过、3 失败，分别命中未授权技术详情、空基准/无记录伪装和回测结果未接真实组件。
-  - 修复后集中定向测试：19 个文件、109 个测试全部通过。
-  - `pnpm typecheck`
-  - `git diff --check`
-- 测试结果：
-  - 集中定向测试：19 个文件、109 个测试通过。
-  - TypeScript 类型检查通过。
-  - Git whitespace 检查通过。
-  - 测试继续输出 React Router v7 future flag 警告，不影响通过结果。
-  - 按本次审查预算未重复执行完整 `pnpm test`、完整 lint、build、E2E 或广泛视觉检查。
-- 视觉验证：本次审查未执行桌面或移动端视觉验证；Session A/B 也没有可接受的 Browser 视觉证据。
-- 未完成项：
-  - 为规则、回测结果、作者、策略和系统正式页面实现普通用户安全的真实能力装配。
-  - 从集中路由配置派生逐页状态矩阵，并覆盖实施计划列出的全部实际渲染页面和六类非就绪状态。
-  - 将盘后结果中的后端状态和降级原因映射为业务中文。
-  - Stage 1 共享视觉、完整回归、E2E、迁移门禁和最终工作区检查。
-- 已知风险：
-  - 现有定向测试主要证明共享框架和部分领域页行为，不能证明普通用户已经能在全部正式页面完成业务操作。
-  - 工作区仍包含本任务范围外的 `.codex/config.toml` 修改、文档删除和 `.pids` 运行时文件，本次未修改或回退。
-- 验收结论：存在一个 `BLOCKER` 和一个未解决的 `HIGH`，`RT-S1-002` 不满足 Session A/B 最终验收，必须保持 `[-] 进行中`。`RT-S1-003` 不允许开始，Stage 2 未开始。
+| Stage | 状态 | 结论 | 详细记录 |
+| --- | --- | --- | --- |
+| Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
+| Stage 1 | `[-]` | 代码门禁通过，Browser Gate 阻塞 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
+| Stage 2 | `[ ]` | 未开始 | Stage 1 通过后创建 `stage-2.md` |
 
-### Parent 复审问题修复
+## Stage 1 已验证证据摘要
 
-- Task ID：`RT-S1-002`
-- 状态：`[-] 进行中`
-- 委派：零子代理。本次修复涉及集中路由公共契约、跨领域产品模式和最终 Parent 复核，拆分会增加契约漂移风险，未选择 Executor 或 Explorer。
-- 修改范围：
-  - 为规则列表、回测实验、分市场状态结果、作者画像、策略候选和系统状态增加普通用户安全的产品模式，复用现有查询、动作和结果，不复制领域逻辑。
-  - 正式规则、作者、策略和系统页面把真实产品模式组件放入业务结果区，不再只放在管理员技术详情中。
-  - 系统配置、数据新鲜度、失败处理和告警摘要接入现有真实接口；缺失或失败时明确显示不可用，不伪装为空或成功。
-  - 分市场状态结果产品模式隐藏内部版本、技术报告和运行详情，统一使用“市场状态”；作者画像产品模式隐藏规则文件、内部字段、操作符、优先级和来源路径。
-  - 盘后结果状态、部分数据和降级原因映射为业务中文。
-  - `route-config.tsx` 增加页面/重定向渲染分类和统一状态投影入口；状态矩阵继续从集中配置派生，并覆盖正式页、兼容页、参数化详情、运行详情、系统页和中文 404，纯重定向路由排除。
-  - 系统配置校验状态和策略版本说明改为业务中文。
-- 关键设计决定：
-  - `route-config.tsx` 继续是路由、导航、权限、元数据、兼容信息和状态矩阵页面清单的唯一事实源。
-  - 兼容组件默认行为不变；只有显式 `productMode` 隐藏工程参数并提供正式业务展示。
-  - 所有非就绪状态继续使用 `PageAvailability`，不把不可用数据转换为零、空集合或成功。
-- 数据库迁移：无。
-- 兼容处理：
-  - 历史路径和默认兼容页面全部保留。
-  - 未修改 Prompt、数据库模型、迁移或 Stage 2 领域契约。
-- 已运行测试：
-  - 首次修复红灯：3 个文件、26 个测试中 16 个通过、10 个失败，命中未接产品模式、状态矩阵不足和盘后英文状态。
-  - 中间回归：3 个文件、27 个测试全部通过。
-  - 扩展状态矩阵后定向回归首次为 3 个文件、31 个测试中 30 个通过、1 个失败；失败是测试仍要求显示英文 `StrategyVersion`，实现已改为业务中文。
-  - 最终 RT-S1-002 聚焦测试：19 个文件、113 个测试全部通过。
-  - `pnpm typecheck`
-  - `git diff --check`
-- 测试结果：
-  - 最终聚焦测试 `19/19` 文件、`113/113` 测试通过。
-  - TypeScript 类型检查通过。
-  - Git whitespace 检查通过。
-  - 测试输出 React Router v7 future flag 警告，不影响测试结果。
-  - 按 Parent 复审预算未重复执行完整 `pnpm test`、完整 lint、build、E2E 或广泛视觉检查。
-- 视觉验证：未执行。本次没有新的桌面或移动端 Browser 证据，不据此声明视觉验收通过。
-- 未完成项：
-  - Stage 1 桌面和移动端共享视觉验收。
-  - 完整前端回归、lint、生产构建和 E2E。
-  - Stage 1 迁移门禁与最终工作区检查。
-- 已知风险：
-  - 状态矩阵对尚未逐页迁入统一壳的兼容和详情页面使用集中路由状态投影；它验证统一状态契约和路由覆盖，但不替代后续真实浏览器逐页视觉验收。
-  - 工作区仍包含本任务范围外的 `.codex/config.toml` 修改、文档删除和 `.pids` 运行时文件，本次未修改或回退。
-- 验收结论：原 Parent 复审记录中的 `BLOCKER`、必需 `HIGH` 和 `MEDIUM` 已修复，未发现新的阻断性 RT-S1-002 缺陷。`RT-S1-002` 因共享 Stage 1 视觉、完整回归、E2E、迁移门禁和最终工作区检查尚未完成，继续保持 `[-] 进行中`。本次未启动 `RT-S1-003` 或 Stage 2；从代码阻断角度可进入 `RT-S1-003`，但仍必须遵守后续会话的明确范围和门禁。
+- 前端全量：`90/90` 个文件、`283/283` 个测试通过。
+- TypeScript、ESLint、Vite 生产构建通过。
+- 后端受影响套件：`25 passed`；存在 2 条既有异步连接清理 warning。
+- 系统状态定向：`4 passed`。
+- app factory、唯一入口和 OpenAPI：`5 passed`。
+- Web 静态/API 路由优先级：`3 passed`。
+- Web E2E：`1 passed`。
+- `git diff --check` 通过。
+- `/dashboard` 生产引用仅保留在集中兼容配置。
+- 未新增数据库迁移、Prompt 或 Stage 2 领域对象。
 
-## RT-S1-003 首页改造
+以上摘要不表示仓库后端全量测试已通过。仓库级后端全量测试曾中止，相关 Stage 1 失败已通过定向套件修复和复验。
 
-- Task ID：`RT-S1-003`
-- 状态：`[-] 进行中`
-- 委派：零子代理。任务风险为 M2，但首页聚合事实、API 增量契约、状态优先级和主操作相互依赖，拆分写集会增加事实源和契约漂移风险，Parent 直接实现并完成最终审查。
-- 修改范围：
-  - 新增只读 `HomeDashboardService`，从已保存市场快照、盘前盘后运行、规则池、已发布策略、市场状态和既有失败运行聚合首页业务状态。
-  - 复用现有 `/api/ui/v1/system/dashboard`，保留全部运维字段并增量加入业务日期、交易日上下文、九项业务状态和下一步主操作。
-  - 新增首页 Query Hook、三级首页组件和正式首页页面，替换旧快捷入口、最近运行和产物工作台。
-  - 首页固定展示日期与市场状态、一个主操作、九项业务状态、真实待办和从文章到盘后的完整流程。
-  - 画像建议和策略建议在没有正式事实源时明确标记不可用，不返回零。
-  - 聚合或单项事实源失败时返回 `unavailable` 和影响说明，不转换为空集合、false、零或成功。
-  - 交易日历只读取已保存文件，不调用实时 Provider；非交易日不生成盘前待办，数据状态使用最近交易日快照。
-  - 市场状态内部标签映射为业务中文。
-  - 清理集中兼容路由之外的 `/dashboard` 生产返回路径，改为 `/`、`/authors`、`/daily` 或 `/strategies`。
-- 关键设计决定：
-  - 首页业务状态不建立第二个 API 或前端缓存事实源，继续复用 `system-dashboard` Query Key。
-  - 主操作优先级固定为补齐数据、今日盘前、最近盘后、规则审核、失败处理、查看今日状态。
-  - 失败运行数量直接复用 `SystemService` 已查询结果，不重复访问数据库。
-  - 当前无正式画像建议和策略建议模型，因此保持 unavailable，未创建 Stage 2 对象或迁移。
-- 数据库迁移：无。
-- 兼容处理：
-  - `/dashboard` 继续只在 `route-config.tsx` 作为历史兼容重定向存在。
-  - 现有 `/system/dashboard` 运维消费者继续获得原字段。
-- 已运行测试：
-  - TDD 红灯：后端因 `home_dashboard_service` 不存在而收集失败；前端因首页模块不存在而两个套件失败。
-  - 异常回退红灯：系统聚合异常时业务状态数量为 0，期望 9。
-  - 旧首页路径红灯：错误恢复仍返回 `/dashboard`。
-  - 市场状态中文红灯：`format_market_state_label` 尚不存在。
-  - 最终后端聚焦测试：`python -m pytest tests/unit/services/test_home_dashboard_service.py tests/unit/services/test_system_service_dashboard.py tests/unit/services/test_config_system_service.py tests/api/routers/ui/test_ui_system_dashboard.py -q`
-  - 最终前端聚焦及直接回归：11 个测试文件。
-  - `pnpm typecheck`
-  - `git diff --check`
-- 测试结果：
-  - 后端：`10 passed`。
-  - 前端：`11/11` 文件、`31/31` 测试通过。
-  - TypeScript 类型检查通过。
-  - Git whitespace 检查通过。
-  - React Router v7 future flag 警告仍存在，不影响通过结果。
-- 未完成项：
-  - Stage 1 全量前后端回归、lint、生产构建和 E2E。
-  - 桌面 1440×900 与移动 390×844 的共享视觉验收。
-  - Stage 1 迁移门禁和最终工作区检查。
-- 已知风险：
-  - 已保存交易日历缺失时首页会诚实降级为 partial；本 Task 不允许在线刷新日历。
-  - 盘前盘后状态继续读取 Stage 9/10 前的兼容运行记录，并在状态说明中标记来源。
-  - 工作区仍包含本 Task 范围外的已有修改和运行时文件，本次未回退。
-- 验收结论：RT-S1-003 的代码范围、增量 API 契约、真实首页状态和聚焦回归已通过 Parent 审查，未发现阻断性缺陷。由于共享 Stage 1 全量回归、E2E、视觉、迁移门禁和最终工作区检查尚未执行，任务保持 `[-] 进行中`，不得开始 Stage 2。
+## 当前残余风险
 
-## Stage 1 Parent 总验收
+- React Router v7 future flag warning 尚未治理。
+- 后端存在既有异步数据库连接清理 RuntimeWarning。
+- 工作区可能仍包含用户已有的 `.codex/config.toml`、AI 模板和运行时文件差异；后续操作不得擅自覆盖或回退。
 
-- Stage：`Stage 1 产品信息架构与统一页面框架`
-- 状态：`[-] 进行中`
-- 审查角色：Parent 独立完成最终审查与接受判断；零子代理。Stage 级路由、事实源、兼容、测试和视觉门禁相互关联，委派不会降低最终验收风险。
-- 审查范围：
-  - 对照 Stage 1 权威要求、实施计划、RT-S1-001 至 RT-S1-003 实施记录、当前完整差异和实际运行证据。
-  - 检查集中路由、49 条历史路径、正式业务旅程、权限、页面七态、首页真实事实、兼容 API、开发术语隔离、迁移范围和工作区污染。
-- Parent 发现与修复：
-  - `HIGH`：失败运行查询失败时，`SystemService` 把不可用事实转换为空列表，首页会显示“暂无失败运行”。已把失败查询向首页聚合传递为不可用，状态固定为 `unavailable`、值为 `None`，并补服务级回归测试。
-  - `BLOCKER`：仓库 Web 验收运行器要求的 `web/src/e2e/web-acceptance.test.tsx` 不存在，E2E 因 “No test files found” 失败。已新增 Stage 1 Web 验收入口，覆盖七个业务导航、正式业务旅程、技术工作台兼容隔离和 49 条历史路径。
-  - `HIGH`：既有 `settings_router` 已实现并有 API 测试，但未注册到统一 FastAPI 应用，OpenAPI 兼容门禁缺少 `/api/ui/v1/settings/*`。已在 `api/app.py` 注册现有 Router；未新增 API、Schema 或配置行为。
-  - `HIGH`：既有 `/run/pre_market` 和 `/run/after_close` 兼容 Router 未注册到统一 FastAPI 应用，关键入口合同失败。已恢复现有 `run.router` 注册，没有修改运行行为。
-  - `HIGH`：系统状态接口在运行密钥缺失时直接返回 400，无法向首页和系统页提供 truthful partial/unavailable 状态。已在运行配置解析失败时返回结构化 `partial`，数据库标记 `unavailable`、目录为 `None`，并隐藏具体密钥名称。
-  - `BLOCKER`：应用内 Browser 运行时返回不可用，无法取得桌面 `1440×900` 和移动 `390×844` 的实际视觉、交互及控制台证据。该项没有可接受的替代证据，未修复。
-- 关键契约复核：
-  - `route-config.tsx` 继续是路由、导航、权限、页面元数据、兼容信息和状态矩阵页面清单的单一事实源。
-  - 正式旅程为研究中心、待审核规则、回测实验、作者画像、策略中心、今日盘前、今日盘后，不经过 `/jobs`、`/workflows`、`/artifacts` 或 `/market/*`。
-  - 首页继续复用 `/api/ui/v1/system/dashboard` 和现有事实源；缺失事实不转换为 false、零、空集合或成功。
-  - 未新增数据库表、迁移、Prompt、第二套 Schema 或 Stage 2 领域对象。
-- 数据库迁移：无；当前 Stage 差异未修改数据库迁移目录。回滚仍为恢复前端路由/首页与移除 Dashboard 增量字段，不需要数据恢复。
-- 已运行测试与检查：
-  - 前端全量：`pnpm test`。
-  - 前端静态与构建：`pnpm typecheck`、`pnpm lint`、`pnpm build`。
-  - 后端受影响套件：首页聚合、系统 Dashboard、配置目录、Dashboard API、系统状态、OpenAPI 合同和设置 API。
-  - API 兼容回归：统一 app factory、唯一 API 入口、历史 `/run/*`、Web 静态与 API 路由优先级。
-  - Web E2E：`python -m pytest tests/e2e/test_web_acceptance.py -q`。
-  - 静态迁移门禁：开发术语、正式页面工程参数、`/dashboard` 生产引用、迁移/Prompt 文件差异。
-  - `git diff --check`、`git status --short` 和 Stage 差异统计。
-- 测试结果：
-  - 前端最终全量：`90/90` 个文件、`283/283` 个测试通过，耗时 `47.98s`；新增 E2E 测试已纳入全量套件。
-  - TypeScript、ESLint 退出 0；Vite 构建成功，转换 `1794` 个模块，耗时 `5.75s`。
-  - 后端最终受影响套件：`25 passed, 2 warnings in 7.86s`。警告为既有异步连接取消协程 RuntimeWarning。
-  - 系统状态定向回归：`4 passed in 6.38s`；有 1 条既有异步连接取消协程 RuntimeWarning。
-  - app factory、唯一入口和 OpenAPI：`5 passed in 9.01s`。
-  - Web 静态与 API 路由优先级在允许本地数据库访问后：`3 passed in 7.78s`。
-  - Web E2E：`1 passed in 7.22s`。
-  - `git diff --check` 退出 0。
-  - 静态门禁确认 `/dashboard` 生产引用仅在集中兼容配置；无迁移、Prompt 或 Stage 2 文件变更。
-- 未完成项：
-  - 桌面和移动端实际视觉与交互验收。
-  - 浏览器控制台无 React 错误、资源错误和请求循环的证据。
-- 已知风险：
-  - React Router 测试继续输出 v7 future flag 警告。
-  - 后端受影响套件存在 2 个异步数据库连接清理 RuntimeWarning，未导致测试失败，但需在后续独立运行时治理中追踪。
-  - 仓库级后端全量 `python -m pytest -q` 在修复前启动并运行 `11m05s` 后中止，停止时为 `140 passed, 1 skipped, 13 failed, 2 errors`。其中 settings、E2E 和 `/run/*` 注册失败已在后续定向测试中修复；其余失败涉及既有测试替身签名、缺失 `SignalVersioning` mock 目标和跨事件循环数据库连接，不属于 Stage 1 差异，不能据此声明仓库后端全量通过。
-  - 工作区仍包含用户已有的 `.codex/config.toml`、AI 会话模板修改/删除等 Stage 1 范围外差异，本次未修改或回退。
-- 验收结论：
-  - 已清除本次发现的代码 `BLOCKER` 和 required `HIGH`。
-  - 因桌面/移动视觉与控制台门禁没有实际 Browser 证据，Stage 1 不满足全部接受条件，RT-S1-001、RT-S1-002、RT-S1-003 的 Stage 级状态统一保持 `[-] 进行中`。
-  - 不允许开始下一 Stage；本次未启动 Stage 2。
+## 日志读取规则
+
+新 Session 或恢复任务时：
+
+1. 先读本文件。
+2. 只读当前 Stage 的详细日志：`refactor-implementation-logs/stage-1.md`。
+3. 再读当前 Task 文档、上游 handoff、当前 `git status` 和完整 diff。
+4. 不默认读取已完成 Stage 的详细日志。
+
+同一 Stage 延续时，只读取本文件变化、当前 Stage 日志新增条目和当前 Task 直接相关证据。

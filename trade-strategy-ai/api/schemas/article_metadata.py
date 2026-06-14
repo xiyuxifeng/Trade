@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.domain.contracts import ArticleStructureContract
+
 
 class ArticleMetadataCandidateResponse(BaseModel):
     """单篇文章的候选 metadata 版本摘要。"""
@@ -97,3 +99,25 @@ class ArticleMetadataSelectRequest(BaseModel):
     selected_schema_version: str
     selected_by: str = "web"
     selection_reason: str | None = None
+
+
+def build_article_metadata_candidate_response(contract: ArticleStructureContract) -> ArticleMetadataCandidateResponse:
+    """将 canonical ArticleStructure 兼容转换为旧 UI DTO。"""
+    return ArticleMetadataCandidateResponse(
+        schema_version=contract.schema_version,
+        score=0.0,
+        score_reasons=[contract.quality.reason] if contract.quality.reason else [],
+        processed_at=contract.audit.updated_at,
+        provider=contract.provenance.source_type,
+        model=contract.prompt_version,
+        article_type=None,
+        extraction_version=contract.schema_version,
+        sentiment_score=None,
+        confidence_score=None,
+        extracted_concepts_count=0,
+        trading_symbols_count=0,
+        strategy_rules_count=0,
+        preconditions_count=0,
+        comment_insights_count=0,
+        raw_llm_output_keys=0,
+    )

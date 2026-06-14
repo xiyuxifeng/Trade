@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.domain.contracts import MarketStateContract
+
 
 class MarketResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -338,6 +340,26 @@ class OhlcvSchedulerRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     profile_id: str | None = None
+
+
+def build_market_regime_summary(contract: MarketStateContract) -> MarketRegimeSummary:
+    """将 canonical MarketState 兼容转换为旧 UI DTO。"""
+    return MarketRegimeSummary(
+        regime_id=contract.reference.legacy_regime_id or str(contract.reference.market_state_id),
+        snapshot_id=contract.market_snapshot.legacy_snapshot_id,
+        trade_date=contract.market_snapshot.trade_date.isoformat(),
+        market=contract.market_snapshot.market,
+        regime_version=contract.reference.definition_version,
+        source_feature_version=contract.source_feature_version,
+        primary_label=contract.primary_label,
+        labels=[],
+        confidence=contract.confidence,
+        quality_status=contract.quality.status.value,
+        missing_reason=contract.quality.reason,
+        storage_ref={},
+        created_at=contract.audit.created_at.isoformat(),
+        updated_at=contract.audit.updated_at.isoformat(),
+    )
     base_dir: str
     pre_market: str
     post_close: str

@@ -6,8 +6,19 @@ from unittest.mock import AsyncMock
 import pytest
 
 
-def test_canonical_writer_flag_defaults_to_legacy_compatibility(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_canonical_writer_flag_defaults_to_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STAGE2_CANONICAL_WRITER_ENABLED", raising=False)
+    routing = importlib.import_module("src.common.stage2_writer_routing")
+
+    assert routing.canonical_writer_enabled() is True
+    with pytest.raises(routing.WriterRoutingError):
+        routing.require_canonical_write("market_snapshot", "test")
+    with pytest.raises(routing.WriterRoutingError):
+        routing.require_legacy_compatibility_write("rule", "test")
+
+
+def test_canonical_writer_flag_false_is_explicit_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STAGE2_CANONICAL_WRITER_ENABLED", "false")
     routing = importlib.import_module("src.common.stage2_writer_routing")
 
     assert routing.canonical_writer_enabled() is False

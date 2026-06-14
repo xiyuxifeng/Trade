@@ -16,8 +16,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 2 领域模型、数据库和版本契约`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S2-003 数据迁移` 尚未开始
-- 下一步：`RT-S2-002` 已接受；如用户明确继续，可开始 `RT-S2-003` 的迁移 preflight 和 bounded backfill 设计，但本 Session 不得自动开始。
+- 当前 Task：`RT-S2-003 数据迁移` 已接受；Stage 2 Gate 尚未开始
+- 下一步：如用户明确继续，可开始 `Stage 2 Gate`；本 Session 不自动启动 Gate，也不进入 Stage 3。
 - 是否允许进入 Stage 2：**是**。
 
 ## 当前阻塞项
@@ -25,7 +25,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 无 Stage 1 阻塞项。
 - `RT-S2-001` 已接受；Stage 2 进入实现中状态。
 - `RT-S2-002` 已通过 Parent Review 接受；不再阻塞后续 Stage 2 Task。
-- `RT-S2-003` 不再被 Schema / Alembic chain / rollback-recovery 门禁阻塞，但仍需用户明确开始该独立 Task。
+- `RT-S2-003` 已接受；当前无实现阻塞。
+- Stage 2 Gate 未执行，因此 Stage 2 仍保持 `[-]`，不得直接宣布整个 Stage 完成。
 
 ## Task 状态
 
@@ -38,7 +39,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S1-003 | `[x]` | 首页实现、聚焦回归和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
 | RT-S2-001 | `[x]` | canonical domain contracts、typed refs、lifecycle validator、legacy mapping 与 compatibility adapters 已接受；未改 DB/运行行为 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 | RT-S2-002 | `[x]` | metadata convergence、Stage 2 线性 migration chain、canonical repository foundation、compatibility views/adapters、backup coverage、isolated PostgreSQL rollback/re-upgrade/existing-data preservation 验证均已通过，Task 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-003 | `[ ]` | 允许开始，但本 Session 未执行 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-003 | `[x]` | legacy source inventory、dry-run/apply/verify、幂等复跑、isolated failure-resume、mapping/FK/compatibility evidence 与 Parent Review 均已通过，Task 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 状态
 
@@ -46,7 +47,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | --- | --- | --- | --- |
 | Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
-| Stage 2 | `[-]` | Bootstrap、RT-S2-001、RT-S2-002 已接受；Stage 未完成；如用户明确继续，可进入 RT-S2-003 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
+| Stage 2 | `[-]` | Bootstrap、RT-S2-001、RT-S2-002、RT-S2-003 均已接受；Stage Gate 尚未执行，因此 Stage 仍未完成 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 1 已接受证据摘要
 

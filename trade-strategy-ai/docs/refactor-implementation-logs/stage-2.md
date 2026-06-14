@@ -3,21 +3,21 @@
 ## Stage 摘要
 
 - Stage：`Stage 2 领域模型、数据库和版本契约`
-- 当前状态：`[ ] 未开始`
+- 当前状态：`[-] 进行中`
 - 入口条件：Stage 1 已接受，权威日志允许进入 Stage 2。
 - 出口条件：领域、ORM、数据库、API/DTO、迁移和 compatibility 合同一致；旧数据迁移可追溯、可重跑、可恢复；无第二套正式事实源。
 - 实施计划：`refactor-implementation-plans/stage-2-implementation-plan.md`
-- 下一 Task：`RT-S2-001 定义核心领域对象`
+- 下一 Task：`Stage 2 Gate`
 
 ## Bootstrap 记录
 
 ### 状态
 
 - Bootstrap 与合同冻结：已完成。
-- Stage 实现：未开始。
-- `RT-S2-001`：`[ ]`。
-- `RT-S2-002`：`[ ]`，等待 `RT-S2-001` 接受。
-- `RT-S2-003`：`[ ]`，等待 `RT-S2-002` 接受。
+- Stage 实现：进行中，Gate 未执行。
+- `RT-S2-001`：`[x]`。
+- `RT-S2-002`：`[x]`。
+- `RT-S2-003`：`[x]`。
 
 ### 委派
 
@@ -199,8 +199,203 @@
 
 ### RT-S2-003 数据迁移
 
-- 状态：`[ ] 未开始`
-- 阻塞：等待 `RT-S2-002` 目标 Schema、migration chain、rollback/recovery 接受。
+- 状态：`[x] 已接受`
+- 委派：`0` 个 subagent；迁移解释、legacy/canonical mapping、冲突边界、cutover/recovery、acceptance 决定均由 Parent 直接完成。
+- 入口与保护：
+  - 当前分支 `main`，执行开始前 `HEAD=27bf920a3f75a6cda726b65a1f9a36e6c21e64d8`。
+  - 开始前已复核 `RT-S2-001` / `RT-S2-002` 在当前仓库中均为 accepted。
+  - 已核对当前 git status、完整 diff、Alembic head、legacy 数据库事实、legacy 文件源、Jobs 与 reports。
+  - 实现开始时工作树无未提交用户改动；未覆盖或回退任何用户内容。
+- 预检与库存核验：
+  - Alembic head：`2026_06_14_0004`，单一 head，无 Schema 链改动。
+  - Bootstrap 数据库计数与预期一致：
+    - `raw_articles=131`
+    - `blog_articles=131`
+    - `article_metadata=262`
+    - `article_metadata_selections=7`
+    - `rule_pool=14`
+    - `ohlcv_bars=84`
+    - `backtest_result_runs=0`
+    - `market_snapshots=0`
+    - `market_regimes=0`
+    - `rule_applicability_profiles=0`
+    - `trader_strategy_versions=0`
+    - `trader_memory=0`
+  - 额外 legacy source inventory：
+    - `daily-report/*.md=34`，fingerprint `ddec80ea037ded1d63233a40f87342983952ba85105213e230582fa2ff319bcd`
+    - `daily-sessions/*.md=36`，fingerprint `199bac92020036efc1a684a4e1505c530cc5cfa6fe987e7454dd124c0df7c5d1`
+    - `data/jobs/*/job.log=4`，fingerprint `c0d6bef0ac7f44316ff9ab3021a60a96217d63dc46ad679ad08ab55867505126`
+    - `data/**/*.json|jsonl=9`，fingerprint `3384345d0fbcc35d6662a95549877381e2d9d705e28a446dc06d18ff043785f1`
+    - `strategy_files=0`
+    - `market_files=0`
+  - 解释约束核对：
+    - `raw_articles.source_url` 与 `blog_articles.source_url` 全量 131/131 对齐。
+    - `raw_articles.is_processed=false` 全量存在，按 Task Card 统一标记为 `ambiguous`，未据此重复导入。
+    - `article_metadata` 为每篇 `v1/v2` 双记录；未知 prompt/schema 版本统一记为 `legacy_unknown`。
+    - `article_metadata_selections` 7 条均为 `auto`，仅保留 compatibility event，不升级为人工批准。
+    - `rule_pool` 14 条中 `approved=7`、`pending=7`，legacy approved 未被提升为 canonical published。
+    - `ohlcv_bars` 84 条仅覆盖单个交易日 `2026-04-20`，仅生成 1 个 partial `DatasetSnapshot`。
+- 本 Task 实现：
+  - 新增 `scripts/migrate_stage2_data.py` 稳定 CLI 入口，支持：
+    - `--dry-run`
+    - `--apply`
+    - `--verify`
+    - `--resume`
+    - `--batch-size`
+    - `--report-dir`
+    - `--fail-after-items`
+  - 新增 `src/migrations/stage2_data_migration.py`：
+    - preflight inventory、deterministic source fingerprint、dry-run report、apply/verify/resume runner；
+    - bounded batch 迁移 articles、article analysis、selections、rules/backtests、market data；
+    - `migration_runs` / `migration_run_items` / `migration_quality_reports` / `legacy_id_mappings` / `migration_conflicts` observability；
+    - deterministic legacy-to-canonical mapping、quality status、recovery export、shadow read、cutover switch 状态；
+    - repeated apply 幂等保护，同一 `source_fingerprint` 下不生成重复 canonical 对象；
+    - injected mid-run failure 可保留 recovery point 并 resume。
+  - 新增测试：
+    - `tests/unit/scripts/test_stage2_migration.py`
+    - `tests/integration/test_stage2_data_migration.py`
+  - 未修改 Prompt、前端页面、legacy 数据文件、Schema 或 Alembic 链。
+- canonical 迁移结果：
+  - Articles：
+    - `blog_articles 131 -> article_revisions 131`
+    - 保留 blog article UUID 作为 canonical article ID；
+    - `raw_articles` 仅保留 provenance/mapping，全部 `ambiguous`，未重复导入。
+  - Article analysis：
+    - `article_metadata 262 -> prompt_runs 262 + article_structures 262 + rule_candidates 485`
+    - raw LLM output 全量保留；
+    - prompt/schema 无法证明时记 `legacy_unknown`；
+    - 未自动批准任何提取结果。
+  - Selections：
+    - `article_metadata_selections 7 -> lifecycle_events 7`
+    - 全部作为 compatibility event 保留，未变成人工批准。
+  - Rules：
+    - `rule_pool 14 -> rules 14 + rule_versions 14 + rule_families 14 + rule_family_memberships 14`
+    - quality 分布：`legacy_only=7`、`unresolved=7`
+    - canonical published 版本数保持 `0`。
+  - Backtests：
+    - `rule_pool.backtest_result 14 -> backtest_result_runs 14`
+    - 全部为 compatibility observation，quality=`unresolved`，未声称可复现。
+  - Market data：
+    - `ohlcv_bars 84 -> dataset_snapshots 1`
+    - 质量标记 `partial=84`，未虚构完整 manifest。
+  - Daily objects：
+    - `34 + 36 = 70` 条文件均保留为 source inventory；
+    - 因 pre-market / post-market 与 stable asset 角色无法证明，全部 `rejected_count=70` + `quality_status_counts.ambiguous=70`；
+    - 未错误映射为正式 `TradingDayPlan` 或 `PostMarketReview`。
+  - Author profiles / strategies：
+    - 当前可用 legacy source 计数均为 `0`，未创建 formal canonical 记录。
+- 主库 dry-run / apply / verify 结论：
+  - dry-run 报告：`/private/tmp/rt_s2_003_dryrun2/dry_run_report.json`
+  - 第一轮 apply 成功后主库 canonical 计数：
+    - `article_revisions=131`
+    - `prompt_runs=262`
+    - `article_structures=262`
+    - `rule_candidates=485`
+    - `rules=14`
+    - `rule_versions=14`
+    - `backtest_result_runs=14`
+    - `dataset_snapshots=1`
+    - `lifecycle_events=7`
+    - `legacy_id_mappings=629`
+    - `migration_run_items=498`
+    - `migration_quality_reports=9`
+  - 第二轮相同 fingerprint apply 幂等通过：
+    - `migration_runs` 仍为 `1`
+    - 各已迁移分类 `migrated_count=0`
+    - `skipped_idempotent_count` 分别为：
+      - articles `131`
+      - article_analysis `262`
+      - selections `7`
+      - rules `14`
+      - backtests `14`
+      - market_data `84`
+  - verify 报告：`/private/tmp/rt_s2_003_verify/verify_report.json`
+- 隔离 PostgreSQL failure/resume 验证：
+  - 使用独立 UTF-8 临时 PostgreSQL cluster：
+    - data dir `/private/tmp/rt_s2_003_pgdata`
+    - socket `/private/tmp/rt_s2_003_pgsocket`
+    - port `55433`
+  - 临时库先升到接受的 head `2026_06_14_0004`，再导入 legacy source tables。
+  - injected failure：
+    - 命令 `--apply --batch-size 50 --fail-after-items 160`
+    - 结果 `exit 2`
+    - `migration_runs.status=failed`
+    - `recovery_point_json={"mode":"apply","error":"injected failure after article analysis batch","processed_items":393}`
+    - 失败时已保留部分写入：
+      - `article_revisions=131`
+      - `prompt_runs=262`
+      - `migration_run_items=393`
+  - resume：
+    - 命令 `--resume --batch-size 50`
+    - 同一 `migration_run_id=3eac42e0-fe95-544a-b72d-34a71afa9f8b` 完成
+    - resume 后计数收敛到目标值：
+      - `article_revisions=131`
+      - `prompt_runs=262`
+      - `article_structures=262`
+      - `rule_candidates=485`
+      - `rules=14`
+      - `rule_versions=14`
+      - `backtest_result_runs=14`
+      - `dataset_snapshots=1`
+      - `migration_run_items=498`
+      - `legacy_id_mappings=629`
+- 主库一致性与 compatibility 证据：
+  - legacy source counts 在迁移前后保持不变：
+    - `raw_articles=131`
+    - `blog_articles=131`
+    - `article_metadata=262`
+    - `article_metadata_selections=7`
+    - `rule_pool=14`
+    - `ohlcv_bars=84`
+  - orphan / duplicate 检查：
+    - `duplicate_legacy_keys=0`
+    - `article_structure_prompt_orphans=0`
+    - `article_structure_revision_orphans=0`
+    - `rule_version_orphans=0`
+    - `family_orphans=0`
+    - `membership_rule_orphans=0`
+  - compatibility reads：
+    - `market_datasets=1`
+    - `regime_rule_selections=0`
+    - `strategy_regime_selections=0`
+    - `lifecycle_events=7`
+  - migration observability：
+    - `migration_quality_reports=9`
+    - `migration_conflicts=0`
+  - shadow read：
+    - `legacy_blog_articles=131 == canonical_article_revisions=131`
+    - `legacy_metadata=262 == prompt_runs=262 == article_structures=262`
+    - `legacy_rule_pool=14 == canonical_rule_versions=14`
+    - `published_rule_versions=0`
+- Writer cutover：
+  - cutover switch：`STAGE2_CANONICAL_WRITER_ENABLED`
+  - 当前 `enabled=false`
+  - `verified=true`，且 recovery export 已生成；本 Task 未开启 dual write，未退役 legacy writer。
+- 已运行测试与检查：
+  - `../.venv/bin/python -m pytest tests/unit/scripts/test_stage2_migration.py tests/integration/test_stage2_data_migration.py -q` → `6 passed in 3.07s`
+  - `../.venv/bin/python scripts/migrate_stage2_data.py --dry-run --report-dir /private/tmp/rt_s2_003_dryrun2` → 通过
+  - `../.venv/bin/python scripts/migrate_stage2_data.py --apply --batch-size 50 --report-dir /private/tmp/rt_s2_003_apply1` → 通过
+  - `../.venv/bin/python scripts/migrate_stage2_data.py --apply --batch-size 50 --report-dir /private/tmp/rt_s2_003_apply4` → 幂等通过，仅 skipped
+  - `../.venv/bin/python scripts/migrate_stage2_data.py --verify --report-dir /private/tmp/rt_s2_003_verify` → 通过
+  - `../.venv/bin/python -m pytest tests/api/routers/test_articles.py tests/api/routers/ui/test_article_metadata.py tests/api/routers/test_rule_pool.py tests/api/routers/test_strategy_versions.py tests/api/routers/test_backtest_results.py tests/api/routers/test_market_ui.py -q` → `20 passed in 17.97s`
+  - 隔离库 injected failure / resume：
+    - `../.venv/bin/python scripts/migrate_stage2_data.py --apply --batch-size 50 --fail-after-items 160 --report-dir /private/tmp/rt_s2_003_temp_fail` → 预期失败，recovery point 已落库
+    - `../.venv/bin/python scripts/migrate_stage2_data.py --resume --batch-size 50 --report-dir /private/tmp/rt_s2_003_temp_resume` → 通过
+  - `git diff --check` → 通过
+- Parent Review 结论：
+  - RT-S2-003 completion conditions 满足：
+    - 所有列出的 migration category 均有 migrated / empty / rejected 结论；
+    - article / metadata / selection / rule / OHLCV / file counts 已核对并解释；
+    - apply 幂等；
+    - isolated failure injection + resume 通过；
+    - legacy-to-canonical mappings deterministic，无重复 legacy assignment；
+    - canonical FK 无 orphan；
+    - compatibility reads 保持可用；
+    - cutover switch 显式存在且 recovery evidence 完整；
+    - legacy 数据未删除，未发明 human-approved/published 状态；
+    - focused tests、compatibility tests、verify mode、`git diff --check` 均通过。
+  - `RT-S2-003` 接受。
+  - Stage 2 Gate 本 Task 未执行；如用户明确继续，可开始 Gate，但当前日志不将 Stage 2 标记为完成。
 
 ## Stage Gate
 
@@ -209,7 +404,6 @@
 
 ## 残余风险与后续依赖
 
-- Stage 2 当前状态更新为 `[-] 进行中`：`RT-S2-001` 已接受，Stage 尚未完成。
-- Alembic metadata drift 是 `RT-S2-002` 必须解决的高风险前置项。
-- legacy 文件和报告的实际迁移数量需在 `RT-S2-003` preflight 中完整盘点。
-- 当前数据库多数后续对象为空，但不能省略升级、回滚、幂等和 compatibility 验证。
+- Stage 2 当前状态保持 `[-] 进行中`：`RT-S2-001`、`RT-S2-002`、`RT-S2-003` 均已接受，但 Stage Gate 尚未执行。
+- 当前无 RT-S2-003 实施阻塞；是否进入 Stage 2 Gate 需用户明确继续。
+- 仍保留的业务限制是：daily objects、author profiles、strategies 中未证明的 legacy 文件没有被升级为正式资产，这一保守边界符合合同要求。

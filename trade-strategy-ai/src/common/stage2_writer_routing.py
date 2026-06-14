@@ -23,7 +23,7 @@ class WriterScope:
 
 
 def canonical_writer_enabled() -> bool:
-    return os.getenv("STAGE2_CANONICAL_WRITER_ENABLED", "0").strip().lower() in {
+    return os.getenv("STAGE2_CANONICAL_WRITER_ENABLED", "true").strip().lower() in {
         "1",
         "true",
         "yes",

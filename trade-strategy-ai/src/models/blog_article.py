@@ -5,14 +5,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, Text, Uuid
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class BlogArticle(TimestampMixin, Base):
@@ -42,18 +38,18 @@ class BlogArticle(TimestampMixin, Base):
     content_text: Mapped[str] = mapped_column(Text, nullable=False)
     content_html: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
-    tags: Mapped[list[str]] = mapped_column(JSONVariant, default=list, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bookmark_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     comment_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     comments_payload: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONVariant,
+        JSON,
         default=list,
         nullable=False,
     )
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     metadata_record = relationship(
         "ArticleMetadata",

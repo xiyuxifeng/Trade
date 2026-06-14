@@ -38,3 +38,37 @@ def test_market_regimes_migration_defines_expected_schema() -> None:
     assert "primary_label" in content
     assert "labels_json" in content
     assert "features_json" in content
+
+
+def test_stage2_migration_chain_defines_linear_metadata_schema_and_compatibility_steps() -> None:
+    """验证 RT-S2-002 线性迁移链文件存在且包含冻结关键动作。"""
+    base_dir = Path(__file__).parent.parent.parent.parent / "src/db/migrations/versions"
+
+    metadata_file = base_dir / "2026_06_14_0002_stage2_metadata_alignment.py"
+    domain_file = base_dir / "2026_06_14_0003_stage2_domain_schema.py"
+    compatibility_file = base_dir / "2026_06_14_0004_stage2_compatibility_views.py"
+
+    metadata = metadata_file.read_text(encoding="utf-8")
+    domain = domain_file.read_text(encoding="utf-8")
+    compatibility = compatibility_file.read_text(encoding="utf-8")
+
+    assert 'revision = "2026_06_14_0002"' in metadata
+    assert 'down_revision = "2026_06_03_0001"' in metadata
+    assert "alert_history" in metadata
+    assert "trade_logs" in metadata
+
+    assert 'revision = "2026_06_14_0003"' in domain
+    assert 'down_revision = "2026_06_14_0002"' in domain
+    assert "prompt_runs" in domain
+    assert "legacy_id_mappings" in domain
+    assert "article_structures" in domain
+    assert "rule_versions" in domain
+    assert "author_profile_versions" in domain
+    assert "daily_rule_selections" in domain
+
+    assert 'revision = "2026_06_14_0004"' in compatibility
+    assert 'down_revision = "2026_06_14_0003"' in compatibility
+    assert "strategy_regime_selections" in compatibility
+    assert "regime_rule_selections" in compatibility
+    assert "market_datasets" in compatibility
+    assert "CREATE VIEW" in compatibility or "create_view" in compatibility.lower()

@@ -19,6 +19,7 @@ from src.models import (  # noqa: F401
     data_audit_event,
     backtest_result_run,
     evidence_pack,
+    market_data,
     hot_topics_snapshot,
     ohlcv_bar,
     ranking_entry,
@@ -30,18 +31,23 @@ from src.models import (  # noqa: F401
     workflow_run,
     signal,
     stock_info,
+    stage2_canonical,
     strong_symbols_snapshot,
+    topic_mapping,
     topic_constituents_snapshot,
     trader_strategy_version,
     strategy_regime_selection,
     trade_log,
     user,
 )
+from src.rule_pool import models as rule_pool_models  # noqa: F401,E402
+from src.alerting import db as alerting_db  # noqa: F401,E402
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
+COMPATIBILITY_VIEW_TABLES = {"market_datasets", "strategy_regime_selections", "regime_rule_selections"}
 
 
 def _get_database_url() -> str:
@@ -51,10 +57,27 @@ def _get_database_url() -> str:
         return env_url
     return config.get_main_option("sqlalchemy.url")
 
+
+def _include_object(object_, name, type_, reflected, compare_to):
+    if type_ != "table":
+        return True
+
+    object_info = getattr(object_, "info", {}) or {}
+    compare_info = getattr(compare_to, "info", {}) or {}
+    if object_info.get("compatibility_view") or compare_info.get("compatibility_view"):
+        return False
+    if reflected and name in COMPATIBILITY_VIEW_TABLES:
+        return False
+    return True
+
 def run_migrations_offline():
     url = _get_database_url()
     context.configure(
-        url=url, target_metadata=target_metadata, literal_binds=True, compare_type=True
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -70,7 +93,12 @@ def run_migrations_online() -> None:
     )
 
     def do_run_migrations(connection) -> None:  # connection: sqlalchemy.engine.Connection
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            include_object=_include_object,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

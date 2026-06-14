@@ -6,14 +6,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class MarketSnapshotItem(TimestampMixin, Base):
@@ -31,13 +27,13 @@ class MarketSnapshotItem(TimestampMixin, Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     snapshot_id: Mapped[str] = mapped_column(String(128), ForeignKey("market_snapshots.snapshot_id", ondelete="CASCADE"), nullable=False)
     section_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    dataset_id: Mapped[str | None] = mapped_column(String(128), ForeignKey("market_datasets.dataset_id", ondelete="SET NULL"))
+    dataset_id: Mapped[str | None] = mapped_column(String(128))
     symbol: Mapped[str | None] = mapped_column(String(32))
     item_key: Mapped[str] = mapped_column(String(128), nullable=False)
     item_type: Mapped[str | None] = mapped_column(String(64))
     source_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ok")
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     def to_dict(self) -> dict[str, Any]:
         """返回 JSON 兼容字典。"""

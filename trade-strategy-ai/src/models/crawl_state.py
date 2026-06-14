@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text
+from sqlalchemy import DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +18,7 @@ class CrawlState(TimestampMixin, Base):
 
     __tablename__ = "crawl_state"
     __table_args__ = (
-        Index("ix_crawl_state_source_author", "source", "author_id", unique=True),
+        UniqueConstraint("source", "author_id", name="ix_crawl_state_source_author"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

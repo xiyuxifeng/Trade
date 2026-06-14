@@ -6,14 +6,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, Uuid, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class TradeLog(TimestampMixin, Base):
@@ -43,14 +39,14 @@ class TradeLog(TimestampMixin, Base):
     account_id: Mapped[str] = mapped_column(String(64), nullable=False)
     symbol: Mapped[str] = mapped_column(String(32), nullable=False)
     market: Mapped[str] = mapped_column(String(32), nullable=False, default="CN")
-    side: Mapped[str] = mapped_column(String(10), nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
     position_side: Mapped[str] = mapped_column(String(10), nullable=False, default="long")
     order_type: Mapped[str | None] = mapped_column(String(20))
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    quantity: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    price: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    fee: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=Decimal("0"))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    fee: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
     strategy_tag: Mapped[str | None] = mapped_column(String(128))
     rationale: Mapped[str | None] = mapped_column(Text)
@@ -58,4 +54,4 @@ class TradeLog(TimestampMixin, Base):
         Uuid,
         ForeignKey("blog_articles.id", ondelete="SET NULL"),
     )
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

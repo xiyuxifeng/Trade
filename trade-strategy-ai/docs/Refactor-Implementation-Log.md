@@ -16,17 +16,16 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 2 领域模型、数据库和版本契约`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S2-002 重构数据库`
-- 下一步：仅可按 [Stage 2 实施计划](refactor-implementation-plans/stage-2-implementation-plan.md) 启动 `RT-S2-002`；必须以已接受的 `RT-S2-001` canonical domain contracts 为唯一领域契约，不得回改数据库之外的 frozen object/ID/lifecycle/fact-source 决定。
+- 当前 Task：`RT-S2-003 数据迁移` 尚未开始
+- 下一步：`RT-S2-002` 已接受；如用户明确继续，可开始 `RT-S2-003` 的迁移 preflight 和 bounded backfill 设计，但本 Session 不得自动开始。
 - 是否允许进入 Stage 2：**是**。
 
 ## 当前阻塞项
 
 - 无 Stage 1 阻塞项。
 - `RT-S2-001` 已接受；Stage 2 进入实现中状态。
-- `RT-S2-002` 不再被 `RT-S2-001` 阻塞，但仍受其自身 M3 Task Card、metadata drift 与 migration safety 门禁约束。
-- `RT-S2-003` 被 `RT-S2-002` 目标 Schema、Alembic chain 和 rollback/recovery 接受阻塞。
-- 当前 `alembic check` 发现 metadata 注册、JSON/JSONB、索引、字段和约束命名漂移；该问题必须在 `RT-S2-002` 先解决，不能直接执行 autogenerate drop。
+- `RT-S2-002` 已通过 Parent Review 接受；不再阻塞后续 Stage 2 Task。
+- `RT-S2-003` 不再被 Schema / Alembic chain / rollback-recovery 门禁阻塞，但仍需用户明确开始该独立 Task。
 
 ## Task 状态
 
@@ -38,8 +37,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S1-002 | `[x]` | 统一页面体验、真实能力接入和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
 | RT-S1-003 | `[x]` | 首页实现、聚焦回归和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
 | RT-S2-001 | `[x]` | canonical domain contracts、typed refs、lifecycle validator、legacy mapping 与 compatibility adapters 已接受；未改 DB/运行行为 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-002 | `[ ]` | 可开始；必须基于已接受的 RT-S2-001 契约处理 ORM/Alembic/compatibility 基础 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-003 | `[ ]` | 等待 RT-S2-002 接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-002 | `[x]` | metadata convergence、Stage 2 线性 migration chain、canonical repository foundation、compatibility views/adapters、backup coverage、isolated PostgreSQL rollback/re-upgrade/existing-data preservation 验证均已通过，Task 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-003 | `[ ]` | 允许开始，但本 Session 未执行 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 状态
 
@@ -47,7 +46,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | --- | --- | --- | --- |
 | Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
-| Stage 2 | `[-]` | Bootstrap 与 RT-S2-001 已接受；Stage 未完成；可进入 RT-S2-002 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
+| Stage 2 | `[-]` | Bootstrap、RT-S2-001、RT-S2-002 已接受；Stage 未完成；如用户明确继续，可进入 RT-S2-003 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 1 已接受证据摘要
 

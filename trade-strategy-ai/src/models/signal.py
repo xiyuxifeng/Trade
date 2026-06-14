@@ -12,7 +12,7 @@ class Signal(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     signal_id = Column(PGUUID(as_uuid=True), nullable=False, unique=True)
-    symbol = Column(String(20), nullable=False, index=True)
+    symbol = Column(String(20), nullable=False)
     side = Column(String(10), nullable=False)  # BUY, SELL, HOLD, REJECTED
     confidence = Column(Float, nullable=True)
     triggered_rules = Column(JSONB, nullable=True)
@@ -39,6 +39,7 @@ class Signal(Base):
     __table_args__ = (
         Index('idx_signals_created_at', 'created_at'),
         Index('idx_signals_signal_id', 'signal_id'),
+        Index('idx_signals_symbol', 'symbol'),
     )
 
     def to_dict(self) -> dict:

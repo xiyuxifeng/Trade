@@ -129,8 +129,73 @@
 
 ### RT-S2-002 重构数据库
 
-- 状态：`[ ] 未开始`
-- 阻塞：无；可在新 Parent Session 中开始，但只能基于已接受的 `RT-S2-001` canonical contracts。
+- 状态：`[x] 已接受`
+- 委派：`0` 个 subagent；Schema、metadata、Alembic、compatibility、rollback/recovery 与 acceptance 决定均由 Parent 直接完成。
+- 入口与保护：
+  - 当前分支 `main`，本任务实现前 `HEAD=e654b89738fc62c4e6681c13ed353d6f01bf7f97`。
+  - 继续执行前已复核当前完整 diff、现有 Alembic 链、真实 PostgreSQL 表结构、代表性数据量和 legacy writer/read 路径。
+  - 本次开始时无未提交用户改动需要保护；未回退任何用户改动。
+- 本 Task 实现：
+  - 完成权威 metadata 收敛：
+    - 注册 `alert_history`、`rule_pool`、`trade_sample`、`article_classification`、`market_data`、`topic_mapping` 等既有表；
+    - 对齐 `trader_strategy_versions` 短约束名 `uq_tsv_trader_dt_ver`；
+    - 修正多处 legacy `json/jsonb`、索引、约束和 `trade_logs` 类型/字段漂移；
+    - `env.py` 引入 compatibility view 过滤，避免 autogenerate 把兼容视图误判为正式表漂移。
+  - 完成 Stage 2 canonical ORM 与 repository/compatibility foundation：
+    - 新增 `src/models/stage2_canonical.py`，落地 support tables、PromptRun、migration observability、canonical rule/profile/strategy/daily-plan tables；
+    - 新增 `src/domain/stage2_repositories.py` canonical repository protocols；
+    - 新增 `src/db/repositories/stage2_compatibility.py` legacy read adapters；
+    - compatibility views 对应的 legacy ORM 已标记为 compatibility-only，不参与正式 metadata drift gate。
+  - 完成线性 Alembic migration chain：
+    - `2026_06_14_0002_stage2_metadata_alignment`
+    - `2026_06_14_0003_stage2_domain_schema`
+    - `2026_06_14_0004_stage2_compatibility_views`
+    - 单一 head 保持为 `2026_06_14_0004`。
+  - 完成 metadata alignment 与 non-destructive Schema 变更：
+    - `alert_history.tags/status/aggregated_count` 收紧为 `NOT NULL`；
+    - `trade_logs` additively 补齐 `source/market/position_side/order_type/currency/strategy_tag/rationale`、`account_id/side/fee` 非空和 `uq_trade_logs_external_id`；
+    - 空 legacy 表 `market_datasets`、`strategy_regime_selections`、`regime_rule_selections` 按冻结方案重构为 `dataset_snapshots`、`daily_rule_selections`、`daily_rule_selection_items`，并保留旧表名 compatibility views；
+    - 未迁移、未回填、未重解释任何现有业务数据。
+  - 完成 backup/recovery foundation：
+    - `backup_project_state` / `restore_project_state` 现在跳过 compatibility views，避免旧视图重复打包；
+    - 新增单测证明 canonical 新表进入 manifest，而 compatibility views 不进入。
+- 冻结合同核验：
+  - 未改动已接受的 19 个 canonical object 定义、稳定 ID 规则、formal version / runtime instance / Proposal 边界、fact-source/provenance/quality/audit 语义或单一 writer 所有权。
+  - 未新建第二套正式 Schema、事实源或 Alembic head。
+  - 未执行 RT-S2-003、未做业务数据 backfill、未删除 legacy 表。
+  - `api/schemas/market.py` 的改动仅为修正既有 response schema 缩进错误，以通过本 Task 明确要求的 API focused checks；未扩展 Stage 边界。
+- 隔离 PostgreSQL 验证：
+  - 因本机 `trade` 角色无 `CREATE DATABASE` 权限，使用临时独立 PostgreSQL cluster（`/private/tmp/rt_s2_002_pgdata` + unix socket）完成隔离验证。
+  - 空库验证：
+    - `base -> head` 升级通过；
+    - `head -> 2026_06_03_0001` downgrade 通过；
+    - `2026_06_03_0001 -> head` re-upgrade 通过。
+  - 代表性 existing-data fixture 验证：
+    - 在 `2026_06_03_0001` base 插入 `blog_articles=1`、`trade_logs=1`、`alert_history=1` legacy rows；
+    - 升级到 head 后计数保持 `1/1/1`，未删除；
+    - 校验 `trade_logs` 原业务字段仍可读，新增字段只填默认兼容值：`source=legacy`、`market=CN`、`position_side=long`、`currency=CNY`；
+    - `alert_history` fixture 行在 `status=sent`、`aggregated_count=1` 下保持不变。
+  - 结构检查通过：
+    - `dataset_snapshots`、`daily_rule_selections` 实体表存在且约束/索引/FK 命名受控；
+    - `market_datasets` compatibility view 存在并可读。
+- 已运行测试与检查：
+  - `../.venv/bin/python -m pytest tests/unit/db/test_migrations.py tests/unit/db/test_stage1_migration.py tests/unit/models tests/unit/backup -q` → `51 passed in 3.24s`
+  - `../.venv/bin/python -m pytest tests/api/routers/test_articles.py tests/api/routers/ui/test_article_metadata.py tests/api/routers/test_rule_pool.py tests/api/routers/test_strategy_versions.py tests/api/routers/test_backtest_results.py tests/api/routers/test_market_ui.py -q` → `20 passed in 6.35s`
+  - `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini heads` → `2026_06_14_0004 (head)`
+  - `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini upgrade head` → 通过；再次执行 `upgrade head` 也为 no-op，通过 safe-rerun 验证
+  - `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini check` → `No new upgrade operations detected.`
+  - `git diff --check` → 通过。
+- Parent Review 结论：
+  - `RT-S2-002` completion conditions 已满足：
+    - 单一 Alembic head；
+    - metadata convergence；
+    - 无 unexplained autogenerate drop；
+    - old API read compatibility focused checks 通过；
+    - 无业务数据 backfill/deletion/reinterpretation；
+    - isolated PostgreSQL rollback / re-upgrade / existing-data preservation 证据完备；
+    - backup manifest 覆盖 canonical 新表并排除 compatibility views。
+  - `RT-S2-002` 接受。
+  - `RT-S2-003` 现在允许开始，但本 Session 未开始执行。
 
 ### RT-S2-003 数据迁移
 

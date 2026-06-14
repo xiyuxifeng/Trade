@@ -22,6 +22,8 @@ from src.models.market_regime import MarketRegimeFeature
 from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityRegimeRecord
 from src.models.strategy_regime_selection import StrategyRegimeSelection, RegimeRuleSelection
 from src.models.raw_article import RawArticle
+from src.models.market_data import MarketData
+from src.models.topic_mapping import TopicMapping
 from src.models.signal import Signal
 from src.models.stock_info import StockInfo
 from src.models.job import Job, JobStatus
@@ -33,6 +35,10 @@ from src.models.trader_memory import TraderMemory
 from src.models.trade_log import TradeLog
 from src.models.user import User, UserSession
 from src.models.config_profile import ConfigProfile
+from src.models.evidence_pack import EvidencePackRecord
+from src.models import stage2_canonical as _stage2_canonical  # noqa: F401
+from src.rule_pool.models import ArticleClassification, RulePool, TradeSample
+from src.alerting.db import AlertHistory
 
 __all__ = [
     "OHLCVBar",
@@ -64,6 +70,13 @@ __all__ = [
     "RuleApplicabilityRegimeRecord",
     "StrategyRegimeSelection",
     "RegimeRuleSelection",
+    "RulePool",
+    "TradeSample",
+    "ArticleClassification",
+    "AlertHistory",
+    "EvidencePackRecord",
+    "MarketData",
+    "TopicMapping",
     "Job",
     "JobStatus",
     "JobAuditEvent",

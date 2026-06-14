@@ -155,6 +155,8 @@ async def backup_project_state(
 
     async with engine.connect() as conn:
         for table in Base.metadata.sorted_tables:
+            if table.info.get("compatibility_view"):
+                continue
             if not await _table_exists(conn, table):
                 continue
             table_names.append(table.name)
@@ -241,13 +243,13 @@ async def restore_project_state(
         table_map: dict[str, Table] = {table.name: table for table in Base.metadata.sorted_tables}
         for table_name in reversed(table_names):
             table = table_map.get(table_name)
-            if table is not None and await _table_exists(conn, table):
+            if table is not None and not table.info.get("compatibility_view") and await _table_exists(conn, table):
                 await conn.execute(delete(table))
 
         row_counts: dict[str, int] = {}
         for table_name in table_names:
             table = table_map.get(table_name)
-            if table is None or not await _table_exists(conn, table):
+            if table is None or table.info.get("compatibility_view") or not await _table_exists(conn, table):
                 continue
             payload_path = _table_payload_path(backup_dir, table_name)
             if not payload_path.exists():

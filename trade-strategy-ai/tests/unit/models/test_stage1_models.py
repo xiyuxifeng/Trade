@@ -14,7 +14,7 @@ def test_trader_strategy_version_table_metadata() -> None:
     assert {"trader_id", "strategy_date", "status", "evidence_refs", "source_article_ids"} <= column_names
 
     constraint_names = {constraint.name for constraint in TraderStrategyVersion.__table__.constraints}
-    assert "uq_trader_strategy_versions_trader_id_strategy_date_version_name" in constraint_names
+    assert "uq_tsv_trader_dt_ver" in constraint_names
 
 
 def test_stage1_snapshot_tables_have_daily_identity() -> None:

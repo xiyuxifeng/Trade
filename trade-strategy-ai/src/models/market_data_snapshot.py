@@ -6,14 +6,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Date, Index, Integer, String, UniqueConstraint, Uuid
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class MarketSnapshot(TimestampMixin, Base):
@@ -35,15 +31,15 @@ class MarketSnapshot(TimestampMixin, Base):
     data_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     slot: Mapped[str] = mapped_column(String(16), nullable=False, default="17-30")
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="partial")
-    provider_sources: Mapped[list[str]] = mapped_column(JSONVariant, default=list, nullable=False)
+    provider_sources: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     section_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     available_section_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     partial_section_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     missing_section_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    storage_ref: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
-    summary_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
-    quality_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
-    data_quality: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    storage_ref: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    summary_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    quality_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    data_quality: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     sections: Mapped[list[Any]] = relationship(
         "MarketSnapshotSection",
         cascade="all, delete-orphan",

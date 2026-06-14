@@ -240,3 +240,31 @@ async def test_backup_and_restore_roundtrip(tmp_path: Path) -> None:
     assert audit_record.await_count == 2
     assert audit_record.call_args.kwargs["event_type"] == "restore_project_state"
     assert audit_record.call_args.kwargs["payload"]["artifacts_restored"] is True
+
+
+@pytest.mark.asyncio
+async def test_backup_manifest_covers_stage2_canonical_tables_and_skips_compatibility_views(tmp_path: Path) -> None:
+    from src.models.market_dataset import MarketDataset
+    from src.models.stage2_canonical import Rule
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage2-backup.db'}")
+    await _create_sqlite_schema(engine)
+    audit_record = AsyncMock(return_value=SimpleNamespace(id="audit-stage2"))
+    audit_service = SimpleNamespace(record=audit_record)
+    async with engine.begin() as conn:
+        await conn.run_sync(Rule.__table__.create)
+        await conn.run_sync(MarketDataset.__table__.create)
+
+    backup_dir = tmp_path / "backup-stage2"
+    stats = await backup_project_state(
+        base_dir=tmp_path,
+        backup_dir=backup_dir,
+        engine=engine,
+        audit_service=audit_service,
+    )
+
+    assert "rules" in stats.tables
+    assert "market_datasets" not in stats.tables
+    assert (backup_dir / "db" / "rules.json").exists()
+    assert not (backup_dir / "db" / "market_datasets.json").exists()
+    audit_record.assert_awaited_once()

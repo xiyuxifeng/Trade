@@ -340,6 +340,11 @@ class OhlcvSchedulerRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     profile_id: str | None = None
+    base_dir: str
+    pre_market: str
+    post_close: str
+    started: bool = False
+    scheduler_started: bool = False
 
 
 def build_market_regime_summary(contract: MarketStateContract) -> MarketRegimeSummary:
@@ -360,11 +365,6 @@ def build_market_regime_summary(contract: MarketStateContract) -> MarketRegimeSu
         created_at=contract.audit.created_at.isoformat(),
         updated_at=contract.audit.updated_at.isoformat(),
     )
-    base_dir: str
-    pre_market: str
-    post_close: str
-    started: bool = False
-    scheduler_started: bool = False
 
 
 class OhlcvSchedulerStopResponse(BaseModel):

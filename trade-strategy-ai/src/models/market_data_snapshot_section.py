@@ -6,14 +6,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class MarketSnapshotSection(TimestampMixin, Base):
@@ -35,8 +31,8 @@ class MarketSnapshotSection(TimestampMixin, Base):
     missing_reason: Mapped[str | None] = mapped_column(String(255))
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="missing")
     section_version: Mapped[str | None] = mapped_column(String(32))
-    storage_ref: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
-    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
+    storage_ref: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     def to_dict(self) -> dict[str, Any]:
         """返回 JSON 兼容字典。"""

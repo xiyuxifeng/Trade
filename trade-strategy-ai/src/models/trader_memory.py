@@ -40,7 +40,7 @@ class TraderMemory(Base, TimestampMixin):
         PG_UUID(as_uuid=True), primary_key=True, default=uuid4
     )
     # 交易员 ID
-    trader_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    trader_id: Mapped[str] = mapped_column(String(64), nullable=False)
     # 记忆类型
     memory_type: Mapped[str] = mapped_column(String(32), nullable=False)
     # 关联交易日期

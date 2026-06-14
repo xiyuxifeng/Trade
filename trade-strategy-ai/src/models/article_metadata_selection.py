@@ -5,14 +5,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Uuid, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
-
-
-JSONVariant = JSON().with_variant(JSONB, "postgresql")
 
 
 class ArticleMetadataSelection(TimestampMixin, Base):
@@ -48,7 +44,7 @@ class ArticleMetadataSelection(TimestampMixin, Base):
     recommended_reason: Mapped[str | None] = mapped_column(String(255))
     selected_by: Mapped[str | None] = mapped_column(String(64))
     selected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    candidate_versions_json: Mapped[list[dict[str, Any]]] = mapped_column(JSONVariant, default=list, nullable=False)
+    candidate_versions_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
 
     def to_dict(self) -> dict[str, Any]:
         """返回可直接给 Web 使用的字典。"""

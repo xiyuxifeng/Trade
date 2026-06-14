@@ -23,6 +23,7 @@ class StrategyRegimeSelection(TimestampMixin, Base):
         Index("ix_strategy_regime_selections_snapshot_id", "snapshot_id"),
         Index("ix_strategy_regime_selections_market_regime_versions", "market_regime_version", "source_feature_version"),
         Index("ix_strategy_regime_selections_selected_by_created_at", "selected_by", "created_at"),
+        {"info": {"compatibility_view": True}},
     )
 
     selection_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -78,6 +79,7 @@ class RegimeRuleSelection(TimestampMixin, Base):
         Index("ix_regime_rule_selections_rule_id", "rule_id"),
         Index("ix_regime_rule_selections_decision", "decision"),
         Index("ix_regime_rule_selections_regime_version", "regime_version"),
+        {"info": {"compatibility_view": True}},
     )
 
     item_id: Mapped[str] = mapped_column(String(64), primary_key=True)

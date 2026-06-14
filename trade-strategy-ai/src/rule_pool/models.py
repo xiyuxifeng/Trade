@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, Uuid, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy.dialects.postgresql import JSON, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base, TimestampMixin
@@ -23,11 +23,10 @@ class RulePool(Base, TimestampMixin):
     rule_id: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
-        unique=True,
         index=True,
     )
     source_article_ids: Mapped[list] = mapped_column(
-        JSONB,
+        JSON,
         nullable=False,
         default=list,
     )
@@ -46,7 +45,7 @@ class RulePool(Base, TimestampMixin):
     )
     # extraction_layer 存储提取层的完整信息
     extraction_layer: Mapped[dict] = mapped_column(
-        JSONB,
+        JSON,
         nullable=False,
         default=dict,
     )
@@ -89,7 +88,7 @@ class RulePool(Base, TimestampMixin):
         nullable=True,
     )
     backtest_result: Mapped[dict | None] = mapped_column(
-        JSONB,
+        JSON,
         nullable=True,
     )
     backtest_hits: Mapped[int] = mapped_column(
@@ -118,6 +117,7 @@ class RulePool(Base, TimestampMixin):
     )
 
     __table_args__ = (
+        UniqueConstraint("rule_id", name="uq_rule_pool_rule_id"),
         Index('ix_rule_pool_rule_type', 'rule_type'),
         Index('ix_rule_pool_mapping_status', 'mapping_status'),
         Index('ix_rule_pool_review_status', 'review_status'),
@@ -137,7 +137,6 @@ class TradeSample(Base, TimestampMixin):
     sample_id: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
-        unique=True,
         index=True,
     )
     article_id: Mapped[UUID | None] = mapped_column(
@@ -189,7 +188,7 @@ class TradeSample(Base, TimestampMixin):
         nullable=True,
     )
     tags: Mapped[list] = mapped_column(
-        JSONB,
+        JSON,
         nullable=False,
         default=list,
     )
@@ -199,6 +198,7 @@ class TradeSample(Base, TimestampMixin):
     )
 
     __table_args__ = (
+        UniqueConstraint("sample_id", name="uq_trade_sample_sample_id"),
         Index('ix_trade_sample_symbol', 'symbol'),
         Index('ix_trade_sample_entry_at', 'entry_at'),
         Index('ix_trade_sample_article_id', 'article_id'),
@@ -219,7 +219,6 @@ class ArticleClassification(Base, TimestampMixin):
         Uuid,
         ForeignKey("blog_articles.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
         index=True,
     )
     article_type: Mapped[str] = mapped_column(
@@ -239,18 +238,20 @@ class ArticleClassification(Base, TimestampMixin):
         nullable=True,
     )
     reasons: Mapped[list] = mapped_column(
-        JSONB,
+        JSON,
         nullable=False,
         default=list,
     )
     # 使用 extra_metadata 而非 metadata，因 metadata 是 SQLAlchemy 保留字
     extra_metadata: Mapped[dict] = mapped_column(
-        JSONB,
+        JSON,
         nullable=False,
         default=dict,
     )
 
     __table_args__ = (
+        UniqueConstraint("article_id", name="uq_article_classification_article_id"),
+        Index('ix_article_classification_article_id', 'article_id'),
         Index('ix_article_classification_article_type', 'article_type'),
         Index('ix_article_classification_confidence', 'confidence'),
     )

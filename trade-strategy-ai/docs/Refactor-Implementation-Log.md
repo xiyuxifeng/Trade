@@ -15,18 +15,18 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 ## 当前状态
 
 - 当前 Stage：`Stage 2 领域模型、数据库和版本契约`
-- Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S2-003 数据迁移` 已接受；Stage 2 Gate 尚未开始
-- 下一步：如用户明确继续，可开始 `Stage 2 Gate`；本 Session 不自动启动 Gate，也不进入 Stage 3。
+- Stage 状态：`[x] 已完成`
+- 当前 Task：`Stage 2 Gate` 已接受
+- 下一步：`Stage 3 Bootstrap`；本 Session 未执行 Stage 3。
 - 是否允许进入 Stage 2：**是**。
 
 ## 当前阻塞项
 
 - 无 Stage 1 阻塞项。
 - `RT-S2-001` 已接受；Stage 2 进入实现中状态。
-- `RT-S2-002` 已通过 Parent Review 接受；不再阻塞后续 Stage 2 Task。
-- `RT-S2-003` 已接受；当前无实现阻塞。
-- Stage 2 Gate 未执行，因此 Stage 2 仍保持 `[-]`，不得直接宣布整个 Stage 完成。
+- `RT-S2-002`、`RT-S2-003` 在 Gate 中因 Schema convergence 与 runtime writer routing 缺陷重开并完成 bounded repair。
+- 合同决定为 `PRESERVE_CONTRACT_AND_REPAIR`；未修改 RT-S2-001 frozen contracts。
+- Stage 2 Gate 最终 `ACCEPTED`；当前无 Stage 2 阻塞。
 
 ## Task 状态
 
@@ -38,8 +38,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S1-002 | `[x]` | 统一页面体验、真实能力接入和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
 | RT-S1-003 | `[x]` | 首页实现、聚焦回归和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
 | RT-S2-001 | `[x]` | canonical domain contracts、typed refs、lifecycle validator、legacy mapping 与 compatibility adapters 已接受；未改 DB/运行行为 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-002 | `[x]` | metadata convergence、Stage 2 线性 migration chain、canonical repository foundation、compatibility views/adapters、backup coverage、isolated PostgreSQL rollback/re-upgrade/existing-data preservation 验证均已通过，Task 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-003 | `[x]` | legacy source inventory、dry-run/apply/verify、幂等复跑、isolated failure-resume、mapping/FK/compatibility evidence 与 Parent Review 均已通过，Task 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-002 | `[x]` | Gate 重开后补齐 reused-table frozen fields/FKs、MarketState typed FKs、linear repair migrations；metadata、实际 PostgreSQL、rollback/re-upgrade 与 existing-data preservation 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-003 | `[x]` | Gate 重开后 feature flag 已控制 runtime writer routing；canonical application-service boundary、legacy write rejection、no-dual-write 与 migration isolation tests 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 状态
 
@@ -47,7 +47,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | --- | --- | --- | --- |
 | Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
-| Stage 2 | `[-]` | Bootstrap、RT-S2-001、RT-S2-002、RT-S2-003 均已接受；Stage Gate 尚未执行，因此 Stage 仍未完成 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
+| Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 
 ## Stage 1 已接受证据摘要
 

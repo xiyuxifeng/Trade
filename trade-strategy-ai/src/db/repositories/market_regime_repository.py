@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_regime_record import MarketRegimeRecord
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class MarketRegimeRepository:
@@ -13,6 +14,7 @@ class MarketRegimeRepository:
 
     async def upsert_regime(self, session: AsyncSession, regime: MarketRegimeRecord) -> MarketRegimeRecord:
         """按 snapshot_id + regime_version 写入或更新 regime。"""
+        require_canonical_write("market_state", "MarketRegimeRepository.upsert_regime")
         existing = await session.scalar(
             select(MarketRegimeRecord).where(
                 MarketRegimeRecord.snapshot_id == regime.snapshot_id,
@@ -26,9 +28,13 @@ class MarketRegimeRepository:
 
         for field in (
             "regime_id",
+            "market_snapshot_id",
             "trade_date",
             "market",
+            "definition_version",
             "source_feature_version",
+            "feature_version",
+            "available_at",
             "primary_label",
             "labels_json",
             "features_json",

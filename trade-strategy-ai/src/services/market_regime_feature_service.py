@@ -24,6 +24,7 @@ from src.models.market_dataset import MarketDataset
 from src.models.ohlcv_bar import OHLCVBar
 from src.models.market_regime import MarketRegimeFeature
 from src.services.base import BaseService, ServiceResult
+from src.common.stage2_writer_routing import canonical_writer_enabled
 
 DEFAULT_FEATURE_VERSION = "market-regime-features-v3"
 FULL_MARKET_FEATURE_VERSION = "market-regime-features-v3"
@@ -848,7 +849,8 @@ class MarketRegimeFeatureService(BaseService):
             db_error: str | None = None
             try:
                 saved = await self._feature_repository.upsert_feature(session, feature)
-                await self._dataset_repository.upsert_dataset(session, dataset_record)
+                if not canonical_writer_enabled():
+                    await self._dataset_repository.upsert_dataset(session, dataset_record)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 db_error = str(exc)

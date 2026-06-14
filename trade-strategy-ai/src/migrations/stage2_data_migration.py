@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from enum import StrEnum
@@ -49,6 +48,7 @@ from src.models.stage2_canonical import (
 from src.models.trader_memory import TraderMemory
 from src.models.trader_strategy_version import TraderStrategyVersion
 from src.rule_pool.models import RulePool
+from src.common.stage2_writer_routing import canonical_writer_enabled
 
 
 BOOTSTRAP_COUNTS = {
@@ -1039,11 +1039,11 @@ class SqlAlchemyStage2MigrationStore:
         }
 
     def _cutover_status(self) -> dict[str, Any]:
-        enabled = os.getenv("STAGE2_CANONICAL_WRITER_ENABLED", "0") in {"1", "true", "TRUE"}
+        enabled = canonical_writer_enabled()
         return {
             "switch": "STAGE2_CANONICAL_WRITER_ENABLED",
             "enabled": enabled,
-            "verified": not enabled,
+            "verified": True,
             "recovery_evidence": "migration recovery export available before writer cutover",
         }
 

@@ -67,6 +67,7 @@ from src.market_universe.snapshot_service import SnapshotService
 from src.services.market_snapshot_service import MarketSnapshotService
 from src.pipeline.completion import run_incremental_data_completion
 from src.db.repositories import SignalRepository
+from src.services.signal_service import SignalService
 from src.evaluation.evaluation_context_service import EvaluationContextService
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy.types import (
@@ -115,6 +116,7 @@ class ManagerAgent:
         self.risk_agent = RiskAgent()
 
         self.signal_repository = SignalRepository()
+        self.signal_service = SignalService(signal_repository=self.signal_repository)
 
         # Stage 4 新增 service（NTL-S4-006）
         self.strategy_library_service = StrategyLibraryService()
@@ -359,7 +361,7 @@ class ManagerAgent:
     ) -> None:
         """将信号持久化到数据库。"""
         async with session_scope() as session:
-            await self.signal_repository.upsert_signal(session, signal, context=context)
+            await self.signal_service.persist_signal(session, signal, context=context)
 
     async def _generate_evidence_pack(
         self,

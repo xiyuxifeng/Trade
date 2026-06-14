@@ -1,15 +1,29 @@
 """Market snapshot ORM 模型。"""
 from __future__ import annotations
 
-from datetime import date
+import hashlib
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, Index, Integer, String, UniqueConstraint, Uuid
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import JSON, Date, DateTime, Index, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base, TimestampMixin
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _default_content_fingerprint(context: Any) -> str:
+    params = context.get_current_parameters()
+    identity = ":".join(
+        str(params.get(key) or "")
+        for key in ("snapshot_id", "market", "trade_date", "slot", "data_version")
+    )
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 class MarketSnapshot(TimestampMixin, Base):
@@ -18,6 +32,13 @@ class MarketSnapshot(TimestampMixin, Base):
     __tablename__ = "market_snapshots"
     __table_args__ = (
         UniqueConstraint("snapshot_id", name="uq_market_snapshots_snapshot_id"),
+        UniqueConstraint(
+            "market",
+            "trade_date",
+            "slot",
+            "data_version",
+            name="uq_market_snapshots_market_date_slot_version",
+        ),
         Index("ix_market_snapshots_trade_date_market", "trade_date", "market"),
         Index("ix_market_snapshots_profile_trade_date", "profile_id", "trade_date"),
         Index("ix_market_snapshots_quality_status_trade_date", "quality_status", "trade_date"),
@@ -40,6 +61,20 @@ class MarketSnapshot(TimestampMixin, Base):
     summary_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     quality_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     data_quality: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    content_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        default=_default_content_fingerprint,
+    )
+    manifest_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        default=dict,
+        nullable=False,
+    )
     sections: Mapped[list[Any]] = relationship(
         "MarketSnapshotSection",
         cascade="all, delete-orphan",
@@ -66,6 +101,11 @@ class MarketSnapshot(TimestampMixin, Base):
             "summary_artifact_ref": self.summary_artifact_ref,
             "quality_artifact_ref": self.quality_artifact_ref,
             "data_quality": self.data_quality,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+            "available_at": self.available_at.isoformat() if self.available_at else None,
+            "effective_at": self.effective_at.isoformat() if self.effective_at else None,
+            "content_fingerprint": self.content_fingerprint,
+            "manifest_json": self.manifest_json,
             "sections": {
                 section.section_id: section.to_dict() if hasattr(section, "to_dict") else section
                 for section in (self.sections or [])

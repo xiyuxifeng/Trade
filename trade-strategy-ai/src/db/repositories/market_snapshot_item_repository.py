@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot_item import MarketSnapshotItem
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class MarketSnapshotItemRepository:
@@ -11,6 +12,7 @@ class MarketSnapshotItemRepository:
 
     async def upsert_item(self, session: AsyncSession, item: MarketSnapshotItem) -> MarketSnapshotItem:
         """按 snapshot_id + section_id + item_key 写入或更新 item。"""
+        require_canonical_write("market_snapshot", "MarketSnapshotItemRepository.upsert_item")
         existing = await session.scalar(
             select(MarketSnapshotItem).where(
                 MarketSnapshotItem.snapshot_id == item.snapshot_id,

@@ -37,7 +37,6 @@ from src.models.user import User, UserSession
 from src.models.config_profile import ConfigProfile
 from src.models.evidence_pack import EvidencePackRecord
 from src.models import stage2_canonical as _stage2_canonical  # noqa: F401
-from src.rule_pool.models import ArticleClassification, RulePool, TradeSample
 from src.alerting.db import AlertHistory
 
 __all__ = [
@@ -70,9 +69,6 @@ __all__ = [
     "RuleApplicabilityRegimeRecord",
     "StrategyRegimeSelection",
     "RegimeRuleSelection",
-    "RulePool",
-    "TradeSample",
-    "ArticleClassification",
     "AlertHistory",
     "EvidencePackRecord",
     "MarketData",

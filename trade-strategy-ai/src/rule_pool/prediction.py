@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.rule_pool.repository import RulePoolRepository
+from src.common.stage2_writer_routing import require_legacy_compatibility_write
 
 
 @dataclass(slots=True)
@@ -32,6 +33,7 @@ class RulePoolPredictionService:
 
     async def predict_high_confidence_rules(self, threshold: float = 0.8, limit: int = 20) -> list[RulePredictionSnapshot]:
         """收集高置信度规则并标记为已参与预测。"""
+        require_legacy_compatibility_write("rule", "RulePoolPredictionService.predict_high_confidence_rules")
         rules = await self.repository.get_high_confidence_rules(threshold=threshold)
         predicted_at = datetime.now(UTC)
         snapshots: list[RulePredictionSnapshot] = []

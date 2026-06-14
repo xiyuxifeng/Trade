@@ -18,6 +18,7 @@ from src.models.market_regime_record import MarketRegimeRecord
 from src.models.regime_rule_selection import RegimeRuleSelectionRecord, RegimeRuleSelectionResult
 from src.models.rule_applicability import RuleApplicabilityProfile
 from src.services.base import BaseService, ServiceResult
+from src.common.stage2_writer_routing import canonical_write_scope
 from src.strategy_library.schemas import StrategyVersion
 from src.trader_profile.schemas import TraderProfile
 
@@ -294,8 +295,9 @@ class RegimeRuleSelectionService(BaseService):
             )
 
         async with session_scope() as session:
-            await selection_repo.upsert_selection(session, summary_row)
-            await rule_repo.replace_for_selection(session, selection_id=selection.selection_id, items=rule_rows)
+            with canonical_write_scope("daily_rule_selection", self.service_name):
+                await selection_repo.upsert_selection(session, summary_row)
+                await rule_repo.replace_for_selection(session, selection_id=selection.selection_id, items=rule_rows)
 
     async def build_regime_rule_selection(
         self,

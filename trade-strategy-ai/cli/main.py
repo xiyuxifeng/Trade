@@ -1208,6 +1208,7 @@ def seed_admin(
 # rule-pool 命令组：规则池查询与审核（NTL-S11-009）
 from src.rule_pool.repository import RulePoolRepository
 from src.db.session import session_scope
+from src.services.rule_pool_service import RulePoolService
 
 rule_pool_app = typer.Typer(help="规则池管理命令")
 
@@ -1337,19 +1338,16 @@ def rule_pool_review(
         return
 
     async def _run():
-        async with session_scope() as session:
-            repo = RulePoolRepository(session)
-            if force:
-                rule = await repo.get_rule_by_id(rule_id)
-                if rule is None:
-                    typer.echo(f"规则不存在: {rule_id}", err=True)
-                    return
-            status = _DECISION_MAP[decision]
-            success = await repo.update_review(rule_id, status, reviewed_by="cli_user", force=force)
-            if success:
-                typer.echo(f"Rule {rule_id} → {status.value}" + (" (force)" if force else ""))
-            else:
-                typer.echo(f"更新失败: 规则 {rule_id} 不存在或已审核（使用 --force 强制覆盖）", err=True)
+        result = await RulePoolService().review_rule(
+            rule_id,
+            decision=decision,
+            force=force,
+            reviewed_by="cli_user",
+        )
+        if result.status == "ok":
+            typer.echo(f"Rule {rule_id} → {_DECISION_MAP[decision].value}" + (" (force)" if force else ""))
+        else:
+            typer.echo(f"更新失败: {result.message}", err=True)
     run_async_with_cleanup(_run())
 
 
@@ -1381,17 +1379,17 @@ def rule_pool_review_batch(
         return
 
     async def _run():
-        async with session_scope() as session:
-            repo = RulePoolRepository(session)
-            target_status = _DECISION_MAP[decision]
-            filter_status = _STATUS_MAP[status]
-            rules = await repo.get_rules_by_status(review_status=filter_status, limit=limit)
-            count = 0
-            for rule in rules:
-                if force or rule.review_status == filter_status.value:
-                    await repo.update_review(rule.rule_id, target_status, reviewed_by="cli_user", force=force)
-                    count += 1
-            typer.echo(f"批量审核完成: {count} 条规则 {filter_status.value} → {target_status.value}")
+        result = await RulePoolService().review_batch(
+            decision=decision,
+            status=status,
+            limit=limit,
+            force=force,
+            reviewed_by="cli_user",
+        )
+        typer.echo(
+            f"批量审核完成: {result.payload['updated_count']} 条规则 "
+            f"{status} → {result.payload['target_status']}"
+        )
     run_async_with_cleanup(_run())
 
 

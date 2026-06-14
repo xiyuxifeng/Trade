@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot import MarketSnapshot
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class MarketSnapshotRepository:
@@ -13,6 +14,7 @@ class MarketSnapshotRepository:
 
     async def upsert_snapshot(self, session: AsyncSession, snapshot: MarketSnapshot) -> MarketSnapshot:
         """按 snapshot_id 写入或更新快照主记录。"""
+        require_canonical_write("market_snapshot", "MarketSnapshotRepository.upsert_snapshot")
         existing = await session.scalar(select(MarketSnapshot).where(MarketSnapshot.snapshot_id == snapshot.snapshot_id))
         if existing is None:
             session.add(snapshot)
@@ -35,6 +37,11 @@ class MarketSnapshotRepository:
             "summary_artifact_ref",
             "quality_artifact_ref",
             "data_quality",
+            "captured_at",
+            "available_at",
+            "effective_at",
+            "content_fingerprint",
+            "manifest_json",
         ):
             setattr(existing, field, getattr(snapshot, field))
         await session.flush()
@@ -69,6 +76,16 @@ class MarketSnapshotRepository:
             stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
+
+    async def list_by_trade_date(
+        self,
+        session: AsyncSession,
+        trade_date: date,
+        *,
+        market: str | None = None,
+    ) -> list[MarketSnapshot]:
+        """Compatibility query routed to the canonical snapshot repository."""
+        return await self.list_snapshots(session, trade_date=trade_date, market=market)
 
     async def count_snapshots(
         self,

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot_section import MarketSnapshotSection
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class MarketSnapshotSectionRepository:
@@ -11,6 +12,7 @@ class MarketSnapshotSectionRepository:
 
     async def upsert_section(self, session: AsyncSession, section: MarketSnapshotSection) -> MarketSnapshotSection:
         """按 snapshot_id + section_id 写入或更新 section。"""
+        require_canonical_write("market_snapshot", "MarketSnapshotSectionRepository.upsert_section")
         existing = await session.scalar(
             select(MarketSnapshotSection).where(
                 MarketSnapshotSection.snapshot_id == section.snapshot_id,
@@ -53,4 +55,3 @@ class MarketSnapshotSectionRepository:
                 MarketSnapshotSection.section_id == section_id,
             )
         )
-

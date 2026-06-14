@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_dataset import MarketDataset
+from src.common.stage2_writer_routing import require_legacy_compatibility_write
 
 
 class MarketDatasetRepository:
@@ -13,6 +14,10 @@ class MarketDatasetRepository:
 
     async def upsert_dataset(self, session: AsyncSession, dataset: MarketDataset) -> MarketDataset:
         """按 dataset_id 写入或更新数据集。"""
+        require_legacy_compatibility_write(
+            "dataset_snapshot",
+            "MarketDatasetRepository.upsert_dataset",
+        )
         existing = await session.scalar(select(MarketDataset).where(MarketDataset.dataset_id == dataset.dataset_id))
         if existing is None:
             session.add(dataset)
@@ -65,6 +70,16 @@ class MarketDatasetRepository:
             stmt = stmt.limit(limit)
         result = await session.scalars(stmt)
         return list(result.all())
+
+    async def list_by_trade_date(
+        self,
+        session: AsyncSession,
+        trade_date: date,
+        *,
+        market: str | None = None,
+    ) -> list[MarketDataset]:
+        """Compatibility read routed through the legacy read-only dataset view."""
+        return await self.list_datasets(session, trade_date=trade_date, market=market)
 
     async def count_datasets(
         self,

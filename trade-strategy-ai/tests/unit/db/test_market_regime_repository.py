@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -27,6 +28,7 @@ async def test_upsert_and_get_market_regime(market_regime_session_factory) -> No
     async with market_regime_session_factory() as session:
         record = MarketRegimeRecord(
             regime_id="regime-001",
+            market_snapshot_id=uuid4(),
             trade_date=date(2026, 5, 16),
             snapshot_id="snap-001",
             market="CN",

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.backtest_result_run import BacktestResultRun
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class BacktestResultRunRepository:
@@ -13,6 +15,7 @@ class BacktestResultRunRepository:
 
     async def upsert_run(self, session: AsyncSession, run: BacktestResultRun) -> BacktestResultRun:
         """按 result_run_id 写入或更新回测结果摘要。"""
+        require_canonical_write("backtest_run", "BacktestResultRunRepository.upsert_run")
         existing = await session.scalar(select(BacktestResultRun).where(BacktestResultRun.result_run_id == run.result_run_id))
         if existing is None:
             session.add(run)
@@ -23,7 +26,11 @@ class BacktestResultRunRepository:
             "source_job_id",
             "job_type",
             "request_trader_id",
+            "legacy_strategy_version_id",
             "strategy_version_id",
+            "rule_version_id",
+            "dataset_snapshot_id",
+            "market_state_definition_version",
             "request_date_from",
             "request_date_to",
             "benchmark_symbol",
@@ -78,7 +85,10 @@ class BacktestResultRunRepository:
         if trader_id:
             stmt = stmt.where(BacktestResultRun.request_trader_id == trader_id)
         if strategy_version_id:
-            stmt = stmt.where(BacktestResultRun.strategy_version_id == strategy_version_id)
+            try:
+                stmt = stmt.where(BacktestResultRun.strategy_version_id == UUID(strategy_version_id))
+            except ValueError:
+                stmt = stmt.where(BacktestResultRun.legacy_strategy_version_id == strategy_version_id)
         if date_from is not None:
             stmt = stmt.where(BacktestResultRun.request_date_from >= date_from)
         if date_to is not None:
@@ -114,7 +124,10 @@ class BacktestResultRunRepository:
         if trader_id:
             stmt = stmt.where(BacktestResultRun.request_trader_id == trader_id)
         if strategy_version_id:
-            stmt = stmt.where(BacktestResultRun.strategy_version_id == strategy_version_id)
+            try:
+                stmt = stmt.where(BacktestResultRun.strategy_version_id == UUID(strategy_version_id))
+            except ValueError:
+                stmt = stmt.where(BacktestResultRun.legacy_strategy_version_id == strategy_version_id)
         if date_from is not None:
             stmt = stmt.where(BacktestResultRun.request_date_from >= date_from)
         if date_to is not None:

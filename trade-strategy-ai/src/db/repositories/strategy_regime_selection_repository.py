@@ -4,6 +4,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.strategy_regime_selection import RegimeRuleSelection, StrategyRegimeSelection
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class StrategyRegimeSelectionRepository:
@@ -11,6 +12,7 @@ class StrategyRegimeSelectionRepository:
 
     async def upsert_selection(self, session: AsyncSession, selection: StrategyRegimeSelection) -> StrategyRegimeSelection:
         """按 selection_id 写入或更新摘要。"""
+        require_canonical_write("daily_rule_selection", "StrategyRegimeSelectionRepository.upsert_selection")
         existing = await session.scalar(
             select(StrategyRegimeSelection).where(StrategyRegimeSelection.selection_id == selection.selection_id)
         )
@@ -110,6 +112,7 @@ class RegimeRuleSelectionRepository:
         items: list[RegimeRuleSelection],
     ) -> list[RegimeRuleSelection]:
         """替换指定 selection 的所有规则记录。"""
+        require_canonical_write("daily_rule_selection", "RegimeRuleSelectionRepository.replace_for_selection")
         await session.execute(delete(RegimeRuleSelection).where(RegimeRuleSelection.selection_id == selection_id))
         for item in items:
             session.add(item)

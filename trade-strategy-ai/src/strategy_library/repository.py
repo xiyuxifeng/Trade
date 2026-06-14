@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.trader_strategy_version import TraderStrategyVersion
+from src.common.stage2_writer_routing import require_legacy_compatibility_write
 from src.strategy_library.schemas import (
     StrategyRecommendation,
     StrategyVersion,
@@ -89,6 +90,10 @@ class StrategyLibraryRepository:
 
     async def save(self, session: AsyncSession, version: StrategyVersion) -> None:
         """保存或更新策略版本（异步）。"""
+        require_legacy_compatibility_write(
+            "strategy_version",
+            "StrategyLibraryRepository.save",
+        )
         existing = await self._get_existing(session, version)
         if existing:
             self._update_existing(existing, version)

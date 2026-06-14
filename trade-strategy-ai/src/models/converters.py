@@ -89,7 +89,13 @@ def schema_to_signal_orm(
     orm_signal.stop_loss = _serialize_complex(schema.stop_loss)
     orm_signal.take_profit = _serialize_complex(schema.take_profit)
     orm_signal.version = schema.version
-    orm_signal.strategy_version_id = schema.strategy_version_id
+    raw_strategy_version_id = schema.strategy_version_id
+    try:
+        orm_signal.strategy_version_id = UUID(str(raw_strategy_version_id)) if raw_strategy_version_id else None
+        orm_signal.legacy_strategy_version_id = None
+    except ValueError:
+        orm_signal.strategy_version_id = None
+        orm_signal.legacy_strategy_version_id = raw_strategy_version_id
     orm_signal.signal_metadata = _serialize_complex(schema.metadata)
     return orm_signal
 
@@ -111,7 +117,7 @@ def orm_to_schema_signal(orm_signal: "Signal") -> "Signal":
         stop_loss=orm_signal.stop_loss,
         take_profit=orm_signal.take_profit,
         version=orm_signal.version or "v1",
-        strategy_version_id=orm_signal.strategy_version_id,
+        strategy_version_id=orm_signal.strategy_version_id or orm_signal.legacy_strategy_version_id,
         metadata=orm_signal.signal_metadata or {},
     )
 

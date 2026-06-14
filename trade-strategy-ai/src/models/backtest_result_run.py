@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import Date, Float, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
@@ -31,7 +32,20 @@ class BacktestResultRun(TimestampMixin, Base):
     source_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     job_type: Mapped[str] = mapped_column(String(64), nullable=False)
     request_trader_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    strategy_version_id: Mapped[str | None] = mapped_column(String(128))
+    legacy_strategy_version_id: Mapped[str | None] = mapped_column(String(128))
+    strategy_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("strategy_versions.strategy_version_id", name="fk_btr_strategy_version", ondelete="SET NULL"),
+    )
+    rule_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("rule_versions.rule_version_id", name="fk_btr_rule_version", ondelete="SET NULL"),
+    )
+    dataset_snapshot_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("dataset_snapshots.dataset_snapshot_id", name="fk_btr_dataset_snapshot", ondelete="SET NULL"),
+    )
+    market_state_definition_version: Mapped[str | None] = mapped_column(String(64))
     request_date_from: Mapped[date] = mapped_column(Date, nullable=False)
     request_date_to: Mapped[date] = mapped_column(Date, nullable=False)
     benchmark_symbol: Mapped[str | None] = mapped_column(String(32))
@@ -55,6 +69,16 @@ class BacktestResultRun(TimestampMixin, Base):
     storage_ref: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
     artifact_ref: Mapped[dict[str, Any]] = mapped_column(JSONVariant, default=dict, nullable=False)
 
+    @validates("strategy_version_id")
+    def _coerce_strategy_version_id(self, _key: str, value: UUID | str | None) -> UUID | None:
+        if value is None or isinstance(value, UUID):
+            return value
+        try:
+            return UUID(str(value))
+        except ValueError:
+            self.legacy_strategy_version_id = str(value)
+            return None
+
     def to_dict(self) -> dict[str, Any]:
         """返回 JSON 兼容字典。"""
         return {
@@ -63,6 +87,10 @@ class BacktestResultRun(TimestampMixin, Base):
             "job_type": self.job_type,
             "request_trader_id": self.request_trader_id,
             "strategy_version_id": self.strategy_version_id,
+            "legacy_strategy_version_id": self.legacy_strategy_version_id,
+            "rule_version_id": self.rule_version_id,
+            "dataset_snapshot_id": self.dataset_snapshot_id,
+            "market_state_definition_version": self.market_state_definition_version,
             "request_date_from": self.request_date_from.isoformat() if isinstance(self.request_date_from, date) else self.request_date_from,
             "request_date_to": self.request_date_to.isoformat() if isinstance(self.request_date_to, date) else self.request_date_to,
             "benchmark_symbol": self.benchmark_symbol,

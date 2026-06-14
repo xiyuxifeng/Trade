@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.common.logger import get_logger
 from src.rule_pool.repository import RulePoolRepository
 from src.rule_pool.schemas import RuleBacktestResult
+from src.common.stage2_writer_routing import require_legacy_compatibility_write
 
 logger = get_logger(__name__)
 
@@ -30,6 +31,7 @@ class RulePoolAttributionService:
         occurred_at: datetime | None = None,
     ) -> bool:
         """记录一次预测归因结果。"""
+        require_legacy_compatibility_write("rule", "RulePoolAttributionService.record_prediction_outcome")
         rule = await self.repository.get_rule_by_id(rule_id)
         if rule is None:
             return False

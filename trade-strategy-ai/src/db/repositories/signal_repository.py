@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.converters import schema_to_signal_context_orm, schema_to_signal_orm
 from src.models.signal import Signal
 from src.strategy.types import SignalContext
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class SignalRepository:
@@ -74,6 +75,7 @@ class SignalRepository:
         context: SignalContext | dict | None = None,
     ) -> Signal:
         """写入或更新信号。"""
+        require_canonical_write("signal", "SignalRepository.upsert_signal")
         signal_uuid = self._parse_signal_id(signal.signal_id)
         existing = await session.scalar(select(Signal).where(Signal.signal_id == signal_uuid))
         if not isinstance(existing, Signal):
@@ -106,7 +108,15 @@ class SignalRepository:
             "stop_loss",
             "take_profit",
             "trader_id",
+            "legacy_strategy_version_id",
             "strategy_version_id",
+            "trading_day_plan_id",
+            "daily_strategy_instance_id",
+            "rule_version_ids",
+            "signal_state",
+            "generated_at",
+            "available_at",
+            "expires_at",
             "source_topic_ids",
             "evidence_refs",
             "decision_mode",

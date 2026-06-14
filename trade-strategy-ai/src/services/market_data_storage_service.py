@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,10 @@ from src.models.market_data_snapshot_item import MarketSnapshotItem
 from src.models.market_data_snapshot_section import MarketSnapshotSection
 from src.models.market_snapshot import MarketSnapshot
 from src.services.base import BaseService, ServiceResult
+from src.common.stage2_writer_routing import (
+    canonical_write_scope,
+    canonical_writer_enabled,
+)
 
 
 def _to_plain(value: Any) -> Any:
@@ -71,6 +77,12 @@ class MarketDataStorageService(BaseService):
         """构建 snapshot 主表记录。"""
         summary = summary_payload or {}
         quality = quality_payload or {}
+        captured_at = snapshot.created_at or datetime.now(UTC)
+        manifest = {
+            "sections": sorted(snapshot.sections),
+            "providers": list(snapshot.provider_sources),
+            "summary": summary,
+        }
         return MarketSnapshotRecord(
             snapshot_id=snapshot.snapshot_id,
             trade_date=date.fromisoformat(snapshot.trade_date) if isinstance(snapshot.trade_date, str) else snapshot.trade_date,
@@ -98,6 +110,22 @@ class MarketDataStorageService(BaseService):
                 "artifact_type": "snapshot-quality-json",
             },
             data_quality={**snapshot.data_quality, "quality_report": quality},
+            captured_at=captured_at,
+            available_at=captured_at,
+            effective_at=captured_at,
+            content_fingerprint=hashlib.sha256(
+                json.dumps(
+                    {
+                        "snapshot_id": snapshot.snapshot_id,
+                        "data_version": snapshot.data_version,
+                        "manifest": manifest,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest(),
+            manifest_json=manifest,
         )
 
     def _build_section_record(self, snapshot: MarketSnapshot, section_id: str, section) -> MarketSnapshotSection:
@@ -215,21 +243,22 @@ class MarketDataStorageService(BaseService):
 
         async with self._session_factory() as session:
             async with session.begin():
-                await self._snapshot_repository.upsert_snapshot(session, snapshot_record)
-                await self._dataset_repository.upsert_dataset(session, dataset_record)
+                with canonical_write_scope("market_snapshot", self.service_name):
+                    await self._snapshot_repository.upsert_snapshot(session, snapshot_record)
+                    section_count = 0
+                    item_count = 0
+                    for section_id, section in snapshot.sections.items():
+                        section_record = self._build_section_record(snapshot, section_id, section)
+                        await self._section_repository.upsert_section(session, section_record)
+                        section_count += 1
 
-                section_count = 0
-                item_count = 0
-                for section_id, section in snapshot.sections.items():
-                    section_record = self._build_section_record(snapshot, section_id, section)
-                    await self._section_repository.upsert_section(session, section_record)
-                    section_count += 1
+                        for item_record in self._iter_section_items(snapshot, section_id, section):
+                            await self._item_repository.upsert_item(session, item_record)
+                            item_count += 1
+                    await self._quality_repository.upsert_report(session, quality_record)
 
-                    for item_record in self._iter_section_items(snapshot, section_id, section):
-                        await self._item_repository.upsert_item(session, item_record)
-                        item_count += 1
-
-                await self._quality_repository.upsert_report(session, quality_record)
+                if not canonical_writer_enabled():
+                    await self._dataset_repository.upsert_dataset(session, dataset_record)
 
         return ServiceResult(
             status="ok",
@@ -268,4 +297,3 @@ class MarketDataStorageService(BaseService):
                 "dataset": dataset.to_dict() if dataset else None,
             },
         )
-

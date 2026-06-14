@@ -26,6 +26,7 @@ from src.common.paths import resolve_project_path
 from src.services.runtime_contracts import ArtifactRef, StorageRef
 from src.services.runtime_config import resolve_runtime_config
 from src.services.step_timeline_service import StepTimelineService
+from src.common.stage2_writer_routing import canonical_write_scope
 from src.common.logger import get_logger
 
 
@@ -299,17 +300,36 @@ class JobService(BaseService):
         trader_id = str(request.get("trader_id") or job.params.get("trader_id") or "").strip()
         if date_from is None or date_to is None or not trader_id:
             return None
+        raw_strategy_version_id = str(
+            request.get("strategy_version_id")
+            or job.params.get("strategy_version_id")
+            or ""
+        ).strip()
+        try:
+            canonical_strategy_version_id = UUID(raw_strategy_version_id) if raw_strategy_version_id else None
+            legacy_strategy_version_id = None
+        except ValueError:
+            canonical_strategy_version_id = None
+            legacy_strategy_version_id = raw_strategy_version_id or None
 
         return BacktestResultRun(
             result_run_id=str(job.id),
             source_job_id=str(job.id),
             job_type=job.job_type,
             request_trader_id=trader_id,
-            strategy_version_id=str(request.get("strategy_version_id") or job.params.get("strategy_version_id") or "") or None,
+            strategy_version_id=canonical_strategy_version_id,
+            legacy_strategy_version_id=legacy_strategy_version_id,
             request_date_from=date_from,
             request_date_to=date_to,
             benchmark_symbol=str(request.get("benchmark_symbol") or backtest_result.get("benchmark_symbol") or job.params.get("benchmark_symbol") or "") or None,
             regime_version=str(request.get("market_regime_version") or backtest_result.get("regime_version") or job.params.get("market_regime_version") or "") or None,
+            market_state_definition_version=str(
+                request.get("market_regime_version")
+                or backtest_result.get("regime_version")
+                or job.params.get("market_regime_version")
+                or ""
+            )
+            or None,
             source_feature_version=str(request.get("source_feature_version") or backtest_result.get("source_feature_version") or job.params.get("source_feature_version") or "") or None,
             mode=str(request.get("mode") or job.params.get("mode") or "") or None,
             scoring_profile=str(request.get("scoring_profile") or job.params.get("scoring_profile") or "") or None,
@@ -345,7 +365,8 @@ class JobService(BaseService):
         if run is None:
             return
         repository = BacktestResultRunRepository()
-        await repository.upsert_run(session, run)
+        with canonical_write_scope("backtest_run", self.service_name):
+            await repository.upsert_run(session, run)
 
     def _job_path_payload(self, job_id: UUID) -> dict[str, Any]:
         """构造 Job 文件路径返回结构。"""

@@ -8,6 +8,7 @@ from typing import Any, Callable
 from src.db.session import session_scope
 from src.db.repositories import SignalRepository
 from src.services.base import BaseService, ServiceResult
+from src.common.stage2_writer_routing import canonical_write_scope
 
 
 class SignalService(BaseService):
@@ -57,9 +58,18 @@ class SignalService(BaseService):
             "confidence": signal.confidence,
             "timestamp": signal.created_at.isoformat() if signal.created_at else None,
             "trader_id": signal.trader_id or metadata.get("trader_id"),
-            "strategy_version_id": signal.strategy_version_id,
+            "strategy_version_id": signal.strategy_version_id or signal.legacy_strategy_version_id,
             "context": self._signal_context(signal),
         }
+
+    async def persist_signal(self, session: Any, signal: Any, *, context: Any = None) -> Any:
+        """Persist a signal through the canonical application-service boundary."""
+        with canonical_write_scope("signal", self.service_name):
+            return await self._signal_repository.upsert_signal(
+                session,
+                signal,
+                context=context,
+            )
 
     def _list_db_signals(
         self,

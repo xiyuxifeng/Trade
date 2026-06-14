@@ -14,6 +14,10 @@ from src.models.market_dataset import MarketDataset
 from src.models.market_regime_record import MarketRegimeRecord
 from src.services.base import BaseService, ServiceResult
 from src.services.market_regime_rules import score_market_regime
+from src.common.stage2_writer_routing import (
+    canonical_write_scope,
+    canonical_writer_enabled,
+)
 
 DEFAULT_REGIME_VERSION = "market-regime-v3"
 DEFAULT_FEATURE_VERSION = "market-regime-features-v3"
@@ -145,6 +149,7 @@ class MarketRegimeService(BaseService):
             )
             regime = MarketRegimeRecord(
                 regime_id=evaluation.regime_id or f"{snapshot.snapshot_id}:{regime_version}",
+                market_snapshot_id=snapshot.id,
                 snapshot_id=snapshot.snapshot_id,
                 trade_date=snapshot.trade_date,
                 market=snapshot.market,
@@ -157,6 +162,7 @@ class MarketRegimeService(BaseService):
                 quality_status=evaluation.quality_status,
                 missing_reason=evaluation.missing_reason,
                 storage_ref={"snapshot_id": snapshot.snapshot_id, "regime_version": regime_version, "feature_version": feature.feature_version},
+                available_at=snapshot.available_at,
             )
             dataset_record = MarketDataset(
                 dataset_id=f"{snapshot.snapshot_id}:{regime_version}",
@@ -178,8 +184,10 @@ class MarketRegimeService(BaseService):
             saved = regime
             db_warning = False
             try:
-                saved = await self._regime_repository.upsert_regime(session, regime)
-                await self._dataset_repository.upsert_dataset(session, dataset_record)
+                with canonical_write_scope("market_state", self.service_name):
+                    saved = await self._regime_repository.upsert_regime(session, regime)
+                if not canonical_writer_enabled():
+                    await self._dataset_repository.upsert_dataset(session, dataset_record)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 db_warning = True

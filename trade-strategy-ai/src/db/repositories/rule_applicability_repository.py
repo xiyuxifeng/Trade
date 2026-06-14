@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from src.models.rule_applicability import RuleApplicabilityProfile
+from src.common.stage2_writer_routing import require_canonical_write
 
 
 class RuleApplicabilityRepository:
@@ -12,6 +13,10 @@ class RuleApplicabilityRepository:
 
     async def upsert_profile(self, session: AsyncSession, profile: RuleApplicabilityProfile) -> RuleApplicabilityProfile:
         """按 rule_id + profile_version + source_backtest_id 写入或更新 profile。"""
+        require_canonical_write(
+            "rule_applicability",
+            "RuleApplicabilityRepository.upsert_profile",
+        )
         existing = await session.scalar(
             select(RuleApplicabilityProfile).where(
                 RuleApplicabilityProfile.rule_id == profile.rule_id,

@@ -12,6 +12,7 @@ from src.db.repositories import RuleApplicabilityRepository
 from src.models.rule_applicability import RuleApplicabilityProfile
 from src.services.base import BaseService, ServiceResult
 from src.services.job_service import JobService
+from src.common.stage2_writer_routing import canonical_write_scope
 
 DEFAULT_PROFILE_VERSION = "rule-applicability-v1"
 DEFAULT_MIN_SAMPLE_COUNT = 5
@@ -459,7 +460,8 @@ class RuleApplicabilityService(BaseService):
         async with session_scope() as session:
             repo = self._repo_factory()
             try:
-                saved = await repo.upsert_profile(session, profile)
+                with canonical_write_scope("rule_applicability", self.service_name):
+                    saved = await repo.upsert_profile(session, profile)
                 await session.commit()
             except Exception as exc:  # noqa: BLE001
                 db_warning = True
@@ -589,7 +591,8 @@ class RuleApplicabilityService(BaseService):
             row.review_status = review_status
             row.reviewed_by = reviewed_by
             row.reviewed_at = datetime.now(UTC)
-            await session.flush()
+            with canonical_write_scope("rule_applicability", self.service_name):
+                await session.flush()
             await session.commit()
         return ServiceResult(
             status="ok",

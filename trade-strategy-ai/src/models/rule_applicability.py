@@ -6,12 +6,14 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Index, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from src.models.base import Base, TimestampMixin
+from src.domain.enums import FormalLifecycleState
+from src.models.stage2_canonical import RuleApplicabilityResultStatus, _enum
 
 
 JSONVariant = JSON().with_variant(JSONB, "postgresql")
@@ -74,9 +76,33 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
         Index("ix_rule_applicability_profiles_source_backtest_id", "source_backtest_id"),
         Index("ix_rule_applicability_profiles_review_status", "review_status"),
         Index("ix_rule_applicability_profiles_created_at", "created_at"),
+        UniqueConstraint(
+            "applicability_profile_id",
+            name="uq_rap_applicability_profile_id",
+        ),
     )
 
     profile_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    applicability_profile_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, default=uuid4)
+    rule_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("rule_versions.rule_version_id", name="fk_rap_rule_version", ondelete="SET NULL"),
+    )
+    dataset_snapshot_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("dataset_snapshots.dataset_snapshot_id", name="fk_rap_dataset_snapshot", ondelete="SET NULL"),
+    )
+    market_state_definition_version: Mapped[str | None] = mapped_column(String(64))
+    lifecycle_state: Mapped[FormalLifecycleState] = mapped_column(
+        _enum(FormalLifecycleState, "formal_lifecycle"),
+        nullable=False,
+        default=FormalLifecycleState.draft,
+    )
+    result_status: Mapped[RuleApplicabilityResultStatus] = mapped_column(
+        _enum(RuleApplicabilityResultStatus, "rule_applicability_result_status"),
+        nullable=False,
+        default=RuleApplicabilityResultStatus.partial,
+    )
     rule_id: Mapped[str] = mapped_column(String(128), nullable=False)
     profile_version: Mapped[str] = mapped_column(String(64), nullable=False, default="rule-applicability-v1")
     source_backtest_id: Mapped[str] = mapped_column(String(128), nullable=False)

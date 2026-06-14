@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.logger import get_logger
 from src.rule_pool.models import RulePool
+from src.common.stage2_writer_routing import require_legacy_compatibility_write
 
 logger = get_logger(__name__)
 from src.rule_pool.schemas import (
@@ -41,6 +42,7 @@ class RulePoolRepository:
         Returns:
             创建的 RulePool ORM 对象
         """
+        require_legacy_compatibility_write("rule", "RulePoolRepository.create_rule")
         orm_obj = self._to_orm_model(rule)
         self.session.add(orm_obj)
         await self.session.flush()
@@ -106,6 +108,7 @@ class RulePoolRepository:
         Returns:
             是否更新成功
         """
+        require_legacy_compatibility_write("rule", "RulePoolRepository.update_mapping")
         orm_obj = await self.get_rule_by_id(rule_id)
         if orm_obj is None:
             return False
@@ -140,6 +143,7 @@ class RulePoolRepository:
         Returns:
             是否更新成功
         """
+        require_legacy_compatibility_write("rule", "RulePoolRepository.update_review")
         orm_obj = await self.get_rule_by_id(rule_id)
         if orm_obj is None:
             return False
@@ -180,6 +184,7 @@ class RulePoolRepository:
         Returns:
             审核结果状态值 (approved/pending/rejected)
         """
+        require_legacy_compatibility_write("rule", "RulePoolRepository.auto_review_rule")
         orm_obj = await self.get_rule_by_id(rule_id)
         if orm_obj is None:
             return "not_found"
@@ -234,6 +239,7 @@ class RulePoolRepository:
         Returns:
             是否更新成功
         """
+        require_legacy_compatibility_write("rule", "RulePoolRepository.update_backtest_result")
         orm_obj = await self.get_rule_by_id(rule_id)
         if orm_obj is None:
             return False

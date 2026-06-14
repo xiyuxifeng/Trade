@@ -5,7 +5,19 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, Uuid, Enum as SAEnum
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -623,6 +635,16 @@ class DailyRuleSelection(TimestampMixin, Base):
     created_by: Mapped[str | None] = mapped_column(String(64))
     updated_by: Mapped[str | None] = mapped_column(String(64))
 
+    __table_args__ = (
+        Index("uq_drs_sv_dt_ms_rev", "strategy_version_id", "trade_date", "market_state_id", "revision_no", unique=True),
+        ForeignKeyConstraint(
+            ["market_state_id"],
+            ["market_regimes.market_state_id"],
+            name="fk_drs_market_state",
+            ondelete="CASCADE",
+        ),
+    )
+
 
 class DailyRuleSelectionItem(TimestampMixin, Base):
     __tablename__ = "daily_rule_selection_items"
@@ -722,7 +744,10 @@ class PostMarketReview(TimestampMixin, Base):
         Uuid,
         ForeignKey("market_snapshots.id", name="fk_pmr_snapshot", ondelete="SET NULL"),
     )
-    market_state_id: Mapped[UUID | None] = mapped_column(Uuid)
+    market_state_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("market_regimes.market_state_id", name="fk_pmr_market_state", ondelete="SET NULL"),
+    )
     signal_results_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     attribution_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

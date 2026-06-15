@@ -110,3 +110,131 @@ Application Service
 - Stage 3 不接受，状态保持 `[-]`。
 - 未实施 RT-S3-001～004。
 - 不允许自动开始 RT-S3-001。
+
+## 2026-06-15 RT-S3-001
+
+### Task
+
+- Task ID：`RT-S3-001 接入版本化 Prompt 套件`
+- Parent：gpt-5.4
+- 委派：`0` 个 subagent。
+- 委派理由：Prompt/Schema ownership、canonical registry、writer ownership、retry/repair 语义和最终 Task Review 都属于 Parent 决策；本仓库现有路径足以直接定位，不需要 Explorer，也不允许 broad Executor。
+
+### Preconditions re-verified
+
+- Stage 2 Gate 仍为 `ACCEPTED`。
+- Stage 3 readiness 仍为 `READY_FOR_RT-S3-001`。
+- 当前 shell 未显式设置 `STAGE2_CANONICAL_WRITER_ENABLED`，实测 `canonical_writer_enabled()` 返回 `True`。
+- 正式写入链保持：
+
+```text
+Application Service
+-> canonical repository
+-> canonical PostgreSQL database
+```
+
+- 未发现 dual-write 或第二 formal writer。
+- `PromptRun` / `ArticleStructure` / `RuleCandidate` 现有表字段足以承载 RT-S3-001 traceability；未触发 DB Schema 或 Alembic escalation。
+- Bootstrap 时 working tree 为空；本 Task 仅新增 RT-S3-001 直接相关文件和 Prompt 版本修正。
+
+### Implemented
+
+- 新增 canonical versioned Prompt registry，冻结 14 个 v1 Prompt 的：
+  - `prompt_name`
+  - `prompt_version`
+  - `file_path`
+  - `schema_name`
+  - `schema_version`
+  - `production_status`
+  - `ownership`
+- 新增单一 Pydantic 输出 Schema 包，覆盖：
+  - `article_analysis_v1`
+  - `article_analysis_repair_v1`
+  - modular extraction Prompts
+  - future-stage asset_validated/batch_only Prompt 资产
+- 修正已知版本错配：
+  - `article_structure_extraction_v1.md`
+  - `explicit_precondition_extraction_v1.md`
+- 新增 Stage 3 Prompt runtime：
+  - normal article 恰好 1 次 `article_analysis_v1`
+  - validation failure 最多 1 次 `article_analysis_repair_v1`
+  - repair 仅接收 article / previous_result / repair_targets / validation_errors
+  - repair 失败后抛出人工处理错误，不执行第二次 repair
+  - bounded provider retry 与 Schema repair 分离
+- 新增 canonical repositories/application service foundation：
+  - `PromptRun` upsert/update
+  - validated `ArticleStructure`
+  - validated `RuleCandidate`
+  - canonical writer scope enforcement
+- 新增 cache identity 与单进程并发 duplicate suppression：
+  - `input_hash + prompt_version + schema_version + model + critical input`
+  - cache hit 不重复 provider call
+  - 同 identity 并发请求不重复创建 canonical records
+- 未激活 future-stage Prompt runtime workflows。
+- legacy Prompt 文件继续保留；未执行 RT-S3-004 retirement。
+
+### Files
+
+- Prompt:
+  - `prompts/article_structure_extraction_v1.md`
+  - `prompts/explicit_precondition_extraction_v1.md`
+- Runtime / Schema / Repository:
+  - `src/llm/__init__.py`
+  - `src/llm/client.py`
+  - `src/llm/prompt_registry.py`
+  - `src/llm/runtime.py`
+  - `src/schemas/prompt_outputs.py`
+  - `src/db/repositories/stage3_prompt_runtime_repository.py`
+  - `src/services/stage3_prompt_runtime_service.py`
+- Tests:
+  - `tests/unit/llm/test_client.py`
+  - `tests/unit/llm/test_prompt_registry.py`
+  - `tests/unit/stage3/test_prompt_runtime_service.py`
+  - `tests/integration/test_stage3_prompt_runtime.py`
+
+### Verification
+
+- Focused red-green:
+  - `../.venv/bin/python -m pytest tests/unit/llm/test_prompt_registry.py tests/unit/stage3/test_prompt_runtime_service.py tests/integration/test_stage3_prompt_runtime.py -q`
+  - 最终：`9 passed`，随后扩展到 `13 passed`
+- Frozen command set:
+  - `../.venv/bin/python -m pytest tests/unit/llm tests/unit/schemas tests/unit/services/test_stage2_writer_routing.py -q`
+    - 结果：`20 passed in 8.19s`
+  - `../.venv/bin/python -m pytest tests/unit/stage3 tests/integration/test_stage3_prompt_runtime.py -q`
+    - 结果：`6 passed in 3.27s`
+  - `../.venv/bin/python -m compileall src api cli`
+    - 结果：通过；shell 输出一条既有 `/Users/wanghui/.rvm/scripts/rvm:20: operation not permitted: ps`，compileall 退出码 `0`
+  - `git diff --check`
+    - 结果：通过
+- Specialized evidence:
+  - registry 14 项扫描：`14`
+  - `article_analysis_v1` normal article 单调用：测试覆盖通过
+  - `article_analysis_repair_v1` repair count `0..1`：测试覆盖通过
+  - second repair rejection：测试覆盖通过
+  - cache hit duplicate suppression：测试覆盖通过
+  - concurrent duplicate suppression：测试覆盖通过
+  - PromptRun trace fields：集成测试覆盖 `prompt_name/prompt_version/schema_name/schema_version/provider/model/input_hash/request_json/raw_output_text/validation_state/retry_count/token_usage/input_version_id`
+  - canonical writer scope：通过 Stage 2 writer routing suite + Stage 3 repository/service tests 复验
+  - future-stage Prompt 未激活：registry/asset validation only；未接入 formal runtime call chain
+
+### Review
+
+- BLOCKER：无
+- HIGH：无
+- MEDIUM：
+  - `cost_amount` / `cost_currency` 目前仍依赖 provider 返回；现实现显式保留字段并在缺失时存 `null`，同时记录 token usage 和 raw output。后续若引入稳定计费规则，可在不改 DB Schema 的前提下补充计算。
+- LOW：
+  - 新增 `tests/unit/stage3/` 作为 RT-S3-001 等价 focused coverage 落点，替代原先仓库中不存在的 frozen path。
+
+### Acceptance
+
+- RT-S3-001 范围内实际 diff、focused tests、frozen verification、日志更新和 Parent Task Review 均完成。
+- 未修改 Alembic、DB Schema 或 Stage 2 frozen relationships。
+- 未启动 RT-S3-002、RT-S3-003、RT-S3-004。
+- 结论：`RT-S3-001 ACCEPTED`
+
+### Remaining Stage 3 gates
+
+- Stage 3 整体仍为 `[-]`。
+- `RT-S3-002` 现在可以开始，但本 Session 不自动开始。
+- `RT-S3-003`、`RT-S3-004` 仍等待上游 accepted Task 和后续证据。

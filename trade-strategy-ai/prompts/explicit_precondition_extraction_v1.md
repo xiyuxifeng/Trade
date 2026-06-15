@@ -13,7 +13,8 @@
 ## 输出 JSON
 
 {
-  "prompt_version": "explicit_precondition_v1",
+  "prompt_version": "explicit_precondition_extraction_v1",
+  "schema_version": "explicit_precondition_v1",
   "status": "explicit|not_declared",
   "preconditions": [
     {

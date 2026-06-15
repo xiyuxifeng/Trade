@@ -29,6 +29,17 @@ class LLMResult:
     model: str  # 实际使用的模型名称
 
 
+@dataclass(frozen=True, slots=True)
+class LLMTraceResult:
+    data: dict[str, Any]
+    model: str
+    raw_output: dict[str, Any] | None
+    raw_output_text: str | None
+    token_usage: dict[str, Any]
+    cost_amount: float | None = None
+    cost_currency: str | None = None
+
+
 # LLM API 调用重试次数
 LLM_MAX_RETRIES = 3
 _FATAL_LLM_KEYWORDS = (
@@ -142,6 +153,10 @@ class LLMClient:
 
     async def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
         """单次 LLM 调用，不重试。"""
+        return (await self.complete_json_with_trace(system_prompt=system_prompt, user_prompt=user_prompt)).data
+
+    async def complete_json_with_trace(self, *, system_prompt: str, user_prompt: str) -> LLMTraceResult:
+        """单次 LLM 调用，返回结构化 trace。"""
         missing = self._missing_fields()
         if missing:
             raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})", retryable=False, code="config")
@@ -151,7 +166,7 @@ class LLMClient:
             raise LLMError("No models configured", retryable=False, code="config")
 
         # 使用第一个模型
-        return await self._call_with_model(models[0], system_prompt, user_prompt)
+        return await self._call_with_model_trace(models[0], system_prompt, user_prompt)
 
     async def complete_json_with_retry(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
         """带重试和模型降级的 LLM 调用。
@@ -189,12 +204,15 @@ class LLMClient:
         raise last_error or LLMError("All models failed")
 
     async def _call_with_model(self, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        return (await self._call_with_model_trace(model, system_prompt, user_prompt)).data
+
+    async def _call_with_model_trace(self, model: str, system_prompt: str, user_prompt: str) -> LLMTraceResult:
         """使用指定模型调用 LLM。"""
         provider = (self.cfg.provider or "").lower().strip()
         if provider in {"openai", "openai_compatible", "qwen", "deepseek", "glm"}:
-            return await self._openai_chat_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
+            return await self._openai_chat_json_trace(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         if provider == "anthropic":
-            return await self._anthropic_json(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
+            return await self._anthropic_json_trace(model=model, system_prompt=system_prompt, user_prompt=user_prompt)
         raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}", retryable=False, code="config")
 
     async def complete_text(self, *, system_prompt: str, user_prompt: str) -> str:
@@ -215,14 +233,14 @@ class LLMClient:
             raise LLMError("complete_text for anthropic is not implemented", retryable=False, code="config")
         raise LLMError(f"Unsupported LLM provider: {self.cfg.provider}", retryable=False, code="config")
 
-    async def _openai_chat_content(
+    async def _openai_chat_completion(
         self,
         *,
         model: str,
         system_prompt: str,
         user_prompt: str,
         response_format: dict[str, Any] | None,
-    ) -> str:
+    ) -> Any:
         if not self.cfg.url:
             raise LLMError("LLM URL (llm.url) 未配置！")
 
@@ -248,6 +266,22 @@ class LLMClient:
         except Exception as exc:  # noqa: BLE001
             retryable, code = _llm_error_metadata(exc)
             raise LLMError(f"LLM request failed: {exc}", retryable=retryable, code=code) from exc
+        return completion
+
+    async def _openai_chat_content(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        response_format: dict[str, Any] | None,
+    ) -> str:
+        completion = await self._openai_chat_completion(
+            model=model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_format=response_format,
+        )
 
         try:
             content = completion.choices[0].message.content
@@ -259,18 +293,43 @@ class LLMClient:
         return content
 
     async def _openai_chat_json(self, *, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
-        content = await self._openai_chat_content(
+        return (await self._openai_chat_json_trace(model=model, system_prompt=system_prompt, user_prompt=user_prompt)).data
+
+    async def _openai_chat_json_trace(self, *, model: str, system_prompt: str, user_prompt: str) -> LLMTraceResult:
+        completion = await self._openai_chat_completion(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            # 尽量要求 JSON 输出；不支持的兼容实现会忽略
             response_format={"type": "json_object"},
         )
 
         try:
-            return json.loads(content)
+            content = completion.choices[0].message.content
+        except Exception as exc:  # noqa: BLE001
+            raise LLMError(f"Unexpected LLM response shape: {completion}") from exc
+        if not isinstance(content, str) or not content.strip():
+            raise LLMError(f"Empty LLM content: {content!r}")
+
+        raw_output = completion.model_dump(mode="json") if hasattr(completion, "model_dump") else None
+        usage = getattr(completion, "usage", None)
+        if hasattr(usage, "model_dump"):
+            token_usage = usage.model_dump(mode="json")
+        elif isinstance(usage, dict):
+            token_usage = usage
+        else:
+            token_usage = {}
+
+        try:
+            data = json.loads(content)
         except json.JSONDecodeError as exc:
             raise LLMError(f"LLM output is not valid JSON: {content[:500]}") from exc
+        return LLMTraceResult(
+            data=data,
+            model=model,
+            raw_output=raw_output,
+            raw_output_text=content,
+            token_usage=token_usage,
+        )
 
     async def _openai_chat_text(self, *, model: str, system_prompt: str, user_prompt: str) -> str:
         return await self._openai_chat_content(
@@ -281,6 +340,9 @@ class LLMClient:
         )
 
     async def _anthropic_json(self, *, model: str, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        return (await self._anthropic_json_trace(model=model, system_prompt=system_prompt, user_prompt=user_prompt)).data
+
+    async def _anthropic_json_trace(self, *, model: str, system_prompt: str, user_prompt: str) -> LLMTraceResult:
         base_url = (self.cfg.url or "https://api.anthropic.com").rstrip("/")
         url = f"{base_url}/v1/messages"
         headers = {
@@ -313,7 +375,16 @@ class LLMClient:
         except Exception as exc:  # noqa: BLE001
             raise LLMError(f"Unexpected Anthropic response shape: {data}") from exc
 
+        raw_output = data if isinstance(data, dict) else None
+        token_usage = data.get("usage", {}) if isinstance(data, dict) else {}
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except json.JSONDecodeError as exc:
             raise LLMError(f"LLM output is not valid JSON: {text[:500]}") from exc
+        return LLMTraceResult(
+            data=parsed,
+            model=model,
+            raw_output=raw_output,
+            raw_output_text=text,
+            token_usage=token_usage if isinstance(token_usage, dict) else {},
+        )

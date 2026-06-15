@@ -15,7 +15,8 @@
 ## 输出 JSON
 
 {
-  "prompt_version": "article_structure_v1",
+  "prompt_version": "article_structure_extraction_v1",
+  "schema_version": "article_structure_v1",
   "article_id": "",
   "author_id": "",
   "published_at": null,

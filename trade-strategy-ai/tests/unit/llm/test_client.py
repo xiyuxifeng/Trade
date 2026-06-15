@@ -108,3 +108,59 @@ async def test_complete_json_with_retry_stops_on_403_quota_error(monkeypatch: py
     assert attempts == ["qwen3-8b"]
     assert exc_info.value.retryable is False
     assert exc_info.value.code == "403"
+
+
+@pytest.mark.asyncio
+async def test_complete_json_with_trace_captures_usage_and_raw_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.llm import client as client_mod
+
+    class _Usage:
+        def model_dump(self, mode="json"):
+            del mode
+            return {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}
+
+    class _Message:
+        content = '{"ok": true}'
+
+    class _Choice:
+        message = _Message()
+
+    class _Completion:
+        choices = [_Choice()]
+        usage = _Usage()
+
+        def model_dump(self, mode="json"):
+            del mode
+            return {"choices": [{"message": {"content": '{"ok": true}'}}], "usage": {"total_tokens": 18}}
+
+    class _FakeCompletions:
+        async def create(self, **kwargs):
+            del kwargs
+            return _Completion()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(client_mod, "AsyncOpenAI", _FakeOpenAI)
+
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model="qwen3-8b",
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+
+    trace = await client.complete_json_with_trace(system_prompt="system", user_prompt="user")
+
+    assert trace.data == {"ok": True}
+    assert trace.model == "qwen3-8b"
+    assert trace.raw_output["usage"]["total_tokens"] == 18
+    assert trace.raw_output_text == '{"ok": true}'
+    assert trace.token_usage["total_tokens"] == 18

@@ -19,6 +19,9 @@ JourneyStatus = Literal["ready", "partial", "empty"]
 HumanReviewDecision = Literal["approve", "reject"]
 
 
+SummarySource = Literal["article_revision_source_payload", "blog_article_current", "unavailable"]
+
+
 @dataclass(frozen=True)
 class AutomaticReviewResult:
     status: AutomaticReviewStatus
@@ -27,6 +30,29 @@ class AutomaticReviewResult:
     backtestability_status: str
     kaipan_dependency: bool
     market_state_status: str
+
+
+@dataclass(frozen=True)
+class SummaryProvenance:
+    summary: str | None
+    source: SummarySource
+    article_revision_id: str
+    content_hash: str
+    available: bool
+    aligned: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ArticleStructureProvenance:
+    article_structure_id: str | None
+    article_revision_id: str | None
+    prompt_run_id: str | None
+    prompt_name: str | None
+    prompt_version: str | None
+    schema_name: str | None
+    schema_version: str | None
+    available: bool
 
 
 @dataclass(frozen=True)
@@ -39,11 +65,84 @@ class ArticleJourney:
     candidates: list[RuleCandidate]
     automatic_reviews: dict[UUID, AutomaticReviewResult]
     rule_versions: dict[UUID, RuleVersion]
+    summary_provenance: SummaryProvenance
+    article_structure_provenance: ArticleStructureProvenance
     message: str | None = None
 
 
 class Stage3SingleArticleError(RuntimeError):
     pass
+
+
+def resolve_summary_provenance(*, article: BlogArticle, revision: ArticleRevision) -> SummaryProvenance:
+    source_payload = revision.source_payload if isinstance(revision.source_payload, dict) else {}
+    revision_summary = None
+    for candidate in (
+        source_payload.get("summary"),
+        (source_payload.get("blog_article") or {}).get("summary") if isinstance(source_payload.get("blog_article"), dict) else None,
+        (source_payload.get("raw_article") or {}).get("summary") if isinstance(source_payload.get("raw_article"), dict) else None,
+    ):
+        if isinstance(candidate, str) and candidate.strip():
+            revision_summary = candidate.strip()
+            break
+
+    if revision_summary is not None:
+        return SummaryProvenance(
+            summary=revision_summary,
+            source="article_revision_source_payload",
+            article_revision_id=str(revision.article_revision_id),
+            content_hash=revision.content_hash,
+            available=True,
+            aligned=True,
+        )
+
+    if article.content_hash == revision.content_hash and isinstance(article.summary, str) and article.summary.strip():
+        return SummaryProvenance(
+            summary=article.summary.strip(),
+            source="blog_article_current",
+            article_revision_id=str(revision.article_revision_id),
+            content_hash=revision.content_hash,
+            available=True,
+            aligned=True,
+        )
+
+    return SummaryProvenance(
+        summary=None,
+        source="unavailable",
+        article_revision_id=str(revision.article_revision_id),
+        content_hash=revision.content_hash,
+        available=False,
+        aligned=False,
+        reason="selected revision has no frozen summary",
+    )
+
+
+def build_article_structure_provenance(
+    *,
+    structure: ArticleStructure | None,
+    prompt_run: PromptRun | None,
+) -> ArticleStructureProvenance:
+    if structure is None or prompt_run is None:
+        return ArticleStructureProvenance(
+            article_structure_id=None,
+            article_revision_id=None,
+            prompt_run_id=None,
+            prompt_name=None,
+            prompt_version=None,
+            schema_name=None,
+            schema_version=None,
+            available=False,
+        )
+    return ArticleStructureProvenance(
+        article_structure_id=str(structure.article_structure_id),
+        article_revision_id=str(structure.article_revision_id) if structure.article_revision_id is not None else None,
+        prompt_run_id=str(structure.prompt_run_id),
+        prompt_name=prompt_run.prompt_name,
+        prompt_version=prompt_run.prompt_version,
+        schema_name=prompt_run.schema_name,
+        schema_version=prompt_run.schema_version,
+        available=True,
+    )
 
 
 def _contains_kaipan_dependency(values: Any) -> bool:
@@ -170,6 +269,8 @@ class Stage3SingleArticleService:
                     candidates=[],
                     automatic_reviews={},
                     rule_versions={},
+                    summary_provenance=resolve_summary_provenance(article=article, revision=revision),
+                    article_structure_provenance=build_article_structure_provenance(structure=None, prompt_run=None),
                     message="该文章尚未完成结构化分析。",
                 )
 
@@ -197,6 +298,8 @@ class Stage3SingleArticleService:
                 candidates=candidates,
                 automatic_reviews=automatic_reviews,
                 rule_versions=rule_versions,
+                summary_provenance=resolve_summary_provenance(article=article, revision=revision),
+                article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
                 message=message,
             )
 

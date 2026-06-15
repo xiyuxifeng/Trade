@@ -4,8 +4,8 @@
 
 - Stage：`Stage 3 Prompt 与文章处理链路`
 - 状态：`[-] 进行中`
-- 当前活动：Bootstrap 与合同冻结完成，未实施任何 Stage 3 Task。
-- 下一可执行 Task：`RT-S3-001 接入版本化 Prompt 套件`
+- 当前活动：`RT-S3-003` 已完成并接受；`RT-S3-004` 尚未开始。
+- 下一可执行 Task：`RT-S3-004 legacy Prompt migration / retirement`
 - Stage 计划：[stage-3-implementation-plan.md](../refactor-implementation-plans/stage-3-implementation-plan.md)
 
 ## 2026-06-15 Bootstrap
@@ -438,3 +438,365 @@ Article
 - Stage 3 整体仍为 `[-]`。
 - `RT-S3-003` 现在可以开始，但本 Session 不自动开始。
 - `RT-S3-004` 仍等待 `RT-S3-003`、观察期和 rollback evidence。
+
+## 2026-06-15 - RT-S3-003 Summary Provenance Contract Escalation Review
+
+### Scope
+
+- 仅审查 reported summary-provenance contradiction。
+- 未实施 `RT-S3-003`。
+- 保留当前 untracked regression/batch failing-test scaffolds。
+- Parent：gpt-5.5。
+- 委派：`0` 个 subagent；事实源、Schema ownership 和 Task acceptance 决策由 Parent 持有。
+
+### Verified evidence
+
+- `ArticleStructureExtractionOutput` 和 `article_analysis_v1` output Schema 没有 `summary`。
+- `method_tags` 和 structured analysis fields 来自 validated canonical `ArticleStructure.payload`。
+- `BlogArticle.summary` 是 article-level mutable field；`upsert_article_from_payload()` 会原地覆盖变化值。
+- `ArticleRevision` 冻结 `content_hash/content_text/content_html/source_payload`，但没有 summary 字段。
+- Stage 2 migration 写入的 `ArticleRevision.source_payload` 不保证包含 `BlogArticle.summary`。
+- RT-S3-002 API 当前对任意 selected revision 返回当前 `BlogArticle.summary`，没有 summary source、revision ID、content hash 或 alignment proof。
+- RT-S3-002 accepted tests 只 seed summary；没有验证 summary 随 selected revision 冻结或在旧 revision 下拒绝错误 fallback。
+- RT-S3-003 untracked fixture scaffolds把 `BlogArticle.summary` seed 为 title，并断言 `summary_contains`；该证据不能证明 revision provenance。
+- Review 开始时 tracked/staged diff 为空。安全 inventory/test scaffolds 仅为：
+  - `tests/regression/stage3/test_fixed_set.py`
+  - `tests/unit/stage3/test_regression_and_batch_services.py`
+  - `tests/integration/test_stage3_batch.py`
+
+### Contract decision
+
+- Preferred premise 未验证：`BlogArticle.summary` 不是 frozen, version-aligned canonical summary source。
+- 不向 `ArticleStructure` Prompt/Schema 添加 summary。
+- 不修改 DB Schema 或 migration。
+- `RT-S3-001` 保持 accepted；registry、Schema ownership、invocation/cache/idempotency 和 canonical persistence contracts 不变。
+- 最小 reopened upstream Task 为 `RT-S3-002`，仅修复 summary/ArticleStructure provenance exposure and verification。
+- `RT-S3-002` human review、RuleVersion、canonical writer 和 no-dual-write contracts 不变。
+- `RT-S3-003` 在 provenance repair accepted 前不得恢复实现。
+
+### Old and new evidence wording
+
+Old:
+
+```text
+原文、summary、method tags、candidate rules、evidence、missing、backtestability、Kaipan、market-state status 全部真实展示。
+```
+
+New:
+
+```text
+原文与 cleaned content 绑定 selected ArticleRevision；summary 仅从 revision-bound frozen canonical source 展示，API 同时返回 summary_provenance，无法对齐时 truthful unavailable/partial。
+method tags、structured claims、candidate rules、evidence、missing、backtestability、Kaipan 和 market-state status 来自 validated canonical ArticleStructure/RuleCandidate，API 同时返回 article_structure_provenance。
+```
+
+### Invalidated evidence and required tests
+
+- Invalidated：
+  - RT-S3-002 “summary 来自 canonical article record” acceptance statement。
+  - 仅 seed/assert `BlogArticle.summary` 的 API/integration evidence。
+  - RT-S3-003 scaffold 中未绑定 selected revision 的 `summary_contains` evidence。
+- Required adjustments：
+  - current revision summary provenance success case。
+  - selected older revision with changed current article summary must not leak/fallback。
+  - missing or unaligned frozen summary returns unavailable/partial with reason。
+  - method tags and structured fields assert `ArticleStructure.article_revision_id/prompt_run_id` provenance independently。
+  - regression manifest records and checks both provenance objects。
+
+### Verification
+
+- `../.venv/bin/python -m pytest tests/unit/stage3/test_single_article_service.py tests/integration/test_stage3_single_article.py tests/api/routers/ui/test_article_metadata.py -q`
+  - `8 passed`
+  - 结论：accepted RT-S3-002 behavior 仍通过，但现有 suite 未覆盖 revision-bound summary provenance。
+- `../.venv/bin/python -m pytest tests/regression/stage3/test_fixed_set.py tests/unit/stage3/test_regression_and_batch_services.py tests/integration/test_stage3_batch.py -q`
+  - collection failed：`stage3_regression_fixtures` 和 `stage3_batch_service` 尚未实现。
+  - 结论：符合“保留 failing scaffolds、未实施 RT-S3-003”；不是新的 product regression evidence。
+- `git diff --check`
+  - 通过。
+
+### Status
+
+- `RT-S3-001`：`[x] ACCEPTED`。
+- `RT-S3-002`：`[-] REOPENED`，仅限 provenance repair。
+- `RT-S3-003`：`[!] BLOCKED` by reopened upstream Task；safe scaffolds preserved。
+- `RT-S3-004`：`[ ]`，继续等待。
+- Review conclusion：`REOPEN_UPSTREAM_TASK`。
+
+## 2026-06-15 - RT-S3-002 Summary and ArticleStructure Provenance Repair
+
+### Scope
+
+- 仅执行 reopened `RT-S3-002` bounded provenance repair。
+- 不重跑 Stage 3 Bootstrap。
+- 不修改 `RT-S3-001` registry/Schema/runtime contracts。
+- 不恢复 `RT-S3-003` 实现；仅保留其 safe inventory work 和 untracked failing scaffolds。
+
+### Root cause
+
+- API 对 selected revision 一律返回当前 `BlogArticle.summary`。
+- 当 `BlogArticle.summary` 已被后续内容覆盖时，older `ArticleRevision` 会泄漏最新摘要。
+- `method_tags` 仍来自 validated canonical `ArticleStructure`，但原实现没有把 summary provenance 与 ArticleStructure provenance 分开表达或验证。
+
+### Repair decision
+
+- summary provenance 冻结为：
+  - 首选 `ArticleRevision.source_payload` 中的 frozen summary；
+  - 仅当 selected revision `content_hash == BlogArticle.content_hash` 时，允许使用当前 `BlogArticle.summary` 作为 latest-revision aligned summary；
+  - 若 selected older revision 没有 frozen summary，则返回 `summary = null`，`summary_provenance.source = unavailable`，不得回退到当前 article row。
+- method tags、structured claims、candidate rules、missing 和 evidence 继续来自 validated canonical `ArticleStructure`。
+- API 明确返回：
+  - `summary_provenance`
+  - `article_structure_provenance`
+  - selected revision `content_hash`
+
+### Files
+
+- `src/services/stage3_single_article_service.py`
+- `api/schemas/article_analysis.py`
+- `api/routers/ui/article_metadata.py`
+- `tests/unit/stage3/test_single_article_service.py`
+- `tests/api/routers/ui/test_article_metadata.py`
+- `tests/integration/test_stage3_single_article.py`
+
+### TDD
+
+- 先新增/更新失败测试：
+  - latest revision summary provenance success
+  - older revision summary from revision-bound source
+  - older revision must not leak changed current article summary
+  - API `article_revision_id/content_hash` 与 `summary_provenance` 对齐
+  - `method_tags` 继续验证 `ArticleStructure` provenance
+- 红灯阶段：
+  - `ImportError: resolve_summary_provenance` not found
+- 随后补最小实现并复跑至全绿。
+
+### Verification
+
+- `../.venv/bin/python -m pytest tests/api/routers/ui/test_article_metadata.py tests/unit/stage3/test_single_article_service.py tests/integration/test_stage3_single_article.py -q`
+  - `12 passed in 6.33s`
+- `../.venv/bin/python -m compileall src api cli`
+  - 通过；shell 输出既有 `/Users/wanghui/.rvm/scripts/rvm:20: operation not permitted: ps`，退出码 `0`
+- `git diff --check`
+  - 通过
+
+### Specialized evidence
+
+- latest revision：
+  - `summary_provenance.source = blog_article_current`
+  - 仅在 `selected revision.content_hash == BlogArticle.content_hash` 时允许
+- older revision：
+  - 若 `ArticleRevision.source_payload.summary` 存在，则返回该 frozen summary
+  - 修改当前 `BlogArticle.summary` 不改变 older revision response
+  - 若 frozen summary 不存在，则 `summary = null` 且 `summary_provenance.source = unavailable`
+- API 同时返回 `article_structure_provenance.article_revision_id/prompt_run_id/prompt/schema`
+- `method_tags` 仍从 selected revision 对应的 canonical `ArticleStructure.payload.method_tags` 返回
+- human-review / RuleVersion:
+  - 原 integration flow 仍通过
+  - `RuleVersion.lifecycle_state = draft` 与 `pending_backtest` 映射未变
+- 未修改 DB Schema、Alembic、writer routing 或 legacy formal write behavior
+- `RT-S3-003` safe untracked scaffolds 保持未触碰：
+  - `tests/regression/stage3/test_fixed_set.py`
+  - `tests/unit/stage3/test_regression_and_batch_services.py`
+  - `tests/integration/test_stage3_batch.py`
+
+### Review
+
+- BLOCKER：无
+- HIGH：无
+- MEDIUM：
+  - 现有真实数据中 `ArticleRevision.source_payload` 未普遍保存 summary；因此 older revision summary 在缺少 frozen source 时会 truthful unavailable，而不是伪造回填。这符合 amended contract。
+
+### Acceptance
+
+- reopened `RT-S3-002` provenance repair 范围内的实现、测试和日志已完成。
+- `RT-S3-001` accepted contracts preserved。
+- `RT-S3-003` safe work preserved，但未恢复执行。
+
+## 2026-06-15 - RT-S3-003 Regression Set and Recoverable Batch Processing
+
+### Scope
+
+- 仅执行 `RT-S3-003 Build the Regression Set and Recoverable Batch Processing`。
+- 保持上游冻结：
+  - `RT-S3-001 ACCEPTED`
+  - `RT-S3-002 ACCEPTED`，并采用 revision-bound summary provenance 合同
+- 未执行 `RT-S3-004`、Stage 4、Stage 6 或 Stage 7。
+
+### Preserved safe work
+
+- 保留 escalation 前已完成的 canonical article inventory audit：
+  - `blog_articles=131`
+  - `article_revisions=131`
+  - `prompt_runs=262`
+  - `article_structures=262`
+  - `rule_candidates=485`
+  - `rule_versions=14`
+- 保留 12 篇代表性候选池与类别覆盖分析。
+- 在原有 untracked scaffolds 上直接完成实现；未删除、未重建：
+  - `tests/regression/stage3/test_fixed_set.py`
+  - `tests/unit/stage3/test_regression_and_batch_services.py`
+  - `tests/integration/test_stage3_batch.py`
+
+### Fixed regression set
+
+- 固定回归集数量：`12`
+- 覆盖类别完整：
+  - `explicit_and_actionable_rules`
+  - `pure_conceptual_content`
+  - `mixed_concept_and_rule_content`
+  - `concrete_review_case_study_content`
+  - `explicit_market_state`
+  - `undeclared_market_state`
+  - `ambiguous_terminology`
+  - `kaipan_dependency`
+  - `duplicate_or_near_duplicate_rules`
+  - `conflicting_viewpoints`
+  - `human_review_required`
+- 冻结 identity / version：
+  - `article_id`
+  - `article_revision_id`
+  - `content_hash`
+  - `prompt_name=article_analysis_v1`
+  - `prompt_version=article_analysis_v1`
+  - `schema_name=article_analysis_v1`
+  - `schema_version=article_analysis_v1`
+  - `model=stage3-fixed-fixture-model`
+- 修订后的 provenance 合同已应用到 fixture：
+  - 当前真实仓库 `131/131` 篇 `BlogArticle.summary` 为空
+  - 当前真实仓库 `131/131` 个 `ArticleRevision.source_payload` 也无 frozen summary
+  - 因此 fixed set 的 summary expectation 统一冻结为 `source=unavailable`
+  - `summary unavailable` 被视为 truthful expected state，不构成 regression failure
+  - `method_tags` / 结构化字段继续由 validated canonical `ArticleStructure` 提供并单独校验 provenance
+
+### Implemented
+
+- 新增 Stage 3 fixed-set fixture / semantic assertion layer：
+  - `src/services/stage3_regression_fixtures.py`
+  - 明确分离 `summary_expectation` 与 `semantic_assertions`
+  - 冻结 12 篇文章的 revision/content hash/category coverage
+- 新增 Stage 3 regression runner：
+  - `src/services/stage3_regression_service.py`
+  - 通过 accepted RT-S3-001 runtime 跑固定集
+  - 验证 summary provenance / article structure provenance / semantic assertions
+  - 检查 normal article 仍为 1 main call + 最多 1 repair
+  - 检查无 human approval 时不生成 `RuleVersion`
+- 新增 Stage 3 recoverable batch service：
+  - `src/services/stage3_batch_service.py`
+  - fixed-set gate 未通过时 block
+  - 使用 `jobs.runtime_state` / `progress` 保存 checkpoint 与质量统计
+  - 支持 resume / idempotent rerun / revision incremental reprocess
+  - concurrency bounded，且 provider/network retry 仍由 accepted runtime bounded 控制
+- 新增冻结 CLI 命令：
+  - `python -m cli.main stage3-regression run --fixed-set`
+  - `python -m cli.main stage3-article-batch run --dry-run --limit 15`
+- bounded RT-S3-001 integration correction：
+  - `src/db/repositories/stage3_prompt_runtime_repository.py`
+  - SQLite / test path 下 cache query 现在用 enum value 过滤，确保 accepted cache contract 可被稳定复验
+
+### Files
+
+- Runtime / CLI:
+  - `src/services/stage3_regression_fixtures.py`
+  - `src/services/stage3_regression_service.py`
+  - `src/services/stage3_batch_service.py`
+  - `src/db/repositories/stage3_prompt_runtime_repository.py`
+  - `cli/main.py`
+- Tests:
+  - `tests/regression/stage3/test_fixed_set.py`
+  - `tests/unit/stage3/test_regression_and_batch_services.py`
+  - `tests/integration/test_stage3_batch.py`
+
+### Verification
+
+- RT-S3-003 focused suite：
+  - `../.venv/bin/python -m pytest tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_batch.py -q`
+  - 结果：`18 passed in 7.28s`
+- RT-S3-002 provenance preservation：
+  - `../.venv/bin/python -m pytest tests/api/routers/ui/test_article_metadata.py tests/unit/stage3/test_single_article_service.py tests/integration/test_stage3_single_article.py tests/integration/test_stage3_prompt_runtime.py -q`
+  - 结果：`13 passed in 6.84s`
+- RT-S3-001/runtime preservation：
+  - `../.venv/bin/python -m pytest tests/unit/llm tests/unit/schemas tests/unit/services/test_stage2_writer_routing.py -q`
+  - 结果：`21 passed in 4.67s`
+- 固定集门禁命令：
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - 结果：
+    - `status=passed`
+    - `article_count=12`
+    - `processed_count=12`
+    - `cached_count=0`
+    - `repaired_count=0`
+    - `human_attention_count=6`
+    - `semantic_failures=[]`
+- 受控 dry-run 命令：
+  - `../.venv/bin/python -m cli.main stage3-article-batch run --dry-run --limit 15`
+  - 结果：
+    - `status=completed`
+    - `gate_status=passed`
+    - `processed_count=12`
+    - `success_count=12`
+    - `cached_count=12`
+    - `repaired_count=0`
+    - `retry_count=0`
+    - `human_attention_count=6`
+    - `quality_stats.automatic_review_status_counts={"needs_human_review": 6, "pending_backtest": 4}`
+- Static / diff:
+  - `../.venv/bin/python -m compileall src api cli`
+    - 结果：通过
+  - `git diff --check`
+    - 结果：通过
+
+### Specialized evidence
+
+- fixed set 为 `12` 篇 existing articles，类别覆盖完整。
+- 所有 fixture 同时绑定 article/revision/content hash 与 Prompt/Schema versions。
+- semantic assertions 使用语义断言而非全文精确匹配。
+- fixed-set failure blocks batch：
+  - unit test 覆盖通过
+- repeated regression 无 formal duplicates：
+  - repeated run 仅命中 cache；`PromptRun/ArticleStructure/RuleCandidate` 不重复增长
+- repeated batch rerun / resume：
+  - 单个 `Job` checkpoint 持续复用
+  - injected failure 后 resume 仅处理剩余 revision
+- incremental content-version update：
+  - 新 revision 仅重跑受影响文章
+  - 旧 revision 结果保持 traceable
+- concurrency limit：
+  - 测试覆盖 `max_active_calls <= configured limit`
+- bounded retry：
+  - provider failure fixture 只触发 bounded network retry
+  - Schema repair 仍保持 `0..1`
+- provenance：
+  - summary provenance 与 article structure provenance 分开校验
+  - unavailable summary 被保留为 truthful expected state
+- no per-article author total-profile call：
+  - RT-S3-003 实现未引入 author total-profile runtime
+- no DB Schema / Alembic change：
+  - 符合
+- no dual-write / no legacy formal writer：
+  - 通过 Stage 2 writer routing suite + Stage 3 focused tests 复验
+- no full 100+ processing：
+  - 本 Task 只执行 fixed set 12 篇 + `--limit 15` dry-run readiness evidence
+
+### Parent review
+
+- BLOCKER：无
+- HIGH：无
+- MEDIUM：
+  - 当前 fixed set 的 revision-bound summary expectation 全部为 `unavailable`，这是当前 canonical article source 的真实状态，而不是 fixture 降级。后续若文章 source 开始保留 revision summary，应显式更新 fixture 与预期。
+
+### Acceptance
+
+- fixed set `12` 篇，类别覆盖完整。
+- fixed-set regression gate 通过。
+- batch dry-run / checkpoint-resume / idempotency / incremental / retry / concurrency focused tests 通过。
+- 真实 dry-run 仅处理 fixed set 12 篇；未触发全量 100+ 处理。
+- 未修改 DB Schema / Alembic。
+- 未恢复 legacy formal writer，未引入第二 writer / second fact source。
+- 日志已更新。
+- 结论：`RT-S3-003 ACCEPTED`
+
+### Remaining Stage 3 gates
+
+- Stage 3 整体仍为 `[-]`。
+- `RT-S3-004` 现在可以开始，但本 Session 不自动开始。
+- Stage 3 不得标记完成；仍需 RT-S3-004 cutover/retirement、观察期与 rollback evidence。
+- 结论：`RT-S3-002 RE-ACCEPTED`

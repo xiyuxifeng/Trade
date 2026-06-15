@@ -206,6 +206,28 @@ Article + ArticleRevision
 
 Future-stage Prompt 仅允许完成 registry、Schema 和 fixture validation。
 
+### 4.7 Summary 与 ArticleStructure provenance
+
+2026-06-15 Contract Escalation Review 验证：
+
+- `ArticleStructureExtractionOutput` 和 `article_analysis_v1` output Schema 不包含 `summary`；不得仅为满足旧 evidence wording 向其新增 `summary`。
+- `method_tags`、`key_claims` 和其他结构化分析字段继续来自 validated canonical `ArticleStructure`。
+- 当前 `BlogArticle.summary` 是可被 article upsert 原地更新的 article-level 字段，不是冻结的 revision-level source。
+- `ArticleRevision` 当前没有 summary 列，现有 `source_payload` 也不保证保存 summary snapshot。
+- 当前 API 在选择任意 `ArticleRevision` 时直接返回当前 `BlogArticle.summary`，因此不能证明 summary 与 selected revision/content hash 对齐。
+
+冻结修订：
+
+- API 不得把当前 mutable `BlogArticle.summary` 无 provenance 地作为 selected revision 的 summary 返回。
+- summary 只有在其值已冻结到现有 canonical persistence，并明确绑定 selected `article_revision_id` 和 `content_hash` 时才可展示；否则必须返回 unavailable/partial 和可操作原因。
+- 不新增 DB 列或 migration。RT-S3-002 provenance repair 必须使用现有 canonical JSON persistence 和 application-service/repository writer boundary。
+- API 必须分别暴露：
+  - `summary_provenance`：summary source、selected `article_revision_id`、selected `content_hash`、availability/alignment。
+  - `article_structure_provenance`：`article_structure_id`、`article_revision_id`、`prompt_run_id`、Prompt/Schema version。
+- regression fixture 必须分别固定并验证这两类 provenance；summary semantic assertion 不得再通过 seed 当前 `BlogArticle.summary` 伪造 revision alignment。
+- RT-S3-001 Prompt registry、Schema ownership、one-main-call/at-most-one-repair 和 canonical PromptRun/ArticleStructure/RuleCandidate invocation contracts保持不变。
+- RT-S3-002 human-review、RuleVersion(draft/pending-backtest)、canonical writer 和 no-dual-write contracts保持不变。
+
 ## 5. Task 顺序
 
 | Task | 风险 | Agent 默认 | Depends on | 并行 |
@@ -309,14 +331,15 @@ git diff --check
 
 **Specialized evidence:**
 
-- 原文、summary、method tags、candidate rules、evidence、missing、backtestability、Kaipan、market-state status 全部真实展示。
+- 原文与 cleaned content 绑定 selected `ArticleRevision`；summary 仅从 revision-bound frozen canonical source 展示，API 同时返回 `summary_provenance`，无法对齐时 truthful unavailable/partial。
+- method tags、structured claims、candidate rules、evidence、missing、backtestability、Kaipan 和 market-state status 来自 validated canonical `ArticleStructure`/`RuleCandidate`，API 同时返回 `article_structure_provenance`。
 - loading/empty/error/partial/permission denied/unavailable 完整。
 - automatic pass 显示为待回测。
 - 未经 human review 不存在 RuleVersion。
 - human review 通过 application service -> canonical repository 创建 RuleVersion。
 - Stage 3 创建的 RuleVersion 未越过待回测边界。
 
-**Completion:** 单篇真实数据路径和 critical E2E 通过；RT-S3-002 单独 Review/accept。
+**Completion:** 单篇真实数据路径、summary/ArticleStructure 双 provenance 和 critical E2E 通过；RT-S3-002 单独 Review/accept。
 
 **Escalate when:** 需要改变 RuleVersion lifecycle、审批角色/权限、canonical relationship、公共 DTO 的冻结语义，或必须依赖 Stage 4/6 才能完成。
 
@@ -359,6 +382,7 @@ git diff --check
 **Specialized evidence:**
 
 - fixed set 数量 10～15 且类别覆盖完整。
+- fixture/API 分别固定并验证 revision-bound `summary_provenance` 与 validated `article_structure_provenance`；summary assertion 不得读取未绑定 selected revision 的 mutable article row。
 - regression 未通过时 bulk gate 拒绝。
 - injected failure 后 resume、重复执行 no duplicate、content version change 增量更新。
 - concurrency 上限和网络 retry 上限可测试。

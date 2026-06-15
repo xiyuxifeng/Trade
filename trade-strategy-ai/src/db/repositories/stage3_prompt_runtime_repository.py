@@ -25,7 +25,11 @@ class Stage3PromptRunRepository:
             .where(PromptRun.schema_version == schema_version)
             .where(PromptRun.model == model)
             .where(PromptRun.input_hash == input_hash)
-            .where(PromptRun.validation_state.in_([PromptValidationState.valid, PromptValidationState.repaired]))
+            .where(
+                PromptRun.validation_state.in_(
+                    [PromptValidationState.valid.value, PromptValidationState.repaired.value]
+                )
+            )
             .order_by(PromptRun.completed_at.desc().nullslast(), PromptRun.created_at.desc())
         )
         prompt_run = (await session.execute(stmt)).scalars().first()

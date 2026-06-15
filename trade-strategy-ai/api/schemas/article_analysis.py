@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 class ArticleAnalysisArticleResponse(BaseModel):
     article_id: str
     article_revision_id: str
+    content_hash: str
     title: str
     source: str
     source_url: str
@@ -20,6 +21,26 @@ class ArticleAnalysisArticleResponse(BaseModel):
     cleaned_content: str
     summary: str | None = None
     tags: list[str] = Field(default_factory=list)
+
+
+class SummaryProvenanceResponse(BaseModel):
+    source: Literal["article_revision_source_payload", "blog_article_current", "unavailable"]
+    article_revision_id: str
+    content_hash: str
+    available: bool
+    aligned: bool
+    reason: str | None = None
+
+
+class ArticleStructureProvenanceResponse(BaseModel):
+    article_structure_id: str | None = None
+    article_revision_id: str | None = None
+    prompt_run_id: str | None = None
+    prompt_name: str | None = None
+    prompt_version: str | None = None
+    schema_name: str | None = None
+    schema_version: str | None = None
+    available: bool
 
 
 class ArticleAnalysisTraceResponse(BaseModel):
@@ -74,6 +95,8 @@ class ArticleAnalysisDetailResponse(BaseModel):
     status: Literal["ready", "partial", "empty"]
     message: str | None = None
     article: ArticleAnalysisArticleResponse
+    summary_provenance: SummaryProvenanceResponse
+    article_structure_provenance: ArticleStructureProvenanceResponse
     method_tags: list[str] = Field(default_factory=list)
     explicit_facts: list[dict[str, Any]] = Field(default_factory=list)
     hypotheses: list[dict[str, Any]] = Field(default_factory=list)

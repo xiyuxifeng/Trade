@@ -1211,6 +1211,8 @@ from src.db.session import session_scope
 from src.services.rule_pool_service import RulePoolService
 
 rule_pool_app = typer.Typer(help="规则池管理命令")
+stage3_regression_app = typer.Typer(help="Stage 3 固定回归集命令")
+stage3_article_batch_app = typer.Typer(help="Stage 3 单篇文章批处理命令")
 
 
 @rule_pool_app.command("list")
@@ -1393,6 +1395,98 @@ def rule_pool_review_batch(
     run_async_with_cleanup(_run())
 
 
+@stage3_regression_app.command("run")
+def stage3_regression_run(
+    fixed_set: bool = typer.Option(False, "--fixed-set", help="仅运行冻结的 Stage 3 固定回归集"),
+    log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+    """运行 Stage 3 固定回归集门禁。"""
+    if not fixed_set:
+        raise typer.BadParameter("当前阶段只允许 --fixed-set")
+    configure_logging(log_level)
+
+    async def _run():
+        from src.db.session import session_scope
+        from src.services.stage3_regression_service import Stage3RegressionService
+
+        return await Stage3RegressionService(
+            session_scope_factory=session_scope,
+        ).run_fixed_set()
+
+    result = run_async_with_cleanup(_run())
+    typer.echo(
+        json.dumps(
+            {
+                "status": result.status,
+                "gate_version": result.gate_version,
+                "article_count": len(result.manifest),
+                "processed_count": result.processed_count,
+                "cached_count": result.cached_count,
+                "repaired_count": result.repaired_count,
+                "human_attention_count": result.human_attention_count,
+                "semantic_failures": result.semantic_failures,
+                "validation_failures": result.validation_failures,
+                "provider_failures": result.provider_failures,
+                "persistence_failures": result.persistence_failures,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    if result.status != "passed":
+        raise typer.Exit(code=1)
+
+
+@stage3_article_batch_app.command("run")
+def stage3_article_batch_run(
+    dry_run: bool = typer.Option(False, "--dry-run", help="仅执行可恢复小批量验证"),
+    limit: int = typer.Option(15, "--limit", help="最多处理文章数"),
+    log_level: str = typer.Option("INFO", help="日志级别"),
+) -> None:
+    """运行 Stage 3 可恢复批处理验证。"""
+    if limit <= 0 or limit > 15:
+        raise typer.BadParameter("RT-S3-003 当前只允许 1..15 的受控批量")
+    configure_logging(log_level)
+
+    async def _run():
+        from src.db.session import session_scope
+        from src.services.stage3_batch_service import Stage3BatchService
+        from src.services.stage3_regression_service import Stage3RegressionService
+
+        regression_service = Stage3RegressionService(session_scope_factory=session_scope)
+        batch_service = Stage3BatchService(
+            session_scope_factory=session_scope,
+            regression_service=regression_service,
+        )
+        return await batch_service.run(dry_run=dry_run, limit=limit)
+
+    result = run_async_with_cleanup(_run())
+    typer.echo(
+        json.dumps(
+            {
+                "status": result.status,
+                "run_id": result.run_id,
+                "gate_status": result.gate_result.status,
+                "gate_version": result.gate_result.gate_version,
+                "processed_count": result.processed_count,
+                "success_count": result.success_count,
+                "failure_count": result.failure_count,
+                "skipped_count": result.skipped_count,
+                "cached_count": result.cached_count,
+                "repaired_count": result.repaired_count,
+                "human_attention_count": result.human_attention_count,
+                "retry_count": result.retry_count,
+                "quality_stats": result.quality_stats,
+                "failure_reasons": result.failure_reasons,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    if result.status != "completed":
+        raise typer.Exit(code=1)
+
+
 # 注册 backtest 子命令（NTL-S6-008）
 from cli.backtest import app as backtest_app
 app.add_typer(backtest_app, name="backtest")
@@ -1415,6 +1509,10 @@ app.add_typer(strategy_app, name="strategy")
 
 # 注册 rule-pool 子命令（NTL-S11-009）
 app.add_typer(rule_pool_app, name="rule-pool")
+
+# 注册 Stage 3 回归与受控批处理命令
+app.add_typer(stage3_regression_app, name="stage3-regression")
+app.add_typer(stage3_article_batch_app, name="stage3-article-batch")
 
 # 注册 dev 调试命令（正式用户入口已迁移到 Web）
 app.add_typer(dev_app, name="dev")

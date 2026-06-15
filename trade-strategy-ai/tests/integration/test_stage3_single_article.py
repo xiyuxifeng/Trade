@@ -238,3 +238,200 @@ async def test_single_article_journey_creates_rule_version_only_after_human_appr
     assert events[0].reason_text == "证据充分，进入待回测。"
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_single_article_journey_binds_summary_to_selected_revision(tmp_path) -> None:
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage3-single-article-summary.db'}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _register_char_length(dbapi_connection, _connection_record):  # noqa: ANN001
+        dbapi_connection.create_function("char_length", 1, lambda value: len(value) if value is not None else 0)
+
+    async with engine.begin() as conn:
+        for table in (
+            BlogArticle.__table__,
+            ArticleRevision.__table__,
+            PromptRun.__table__,
+            ArticleStructure.__table__,
+            RuleCandidate.__table__,
+        ):
+            await conn.run_sync(lambda sync_conn, current_table=table: current_table.create(bind=sync_conn, checkfirst=True))
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    article_id = UUID("33333333-3333-3333-3333-333333333333")
+    old_revision_id = UUID("44444444-4444-4444-4444-444444444444")
+    latest_revision_id = UUID("55555555-5555-5555-5555-555555555555")
+    old_prompt_run_id = UUID("66666666-6666-6666-6666-666666666666")
+    latest_prompt_run_id = UUID("77777777-7777-7777-7777-777777777777")
+    old_structure_id = UUID("88888888-8888-8888-8888-888888888888")
+    latest_structure_id = UUID("99999999-9999-9999-9999-999999999999")
+
+    async with session_factory() as session:
+        session.add(
+            BlogArticle(
+                id=article_id,
+                source="tgb",
+                source_url="https://example.com/article-summary",
+                title="双版本文章",
+                author_name="Alice",
+                author_id="author-1",
+                published_at=datetime(2026, 6, 15, 9, 30, tzinfo=UTC),
+                crawled_at=datetime(2026, 6, 15, 9, 40, tzinfo=UTC),
+                content_text="最新原文",
+                summary="最新版本摘要",
+                tags=["突破"],
+                content_hash="hash-new",
+                view_count=1,
+                like_count=0,
+                bookmark_count=0,
+                comment_count=0,
+                raw_payload={},
+            )
+        )
+        session.add_all(
+            [
+                ArticleRevision(
+                    article_revision_id=old_revision_id,
+                    article_id=article_id,
+                    revision_no=1,
+                    content_hash="hash-old",
+                    content_text="旧版清洗正文",
+                    content_html=None,
+                    source_payload={"summary": "旧版本摘要"},
+                    captured_at=datetime(2026, 6, 14, 9, 40, tzinfo=UTC),
+                    quality_status="complete",
+                ),
+                ArticleRevision(
+                    article_revision_id=latest_revision_id,
+                    article_id=article_id,
+                    revision_no=2,
+                    content_hash="hash-new",
+                    content_text="新版清洗正文",
+                    content_html=None,
+                    source_payload={},
+                    captured_at=datetime(2026, 6, 15, 9, 40, tzinfo=UTC),
+                    quality_status="complete",
+                ),
+                PromptRun(
+                    prompt_run_id=old_prompt_run_id,
+                    run_id="run-old",
+                    article_id=article_id,
+                    prompt_name="article_analysis_v1",
+                    prompt_version="article_analysis_v1",
+                    schema_name="article_analysis_v1",
+                    schema_version="article_analysis_v1",
+                    provider="test-provider",
+                    model="test-model",
+                    input_object_type="article_revision",
+                    input_object_id=str(article_id),
+                    input_version_id=str(old_revision_id),
+                    input_hash="hash-old-run",
+                    request_json={},
+                    raw_output={},
+                    raw_output_text="{}",
+                    validation_state="valid",
+                    validation_errors={},
+                    retry_count=0,
+                    token_usage={},
+                    cost_amount=None,
+                    cost_currency=None,
+                    started_at=datetime(2026, 6, 14, 9, 41, tzinfo=UTC),
+                    completed_at=datetime(2026, 6, 14, 9, 42, tzinfo=UTC),
+                ),
+                PromptRun(
+                    prompt_run_id=latest_prompt_run_id,
+                    run_id="run-latest",
+                    article_id=article_id,
+                    prompt_name="article_analysis_v1",
+                    prompt_version="article_analysis_v1",
+                    schema_name="article_analysis_v1",
+                    schema_version="article_analysis_v1",
+                    provider="test-provider",
+                    model="test-model",
+                    input_object_type="article_revision",
+                    input_object_id=str(article_id),
+                    input_version_id=str(latest_revision_id),
+                    input_hash="hash-latest-run",
+                    request_json={},
+                    raw_output={},
+                    raw_output_text="{}",
+                    validation_state="valid",
+                    validation_errors={},
+                    retry_count=0,
+                    token_usage={},
+                    cost_amount=None,
+                    cost_currency=None,
+                    started_at=datetime(2026, 6, 15, 9, 41, tzinfo=UTC),
+                    completed_at=datetime(2026, 6, 15, 9, 42, tzinfo=UTC),
+                ),
+                ArticleStructure(
+                    article_structure_id=old_structure_id,
+                    article_id=article_id,
+                    article_revision_id=old_revision_id,
+                    prompt_run_id=old_prompt_run_id,
+                    schema_version="article_analysis_v1",
+                    payload={"method_tags": ["旧标签"], "key_claims": []},
+                    evidence_json={},
+                    missing_fields={},
+                    inference_fields={},
+                    lifecycle_state="draft",
+                    quality_status="partial",
+                    created_by="test",
+                    updated_by="test",
+                ),
+                ArticleStructure(
+                    article_structure_id=latest_structure_id,
+                    article_id=article_id,
+                    article_revision_id=latest_revision_id,
+                    prompt_run_id=latest_prompt_run_id,
+                    schema_version="article_analysis_v1",
+                    payload={"method_tags": ["新标签"], "key_claims": []},
+                    evidence_json={},
+                    missing_fields={},
+                    inference_fields={},
+                    lifecycle_state="draft",
+                    quality_status="partial",
+                    created_by="test",
+                    updated_by="test",
+                ),
+            ]
+        )
+        await session.commit()
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    service = Stage3SingleArticleService(
+        session_scope_factory=_session_scope,
+        repository=Stage3SingleArticleRepository(),
+    )
+
+    latest = await service.get_journey(article_id=article_id, article_revision_id=latest_revision_id)
+    older = await service.get_journey(article_id=article_id, article_revision_id=old_revision_id)
+
+    assert latest.summary_provenance.summary == "最新版本摘要"
+    assert latest.summary_provenance.source == "blog_article_current"
+    assert latest.summary_provenance.available is True
+    assert latest.summary_provenance.article_revision_id == str(latest_revision_id)
+    assert latest.summary_provenance.content_hash == "hash-new"
+    assert latest.article_structure_provenance.article_revision_id == str(latest_revision_id)
+    assert latest.structure.payload["method_tags"] == ["新标签"]
+
+    assert older.summary_provenance.summary == "旧版本摘要"
+    assert older.summary_provenance.source == "article_revision_source_payload"
+    assert older.summary_provenance.available is True
+    assert older.summary_provenance.article_revision_id == str(old_revision_id)
+    assert older.summary_provenance.content_hash == "hash-old"
+    assert older.summary_provenance.summary != latest.summary_provenance.summary
+    assert older.article_structure_provenance.article_revision_id == str(old_revision_id)
+    assert older.structure.payload["method_tags"] == ["旧标签"]
+
+    await engine.dispose()

@@ -187,12 +187,39 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
                 "tags": ["突破"],
             },
         )()
-        revision = type("Revision", (), {"article_revision_id": uuid4(), "content_text": "清洗后正文"})()
+        revision = type("Revision", (), {"article_revision_id": uuid4(), "content_text": "清洗后正文", "content_hash": "hash-1"})()
         prompt_run = None
         structure = None
         candidates = []
         automatic_reviews = {}
         rule_versions = {}
+        summary_provenance = type(
+            "SummaryProvenance",
+            (),
+            {
+                "summary": "摘要",
+                "source": "blog_article_current",
+                "article_revision_id": str(revision.article_revision_id),
+                "content_hash": "hash-1",
+                "available": True,
+                "aligned": True,
+                "reason": None,
+            },
+        )()
+        article_structure_provenance = type(
+            "StructureProvenance",
+            (),
+            {
+                "article_structure_id": None,
+                "article_revision_id": None,
+                "prompt_run_id": None,
+                "prompt_name": None,
+                "prompt_version": None,
+                "schema_name": None,
+                "schema_version": None,
+                "available": False,
+            },
+        )()
 
     class _FakeService:
         async def get_journey(self, *, article_id, article_revision_id=None):
@@ -212,6 +239,10 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
     assert payload["message"] == "该文章尚未完成结构化分析。"
     assert payload["article"]["original_text"] == "原始正文"
     assert payload["article"]["cleaned_content"] == "清洗后正文"
+    assert payload["article"]["summary"] == "摘要"
+    assert payload["article"]["content_hash"] == "hash-1"
+    assert payload["summary_provenance"]["source"] == "blog_article_current"
+    assert payload["summary_provenance"]["article_revision_id"] == payload["article"]["article_revision_id"]
     assert payload["candidates"] == []
 
 
@@ -242,7 +273,7 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
                 "tags": ["突破"],
             },
         )()
-        revision = type("Revision", (), {"article_revision_id": UUID(revision_id), "content_text": "清洗后正文"})()
+        revision = type("Revision", (), {"article_revision_id": UUID(revision_id), "content_text": "清洗后正文", "content_hash": "hash-1"})()
         prompt_run = type(
             "PromptRun",
             (),
@@ -270,6 +301,9 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
                 "payload": {"method_tags": ["突破"], "key_claims": [{"claim": "放量突破介入", "source": "explicit", "evidence": ["放量突破介入"]}]},
                 "inference_fields": {},
                 "missing_fields": {},
+                "article_structure_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "article_revision_id": UUID(revision_id),
+                "prompt_run_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
             },
         )()
         candidate = type(
@@ -294,6 +328,33 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
         rule_versions = {
             UUID(candidate_id): type("RuleVersion", (), {"rule_version_id": UUID(rule_version_id), "lifecycle_state": "draft"})()
         }
+        summary_provenance = type(
+            "SummaryProvenance",
+            (),
+            {
+                "summary": "摘要",
+                "source": "article_revision_source_payload",
+                "article_revision_id": revision_id,
+                "content_hash": "hash-1",
+                "available": True,
+                "aligned": True,
+                "reason": None,
+            },
+        )()
+        article_structure_provenance = type(
+            "StructureProvenance",
+            (),
+            {
+                "article_structure_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "article_revision_id": revision_id,
+                "prompt_run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "prompt_name": "article_analysis_v1",
+                "prompt_version": "article_analysis_v1",
+                "schema_name": "article_analysis_v1",
+                "schema_version": "article_analysis_v1",
+                "available": True,
+            },
+        )()
 
     class _FakeService:
         def __init__(self) -> None:
@@ -326,6 +387,9 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     assert response.json()["candidates"][0]["human_review"]["formal_rule_created"] is True
     assert response.json()["candidates"][0]["human_review"]["formal_lifecycle_state"] == "draft"
     assert response.json()["candidates"][0]["human_review"]["stage3_status"] == "pending_backtest"
+    assert response.json()["summary_provenance"]["article_revision_id"] == revision_id
+    assert response.json()["article_structure_provenance"]["article_revision_id"] == revision_id
+    assert response.json()["method_tags"] == ["突破"]
 
     app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: fake_service
     app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(

@@ -73,6 +73,16 @@ Single-article constraints:
   dependencies, and backtestability.
 - Automatic pass means pending backtest, not formally usable.
 - Only human-reviewed results may create a formal RuleVersion.
+- Summary and other version-bound fields must be tied to the selected
+  ArticleRevision/content version.
+- Prefer a summary frozen in ArticleRevision source data.
+- The current article summary may be used only when its content hash matches
+  the selected ArticleRevision content hash.
+- If revision alignment cannot be proven, summary must be unavailable.
+- Never fall back to the latest article summary for an older revision.
+- Summary provenance and validated ArticleStructure provenance must be exposed
+  and verified separately.
+- Do not fabricate or backfill historical summaries without evidence.
 ```
 
 ### 11.6 回归样本与批处理

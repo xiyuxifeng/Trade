@@ -238,3 +238,203 @@ Application Service
 - Stage 3 整体仍为 `[-]`。
 - `RT-S3-002` 现在可以开始，但本 Session 不自动开始。
 - `RT-S3-003`、`RT-S3-004` 仍等待上游 accepted Task 和后续证据。
+
+## 2026-06-15 - RT-S3-002 Single Article to Candidate Rule Journey
+
+### Scope
+
+- 仅执行 `RT-S3-002 Single Article to Candidate Rule Journey`。
+- 冻结上游：`RT-S3-001 ACCEPTED`；其 registry/Schema/invocation/cache/idempotency/canonical persistence 合同保持不变。
+- 未执行 `RT-S3-003`、`RT-S3-004` 或 Stage 4。
+
+### Verified upstream facts
+
+- `RT-S3-001` 仍为 `ACCEPTED`。
+- `STAGE2_CANONICAL_WRITER_ENABLED` effective true。
+- 正式写入链仍为：
+
+```text
+Application Service
+-> canonical repository
+-> canonical PostgreSQL database
+```
+
+- 未发现 dual-write 或第二 formal writer。
+- 工作树开始时为空；无用户自有未提交改动。
+- 冻结模型可以表示：
+  - `PromptRun` / `ArticleStructure` / `RuleCandidate` trace 与 canonical persistence
+  - human review actor / time / reason / before-after：通过 `LifecycleEvent`
+  - Stage 3 RuleVersion boundary：以 canonical `RuleVersion.lifecycle_state = draft` 表示 formal `pending_backtest` boundary；未修改生命周期枚举
+
+### Implementation
+
+- 新增 canonical Stage 3 single-article repository / application service：
+  - `src/db/repositories/stage3_single_article_repository.py`
+  - `src/services/stage3_single_article_service.py`
+- 单篇旅程现在支持：
+
+```text
+Article
+-> ArticleRevision
+-> RT-S3-001 runtime
+-> PromptRun
+-> ArticleStructure
+-> RuleCandidate
+-> deterministic automatic review
+-> explicit human review
+-> canonical RuleVersion(draft == pending_backtest boundary)
+```
+
+- deterministic automatic review 为纯程序规则，不触发额外 LLM 调用：
+  - `pending_backtest`
+  - `needs_human_review`
+  - `suggested_reject`
+- automatic review 不创建 `RuleVersion`。
+- human review 才通过 canonical write scope 创建 `Rule` + `RuleVersion`。
+- human review 同时写入 `LifecycleEvent`：
+  - `RuleCandidate` 审核前后状态
+  - `RuleVersion` 创建事件
+- 新增 UI API：
+  - `GET /api/ui/v1/article-metadata/articles/{article_id}/analysis`
+  - `POST /api/ui/v1/article-metadata/articles/{article_id}/analysis`
+  - `POST /api/ui/v1/article-metadata/articles/{article_id}/candidates/{candidate_id}/review`
+- 新增 API Schema：
+  - `api/schemas/article_analysis.py`
+- 新增前端 article journey client/types/page：
+  - `web/src/lib/api/article-analysis.ts`
+  - `web/src/types/article-analysis.ts`
+  - `web/src/pages/articles/ArticleResultsJourneyPage.tsx`
+  - `web/src/pages/articles/index.tsx` export 切换到新结果页
+- 现有 article 产品入口保持不变；未创建第二 formal article page route。
+
+### Truthful user-visible result
+
+- 文章详情页/API 现在展示：
+  - original article text
+  - cleaned content
+  - article/content revision
+  - summary
+  - method tags
+  - explicit facts
+  - LLM hypotheses
+  - missing/unknown fields
+  - candidate rules
+  - source evidence
+  - data dependencies
+  - backtestability
+  - Kaipan dependency
+  - market-state declaration status
+  - Prompt/Schema/model/run trace
+- 未声明市场状态保持 `not_declared`。
+- 不再用旧 metadata 文案暗示“已可直接回测/策略使用”。
+- human approval 按钮明确表述为“人工批准为待回测规则”。
+
+### Files
+
+- Backend / API:
+  - `api/routers/ui/article_metadata.py`
+  - `api/schemas/__init__.py`
+  - `api/schemas/article_analysis.py`
+  - `src/db/repositories/stage3_single_article_repository.py`
+  - `src/services/stage3_single_article_service.py`
+- Tests:
+  - `tests/api/routers/ui/test_article_metadata.py`
+  - `tests/unit/stage3/test_single_article_service.py`
+  - `tests/integration/test_stage3_single_article.py`
+- Frontend:
+  - `web/src/lib/api/article-analysis.ts`
+  - `web/src/types/article-analysis.ts`
+  - `web/src/pages/articles/ArticleResultsJourneyPage.tsx`
+  - `web/src/pages/articles/index.tsx`
+  - `web/src/pages/articles/index.test.tsx`
+
+### Verification
+
+- Frozen backend command set:
+  - `../.venv/bin/python -m pytest tests/api/routers/test_articles.py tests/api/routers/ui/test_article_metadata.py tests/api/routers/test_rule_pool.py -q`
+    - 结果：`10 passed in 15.61s`
+  - `../.venv/bin/python -m pytest tests/unit/stage3 tests/integration/test_stage3_single_article.py -q`
+    - 结果：`9 passed in 3.37s`
+- Upstream RT-S3-001 preservation:
+  - `../.venv/bin/python -m pytest tests/unit/llm tests/unit/schemas tests/unit/services/test_stage2_writer_routing.py -q`
+    - 结果：`21 passed in 6.66s`
+  - `../.venv/bin/python -m pytest tests/integration/test_stage3_prompt_runtime.py -q`
+    - 结果：`1 passed in 3.08s`
+- Frontend:
+  - `pnpm test -- src/pages/articles/index.test.tsx`
+    - 结果：`8 passed`
+  - `pnpm typecheck`
+    - 结果：通过
+- Build / diff:
+  - `../.venv/bin/python -m compileall src api cli`
+    - 结果：通过；shell 仍有既有 `/Users/wanghui/.rvm/scripts/rvm:20: operation not permitted: ps` 输出，退出码 `0`
+  - `git diff --check`
+    - 结果：通过
+
+### Specialized evidence
+
+- correct `ArticleRevision` linkage：
+  - API / integration test 显示 `original_text` 来自 `BlogArticle.content_text`
+  - `cleaned_content` 与 `article_revision_id` 来自 `ArticleRevision`
+- summary / method tags：
+  - `summary` 来自 canonical article record
+  - `method_tags` 来自 validated canonical `ArticleStructure.payload`
+- explicit facts / hypotheses visually/API-distinguished：
+  - `explicit_facts` 与 `hypotheses` 分字段返回并独立展示
+- missing fields visible：
+  - `missing_fields` 在 article-level 和 candidate-level 保留
+- candidate evidence retained：
+  - `evidence` 从 canonical `RuleCandidate.evidence_json` 返回
+- backtestability / Kaipan truthful：
+  - `backtestability_status` 直接来自 canonical candidate
+  - `kaipan_dependency` 由 persisted dependencies 派生
+- undeclared market state：
+  - API 返回 `market_state_declaration_status = not_declared`
+- trace available：
+  - API 返回 Prompt/Schema/model/run trace
+- automatic review cannot create RuleVersion：
+  - integration test 在 human approval 前断言 `RuleVersion count == 0`
+- automatic pass represented as pending_backtest：
+  - automatic review status 为 `pending_backtest`
+- explicit human approval only RuleVersion path：
+  - API + integration test 覆盖 `review_candidate(decision=approve)` 后才出现 `RuleVersion`
+- Stage 3 RuleVersion boundary：
+  - created `RuleVersion.lifecycle_state = draft`
+  - UI/API `stage3_status = pending_backtest`
+- permission enforcement：
+  - viewer review API 返回 `403 insufficient permissions`
+- truthful states：
+  - UI/API tests 覆盖 loading / empty / error / partial / permission_denied；unavailable 仍沿用统一 API error handling
+- no legacy formal writer / dual-write：
+  - 新正式写入仅发生于 `canonical_write_scope("rule_version", ...)`
+  - 未恢复 legacy `RulePool` / `ArticleMetadata` formal write
+- no Stage 4 / Stage 6 behavior：
+  - 未引入 RuleFamily / fingerprint / duplicate governance / backtest runtime
+- RT-S3-001 single-call / one-repair behavior：
+  - upstream prompt runtime integration test 复验通过
+
+### Review
+
+- BLOCKER：无
+- HIGH：无
+- MEDIUM：
+  - `RuleVersion` 的 Stage 3 user-facing `pending_backtest` 通过 `draft` lifecycle + explicit `stage3_status` 映射表达；这满足冻结模型边界，但后续 Stage 4/6 仍需统一正式生命周期文案
+- LOW：
+  - 旧 `ArticlePipelinePage.tsx` 中 legacy metadata results page 仍保留在文件内但不再作为正式结果页导出；其最终退役不属于 `RT-S3-002`
+
+### Acceptance
+
+- single-article canonical data journey 已打通。
+- automatic review 不创建 `RuleVersion`。
+- explicit human approval 是唯一 `RuleVersion` 创建路径。
+- created `RuleVersion` 保持 Stage 3 pending-backtest boundary。
+- 未修改 DB Schema / Alembic。
+- 未引入 dual-write 或 legacy formal writer。
+- 日志已更新。
+- 结论：`RT-S3-002 ACCEPTED`
+
+### Remaining Stage 3 gates
+
+- Stage 3 整体仍为 `[-]`。
+- `RT-S3-003` 现在可以开始，但本 Session 不自动开始。
+- `RT-S3-004` 仍等待 `RT-S3-003`、观察期和 rollback evidence。

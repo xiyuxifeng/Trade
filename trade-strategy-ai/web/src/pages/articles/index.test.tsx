@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleListPage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
+import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis } from '@/lib/api/article-analysis';
 import { getArticleMetadataSummary, listArticleMetadataArticles, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
@@ -29,6 +30,12 @@ vi.mock('@/lib/api/article-metadata', () => ({
   selectArticleMetadataVersion: vi.fn(),
 }));
 
+vi.mock('@/lib/api/article-analysis', () => ({
+  getArticleAnalysis: vi.fn(),
+  reviewArticleCandidate: vi.fn(),
+  runArticleAnalysis: vi.fn(),
+}));
+
 vi.mock('@/lib/api/profiles', () => ({
   listProfiles: vi.fn(),
 }));
@@ -49,6 +56,9 @@ const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetArticleMetadataSummary = vi.mocked(getArticleMetadataSummary);
 const mockedListArticleMetadataArticles = vi.mocked(listArticleMetadataArticles);
 const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
+const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
+const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
+const mockedRunArticleAnalysis = vi.mocked(runArticleAnalysis);
 const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
@@ -442,6 +452,76 @@ function buildArticleMetadataDetail(articleId: string) {
   };
 }
 
+function buildArticleAnalysisDetail(articleId: string) {
+  return {
+    status: 'ready' as const,
+    message: null,
+    article: {
+      article_id: articleId,
+      article_revision_id: 'revision-1',
+      title: articleId === 'article-2' ? 'Article Two' : 'Article One',
+      source: articleId === 'article-2' ? 'xhs' : 'tgb',
+      source_url: `https://example.com/${articleId}`,
+      author_name: articleId === 'article-2' ? 'Bob' : 'Alice',
+      author_id: articleId === 'article-2' ? 'author-2' : 'author-1',
+      published_at: '2026-05-11T08:00:00Z',
+      crawled_at: '2026-05-11T09:00:00Z',
+      original_text: '原始正文',
+      cleaned_content: '清洗后正文',
+      summary: 'summary two',
+      tags: ['momentum'],
+    },
+    method_tags: ['突破'],
+    explicit_facts: [{ claim: '放量突破介入', source: 'explicit' }],
+    hypotheses: [{ hypothesis: '可能偏强势行情' }],
+    missing_fields: { stop_loss: 'unknown' },
+    prompt_trace: {
+      run_id: 'run-1',
+      prompt_name: 'article_analysis_v1',
+      prompt_version: 'article_analysis_v1',
+      schema_name: 'article_analysis_v1',
+      schema_version: 'article_analysis_v1',
+      provider: 'openai',
+      model: 'gpt-5.4',
+      validation_state: 'valid',
+      retry_count: 0,
+      token_usage: { total_tokens: 42 },
+      cost_amount: null,
+      cost_currency: null,
+      started_at: null,
+      completed_at: null,
+    },
+    candidates: [
+      {
+        candidate_id: 'candidate-1',
+        candidate_index: 0,
+        title: '放量突破介入',
+        rule_type: 'entry',
+        explicit_facts: { holding_period: 'intraday' },
+        hypotheses: { note: '可能需要量比确认' },
+        missing_fields: { stop_loss: 'unknown' },
+        evidence: { items: [{ quote: '放量突破介入' }] },
+        data_dependencies: { required: ['ohlcv_1d'] },
+        backtestability_status: 'executable',
+        kaipan_dependency: false,
+        market_state_declaration_status: 'not_declared',
+        automatic_review: {
+          status: 'pending_backtest' as const,
+          reasons: ['证据、条件和动作完整，可进入待回测'],
+          risk_level: 'low' as const,
+        },
+        human_review: {
+          review_state: 'auto_review',
+          formal_rule_created: false,
+          rule_version_id: null,
+          formal_lifecycle_state: null,
+          stage3_status: null,
+        },
+      },
+    ],
+  };
+}
+
 describe('ArticlesPage', () => {
   it('renders workspace entry cards that link to article subpages', async () => {
     renderWithRouter([{ path: '/articles', element: <ArticlesPage /> }], ['/articles']);
@@ -653,59 +733,52 @@ describe('ArticlesPage', () => {
     expect(screen.queryByText('最近一次文章 Job')).not.toBeInTheDocument();
   });
 
-  it('renders the results page with selectable article list and detail panel', async () => {
-    mockedListArticleMetadataArticles.mockImplementation(async (request?: { selection_status?: 'all' | 'selected' | 'unselected' }) =>
-      buildArticleMetadataListForStatus(request?.selection_status),
-    );
-    mockedGetArticleMetadataSummary.mockImplementation(async (articleId: string) => buildArticleMetadataDetail(articleId));
+  it('renders the results page with single-article analysis and review detail', async () => {
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedGetArticleAnalysis.mockImplementation(async (articleId: string) => buildArticleAnalysisDetail(articleId));
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
-    expect(await screen.findByRole('heading', { name: '处理结果' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: '未选择' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '已选择' })).toBeInTheDocument();
-    expect((await screen.findAllByText('Article Two')).length).toBeGreaterThan(0);
-    expect(await screen.findByText('当前文章详情')).toBeInTheDocument();
-    expect(await screen.findByText('元数据版本选择')).toBeInTheDocument();
-
-    await userEvent.setup().click(screen.getByRole('button', { name: '已选择' }));
+    expect(await screen.findByRole('heading', { name: '文章分析与审核' })).toBeInTheDocument();
     expect((await screen.findAllByText('Article One')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('当前文章详情')).toBeInTheDocument();
+    expect(await screen.findByText('结构化摘要')).toBeInTheDocument();
+    expect(await screen.findByText('候选规则与审核')).toBeInTheDocument();
+    expect(await screen.findByText('待回测')).toBeInTheDocument();
+    expect(await screen.findByText('原始原文')).toBeInTheDocument();
+    expect(await screen.findByText('清洗后内容')).toBeInTheDocument();
   });
 
-  it('submits the selected article metadata version from the results page', async () => {
+  it('runs review action from the results page', async () => {
     const user = userEvent.setup();
-    mockedListArticleMetadataArticles.mockImplementation(async (request?: { selection_status?: 'all' | 'selected' | 'unselected' }) =>
-      buildArticleMetadataListForStatus(request?.selection_status),
-    );
-    mockedGetArticleMetadataSummary.mockImplementation(async (articleId: string) => buildArticleMetadataDetail(articleId));
-    mockedSelectArticleMetadataVersion.mockResolvedValue({
-      ...buildArticleMetadataDetail('article-2'),
-      article_id: 'article-2',
-      selected_schema_version: 'v2',
-      selected_by: 'web',
-      selected_at: '2026-05-10T11:00:00Z',
-      selection_mode: 'manual',
-      selection_score: 4.1,
-      selection_reason: '用户手动确认',
-      effective_schema_version: 'v2',
-      effective_score: 4.1,
-      effective_reason: '用户手动确认',
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedGetArticleAnalysis.mockImplementation(async (articleId: string) => buildArticleAnalysisDetail(articleId));
+    mockedReviewArticleCandidate.mockResolvedValue({
+      ...buildArticleAnalysisDetail('article-1'),
+      candidates: [{
+        ...buildArticleAnalysisDetail('article-1').candidates[0],
+        human_review: {
+          review_state: 'approved',
+          formal_rule_created: true,
+          rule_version_id: 'rule-version-1',
+          formal_lifecycle_state: 'draft',
+          stage3_status: 'pending_backtest',
+        },
+      }],
     });
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
-    await screen.findByText('元数据版本选择');
-    expect((await screen.findAllByText('Article Two')).length).toBeGreaterThan(0);
-    await user.selectOptions(await screen.findByLabelText('选择当前使用版本'), 'v2');
-    await user.click(screen.getByRole('button', { name: '设为当前版本' }));
+    await screen.findByText('候选规则与审核');
+    await user.click(screen.getByRole('button', { name: '人工批准为待回测规则' }));
 
     await waitFor(() => {
-      expect(mockedSelectArticleMetadataVersion).toHaveBeenCalledWith('article-2', {
-        selected_schema_version: 'v2',
-        selected_by: 'web',
+      expect(mockedReviewArticleCandidate).toHaveBeenCalledWith('article-1', 'candidate-1', {
+        decision: 'approve',
+        reason: '人工确认后进入待回测。',
       });
     });
-    expect(await screen.findByText('文章元数据版本已更新。')).toBeInTheDocument();
+    expect(await screen.findByText('人工审核结果已保存。')).toBeInTheDocument();
   });
 
 });

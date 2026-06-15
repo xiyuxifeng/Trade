@@ -16,10 +16,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 3 Prompt 与文章处理链路`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S3-001 接入版本化 Prompt 套件` 已接受；不得自动开始 `RT-S3-002`。
+- 当前 Task：`RT-S3-002 单篇文章到候选规则闭环` 已接受；不得自动开始 `RT-S3-003`。
 - 计划：[Stage 3 实施计划](refactor-implementation-plans/stage-3-implementation-plan.md)
 - 详细日志：[Stage 3](refactor-implementation-logs/stage-3.md)
-- 下一步：`RT-S3-002 单篇文章到候选规则闭环` 可开始，但本 Session 不自动开始。
+- 下一步：`RT-S3-003 建立回归样本并批量处理现有 100+ 篇文章` 可开始，但本 Session 不自动开始。
 
 ## 当前阻塞项
 
@@ -27,7 +27,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 2 Gate 最终 `ACCEPTED`。
 - Stage 3 Bootstrap 已复核 canonical writer effective true、legacy writer rejection 和 no dual-write；当前无 Bootstrap blocker。
 - RT-S3-001 已接受；Stage 3 canonical Prompt registry、Pydantic Schema、Prompt runtime foundation 和 canonical PromptRun/ArticleStructure/RuleCandidate 写入已建立。
-- Stage 3 仍未完成单篇人工审核闭环、固定 regression set 批量准入和 legacy runtime retirement。
+- RT-S3-002 已接受；single-article analysis/review journey、canonical RuleVersion creation boundary 和文章结果页 truthful UI 已建立。
+- Stage 3 仍未完成固定 regression set 批量准入和 legacy runtime retirement。
 
 ## Task 状态
 
@@ -42,8 +43,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S2-002 | `[x]` | Gate 重开后补齐 reused-table frozen fields/FKs、MarketState typed FKs、linear repair migrations；metadata、实际 PostgreSQL、rollback/re-upgrade 与 existing-data preservation 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 | RT-S2-003 | `[x]` | Gate 重开后 feature flag 已控制 runtime writer routing；canonical application-service boundary、legacy write rejection、no-dual-write 与 migration isolation tests 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
 | RT-S3-001 | `[x]` | versioned Prompt registry、Pydantic Schema、single-call/one-repair runtime、cache/idempotency 和 canonical persistence foundation 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-002 | `[ ]` | 现在可执行；不得自动开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-003 | `[ ]` | 等待 RT-S3-002 接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-002 | `[x]` | 单篇 canonical article -> candidate -> automatic review -> human review -> RuleVersion(draft) 闭环已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-003 | `[ ]` | 现在可执行；不得自动开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-004 | `[ ]` | 单独且最后；等待 RT-S3-003、观察期和 rollback evidence | [Stage 3](refactor-implementation-logs/stage-3.md) |
 
 ## Stage 状态
@@ -53,7 +54,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
-| Stage 3 | `[-]` | Bootstrap 完成；RT-S3-001 已接受；RT-S3-002～004 未实施 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
+| Stage 3 | `[-]` | Bootstrap、RT-S3-001、RT-S3-002 已接受；RT-S3-003～004 未实施 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -77,7 +78,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 后端存在既有异步数据库连接清理 RuntimeWarning，记录为非阻塞技术债。
 - 视觉一致性、非关键响应式细节和文案润色进入 UI backlog，不阻塞 Stage 2。
 - Stage 3 legacy article extraction 仍存在，但在 canonical writer enabled 时不能形成正式 Stage 3 formal writer。
-- Stage 3 固定 regression set、RT-S3-002 human-review journey、RuleVersion creation 和后续 Task 尚未实现。
+- Stage 3 固定 regression set、batch gate、legacy runtime retirement 和后续 Task 尚未实现。
 - 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
 
 ## 日志读取规则

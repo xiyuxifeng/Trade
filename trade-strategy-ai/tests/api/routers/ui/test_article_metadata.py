@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
 from api.routers.ui import article_metadata as article_metadata_routes
 from src.models.article_metadata import ArticleMetadata
@@ -161,3 +161,188 @@ async def test_get_and_select_article_metadata_version(client: AsyncClient) -> N
     summary_after_select = await client.get('/api/ui/v1/article-metadata/summary', params=[('article_ids', SEEDED_ARTICLE_ID)])
     assert summary_after_select.status_code == 200
     assert summary_after_select.json()['items'][0]['selected_schema_version'] == 'v1'
+
+
+@pytest.mark.asyncio
+async def test_get_article_analysis_returns_truthful_partial_state(client: AsyncClient) -> None:
+    assert SEEDED_ARTICLE_ID is not None
+
+    class _FakeJourney:
+        status = "partial"
+        message = "该文章尚未完成结构化分析。"
+        article = type(
+            "Article",
+            (),
+            {
+                "id": UUID(SEEDED_ARTICLE_ID),
+                "title": "Article One",
+                "source": "tgb",
+                "source_url": "https://example.com/article-1",
+                "author_name": "Alice",
+                "author_id": "author-1",
+                "published_at": datetime(2026, 5, 10, tzinfo=UTC),
+                "crawled_at": datetime(2026, 5, 10, 9, 0, tzinfo=UTC),
+                "content_text": "原始正文",
+                "summary": "摘要",
+                "tags": ["突破"],
+            },
+        )()
+        revision = type("Revision", (), {"article_revision_id": uuid4(), "content_text": "清洗后正文"})()
+        prompt_run = None
+        structure = None
+        candidates = []
+        automatic_reviews = {}
+        rule_versions = {}
+
+    class _FakeService:
+        async def get_journey(self, *, article_id, article_revision_id=None):
+            assert str(article_id) == SEEDED_ARTICLE_ID
+            assert article_revision_id is None
+            return _FakeJourney()
+
+    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: _FakeService()
+    try:
+        response = await client.get(f"/api/ui/v1/article-metadata/articles/{SEEDED_ARTICLE_ID}/analysis")
+    finally:
+        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "partial"
+    assert payload["message"] == "该文章尚未完成结构化分析。"
+    assert payload["article"]["original_text"] == "原始正文"
+    assert payload["article"]["cleaned_content"] == "清洗后正文"
+    assert payload["candidates"] == []
+
+
+@pytest.mark.asyncio
+async def test_operator_can_review_article_candidate_and_viewer_cannot(client: AsyncClient) -> None:
+    article_id = str(uuid4())
+    candidate_id = str(uuid4())
+    revision_id = str(uuid4())
+    rule_version_id = str(uuid4())
+
+    class _FakeJourney:
+        status = "ready"
+        message = None
+        article = type(
+            "Article",
+            (),
+            {
+                "id": UUID(article_id),
+                "title": "Article One",
+                "source": "tgb",
+                "source_url": "https://example.com/article-1",
+                "author_name": "Alice",
+                "author_id": "author-1",
+                "published_at": datetime(2026, 5, 10, tzinfo=UTC),
+                "crawled_at": datetime(2026, 5, 10, 9, 0, tzinfo=UTC),
+                "content_text": "原始正文",
+                "summary": "摘要",
+                "tags": ["突破"],
+            },
+        )()
+        revision = type("Revision", (), {"article_revision_id": UUID(revision_id), "content_text": "清洗后正文"})()
+        prompt_run = type(
+            "PromptRun",
+            (),
+            {
+                "run_id": "run-1",
+                "prompt_name": "article_analysis_v1",
+                "prompt_version": "article_analysis_v1",
+                "schema_name": "article_analysis_v1",
+                "schema_version": "article_analysis_v1",
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "validation_state": "valid",
+                "retry_count": 0,
+                "token_usage": {"total_tokens": 12},
+                "cost_amount": None,
+                "cost_currency": None,
+                "started_at": None,
+                "completed_at": None,
+            },
+        )()
+        structure = type(
+            "Structure",
+            (),
+            {
+                "payload": {"method_tags": ["突破"], "key_claims": [{"claim": "放量突破介入", "source": "explicit", "evidence": ["放量突破介入"]}]},
+                "inference_fields": {},
+                "missing_fields": {},
+            },
+        )()
+        candidate = type(
+            "Candidate",
+            (),
+            {
+                "rule_candidate_id": UUID(candidate_id),
+                "candidate_index": 0,
+                "rule_type": "entry",
+                "canonical_payload": {"title": "放量突破介入", "market_state_applicability": {"status": "not_declared"}},
+                "explicit_fields": {"holding_period": "intraday"},
+                "inferred_fields": {"note": "可能需要配合量比"},
+                "missing_fields": {"stop_loss": "unknown"},
+                "evidence_json": {"items": [{"quote": "放量突破介入"}]},
+                "data_dependencies": {"required": ["ohlcv_1d"]},
+                "backtestability_status": "executable",
+                "review_state": "approved",
+            },
+        )()
+        candidates = [candidate]
+        automatic_reviews = {UUID(candidate_id): type("Review", (), {"status": "pending_backtest", "reasons": ["证据完整"], "risk_level": "low"})()}
+        rule_versions = {
+            UUID(candidate_id): type("RuleVersion", (), {"rule_version_id": UUID(rule_version_id), "lifecycle_state": "draft"})()
+        }
+
+    class _FakeService:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def review_candidate(self, **kwargs):
+            self.calls.append(kwargs)
+            return _FakeJourney()
+
+    fake_service = _FakeService()
+    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: fake_service
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="operator",
+        api_key_label="operator-user",
+        authenticated=True,
+        source="api_key",
+        api_key="operator-key",
+    )
+    try:
+        response = await client.post(
+            f"/api/ui/v1/article-metadata/articles/{article_id}/candidates/{candidate_id}/review",
+            json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
+        )
+    finally:
+        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(get_current_principal, None)
+
+    assert response.status_code == 200
+    assert fake_service.calls[0]["actor_id"] == "operator-user"
+    assert response.json()["candidates"][0]["human_review"]["formal_rule_created"] is True
+    assert response.json()["candidates"][0]["human_review"]["formal_lifecycle_state"] == "draft"
+    assert response.json()["candidates"][0]["human_review"]["stage3_status"] == "pending_backtest"
+
+    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: fake_service
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="viewer",
+        api_key_label="viewer-user",
+        authenticated=True,
+        source="api_key",
+        api_key="viewer-key",
+    )
+    try:
+        forbidden = await client.post(
+            f"/api/ui/v1/article-metadata/articles/{article_id}/candidates/{candidate_id}/review",
+            json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
+        )
+    finally:
+        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(get_current_principal, None)
+
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"] == "insufficient permissions"

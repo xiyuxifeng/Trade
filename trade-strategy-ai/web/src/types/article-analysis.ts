@@ -29,6 +29,27 @@ export type HumanReview = {
   stage3_status: string | null;
 };
 
+export type GovernanceMatch = {
+  relation: 'exact_duplicate' | 'parameter_variant' | 'conflict' | 'similar_rule' | 'distinct';
+  rule_version_id: string;
+  rule_id: string;
+  family_id: string | null;
+  title: string;
+  parameter_differences: Record<string, Record<string, unknown>>;
+  conflict_reasons: string[];
+};
+
+export type CandidateGovernance = {
+  algorithm_version: string;
+  exact_fingerprint: string;
+  family_fingerprint: string;
+  family_key: string;
+  exact_duplicate_of_rule_version_id: string | null;
+  eligible_for_formal_version: boolean;
+  eligible_for_backtest: boolean;
+  related_rules: GovernanceMatch[];
+};
+
 export type ArticleAnalysisCandidate = {
   candidate_id: string;
   candidate_index: number;
@@ -44,11 +65,13 @@ export type ArticleAnalysisCandidate = {
   market_state_declaration_status: string;
   automatic_review: AutomaticReview;
   human_review: HumanReview;
+  governance: CandidateGovernance;
 };
 
 export type ArticleAnalysisArticle = {
   article_id: string;
   article_revision_id: string;
+  content_hash: string;
   title: string;
   source: string;
   source_url: string;
@@ -66,6 +89,24 @@ export type ArticleAnalysisDetail = {
   status: 'ready' | 'partial' | 'empty';
   message: string | null;
   article: ArticleAnalysisArticle;
+  summary_provenance: {
+    source: 'article_revision_source_payload' | 'blog_article_current' | 'unavailable';
+    article_revision_id: string;
+    content_hash: string;
+    available: boolean;
+    aligned: boolean;
+    reason: string | null;
+  };
+  article_structure_provenance: {
+    article_structure_id: string | null;
+    article_revision_id: string | null;
+    prompt_run_id: string | null;
+    prompt_name: string | null;
+    prompt_version: string | null;
+    schema_name: string | null;
+    schema_version: string | null;
+    available: boolean;
+  };
   method_tags: string[];
   explicit_facts: Array<Record<string, unknown>>;
   hypotheses: Array<Record<string, unknown>>;

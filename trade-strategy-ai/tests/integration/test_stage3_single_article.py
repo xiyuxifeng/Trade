@@ -25,8 +25,12 @@ from src.models.stage2_canonical import (
     PromptRun,
     Rule,
     RuleCandidate,
+    RuleFamily,
+    RuleFamilyMembership,
     RuleVersion,
+    RuleVersionSourceLink,
 )
+from src.services.stage3_regression_service import RegressionRunResult
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
 from src.services.stage3_single_article_service import Stage3SingleArticleService
 
@@ -119,6 +123,11 @@ class _PassingGateway:
         )
 
 
+class _PassingGate:
+    async def run_fixed_set(self) -> RegressionRunResult:
+        return RegressionRunResult(status="passed", gate_version="stage3-fixed-set-v1", manifest=[])
+
+
 @pytest.mark.asyncio
 async def test_single_article_journey_creates_rule_version_only_after_human_approval(tmp_path) -> None:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage3-single-article.db'}")
@@ -136,6 +145,9 @@ async def test_single_article_journey_creates_rule_version_only_after_human_appr
             RuleCandidate.__table__,
             Rule.__table__,
             RuleVersion.__table__,
+            RuleFamily.__table__,
+            RuleFamilyMembership.__table__,
+            RuleVersionSourceLink.__table__,
             LifecycleEvent.__table__,
         ):
             await conn.run_sync(lambda sync_conn, current_table=table: current_table.create(bind=sync_conn, checkfirst=True))
@@ -201,6 +213,7 @@ async def test_single_article_journey_creates_rule_version_only_after_human_appr
         session_scope_factory=_session_scope,
         prompt_runtime_service=runtime_service,
         repository=Stage3SingleArticleRepository(),
+        regression_service=_PassingGate(),
     )
 
     analyzed = await single_article_service.run_analysis(

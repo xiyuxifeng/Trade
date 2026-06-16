@@ -468,6 +468,29 @@ class RuleFamilyMembership(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class RuleVersionSourceLink(TimestampMixin, Base):
+    __tablename__ = "rule_version_source_links"
+    __table_args__ = (
+        Index("uq_rvsl_rule_version_candidate", "rule_version_id", "rule_candidate_id", unique=True),
+        Index("uq_rvsl_candidate_version", "rule_candidate_id", "rule_version_id", unique=True),
+    )
+
+    rule_version_source_link_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    rule_version_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("rule_versions.rule_version_id", name="fk_rvsl_rule_version", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rule_candidate_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("rule_candidates.rule_candidate_id", name="fk_rvsl_rule_candidate", ondelete="CASCADE"),
+        nullable=False,
+    )
+    link_reason: Mapped[str] = mapped_column(String(32), nullable=False, default="formal_source")
+    created_by: Mapped[str | None] = mapped_column(String(64))
+    updated_by: Mapped[str | None] = mapped_column(String(64))
+
+
 class DatasetSnapshot(TimestampMixin, Base):
     __tablename__ = "dataset_snapshots"
     __table_args__ = (

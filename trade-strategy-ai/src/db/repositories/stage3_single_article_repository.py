@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.stage2_writer_routing import require_canonical_write
@@ -17,6 +17,7 @@ from src.models.stage2_canonical import (
     Rule,
     RuleCandidate,
     RuleVersion,
+    RuleVersionSourceLink,
 )
 
 
@@ -99,7 +100,25 @@ class Stage3SingleArticleRepository:
             .order_by(RuleVersion.version_no.desc(), RuleVersion.created_at.desc())
             .limit(1)
         )
-        return (await session.execute(stmt)).scalars().first()
+        direct = (await session.execute(stmt)).scalars().first()
+        if direct is not None:
+            return direct
+        if not await self._table_exists(session, "rule_version_source_links"):
+            return None
+        link_stmt = (
+            select(RuleVersion)
+            .join(
+                RuleVersionSourceLink,
+                RuleVersionSourceLink.rule_version_id == RuleVersion.rule_version_id,
+            )
+            .where(RuleVersionSourceLink.rule_candidate_id == candidate_id)
+            .order_by(RuleVersion.created_at.desc(), RuleVersion.version_no.desc())
+            .limit(1)
+        )
+        return (await session.execute(link_stmt)).scalars().first()
+
+    async def _table_exists(self, session: AsyncSession, table_name: str) -> bool:
+        return await session.run_sync(lambda sync_session: inspect(sync_session.get_bind()).has_table(table_name))
 
     async def approve_candidate(
         self,

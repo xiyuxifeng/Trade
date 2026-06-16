@@ -268,3 +268,104 @@ None.
 `READY`
 
 Stage 4 implementation may begin with `RT-S4-002` after explicit user authorization. Do not start implementation automatically from Bootstrap.
+
+## 2026-06-16 RT-S4-002 Rule Fingerprint And RuleFamily
+
+### Task
+
+- Task ID: `RT-S4-002`
+- 状态: `[x]`
+- 结论: `ACCEPTED`
+
+### Scope implemented
+
+- deterministic and evolvable canonical rule fingerprinting;
+- exact duplicate, parameter variant, similar-rule, and conflict comparison semantics;
+- canonical `RuleFamily` / `RuleFamilyMembership` runtime;
+- `RuleVersionSourceLink` provenance bridge for repeated source candidates;
+- idempotent family, membership, and source-link creation;
+- repeated formal-rule-version prevention for exact duplicates;
+- repeated backtest-eligibility prevention for exact duplicates;
+- fixed-set gate enforcement before canonical candidate governance mutation;
+- focused API/schema/type updates exposing governance findings;
+- Stage 4 implementation log and main log updates.
+
+### Design decisions
+
+- Exact fingerprint uses normalized rule semantics only and ignores mutable display-only fields such as title, description, evidence text ordering, and source copy wording.
+- Family fingerprint generalizes parameter slots while preserving rule intent, so equal-family-but-different-exact rules become parameter variants instead of duplicates.
+- Conflict detection is explicit when comparable rules share trigger structure but diverge in action direction.
+- Exact duplicates reuse the existing canonical `RuleVersion`; they do not create a second `Rule` or `RuleVersion`.
+- Repeated source provenance is preserved through canonical `rule_version_source_links`, not by mutating legacy `rule_pool`.
+- Stage 3 candidate approval is now routed through canonical rule governance and requires a passing fixed-set gate immediately before mutation.
+
+### Files changed
+
+- `src/services/rule_governance_service.py`
+- `src/db/repositories/rule_governance_repository.py`
+- `src/db/migrations/versions/2026_06_16_0007_stage4_rule_governance.py`
+- `src/models/stage2_canonical.py`
+- `src/services/stage3_prompt_runtime_service.py`
+- `src/services/stage3_single_article_service.py`
+- `src/db/repositories/stage3_single_article_repository.py`
+- `api/schemas/article_analysis.py`
+- `api/routers/ui/article_metadata.py`
+- `web/src/types/article-analysis.ts`
+- `web/src/pages/articles/index.test.tsx`
+- `tests/unit/services/test_rule_governance_service.py`
+- `tests/unit/db/test_stage4_rule_governance_migration.py`
+- `tests/integration/test_stage4_rule_governance.py`
+- `tests/unit/models/test_stage2_canonical_models.py`
+- `tests/integration/test_stage3_single_article.py`
+
+### Database migration
+
+- Added `2026_06_16_0007_stage4_rule_governance.py`.
+- Adds canonical `rule_version_source_links`.
+- Backfills `rule_candidates.candidate_fingerprint` and `rule_versions.canonical_fingerprint` with the RT-S4-002 fingerprint contract.
+- Seeds source links from existing `RuleVersion.source_candidate_id`.
+
+### Compatibility handling
+
+- Stage 3 accepted contracts remain in force: canonical writer only, no dual-write, no legacy writer fallback, revision-bound summaries, truthful unavailable semantics.
+- `rule_pool` / `strategy_studio` remain compatibility/history only and were not promoted to formal governance authorities.
+- API response builder now provides a deterministic governance payload even for older/fake journey objects without persisted governance findings, preserving response compatibility during transition.
+
+### Tests run
+
+- Baseline gate before mutation:
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - Result: `passed` (`article_count=12`, `processed_count=12`, `cached_count=12`, `semantic_failures=[]`, `validation_failures=[]`, `provider_failures=[]`, `persistence_failures=[]`)
+- Focused pytest suite:
+  - `../.venv/bin/pytest tests/unit/stage3/test_single_article_service.py tests/unit/stage3/test_prompt_runtime_service.py tests/unit/stage3/test_regression_and_batch_services.py tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py tests/api/test_ui_openapi_contract.py tests/unit/models/test_stage2_canonical_models.py tests/unit/db/test_migrations.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/services/test_rule_governance_service.py tests/integration/test_stage4_rule_governance.py -q`
+  - Result: `41 passed`
+- Frontend compile/type check:
+  - `corepack pnpm --dir web typecheck`
+  - Result: passed
+- Diff hygiene:
+  - `git diff --check`
+  - Result: passed
+- Final gate rerun after implementation:
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - Result: `passed` (`article_count=12`, `processed_count=12`, `cached_count=12`, `semantic_failures=[]`, `validation_failures=[]`, `provider_failures=[]`, `persistence_failures=[]`)
+
+### Self-review repairs
+
+- Removed circular import between rule governance and Stage 3 regression/single-article services.
+- Added API fallback governance serialization so existing fake journeys in tests remain valid while real runtime always returns canonical governance findings.
+- Updated Stage 3 integration fixtures to include fixed-set gate stubs and the new canonical source-link/family tables.
+- Fixed frontend test fixtures to satisfy the expanded article-analysis contract.
+
+### Remaining non-blocking risks
+
+- `rule_version_source_links` introduces a new canonical provenance bridge; full production migration upgrade/rollback on real PostgreSQL should still be exercised at Stage 4 Gate.
+- Legacy `rule_pool` / `strategy_studio` review surfaces still exist as compatibility/history UI/API and must remain non-authoritative until later Stage 4 tasks finish the convergence.
+- Similar-rule and conflict semantics are intentionally conservative in RT-S4-002; richer human-review workflow and lifecycle policy remain for RT-S4-001 / RT-S4-003.
+
+### Acceptance conclusion
+
+- Deterministic fingerprint contract is active for new candidates and formal rule governance.
+- Exact duplicates no longer create repeated canonical rule versions and are marked not eligible for repeated backtest.
+- RuleFamily creation/membership is idempotent and canonical.
+- Fixed-set gate is enforced before canonical candidate governance mutation.
+- RT-S4-003 may begin after explicit user instruction.

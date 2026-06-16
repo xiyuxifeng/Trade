@@ -34,6 +34,7 @@ from src.models.stage2_canonical import (
     QualityStatus,
     RuleCandidate,
 )
+from src.services.rule_governance_service import fingerprint_rule_payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +151,7 @@ def _inference_fields(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    return fingerprint_rule_payload(payload).exact_fingerprint
 
 
 class Stage3PromptRuntimeService:

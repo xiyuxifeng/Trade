@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 from uuid import UUID
 
 from src.common.stage2_writer_routing import canonical_write_scope
@@ -11,7 +11,11 @@ from src.domain.enums import FormalLifecycleState
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
+from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceGateError, RuleGovernanceService
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
+
+if TYPE_CHECKING:
+    from src.services.stage3_regression_service import Stage3RegressionService
 
 
 AutomaticReviewStatus = Literal["pending_backtest", "needs_human_review", "suggested_reject"]
@@ -65,6 +69,7 @@ class ArticleJourney:
     candidates: list[RuleCandidate]
     automatic_reviews: dict[UUID, AutomaticReviewResult]
     rule_versions: dict[UUID, RuleVersion]
+    governance_assessments: dict[UUID, CandidateGovernanceAssessment]
     summary_provenance: SummaryProvenance
     article_structure_provenance: ArticleStructureProvenance
     message: str | None = None
@@ -226,6 +231,8 @@ class Stage3SingleArticleService:
         session_scope_factory,
         prompt_runtime_service: Stage3PromptRuntimeService | None = None,
         repository: Stage3SingleArticleRepository | None = None,
+        regression_service: Any | None = None,
+        governance_service: RuleGovernanceService | None = None,
     ) -> None:
         self._session_scope_factory = session_scope_factory
         self._prompt_runtime_service = prompt_runtime_service or Stage3PromptRuntimeService(
@@ -233,6 +240,9 @@ class Stage3SingleArticleService:
             model="gpt-5.4",
         )
         self._repository = repository or Stage3SingleArticleRepository()
+        self._governance_service = governance_service or RuleGovernanceService(
+            regression_service=regression_service,
+        )
 
     async def get_journey(
         self,
@@ -269,6 +279,7 @@ class Stage3SingleArticleService:
                     candidates=[],
                     automatic_reviews={},
                     rule_versions={},
+                    governance_assessments={},
                     summary_provenance=resolve_summary_provenance(article=article, revision=revision),
                     article_structure_provenance=build_article_structure_provenance(structure=None, prompt_run=None),
                     message="该文章尚未完成结构化分析。",
@@ -276,6 +287,10 @@ class Stage3SingleArticleService:
 
             automatic_reviews = {
                 candidate.rule_candidate_id: determine_automatic_review(candidate)
+                for candidate in candidates
+            }
+            governance_assessments = {
+                candidate.rule_candidate_id: await self._governance_service.assess_candidate(session, candidate=candidate)
                 for candidate in candidates
             }
             rule_versions = {}
@@ -293,15 +308,16 @@ class Stage3SingleArticleService:
                 status=status,
                 article=article,
                 revision=revision,
-                prompt_run=prompt_run,
-                structure=structure,
-                candidates=candidates,
-                automatic_reviews=automatic_reviews,
-                rule_versions=rule_versions,
-                summary_provenance=resolve_summary_provenance(article=article, revision=revision),
-                article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
-                message=message,
-            )
+                    prompt_run=prompt_run,
+                    structure=structure,
+                    candidates=candidates,
+                    automatic_reviews=automatic_reviews,
+                    rule_versions=rule_versions,
+                    governance_assessments=governance_assessments,
+                    summary_provenance=resolve_summary_provenance(article=article, revision=revision),
+                    article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
+                    message=message,
+                )
 
     async def run_analysis(
         self,
@@ -387,17 +403,19 @@ class Stage3SingleArticleService:
                 "review_state": "approved" if decision == "approve" else "rejected",
             }
 
+            try:
+                await self._governance_service.ensure_fixed_set_gate()
+            except RuleGovernanceGateError as exc:
+                raise Stage3SingleArticleError(str(exc)) from exc
+
             with canonical_write_scope("rule_version", self.service_name):
                 if decision == "approve":
                     payload = candidate.canonical_payload or {}
-                    await self._repository.approve_candidate(
+                    await self._governance_service.approve_candidate(
                         session,
                         candidate=candidate,
                         actor_id=actor_id,
                         reason=reason,
-                        formal_lifecycle_state=FormalLifecycleState.draft,
-                        quality_status="partial" if review.status != "pending_backtest" else "complete",
-                        business_key=f"stage3:{candidate.candidate_fingerprint}",
                         title=str(payload.get("title") or f"candidate-{candidate.candidate_index}"),
                         description=str(payload.get("description")) if payload.get("description") is not None else None,
                         schema_version="rule_v1",
@@ -408,6 +426,7 @@ class Stage3SingleArticleService:
                             "timeframe": payload.get("timeframe"),
                             "holding_period": payload.get("holding_period"),
                             "risk_controls": payload.get("risk_controls") or [],
+                            "market_state_applicability": payload.get("market_state_applicability") or {},
                         },
                         data_dependencies=candidate.data_dependencies or {},
                         evidence_json=candidate.evidence_json or {},

@@ -22,6 +22,8 @@ from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
 from src.models.article_metadata_selection import ArticleMetadataSelection
 from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
+from src.services.rule_governance_service import fingerprint_rule_payload
+from src.services.stage3_regression_service import Stage3RegressionService
 from src.services.stage3_single_article_service import Stage3SingleArticleError, Stage3SingleArticleService
 
 
@@ -55,7 +57,10 @@ def get_stage3_single_article_service() -> Stage3SingleArticleService:
                 await session.rollback()
                 raise
 
-    return Stage3SingleArticleService(session_scope_factory=_session_scope)
+    return Stage3SingleArticleService(
+        session_scope_factory=_session_scope,
+        regression_service=Stage3RegressionService(session_scope_factory=_session_scope),
+    )
 
 
 def _selection_status_condition(selection_status: str):
@@ -102,6 +107,43 @@ def _build_article_analysis_response(journey) -> dict[str, Any]:
     claims = structure_payload.get("key_claims") or []
     explicit_claims = [claim for claim in claims if claim.get("source") == "explicit"]
     inferred_claims = [claim for claim in claims if claim.get("source") != "explicit"]
+    governance_assessments = getattr(journey, "governance_assessments", {}) or {}
+
+    def _governance_payload(candidate) -> dict[str, Any]:
+        assessment = governance_assessments.get(candidate.rule_candidate_id)
+        if assessment is None:
+            fingerprint = fingerprint_rule_payload(candidate.canonical_payload or {})
+            return {
+                "algorithm_version": fingerprint.algorithm_version,
+                "exact_fingerprint": fingerprint.exact_fingerprint,
+                "family_fingerprint": fingerprint.family_fingerprint,
+                "family_key": f"family:{fingerprint.family_fingerprint}",
+                "exact_duplicate_of_rule_version_id": None,
+                "eligible_for_formal_version": True,
+                "eligible_for_backtest": True,
+                "related_rules": [],
+            }
+        return {
+            "algorithm_version": assessment.fingerprint.algorithm_version,
+            "exact_fingerprint": assessment.fingerprint.exact_fingerprint,
+            "family_fingerprint": assessment.fingerprint.family_fingerprint,
+            "family_key": assessment.family_key,
+            "exact_duplicate_of_rule_version_id": assessment.exact_duplicate_of_rule_version_id,
+            "eligible_for_formal_version": assessment.eligible_for_formal_version,
+            "eligible_for_backtest": assessment.eligible_for_backtest,
+            "related_rules": [
+                {
+                    "relation": item.relation,
+                    "rule_version_id": item.rule_version_id,
+                    "rule_id": item.rule_id,
+                    "family_id": item.family_id,
+                    "title": item.title,
+                    "parameter_differences": item.parameter_differences,
+                    "conflict_reasons": item.conflict_reasons,
+                }
+                for item in assessment.related_rules
+            ],
+        }
 
     return ArticleAnalysisDetailResponse(
         status=journey.status,
@@ -192,6 +234,7 @@ def _build_article_analysis_response(journey) -> dict[str, Any]:
                     else None,
                     "stage3_status": "pending_backtest" if candidate.rule_candidate_id in journey.rule_versions else None,
                 },
+                "governance": _governance_payload(candidate),
             }
             for candidate in journey.candidates
         ],

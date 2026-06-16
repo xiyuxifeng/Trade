@@ -74,6 +74,27 @@ class HumanReviewResponse(BaseModel):
     stage3_status: str | None = None
 
 
+class GovernanceMatchResponse(BaseModel):
+    relation: Literal["exact_duplicate", "parameter_variant", "conflict", "similar_rule", "distinct"]
+    rule_version_id: str
+    rule_id: str
+    family_id: str | None = None
+    title: str
+    parameter_differences: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    conflict_reasons: list[str] = Field(default_factory=list)
+
+
+class CandidateGovernanceResponse(BaseModel):
+    algorithm_version: str
+    exact_fingerprint: str
+    family_fingerprint: str
+    family_key: str
+    exact_duplicate_of_rule_version_id: str | None = None
+    eligible_for_formal_version: bool
+    eligible_for_backtest: bool
+    related_rules: list[GovernanceMatchResponse] = Field(default_factory=list)
+
+
 class CandidateRuleResponse(BaseModel):
     candidate_id: str
     candidate_index: int
@@ -89,6 +110,7 @@ class CandidateRuleResponse(BaseModel):
     market_state_declaration_status: str
     automatic_review: AutomaticReviewResponse
     human_review: HumanReviewResponse
+    governance: CandidateGovernanceResponse
 
 
 class ArticleAnalysisDetailResponse(BaseModel):

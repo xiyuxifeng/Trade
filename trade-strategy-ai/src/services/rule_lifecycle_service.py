@@ -490,6 +490,7 @@ class RuleLifecycleService:
                         candidate=candidate,
                         actor_id=actor_id,
                         reason=reason,
+                        correlation_id=correlation_id,
                         title=str(payload.get("title") or f"candidate-{candidate.candidate_index}"),
                         description=str(payload.get("description")) if payload.get("description") is not None else None,
                         schema_version="rule_v1",

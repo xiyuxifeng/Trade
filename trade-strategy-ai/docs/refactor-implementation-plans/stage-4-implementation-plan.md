@@ -373,6 +373,14 @@ RT-S4-001:
 - all human actions are audited;
 - user-facing error states are truthful and actionable.
 
+RT-S4-001 frozen implementation refinements from repository evidence:
+
+- `auto_pass` is reserved for low-risk non-entry rules with complete evidence and no duplicate/conflict/manual-review findings;
+- `recommend_pass` is used for low-risk entry rules and exact-duplicate reuse cases that still require human confirmation or batch approval;
+- `manual_review` is forced by conflict, similar/parameter-variant findings, ambiguity, inference, missing fields, Kaipan dependency, or post-edit review;
+- `not_backtestable` and `recommend_reject` remain blocked/unavailable until human action and do not fabricate pending-backtest or usable states;
+- `approve` / `approve_after_edit` / `merge` must propagate the caller correlation id through canonical `LifecycleEvent` audit rows, including duplicate reuse and new `RuleVersion` creation.
+
 ## 18. Test Strategy And Commands
 
 Before every Stage 4 implementation Task:

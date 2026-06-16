@@ -496,3 +496,140 @@ Actor / reason / correlation / idempotency / concurrency rules:
 - fixed-set gate is enforced before formal lifecycle mutation
 - legacy `rule_pool` write fallback is rejected
 - RT-S4-003 is accepted
+
+## 2026-06-16 RT-S4-001 Automatic Review And Human Review Workbench
+
+### Scope
+
+- Task ID: `RT-S4-001`
+- Status: `[x]`
+- Objective: implement deterministic automatic review, the canonical human-review service/API/workbench, and batch review boundaries on top of accepted RT-S4-002 and RT-S4-003 contracts.
+
+### Frozen automatic-review contract
+
+Automatic-review statuses implemented:
+
+- `auto_pass`: low-risk non-entry rule; complete evidence; no duplicate/conflict/manual-review finding.
+- `recommend_pass`: low-risk entry rule or exact duplicate that can reuse the existing formal `RuleVersion` and lifecycle track.
+- `manual_review`: ambiguity, missing fields, inference, conflict, similar/parameter-variant, Kaipan dependency, or post-edit review.
+- `not_backtestable`: candidate cannot yet truthfully enter pending-backtest because required backtest evidence/fields are unavailable.
+- `recommend_reject`: missing evidence, missing condition, or missing action.
+
+Deterministic reasons are derived from canonical payload, `RuleCandidate` missing/inferred fields, data dependencies, and accepted RT-S4-002 governance findings.
+
+### Human-review actions
+
+Implemented canonical actions:
+
+- `edit`
+- `approve`
+- `approve_after_edit`
+- `merge`
+- `hold`
+- `reject`
+- `approve_low_risk` batch action
+- `reject_invalid` batch action
+
+Rules enforced:
+
+- automatic review never makes a rule formally usable
+- low-risk batch approval only routes through canonical `approve` and stops at the accepted Stage 4 `已批准` boundary
+- `merge` is allowed only for exact duplicates and reuses the existing canonical `RuleVersion`
+- invalid batch rejection only accepts `recommend_reject` and `not_backtestable`
+- all formal review mutations call the RT-S4-003 lifecycle service and therefore inherit fixed-set gate enforcement and canonical writer scope
+
+### API and Web
+
+Added:
+
+- canonical API router: `/api/ui/v1/rule-review`
+- Web workbench: `/rules/review`
+
+Capabilities exposed:
+
+- candidate list with human-review filtering
+- candidate detail with source article / revision summary provenance, automatic-review reasons, missing fields, dependency display, duplicate/similar/conflict findings, lifecycle state, allowed actions, and audit history
+- mutation endpoints for single-item and batch review actions
+- business-Chinese user wording only on the normal-user surface
+
+Legacy handling:
+
+- old `rule_pool` / `strategy_studio` review writes remain compatibility-only rejected
+- no dual-write or legacy fallback was restored
+
+### Audit and correlation-id behavior
+
+- all human actions append to the canonical `LifecycleEvent` ledger
+- `edit` / `hold` append candidate-scoped audit rows without fabricating formal lifecycle progress
+- `approve` / `approve_after_edit` / `merge` propagate the caller `correlation_id` into the canonical governance-created lifecycle rows
+- history remains append-only in normal operation
+
+### Migration decision
+
+- no new migration was added for RT-S4-001
+- decision: existing JSON audit columns and canonical candidate/rule tables were sufficient
+
+### Files changed
+
+- `src/db/repositories/rule_review_repository.py`
+- `src/services/rule_review_service.py`
+- `src/db/repositories/rule_governance_repository.py`
+- `src/services/rule_governance_service.py`
+- `src/services/rule_lifecycle_service.py`
+- `api/routers/ui/rule_review.py`
+- `api/routers/ui/__init__.py`
+- `api/app.py`
+- `web/src/lib/api/rule-review.ts`
+- `web/src/types/rule-review.ts`
+- `web/src/pages/rules/index.tsx`
+- `web/src/pages/rules/review.test.tsx`
+- `tests/integration/test_stage4_rule_review.py`
+- `tests/api/routers/test_rule_review.py`
+- `tests/integration/test_stage4_rule_governance.py`
+- `docs/Refactor-Implementation-Log.md`
+- `docs/refactor-implementation-logs/stage-4.md`
+- `docs/refactor-implementation-plans/stage-4-implementation-plan.md`
+
+### Tests run
+
+- Baseline and final fixed-set gate:
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - Result: `passed` (`article_count=12`, `processed_count=12`, `semantic_failures=[]`, `validation_failures=[]`, `provider_failures=[]`, `persistence_failures=[]`)
+- New RT-S4-001 TDD suites:
+  - `python -m pytest tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_review.py -q`
+  - Result: `5 passed`
+- Expanded backend/API regression:
+  - `python -m pytest tests/integration/test_stage3_single_article.py tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/api/routers/ui/test_article_metadata.py tests/api/test_ui_openapi_contract.py tests/unit/services/test_optimize_rule_pool_service.py -q`
+  - Result: `23 passed, 1 warning`
+- Frontend:
+  - `pnpm test -- src/pages/rules/review.test.tsx`
+  - Result: `3 passed`
+  - `pnpm typecheck`
+  - Result: passed
+- Verification commands:
+  - `../.venv/bin/python -m compileall src api cli`
+  - `git diff --check`
+  - Result: passed
+
+### Self-review repairs
+
+- aligned exact-duplicate / new-rule formal audit rows so they preserve caller `correlation_id`
+- corrected RT-S4-001 sample fixtures so recommend-pass, conflict, and edit-after-approve cases do not collapse into the same fingerprint family by mistake
+- replaced the old `/rules/review` compatibility placeholder with the new canonical workbench while keeping normal-user wording in Chinese
+- fixed Web type mismatches and error-category usage during typecheck
+
+### Remaining non-blocking risks
+
+- the current workbench implements the required action surface but is still a compact operator UI; broader review dashboard ergonomics can improve during Stage 4 Review without changing the accepted contract
+- existing backend warning `RuntimeWarning: coroutine 'Connection._cancel' was never awaited` still appears in one OpenAPI test path and remains an existing non-blocking async cleanup issue
+- batch approval intentionally stops at `已批准`; Stage 6/8 evidence and publication semantics remain unavailable and are not fabricated
+
+### Acceptance conclusion
+
+- deterministic automatic review now uses the required five statuses
+- canonical human-review mutations are centralized and audited
+- exact duplicates reuse one formal lifecycle track
+- `/rules/review` is now the normal-user review workbench
+- fixed-set gate still blocks canonical mutation paths
+- RT-S4-002 and RT-S4-003 regression suites remain green
+- RT-S4-001 is accepted

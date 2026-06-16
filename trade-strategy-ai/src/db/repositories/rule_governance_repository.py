@@ -180,6 +180,7 @@ class RuleGovernanceRepository:
         data_dependencies: dict[str, Any],
         evidence_json: dict[str, Any],
         after_review_snapshot: dict[str, Any],
+        correlation_id: str,
     ) -> RuleVersion:
         require_canonical_write("rule_version", "RuleGovernanceRepository.create_formal_rule")
         now = datetime.now(UTC)
@@ -279,7 +280,7 @@ class RuleGovernanceRepository:
                 before_json={"review_state": "manual_review"},
                 after_json=after_review_snapshot,
                 occurred_at=now,
-                correlation_id=str(rule_version.rule_version_id),
+                correlation_id=correlation_id,
             )
         )
         session.add(
@@ -309,7 +310,7 @@ class RuleGovernanceRepository:
                     },
                 },
                 occurred_at=now,
-                correlation_id=str(rule_version.rule_version_id),
+                correlation_id=correlation_id,
             )
         )
         await session.flush()
@@ -324,6 +325,7 @@ class RuleGovernanceRepository:
         actor_id: str,
         reason: str | None,
         after_review_snapshot: dict[str, Any],
+        correlation_id: str,
     ) -> RuleVersion:
         require_canonical_write("rule_version", "RuleGovernanceRepository.link_candidate_to_existing_rule_version")
         now = datetime.now(UTC)
@@ -352,7 +354,7 @@ class RuleGovernanceRepository:
                 before_json={"review_state": "manual_review"},
                 after_json=after_review_snapshot,
                 occurred_at=now,
-                correlation_id=str(rule_version.rule_version_id),
+                correlation_id=correlation_id,
             )
         )
         await session.flush()

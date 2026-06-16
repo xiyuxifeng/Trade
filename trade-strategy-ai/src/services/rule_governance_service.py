@@ -324,6 +324,7 @@ class RuleGovernanceService:
         candidate: RuleCandidate,
         actor_id: str,
         reason: str | None,
+        correlation_id: str,
         title: str,
         description: str | None,
         schema_version: str,
@@ -350,6 +351,7 @@ class RuleGovernanceService:
                 rule_version=version,
                 actor_id=actor_id,
                 reason=reason,
+                correlation_id=correlation_id,
                 after_review_snapshot={
                     **after_review_snapshot,
                     "governance_relation": "exact_duplicate",
@@ -389,6 +391,7 @@ class RuleGovernanceService:
             parameter_json=parameter_json,
             data_dependencies=data_dependencies,
             evidence_json=evidence_json,
+            correlation_id=correlation_id,
             after_review_snapshot={
                 **after_review_snapshot,
                 "governance_relation": "new_rule_version",

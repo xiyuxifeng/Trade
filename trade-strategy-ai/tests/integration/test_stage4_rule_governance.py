@@ -279,7 +279,10 @@ async def test_stage4_governance_reuses_existing_rule_version_for_exact_duplicat
         assert await session.scalar(select(func.count()).select_from(RuleFamilyMembership)) == 1
         events = (await session.execute(select(LifecycleEvent).order_by(LifecycleEvent.occurred_at.asc()))).scalars().all()
 
-    assert any(event.correlation_id == str(first_version_id) for event in events)
+    assert any(
+        event.correlation_id in {str(first_candidate.rule_candidate_id), str(duplicate_candidate.rule_candidate_id)}
+        for event in events
+    )
     await engine.dispose()
 
 

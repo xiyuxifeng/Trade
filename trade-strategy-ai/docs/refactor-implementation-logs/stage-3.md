@@ -4,8 +4,8 @@
 
 - Stage：`Stage 3 Prompt 与文章处理链路`
 - 状态：`[-] 进行中`
-- 当前活动：`RT-S3-003` 已完成并接受；`RT-S3-004` 尚未开始。
-- 下一可执行 Task：`RT-S3-004 legacy Prompt migration / retirement`
+- 当前活动：`RT-S3-004` 已完成并接受；Stage 3 Gate 尚未开始。
+- 下一可执行 Task：`Stage 3 Gate`
 - Stage 计划：[stage-3-implementation-plan.md](../refactor-implementation-plans/stage-3-implementation-plan.md)
 
 ## 2026-06-15 Bootstrap
@@ -800,3 +800,136 @@ method tags、structured claims、candidate rules、evidence、missing、backtes
 - `RT-S3-004` 现在可以开始，但本 Session 不自动开始。
 - Stage 3 不得标记完成；仍需 RT-S3-004 cutover/retirement、观察期与 rollback evidence。
 - 结论：`RT-S3-002 RE-ACCEPTED`
+
+## 2026-06-16 RT-S3-004 Recovery, Continuation, and Retirement
+
+### Scope
+
+- 仅执行 `RT-S3-004 旧 Prompt 迁移与退役`。
+- Recovery Session 基于仓库事实继续中断的上一个 5.5 Session，不重启 Task。
+- 保持上游 accepted contracts 不变：
+  - `RT-S3-001`～`RT-S3-003` accepted
+  - canonical Prompt registry / Pydantic Schema ownership 不变
+  - canonical writer 仍为唯一 formal writer
+  - no dual-write
+  - historical-read compatibility 保留
+  - no DB Schema / Alembic change
+  - no Stage 4+ implementation
+
+### Recovered state from repository evidence
+
+- Recovery 时 `git status --short` 显示：
+  - tracked modified:
+    - `src/agents/data_agent/skills/extract_article_metadata.py`
+    - `src/evaluation/postmortem_service.py`
+    - `tests/unit/agents/test_extract_article_metadata.py`
+    - `tests/unit/agents/test_extract_article_metadata_extended.py`
+  - untracked:
+    - `src/services/stage3_prompt_retirement.py`
+    - `tests/integration/test_stage3_legacy_compatibility.py`
+- 完整 diff 证据显示：
+  - legacy article extraction 已改为加载 `article_analysis_v1`，并投影到 legacy reader shape；
+  - postmortem Prompt helper 已改为加载 `llm_attribution_v1` / `llm_postmortem_notes_v1`；
+  - 5 个 legacy Prompt 文件仍存在，形成 unsafe partial retirement；
+  - Stage 日志和主日志仍把 `RT-S3-004` 记录为未开始。
+- 未发现与本 Task 无关的用户修改。
+
+### Recovery review findings
+
+- BLOCKER：无
+- HIGH：
+  - legacy Prompt 文件仍存在，删除 gate 未真正完成。
+- MEDIUM：
+  - retirement inventory 是 static stub，未绑定真实文件删除状态。
+  - 缺少 machine-verifiable fixed-set compatibility comparison evidence。
+  - 主日志 / Stage 日志仍是 stale “未开始”状态。
+
+### Bounded repairs
+
+- 将 `src/services/stage3_prompt_retirement.py` 从静态 stub 补为 file-truth inventory：
+  - 每个 legacy Prompt 记录 `prompt_path`
+  - 运行时按仓库状态计算 `prompt_file_exists`
+  - `deletion_gate_status` 由真实文件存在性驱动
+- 补充 `tests/integration/test_stage3_legacy_compatibility.py`：
+  - 断言 5 个 legacy Prompt 文件已从 `prompts/` 删除
+  - 断言 retirement inventory 反映 `prompt_file_exists is False`
+  - 新增 fixed-set compatibility projection comparison
+- 删除 legacy Prompt 文件：
+  - `prompts/concept_extraction.md`
+  - `prompts/rule_extraction.md`
+  - `prompts/precondition_extraction.md`
+  - `prompts/llm_attribution.md`
+  - `prompts/llm_postmortem_notes.md`
+- 新增正式 retirement 证据文档：
+  - `docs/RT-S3-004-Prompt-Retirement-Report.md`
+
+### Files changed
+
+- Deleted:
+  - `prompts/concept_extraction.md`
+  - `prompts/rule_extraction.md`
+  - `prompts/precondition_extraction.md`
+  - `prompts/llm_attribution.md`
+  - `prompts/llm_postmortem_notes.md`
+- Added:
+  - `src/services/stage3_prompt_retirement.py`
+  - `tests/integration/test_stage3_legacy_compatibility.py`
+  - `docs/RT-S3-004-Prompt-Retirement-Report.md`
+- Modified:
+  - `src/agents/data_agent/skills/extract_article_metadata.py`
+  - `src/evaluation/postmortem_service.py`
+  - `tests/unit/agents/test_extract_article_metadata.py`
+  - `tests/unit/agents/test_extract_article_metadata_extended.py`
+  - `docs/Refactor-Implementation-Log.md`
+  - `docs/refactor-implementation-logs/stage-3.md`
+
+### Verification
+
+- Red step:
+  - `../.venv/bin/python -m pytest tests/integration/test_stage3_legacy_compatibility.py -q`
+  - 初次结果：`1 failed, 4 passed`
+  - 失败原因：5 个 legacy Prompt 文件仍存在
+- After repair:
+  - `../.venv/bin/python -m pytest tests/integration/test_stage3_legacy_compatibility.py -q`
+  - 结果：`6 passed in 6.54s`
+- Frozen RT-S3-004 suite:
+  - `../.venv/bin/python -m pytest tests/regression/stage3 tests/unit/llm tests/integration/test_stage3_legacy_compatibility.py -q`
+  - 结果：`14 passed in 3.52s`
+- Invalidated local compatibility suite:
+  - `../.venv/bin/python -m pytest tests/e2e/test_article_pipeline_v1.py tests/unit/agents/test_extract_article_metadata.py tests/unit/agents/test_extract_article_metadata_extended.py -q`
+  - 结果：`17 passed, 1 skipped in 5.98s`
+- Static:
+  - `git diff --check`
+  - 结果：通过
+- Reference scan:
+  - `rg -n "concept_extraction\.md|rule_extraction\.md|precondition_extraction\.md|llm_attribution\.md|llm_postmortem_notes\.md" src api cli scripts tests prompts docs`
+  - 结果：
+    - `prompts/` 无 legacy Prompt 文件命中
+    - `src/` 仅 retirement inventory metadata 命中
+    - `tests/` 仅 compatibility gates 命中
+    - `docs/` 为历史设计、Task、migration 和 retirement 记录命中
+
+### Specialized evidence
+
+- fixed-set compatibility comparison：
+  - `article_analysis_v1` fixed fixtures 可稳定投影为 legacy reader shape
+- sole formal writer verification：
+  - 无生产 caller 继续加载 legacy Prompt filenames
+  - formal write chain 仍为 canonical application-service chain
+- historical-read compatibility：
+  - historical adapter 不加载已删除 Prompt 文件
+  - registry 不暴露 legacy Prompt identity/path
+- rollback evidence：
+  - active callers 以 `article_analysis_v1` / `llm_attribution_v1` / `llm_postmortem_notes_v1` 为硬绑定
+  - 恢复旧 Prompt 文件文本不会重新激活 legacy routing
+- per-prompt deletion gate：
+  - 5/5 passed
+
+### Acceptance
+
+- legacy Prompt inventory、old-to-new mapping、fixed-set compatibility comparison、sole-writer verification、historical-read compatibility、rollback evidence、per-prompt deletion gates、safe deletion、focused tests 和正式日志更新全部完成。
+- 未修改 Stage 3 frozen contract。
+- 未引入第二 formal writer。
+- 未引入 DB Schema / Alembic change。
+- Stage 3 Gate 尚未开始。
+- 结论：`RT-S3-004 ACCEPTED — Stage 3 Gate may begin`

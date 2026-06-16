@@ -16,10 +16,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 3 Prompt 与文章处理链路`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S3-003` 已接受；不得自动开始 `RT-S3-004`。
+- 当前 Task：`RT-S3-004` 已接受；不得自动开始 Stage 3 Gate。
 - 计划：[Stage 3 实施计划](refactor-implementation-plans/stage-3-implementation-plan.md)
 - 详细日志：[Stage 3](refactor-implementation-logs/stage-3.md)
-- 下一步：`RT-S3-004 旧 Prompt migration / retirement` 可开始，但本 Session 不自动开始。
+- 下一步：可进入 Stage 3 Gate，但本 Session 不自动开始。
 
 ## 当前阻塞项
 
@@ -29,7 +29,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - RT-S3-001 已接受；Stage 3 canonical Prompt registry、Pydantic Schema、Prompt runtime foundation 和 canonical PromptRun/ArticleStructure/RuleCandidate 写入已建立。
 - RT-S3-002 provenance repair 已接受；human-review/RuleVersion/canonical-writer 工作保留，summary 与 ArticleStructure provenance 已补齐。
 - RT-S3-003 已接受；固定 12 篇 regression set、bulk gate 和可恢复 dry-run batch 已建立。
-- Stage 3 仍未完成 legacy runtime retirement。
+- RT-S3-004 已接受；legacy Prompt 已删除，历史读取兼容、fixed-set compatibility comparison、rollback 与 deletion gate 证据已补齐。
+- Stage 3 仍未执行最终 Gate。
 
 ## Task 状态
 
@@ -46,7 +47,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S3-001 | `[x]` | versioned Prompt registry、Pydantic Schema、single-call/one-repair runtime、cache/idempotency 和 canonical persistence foundation 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-002 | `[x]` | human-review/RuleVersion contracts 保留；summary/ArticleStructure provenance repair 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-003 | `[x]` | 12 篇 fixed regression set、semantic assertions、gate、recoverable dry-run batch、CLI/readiness evidence 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-004 | `[ ]` | 单独且最后；等待 RT-S3-003、观察期和 rollback evidence | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-004 | `[x]` | legacy Prompt migration / retirement 已接受；Stage 3 Gate 可开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 
 ## Stage 状态
 
@@ -80,7 +81,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 视觉一致性、非关键响应式细节和文案润色进入 UI backlog，不阻塞 Stage 2。
 - Stage 3 legacy article extraction 仍存在，但在 canonical writer enabled 时不能形成正式 Stage 3 formal writer。
 - 旧 revision summary 仅在 `ArticleRevision.source_payload` 含 frozen summary 时可展示；否则 API 需 truthful unavailable，不得回退到当前 `BlogArticle.summary`。
-- Stage 3 legacy runtime retirement、观察期和 rollback evidence 尚未完成。
+- Stage 3 final Gate 尚未执行；不得把 RT-S3-004 accepted 视为 Stage 3 完成。
 - 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
 
 ## 日志读取规则

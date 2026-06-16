@@ -22,6 +22,7 @@ from src.rule_pool.models import ArticleClassification, TradeSample
 from src.rule_pool.repository import RulePoolRepository
 from src.rule_pool.schemas import ArticleType, ExtractionLayer, RawCondition, RulePoolItem, RuleSourceType
 from src.llm.client import LLMClient, LLMError, LLMResult, from_env_and_config
+from src.llm.prompt_registry import get_prompt_spec
 from src.market_data.stock_info_service import get_stock_name_to_symbol_map
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
@@ -423,6 +424,86 @@ def _heuristic_extract(article: BlogArticle) -> dict[str, Any]:
         "sentiment_score": sentiment,
         "confidence_score": 0.1,
     }
+
+
+def _legacy_compat_output_from_article_analysis(raw: dict[str, Any]) -> dict[str, Any]:
+    """Project article_analysis_v1 output into the retired ArticleMetadata shape.
+
+    This compatibility adapter keeps legacy readers working while the formal
+    Stage 3 writer remains PromptRun -> ArticleStructure -> RuleCandidate.
+    """
+    concepts = raw.get("concept_extraction") if isinstance(raw.get("concept_extraction"), dict) else {}
+    rules = raw.get("rule_extraction") if isinstance(raw.get("rule_extraction"), dict) else {}
+    preconditions = raw.get("explicit_preconditions") if isinstance(raw.get("explicit_preconditions"), dict) else {}
+    quality = raw.get("quality") if isinstance(raw.get("quality"), dict) else {}
+
+    raw_strategy_rules = rules.get("strategy_rules")
+    strategy_rules: list[dict[str, Any]] = []
+    for item in raw_strategy_rules if isinstance(raw_strategy_rules, list) else []:
+        if not isinstance(item, dict):
+            continue
+        strategy_rules.append(
+            {
+                "schema_version": "v0_compat_from_rule_v1",
+                "rule_type": item.get("rule_type") or "entry",
+                "instrument_focus": ",".join(item.get("instrument_focus") or []) if isinstance(item.get("instrument_focus"), list) else "mixed",
+                "condition": item.get("condition") or {},
+                "action": item.get("action") or {"type": "enter", "side": "buy", "order": "market", "price": None, "params": {}},
+                "confidence": item.get("confidence"),
+                "quoted_text": _first_evidence_quote(item.get("evidence")),
+                "source_url": None,
+                "published_at": None,
+            }
+        )
+
+    raw_preconditions = preconditions.get("preconditions")
+    compat_preconditions: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_preconditions if isinstance(raw_preconditions, list) else []):
+        if not isinstance(item, dict):
+            continue
+        compat_preconditions.append(
+            {
+                "schema_version": "v0_compat_from_explicit_precondition_v1",
+                "precondition_id": item.get("precondition_id") or f"precondition-{index}",
+                "precondition_type": item.get("type") or "market_regime",
+                "description": item.get("description") or item.get("raw_expression") or "",
+                "source": item.get("source") or "explicit",
+                "confidence": item.get("confidence"),
+                "evidence": item.get("evidence") or [],
+            }
+        )
+
+    return {
+        "extracted_concepts": concepts.get("concepts") if isinstance(concepts.get("concepts"), list) else [],
+        "trading_symbols": concepts.get("trading_symbols") if isinstance(concepts.get("trading_symbols"), list) else [],
+        "strategy_rules": strategy_rules,
+        "preconditions": compat_preconditions,
+        "comment_insights": [],
+        "sentiment_score": (concepts.get("sentiment") or {}).get("score") if isinstance(concepts.get("sentiment"), dict) else 0.0,
+        "confidence_score": _compat_confidence(raw, concepts, rules, quality),
+        "stage3_prompt_name": "article_analysis_v1",
+        "stage3_schema_version": raw.get("schema_version"),
+    }
+
+
+def _first_evidence_quote(evidence: Any) -> str | None:
+    if not isinstance(evidence, list):
+        return None
+    for item in evidence:
+        if isinstance(item, dict) and isinstance(item.get("quote"), str):
+            return item["quote"]
+        if isinstance(item, str):
+            return item
+    return None
+
+
+def _compat_confidence(*payloads: dict[str, Any]) -> float:
+    values: list[float] = []
+    for payload in payloads:
+        confidence = _safe_float(payload.get("confidence"))
+        if confidence is not None:
+            values.append(confidence)
+    return sum(values) / len(values) if values else 0.5
 
 
 def _validate_rules(rules: Any, *, source_url: str | None, published_at: datetime | None) -> list[dict[str, Any]]:
@@ -1026,29 +1107,9 @@ async def _extract_one(
     prompts_dir: Path,
     article: BlogArticle,
 ) -> dict[str, Any]:
-    concept_p = _read_prompt(prompts_dir / "concept_extraction.md")
-    rule_p = _read_prompt(prompts_dir / "rule_extraction.md")
-    pre_p = _read_prompt(prompts_dir / "precondition_extraction.md")
-
-    system_prompt = "\n\n".join([
-        "你必须只输出严格 JSON，不要输出 Markdown。",
-        concept_p,
-        rule_p,
-        pre_p,
-        "最终输出必须合并为一个 JSON 对象，包含字段：extracted_concepts, trading_symbols, strategy_rules, preconditions, comment_insights, sentiment_score, confidence_score。",
-        (
-            "输出格式要求：\n"
-            "{\n"
-            '  "extracted_concepts": [...],   // 0-10 条，太多说明提取不精准\n'
-            '  "trading_symbols": [...],       // 0-8 个，优先提取有把握的\n'
-            '  "strategy_rules": [...],        // 0-8 条，宁缺毋滥\n'
-            '  "preconditions": [...],         // 0-8 条\n'
-            '  "comment_insights": [...],      // 0-5 条，从评论中提炼\n'
-            '  "sentiment_score": float,       // -1.0 ~ 1.0\n'
-            '  "confidence_score": float       // 0.0 ~ 1.0\n'
-            "}"
-        ),
-    ])
+    del prompts_dir
+    prompt_spec = get_prompt_spec("article_analysis_v1")
+    system_prompt = prompt_spec.load_prompt_text()
 
     # 控制输入长度：避免把超长评论一次性塞爆
     content = article.content_text.strip()
@@ -1066,7 +1127,8 @@ async def _extract_one(
         ensure_ascii=False,
     )
 
-    return await client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
+    raw = await client.complete_json(system_prompt=system_prompt, user_prompt=user_prompt)
+    return _legacy_compat_output_from_article_analysis(raw)
 
 
 @dataclass(slots=True)
@@ -1546,29 +1608,9 @@ async def _extract_one_with_retry(
     Returns:
         LLMResult: 包含 data (dict) 和 model (str)
     """
-    concept_p = _read_prompt(prompts_dir / "concept_extraction.md")
-    rule_p = _read_prompt(prompts_dir / "rule_extraction.md")
-    pre_p = _read_prompt(prompts_dir / "precondition_extraction.md")
-
-    system_prompt = "\n\n".join([
-        "你必须只输出严格 JSON，不要输出 Markdown。",
-        concept_p,
-        rule_p,
-        pre_p,
-        "最终输出必须合并为一个 JSON 对象，包含字段：extracted_concepts, trading_symbols, strategy_rules, preconditions, comment_insights, sentiment_score, confidence_score。",
-        (
-            "输出格式要求：\n"
-            "{\n"
-            '  "extracted_concepts": [...],   // 0-10 条，太多说明提取不精准\n'
-            '  "trading_symbols": [...],       // 0-8 个，优先提取有把握的\n'
-            '  "strategy_rules": [...],        // 0-8 条，宁缺毋滥\n'
-            '  "preconditions": [...],         // 0-8 条\n'
-            '  "comment_insights": [...],      // 0-5 条，从评论中提炼\n'
-            '  "sentiment_score": float,       // -1.0 ~ 1.0\n'
-            '  "confidence_score": float       // 0.0 ~ 1.0\n'
-            "}"
-        ),
-    ])
+    del prompts_dir
+    prompt_spec = get_prompt_spec("article_analysis_v1")
+    system_prompt = prompt_spec.load_prompt_text()
 
     # 控制输入长度：避免把超长评论一次性塞爆
     content = article.content_text.strip()
@@ -1586,8 +1628,9 @@ async def _extract_one_with_retry(
         ensure_ascii=False,
     )
 
-    # 使用带重试和模型降级的调用
-    return await client.complete_json_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
+    # 使用带重试和模型降级的调用；输出仅投影到 legacy 兼容读取形状。
+    result = await client.complete_json_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
+    return LLMResult(data=_legacy_compat_output_from_article_analysis(result.data), model=result.model)
 
 
 async def extract_and_store_metadata(

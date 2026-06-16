@@ -71,6 +71,10 @@ def _load_prompt(relative_path: str) -> str:
     return (root / relative_path).read_text(encoding="utf-8").strip()
 
 
+LLM_ATTRIBUTION_PROMPT = "prompts/llm_attribution_v1.md"
+LLM_POSTMORTEM_NOTES_PROMPT = "prompts/llm_postmortem_notes_v1.md"
+
+
 class LLMValidator(Protocol):
     """LLM 校验器接口。"""
     async def validate(
@@ -230,23 +234,28 @@ class PostmortemService:
         target_price = evidence_pack.market_data.target_price
         stop_loss_price = evidence_pack.market_data.stop_loss_price
 
-        template = _load_prompt("prompts/llm_postmortem_notes.md")
-        result = template.replace("{symbol}", str(symbol))
-        result = result.replace("{trade_date}", str(evidence_pack.trade_date))
-        result = result.replace("{side}", str(trade_side))
-        result = result.replace("{entry_price}", str(entry_value if entry_value is not None else "N/A"))
-        result = result.replace("{target_price}", str(target_price if target_price is not None else "N/A"))
-        result = result.replace("{stop_loss_price}", str(stop_loss_price if stop_loss_price is not None else "N/A"))
-        result = result.replace("{bars}", bars_str)
-        result = result.replace("{root_causes}", root_causes)
-        result = result.replace("{attribution_source}", attribution_source)
-        result = result.replace("{mfe}", f"{mfe:.6f}")
-        result = result.replace("{mae}", f"{mae:.6f}")
-        result = result.replace("{return_pct}", f"{return_pct:.6f}")
-        result = result.replace("{rules_hit}", rules_text)
-        result = result.replace("{exit_triggered}", exit_text)
-        result = result.replace("{exit_date}", exit_date_text)
-        return result
+        payload = {
+            "trade": {
+                "symbol": symbol,
+                "trade_date": evidence_pack.trade_date,
+                "side": trade_side,
+                "entry_price": entry_value,
+                "target_price": target_price,
+                "stop_loss_price": stop_loss_price,
+            },
+            "market_data": {"bars": bars_str},
+            "program_results": {
+                "root_causes": root_causes,
+                "attribution_source": attribution_source,
+                "mfe": f"{mfe:.6f}",
+                "mae": f"{mae:.6f}",
+                "return_pct": f"{return_pct:.6f}",
+                "rules_hit": rules_text,
+                "exit_triggered": exit_text,
+                "exit_date": exit_date_text,
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, default=str)
 
     async def _generate_postmortem_notes(
         self,
@@ -281,7 +290,7 @@ class PostmortemService:
         if not client.is_enabled():
             return None, "fallback"
 
-        system_prompt = _load_prompt("prompts/llm_postmortem_notes.md")
+        system_prompt = _load_prompt(LLM_POSTMORTEM_NOTES_PROMPT)
         user_prompt = self._build_llm_notes_prompt(
             evidence_pack=evidence_pack,
             final_attribution=final_attribution,
@@ -302,7 +311,7 @@ class PostmortemService:
         except Exception:
             return None, "fallback"
 
-        notes = response.get("notes") or response.get("summary") or response.get("content")
+        notes = response.get("summary") or response.get("notes") or response.get("content")
         if isinstance(notes, list):
             notes = "；".join(str(item) for item in notes if item)
         if not isinstance(notes, str) or not notes.strip():
@@ -459,7 +468,7 @@ class PostmortemService:
                 "confidence": 0.0,
             }
 
-        system_prompt = _load_prompt("prompts/llm_attribution.md")
+        system_prompt = _load_prompt(LLM_ATTRIBUTION_PROMPT)
         user_prompt = self._build_llm_user_prompt(trade_idea, market_data, auto_attribution)
 
         try:
@@ -479,7 +488,13 @@ class PostmortemService:
                 "confidence": 0.0,
             }
 
-        corrected_reason = response.get("corrected_reason") or response.get("reason", "")
+        corrected_reason = (
+            response.get("corrected_reason")
+            or response.get("reason")
+            or response.get("reasoning")
+            or response.get("primary_category")
+            or ""
+        )
         auto_reason = auto_attribution.get("reason", "")
 
         if corrected_reason == auto_reason:
@@ -500,26 +515,24 @@ class PostmortemService:
         market_data: dict,
         auto_attribution: dict,
     ) -> str:
-        """从 prompts/llm_attribution.md 加载模板并填充变量。"""
+        """Build structured v1 user input for LLM attribution."""
         bars = market_data.get("bars", [])
-        bars_str = json.dumps(bars, ensure_ascii=False, default=str) if bars else "无市场数据"
 
         entry = trade_idea.get("entry", {})
-        if isinstance(entry, dict):
-            entry_str = json.dumps(entry, ensure_ascii=False, default=str)
-        else:
-            entry_str = str(entry)
-
-        # 加载模板并替换占位符
-        template = _load_prompt("prompts/llm_attribution.md")
-        result = template.replace("{symbol}", str(trade_idea.get("symbol", "N/A")))
-        result = result.replace("{side}", str(trade_idea.get("side", "N/A")))
-        result = result.replace("{entry}", entry_str)
-        target_val = trade_idea.get("target_price", trade_idea.get("target", "N/A"))
-        stop_loss_val = trade_idea.get("stop_loss_price", trade_idea.get("stop_loss", "N/A"))
-        result = result.replace("{target}", str(target_val))
-        result = result.replace("{stop_loss}", str(stop_loss_val))
-        result = result.replace("{bars}", bars_str)
-        result = result.replace("{auto_reason}", str(auto_attribution.get("reason", "N/A")))
-        result = result.replace("{auto_confidence}", str(auto_attribution.get("confidence", 0.0)))
-        return result
+        target_val = trade_idea.get("target_price", trade_idea.get("target"))
+        stop_loss_val = trade_idea.get("stop_loss_price", trade_idea.get("stop_loss"))
+        payload = {
+            "交易想法": {
+                "symbol": trade_idea.get("symbol"),
+                "side": trade_idea.get("side"),
+                "entry": entry,
+                "target_price": target_val,
+                "stop_loss_price": stop_loss_val,
+            },
+            "市场数据": {"bars": bars},
+            "自动归因结果": {
+                "reason": auto_attribution.get("reason"),
+                "confidence": auto_attribution.get("confidence", 0.0),
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, default=str)

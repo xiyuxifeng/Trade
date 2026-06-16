@@ -120,8 +120,6 @@ async def test_process_one_article_sets_article_type_on_success(
     """测试 _process_one_article 在分类成功时正确设置 article_type"""
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt content", encoding="utf-8")
 
     article = _make_article(content_text="这是测试内容" * 30)
     meta = _make_metadata(article)
@@ -214,8 +212,6 @@ async def test_process_one_article_sets_noise_on_classification_failure(
     """测试 _process_one_article 在分类失败时默认为噪音"""
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt content", encoding="utf-8")
 
     article = _make_article(content_text="这是测试内容" * 30)
     meta = _make_metadata(article)
@@ -292,8 +288,6 @@ async def test_process_one_article_no_classification_when_llm_disabled(
     """测试 LLM 禁用时不进行分类"""
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt content", encoding="utf-8")
 
     article = _make_article(content_text="000001.SZ 看好上涨" * 10)
     meta = _make_metadata(article)
@@ -360,8 +354,6 @@ async def test_process_article_isolated_sets_article_type(
     """测试 _process_article_isolated 正确设置 article_type"""
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt content", encoding="utf-8")
 
     article = _make_article(content_text="这是测试内容" * 30, title="测试规则文章")
     meta = _make_metadata(article, version="v1")

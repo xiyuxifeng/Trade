@@ -250,11 +250,9 @@ async def test_finalize_extraction_artifacts_auto_creates_rules() -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_one_prompt_includes_structured_limits(tmp_path: Path) -> None:
+async def test_extract_one_uses_article_analysis_v1_and_compat_projection(tmp_path: Path) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text(f"{name} content", encoding="utf-8")
 
     article = _make_article(content_text="这是一段足够长的正文。" * 20)
     captured: dict[str, str] = {}
@@ -263,20 +261,31 @@ async def test_extract_one_prompt_includes_structured_limits(tmp_path: Path) -> 
         async def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, object]:
             captured["system_prompt"] = system_prompt
             captured["user_prompt"] = user_prompt
-            return {}
+            return {
+                "schema_version": "article_analysis_v1",
+                "concept_extraction": {
+                    "concepts": [{"name": "放量突破", "type": "pattern"}],
+                    "trading_symbols": ["000001.SZ"],
+                    "sentiment": {"score": 0.2},
+                    "confidence": 0.8,
+                },
+                "rule_extraction": {"strategy_rules": []},
+                "explicit_preconditions": {"preconditions": []},
+                "quality": {},
+            }
 
-    await mod._extract_one(client=FakeClient(), prompts_dir=prompts_dir, article=article)
+    result = await mod._extract_one(client=FakeClient(), prompts_dir=prompts_dir, article=article)
 
-    assert '"extracted_concepts": [...],   // 0-10 条' in captured["system_prompt"]
-    assert '"comment_insights": [...],      // 0-5 条，从评论中提炼' in captured["system_prompt"]
+    assert "# Article Analysis v1" in captured["system_prompt"]
+    assert result["stage3_prompt_name"] == "article_analysis_v1"
+    assert result["extracted_concepts"] == [{"name": "放量突破", "type": "pattern"}]
+    assert result["trading_symbols"] == ["000001.SZ"]
 
 
 @pytest.mark.asyncio
 async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     article = _make_article(
         content_text="000001.SZ 看好上涨机会，准备买入。" * 10,
@@ -325,8 +334,6 @@ async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_p
 async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     article = _make_article(content_text="600000.SH 走弱，考虑止损。" * 10)
     meta = _make_metadata(article)
@@ -371,8 +378,6 @@ async def test_extract_and_store_metadata_falls_back_on_llm_error(tmp_path: Path
 async def test_run_article_extraction_pipeline_aborts_on_fatal_llm_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     article = _make_article(content_text="600000.SH 走弱，考虑止损。" * 10)
     meta = _make_metadata(article)
@@ -418,8 +423,6 @@ async def test_run_article_extraction_pipeline_aborts_on_fatal_llm_error(tmp_pat
 async def test_extract_and_store_metadata_v1_only_uses_v1_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     article_v1_target = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
     article_other_version = _make_article(content_text="600000.SH 仍需观察，谨慎一点。" * 10)
@@ -506,8 +509,6 @@ async def test_extract_and_store_metadata_target_mode_does_not_fallback_to_db_sc
 ) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     target_article = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
     other_article = _make_article(content_text="600000.SH 仍需观察，谨慎一点。" * 10)
@@ -584,8 +585,6 @@ async def test_extract_and_store_metadata_target_mode_does_not_fallback_to_db_sc
 async def test_process_article_isolated_respects_cancel_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    for name in ("concept_extraction.md", "rule_extraction.md", "precondition_extraction.md"):
-        (prompts_dir / name).write_text("prompt", encoding="utf-8")
 
     article = _make_article(content_text="000001.SZ 看好上涨机会，准备买入。" * 10)
 

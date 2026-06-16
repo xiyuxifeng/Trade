@@ -73,6 +73,7 @@ def _load_prompt(relative_path: str) -> str:
 
 LLM_ATTRIBUTION_PROMPT = "prompts/llm_attribution_v1.md"
 LLM_POSTMORTEM_NOTES_PROMPT = "prompts/llm_postmortem_notes_v1.md"
+FUTURE_STAGE_LLM_PROMPTS_ACTIVE = False
 
 
 class LLMValidator(Protocol):
@@ -276,6 +277,9 @@ class PostmortemService:
             (notes, source)
         """
         client = self.llm_notes_client
+        if not FUTURE_STAGE_LLM_PROMPTS_ACTIVE:
+            return None, "future_stage_inactive"
+
         if client is None:
             from src.llm.client import LLMClient, from_env_and_config
 
@@ -452,6 +456,15 @@ class PostmortemService:
             dict: 包含 attribution_source 和归因详情的 dict
         """
         from src.llm.client import LLMClient, LLMClientConfig, from_env_and_config
+
+        if not FUTURE_STAGE_LLM_PROMPTS_ACTIVE:
+            return {
+                "attribution_source": "auto",
+                "reason": auto_attribution.get("reason", ""),
+                "corrected_reason": None,
+                "confidence": 0.0,
+                "stage3_future_prompt_status": "inactive",
+            }
 
         if llm_client is None:
             cfg = from_env_and_config(

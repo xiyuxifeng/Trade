@@ -3,9 +3,9 @@
 ## 当前状态
 
 - Stage：`Stage 3 Prompt 与文章处理链路`
-- 状态：`[-] 进行中`
-- 当前活动：`RT-S3-004` 已完成并接受；Stage 3 Gate 尚未开始。
-- 下一可执行 Task：`Stage 3 Gate`
+- 状态：`[x] 已完成`
+- 当前活动：`Stage 3 Gate` 已完成并接受。
+- 下一可执行 Task：`Stage 4 Bootstrap`
 - Stage 计划：[stage-3-implementation-plan.md](../refactor-implementation-plans/stage-3-implementation-plan.md)
 
 ## 2026-06-15 Bootstrap
@@ -933,3 +933,102 @@ method tags、structured claims、candidate rules、evidence、missing、backtes
 - 未引入 DB Schema / Alembic change。
 - Stage 3 Gate 尚未开始。
 - 结论：`RT-S3-004 ACCEPTED — Stage 3 Gate may begin`
+
+## 2026-06-16 Stage 3 Gate Review and Final Decision
+
+### Scope
+
+- Gate：`Stage 3 Prompt and Article Processing Pipeline`
+- Tasks：`RT-S3-001`、`RT-S3-002`、`RT-S3-003`、`RT-S3-004`
+- Parent：gpt-5.5
+- 委派：
+  - Explorer Alpha：single-article journey、human review、RuleVersion boundary、summary/ArticleStructure provenance。
+  - Explorer Beta：Prompt registry、Schema、invocation/repair、future Prompt inactivity。
+  - Explorer Gamma：fixed regression set、batch readiness、recovery guarantees。
+  - 第四个 legacy/log slice 因 subagent thread limit 由 Parent 本地执行。
+
+### Initial findings
+
+- `AUTO_REPAIRABLE MEDIUM`：主日志 Stage 3 summary stale，仍写成仅 RT-S3-001～RT-S3-003 accepted 且 RT-S3-004 remains。
+  - Owning Task：`Stage 3 Gate documentation consistency`
+  - Repair：本 Gate 将主日志 Stage 3 状态、当前状态、下一步和 residual risk 更新为 final accepted truth。
+- `AUTO_REPAIRABLE LOW`：controlled dry-run batch command 在 sandbox 内因本地 PostgreSQL socket 权限返回 `PermissionError: [Errno 1] Operation not permitted`，同一命令按权限流程在外部执行通过。
+  - Owning Task：`RT-S3-003`
+  - Repair：无需代码变更；记录为 verification environment issue。
+- `AUTO_REPAIRABLE MEDIUM`：`PostmortemService` / `postmortem_tasks` 可触达 `llm_attribution_v1` 与 `llm_postmortem_notes_v1`，与 Gate “future-stage Prompts remain inactive” 不一致。
+  - Owning Task：`RT-S3-004`
+  - Repair：保留 historical/fallback postmortem behavior，但在 Stage 3 hard-disable future-stage LLM prompt invocation；enabled clients are not called and prompt assets are not loaded.
+- `CONTRACT_SENSITIVE`：无。Postmortem prompt activation resolution did not require changing frozen contracts.
+
+### Verified final facts
+
+- `RT-S3-001`～`RT-S3-004` 均保持 accepted。
+- Canonical Prompt registry 是 Prompt identity/version/status 的运行事实源；Pydantic models 是 output Schema 事实源。
+- 普通文章主链路仍为 `article_analysis_v1` 一次主调用，Schema repair 为 targeted 且最多一次。
+- `PromptRun.raw_output` / `raw_output_text` 只作为 traceability，不作为正式业务事实源。
+- `ArticleStructure` / `RuleCandidate` 保持 facts、hypotheses、evidence、missing fields 与 `not_declared` 分离。
+- Deterministic automatic review 不创建 `RuleVersion`。
+- 只有 explicit human approval 创建 `RuleVersion`；Stage 3 `draft` lifecycle 继续映射为 user-facing `pending_backtest` boundary。
+- Revision-bound summary 不回退到 latest article summary；无法证明对齐时保持 truthful unavailable。
+- Fixed regression set 为 12 篇，覆盖要求类别；未执行 full 100+ article processing。
+- Batch readiness 通过 fixed-set gate、idempotent resume、checkpoint、incremental、bounded retry 和 concurrency-bound tests 验证。
+- Future-stage Prompts 保持 `asset_validated` / inactive；未启动 Stage 4+ behavior。
+- v1 链路是唯一 formal production writer；legacy Prompt 文件 5/5 已删除，legacy references 仅剩 retirement inventory、tests 和 historical docs。
+- Historical reads and rollback remain safe without deleted Prompt files。
+- Stage 3 Tasks 未新增 DB Schema 或 Alembic migration。完整 bootstrap-to-HEAD diff 中存在一个独立 Stage 2 migration-ordering repair commit，修改既有 Stage 2 migration 的 fresh-database FK defer logic，不新增 Stage 3 schema。
+
+### Final verification
+
+- `../.venv/bin/python -m pytest tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_prompt_runtime.py tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py -q`
+  - `27 passed`
+- `../.venv/bin/python -m pytest tests/unit/llm tests/unit/schemas tests/unit/services/test_stage2_writer_routing.py -q`
+  - `21 passed`
+- `../.venv/bin/python -m pytest tests/api/routers/test_articles.py tests/api/routers/ui/test_article_metadata.py tests/api/routers/test_rule_pool.py -q`
+  - `10 passed`
+- `../.venv/bin/python -m pytest tests/e2e/test_article_pipeline_v1.py tests/unit/agents/test_extract_article_metadata.py tests/unit/agents/test_extract_article_metadata_extended.py -q`
+  - `17 passed, 1 skipped`
+- `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - `status=passed`, `article_count=12`, `processed_count=12`, `cached_count=12`, `repaired_count=0`, `human_attention_count=6`
+- `../.venv/bin/python -m cli.main stage3-article-batch run --dry-run --limit 15`
+  - sandbox result：blocked by local PostgreSQL socket permission
+  - approved external rerun：`status=completed`, `gate_status=passed`, `skipped_count=12`, `concurrency_limit=2`
+- `pnpm test -- src/pages/articles/index.test.tsx`
+  - `8 passed`
+- `pnpm typecheck`
+  - passed
+- `../.venv/bin/python -m compileall src api cli`
+  - passed
+- `../.venv/bin/python -m pytest tests/unit/db/test_migrations.py -q`
+  - `3 passed`
+- `git diff --check`
+  - passed
+- Legacy Prompt active reference scan over `src api cli scripts prompts`
+  - no active production reference; only retirement inventory metadata remains in `src/services/stage3_prompt_retirement.py`.
+
+### Contract compliance
+
+- No unresolved `BLOCKER` or required `HIGH` remains.
+- No dual-write or legacy formal writer exists.
+- No Stage 4+ behavior was implemented by Stage 3.
+- Logs, Stage status and runtime evidence now agree.
+
+### Gate repair evidence
+
+- Files changed:
+  - `src/evaluation/postmortem_service.py`
+  - `tests/unit/evaluation/test_postmortem_service.py`
+  - `tests/integration/test_stage3_legacy_compatibility.py`
+- Repair verification:
+  - `../.venv/bin/python -m pytest tests/unit/evaluation/test_postmortem_service.py::TestGenerate::test_generate_with_notes_enabled_keeps_future_stage_llm_inactive tests/unit/evaluation/test_postmortem_service.py::test_llm_attribution_future_stage_prompt_inactive_with_enabled_client tests/integration/test_stage3_legacy_compatibility.py::test_postmortem_llm_helpers_do_not_activate_future_stage_prompt_assets -q`
+    - Red before repair：`3 failed`
+    - Green after repair：`3 passed`
+  - `../.venv/bin/python -m pytest tests/unit/evaluation/test_postmortem_service.py tests/unit/pipeline/tasks/test_postmortem_tasks.py tests/integration/test_stage3_legacy_compatibility.py -q`
+    - `35 passed`
+  - `../.venv/bin/python -m pytest tests/unit/llm/test_prompt_registry.py tests/unit/llm/test_client.py tests/unit/stage3/test_prompt_runtime_service.py tests/integration/test_stage3_prompt_runtime.py tests/integration/test_stage3_single_article.py -q`
+    - `15 passed`
+
+### Final Gate decision
+
+`ACCEPTED: next Stage may begin`
+
+Stage 4 Bootstrap may begin. Stage 4 was not started automatically.

@@ -311,8 +311,8 @@ class TestGenerate:
         assert "data_quality_issue" in result.failure_attribution.root_causes
         assert result.postmortem_notes is None
 
-    async def test_generate_with_notes_enabled_uses_llm_notes(self):
-        """开启复盘笔记且注入 LLM 客户端时，应返回 LLM 生成摘要。"""
+    async def test_generate_with_notes_enabled_keeps_future_stage_llm_inactive(self):
+        """Stage 3 不激活 future-stage 复盘 LLM Prompt。"""
         from uuid import uuid4
         from src.evaluation.postmortem_service import PostmortemService
         from src.evaluation.evidence_pack import EvidencePack
@@ -345,9 +345,9 @@ class TestGenerate:
 
         result = await service.generate(evidence)
         assert result.postmortem_notes is not None
-        assert result.postmortem_notes == "LLM 生成的复盘摘要"
-        assert result.extra["notes_source"] == "llm"
-        mock_client.complete_json_with_retry.assert_awaited_once()
+        assert result.postmortem_notes != "LLM 生成的复盘摘要"
+        assert result.extra["notes_source"] == "fallback"
+        mock_client.complete_json_with_retry.assert_not_awaited()
 
     async def test_generate_with_notes_enabled_falls_back_without_llm(self):
         """未注入 LLM 客户端时，应回退到结构化摘要。"""
@@ -457,11 +457,16 @@ async def test_llm_attribution_llm_disabled_returns_auto():
 
 
 @pytest.mark.asyncio
-async def test_llm_attribution_llm_confirmed():
-    """LLM 确认自动归因时返回 llm_confirmed。"""
+async def test_llm_attribution_future_stage_prompt_inactive_with_enabled_client(monkeypatch):
+    """Stage 3 不加载或调用 future-stage attribution Prompt。"""
     from unittest.mock import AsyncMock
     from src.evaluation.postmortem_service import PostmortemService
     from src.llm.client import LLMClient, LLMClientConfig
+
+    def fail_load_prompt(_relative_path: str) -> str:
+        raise AssertionError("future-stage attribution prompt must remain inactive")
+
+    monkeypatch.setattr("src.evaluation.postmortem_service._load_prompt", fail_load_prompt)
 
     cfg = LLMClientConfig(provider="openai", model="gpt-4o", url="https://api.openai.com/v1", api_key="fake")
     client = LLMClient(cfg)
@@ -474,13 +479,15 @@ async def test_llm_attribution_llm_confirmed():
         auto_attribution={"reason": "原始原因", "confidence": 0.5},
         llm_client=client,
     )
-    assert result["attribution_source"] == "llm_confirmed"
+    assert result["attribution_source"] == "auto"
     assert result["reason"] == "原始原因"
+    assert result["corrected_reason"] is None
+    client.complete_json.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_llm_attribution_llm_corrected():
-    """LLM 修正自动归因时返回 llm_corrected。"""
+async def test_llm_attribution_llm_corrected_future_prompt_inactive():
+    """Stage 3 不激活 LLM 修正归因。"""
     from unittest.mock import AsyncMock
     from src.evaluation.postmortem_service import PostmortemService
     from src.llm.client import LLMClient, LLMClientConfig
@@ -496,14 +503,15 @@ async def test_llm_attribution_llm_corrected():
         auto_attribution={"reason": "原始原因", "confidence": 0.5},
         llm_client=client,
     )
-    assert result["attribution_source"] == "llm_corrected"
-    assert result["reason"] == "修正原因"
-    assert result["corrected_reason"] == "修正原因"
+    assert result["attribution_source"] == "auto"
+    assert result["reason"] == "原始原因"
+    assert result["corrected_reason"] is None
+    client.complete_json.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_llm_attribution_llm_rejected():
-    """LLM 调用失败时返回 llm_rejected。"""
+async def test_llm_attribution_llm_rejected_future_prompt_inactive():
+    """Stage 3 不调用 LLM，因此不会产生 llm_rejected。"""
     from unittest.mock import AsyncMock
     from src.evaluation.postmortem_service import PostmortemService
     from src.llm.client import LLMClient, LLMClientConfig
@@ -519,8 +527,9 @@ async def test_llm_attribution_llm_rejected():
         auto_attribution={"reason": "原始原因", "confidence": 0.5},
         llm_client=client,
     )
-    assert result["attribution_source"] == "llm_rejected"
+    assert result["attribution_source"] == "auto"
     assert result["reason"] == "原始原因"
+    client.complete_json.assert_not_awaited()
 
 
 def test_build_llm_user_prompt():

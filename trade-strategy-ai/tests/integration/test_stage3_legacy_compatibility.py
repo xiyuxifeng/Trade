@@ -101,7 +101,7 @@ def test_stage3_legacy_retirement_inventory_maps_every_prompt_and_allows_deletio
 
 
 @pytest.mark.asyncio
-async def test_postmortem_llm_helpers_load_v1_prompt_assets(monkeypatch) -> None:
+async def test_postmortem_llm_helpers_do_not_activate_future_stage_prompt_assets(monkeypatch) -> None:
     from src.evaluation.postmortem_service import PostmortemService
 
     loaded_paths: list[str] = []
@@ -129,5 +129,5 @@ async def test_postmortem_llm_helpers_load_v1_prompt_assets(monkeypatch) -> None
         llm_client=EnabledClient(),
     )
 
-    assert result["attribution_source"] == "llm_confirmed"
-    assert loaded_paths == ["prompts/llm_attribution_v1.md"]
+    assert result["attribution_source"] == "auto"
+    assert loaded_paths == []

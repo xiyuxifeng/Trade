@@ -580,7 +580,6 @@ class RuleLifecycleService:
             version_uuid = UUID(str(rule_version_id))
             rule_version = await self._get_rule_version(session, rule_version_id=version_uuid)
             rule = await self._get_rule(session, rule_id=rule_version.rule_id)
-            self._ensure_expected_timestamp(rule_version.updated_at, expected_updated_at)
             existing = await self._get_latest_event(
                 session,
                 object_type=CanonicalObjectType.rule_version.value,
@@ -594,6 +593,7 @@ class RuleLifecycleService:
                     object_id=rule_version.rule_version_id,
                 )
                 return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
+            self._ensure_expected_timestamp(rule_version.updated_at, expected_updated_at)
 
             latest_event = await self._get_latest_event(
                 session,

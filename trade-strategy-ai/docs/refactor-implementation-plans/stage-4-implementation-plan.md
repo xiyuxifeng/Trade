@@ -380,6 +380,7 @@ RT-S4-001 frozen implementation refinements from repository evidence:
 - `manual_review` is forced by conflict, similar/parameter-variant findings, ambiguity, inference, missing fields, Kaipan dependency, or post-edit review;
 - `not_backtestable` and `recommend_reject` remain blocked/unavailable until human action and do not fabricate pending-backtest or usable states;
 - `approve` / `approve_after_edit` / `merge` must propagate the caller correlation id through canonical `LifecycleEvent` audit rows, including duplicate reuse and new `RuleVersion` creation.
+- `approve_low_risk` must pre-check the whole batch before mutation; eligible new low-risk RuleVersions move to `待回测`, while exact duplicates reuse the existing RuleVersion and do not create repeated backtest eligibility.
 
 ## 18. Test Strategy And Commands
 

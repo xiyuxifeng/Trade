@@ -265,7 +265,7 @@ async def test_rule_lifecycle_requires_review_before_approval_and_tracks_pending
         actor_id="operator-user",
         reason="重试同一请求。",
         correlation_id="corr-backtest-queue",
-        expected_updated_at=queued.updated_at,
+        expected_updated_at=approved.updated_at,
     )
     assert retried.display_state == "待回测"
 
@@ -427,4 +427,3 @@ async def test_rule_lifecycle_rejects_stale_write_and_blocks_publish_without_bac
     assert retired.canonical_state == "archived"
 
     await engine.dispose()
-

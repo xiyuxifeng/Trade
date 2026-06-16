@@ -5,6 +5,7 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from uuid import uuid4
 
 from src.services.rule_governance_service import fingerprint_rule_payload
 
@@ -32,6 +33,19 @@ rule_versions = sa.table(
     sa.column("parameter_json", postgresql.JSONB(astext_type=sa.Text())),
     sa.column("data_dependencies", postgresql.JSONB(astext_type=sa.Text())),
     sa.column("canonical_fingerprint", sa.String(length=64)),
+    sa.column("source_candidate_id", postgresql.UUID(as_uuid=True)),
+    sa.column("created_by", sa.String(length=64)),
+    sa.column("updated_by", sa.String(length=64)),
+)
+
+rule_version_source_links = sa.table(
+    "rule_version_source_links",
+    sa.column("rule_version_source_link_id", postgresql.UUID(as_uuid=True)),
+    sa.column("rule_version_id", postgresql.UUID(as_uuid=True)),
+    sa.column("rule_candidate_id", postgresql.UUID(as_uuid=True)),
+    sa.column("link_reason", sa.String(length=32)),
+    sa.column("created_by", sa.String(length=64)),
+    sa.column("updated_by", sa.String(length=64)),
 )
 
 
@@ -109,29 +123,19 @@ def upgrade() -> None:
         )
     )
 
-    op.execute(
-        sa.text(
-            """
-            INSERT INTO rule_version_source_links (
-                rule_version_source_link_id,
-                rule_version_id,
-                rule_candidate_id,
-                link_reason,
-                created_by,
-                updated_by
+    for row in version_rows:
+        if row.source_candidate_id is None:
+            continue
+        bind.execute(
+            rule_version_source_links.insert().values(
+                rule_version_source_link_id=uuid4(),
+                rule_version_id=row.rule_version_id,
+                rule_candidate_id=row.source_candidate_id,
+                link_reason="formal_source",
+                created_by=row.created_by or "migration",
+                updated_by=row.updated_by or "migration",
             )
-            SELECT gen_random_uuid(),
-                   rv.rule_version_id,
-                   rv.source_candidate_id,
-                   'formal_source',
-                   COALESCE(rv.created_by, 'migration'),
-                   COALESCE(rv.updated_by, 'migration')
-            FROM rule_versions AS rv
-            WHERE rv.source_candidate_id IS NOT NULL
-            ON CONFLICT DO NOTHING
-            """
         )
-    )
 
     op.execute(
         sa.text(

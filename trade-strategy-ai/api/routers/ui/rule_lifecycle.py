@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.dependencies import get_current_principal, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.db.session import get_session_factory as async_session_factory
 from src.services.rule_lifecycle_service import (
     LifecycleAction,
@@ -128,11 +128,11 @@ async def list_rule_version_history(
 async def transition_rule_version(
     rule_version_id: str,
     request: RuleLifecycleTransitionRequest,
-    principal=Depends(get_current_principal),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
     service: RuleLifecycleService = Depends(get_rule_lifecycle_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
-    actor_id = getattr(principal, "api_key_label", None) or getattr(principal, "role", "anonymous")
+    actor_id = principal.api_key_label or principal.role
     try:
         view = await service.transition_rule_version(
             rule_version_id=rule_version_id,

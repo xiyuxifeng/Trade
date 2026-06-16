@@ -186,7 +186,7 @@ class RuleReviewService:
                 reasons.append("量化字段仍不完整")
             return AutomaticReviewDecision(
                 status="not_backtestable",
-                label="暂不可回测",
+                label="不可回测",
                 risk_level="high",
                 reasons=reasons,
                 requires_human_review=True,
@@ -216,7 +216,7 @@ class RuleReviewService:
         if manual_reasons:
             return AutomaticReviewDecision(
                 status="manual_review",
-                label="人工审核",
+                label="需要人工确认",
                 risk_level="high" if "发现冲突规则" in manual_reasons else "medium",
                 reasons=list(dict.fromkeys(manual_reasons)),
                 requires_human_review=True,
@@ -677,13 +677,21 @@ class RuleReviewService:
         await self._ensure_gate()
         if not candidate_ids:
             raise RuleReviewTransitionBlockedError("必须提供候选规则列表。")
-        items: list[dict[str, Any]] = []
-        for index, candidate_id in enumerate(candidate_ids):
+        prechecked: list[tuple[UUID | str, dict[str, Any], str]] = []
+        for candidate_id in candidate_ids:
             detail = await self.get_candidate_detail(candidate_id=candidate_id)
             status = detail["automatic_review"]["status"]
             if action == "approve_low_risk":
                 if status not in {"auto_pass", "recommend_pass"}:
                     raise RuleReviewTransitionBlockedError("批量通过只允许处理低风险候选规则。")
+            elif status not in {"recommend_reject", "not_backtestable"}:
+                raise RuleReviewTransitionBlockedError("批量驳回只允许处理明显无效或不可回测的候选规则。")
+            prechecked.append((candidate_id, detail, status))
+
+        items: list[dict[str, Any]] = []
+        for index, (candidate_id, detail, _status) in enumerate(prechecked):
+            if action == "approve_low_risk":
+                eligible_for_backtest = bool(detail.get("governance", {}).get("eligible_for_backtest"))
                 result = await self.apply_action(
                     candidate_id=candidate_id,
                     action="approve",
@@ -692,9 +700,24 @@ class RuleReviewService:
                     reason=reason,
                     correlation_id=f"{correlation_id}:{index}",
                 )
+                if eligible_for_backtest and result.rule_version_id is not None:
+                    queued = await self._lifecycle_service.transition_rule_version(
+                        rule_version_id=result.rule_version_id,
+                        target_state="待回测",
+                        actor_type=actor_type,
+                        actor_id=actor_id,
+                        reason=reason,
+                        correlation_id=f"{correlation_id}:{index}:queue-backtest",
+                    )
+                    result = ReviewActionResult(
+                        candidate_id=result.candidate_id,
+                        current_review_state=result.current_review_state,
+                        current_lifecycle_state=queued.display_label or queued.display_state,
+                        rule_version_id=result.rule_version_id,
+                        last_action=result.last_action,
+                        allowed_actions=[{"key": item.key, "label": item.label} for item in queued.allowed_next_actions],
+                    )
             else:
-                if status not in {"recommend_reject", "not_backtestable"}:
-                    raise RuleReviewTransitionBlockedError("批量驳回只允许处理明显无效或不可回测的候选规则。")
                 result = await self.apply_action(
                     candidate_id=candidate_id,
                     action="reject",

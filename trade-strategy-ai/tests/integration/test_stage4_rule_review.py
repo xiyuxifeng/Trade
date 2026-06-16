@@ -363,11 +363,17 @@ async def test_rule_review_classifies_all_five_statuses_and_routes_conflicts(tmp
 
     items = await service.list_candidates()
     statuses = {item.candidate_id: item.automatic_review.status for item in items}
+    labels = {item.candidate_id: item.automatic_review.label for item in items}
     assert statuses[str(auto_pass_candidate.rule_candidate_id)] == "auto_pass"
     assert statuses[str(recommend_pass_candidate.rule_candidate_id)] == "recommend_pass"
     assert statuses[str(manual_candidate.rule_candidate_id)] == "manual_review"
     assert statuses[str(not_backtestable_candidate.rule_candidate_id)] == "not_backtestable"
     assert statuses[str(reject_candidate.rule_candidate_id)] == "recommend_reject"
+    assert labels[str(auto_pass_candidate.rule_candidate_id)] == "自动通过"
+    assert labels[str(recommend_pass_candidate.rule_candidate_id)] == "建议通过"
+    assert labels[str(manual_candidate.rule_candidate_id)] == "需要人工确认"
+    assert labels[str(not_backtestable_candidate.rule_candidate_id)] == "不可回测"
+    assert labels[str(reject_candidate.rule_candidate_id)] == "建议驳回"
 
     conflict_detail = await service.get_candidate_detail(candidate_id=manual_candidate.rule_candidate_id)
     assert conflict_detail["automatic_review"]["status"] == "manual_review"
@@ -826,6 +832,26 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
             payload=manual_payload,
             backtestability_status=manual_backtestability,
         )
+        batch_precheck_approve = await _seed_candidate(
+            session,
+            article_id=article_id,
+            revision_id=revision_id,
+            prompt_run_id=prompt_run_id,
+            structure_id=structure_id,
+            index=3,
+            payload={**approve_payload, "title": "预检批量通过规则"},
+            backtestability_status=approve_backtestability,
+        )
+        batch_precheck_manual = await _seed_candidate(
+            session,
+            article_id=article_id,
+            revision_id=revision_id,
+            prompt_run_id=prompt_run_id,
+            structure_id=structure_id,
+            index=4,
+            payload={**manual_payload, "title": "预检冲突规则"},
+            backtestability_status=manual_backtestability,
+        )
         await session.commit()
 
     @asynccontextmanager
@@ -843,6 +869,19 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
         regression_service=_PassingGate(),
     )
 
+    with pytest.raises(RuleReviewTransitionBlockedError):
+        await service.apply_batch_action(
+            action="approve_low_risk",
+            actor_type="human",
+            actor_id="reviewer",
+            reason="错误地混合低风险和需要人工判断的规则。",
+            correlation_id="corr-batch-precheck",
+            candidate_ids=[batch_precheck_approve.rule_candidate_id, batch_precheck_manual.rule_candidate_id],
+        )
+    precheck_detail = await service.get_candidate_detail(candidate_id=batch_precheck_approve.rule_candidate_id)
+    assert precheck_detail["current_review_state"] == "候选"
+    assert precheck_detail["rule_version_id"] is None
+
     approved = await service.apply_batch_action(
         action="approve_low_risk",
         actor_type="human",
@@ -852,6 +891,21 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
         candidate_ids=[batch_approve.rule_candidate_id],
     )
     assert approved.processed_count == 1
+    approved_detail = await service.get_candidate_detail(candidate_id=batch_approve.rule_candidate_id)
+    assert approved_detail["current_lifecycle_state"] == "待回测"
+    async with session_factory() as session:
+        queued_events = list(
+            (
+                await session.execute(
+                    select(LifecycleEvent)
+                    .where(LifecycleEvent.reason_code == "queued_for_backtest")
+                    .where(LifecycleEvent.correlation_id == "corr-batch-approve:0:queue-backtest")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(queued_events) == 1
 
     rejected = await service.apply_batch_action(
         action="reject_invalid",

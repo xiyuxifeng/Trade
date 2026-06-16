@@ -3,11 +3,11 @@
 ## Current Status
 
 - Stage：`Stage 4 规则管理、去重和规则族`
-- Stage 状态：`[-] 进行中`
-- 当前活动：`RT-S4-003 规则生命周期` 已完成并接受。
-- 下一可执行 Task：`RT-S4-001 自动审核与人工审核工作台`
+- Stage 状态：`[x] 已完成`
+- 当前活动：`Stage 4 Review and Gate` 已完成。
+- 下一可执行 Task：`Stage 5 Bootstrap`，需用户明确授权后才能开始。
 - Bootstrap 决策：`READY`
-- Stage 4 implementation：may begin only after explicit user instruction.
+- Stage 4 Gate 决策：`ACCEPTED`
 
 ## 2026-06-16 Stage 4 Bootstrap
 
@@ -533,7 +533,8 @@ Implemented canonical actions:
 Rules enforced:
 
 - automatic review never makes a rule formally usable
-- low-risk batch approval only routes through canonical `approve` and stops at the accepted Stage 4 `已批准` boundary
+- low-risk batch approval pre-checks the whole batch, routes through canonical `approve`, and moves eligible new RuleVersions to `待回测`
+- exact duplicate batch approval reuses the existing RuleVersion and does not create repeated backtest eligibility
 - `merge` is allowed only for exact duplicates and reuses the existing canonical `RuleVersion`
 - invalid batch rejection only accepts `recommend_reject` and `not_backtestable`
 - all formal review mutations call the RT-S4-003 lifecycle service and therefore inherit fixed-set gate enforcement and canonical writer scope
@@ -622,7 +623,7 @@ Legacy handling:
 
 - the current workbench implements the required action surface but is still a compact operator UI; broader review dashboard ergonomics can improve during Stage 4 Review without changing the accepted contract
 - existing backend warning `RuntimeWarning: coroutine 'Connection._cancel' was never awaited` still appears in one OpenAPI test path and remains an existing non-blocking async cleanup issue
-- batch approval intentionally stops at `已批准`; Stage 6/8 evidence and publication semantics remain unavailable and are not fabricated
+- Stage 6/8 validation and publication semantics remain unavailable and are not fabricated; Stage 4 batch approval only reaches `待回测`
 
 ### Acceptance conclusion
 
@@ -633,3 +634,105 @@ Legacy handling:
 - fixed-set gate still blocks canonical mutation paths
 - RT-S4-002 and RT-S4-003 regression suites remain green
 - RT-S4-001 is accepted
+
+## 2026-06-16 Stage 4 Review And Gate
+
+### Scope
+
+- Task: Stage 4 Review and Gate
+- Status: `[x]`
+- Decision: `ACCEPTED`
+
+### Findings discovered
+
+- `approve_low_risk` batch review stopped at `已批准`, while the TaskList requires low-risk rules to be able to enter `待回测`.
+- `approve_low_risk` processed candidates one by one before validating the whole batch, so a mixed valid/invalid batch could partially mutate canonical governance before failing.
+- `/api/ui/v1/rule-lifecycle/*/transition` accepted any authenticated principal instead of requiring operator permission for formal lifecycle mutation.
+- `transition_rule_version` checked `expected_updated_at` before correlation-id idempotency, causing a retry of the same mutation to be rejected as stale.
+- Stage 4 migration used PostgreSQL `gen_random_uuid()` without an extension contract, which made fresh/existing upgrade depend on undeclared database state.
+- legacy CLI `rule-pool review-batch` rejected writes through the service but then crashed on the compatibility-only response instead of reporting a controlled refusal.
+- `/rules/review` displayed raw governance relation/data dependency values such as `exact_duplicate` and `ohlcv_1d` on the normal-user surface.
+- automatic-review labels differed from the frozen Chinese status contract for `manual_review` and `not_backtestable`.
+
+### Repairs applied
+
+- Batch low-risk approval now performs a whole-batch precheck before mutation; eligible new RuleVersions are transitioned to `待回测`; exact duplicates reuse the existing RuleVersion and do not create repeated backtest eligibility.
+- Lifecycle transition API now requires `operator` role.
+- Lifecycle transition idempotency now checks same `correlation_id` before stale-write protection.
+- Stage 4 migration source-link backfill now generates UUIDs in Python and no longer depends on `gen_random_uuid()`.
+- CLI `rule-pool review-batch` now reports compatibility-only refusal without crashing.
+- `/rules/review` maps dependencies and duplicate/conflict relations to Chinese business wording.
+- automatic-review labels now match the contract: `自动通过`、`建议通过`、`需要人工确认`、`不可回测`、`建议驳回`.
+
+### Verification
+
+- Initial Stage 3 fixed-set gate before review:
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - Result: `passed` (`article_count=12`, `processed_count=12`, `cached_count=12`, no semantic/validation/provider/persistence failures).
+- Focused repaired tests:
+  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_review.py::test_rule_review_batch_approval_and_rejection_validate_status_and_permissions -q`
+  - Result: `1 passed`
+  - `../.venv/bin/python -m pytest tests/api/routers/test_rule_lifecycle.py -q`
+  - Result: `2 passed`
+  - `../.venv/bin/python -m pytest tests/unit/cli/test_rule_pool_cli.py::TestRulePoolCLIReviewCommand::test_rule_pool_review_batch_reports_compatibility_only_without_crashing -q`
+  - Result: `1 passed`
+  - `../.venv/bin/python -m pytest tests/unit/db/test_stage4_rule_governance_migration.py -q`
+  - Result: `1 passed`
+  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_lifecycle.py::test_rule_lifecycle_requires_review_before_approval_and_tracks_pending_backtest_idempotently -q`
+  - Result: `1 passed`
+- Stage 4 focused backend/API/CLI/migration suite:
+  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/unit/services/test_rule_governance_service.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/cli/test_rule_pool_cli.py -q`
+  - Result: `20 passed, 1 warning` (`RuntimeWarning: coroutine 'Connection._cancel' was never awaited`, existing async cleanup warning).
+- Stage 3/4 affected backend and API regression:
+  - `../.venv/bin/python -m pytest tests/unit/services/test_stage2_writer_routing.py tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py tests/api/test_ui_openapi_contract.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/unit/services/test_optimize_rule_pool_service.py -q`
+  - Result: `46 passed`
+- Frontend:
+  - `pnpm test -- src/pages/rules src/pages/articles/index.test.tsx src/pages/rule-pool/index.test.tsx`
+  - Result: `13 passed` with React Query test mock warnings about undefined refetch values.
+  - `pnpm typecheck`
+  - Result: passed.
+- Compile and diff hygiene:
+  - `../.venv/bin/python -m compileall src api cli`
+  - Result: passed.
+  - `git diff --check`
+  - Result: passed.
+
+### Migration and data-integrity evidence
+
+- Fresh PostgreSQL migration verification used isolated database `trade_strategy_ai_stage4_gate_0616`:
+  - `alembic upgrade head`: passed through `2026_06_16_0007`.
+  - `alembic downgrade 2026_06_14_0006`: passed; `rule_version_source_links` removed.
+  - `alembic upgrade head` after downgrade: passed.
+- Existing-data verification used a restored copy of current `trade_strategy_ai` at `2026_06_14_0006`:
+  - Pre-upgrade counts: `rule_candidates=495`, `rule_versions=14`, `versions_with_source_candidate=14`.
+  - Post-upgrade counts: `rule_candidates=495`, `rule_versions=14`, `source_links=14`, `candidates_missing_fingerprint=0`, `versions_missing_fingerprint=0`.
+  - Downgrade to `2026_06_14_0006` preserved `rule_candidates=495` and `rule_versions=14`; `rule_version_source_links` table removed as expected.
+- Temporary databases and dump files created for verification were removed after evidence collection.
+
+### Canonical and legacy path verification
+
+- Canonical review mutations flow through `RuleReviewService` -> `RuleLifecycleService` -> `RuleGovernanceService` / canonical repository.
+- `rule_pool` and `strategy_studio` review writes remain compatibility-only rejected and do not create formal lifecycle state.
+- CLI `rule-pool review` / `review-batch` cannot bypass canonical governance; batch now reports compatibility-only rejection instead of crashing.
+- Job registry `rule-review` remains non-runnable and maps to the compatibility-only `rule_pool` rejection path.
+- Fixed-set gate is enforced by canonical governance/lifecycle/review services before formal mutation.
+- No dual-write or legacy fallback was restored.
+- No Stage 5+ data/backtest/strategy/daily behavior or future Prompt activation was introduced.
+
+### Remaining non-blocking risks
+
+- Existing async cleanup warning `RuntimeWarning: coroutine 'Connection._cancel' was never awaited` remains outside Stage 4 scope.
+- `/rules/review` is functionally complete but compact; further ergonomics can improve in later UI polish without changing governance contracts.
+- Stage 6/8 validation/publication semantics remain intentionally unavailable; Stage 4 reaches `待回测` but does not fabricate backtest validation or formal usability.
+
+### Logs and docs
+
+- Updated `docs/Refactor-Implementation-Log.md`.
+- Updated `docs/refactor-implementation-logs/stage-4.md`.
+- Updated `docs/refactor-implementation-plans/stage-4-implementation-plan.md` only for the material batch-review contract correction.
+
+### Gate conclusion
+
+`ACCEPTED`
+
+Stage 5 Bootstrap may begin after explicit user authorization. Do not begin Stage 5 automatically.

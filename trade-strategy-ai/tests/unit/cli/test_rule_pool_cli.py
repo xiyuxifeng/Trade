@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from typer.testing import CliRunner
+from src.services.base import ServiceResult
 
 
 class TestRulePoolCLIListCommand:
@@ -59,3 +60,23 @@ class TestRulePoolCLIReviewCommand:
         result = runner.invoke(app, ["rule-pool", "review", "--help"])
         assert result.exit_code == 0
         assert "[required]" in result.output
+
+    def test_rule_pool_review_batch_reports_compatibility_only_without_crashing(self, monkeypatch):
+        """legacy 批量审核命令必须拒写并给出清晰提示。"""
+        import cli.main as cli_main
+
+        class _FakeRulePoolService:
+            async def review_batch(self, **_kwargs):
+                return ServiceResult(
+                    status="error",
+                    message="legacy rule-pool batch review is compatibility-only",
+                    payload={"status": "compatibility_only", "updated_count": 0},
+                )
+
+        monkeypatch.setattr(cli_main, "RulePoolService", _FakeRulePoolService)
+        runner = CliRunner()
+        result = runner.invoke(cli_main.app, ["rule-pool", "review-batch", "--decision", "approve"])
+
+        assert result.exit_code == 0
+        assert "更新失败" in result.output
+        assert "compatibility-only" in result.output

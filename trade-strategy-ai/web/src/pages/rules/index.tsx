@@ -16,6 +16,29 @@ type FormalPageProps = {
   availability?: PageAvailability;
 };
 
+const dependencyLabels: Record<string, string> = {
+  ohlcv_1d: '历史行情',
+  ohlcv: '历史行情',
+  kaipan: '盘前增强数据',
+  market_state: '市场状态',
+};
+
+const relationLabels: Record<string, string> = {
+  exact_duplicate: '完全重复',
+  parameter_variant: '参数变体',
+  conflict: '冲突规则',
+  similar_rule: '相近规则',
+  distinct: '不同规则',
+};
+
+function formatDependencyLabel(value: string) {
+  return dependencyLabels[value] ?? value;
+}
+
+function formatRelationLabel(value: string) {
+  return relationLabels[value] ?? '待人工确认';
+}
+
 export function RulesReviewPage({ availability }: FormalPageProps = {}) {
   const state = availability ?? undefined;
   if (state) {
@@ -141,7 +164,7 @@ function RulesReviewWorkbench() {
 
       <SectionCard
         title="筛选条件"
-        description="这里只展示正式审核入口，不再回退到旧规则池写路径。"
+        description="这里只展示正式审核入口，不再使用旧入口直接改状态。"
       >
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input
@@ -219,7 +242,7 @@ function RulesReviewWorkbench() {
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">数据依赖与缺失项</p>
                   <p className="mt-2 text-sm text-slate-700">
-                    数据依赖：{selectedCandidate.data_dependencies.length ? selectedCandidate.data_dependencies.join('、') : '无'}
+                    数据依赖：{selectedCandidate.data_dependencies.length ? selectedCandidate.data_dependencies.map(formatDependencyLabel).join('、') : '无'}
                   </p>
                   <p className="mt-2 text-sm text-slate-700">
                     缺失字段：{selectedCandidate.missing_fields.length ? selectedCandidate.missing_fields.join('、') : '无'}
@@ -234,7 +257,7 @@ function RulesReviewWorkbench() {
                     {selectedCandidate.governance.related_rules.map((item, index) => (
                       <div key={`${item.relation}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                         <p className="font-medium text-slate-950">{item.title}</p>
-                        <p className="mt-1">关系：{item.relation}</p>
+                        <p className="mt-1">关系：{formatRelationLabel(item.relation)}</p>
                       </div>
                     ))}
                   </div>

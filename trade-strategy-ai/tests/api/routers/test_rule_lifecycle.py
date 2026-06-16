@@ -9,7 +9,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.routers.ui.rule_lifecycle import get_rule_lifecycle_service
 
 
@@ -88,6 +88,12 @@ async def client() -> AsyncIterator[AsyncClient]:
     try:
         app.dependency_overrides[verify_api_key] = lambda: "test-key"
         app.dependency_overrides[get_rule_lifecycle_service] = lambda: _FakeRuleLifecycleService()
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="tester",
+            authenticated=True,
+            source="api_key",
+        )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
@@ -118,3 +124,29 @@ async def test_rule_lifecycle_router_reads_detail_history_and_transition(client:
     assert transitioned.status_code == 200
     assert transitioned.json()["display_label"] == "验证中"
 
+
+@pytest.mark.asyncio
+async def test_rule_lifecycle_transition_requires_operator_permission() -> None:
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_rule_lifecycle_service] = lambda: _FakeRuleLifecycleService()
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="viewer",
+            api_key_label="viewer",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            transitioned = await ac.post(
+                "/api/ui/v1/rule-lifecycle/rule-versions/rule-version-1/transition",
+                json={
+                    "target_state": "验证中",
+                    "reason": "权限不足时不能变更规则生命周期。",
+                    "correlation_id": "corr-forbidden",
+                },
+            )
+            assert transitioned.status_code == 403
+    finally:
+        app.dependency_overrides.clear()

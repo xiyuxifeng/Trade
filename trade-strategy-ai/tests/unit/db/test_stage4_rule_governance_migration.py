@@ -19,3 +19,4 @@ def test_stage4_rule_governance_migration_defines_source_links_and_backfill() ->
     assert "uq_rvsl_candidate_version" in content
     assert "UPDATE rule_candidates" in content
     assert "candidate_fingerprint" in content
+    assert "gen_random_uuid" not in content

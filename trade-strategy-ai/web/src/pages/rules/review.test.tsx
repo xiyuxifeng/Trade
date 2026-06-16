@@ -69,7 +69,7 @@ describe('RulesReviewPage', () => {
       current_lifecycle_state: '候选',
       missing_fields: [],
       data_dependencies: ['ohlcv_1d'],
-      governance: { related_rules: [] },
+      governance: { related_rules: [{ relation: 'exact_duplicate', title: '既有规则' }] },
       lifecycle: { allowed_next_actions: [] },
       history: [],
       allowed_actions: [{ key: 'approve', label: '批准' }],
@@ -91,6 +91,10 @@ describe('RulesReviewPage', () => {
     expect(await screen.findByText('低风险规则')).toBeInTheDocument();
     expect(await screen.findByText('建议通过')).toBeInTheDocument();
     expect(await screen.findByText('冻结摘要')).toBeInTheDocument();
+    expect(await screen.findByText('数据依赖：历史行情')).toBeInTheDocument();
+    expect(await screen.findByText('关系：完全重复')).toBeInTheDocument();
+    expect(screen.queryByText('ohlcv_1d')).not.toBeInTheDocument();
+    expect(screen.queryByText('关系：exact_duplicate')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '批准' }));
     await waitFor(() => {
@@ -129,7 +133,7 @@ describe('RulesReviewPage', () => {
           source_article_title: '示例文章',
           automatic_review: {
             status: 'manual_review',
-            label: '人工审核',
+            label: '需要人工确认',
             risk_level: 'high',
             reasons: ['摘要暂不可用'],
             requires_human_review: true,
@@ -151,7 +155,7 @@ describe('RulesReviewPage', () => {
       },
       automatic_review: {
         status: 'manual_review',
-        label: '人工审核',
+        label: '需要人工确认',
         risk_level: 'high',
         reasons: ['摘要暂不可用'],
         requires_human_review: true,

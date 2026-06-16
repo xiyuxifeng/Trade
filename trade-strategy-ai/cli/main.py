@@ -1388,6 +1388,9 @@ def rule_pool_review_batch(
             force=force,
             reviewed_by="cli_user",
         )
+        if result.status != "ok":
+            typer.echo(f"更新失败: {result.message}", err=True)
+            return
         typer.echo(
             f"批量审核完成: {result.payload['updated_count']} 条规则 "
             f"{status} → {result.payload['target_status']}"

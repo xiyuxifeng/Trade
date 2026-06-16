@@ -15,11 +15,11 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 ## 当前状态
 
 - 当前 Stage：`Stage 4 规则管理、去重和规则族`
-- Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S4-001 自动审核与人工审核工作台` 已接受。
+- Stage 状态：`[x] 已完成`
+- 当前 Task：`Stage 4 Review and Gate` 已接受。
 - 计划：[Stage 4 实施计划](refactor-implementation-plans/stage-4-implementation-plan.md)
 - 详细日志：[Stage 4](refactor-implementation-logs/stage-4.md)
-- 下一步：可开始 `Stage 4 Review`；不得自动开始，需用户明确授权。
+- 下一步：可开始 `Stage 5 Bootstrap`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -33,7 +33,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 3 Gate 最终 `ACCEPTED`；Stage 4 Bootstrap may begin。
 - Stage 4 Bootstrap 已完成；Stage 4 范围冻结为 `RT-S4-001`、`RT-S4-002`、`RT-S4-003`。
 - Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
-- Stage 4 未发现需要 `ESCALATION_REQUIRED` 的阻塞项。
+- Stage 4 Gate 最终 `ACCEPTED`；Stage 5 Bootstrap may begin after explicit user instruction.
 
 ## Task 状态
 
@@ -63,7 +63,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
-| Stage 4 | `[-]` | RT-S4-001、RT-S4-002、RT-S4-003 已接受；可进入 Stage 4 Review | [stage-4.md](refactor-implementation-logs/stage-4.md) |
+| Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -91,11 +91,11 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 3 Gate dry-run batch 在 sandbox 内因本地 PostgreSQL socket 权限失败；已按权限流程在外部执行同一命令并通过。该 sandbox 限制不影响 Stage 3 runtime contract。
 - Stage 3 Gate 发现 postmortem future-stage Prompt 可被旧 pipeline opt-in 触达；已在 Stage 3 hard-disable future-stage LLM Prompt invocation，保留 deterministic fallback 和 historical read compatibility。
 - 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
-- Stage 4 Bootstrap 发现 legacy `rule_pool` / `strategy_studio` / job / CLI review paths 仍存在；Stage 4 必须将其冻结为兼容/历史或路由到 canonical governance service，不能形成第二套正式治理路径。
-- Stage 4 Bootstrap 发现部分 Web 表面仍含 `Job`、`Pipeline`、`Schema`、`Regime` 等普通用户不应看到的词；Stage 4 实现需在受影响规则治理页面内修正。
+- Stage 4 Gate 已验证 legacy `rule_pool` / `strategy_studio` / job / CLI review paths 不能绕过 canonical governance；旧 review 写入口保持 compatibility-only 拒写。
+- Stage 4 Gate 已修正受影响规则审核页面的普通用户技术词暴露；内部组件/import 名称中仍可能存在 legacy `Regime` 等代码命名，但不作为 Stage 4 普通用户显示文本。
 - RT-S4-003 已将 canonical 规则生命周期收口为单一路径：`候选 -> 待审核 -> 已批准 -> 待回测 -> 验证中 -> 可用/限定使用 -> 已停用`。`FormalLifecycleState.approved` 在当前 Stage 仍无可证明用户态映射时返回 truthful unavailable/compatibility-only，不伪造“可用”。
 - legacy `rule_pool` / `strategy_studio` UI 与 CLI 写路径已在 RT-S4-003 显式拒绝 formal lifecycle 写入；RT-S4-001 已新增 `/rules/review` 正式审核工作台和 canonical `/api/ui/v1/rule-review` 写路径。
-- RT-S4-001 automatic review 使用五状态：`auto_pass`、`recommend_pass`、`manual_review`、`not_backtestable`、`recommend_reject`。其中低风险批量通过只允许 `auto_pass/recommend_pass`，批量驳回只允许 `recommend_reject/not_backtestable`，且全部 formal mutation 继续受 fixed-set gate 约束。
+- RT-S4-001 automatic review 使用五状态：`auto_pass`、`recommend_pass`、`manual_review`、`not_backtestable`、`recommend_reject`。其中低风险批量通过只允许 `auto_pass/recommend_pass`，会全批预检后把可回测的新规则推进到 `待回测`；精确重复规则复用既有 RuleVersion 且不重复进入回测；批量驳回只允许 `recommend_reject/not_backtestable`；全部 formal mutation 继续受 fixed-set gate 约束。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 日志读取规则

@@ -45,6 +45,14 @@ LATE_TABLES = [
     "optimization_proposals",
 ]
 
+# These constraints target columns introduced by the later Stage 2 gate repair
+# migration.  Historical migrations must not inherit them from the current ORM
+# metadata during fresh-database creation; migration 0005 adds them after the
+# referenced columns and keys exist.
+DEFERRED_FOREIGN_KEYS = {
+    "fk_pmr_market_state",
+}
+
 ENUM_TYPES: dict[str, tuple[str, ...]] = {
     "quality_status": ("verified", "complete", "partial", "ambiguous", "unresolved", "rejected", "legacy_only"),
     "formal_lifecycle": ("draft", "in_review", "approved", "published", "archived", "rejected", "superseded"),
@@ -111,7 +119,19 @@ def _create_enum_type(name: str, values: tuple[str, ...]) -> None:
 def _create_tables(names: list[str]) -> None:
     bind = op.get_bind()
     for name in names:
-        Base.metadata.tables[name].create(bind, checkfirst=True)
+        table = Base.metadata.tables[name]
+        deferred_constraints = [
+            constraint
+            for constraint in table.constraints
+            if isinstance(constraint, sa.ForeignKeyConstraint)
+            and constraint.name in DEFERRED_FOREIGN_KEYS
+        ]
+        for constraint in deferred_constraints:
+            table.constraints.remove(constraint)
+        try:
+            table.create(bind, checkfirst=True)
+        finally:
+            table.constraints.update(deferred_constraints)
 
 
 def _rewrite_dataset_snapshots() -> None:

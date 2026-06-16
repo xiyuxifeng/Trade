@@ -14,16 +14,16 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 ## 当前状态
 
-- 当前 Stage：`Stage 3 Prompt 与文章处理链路`
-- Stage 状态：`[x] 已完成`
-- 当前 Task：`Stage 3 Gate` 已接受。
-- 计划：[Stage 3 实施计划](refactor-implementation-plans/stage-3-implementation-plan.md)
-- 详细日志：[Stage 3](refactor-implementation-logs/stage-3.md)
-- 下一步：Stage 4 Bootstrap may begin；不得自动开始 Stage 4。
+- 当前 Stage：`Stage 4 规则管理、去重和规则族`
+- Stage 状态：`[-] 进行中`
+- 当前 Task：`Stage 4 Bootstrap` 已完成；Stage 4 implementation may begin。
+- 计划：[Stage 4 实施计划](refactor-implementation-plans/stage-4-implementation-plan.md)
+- 详细日志：[Stage 4](refactor-implementation-logs/stage-4.md)
+- 下一步：执行 `RT-S4-002 规则指纹与规则族`；不得自动开始实现，需用户明确授权。
 
 ## 当前阻塞项
 
-- 当前无 Stage 3 Bootstrap blocker。
+- 当前无 Stage 4 Bootstrap blocker。
 - Stage 2 Gate 最终 `ACCEPTED`。
 - Stage 3 Bootstrap 已复核 canonical writer effective true、legacy writer rejection 和 no dual-write；当前无 Bootstrap blocker。
 - RT-S3-001 已接受；Stage 3 canonical Prompt registry、Pydantic Schema、Prompt runtime foundation 和 canonical PromptRun/ArticleStructure/RuleCandidate 写入已建立。
@@ -31,6 +31,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - RT-S3-003 已接受；固定 12 篇 regression set、bulk gate 和可恢复 dry-run batch 已建立。
 - RT-S3-004 已接受；legacy Prompt 已删除，历史读取兼容、fixed-set compatibility comparison、rollback 与 deletion gate 证据已补齐。
 - Stage 3 Gate 最终 `ACCEPTED`；Stage 4 Bootstrap may begin。
+- Stage 4 Bootstrap 已完成；Stage 4 范围冻结为 `RT-S4-001`、`RT-S4-002`、`RT-S4-003`。
+- Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
+- Stage 4 未发现需要 `ESCALATION_REQUIRED` 的阻塞项。
 
 ## Task 状态
 
@@ -48,6 +51,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S3-002 | `[x]` | human-review/RuleVersion contracts 保留；summary/ArticleStructure provenance repair 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-003 | `[x]` | 12 篇 fixed regression set、semantic assertions、gate、recoverable dry-run batch、CLI/readiness evidence 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-004 | `[x]` | legacy Prompt migration / retirement 已接受；Stage 3 Gate 可开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S4-002 | `[ ]` | Bootstrap 决定先执行；冻结 deterministic fingerprint、duplicate/conflict、RuleFamily runtime，不进入 workbench 或后续 Stage | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| RT-S4-003 | `[ ]` | Bootstrap 决定第二执行；统一规则生命周期和 audit transition，依赖 RT-S4-002 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| RT-S4-001 | `[ ]` | Bootstrap 决定后置单独执行；自动审核与人工审核工作台依赖 RT-S4-002/003 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 
 ## Stage 状态
 
@@ -57,6 +63,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
+| Stage 4 | `[-]` | Bootstrap 已完成，implementation 未开始；计划和执行顺序已冻结 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -84,13 +91,16 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 3 Gate dry-run batch 在 sandbox 内因本地 PostgreSQL socket 权限失败；已按权限流程在外部执行同一命令并通过。该 sandbox 限制不影响 Stage 3 runtime contract。
 - Stage 3 Gate 发现 postmortem future-stage Prompt 可被旧 pipeline opt-in 触达；已在 Stage 3 hard-disable future-stage LLM Prompt invocation，保留 deterministic fallback 和 historical read compatibility。
 - 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
+- Stage 4 Bootstrap 发现 legacy `rule_pool` / `strategy_studio` / job / CLI review paths 仍存在；Stage 4 必须将其冻结为兼容/历史或路由到 canonical governance service，不能形成第二套正式治理路径。
+- Stage 4 Bootstrap 发现部分 Web 表面仍含 `Job`、`Pipeline`、`Schema`、`Regime` 等普通用户不应看到的词；Stage 4 实现需在受影响规则治理页面内修正。
+- `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 日志读取规则
 
 新 Session 或恢复任务时：
 
 1. 先读本文件。
-2. 读取 Stage 3 计划和详细日志。
+2. 读取 Stage 4 计划和详细日志。
 3. 再读当前 Task Card、上游 handoff、当前 `git status` 和完整 diff。
 4. 不默认读取已完成 Stage 详细日志；仅在 single-writer 证据失效或合同冲突时回读 Stage 2。
 

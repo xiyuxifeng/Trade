@@ -244,8 +244,8 @@ def test_optimize_service_reviews_candidate_version(tmp_path: Path) -> None:
     assert "reviewed_by=web" in result.payload["candidate"]["notes"]
 
 
-def test_rule_pool_service_lists_shows_and_reviews_rules() -> None:
-    """RulePoolService 应支持查询和审核。"""
+def test_rule_pool_service_lists_rules_and_rejects_legacy_review_writes() -> None:
+    """RulePoolService 查询保留，但 legacy 审核写入必须拒绝。"""
     from src.services.rule_pool_service import RulePoolService
 
     class _FakeRule:
@@ -304,13 +304,12 @@ def test_rule_pool_service_lists_shows_and_reviews_rules() -> None:
     listed = asyncio.run(service.list_rules(limit=10))
     shown = asyncio.run(service.show_rule("rule-001"))
     reviewed = asyncio.run(service.review_rule("rule-001", decision="approve", force=True, reviewed_by="web_user"))
-    batch = asyncio.run(
-        service.review_batch(decision="reject", status="pending", limit=2, force=False, reviewed_by="web_user")
-    )
+    batch = asyncio.run(service.review_batch(decision="reject", status="pending", limit=2, force=False, reviewed_by="web_user"))
 
     assert len(listed.payload["rules"]) == 2
     assert shown.payload["rule"]["rule_id"] == "rule-001"
-    assert reviewed.payload["review_status"] == "approved"
-    assert batch.payload["updated_count"] == 2
-    assert repo.review_calls[0][2] == "web_user"
-    assert repo.review_calls[-1][2] == "web_user"
+    assert reviewed.status == "error"
+    assert reviewed.payload["status"] == "compatibility_only"
+    assert batch.status == "error"
+    assert batch.payload["status"] == "compatibility_only"
+    assert repo.review_calls == []

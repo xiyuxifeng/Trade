@@ -21,6 +21,7 @@ from .security_audit import router as security_audit_router
 from .strategy_studio import router as strategy_studio_router
 from .job_audits import router as job_audits_router
 from .rule_pool import router as rule_pool_router
+from .rule_lifecycle import router as rule_lifecycle_router
 from .system import legacy_router as legacy_system_router
 from .system import router as system_router
 from api.routers.ui.jobs import router as jobs_router
@@ -48,6 +49,7 @@ __all__ = [
     "snapshots_router",
     "signals_router",
     "rule_pool_router",
+    "rule_lifecycle_router",
     "strategy_studio_router",
     "system_router",
 ]

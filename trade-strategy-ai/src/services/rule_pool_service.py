@@ -158,27 +158,15 @@ class RulePoolService(BaseService):
         force: bool = False,
         reviewed_by: str = "cli_user",
     ) -> ServiceResult:
-        """审核单条规则。"""
-        mapping = {
-            "approve": ReviewStatus.APPROVED,
-            "reject": ReviewStatus.REJECTED,
-            "pending": ReviewStatus.PENDING,
-        }
-        if decision not in mapping:
-            raise ValueError("invalid decision")
-
-        session_scope = self._ensure_session_factory()
-        async with session_scope() as session:
-            repo = self._repo_factory(session)
-            success = await repo.update_review(rule_id, mapping[decision], reviewed_by=reviewed_by, force=force)
         return ServiceResult(
-            status="ok" if success else "partial",
-            message="rule reviewed" if success else "rule review failed",
+            status="error",
+            message="legacy rule-pool review is compatibility-only",
             payload={
                 "rule_id": rule_id,
-                "review_status": mapping[decision].value,
+                "status": "compatibility_only",
+                "message": "历史规则池入口不能再写入正式规则生命周期，请使用 Stage 4 正式生命周期入口。",
+                "decision": decision,
                 "force": force,
-                "success": success,
                 "reviewed_by": reviewed_by,
             },
         )
@@ -192,44 +180,17 @@ class RulePoolService(BaseService):
         force: bool = False,
         reviewed_by: str = "cli_user",
     ) -> ServiceResult:
-        """批量审核规则。"""
-        decision_map = {
-            "approve": ReviewStatus.APPROVED,
-            "reject": ReviewStatus.REJECTED,
-            "pending": ReviewStatus.PENDING,
-        }
-        status_map = {
-            "pending": ReviewStatus.PENDING,
-            "approved": ReviewStatus.APPROVED,
-            "rejected": ReviewStatus.REJECTED,
-        }
-        if decision not in decision_map:
-            raise ValueError("invalid decision")
-        if status not in status_map:
-            raise ValueError("invalid status")
-
-        target_status = decision_map[decision]
-        filter_status = status_map[status]
-
-        session_scope = self._ensure_session_factory()
-        updated_count = 0
-        async with session_scope() as session:
-            repo = self._repo_factory(session)
-            rules = await repo.get_rules_by_status(review_status=filter_status, limit=limit)
-            for rule in rules:
-                if force or getattr(rule, "review_status", None) == filter_status.value:
-                    ok = await repo.update_review(rule.rule_id, target_status, reviewed_by=reviewed_by, force=force)
-                    if ok:
-                        updated_count += 1
-
         return ServiceResult(
-            status="ok",
-            message="rule batch reviewed",
+            status="error",
+            message="legacy rule-pool batch review is compatibility-only",
             payload={
                 "decision": decision,
+                "status": "compatibility_only",
+                "message": "历史规则池入口不能再写入正式规则生命周期，请使用 Stage 4 正式生命周期入口。",
                 "filter_status": status,
-                "updated_count": updated_count,
-                "target_status": target_status.value,
+                "updated_count": 0,
                 "reviewed_by": reviewed_by,
+                "limit": limit,
+                "force": force,
             },
         )

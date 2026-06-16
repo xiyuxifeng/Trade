@@ -16,10 +16,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 4 规则管理、去重和规则族`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S4-002 规则指纹与规则族` 已接受。
+- 当前 Task：`RT-S4-003 规则生命周期` 已接受。
 - 计划：[Stage 4 实施计划](refactor-implementation-plans/stage-4-implementation-plan.md)
 - 详细日志：[Stage 4](refactor-implementation-logs/stage-4.md)
-- 下一步：可开始 `RT-S4-003 规则生命周期`；不得自动开始，需用户明确授权。
+- 下一步：可开始 `RT-S4-001 自动审核与人工审核工作台`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -52,7 +52,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S3-003 | `[x]` | 12 篇 fixed regression set、semantic assertions、gate、recoverable dry-run batch、CLI/readiness evidence 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S3-004 | `[x]` | legacy Prompt migration / retirement 已接受；Stage 3 Gate 可开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
 | RT-S4-002 | `[x]` | canonical fingerprint/family/runtime、duplicate/variant/conflict detection、source-link provenance、fixed-set gate enforcement、focused API/schema/migration/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
-| RT-S4-003 | `[ ]` | Bootstrap 决定第二执行；统一规则生命周期和 audit transition，依赖 RT-S4-002 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| RT-S4-003 | `[x]` | canonical 规则生命周期、单一路径 transition/audit、idempotency/stale-write 保护、legacy rule_pool 拒写和 focused API/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | RT-S4-001 | `[ ]` | Bootstrap 决定后置单独执行；自动审核与人工审核工作台依赖 RT-S4-002/003 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 
 ## Stage 状态
@@ -63,7 +63,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
-| Stage 4 | `[-]` | RT-S4-002 已接受；RT-S4-003 和 RT-S4-001 尚未开始 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
+| Stage 4 | `[-]` | RT-S4-002、RT-S4-003 已接受；RT-S4-001 尚未开始 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -93,7 +93,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
 - Stage 4 Bootstrap 发现 legacy `rule_pool` / `strategy_studio` / job / CLI review paths 仍存在；Stage 4 必须将其冻结为兼容/历史或路由到 canonical governance service，不能形成第二套正式治理路径。
 - Stage 4 Bootstrap 发现部分 Web 表面仍含 `Job`、`Pipeline`、`Schema`、`Regime` 等普通用户不应看到的词；Stage 4 实现需在受影响规则治理页面内修正。
-- RT-S4-002 仅完成 canonical 指纹、规则族、重复/变体/冲突判断和 candidate 审批写入收口；legacy `rule_pool` / `strategy_studio` UI 与 CLI 仍是兼容/历史表面，后续需由 RT-S4-003 / RT-S4-001 继续收口。
+- RT-S4-003 已将 canonical 规则生命周期收口为单一路径：`候选 -> 待审核 -> 已批准 -> 待回测 -> 验证中 -> 可用/限定使用 -> 已停用`。`FormalLifecycleState.approved` 在当前 Stage 仍无可证明用户态映射时返回 truthful unavailable/compatibility-only，不伪造“可用”。
+- legacy `rule_pool` / `strategy_studio` UI 与 CLI 写路径已在 RT-S4-003 显式拒绝 formal lifecycle 写入；后续 RT-S4-001 仍需提供正式审核工作台以替代旧入口。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 日志读取规则

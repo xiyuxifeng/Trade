@@ -115,10 +115,10 @@ class _FakeRulePoolService:
     async def review_rule(self, rule_id: str, *, decision: str, force: bool = False, reviewed_by: str = 'web') -> Any:
         self.review_calls.append((rule_id, decision, force, reviewed_by))
         return SimpleNamespace(
-            status='ok',
+            status='error',
             payload={
                 'rule_id': rule_id,
-                'review_status': 'approved' if decision == 'approve' else 'rejected' if decision == 'reject' else 'pending',
+                'status': 'compatibility_only',
                 'force': force,
                 'reviewed_by': reviewed_by,
             },
@@ -135,12 +135,12 @@ class _FakeRulePoolService:
     ) -> Any:
         self.review_batch_calls.append((decision, status, limit, force, reviewed_by))
         return SimpleNamespace(
-            status='ok',
+            status='error',
             payload={
                 'decision': decision,
+                'status': 'compatibility_only',
                 'filter_status': status,
                 'updated_count': limit,
-                'target_status': decision,
                 'reviewed_by': reviewed_by,
             },
         )
@@ -196,7 +196,7 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_canonical_rule_pool_router_covers_list_detail_and_review_actions(client: AsyncClient) -> None:
+async def test_canonical_rule_pool_router_keeps_reads_and_rejects_legacy_review_actions(client: AsyncClient) -> None:
     options = await client.get('/api/ui/v1/rule-pool/filter-options')
     assert options.status_code == 200
     assert options.json()['review_statuses'] == ['pending', 'approved', 'rejected']
@@ -228,12 +228,12 @@ async def test_canonical_rule_pool_router_covers_list_detail_and_review_actions(
         '/api/ui/v1/rule-pool/rule-1/review',
         json={'decision': 'approve', 'force': False, 'reviewed_by': 'web'},
     )
-    assert review.status_code == 200
-    assert review.json()['review_status'] == 'approved'
+    assert review.status_code == 409
+    assert review.json()['detail']['status'] == 'compatibility_only'
 
     batch = await client.post(
         '/api/ui/v1/rule-pool/review-batch',
         json={'decision': 'reject', 'status': 'pending', 'limit': 25, 'force': True, 'reviewed_by': 'web'},
     )
-    assert batch.status_code == 200
-    assert batch.json()['filter_status'] == 'pending'
+    assert batch.status_code == 409
+    assert batch.json()['detail']['status'] == 'compatibility_only'

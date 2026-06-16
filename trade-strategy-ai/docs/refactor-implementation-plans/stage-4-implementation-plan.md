@@ -311,6 +311,15 @@ Allowed:
 - retirement/limited-use states if represented safely;
 - compatibility state display mapping.
 
+RT-S4-003 frozen implementation contract:
+
+- `候选` and `待审核` are candidate states; `已批准` / `待回测` / `验证中` / `可用` / `限定使用` / `已停用` are formal lifecycle views derived from canonical `RuleVersion` state plus auditable lifecycle metadata.
+- `draft` may truthfully display as either `已批准` or `待回测` only when supported by lifecycle evidence; `draft` without such proof remains unavailable.
+- `published` becomes `可用` only when promoted as the current usable version; `published` with a restriction marker or without current-use promotion displays `限定使用`.
+- `FormalLifecycleState.approved` is not auto-mapped to `可用` during Stage 4.
+- no new migration is required if audit metadata, source action, evidence refs, and restriction flags fit durably in `LifecycleEvent.after_json` and `RuleVersion.evidence_json`, and stale-write protection can use existing timestamps.
+- legacy `rule_pool` / `strategy_studio` review writes must be routed to canonical lifecycle service or rejected as compatibility-only.
+
 Forbidden:
 
 - changing Stage 2 formal lifecycle enum without a migration and compatibility proof;

@@ -228,6 +228,16 @@ async def test_single_article_journey_creates_rule_version_only_after_human_appr
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(RuleVersion)) == 0
 
+    transitioned = await single_article_service._lifecycle_service.transition_candidate(  # noqa: SLF001
+        candidate_id=candidate.rule_candidate_id,
+        target_state="待审核",
+        actor_type="human",
+        actor_id="operator-user",
+        reason="提交人工审核。",
+        correlation_id="corr-stage3-review",
+    )
+    assert transitioned.display_label == "待审核"
+
     reviewed = await single_article_service.review_candidate(
         article_id=article_id,
         article_revision_id=revision_id,
@@ -246,9 +256,10 @@ async def test_single_article_journey_creates_rule_version_only_after_human_appr
     assert version.source_candidate_id == candidate.rule_candidate_id
     assert version.lifecycle_state == "draft"
     assert version.published_at is None
-    assert len(events) == 2
-    assert events[0].actor_id == "operator-user"
-    assert events[0].reason_text == "证据充分，进入待回测。"
+    assert len(events) == 3
+    assert events[0].reason_code == "submitted_for_review"
+    assert events[1].actor_id == "operator-user"
+    assert events[1].reason_text == "证据充分，进入待回测。"
 
     await engine.dispose()
 

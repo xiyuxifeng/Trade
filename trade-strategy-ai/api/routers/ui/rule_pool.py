@@ -345,6 +345,8 @@ async def review_rule(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if result.status == "error":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.payload)
     if result.status == "partial":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.message or "rule not found")
     if result.status != "ok":
@@ -369,6 +371,8 @@ async def review_batch(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if result.status == "error":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.payload)
     if result.status != "ok":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.message or "rule batch review failed")
     return result.payload

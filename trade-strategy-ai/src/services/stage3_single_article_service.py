@@ -11,7 +11,8 @@ from src.domain.enums import FormalLifecycleState
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
-from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceGateError, RuleGovernanceService
+from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceService
+from src.services.rule_lifecycle_service import RuleLifecycleService, RuleLifecycleTransitionBlockedError
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
 
 if TYPE_CHECKING:
@@ -243,6 +244,11 @@ class Stage3SingleArticleService:
         self._governance_service = governance_service or RuleGovernanceService(
             regression_service=regression_service,
         )
+        self._lifecycle_service = RuleLifecycleService(
+            session_scope_factory=session_scope_factory,
+            regression_service=regression_service,
+            governance_service=self._governance_service,
+        )
 
     async def get_journey(
         self,
@@ -395,52 +401,27 @@ class Stage3SingleArticleService:
             if candidate is None:
                 raise Stage3SingleArticleError("rule candidate not found")
 
-            review = determine_automatic_review(candidate)
-            before_state = str(candidate.review_state)
-            after_snapshot = {
-                "automatic_review_status": review.status,
-                "reason": reason,
-                "review_state": "approved" if decision == "approve" else "rejected",
-            }
-
-            try:
-                await self._governance_service.ensure_fixed_set_gate()
-            except RuleGovernanceGateError as exc:
-                raise Stage3SingleArticleError(str(exc)) from exc
-
-            with canonical_write_scope("rule_version", self.service_name):
-                if decision == "approve":
-                    payload = candidate.canonical_payload or {}
-                    await self._governance_service.approve_candidate(
-                        session,
-                        candidate=candidate,
+            if decision == "approve":
+                try:
+                    await self._lifecycle_service.approve_candidate(
+                        candidate_id=candidate.rule_candidate_id,
                         actor_id=actor_id,
                         reason=reason,
-                        title=str(payload.get("title") or f"candidate-{candidate.candidate_index}"),
-                        description=str(payload.get("description")) if payload.get("description") is not None else None,
-                        schema_version="rule_v1",
-                        instrument_scope={"instrument_focus": payload.get("instrument_focus") or []},
-                        condition_json=payload.get("condition") or {},
-                        action_json=payload.get("action") or {},
-                        parameter_json={
-                            "timeframe": payload.get("timeframe"),
-                            "holding_period": payload.get("holding_period"),
-                            "risk_controls": payload.get("risk_controls") or [],
-                            "market_state_applicability": payload.get("market_state_applicability") or {},
-                        },
-                        data_dependencies=candidate.data_dependencies or {},
-                        evidence_json=candidate.evidence_json or {},
-                        after_review_snapshot=after_snapshot,
+                        correlation_id=str(candidate.rule_candidate_id),
                     )
-                else:
-                    await self._repository.reject_candidate(
-                        session,
-                        candidate=candidate,
+                except RuleLifecycleTransitionBlockedError as exc:
+                    raise Stage3SingleArticleError(str(exc)) from exc
+            else:
+                try:
+                    await self._lifecycle_service.reject_candidate(
+                        candidate_id=candidate.rule_candidate_id,
+                        actor_type="human",
                         actor_id=actor_id,
                         reason=reason,
-                        before_state=before_state,
-                        after_review_snapshot=after_snapshot,
+                        correlation_id=str(candidate.rule_candidate_id),
                     )
+                except RuleLifecycleTransitionBlockedError as exc:
+                    raise Stage3SingleArticleError(str(exc)) from exc
 
         return await self.get_journey(
             article_id=article_id,

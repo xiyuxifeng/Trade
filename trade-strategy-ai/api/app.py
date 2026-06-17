@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 
 from api.dependencies import describe_api_key
+from config.database import dispose_cached_engine
 from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
 from api.routers.ui import auth_router as ui_auth_router
@@ -72,7 +73,10 @@ def _is_reserved_local_path(path: str) -> bool:
 async def lifespan(app: FastAPI):
     """应用生命周期管理，负责初始化运行时配置。"""
     configure_logging()
-    yield
+    try:
+        yield
+    finally:
+        await dispose_cached_engine()
 
 
 def get_audit_service() -> AuditService:

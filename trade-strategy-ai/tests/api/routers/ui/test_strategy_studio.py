@@ -13,7 +13,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.routers.ui.strategy_studio import (
     get_optimize_service,
     get_rule_pool_service,
@@ -369,6 +369,12 @@ async def client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: 'test-key'
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="tester",
+            authenticated=True,
+            source="api_key",
+        )
         app.dependency_overrides[get_session_scope_factory] = lambda: (lambda: _FakeSessionScope(fake_session))
         app.dependency_overrides[get_optimize_service] = lambda: fake_optimize_service
         app.dependency_overrides[get_strategy_library_service] = lambda: fake_strategy_service
@@ -558,3 +564,57 @@ async def test_strategy_studio_endpoints_cover_versions_rules_and_candidate_crea
     )
     assert canonical_rule_review.status_code == 200
     assert canonical_rule_review.json()['review_status'] == 'approve'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("principal", "path", "payload"),
+    [
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/strategy-studio/rule-pool/rule-1/review",
+            {"decision": "approve", "force": False, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/strategy-studio/rule-pool/rule-1/review",
+            {"decision": "approve", "force": False, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/strategy-studio/rule-pool/review-batch",
+            {"decision": "reject", "status": "pending", "limit": 25, "force": True, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/strategy-studio/rule-pool/review-batch",
+            {"decision": "reject", "status": "pending", "limit": 25, "force": True, "reviewed_by": "web"},
+        ),
+    ],
+)
+async def test_strategy_studio_rule_pool_mutations_reject_non_operator_before_service_calls(
+    principal: CurrentPrincipal,
+    path: str,
+    payload: dict[str, Any],
+) -> None:
+    fake_session = _FakeSession([], [])
+    fake_optimize_service = _FakeOptimizeService()
+    fake_strategy_service = _FakeStrategyService(versions={})
+    fake_rule_pool_service = _FakeRulePoolService()
+
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_current_principal] = lambda: principal
+        app.dependency_overrides[get_session_scope_factory] = lambda: (lambda: _FakeSessionScope(fake_session))
+        app.dependency_overrides[get_optimize_service] = lambda: fake_optimize_service
+        app.dependency_overrides[get_strategy_library_service] = lambda: fake_strategy_service
+        app.dependency_overrides[get_rule_pool_service] = lambda: fake_rule_pool_service
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(path, json=payload)
+        assert response.status_code == 403
+        assert fake_rule_pool_service.review_calls == []
+        assert fake_rule_pool_service.review_batch_calls == []
+    finally:
+        app.dependency_overrides.clear()

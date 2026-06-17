@@ -38,6 +38,9 @@ class _FakeLifecycleView:
 
 
 class _FakeRuleLifecycleService:
+    def __init__(self) -> None:
+        self.transition_calls = 0
+
     async def get_rule_version_lifecycle(self, *, rule_version_id: str) -> _FakeLifecycleView:
         return _FakeLifecycleView(
             object_type="rule_version",
@@ -66,6 +69,7 @@ class _FakeRuleLifecycleService:
         ]
 
     async def transition_rule_version(self, **_: Any) -> _FakeLifecycleView:
+        self.transition_calls += 1
         return _FakeLifecycleView(
             object_type="rule_version",
             object_id="rule-version-1",
@@ -148,5 +152,36 @@ async def test_rule_lifecycle_transition_requires_operator_permission() -> None:
                 },
             )
             assert transitioned.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "principal",
+    [
+        CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+        CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+    ],
+)
+async def test_rule_lifecycle_mutation_endpoint_rejects_non_operator_before_service_calls(principal: CurrentPrincipal) -> None:
+    fake_service = _FakeRuleLifecycleService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_rule_lifecycle_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: principal
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rule-lifecycle/rule-versions/rule-version-1/transition",
+                json={
+                    "target_state": "验证中",
+                    "reason": "权限不足时不能变更规则生命周期。",
+                    "correlation_id": "corr-forbidden",
+                },
+            )
+        assert response.status_code == 403
+        assert fake_service.transition_calls == 0
     finally:
         app.dependency_overrides.clear()

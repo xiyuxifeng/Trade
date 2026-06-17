@@ -252,11 +252,14 @@ class RuleReviewService:
 
     async def _get_bundle_and_assessment(self, *, candidate_id: UUID) -> tuple[RuleReviewBundle, CandidateGovernanceAssessment]:
         async with self._session_scope_factory() as session:
-            bundle = await self._repository.build_bundle(session, candidate_id=candidate_id)
-            if bundle is None:
-                raise RuleReviewError(f"rule candidate not found: {candidate_id}")
-            assessment = await self._governance_service.assess_candidate(session, candidate=bundle.candidate)
-            return bundle, assessment
+            return await self._get_bundle_and_assessment_in_session(session, candidate_id=candidate_id)
+
+    async def _get_bundle_and_assessment_in_session(self, session, *, candidate_id: UUID) -> tuple[RuleReviewBundle, CandidateGovernanceAssessment]:
+        bundle = await self._repository.build_bundle(session, candidate_id=candidate_id)
+        if bundle is None:
+            raise RuleReviewError(f"rule candidate not found: {candidate_id}")
+        assessment = await self._governance_service.assess_candidate(session, candidate=bundle.candidate)
+        return bundle, assessment
 
     async def list_candidates(
         self,
@@ -277,7 +280,7 @@ class RuleReviewService:
                     continue
                 if automatic_review_status and automatic_review.status != automatic_review_status:
                     continue
-                lifecycle = await self._lifecycle_service.get_candidate_lifecycle(candidate_id=candidate.rule_candidate_id)
+                lifecycle = await self._lifecycle_service.get_candidate_lifecycle_in_session(session, candidate_id=candidate.rule_candidate_id)
                 items.append(
                     ReviewCandidateListItem(
                         candidate_id=str(candidate.rule_candidate_id),
@@ -294,16 +297,13 @@ class RuleReviewService:
     async def get_candidate_detail(self, *, candidate_id: UUID | str) -> dict[str, Any]:
         candidate_uuid = UUID(str(candidate_id))
         async with self._session_scope_factory() as session:
-            bundle = await self._repository.build_bundle(session, candidate_id=candidate_uuid)
-            if bundle is None:
-                raise RuleReviewError(f"rule candidate not found: {candidate_id}")
-            assessment = await self._governance_service.assess_candidate(session, candidate=bundle.candidate)
+            bundle, assessment = await self._get_bundle_and_assessment_in_session(session, candidate_id=candidate_uuid)
             automatic_review = self._classify_candidate(candidate=bundle.candidate, assessment=assessment)
             summary = resolve_summary_provenance(article=bundle.article, revision=bundle.revision)
-            candidate_lifecycle = await self._lifecycle_service.get_candidate_lifecycle(candidate_id=candidate_uuid)
+            candidate_lifecycle = await self._lifecycle_service.get_candidate_lifecycle_in_session(session, candidate_id=candidate_uuid)
             version_lifecycle: LifecycleView | None = None
             if bundle.rule_version is not None:
-                version_lifecycle = await self._lifecycle_service.get_rule_version_lifecycle(rule_version_id=bundle.rule_version.rule_version_id)
+                version_lifecycle = await self._lifecycle_service.get_rule_version_lifecycle_in_session(session, rule_version_id=bundle.rule_version.rule_version_id)
             history = []
             for event in await self._repository.list_candidate_events(session, candidate_id=candidate_uuid):
                 history.append(
@@ -438,17 +438,31 @@ class RuleReviewService:
         )
         await session.flush()
 
-    async def _ensure_under_review(self, *, candidate_id: UUID, actor_type: str, actor_id: str, reason: str, correlation_id: str) -> None:
-        lifecycle = await self._lifecycle_service.get_candidate_lifecycle(candidate_id=candidate_id)
+    async def _ensure_under_review(self, *, candidate_id: UUID, actor_type: str, actor_id: str, reason: str, correlation_id: str, session=None) -> None:
+        if session is None:
+            lifecycle = await self._lifecycle_service.get_candidate_lifecycle(candidate_id=candidate_id)
+        else:
+            lifecycle = await self._lifecycle_service.get_candidate_lifecycle_in_session(session, candidate_id=candidate_id)
         if lifecycle.display_label == "候选":
-            await self._lifecycle_service.transition_candidate(
-                candidate_id=candidate_id,
-                target_state="待审核",
-                actor_type=actor_type,
-                actor_id=actor_id,
-                reason=reason,
-                correlation_id=f"{correlation_id}:prepare",
-            )
+            if session is None:
+                await self._lifecycle_service.transition_candidate(
+                    candidate_id=candidate_id,
+                    target_state="待审核",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason=reason,
+                    correlation_id=f"{correlation_id}:prepare",
+                )
+            else:
+                await self._lifecycle_service.transition_candidate_in_session(
+                    session,
+                    candidate_id=candidate_id,
+                    target_state="待审核",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason=reason,
+                    correlation_id=f"{correlation_id}:prepare",
+                )
 
     async def apply_action(
         self,
@@ -465,86 +479,117 @@ class RuleReviewService:
             raise RuleReviewTransitionBlockedError("必须提供审核原因。")
         await self._ensure_gate()
         candidate_uuid = UUID(str(candidate_id))
-
-        if action in {"approve", "approve_after_edit", "merge", "reject"}:
-            await self._ensure_under_review(
+        async with self._session_scope_factory() as session:
+            result = await self._apply_action_in_session(
+                session,
                 candidate_id=candidate_uuid,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                reason=reason,
-                correlation_id=correlation_id,
-            )
-
-        if action == "edit":
-            await self._apply_edit(
-                candidate_id=candidate_uuid,
+                action=action,
                 actor_type=actor_type,
                 actor_id=actor_id,
                 reason=reason,
                 correlation_id=correlation_id,
                 edits=edits or {},
             )
-            detail = await self.get_candidate_detail(candidate_id=candidate_uuid)
+        detail = await self.get_candidate_detail(candidate_id=candidate_uuid)
+        return ReviewActionResult(
+            candidate_id=result.candidate_id,
+            current_review_state=detail["current_review_state"],
+            current_lifecycle_state=detail["current_lifecycle_state"],
+            rule_version_id=detail["rule_version_id"],
+            last_action=result.last_action,
+            allowed_actions=detail["allowed_actions"],
+        )
+
+    async def _apply_action_in_session(
+        self,
+        session,
+        *,
+        candidate_id: UUID,
+        action: ReviewActionKey,
+        actor_type: str,
+        actor_id: str,
+        reason: str,
+        correlation_id: str,
+        edits: dict[str, Any],
+    ) -> ReviewActionResult:
+        if action in {"approve", "approve_after_edit", "merge", "reject"}:
+            await self._ensure_under_review(
+                candidate_id=candidate_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
+                correlation_id=correlation_id,
+                session=session,
+            )
+
+        if action == "edit":
+            await self._apply_edit_in_session(
+                session,
+                candidate_id=candidate_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
+                correlation_id=correlation_id,
+                edits=edits,
+            )
             return ReviewActionResult(
-                candidate_id=str(candidate_uuid),
-                current_review_state=detail["current_review_state"],
-                current_lifecycle_state=detail["current_lifecycle_state"],
-                rule_version_id=detail["rule_version_id"],
+                candidate_id=str(candidate_id),
+                current_review_state="待审核",
+                current_lifecycle_state="待审核",
+                rule_version_id=None,
                 last_action="edit",
-                allowed_actions=detail["allowed_actions"],
             )
 
         if action == "approve_after_edit":
-            await self._apply_edit(
-                candidate_id=candidate_uuid,
+            await self._apply_edit_in_session(
+                session,
+                candidate_id=candidate_id,
                 actor_type=actor_type,
                 actor_id=actor_id,
                 reason=reason,
                 correlation_id=f"{correlation_id}:edit",
-                edits=edits or {},
+                edits=edits,
             )
             action = "approve"
 
         if action == "hold":
-            async with self._session_scope_factory() as session:
-                bundle = await self._repository.build_bundle(session, candidate_id=candidate_uuid)
-                if bundle is None:
-                    raise RuleReviewError(f"rule candidate not found: {candidate_id}")
-                with canonical_write_scope("rule_version", self.service_name):
-                    self._merge_workbench_metadata(
-                        bundle.candidate,
-                        actor_id=actor_id,
-                        patch={"hold": True, "hold_reason": reason},
-                    )
-                    bundle.candidate.updated_by = actor_id
-                    bundle.candidate.updated_at = datetime.now(UTC)
-                    await self._append_candidate_event(
-                        session=session,
-                        candidate=bundle.candidate,
-                        from_state=str(bundle.candidate.review_state),
-                        to_state=str(bundle.candidate.review_state),
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="human_hold",
-                        reason_text=reason,
-                        before_json={"review_state": str(bundle.candidate.review_state)},
-                        after_json={"review_state": str(bundle.candidate.review_state), "hold": True},
-                        correlation_id=correlation_id,
-                    )
-            detail = await self.get_candidate_detail(candidate_id=candidate_uuid)
+            bundle = await self._repository.build_bundle(session, candidate_id=candidate_id)
+            if bundle is None:
+                raise RuleReviewError(f"rule candidate not found: {candidate_id}")
+            with canonical_write_scope("rule_version", self.service_name):
+                self._merge_workbench_metadata(
+                    bundle.candidate,
+                    actor_id=actor_id,
+                    patch={"hold": True, "hold_reason": reason},
+                )
+                bundle.candidate.updated_by = actor_id
+                bundle.candidate.updated_at = datetime.now(UTC)
+                await self._append_candidate_event(
+                    session=session,
+                    candidate=bundle.candidate,
+                    from_state=str(bundle.candidate.review_state),
+                    to_state=str(bundle.candidate.review_state),
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="human_hold",
+                    reason_text=reason,
+                    before_json={"review_state": str(bundle.candidate.review_state)},
+                    after_json={"review_state": str(bundle.candidate.review_state), "hold": True},
+                    correlation_id=correlation_id,
+                )
             return ReviewActionResult(
-                candidate_id=str(candidate_uuid),
-                current_review_state=detail["current_review_state"],
-                current_lifecycle_state=detail["current_lifecycle_state"],
-                rule_version_id=detail["rule_version_id"],
+                candidate_id=str(candidate_id),
+                current_review_state=self._current_candidate_label(str(bundle.candidate.review_state)),
+                current_lifecycle_state=(await self._lifecycle_service.get_candidate_lifecycle_in_session(session, candidate_id=candidate_id)).display_label,
+                rule_version_id=str(bundle.rule_version.rule_version_id) if bundle.rule_version is not None else None,
                 last_action="hold",
-                allowed_actions=detail["allowed_actions"],
             )
 
         if action == "reject":
             try:
-                view = await self._lifecycle_service.reject_candidate(
-                    candidate_id=candidate_uuid,
+                view = await self._lifecycle_service.reject_candidate_in_session(
+                    session,
+                    candidate_id=candidate_id,
                     actor_type=actor_type,
                     actor_id=actor_id,
                     reason=reason,
@@ -553,58 +598,52 @@ class RuleReviewService:
             except RuleLifecycleTransitionBlockedError as exc:
                 raise RuleReviewTransitionBlockedError(str(exc)) from exc
             return ReviewActionResult(
-                candidate_id=str(candidate_uuid),
+                candidate_id=str(candidate_id),
                 current_review_state="已拒绝",
                 current_lifecycle_state=view.display_label,
                 rule_version_id=None,
                 last_action="reject",
-                allowed_actions=[],
             )
 
-        bundle, assessment = await self._get_bundle_and_assessment(candidate_id=candidate_uuid)
+        bundle, assessment = await self._get_bundle_and_assessment_in_session(session, candidate_id=candidate_id)
         result_action = action
         if action == "merge":
             if assessment.exact_duplicate_of_rule_version_id is None:
                 raise RuleReviewTransitionBlockedError("只有完全重复的候选规则才能执行合并。")
-            async with self._session_scope_factory() as session:
-                refresh_bundle = await self._repository.build_bundle(session, candidate_id=candidate_uuid)
-                if refresh_bundle is None:
-                    raise RuleReviewError(f"rule candidate not found: {candidate_id}")
-                with canonical_write_scope("rule_version", self.service_name):
-                    await self._append_candidate_event(
-                        session=session,
-                        candidate=refresh_bundle.candidate,
-                        from_state=str(refresh_bundle.candidate.review_state),
-                        to_state=str(refresh_bundle.candidate.review_state),
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="human_merge",
-                        reason_text=reason,
-                        before_json={"review_state": str(refresh_bundle.candidate.review_state)},
-                        after_json={"review_state": str(refresh_bundle.candidate.review_state), "merge_target_rule_version_id": assessment.exact_duplicate_of_rule_version_id},
-                        correlation_id=f"{correlation_id}:merge",
-                    )
+            with canonical_write_scope("rule_version", self.service_name):
+                await self._append_candidate_event(
+                    session=session,
+                    candidate=bundle.candidate,
+                    from_state=str(bundle.candidate.review_state),
+                    to_state=str(bundle.candidate.review_state),
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="human_merge",
+                    reason_text=reason,
+                    before_json={"review_state": str(bundle.candidate.review_state)},
+                    after_json={"review_state": str(bundle.candidate.review_state), "merge_target_rule_version_id": assessment.exact_duplicate_of_rule_version_id},
+                    correlation_id=f"{correlation_id}:merge",
+                )
             action = "approve"
             result_action = "merge"
 
         if action == "approve":
             try:
-                view = await self._lifecycle_service.approve_candidate(
-                    candidate_id=candidate_uuid,
+                view = await self._lifecycle_service.approve_candidate_in_session(
+                    session,
+                    candidate_id=candidate_id,
                     actor_id=actor_id,
                     reason=reason,
                     correlation_id=correlation_id,
                 )
             except RuleLifecycleTransitionBlockedError as exc:
                 raise RuleReviewTransitionBlockedError(str(exc)) from exc
-            detail = await self.get_candidate_detail(candidate_id=candidate_uuid)
             return ReviewActionResult(
-                candidate_id=str(candidate_uuid),
+                candidate_id=str(candidate_id),
                 current_review_state="已批准",
-                current_lifecycle_state=detail["current_lifecycle_state"] or view.display_label,
+                current_lifecycle_state=view.display_label,
                 rule_version_id=view.object_id,
                 last_action=result_action,
-                allowed_actions=detail["allowed_actions"],
             )
 
         raise RuleReviewTransitionBlockedError(f"unsupported action: {action}")
@@ -620,49 +659,73 @@ class RuleReviewService:
         edits: dict[str, Any],
     ) -> None:
         async with self._session_scope_factory() as session:
-            bundle = await self._repository.build_bundle(session, candidate_id=candidate_id)
-            if bundle is None:
-                raise RuleReviewError(f"rule candidate not found: {candidate_id}")
-            if not edits:
-                raise RuleReviewTransitionBlockedError("编辑后批准必须提供修改内容。")
-            before_json = {
-                "canonical_payload": bundle.candidate.canonical_payload,
-                "evidence_json": bundle.candidate.evidence_json,
-                "data_dependencies": bundle.candidate.data_dependencies,
-            }
-            with canonical_write_scope("rule_version", self.service_name):
-                if "canonical_payload" in edits:
-                    bundle.candidate.canonical_payload = edits["canonical_payload"]
-                if "data_dependencies" in edits:
-                    bundle.candidate.data_dependencies = edits["data_dependencies"]
-                if "explicit_fields" in edits:
-                    bundle.candidate.explicit_fields = edits["explicit_fields"]
-                if "missing_fields" in edits:
-                    bundle.candidate.missing_fields = edits["missing_fields"]
-                self._merge_workbench_metadata(
-                    bundle.candidate,
-                    actor_id=actor_id,
-                    patch={"edited": True},
-                )
-                bundle.candidate.updated_by = actor_id
-                bundle.candidate.updated_at = datetime.now(UTC)
-                await self._append_candidate_event(
-                    session=session,
-                    candidate=bundle.candidate,
-                    from_state=str(bundle.candidate.review_state),
-                    to_state=str(bundle.candidate.review_state),
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    reason_code="human_edited",
-                    reason_text=reason,
-                    before_json=before_json,
-                    after_json={
-                        "canonical_payload": bundle.candidate.canonical_payload,
-                        "evidence_json": bundle.candidate.evidence_json,
-                        "data_dependencies": bundle.candidate.data_dependencies,
-                    },
-                    correlation_id=correlation_id,
-                )
+            await self._apply_edit_in_session(
+                session,
+                candidate_id=candidate_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
+                correlation_id=correlation_id,
+                edits=edits,
+            )
+
+    async def _apply_edit_in_session(
+        self,
+        session,
+        *,
+        candidate_id: UUID,
+        actor_type: str,
+        actor_id: str,
+        reason: str,
+        correlation_id: str,
+        edits: dict[str, Any],
+    ) -> None:
+        bundle = await self._repository.build_bundle(session, candidate_id=candidate_id)
+        if bundle is None:
+            raise RuleReviewError(f"rule candidate not found: {candidate_id}")
+        if not edits:
+            raise RuleReviewTransitionBlockedError("编辑后批准必须提供修改内容。")
+        before_json = {
+            "canonical_payload": bundle.candidate.canonical_payload,
+            "evidence_json": bundle.candidate.evidence_json,
+            "data_dependencies": bundle.candidate.data_dependencies,
+        }
+        with canonical_write_scope("rule_version", self.service_name):
+            if "canonical_payload" in edits:
+                bundle.candidate.canonical_payload = edits["canonical_payload"]
+            if "data_dependencies" in edits:
+                bundle.candidate.data_dependencies = edits["data_dependencies"]
+            if "explicit_fields" in edits:
+                bundle.candidate.explicit_fields = edits["explicit_fields"]
+            if "missing_fields" in edits:
+                bundle.candidate.missing_fields = edits["missing_fields"]
+            self._merge_workbench_metadata(
+                bundle.candidate,
+                actor_id=actor_id,
+                patch={"edited": True},
+            )
+            bundle.candidate.updated_by = actor_id
+            bundle.candidate.updated_at = datetime.now(UTC)
+            await self._append_candidate_event(
+                session=session,
+                candidate=bundle.candidate,
+                from_state=str(bundle.candidate.review_state),
+                to_state=str(bundle.candidate.review_state),
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason_code="human_edited",
+                reason_text=reason,
+                before_json=before_json,
+                after_json={
+                    "canonical_payload": bundle.candidate.canonical_payload,
+                    "evidence_json": bundle.candidate.evidence_json,
+                    "data_dependencies": bundle.candidate.data_dependencies,
+                },
+                correlation_id=correlation_id,
+            )
+
+    async def _after_batch_item_processed(self, **_kwargs: Any) -> None:
+        return None
 
     async def apply_batch_action(
         self,
@@ -677,63 +740,83 @@ class RuleReviewService:
         await self._ensure_gate()
         if not candidate_ids:
             raise RuleReviewTransitionBlockedError("必须提供候选规则列表。")
-        prechecked: list[tuple[UUID | str, dict[str, Any], str]] = []
-        for candidate_id in candidate_ids:
-            detail = await self.get_candidate_detail(candidate_id=candidate_id)
-            status = detail["automatic_review"]["status"]
-            if action == "approve_low_risk":
-                if status not in {"auto_pass", "recommend_pass"}:
-                    raise RuleReviewTransitionBlockedError("批量通过只允许处理低风险候选规则。")
-            elif status not in {"recommend_reject", "not_backtestable"}:
-                raise RuleReviewTransitionBlockedError("批量驳回只允许处理明显无效或不可回测的候选规则。")
-            prechecked.append((candidate_id, detail, status))
+        async with self._session_scope_factory() as session:
+            prechecked: list[UUID] = []
+            for candidate_id in candidate_ids:
+                candidate_uuid = UUID(str(candidate_id))
+                bundle, assessment = await self._get_bundle_and_assessment_in_session(session, candidate_id=candidate_uuid)
+                status = self._classify_candidate(candidate=bundle.candidate, assessment=assessment).status
+                if action == "approve_low_risk":
+                    if status not in {"auto_pass", "recommend_pass"}:
+                        raise RuleReviewTransitionBlockedError("批量通过只允许处理低风险候选规则。")
+                elif status not in {"recommend_reject", "not_backtestable"}:
+                    raise RuleReviewTransitionBlockedError("批量驳回只允许处理明显无效或不可回测的候选规则。")
+                prechecked.append(candidate_uuid)
 
-        items: list[dict[str, Any]] = []
-        for index, (candidate_id, detail, _status) in enumerate(prechecked):
-            if action == "approve_low_risk":
-                eligible_for_backtest = bool(detail.get("governance", {}).get("eligible_for_backtest"))
-                result = await self.apply_action(
-                    candidate_id=candidate_id,
-                    action="approve",
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    reason=reason,
-                    correlation_id=f"{correlation_id}:{index}",
-                )
-                if eligible_for_backtest and result.rule_version_id is not None:
-                    queued = await self._lifecycle_service.transition_rule_version(
-                        rule_version_id=result.rule_version_id,
-                        target_state="待回测",
+            items: list[dict[str, Any]] = []
+            for index, candidate_uuid in enumerate(prechecked):
+                _bundle, current_assessment = await self._get_bundle_and_assessment_in_session(session, candidate_id=candidate_uuid)
+                current_status = self._classify_candidate(candidate=_bundle.candidate, assessment=current_assessment).status
+                if action == "approve_low_risk" and current_status not in {"auto_pass", "recommend_pass"}:
+                    raise RuleReviewTransitionBlockedError("候选规则状态已变化，请刷新后重试批量通过。")
+                if action == "reject_invalid" and current_status not in {"recommend_reject", "not_backtestable"}:
+                    raise RuleReviewTransitionBlockedError("候选规则状态已变化，请刷新后重试批量驳回。")
+
+                if action == "approve_low_risk":
+                    result = await self._apply_action_in_session(
+                        session,
+                        candidate_id=candidate_uuid,
+                        action="approve",
                         actor_type=actor_type,
                         actor_id=actor_id,
                         reason=reason,
-                        correlation_id=f"{correlation_id}:{index}:queue-backtest",
+                        correlation_id=f"{correlation_id}:{index}",
+                        edits={},
                     )
-                    result = ReviewActionResult(
-                        candidate_id=result.candidate_id,
-                        current_review_state=result.current_review_state,
-                        current_lifecycle_state=queued.display_label or queued.display_state,
-                        rule_version_id=result.rule_version_id,
-                        last_action=result.last_action,
-                        allowed_actions=[{"key": item.key, "label": item.label} for item in queued.allowed_next_actions],
+                    if current_assessment.eligible_for_backtest and result.rule_version_id is not None:
+                        queued = await self._lifecycle_service.transition_rule_version_in_session(
+                            session,
+                            rule_version_id=result.rule_version_id,
+                            target_state="待回测",
+                            actor_type=actor_type,
+                            actor_id=actor_id,
+                            reason=reason,
+                            correlation_id=f"{correlation_id}:{index}:queue-backtest",
+                        )
+                        result = ReviewActionResult(
+                            candidate_id=result.candidate_id,
+                            current_review_state=result.current_review_state,
+                            current_lifecycle_state=queued.display_label or queued.display_state,
+                            rule_version_id=result.rule_version_id,
+                            last_action=result.last_action,
+                            allowed_actions=[{"key": item.key, "label": item.label} for item in queued.allowed_next_actions],
+                        )
+                else:
+                    result = await self._apply_action_in_session(
+                        session,
+                        candidate_id=candidate_uuid,
+                        action="reject",
+                        actor_type=actor_type,
+                        actor_id=actor_id,
+                        reason=reason,
+                        correlation_id=f"{correlation_id}:{index}",
+                        edits={},
                     )
-            else:
-                result = await self.apply_action(
-                    candidate_id=candidate_id,
-                    action="reject",
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    reason=reason,
-                    correlation_id=f"{correlation_id}:{index}",
+                items.append(
+                    {
+                        "candidate_id": result.candidate_id,
+                        "status": "processed",
+                        "current_review_state": result.current_review_state,
+                        "rule_version_id": result.rule_version_id,
+                    }
                 )
-            items.append(
-                {
-                    "candidate_id": result.candidate_id,
-                    "status": "processed",
-                    "current_review_state": result.current_review_state,
-                    "rule_version_id": result.rule_version_id,
-                }
-            )
+                await self._after_batch_item_processed(
+                    session=session,
+                    index=index,
+                    result=result,
+                    action=action,
+                    correlation_id=correlation_id,
+                )
         return ReviewBatchResult(
             processed_count=len(items),
             skipped_count=0,

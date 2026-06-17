@@ -12,7 +12,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from api.main import app
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.routers.ui.rule_pool import get_rule_pool_service, get_session_scope_factory
 
 
@@ -186,6 +186,12 @@ async def client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
     try:
         app.dependency_overrides[verify_api_key] = lambda: 'test-key'
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="tester",
+            authenticated=True,
+            source="api_key",
+        )
         app.dependency_overrides[get_session_scope_factory] = lambda: (lambda: _FakeSessionScope(fake_session))
         app.dependency_overrides[get_rule_pool_service] = lambda: fake_rule_pool_service
         transport = ASGITransport(app=app)
@@ -237,3 +243,53 @@ async def test_canonical_rule_pool_router_keeps_reads_and_rejects_legacy_review_
     )
     assert batch.status_code == 409
     assert batch.json()['detail']['status'] == 'compatibility_only'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("principal", "path", "payload"),
+    [
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/rule-pool/rule-1/review",
+            {"decision": "approve", "force": False, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/rule-pool/rule-1/review",
+            {"decision": "approve", "force": False, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/rule-pool/review-batch",
+            {"decision": "reject", "status": "pending", "limit": 25, "force": True, "reviewed_by": "web"},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/rule-pool/review-batch",
+            {"decision": "reject", "status": "pending", "limit": 25, "force": True, "reviewed_by": "web"},
+        ),
+    ],
+)
+async def test_rule_pool_compat_mutation_endpoints_reject_non_operator_before_service_calls(
+    principal: CurrentPrincipal,
+    path: str,
+    payload: dict[str, Any],
+) -> None:
+    fake_session = _FakeSession([])
+    fake_rule_pool_service = _FakeRulePoolService()
+
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_current_principal] = lambda: principal
+        app.dependency_overrides[get_session_scope_factory] = lambda: (lambda: _FakeSessionScope(fake_session))
+        app.dependency_overrides[get_rule_pool_service] = lambda: fake_rule_pool_service
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(path, json=payload)
+        assert response.status_code == 403
+        assert fake_rule_pool_service.review_calls == []
+        assert fake_rule_pool_service.review_batch_calls == []
+    finally:
+        app.dependency_overrides.clear()

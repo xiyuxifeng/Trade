@@ -51,6 +51,10 @@ class _FakeBatchResult:
 
 
 class _FakeRuleReviewService:
+    def __init__(self) -> None:
+        self.action_calls = 0
+        self.batch_calls = 0
+
     async def list_candidates(self, **_: Any) -> list[_FakeCandidateItem]:
         return [
             _FakeCandidateItem(
@@ -90,6 +94,7 @@ class _FakeRuleReviewService:
         }
 
     async def apply_action(self, **_: Any) -> _FakeActionResult:
+        self.action_calls += 1
         return _FakeActionResult(
             candidate_id="candidate-1",
             current_review_state="已批准",
@@ -100,6 +105,7 @@ class _FakeRuleReviewService:
         )
 
     async def apply_batch_action(self, **_: Any) -> _FakeBatchResult:
+        self.batch_calls += 1
         return _FakeBatchResult(
             processed_count=1,
             skipped_count=0,
@@ -174,5 +180,54 @@ async def test_rule_review_router_enforces_permissions() -> None:
                 json={"action": "approve", "reason": "forbidden", "correlation_id": "corr-2"},
             )
             assert response.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("principal", "path", "payload"),
+    [
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/rule-review/candidates/candidate-1/actions",
+            {"action": "approve", "reason": "forbidden", "correlation_id": "corr-anon"},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/rule-review/candidates/candidate-1/actions",
+            {"action": "approve", "reason": "forbidden", "correlation_id": "corr-viewer"},
+        ),
+        (
+            CurrentPrincipal(role="anonymous", api_key_label=None, authenticated=False, source="anonymous"),
+            "/api/ui/v1/rule-review/candidates/batch-actions",
+            {"action": "approve_low_risk", "reason": "forbidden", "correlation_id": "corr-batch-anon", "candidate_ids": ["candidate-1"]},
+        ),
+        (
+            CurrentPrincipal(role="viewer", api_key_label="viewer", authenticated=True, source="api_key"),
+            "/api/ui/v1/rule-review/candidates/batch-actions",
+            {"action": "approve_low_risk", "reason": "forbidden", "correlation_id": "corr-batch-viewer", "candidate_ids": ["candidate-1"]},
+        ),
+    ],
+)
+async def test_rule_review_mutation_endpoints_reject_non_operator_before_service_calls(
+    principal: CurrentPrincipal,
+    path: str,
+    payload: dict[str, Any],
+) -> None:
+    from api.routers.ui.rule_review import get_rule_review_service
+
+    fake_service = _FakeRuleReviewService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_rule_review_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: principal
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(path, json=payload)
+        assert response.status_code == 403
+        assert fake_service.action_calls == 0
+        assert fake_service.batch_calls == 0
     finally:
         app.dependency_overrides.clear()

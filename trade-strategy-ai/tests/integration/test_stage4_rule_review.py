@@ -893,6 +893,15 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
     assert approved.processed_count == 1
     approved_detail = await service.get_candidate_detail(candidate_id=batch_approve.rule_candidate_id)
     assert approved_detail["current_lifecycle_state"] == "待回测"
+    retried = await service.apply_batch_action(
+        action="approve_low_risk",
+        actor_type="human",
+        actor_id="reviewer",
+        reason="重试同一批量通过请求。",
+        correlation_id="corr-batch-approve",
+        candidate_ids=[batch_approve.rule_candidate_id],
+    )
+    assert retried.processed_count == 1
     async with session_factory() as session:
         queued_events = list(
             (
@@ -926,3 +935,197 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
             correlation_id="corr-batch-blocked",
             candidate_ids=[batch_manual.rule_candidate_id],
         )
+
+
+@pytest.mark.asyncio
+async def test_rule_review_batch_approval_rolls_back_all_mutations_on_mid_batch_failure(tmp_path) -> None:
+    from src.services.rule_review_service import RuleReviewService
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage4-rule-review-batch-rollback.db'}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _register_char_length(dbapi_connection, _connection_record):  # noqa: ANN001
+        dbapi_connection.create_function("char_length", 1, lambda value: len(value) if value is not None else 0)
+
+    async with engine.begin() as conn:
+        for table in (
+            BlogArticle.__table__,
+            ArticleRevision.__table__,
+            PromptRun.__table__,
+            ArticleStructure.__table__,
+            RuleCandidate.__table__,
+            Rule.__table__,
+            RuleVersion.__table__,
+            RuleFamily.__table__,
+            RuleFamilyMembership.__table__,
+            RuleVersionSourceLink.__table__,
+            LifecycleEvent.__table__,
+        ):
+            await conn.run_sync(lambda sync_conn, current_table=table: current_table.create(bind=sync_conn, checkfirst=True))
+
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        article_id = UUID("11111111-aaaa-1111-aaaa-111111111111")
+        revision_id = UUID("22222222-bbbb-2222-bbbb-222222222222")
+        prompt_run_id = UUID("33333333-cccc-3333-cccc-333333333333")
+        structure_id = UUID("44444444-dddd-4444-dddd-444444444444")
+        session.add(
+            BlogArticle(
+                id=article_id,
+                source="tgb",
+                source_url="https://example.com/article",
+                title="批量回滚文章",
+                author_name="Dora",
+                author_id="author-4",
+                published_at=datetime(2026, 6, 15, 9, 30, tzinfo=UTC),
+                crawled_at=datetime(2026, 6, 15, 9, 40, tzinfo=UTC),
+                content_text="原始文章正文",
+                summary="文章摘要",
+                tags=["突破"],
+                content_hash="hash-rollback",
+                view_count=1,
+                like_count=0,
+                bookmark_count=0,
+                comment_count=0,
+                raw_payload={},
+            )
+        )
+        session.add(
+            ArticleRevision(
+                article_revision_id=revision_id,
+                article_id=article_id,
+                revision_no=1,
+                content_hash="hash-rollback",
+                content_text="清洗后的文章正文",
+                content_html=None,
+                source_payload={"summary": "冻结摘要"},
+                captured_at=datetime(2026, 6, 15, 9, 40, tzinfo=UTC),
+                quality_status="complete",
+            )
+        )
+        session.add(
+            PromptRun(
+                prompt_run_id=prompt_run_id,
+                run_id=str(prompt_run_id),
+                article_id=article_id,
+                prompt_name="article_analysis_v1",
+                prompt_version="article_analysis_v1",
+                schema_name="article_analysis_v1",
+                schema_version="article_analysis_v1",
+                provider="test-provider",
+                model="test-model",
+                input_object_type="article_revision",
+                input_object_id=str(article_id),
+                input_version_id=str(revision_id),
+                input_hash="input-hash-rollback",
+                request_json={},
+                raw_output={},
+                validation_errors={},
+                validation_state="valid",
+                retry_count=0,
+                token_usage={},
+                cost_amount=None,
+                cost_currency=None,
+                raw_output_text="{}",
+                started_at=datetime(2026, 6, 15, 9, 41, tzinfo=UTC),
+                completed_at=datetime(2026, 6, 15, 9, 41, tzinfo=UTC),
+            )
+        )
+        session.add(
+            ArticleStructure(
+                article_structure_id=structure_id,
+                article_id=article_id,
+                article_revision_id=revision_id,
+                prompt_run_id=prompt_run_id,
+                schema_version="article_structure_v1",
+                payload={"method_tags": ["突破"], "key_claims": []},
+                evidence_json={},
+                missing_fields={},
+                inference_fields={},
+                lifecycle_state="approved",
+                quality_status="complete",
+                approved_by="tester",
+                approved_at=datetime(2026, 6, 16, 9, 0, tzinfo=UTC),
+                supersedes_id=None,
+                created_by="tester",
+                updated_by="tester",
+            )
+        )
+        payload_one, backtestability_one = _payload(title="回滚批量通过规则一")
+        payload_two, backtestability_two = _payload(
+            title="回滚批量通过规则二",
+            condition={
+                "logic": "single",
+                "clauses": [{"field": "close", "operator": "gt", "value": 2.5, "unit": "x", "lookback": 5}],
+            },
+        )
+        candidate_one = await _seed_candidate(
+            session,
+            article_id=article_id,
+            revision_id=revision_id,
+            prompt_run_id=prompt_run_id,
+            structure_id=structure_id,
+            index=0,
+            payload=payload_one,
+            backtestability_status=backtestability_one,
+        )
+        candidate_two = await _seed_candidate(
+            session,
+            article_id=article_id,
+            revision_id=revision_id,
+            prompt_run_id=prompt_run_id,
+            structure_id=structure_id,
+            index=1,
+            payload=payload_two,
+            backtestability_status=backtestability_two,
+        )
+        await session.commit()
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    class _InjectedBatchFailureRuleReviewService(RuleReviewService):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self._batch_item_counter = 0
+
+        async def _after_batch_item_processed(self, **_kwargs) -> None:
+            self._batch_item_counter += 1
+            if self._batch_item_counter == 2:
+                raise RuntimeError("injected mid-batch failure")
+
+    service = _InjectedBatchFailureRuleReviewService(
+        session_scope_factory=_session_scope,
+        regression_service=_PassingGate(),
+    )
+
+    with pytest.raises(RuntimeError, match="injected mid-batch failure"):
+        await service.apply_batch_action(
+            action="approve_low_risk",
+            actor_type="human",
+            actor_id="reviewer",
+            reason="第二条处理中断，整批必须回滚。",
+            correlation_id="corr-batch-rollback",
+            candidate_ids=[candidate_one.rule_candidate_id, candidate_two.rule_candidate_id],
+        )
+
+    async with session_factory() as session:
+        candidates = (
+            await session.execute(
+                select(RuleCandidate).order_by(RuleCandidate.candidate_index.asc())
+            )
+        ).scalars().all()
+        assert [candidate.review_state for candidate in candidates] == ["extracted", "extracted"]
+        assert await session.scalar(select(func.count()).select_from(Rule)) == 0
+        assert await session.scalar(select(func.count()).select_from(RuleVersion)) == 0
+        assert await session.scalar(select(func.count()).select_from(RuleFamily)) == 0
+        assert await session.scalar(select(func.count()).select_from(RuleFamilyMembership)) == 0
+        assert await session.scalar(select(func.count()).select_from(RuleVersionSourceLink)) == 0
+        assert await session.scalar(select(func.count()).select_from(LifecycleEvent)) == 0

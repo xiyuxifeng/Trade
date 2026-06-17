@@ -362,20 +362,26 @@ class RuleLifecycleService:
 
     async def get_candidate_lifecycle(self, *, candidate_id: UUID) -> LifecycleView:
         async with self._session_scope_factory() as session:
-            candidate = await self._get_candidate(session, candidate_id=candidate_id)
-            return self._build_candidate_view(candidate=candidate)
+            return await self.get_candidate_lifecycle_in_session(session, candidate_id=candidate_id)
+
+    async def get_candidate_lifecycle_in_session(self, session, *, candidate_id: UUID) -> LifecycleView:
+        candidate = await self._get_candidate(session, candidate_id=candidate_id)
+        return self._build_candidate_view(candidate=candidate)
+
+    async def get_rule_version_lifecycle_in_session(self, session, *, rule_version_id: str | UUID) -> LifecycleView:
+        version_uuid = UUID(str(rule_version_id))
+        rule_version = await self._get_rule_version(session, rule_version_id=version_uuid)
+        rule = await self._get_rule(session, rule_id=rule_version.rule_id)
+        latest_event = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_version.value,
+            object_id=version_uuid,
+        )
+        return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
 
     async def get_rule_version_lifecycle(self, *, rule_version_id: str | UUID) -> LifecycleView:
         async with self._session_scope_factory() as session:
-            version_uuid = UUID(str(rule_version_id))
-            rule_version = await self._get_rule_version(session, rule_version_id=version_uuid)
-            rule = await self._get_rule(session, rule_id=rule_version.rule_id)
-            latest_event = await self._get_latest_event(
-                session,
-                object_type=CanonicalObjectType.rule_version.value,
-                object_id=version_uuid,
-            )
-            return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
+            return await self.get_rule_version_lifecycle_in_session(session, rule_version_id=rule_version_id)
 
     async def list_rule_version_history(self, *, rule_version_id: str | UUID) -> list[dict[str, Any]]:
         async with self._session_scope_factory() as session:
@@ -423,44 +429,65 @@ class RuleLifecycleService:
             raise RuleLifecycleTransitionBlockedError("当前阶段只支持把候选规则提交到待审核。")
         await self._ensure_gate()
         async with self._session_scope_factory() as session:
-            candidate = await self._get_candidate(session, candidate_id=candidate_id)
-            existing = await self._get_latest_event(
+            return await self.transition_candidate_in_session(
+                session,
+                candidate_id=candidate_id,
+                target_state=target_state,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
+                correlation_id=correlation_id,
+            )
+
+    async def transition_candidate_in_session(
+        self,
+        session,
+        *,
+        candidate_id: UUID,
+        target_state: str,
+        actor_type: str,
+        actor_id: str,
+        reason: str | None,
+        correlation_id: str,
+    ) -> LifecycleView:
+        candidate = await self._get_candidate(session, candidate_id=candidate_id)
+        existing = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_candidate.value,
+            object_id=candidate.rule_candidate_id,
+            correlation_id=correlation_id,
+        )
+        if existing is not None:
+            return self._build_candidate_view(candidate=candidate)
+        if str(candidate.review_state) != "extracted":
+            raise RuleLifecycleTransitionBlockedError("只有候选状态的规则才能进入待审核。")
+        with canonical_write_scope("rule_version", self.service_name):
+            candidate.review_state = "manual_review"
+            candidate.updated_by = actor_id
+            candidate.updated_at = datetime.now(UTC)
+            await self._append_event(
                 session,
                 object_type=CanonicalObjectType.rule_candidate.value,
                 object_id=candidate.rule_candidate_id,
+                from_state="extracted",
+                to_state="manual_review",
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason_code="submitted_for_review",
+                reason_text=reason,
+                before_json={"review_state": "extracted"},
+                after_json={
+                    "review_state": "manual_review",
+                    **self._rule_lifecycle_payload(
+                        display_state="待审核",
+                        display_label="待审核",
+                        entry_point="rule_lifecycle.transition_candidate",
+                    ),
+                },
                 correlation_id=correlation_id,
             )
-            if existing is not None:
-                return self._build_candidate_view(candidate=candidate)
-            if str(candidate.review_state) != "extracted":
-                raise RuleLifecycleTransitionBlockedError("只有候选状态的规则才能进入待审核。")
-            with canonical_write_scope("rule_version", self.service_name):
-                candidate.review_state = "manual_review"
-                candidate.updated_by = actor_id
-                candidate.updated_at = datetime.now(UTC)
-                await self._append_event(
-                    session,
-                    object_type=CanonicalObjectType.rule_candidate.value,
-                    object_id=candidate.rule_candidate_id,
-                    from_state="extracted",
-                    to_state="manual_review",
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    reason_code="submitted_for_review",
-                    reason_text=reason,
-                    before_json={"review_state": "extracted"},
-                    after_json={
-                        "review_state": "manual_review",
-                        **self._rule_lifecycle_payload(
-                            display_state="待审核",
-                            display_label="待审核",
-                            entry_point="rule_lifecycle.transition_candidate",
-                        ),
-                    },
-                    correlation_id=correlation_id,
-                )
-                await session.refresh(candidate)
-            return self._build_candidate_view(candidate=candidate)
+            await session.refresh(candidate)
+        return self._build_candidate_view(candidate=candidate)
 
     async def approve_candidate(
         self,
@@ -473,58 +500,75 @@ class RuleLifecycleService:
         self._ensure_reason(reason)
         await self._ensure_gate()
         async with self._session_scope_factory() as session:
-            candidate = await self._get_candidate(session, candidate_id=candidate_id)
-            if str(candidate.review_state) not in {"manual_review", "auto_review"}:
-                raise RuleLifecycleTransitionBlockedError("候选规则必须先进入待审核，不能跳过审核直接批准。")
-            existing = await self._get_latest_event(
+            return await self.approve_candidate_in_session(
                 session,
-                object_type=CanonicalObjectType.rule_candidate.value,
-                object_id=candidate.rule_candidate_id,
+                candidate_id=candidate_id,
+                actor_id=actor_id,
+                reason=reason,
                 correlation_id=correlation_id,
             )
-            if existing is None:
-                payload = candidate.canonical_payload or {}
-                with canonical_write_scope("rule_version", self.service_name):
-                    await self._governance_service.approve_candidate(
-                        session,
-                        candidate=candidate,
-                        actor_id=actor_id,
-                        reason=reason,
-                        correlation_id=correlation_id,
-                        title=str(payload.get("title") or f"candidate-{candidate.candidate_index}"),
-                        description=str(payload.get("description")) if payload.get("description") is not None else None,
-                        schema_version="rule_v1",
-                        instrument_scope={"instrument_focus": payload.get("instrument_focus") or []},
-                        condition_json=payload.get("condition") or {},
-                        action_json=payload.get("action") or {},
-                        parameter_json={
-                            "timeframe": payload.get("timeframe"),
-                            "holding_period": payload.get("holding_period"),
-                            "risk_controls": payload.get("risk_controls") or [],
-                            "market_state_applicability": payload.get("market_state_applicability") or {},
-                        },
-                        data_dependencies=candidate.data_dependencies or {},
-                        evidence_json=candidate.evidence_json or {},
-                        after_review_snapshot={
-                            "automatic_review_status": "needs_human_review",
-                            "reason": reason,
-                            "review_state": "approved",
-                        },
-                    )
-            linked = await self._governance_service._repository.get_linked_rule_version_by_candidate(  # noqa: SLF001
-                session,
-                candidate_id=candidate.rule_candidate_id,
-            )
-            if linked is None:
-                raise RuleLifecycleError("approved candidate has no linked rule version")
-            await session.refresh(linked)
-            rule = await self._get_rule(session, rule_id=linked.rule_id)
-            latest_event = await self._get_latest_event(
-                session,
-                object_type=CanonicalObjectType.rule_version.value,
-                object_id=linked.rule_version_id,
-            )
-            return self._build_rule_version_view(rule_version=linked, rule=rule, latest_event=latest_event)
+
+    async def approve_candidate_in_session(
+        self,
+        session,
+        *,
+        candidate_id: UUID,
+        actor_id: str,
+        reason: str | None,
+        correlation_id: str,
+    ) -> LifecycleView:
+        candidate = await self._get_candidate(session, candidate_id=candidate_id)
+        existing = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_candidate.value,
+            object_id=candidate.rule_candidate_id,
+            correlation_id=correlation_id,
+        )
+        if existing is None:
+            if str(candidate.review_state) not in {"manual_review", "auto_review"}:
+                raise RuleLifecycleTransitionBlockedError("候选规则必须先进入待审核，不能跳过审核直接批准。")
+            payload = candidate.canonical_payload or {}
+            with canonical_write_scope("rule_version", self.service_name):
+                await self._governance_service.approve_candidate(
+                    session,
+                    candidate=candidate,
+                    actor_id=actor_id,
+                    reason=reason,
+                    correlation_id=correlation_id,
+                    title=str(payload.get("title") or f"candidate-{candidate.candidate_index}"),
+                    description=str(payload.get("description")) if payload.get("description") is not None else None,
+                    schema_version="rule_v1",
+                    instrument_scope={"instrument_focus": payload.get("instrument_focus") or []},
+                    condition_json=payload.get("condition") or {},
+                    action_json=payload.get("action") or {},
+                    parameter_json={
+                        "timeframe": payload.get("timeframe"),
+                        "holding_period": payload.get("holding_period"),
+                        "risk_controls": payload.get("risk_controls") or [],
+                        "market_state_applicability": payload.get("market_state_applicability") or {},
+                    },
+                    data_dependencies=candidate.data_dependencies or {},
+                    evidence_json=candidate.evidence_json or {},
+                    after_review_snapshot={
+                        "automatic_review_status": "needs_human_review",
+                        "reason": reason,
+                        "review_state": "approved",
+                    },
+                )
+        linked = await self._governance_service._repository.get_linked_rule_version_by_candidate(  # noqa: SLF001
+            session,
+            candidate_id=candidate.rule_candidate_id,
+        )
+        if linked is None:
+            raise RuleLifecycleError("approved candidate has no linked rule version")
+        await session.refresh(linked)
+        rule = await self._get_rule(session, rule_id=linked.rule_id)
+        latest_event = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_version.value,
+            object_id=linked.rule_version_id,
+        )
+        return self._build_rule_version_view(rule_version=linked, rule=rule, latest_event=latest_event)
 
     async def reject_candidate(
         self,
@@ -538,29 +582,56 @@ class RuleLifecycleService:
         self._ensure_reason(reason)
         await self._ensure_gate()
         async with self._session_scope_factory() as session:
-            candidate = await self._get_candidate(session, candidate_id=candidate_id)
-            if str(candidate.review_state) not in {"manual_review", "auto_review"}:
-                raise RuleLifecycleTransitionBlockedError("只有待审核的候选规则才能驳回。")
-            with canonical_write_scope("rule_version", self.service_name):
-                candidate.review_state = "rejected"
-                candidate.updated_by = actor_id
-                candidate.updated_at = datetime.now(UTC)
-                await self._append_event(
-                    session,
-                    object_type=CanonicalObjectType.rule_candidate.value,
-                    object_id=candidate.rule_candidate_id,
-                    from_state="manual_review",
-                    to_state="rejected",
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    reason_code="human_rejected",
-                    reason_text=reason,
-                    before_json={"review_state": "manual_review"},
-                    after_json={"review_state": "rejected"},
-                    correlation_id=correlation_id,
-                )
-                await session.refresh(candidate)
+            return await self.reject_candidate_in_session(
+                session,
+                candidate_id=candidate_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
+                correlation_id=correlation_id,
+            )
+
+    async def reject_candidate_in_session(
+        self,
+        session,
+        *,
+        candidate_id: UUID,
+        actor_type: str,
+        actor_id: str,
+        reason: str | None,
+        correlation_id: str,
+    ) -> LifecycleView:
+        candidate = await self._get_candidate(session, candidate_id=candidate_id)
+        existing = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_candidate.value,
+            object_id=candidate.rule_candidate_id,
+            correlation_id=correlation_id,
+        )
+        if existing is not None:
             return self._build_candidate_view(candidate=candidate)
+        if str(candidate.review_state) not in {"manual_review", "auto_review"}:
+            raise RuleLifecycleTransitionBlockedError("只有待审核的候选规则才能驳回。")
+        with canonical_write_scope("rule_version", self.service_name):
+            candidate.review_state = "rejected"
+            candidate.updated_by = actor_id
+            candidate.updated_at = datetime.now(UTC)
+            await self._append_event(
+                session,
+                object_type=CanonicalObjectType.rule_candidate.value,
+                object_id=candidate.rule_candidate_id,
+                from_state="manual_review",
+                to_state="rejected",
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason_code="human_rejected",
+                reason_text=reason,
+                before_json={"review_state": "manual_review"},
+                after_json={"review_state": "rejected"},
+                correlation_id=correlation_id,
+            )
+            await session.refresh(candidate)
+        return self._build_candidate_view(candidate=candidate)
 
     async def transition_rule_version(
         self,
@@ -577,163 +648,188 @@ class RuleLifecycleService:
         self._ensure_reason(reason)
         await self._ensure_gate()
         async with self._session_scope_factory() as session:
-            version_uuid = UUID(str(rule_version_id))
-            rule_version = await self._get_rule_version(session, rule_version_id=version_uuid)
-            rule = await self._get_rule(session, rule_id=rule_version.rule_id)
-            existing = await self._get_latest_event(
+            return await self.transition_rule_version_in_session(
                 session,
-                object_type=CanonicalObjectType.rule_version.value,
-                object_id=rule_version.rule_version_id,
+                rule_version_id=rule_version_id,
+                target_state=target_state,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                reason=reason,
                 correlation_id=correlation_id,
+                expected_updated_at=expected_updated_at,
+                evidence_refs=evidence_refs,
             )
-            if existing is not None:
-                latest_event = await self._get_latest_event(
-                    session,
-                    object_type=CanonicalObjectType.rule_version.value,
-                    object_id=rule_version.rule_version_id,
-                )
-                return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
-            self._ensure_expected_timestamp(rule_version.updated_at, expected_updated_at)
 
-            latest_event = await self._get_latest_event(
-                session,
-                object_type=CanonicalObjectType.rule_version.value,
-                object_id=rule_version.rule_version_id,
-            )
-            current_view = self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
-
-            with canonical_write_scope("rule_version", self.service_name):
-                if target_state == "待回测":
-                    if current_view.display_label != "已批准" or str(rule_version.lifecycle_state) != FormalLifecycleState.draft.value:
-                        raise RuleLifecycleTransitionBlockedError("只有已批准的规则才能进入待回测。")
-                    lifecycle_payload = self._rule_lifecycle_payload(
-                        display_state="待回测",
-                        display_label="待回测",
-                        evidence_refs=evidence_refs,
-                        entry_point="rule_lifecycle.transition_rule_version",
-                    )
-                    rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
-                    rule_version.updated_by = actor_id
-                    rule_version.updated_at = datetime.now(UTC)
-                    await self._append_event(
-                        session,
-                        object_type=CanonicalObjectType.rule_version.value,
-                        object_id=rule_version.rule_version_id,
-                        from_state=FormalLifecycleState.draft.value,
-                        to_state=FormalLifecycleState.draft.value,
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="queued_for_backtest",
-                        reason_text=reason,
-                        before_json={"lifecycle_state": FormalLifecycleState.draft.value},
-                        after_json={"lifecycle_state": FormalLifecycleState.draft.value, **lifecycle_payload},
-                        correlation_id=correlation_id,
-                    )
-                elif target_state == "验证中":
-                    if current_view.display_label != "待回测" or str(rule_version.lifecycle_state) != FormalLifecycleState.draft.value:
-                        raise RuleLifecycleTransitionBlockedError("只有待回测的规则才能进入验证中。")
-                    lifecycle_payload = self._rule_lifecycle_payload(
-                        display_state="验证中",
-                        display_label="验证中",
-                        evidence_refs=evidence_refs,
-                        entry_point="rule_lifecycle.transition_rule_version",
-                    )
-                    rule_version.lifecycle_state = FormalLifecycleState.in_review
-                    rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
-                    rule_version.updated_by = actor_id
-                    rule_version.updated_at = datetime.now(UTC)
-                    await self._append_event(
-                        session,
-                        object_type=CanonicalObjectType.rule_version.value,
-                        object_id=rule_version.rule_version_id,
-                        from_state=FormalLifecycleState.draft.value,
-                        to_state=FormalLifecycleState.in_review.value,
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="started_validation",
-                        reason_text=reason,
-                        before_json={"lifecycle_state": FormalLifecycleState.draft.value},
-                        after_json={"lifecycle_state": FormalLifecycleState.in_review.value, **lifecycle_payload},
-                        correlation_id=correlation_id,
-                    )
-                elif target_state in {"可用", "限定使用"}:
-                    if current_view.display_label not in {"验证中", "限定使用", "可用"}:
-                        raise RuleLifecycleTransitionBlockedError("只有验证中的规则才能变更为可用或限定使用。")
-                    if not evidence_refs:
-                        raise RuleLifecycleTransitionBlockedError("缺少回测或人工验证证据，不能进入正式可用状态。")
-                    restriction_level = "limited" if target_state == "限定使用" else "none"
-                    restriction_message = reason if target_state == "限定使用" else None
-                    lifecycle_payload = self._rule_lifecycle_payload(
-                        display_state=target_state,
-                        display_label=target_state,
-                        restriction_level=restriction_level,
-                        restriction_message=restriction_message,
-                        evidence_refs=evidence_refs,
-                        entry_point="rule_lifecycle.transition_rule_version",
-                    )
-                    prior_state = str(rule_version.lifecycle_state)
-                    rule_version.lifecycle_state = FormalLifecycleState.published
-                    rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
-                    rule_version.updated_by = actor_id
-                    rule_version.updated_at = datetime.now(UTC)
-                    if rule is not None:
-                        rule.current_published_version_id = None if target_state == "限定使用" else rule_version.rule_version_id
-                        rule.updated_by = actor_id
-                        rule.updated_at = datetime.now(UTC)
-                    await self._append_event(
-                        session,
-                        object_type=CanonicalObjectType.rule_version.value,
-                        object_id=rule_version.rule_version_id,
-                        from_state=prior_state,
-                        to_state=FormalLifecycleState.published.value,
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="marked_limited_use" if target_state == "限定使用" else "marked_usable",
-                        reason_text=reason,
-                        before_json={"lifecycle_state": prior_state},
-                        after_json={"lifecycle_state": FormalLifecycleState.published.value, **lifecycle_payload},
-                        correlation_id=correlation_id,
-                    )
-                elif target_state == "已停用":
-                    if current_view.display_label not in {"已批准", "待回测", "验证中", "可用", "限定使用"}:
-                        raise RuleLifecycleTransitionBlockedError("当前状态不支持停用。")
-                    lifecycle_payload = self._rule_lifecycle_payload(
-                        display_state="已停用",
-                        display_label="已停用",
-                        evidence_refs=evidence_refs,
-                        entry_point="rule_lifecycle.transition_rule_version",
-                    )
-                    prior_state = str(rule_version.lifecycle_state)
-                    rule_version.lifecycle_state = FormalLifecycleState.archived
-                    rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
-                    rule_version.updated_by = actor_id
-                    rule_version.updated_at = datetime.now(UTC)
-                    rule_version.superseded_at = datetime.now(UTC)
-                    if rule is not None and rule.current_published_version_id == rule_version.rule_version_id:
-                        rule.current_published_version_id = None
-                        rule.updated_by = actor_id
-                        rule.updated_at = datetime.now(UTC)
-                    await self._append_event(
-                        session,
-                        object_type=CanonicalObjectType.rule_version.value,
-                        object_id=rule_version.rule_version_id,
-                        from_state=prior_state,
-                        to_state=FormalLifecycleState.archived.value,
-                        actor_type=actor_type,
-                        actor_id=actor_id,
-                        reason_code="archived_by_operator",
-                        reason_text=reason,
-                        before_json={"lifecycle_state": prior_state},
-                        after_json={"lifecycle_state": FormalLifecycleState.archived.value, **lifecycle_payload},
-                        correlation_id=correlation_id,
-                    )
-                else:
-                    raise RuleLifecycleTransitionBlockedError(f"不支持的目标状态：{target_state}")
-
-            await session.refresh(rule_version)
+    async def transition_rule_version_in_session(
+        self,
+        session,
+        *,
+        rule_version_id: str | UUID,
+        target_state: str,
+        actor_type: str,
+        actor_id: str,
+        reason: str | None,
+        correlation_id: str,
+        expected_updated_at: datetime | None = None,
+        evidence_refs: list[str] | None = None,
+    ) -> LifecycleView:
+        version_uuid = UUID(str(rule_version_id))
+        rule_version = await self._get_rule_version(session, rule_version_id=version_uuid)
+        rule = await self._get_rule(session, rule_id=rule_version.rule_id)
+        existing = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_version.value,
+            object_id=rule_version.rule_version_id,
+            correlation_id=correlation_id,
+        )
+        if existing is not None:
             latest_event = await self._get_latest_event(
                 session,
                 object_type=CanonicalObjectType.rule_version.value,
                 object_id=rule_version.rule_version_id,
             )
             return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
+        self._ensure_expected_timestamp(rule_version.updated_at, expected_updated_at)
+
+        latest_event = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_version.value,
+            object_id=rule_version.rule_version_id,
+        )
+        current_view = self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)
+
+        with canonical_write_scope("rule_version", self.service_name):
+            if target_state == "待回测":
+                if current_view.display_label != "已批准" or str(rule_version.lifecycle_state) != FormalLifecycleState.draft.value:
+                    raise RuleLifecycleTransitionBlockedError("只有已批准的规则才能进入待回测。")
+                lifecycle_payload = self._rule_lifecycle_payload(
+                    display_state="待回测",
+                    display_label="待回测",
+                    evidence_refs=evidence_refs,
+                    entry_point="rule_lifecycle.transition_rule_version",
+                )
+                rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
+                rule_version.updated_by = actor_id
+                rule_version.updated_at = datetime.now(UTC)
+                await self._append_event(
+                    session,
+                    object_type=CanonicalObjectType.rule_version.value,
+                    object_id=rule_version.rule_version_id,
+                    from_state=FormalLifecycleState.draft.value,
+                    to_state=FormalLifecycleState.draft.value,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="queued_for_backtest",
+                    reason_text=reason,
+                    before_json={"lifecycle_state": FormalLifecycleState.draft.value},
+                    after_json={"lifecycle_state": FormalLifecycleState.draft.value, **lifecycle_payload},
+                    correlation_id=correlation_id,
+                )
+            elif target_state == "验证中":
+                if current_view.display_label != "待回测" or str(rule_version.lifecycle_state) != FormalLifecycleState.draft.value:
+                    raise RuleLifecycleTransitionBlockedError("只有待回测的规则才能进入验证中。")
+                lifecycle_payload = self._rule_lifecycle_payload(
+                    display_state="验证中",
+                    display_label="验证中",
+                    evidence_refs=evidence_refs,
+                    entry_point="rule_lifecycle.transition_rule_version",
+                )
+                rule_version.lifecycle_state = FormalLifecycleState.in_review
+                rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
+                rule_version.updated_by = actor_id
+                rule_version.updated_at = datetime.now(UTC)
+                await self._append_event(
+                    session,
+                    object_type=CanonicalObjectType.rule_version.value,
+                    object_id=rule_version.rule_version_id,
+                    from_state=FormalLifecycleState.draft.value,
+                    to_state=FormalLifecycleState.in_review.value,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="started_validation",
+                    reason_text=reason,
+                    before_json={"lifecycle_state": FormalLifecycleState.draft.value},
+                    after_json={"lifecycle_state": FormalLifecycleState.in_review.value, **lifecycle_payload},
+                    correlation_id=correlation_id,
+                )
+            elif target_state in {"可用", "限定使用"}:
+                if current_view.display_label not in {"验证中", "限定使用", "可用"}:
+                    raise RuleLifecycleTransitionBlockedError("只有验证中的规则才能变更为可用或限定使用。")
+                if not evidence_refs:
+                    raise RuleLifecycleTransitionBlockedError("缺少回测或人工验证证据，不能进入正式可用状态。")
+                restriction_level = "limited" if target_state == "限定使用" else "none"
+                restriction_message = reason if target_state == "限定使用" else None
+                lifecycle_payload = self._rule_lifecycle_payload(
+                    display_state=target_state,
+                    display_label=target_state,
+                    restriction_level=restriction_level,
+                    restriction_message=restriction_message,
+                    evidence_refs=evidence_refs,
+                    entry_point="rule_lifecycle.transition_rule_version",
+                )
+                prior_state = str(rule_version.lifecycle_state)
+                rule_version.lifecycle_state = FormalLifecycleState.published
+                rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
+                rule_version.updated_by = actor_id
+                rule_version.updated_at = datetime.now(UTC)
+                if rule is not None:
+                    rule.current_published_version_id = None if target_state == "限定使用" else rule_version.rule_version_id
+                    rule.updated_by = actor_id
+                    rule.updated_at = datetime.now(UTC)
+                await self._append_event(
+                    session,
+                    object_type=CanonicalObjectType.rule_version.value,
+                    object_id=rule_version.rule_version_id,
+                    from_state=prior_state,
+                    to_state=FormalLifecycleState.published.value,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="marked_limited_use" if target_state == "限定使用" else "marked_usable",
+                    reason_text=reason,
+                    before_json={"lifecycle_state": prior_state},
+                    after_json={"lifecycle_state": FormalLifecycleState.published.value, **lifecycle_payload},
+                    correlation_id=correlation_id,
+                )
+            elif target_state == "已停用":
+                if current_view.display_label not in {"已批准", "待回测", "验证中", "可用", "限定使用"}:
+                    raise RuleLifecycleTransitionBlockedError("当前状态不支持停用。")
+                lifecycle_payload = self._rule_lifecycle_payload(
+                    display_state="已停用",
+                    display_label="已停用",
+                    evidence_refs=evidence_refs,
+                    entry_point="rule_lifecycle.transition_rule_version",
+                )
+                prior_state = str(rule_version.lifecycle_state)
+                rule_version.lifecycle_state = FormalLifecycleState.archived
+                rule_version.evidence_json = {**(rule_version.evidence_json or {}), **lifecycle_payload}
+                rule_version.updated_by = actor_id
+                rule_version.updated_at = datetime.now(UTC)
+                rule_version.superseded_at = datetime.now(UTC)
+                if rule is not None and rule.current_published_version_id == rule_version.rule_version_id:
+                    rule.current_published_version_id = None
+                    rule.updated_by = actor_id
+                    rule.updated_at = datetime.now(UTC)
+                await self._append_event(
+                    session,
+                    object_type=CanonicalObjectType.rule_version.value,
+                    object_id=rule_version.rule_version_id,
+                    from_state=prior_state,
+                    to_state=FormalLifecycleState.archived.value,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    reason_code="archived_by_operator",
+                    reason_text=reason,
+                    before_json={"lifecycle_state": prior_state},
+                    after_json={"lifecycle_state": FormalLifecycleState.archived.value, **lifecycle_payload},
+                    correlation_id=correlation_id,
+                )
+            else:
+                raise RuleLifecycleTransitionBlockedError(f"不支持的目标状态：{target_state}")
+
+        await session.refresh(rule_version)
+        latest_event = await self._get_latest_event(
+            session,
+            object_type=CanonicalObjectType.rule_version.value,
+            object_id=rule_version.rule_version_id,
+        )
+        return self._build_rule_version_view(rule_version=rule_version, rule=rule, latest_event=latest_event)

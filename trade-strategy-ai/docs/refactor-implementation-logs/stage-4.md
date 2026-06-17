@@ -4,10 +4,73 @@
 
 - Stage：`Stage 4 规则管理、去重和规则族`
 - Stage 状态：`[x] 已完成`
-- 当前活动：`Stage 4 Review and Gate` 已完成。
+- 当前活动：`2026-06-17 Pre-Stage-5 cleanup review` 已完成；Stage 4 Gate 仍保持 accepted。
 - 下一可执行 Task：`Stage 5 Bootstrap`，需用户明确授权后才能开始。
 - Bootstrap 决策：`READY`
 - Stage 4 Gate 决策：`ACCEPTED`
+
+## 2026-06-17 Pre-Stage-5 Stage 4 Cleanup Review
+
+### Scope
+
+- 在不改写已接受 Stage 4 commit 的前提下，对 4 个已跟踪 concern 做 bounded review、复验和修复：
+  - async database cleanup warning；
+  - batch review transaction atomicity；
+  - operator authorization on every formal mutation endpoint；
+  - documentation contract reconciliation。
+
+### Findings
+
+- 缓存的 async SQLAlchemy engine 在应用 shutdown 时未显式 `dispose`；当测试或短生命周期进程使用 asyncpg 后，连接池清理会落到解释器/事件循环收尾阶段，形成 `Connection._cancel` warning 风险。该问题具有 runtime relevance，不仅是测试噪音。
+- `RuleReviewService.apply_batch_action()` 虽然做了 whole-batch precheck，但实际 mutation 仍通过多次独立 session/commit 执行，不满足 all-or-nothing。
+- 兼容 `rule-pool` / `strategy-studio` formal mutation endpoints 缺少 `operator` 强制校验，匿名或 viewer 会先触达 compatibility-only service，再返回拒写。
+- 当前 active docs / tests / user-facing contract 未发现仍声称“低风险批量通过停在已批准”的正式条目；历史 Gate 日志中的旧表述作为当时事实保留，但已被本次 cleanup review supersede。
+
+### Repairs applied
+
+- 在 `config/database.py` 新增缓存 engine dispose helper，并在 `api/app.py` lifespan shutdown 中强制释放 cached async engine。
+- 将 `RuleLifecycleService` 扩展为 session-aware internal operations，确保 idempotency 检查先于 stale/state 拦截，供批量审核复用同一事务。
+- 将 `RuleReviewService.apply_batch_action()` 改为单事务执行；批内每项在写入前重新计算当前资格；新增 injected mid-batch failure hook regression，证明 item 2 失败时零 mutation 残留。
+- 为 `/api/ui/v1/rule-pool/*review*` 和 `/api/ui/v1/strategy-studio/rule-pool/*review*` 加入 `operator` 鉴权；`rule-review` / `rule-lifecycle` 原正式变更入口继续维持 `operator` 要求，并补齐 parameterized denial tests。
+
+### Verification
+
+- Warning regression:
+  - `PYTHONASYNCIODEBUG=1 PYTHONTRACEMALLOC=1 ../.venv/bin/python -W error::RuntimeWarning -m pytest tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py::test_app_lifespan_disposes_cached_engine_on_shutdown -q`
+  - Repeated `3` runs；结果均为 `2 passed`，无 `Connection._cancel` warning。
+- Stage 4 focused suite:
+  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/unit/services/test_rule_governance_service.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/cli/test_rule_pool_cli.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py -q`
+  - Result: `41 passed`
+- Affected Stage 3/4 regression:
+  - `../.venv/bin/python -m pytest tests/unit/services/test_stage2_writer_routing.py tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py tests/unit/services/test_optimize_rule_pool_service.py -q`
+  - Result: `43 passed`
+- Stage 3 fixed-set gate:
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - Result: `passed`
+- Frontend/API contract safety:
+  - `pnpm test -- src/pages/rules/review.test.tsx src/pages/rule-pool/index.test.tsx`
+  - Result: `5 passed`
+  - `pnpm typecheck`
+  - Result: passed
+- Hygiene:
+  - `../.venv/bin/python -m compileall src api cli`
+  - `git diff --check`
+  - Result: passed
+
+### Contract reconciliation result
+
+- Final Stage 4 contract remains:
+  - eligible new low-risk `RuleVersion` progresses to `待回测`
+  - exact duplicates reuse existing `RuleVersion` and do not re-enter backtest
+  - Stage 4 does not fabricate validation / `可用` / publication semantics
+- No active non-historical docs required a contract rewrite.
+- Historical references to the old async warning and pre-fix batch behavior remain in earlier log sections as then-true evidence, and are superseded by this cleanup entry rather than silently rewritten.
+
+### Conclusion
+
+- Stage 4 Gate decision remains `ACCEPTED`.
+- This cleanup review is complete; all four tracked concerns are now verified/fixed in the bounded Stage 4 scope.
+- Stage 5 Bootstrap may begin only after explicit user authorization.
 
 ## 2026-06-16 Stage 4 Bootstrap
 

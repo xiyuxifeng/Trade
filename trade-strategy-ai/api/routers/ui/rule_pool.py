@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 
-from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from api.routers.ui.strategy_studio import (
     RulePoolBatchReviewRequest,
     RulePoolDetailResponse,
@@ -332,6 +332,7 @@ async def review_rule_applicability_profile(
 async def review_rule(
     rule_id: str,
     request: RulePoolReviewRequest,
+    _principal: CurrentPrincipal = Depends(require_role("operator")),
     rule_pool_service=Depends(get_rule_pool_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
@@ -357,6 +358,7 @@ async def review_rule(
 @router.post("/review-batch")
 async def review_batch(
     request: RulePoolBatchReviewRequest,
+    _principal: CurrentPrincipal = Depends(require_role("operator")),
     rule_pool_service=Depends(get_rule_pool_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:

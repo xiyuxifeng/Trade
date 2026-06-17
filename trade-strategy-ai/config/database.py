@@ -54,7 +54,18 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-__all__ = ["get_engine", "get_session_factory", "get_async_session", "run_async_with_cleanup"]
+async def dispose_cached_engine() -> None:
+    """Dispose the cached async engine and clear dependent caches."""
+    if get_engine.cache_info().currsize == 0:
+        return
+
+    engine = get_engine()
+    await engine.dispose()
+    get_session_factory.cache_clear()
+    get_engine.cache_clear()
+
+
+__all__ = ["get_engine", "get_session_factory", "get_async_session", "run_async_with_cleanup", "dispose_cached_engine"]
 
 
 def run_async_with_cleanup(coro: Coroutine[object, object, T]) -> T:

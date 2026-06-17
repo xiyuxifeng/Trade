@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
@@ -41,3 +43,16 @@ def test_request_middleware_injects_request_id(caplog) -> None:
         record.request_id == request_id and "request completed method=GET path=/health" in record.message
         for record in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_app_lifespan_disposes_cached_engine_on_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """应用关闭时必须释放缓存的异步数据库引擎。"""
+    dispose_cached_engine = AsyncMock()
+    monkeypatch.setattr("api.app.dispose_cached_engine", dispose_cached_engine, raising=False)
+
+    application = create_app()
+    async with application.router.lifespan_context(application):
+        pass
+
+    dispose_cached_engine.assert_awaited_once()

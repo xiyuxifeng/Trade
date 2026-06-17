@@ -34,6 +34,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 4 Bootstrap 已完成；Stage 4 范围冻结为 `RT-S4-001`、`RT-S4-002`、`RT-S4-003`。
 - Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
 - Stage 4 Gate 最终 `ACCEPTED`；Stage 5 Bootstrap may begin after explicit user instruction.
+- 2026-06-17 已完成 Stage 4 Pre-Stage-5 cleanup review；异步数据库清理 warning、批量审核原子性、正式变更入口授权和低风险批量合同一致性均已复验并修复/核实。
 
 ## Task 状态
 
@@ -84,7 +85,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 ## 当前残余风险
 
 - React Router v7 future flag warning 尚未治理，记录为非阻塞技术债。
-- 后端存在既有异步数据库连接清理 RuntimeWarning，记录为非阻塞技术债。
+- 2026-06-16 及更早日志中记录的 async cleanup warning 已在 2026-06-17 Pre-Stage-5 cleanup review 中修复；相关历史条目仅保留为当时 Gate 证据，不再代表当前状态。
 - 视觉一致性、非关键响应式细节和文案润色进入 UI backlog，不阻塞 Stage 2。
 - Stage 3 legacy article extraction 仍存在，但在 canonical writer enabled 时不能形成正式 Stage 3 formal writer。
 - 旧 revision summary 仅在 `ArticleRevision.source_payload` 含 frozen summary 时可展示；否则 API 需 truthful unavailable，不得回退到当前 `BlogArticle.summary`。
@@ -97,6 +98,40 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - legacy `rule_pool` / `strategy_studio` UI 与 CLI 写路径已在 RT-S4-003 显式拒绝 formal lifecycle 写入；RT-S4-001 已新增 `/rules/review` 正式审核工作台和 canonical `/api/ui/v1/rule-review` 写路径。
 - RT-S4-001 automatic review 使用五状态：`auto_pass`、`recommend_pass`、`manual_review`、`not_backtestable`、`recommend_reject`。其中低风险批量通过只允许 `auto_pass/recommend_pass`，会全批预检后把可回测的新规则推进到 `待回测`；精确重复规则复用既有 RuleVersion 且不重复进入回测；批量驳回只允许 `recommend_reject/not_backtestable`；全部 formal mutation 继续受 fixed-set gate 约束。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
+
+## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review
+
+- Task ID：`Stage 4 Pre-Stage-5 Cleanup Review`
+- 状态：`[x] 已完成`
+- 修改范围：`config/database.py`、`api/app.py`、`src/services/rule_review_service.py`、`src/services/rule_lifecycle_service.py`、`api/routers/ui/rule_pool.py`、`api/routers/ui/strategy_studio.py`、相关 Stage 4 API/integration tests、Stage 4 日志。
+- 关键决定：
+  - 缓存 async engine 必须在应用 shutdown 时显式 `dispose`，不能把 asyncpg 连接清理留给解释器/事件循环收尾。
+  - `approve_low_risk` / `reject_invalid` 必须在单个事务单元内执行，且批内每项在写入时重新校验资格，不能只依赖批前预检。
+  - `/api/ui/v1/rule-review`、`/api/ui/v1/rule-lifecycle` 以及兼容 `rule-pool` / `strategy-studio` 正式变更入口均要求 `operator+`。
+  - 低风险批量合同保持为：新规则进入 `待回测`；精确重复复用既有 `RuleVersion` 且不重复进入回测；不伪造验证/可用/发布语义。
+- 数据库迁移：无新增迁移。
+- 兼容处理：保留 legacy `rule-pool` / `strategy-studio` 写入口为 compatibility-only，同时新增 operator 授权拦截，拒绝在拒写逻辑之前触达服务。
+- 已运行测试：
+  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/unit/services/test_rule_governance_service.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/cli/test_rule_pool_cli.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py -q`
+  - `../.venv/bin/python -m pytest tests/unit/services/test_stage2_writer_routing.py tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py tests/unit/services/test_optimize_rule_pool_service.py -q`
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - `PYTHONASYNCIODEBUG=1 PYTHONTRACEMALLOC=1 ../.venv/bin/python -W error::RuntimeWarning -m pytest tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py::test_app_lifespan_disposes_cached_engine_on_shutdown -q` repeated 3 times
+  - `pnpm test -- src/pages/rules/review.test.tsx src/pages/rule-pool/index.test.tsx`
+  - `pnpm typecheck`
+  - `../.venv/bin/python -m compileall src api cli`
+  - `git diff --check`
+- 测试结果：
+  - Stage 4 focused governance/API/CLI/migration/auth suite：`41 passed`
+  - Affected Stage 3/4 regression suite：`43 passed`
+  - Stage 3 fixed-set gate：`passed`
+  - RuntimeWarning diagnostic repeat：`3/3` runs passed with no `Connection._cancel` warning
+  - Frontend targeted tests：`5 passed`
+  - TypeScript、compileall、`git diff --check`：passed
+- 未完成项：无。
+- 已知风险：
+  - 当前结论基于本地可访问 PostgreSQL/asyncpg 与 targeted regression evidence；仓库全量后端测试未在本次 bounded review 中重跑。
+  - React Query 测试仍输出既有 query-data warning，不属于本次 Stage 4 formal contract。
+- 验收结论：Stage 4 `ACCEPTED` 保持不变；Pre-Stage-5 cleanup review 结论为 verified and fixed；Stage 5 Bootstrap 仍需用户明确授权后方可开始。
 
 ## 日志读取规则
 

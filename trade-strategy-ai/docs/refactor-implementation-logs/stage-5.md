@@ -4,10 +4,10 @@
 
 - Stage：`Stage 5 基础数据、数据调度与数据质量`
 - Stage 状态：`[-] 进行中`
-- 当前活动：`2026-06-17 Stage 5 Bootstrap` 已完成。
-- Bootstrap 决策：`READY`
-- 下一可执行 Task：`RT-S5-001 OHLCV 数据体系`
-- 不得自动开始：`RT-S5-001` 需要用户明确授权。
+- 当前活动：`2026-06-17 RT-S5-002 Kaipan 数据体系` 已完成。
+- 当前已接受：`Stage 5 Bootstrap`、`RT-S5-001`、`RT-S5-002`
+- 下一可执行 Task：`RT-S5-003 调度和系统管理`
+- 不得自动开始：`RT-S5-003` 需要用户明确授权。
 - 计划：`docs/refactor-implementation-plans/stage-5-implementation-plan.md`
 
 ## 2026-06-17 Stage 5 Bootstrap
@@ -345,3 +345,80 @@ Results:
 ### Next Task
 
 `RT-S5-002` may begin in a separate acceptance batch. Do not begin it automatically.
+
+## 2026-06-17 RT-S5-002 Kaipan 数据体系
+
+### Decision
+
+`ACCEPTED`
+
+### Scope Executed
+
+- Froze canonical Kaipan slot semantics at `09-25` pre-market and `17-30` post-close.
+- Extended `MarketSnapshot` / `MarketSnapshotSection` contracts with explicit slot, source/captured/ingested/available time, section source dataset, payload fingerprint, normalization version, content fingerprint, and frozen time.
+- Made MarketSnapshot freeze idempotent on canonical content and versioned by `content_fingerprint`.
+- Removed the blocking `(market, trade_date, slot, data_version)` unique constraint so changed content for the same slot can form a new frozen version instead of mutating the old one.
+- Preserved truthful unavailable behavior for missing historical Kaipan data.
+- Kept `market_datasets` compatibility-write rejection in place and updated affected tests/read paths accordingly.
+- Verified market-state feature/regime construction degrades truthfully when snapshot coverage is insufficient.
+
+### Implementation Notes
+
+- Canonical section payloads now strip volatile fields such as `fetched_at` before fingerprinting, so reruns with unchanged content reuse the same frozen snapshot identity.
+- Snapshot/service output now exposes slot-specific `available_at` and `content_fingerprint`; `09-25` and `17-30` snapshots cannot collide.
+- Section provenance defaults remain truthful: when a section is unavailable or missing, time fields stay absent rather than being synthesized.
+- File-based snapshot paths remain compatibility-only; formal freeze semantics are carried by `market_snapshots` and child tables.
+- A pre-existing package import cycle involving `src.models` and `src.alerting.db` was repaired with a lazy `AlertHistory` export so the affected Kaipan/market-state suites could run again.
+
+### Files Changed
+
+- `src/models/market_snapshot.py`
+- `src/models/market_data_snapshot.py`
+- `src/models/market_data_snapshot_section.py`
+- `src/services/market_snapshot_builders.py`
+- `src/services/market_snapshot_service.py`
+- `src/services/market_data_storage_service.py`
+- `src/db/repositories/market_snapshot_repository.py`
+- `src/db/repositories/market_snapshot_section_repository.py`
+- `src/services/market_regime_service.py`
+- `src/models/__init__.py`
+- `src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py`
+- `data/kaipan/raw/.gitkeep`
+- `data/kaipan/snapshots/.gitkeep`
+- `tests/providers/test_kaipan_pipeline.py`
+- `tests/unit/db/repositories/test_market_data_repositories.py`
+- `tests/unit/db/test_migrations.py`
+- `tests/unit/models/test_market_snapshot.py`
+- `tests/unit/services/test_market_data_storage_service.py`
+- `tests/unit/services/test_market_regime_feature_service.py`
+- `tests/unit/services/test_market_snapshot_service.py`
+
+### Verification
+
+Commands run:
+
+- `../.venv/bin/python -m pytest tests/unit/models/test_market_snapshot.py tests/unit/providers/test_kaipan_provider.py tests/unit/providers/test_kaipan_normalizer.py tests/providers/test_kaipan_scheduler.py tests/providers/test_kaipan_pipeline.py tests/unit/services/test_market_snapshot_builders.py tests/unit/services/test_market_snapshot_registry.py tests/unit/services/test_market_snapshot_service.py tests/unit/services/test_market_data_storage_service.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_market_regime_feature_service.py tests/unit/services/test_market_regime_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/services/test_kaipan_dashboard_service.py tests/api/routers/ui/test_kaipan.py tests/api/routers/test_ui_snapshots.py tests/api/routers/test_market_ui.py tests/unit/db/repositories/test_market_data_repositories.py tests/unit/db/test_migrations.py -q`
+- `pnpm vitest run src/features/market-workspace/market-workspace-shell.test.tsx src/pages/market/snapshots/index.test.tsx src/pages/market/index.test.tsx`
+- `pnpm typecheck`
+- `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+- `../.venv/bin/python -m compileall src api cli`
+- `git diff --check`
+
+Results:
+
+- Focused backend/API/provider/database/migration/market-state suite: `119 passed`
+- Frontend targeted suite: `14 passed`
+- TypeScript: passed
+- Stage 3 fixed-set regression: `passed` with `article_count=12`, `processed_count=12`, `validation_failures=[]`
+- `compileall`: passed
+- `git diff --check`: passed
+
+### Remaining Risks
+
+- Migration evidence is still based on migration-definition tests, downgrade guards, sqlite-backed runtime verification, and code review. A separate real PostgreSQL upgrade/downgrade/re-upgrade replay remains advisable before Stage 5 Gate.
+- Historical Kaipan operational success still depends on provider credentials/network and whether the upstream source actually has the requested historical payloads.
+- Formal normal-user data-readiness/system-management surface remains owned by `RT-S5-003`.
+
+### Next Task
+
+`RT-S5-003` may begin in a separate acceptance batch. Do not begin it automatically.

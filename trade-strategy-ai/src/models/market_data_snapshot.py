@@ -32,14 +32,8 @@ class MarketSnapshot(TimestampMixin, Base):
     __tablename__ = "market_snapshots"
     __table_args__ = (
         UniqueConstraint("snapshot_id", name="uq_market_snapshots_snapshot_id"),
-        UniqueConstraint(
-            "market",
-            "trade_date",
-            "slot",
-            "data_version",
-            name="uq_market_snapshots_market_date_slot_version",
-        ),
         Index("ix_market_snapshots_trade_date_market", "trade_date", "market"),
+        Index("ix_market_snapshots_trade_date_slot", "trade_date", "slot"),
         Index("ix_market_snapshots_profile_trade_date", "profile_id", "trade_date"),
         Index("ix_market_snapshots_quality_status_trade_date", "quality_status", "trade_date"),
     )
@@ -61,9 +55,12 @@ class MarketSnapshot(TimestampMixin, Base):
     summary_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     quality_artifact_ref: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     data_quality: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    source_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
     effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     content_fingerprint: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
@@ -101,9 +98,12 @@ class MarketSnapshot(TimestampMixin, Base):
             "summary_artifact_ref": self.summary_artifact_ref,
             "quality_artifact_ref": self.quality_artifact_ref,
             "data_quality": self.data_quality,
+            "source_time": self.source_time.isoformat() if self.source_time else None,
             "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+            "ingested_at": self.ingested_at.isoformat() if self.ingested_at else None,
             "available_at": self.available_at.isoformat() if self.available_at else None,
             "effective_at": self.effective_at.isoformat() if self.effective_at else None,
+            "frozen_at": self.frozen_at.isoformat() if self.frozen_at else None,
             "content_fingerprint": self.content_fingerprint,
             "manifest_json": self.manifest_json,
             "sections": {

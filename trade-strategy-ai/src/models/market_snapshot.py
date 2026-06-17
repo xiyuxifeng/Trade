@@ -25,11 +25,19 @@ class MarketSnapshotSection:
     """Market Snapshot 的单个 section。"""
 
     section_id: str
-    provider: str | None
-    source_time: datetime | None
-    record_count: int
-    missing_reason: str | None
-    quality_status: str
+    trade_date: str | None = None
+    slot: str | None = None
+    source_dataset: str | None = None
+    provider: str | None = None
+    source_time: datetime | None = None
+    captured_at: datetime | None = None
+    ingested_at: datetime | None = None
+    available_at: datetime | None = None
+    record_count: int = 0
+    missing_reason: str | None = None
+    quality_status: str = "missing"
+    raw_payload_fingerprint: str | None = None
+    normalization_version: str | None = None
     payload: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -44,12 +52,20 @@ class MarketSnapshot:
 
     snapshot_id: str
     trade_date: str
-    market: str
-    data_version: str
-    provider_sources: list[str]
-    created_at: datetime
-    data_quality: dict[str, Any]
-    sections: dict[str, MarketSnapshotSection]
+    slot: str = "17-30"
+    market: str = "CN"
+    data_version: str = "market-snapshot-v2"
+    provider_sources: list[str] = field(default_factory=list)
+    source_time: datetime | None = None
+    captured_at: datetime | None = None
+    ingested_at: datetime | None = None
+    available_at: datetime | None = None
+    frozen_at: datetime | None = None
+    content_fingerprint: str | None = None
+    created_at: datetime | None = None
+    data_quality: dict[str, Any] = field(default_factory=dict)
+    sections: dict[str, MarketSnapshotSection] = field(default_factory=dict)
+    storage_ref: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

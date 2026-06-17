@@ -37,7 +37,6 @@ from src.models.user import User, UserSession
 from src.models.config_profile import ConfigProfile
 from src.models.evidence_pack import EvidencePackRecord
 from src.models import stage2_canonical as _stage2_canonical  # noqa: F401
-from src.alerting.db import AlertHistory
 
 __all__ = [
     "OHLCVBar",
@@ -89,3 +88,11 @@ __all__ = [
     "UserSession",
     "ConfigProfile",
 ]
+
+
+def __getattr__(name: str):
+    if name == "AlertHistory":
+        from src.alerting.db import AlertHistory
+
+        return AlertHistory
+    raise AttributeError(name)

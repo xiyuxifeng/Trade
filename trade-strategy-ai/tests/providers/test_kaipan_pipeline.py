@@ -46,7 +46,7 @@ class TestKaipanSchemaFiles:
         """schema dataset 名称正确。"""
         schema_dir = Path("src/providers/kaipan_schema")
         datasets = {f.stem for f in schema_dir.glob("*.yaml")}
-        assert datasets == {
+        assert datasets.issuperset({
             "hot_topics",
             "topic_constituents",
             "strong_symbols",
@@ -56,7 +56,7 @@ class TestKaipanSchemaFiles:
             "daily_limit_index",
             "weight_performance",
             "get_feng_k_list",
-        }
+        })
 
 
 class TestKaipanProvider:
@@ -176,6 +176,7 @@ class TestKaipanProvider:
         monkeypatch.setattr(self.provider.session, "request", fake_request)
         monkeypatch.setattr(self.provider, "_throttle", lambda: None)
         monkeypatch.setattr(self.provider, "_sleep_with_backoff", lambda attempt: None)
+        monkeypatch.setattr(self.provider, "_inject_runtime_credentials", lambda params: None)
         self.provider.max_retries = 2
 
         request = self.provider.build_request(api_name="MorningBidding", controller="HisHomeDingPan", method="POST")

@@ -12,39 +12,29 @@ from src.common.stage2_writer_routing import require_canonical_write
 class MarketSnapshotRepository:
     """市场快照主表仓储。"""
 
+    async def get_by_content_fingerprint(self, session: AsyncSession, content_fingerprint: str) -> MarketSnapshot | None:
+        """按 canonical content_fingerprint 查询快照。"""
+        return await session.scalar(
+            select(MarketSnapshot).where(MarketSnapshot.content_fingerprint == content_fingerprint)
+        )
+
     async def upsert_snapshot(self, session: AsyncSession, snapshot: MarketSnapshot) -> MarketSnapshot:
-        """按 snapshot_id 写入或更新快照主记录。"""
+        """按 canonical 内容写入或复用 frozen snapshot。"""
         require_canonical_write("market_snapshot", "MarketSnapshotRepository.upsert_snapshot")
+        existing_by_fingerprint = await self.get_by_content_fingerprint(session, snapshot.content_fingerprint)
+        if existing_by_fingerprint is not None:
+            return existing_by_fingerprint
+
         existing = await session.scalar(select(MarketSnapshot).where(MarketSnapshot.snapshot_id == snapshot.snapshot_id))
         if existing is None:
             session.add(snapshot)
             await session.flush()
             return snapshot
 
-        for field in (
-            "trade_date",
-            "market",
-            "profile_id",
-            "data_version",
-            "slot",
-            "quality_status",
-            "provider_sources",
-            "section_count",
-            "available_section_count",
-            "partial_section_count",
-            "missing_section_count",
-            "storage_ref",
-            "summary_artifact_ref",
-            "quality_artifact_ref",
-            "data_quality",
-            "captured_at",
-            "available_at",
-            "effective_at",
-            "content_fingerprint",
-            "manifest_json",
-        ):
-            setattr(existing, field, getattr(snapshot, field))
-        await session.flush()
+        if existing.content_fingerprint != snapshot.content_fingerprint:
+            raise ValueError(
+                f"frozen snapshot {snapshot.snapshot_id} already exists with a different content fingerprint"
+            )
         return existing
 
     async def get_by_snapshot_id(self, session: AsyncSession, snapshot_id: str) -> MarketSnapshot | None:

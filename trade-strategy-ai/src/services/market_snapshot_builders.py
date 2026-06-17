@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from src.market_data.service import MarketDataCache
 from src.market_universe.constituents_resolver import ConstituentsResolver
@@ -18,6 +20,12 @@ from src.services.persona_service import PersonaService
 
 _MAJOR_INDEX_SYMBOLS = ("SH000001", "SZ399001", "SZ399006", "SH000688")
 _DATA_VERSION = "market-snapshot-v1"
+_NORMALIZATION_VERSION = "kaipan-normalizer-v2"
+_SHANGHAI = ZoneInfo("Asia/Shanghai")
+_SLOT_TIMES: dict[str, tuple[int, int]] = {
+    "09-25": (9, 25),
+    "17-30": (17, 30),
+}
 
 
 def _now_utc() -> datetime:
@@ -84,6 +92,59 @@ def _load_json_payload(path: Path) -> dict[str, Any] | None:
         if payload is not None:
             return {"value": payload}
     return data if isinstance(data, dict) else None
+
+
+def _slot_timestamp_utc(trade_date: date, slot: str) -> datetime:
+    """返回 slot 的 canonical UTC 时间。"""
+    hour, minute = _SLOT_TIMES.get(slot, _SLOT_TIMES["17-30"])
+    return datetime(
+        trade_date.year,
+        trade_date.month,
+        trade_date.day,
+        hour,
+        minute,
+        tzinfo=_SHANGHAI,
+    ).astimezone(UTC)
+
+
+def _payload_fingerprint(section_id: str, payload: dict[str, Any], metadata: dict[str, Any]) -> str:
+    """为 raw/normalized payload 生成稳定指纹。"""
+    seed = json.dumps(
+        {
+            "section_id": section_id,
+            "payload": _to_plain(payload),
+            "metadata": _to_plain(metadata),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _sanitize_canonical_payload(value: Any) -> Any:
+    """移除会破坏 rerun idempotence 的易变 provider 字段。"""
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_canonical_payload(nested)
+            for key, nested in value.items()
+            if key not in {"fetched_at", "captured_at", "ingested_at"}
+        }
+    if isinstance(value, list):
+        return [_sanitize_canonical_payload(item) for item in value]
+    return value
+
+
+def _quality_status_from_exception(exc: Exception) -> str:
+    """按错误类型映射缺失语义。"""
+    message = str(exc).lower()
+    if "conflict" in message:
+        return "conflict"
+    if "invalid" in message or "malformed" in message:
+        return "invalid"
+    if "unavailable" in message:
+        return "unavailable"
+    return "missing"
 
 
 def _custom_raw_path(
@@ -167,15 +228,34 @@ def _build_section(
     metadata: dict[str, Any] | None = None,
 ) -> MarketSnapshotSection:
     """统一构建 MarketSnapshotSection。"""
+    trade_date_value = metadata.get("trade_date") if isinstance(metadata, dict) else None
+    slot_value = metadata.get("slot") if isinstance(metadata, dict) else None
+    trade_day = date.fromisoformat(trade_date_value) if isinstance(trade_date_value, str) and trade_date_value else None
+    source_dataset = metadata.get("source_dataset", section_id) if isinstance(metadata, dict) else section_id
+    successful = quality_status not in {"missing", "unavailable", "invalid", "conflict"} and bool(payload)
+    source_time = _slot_timestamp_utc(trade_day, slot_value) if successful and trade_day and slot_value else None
+    captured_at = source_time
+    ingested_at = source_time
+    available_at = source_time
+    normalized_payload = _sanitize_canonical_payload(_to_plain(payload) if isinstance(payload, dict) else {})
+    normalized_metadata = metadata or {}
     return MarketSnapshotSection(
         section_id=section_id,
+        trade_date=trade_day.isoformat() if trade_day else None,
+        slot=slot_value,
+        source_dataset=source_dataset,
         provider=provider,
-        source_time=_now_utc(),
+        source_time=source_time,
+        captured_at=captured_at,
+        ingested_at=ingested_at,
+        available_at=available_at,
         record_count=record_count,
         missing_reason=missing_reason,
         quality_status=quality_status,
-        payload=payload,
-        metadata=metadata or {},
+        raw_payload_fingerprint=_payload_fingerprint(section_id, normalized_payload, normalized_metadata),
+        normalization_version=_NORMALIZATION_VERSION,
+        payload=normalized_payload,
+        metadata=normalized_metadata,
     )
 
 
@@ -790,9 +870,9 @@ def build_hot_topics_section(
             provider="kaipan",
             payload={},
             record_count=0,
-            quality_status="missing",
+            quality_status=_quality_status_from_exception(exc),
             missing_reason=str(exc),
-            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot, "source_dataset": "hot_topics"},
         )
 
 
@@ -822,9 +902,9 @@ def build_topic_constituents_section(
             provider="kaipan",
             payload={},
             record_count=0,
-            quality_status="missing",
+            quality_status=_quality_status_from_exception(exc),
             missing_reason=str(exc),
-            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot, "source_dataset": "topic_constituents"},
         )
 
 
@@ -854,9 +934,9 @@ def build_strong_symbols_section(
             provider="kaipan",
             payload={},
             record_count=0,
-            quality_status="missing",
+            quality_status=_quality_status_from_exception(exc),
             missing_reason=str(exc),
-            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot},
+            metadata={"trade_date": trade_date.isoformat(), "slot": context.slot, "source_dataset": "strong_symbols"},
         )
 
 

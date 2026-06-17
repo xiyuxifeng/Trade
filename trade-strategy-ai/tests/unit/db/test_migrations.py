@@ -89,3 +89,21 @@ def test_stage5_ohlcv_contract_migration_defines_identity_and_time_fields() -> N
     assert "available_at" in content
     assert "captured_at" in content
     assert "ingested_at" in content
+
+
+def test_stage5_kaipan_contract_migration_defines_slot_provenance_and_freeze_fields() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_17_0009"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_17_0008"' in content
+    assert "source_time" in content
+    assert "frozen_at" in content
+    assert "trade_date" in content
+    assert "source_dataset" in content
+    assert "raw_payload_fingerprint" in content
+    assert "normalization_version" in content
+    assert "uq_market_snapshots_market_date_slot_version" in content

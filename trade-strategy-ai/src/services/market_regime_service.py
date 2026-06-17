@@ -149,7 +149,7 @@ class MarketRegimeService(BaseService):
             )
             regime = MarketRegimeRecord(
                 regime_id=evaluation.regime_id or f"{snapshot.snapshot_id}:{regime_version}",
-                market_snapshot_id=snapshot.id,
+                market_snapshot_id=getattr(snapshot, "id", None),
                 snapshot_id=snapshot.snapshot_id,
                 trade_date=snapshot.trade_date,
                 market=snapshot.market,
@@ -162,7 +162,7 @@ class MarketRegimeService(BaseService):
                 quality_status=evaluation.quality_status,
                 missing_reason=evaluation.missing_reason,
                 storage_ref={"snapshot_id": snapshot.snapshot_id, "regime_version": regime_version, "feature_version": feature.feature_version},
-                available_at=snapshot.available_at,
+                available_at=getattr(snapshot, "available_at", None),
             )
             dataset_record = MarketDataset(
                 dataset_id=f"{snapshot.snapshot_id}:{regime_version}",

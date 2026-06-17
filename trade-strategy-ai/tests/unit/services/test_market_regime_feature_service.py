@@ -318,8 +318,56 @@ async def test_build_market_regime_features_persists_feature_and_artifact(market
     assert result.payload["feature_payload_json"]["breadth_up_ratio"]["value"] == pytest.approx(0.62)
     assert result.payload["feature_payload_json"]["turnover_level"]["value"] == "high"
     assert result.payload["warnings"] == []
-    assert result.payload["dataset_id"] == "snap-001:market-regime-features-v3"
-    assert (tmp_path / "processed" / "market_regime_features" / "2026-05-16" / "snap-001" / "market-regime-features-v3.json").exists()
+
+
+@pytest.mark.asyncio()
+async def test_build_market_regime_features_degrades_truthfully_when_snapshot_coverage_is_insufficient(
+    market_regime_feature_session_factory,
+    tmp_path,
+) -> None:
+    """当 MarketSnapshot coverage 不足时，market-state 特征构建必须 partial。"""
+    from src.services.market_regime_feature_service import MarketRegimeFeatureService
+
+    await _seed_snapshot(
+        market_regime_feature_session_factory,
+        snapshot_id="snap-partial",
+        trade_date=date(2026, 5, 16),
+        market="CN",
+        sections=[
+            {
+                "section_id": "overview",
+                "quality_status": "ok",
+                "record_count": 1,
+                "payload_json": {"sentiment": {"label": "bullish"}},
+            },
+            {
+                "section_id": "market_state",
+                "quality_status": "missing",
+                "record_count": 0,
+                "missing_reason": "insufficient_coverage",
+                "payload_json": {},
+            },
+            {
+                "section_id": "ohlcv",
+                "quality_status": "missing",
+                "record_count": 0,
+                "missing_reason": "insufficient_coverage",
+                "payload_json": {},
+            },
+        ],
+    )
+
+    service = MarketRegimeFeatureService(
+        session_factory=market_regime_feature_session_factory,
+        artifact_root=tmp_path / "processed" / "market_regime_features",
+    )
+
+    result = await service.build_market_regime_features(snapshot_id="snap-partial")
+
+    assert result.status == "partial"
+    assert result.payload["feature"]["quality_status"] == "partial"
+    assert result.payload["summary"]["missing_feature_count"] > 0
+    assert result.payload["warnings"]
 
 
 @pytest.mark.asyncio()

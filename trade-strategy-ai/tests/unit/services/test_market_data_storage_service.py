@@ -79,7 +79,7 @@ async def test_market_data_storage_service_saves_and_loads_snapshot(market_data_
     assert len(loaded.payload["sections"]) == 2
     assert len(loaded.payload["items"]) >= 3
     assert loaded.payload["quality_report"]["snapshot_id"] == "snapshot-2026-05-16"
-    assert loaded.payload["dataset"]["dataset_id"] == "snapshot-2026-05-16:dataset"
+    assert loaded.payload["dataset"] is None
 
 
 @pytest.mark.asyncio()

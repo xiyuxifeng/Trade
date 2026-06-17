@@ -73,58 +73,84 @@ class MarketDataStorageService(BaseService):
         """生成 snapshot 级 dataset_id。"""
         return f"{snapshot.snapshot_id}:dataset"
 
+    def _snapshot_manifest(self, snapshot: MarketSnapshot, *, summary_payload: dict[str, Any] | None) -> dict[str, Any]:
+        """构建用于冻结与追踪的 canonical manifest。"""
+        summary = summary_payload or {}
+        return _to_plain({
+            "trade_date": snapshot.trade_date,
+            "slot": snapshot.slot,
+            "market": snapshot.market,
+            "data_version": snapshot.data_version,
+            "provider_sources": list(snapshot.provider_sources),
+            "summary": summary,
+            "sections": {
+                section_id: {
+                    "trade_date": section.trade_date,
+                    "slot": section.slot,
+                    "source_dataset": section.source_dataset,
+                    "provider": section.provider,
+                    "source_time": section.source_time.isoformat() if section.source_time else None,
+                    "available_at": section.available_at.isoformat() if section.available_at else None,
+                    "record_count": section.record_count,
+                    "missing_reason": section.missing_reason,
+                    "quality_status": section.quality_status,
+                    "raw_payload_fingerprint": section.raw_payload_fingerprint,
+                    "normalization_version": section.normalization_version,
+                    "payload": _to_plain(section.payload),
+                    "metadata": _to_plain(section.metadata),
+                }
+                for section_id, section in sorted(snapshot.sections.items())
+            },
+        })
+
     def _build_snapshot_record(self, snapshot: MarketSnapshot, *, summary_payload: dict[str, Any] | None, quality_payload: dict[str, Any] | None) -> MarketSnapshotRecord:
         """构建 snapshot 主表记录。"""
         summary = summary_payload or {}
         quality = quality_payload or {}
-        captured_at = snapshot.created_at or datetime.now(UTC)
-        manifest = {
-            "sections": sorted(snapshot.sections),
-            "providers": list(snapshot.provider_sources),
-            "summary": summary,
-        }
+        captured_at = snapshot.captured_at or snapshot.created_at or datetime.now(UTC)
+        ingested_at = snapshot.ingested_at or captured_at
+        available_at = snapshot.available_at or captured_at
+        frozen_at = snapshot.frozen_at or snapshot.created_at or ingested_at
+        manifest = self._snapshot_manifest(snapshot, summary_payload=summary_payload)
+        content_fingerprint = snapshot.content_fingerprint or hashlib.sha256(
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
         return MarketSnapshotRecord(
             snapshot_id=snapshot.snapshot_id,
             trade_date=date.fromisoformat(snapshot.trade_date) if isinstance(snapshot.trade_date, str) else snapshot.trade_date,
             market=snapshot.market,
             profile_id=snapshot.metadata.get("profile_id") if isinstance(snapshot.metadata, dict) else None,
             data_version=snapshot.data_version,
-            slot=snapshot.metadata.get("slot", "17-30") if isinstance(snapshot.metadata, dict) else "17-30",
+            slot=snapshot.slot,
             quality_status=summary.get("overall_status") or snapshot.data_quality.get("overall_status", "partial"),
             provider_sources=list(snapshot.provider_sources),
             section_count=int(summary.get("section_count", len(snapshot.sections))),
             available_section_count=int(summary.get("available_section_count", 0)),
             partial_section_count=int(summary.get("partial_section_count", 0)),
             missing_section_count=int(summary.get("missing_section_count", 0)),
-            storage_ref={
+            storage_ref=_to_plain({
                 "snapshot_id": snapshot.snapshot_id,
+                "logical_snapshot_id": snapshot.storage_ref.get("logical_snapshot_id") if isinstance(snapshot.storage_ref, dict) else None,
+                "content_fingerprint": content_fingerprint,
                 "trade_date": snapshot.trade_date,
                 "market": snapshot.market,
-            },
-            summary_artifact_ref={
+            }),
+            summary_artifact_ref=_to_plain({
                 "snapshot_id": snapshot.snapshot_id,
                 "artifact_type": "snapshot-summary-json",
-            },
-            quality_artifact_ref={
+            }),
+            quality_artifact_ref=_to_plain({
                 "snapshot_id": snapshot.snapshot_id,
                 "artifact_type": "snapshot-quality-json",
-            },
-            data_quality={**snapshot.data_quality, "quality_report": quality},
+            }),
+            data_quality=_to_plain({**snapshot.data_quality, "quality_report": quality}),
+            source_time=snapshot.source_time,
             captured_at=captured_at,
-            available_at=captured_at,
-            effective_at=captured_at,
-            content_fingerprint=hashlib.sha256(
-                json.dumps(
-                    {
-                        "snapshot_id": snapshot.snapshot_id,
-                        "data_version": snapshot.data_version,
-                        "manifest": manifest,
-                    },
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    default=str,
-                ).encode("utf-8")
-            ).hexdigest(),
+            ingested_at=ingested_at,
+            available_at=available_at,
+            effective_at=frozen_at,
+            frozen_at=frozen_at,
+            content_fingerprint=content_fingerprint,
             manifest_json=manifest,
         )
 
@@ -133,16 +159,24 @@ class MarketDataStorageService(BaseService):
         return MarketSnapshotSection(
             snapshot_id=snapshot.snapshot_id,
             section_id=section_id,
+            trade_date=date.fromisoformat(section.trade_date or snapshot.trade_date),
+            slot=section.slot or snapshot.slot,
+            source_dataset=section.source_dataset or section_id,
             provider=section.provider,
             source_time=section.source_time,
+            captured_at=section.captured_at,
+            ingested_at=section.ingested_at,
+            available_at=section.available_at,
             record_count=section.record_count,
             missing_reason=section.missing_reason,
             quality_status=section.quality_status,
             section_version=section.metadata.get("section_version") if isinstance(section.metadata, dict) else None,
-            storage_ref={
+            raw_payload_fingerprint=section.raw_payload_fingerprint,
+            normalization_version=section.normalization_version,
+            storage_ref=_to_plain({
                 "snapshot_id": snapshot.snapshot_id,
                 "section_id": section_id,
-            },
+            }),
             payload_json=_to_plain(section.payload),
         )
 

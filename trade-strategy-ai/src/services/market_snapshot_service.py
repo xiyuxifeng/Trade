@@ -8,6 +8,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from src.common.config import load_app_config
 from src.models.market_snapshot import MarketSnapshot, MarketSnapshotBuildContext, MarketSnapshotSection
@@ -20,6 +21,14 @@ from src.services.market_service import MarketService
 from src.services.market_snapshot_builders import build_default_market_snapshot_registry
 from src.services.market_snapshot_registry import MarketSnapshotRegistry
 from src.services.persona_service import PersonaService
+
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+CANONICAL_SLOT_TIMES: dict[str, tuple[int, int]] = {
+    "09-25": (9, 25),
+    "17-30": (17, 30),
+}
+CANONICAL_SNAPSHOT_VERSION = "market-snapshot-v2"
+KAIPAN_NORMALIZATION_VERSION = "kaipan-normalizer-v2"
 
 
 def _project_base_dir(config_path: Path) -> Path:
@@ -70,6 +79,57 @@ def _write_json_atomic(path: Path, payload: Any) -> Path:
     tmp_path.write_text(json.dumps(_to_plain(payload), ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp_path, path)
     return path
+
+
+def _slot_timestamp_utc(trade_date: str | date, slot: str) -> datetime:
+    """返回 slot 对应的 Asia/Shanghai canonical UTC 时间。"""
+    trade_day = trade_date if isinstance(trade_date, date) else date.fromisoformat(trade_date)
+    hour, minute = CANONICAL_SLOT_TIMES.get(slot, CANONICAL_SLOT_TIMES["17-30"])
+    return datetime(
+        trade_day.year,
+        trade_day.month,
+        trade_day.day,
+        hour,
+        minute,
+        tzinfo=SHANGHAI,
+    ).astimezone(UTC)
+
+
+def _section_payload_fingerprint(section_id: str, payload: dict[str, Any], metadata: dict[str, Any]) -> str:
+    """为 raw/normalized traceability 生成稳定指纹。"""
+    seed = _stable_json({"section_id": section_id, "payload": payload, "metadata": metadata})
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _snapshot_content_fingerprint(*, trade_date: str, slot: str, market: str, data_version: str, sections: dict[str, MarketSnapshotSection]) -> str:
+    """按 canonical 内容生成 MarketSnapshot content fingerprint。"""
+    seed = _stable_json(
+        {
+            "trade_date": trade_date,
+            "slot": slot,
+            "market": market,
+            "data_version": data_version,
+            "sections": {
+                section_id: {
+                    "trade_date": section.trade_date,
+                    "slot": section.slot,
+                    "source_dataset": section.source_dataset,
+                    "provider": section.provider,
+                    "source_time": section.source_time,
+                    "available_at": section.available_at,
+                    "record_count": section.record_count,
+                    "missing_reason": section.missing_reason,
+                    "quality_status": section.quality_status,
+                    "raw_payload_fingerprint": section.raw_payload_fingerprint,
+                    "normalization_version": section.normalization_version,
+                    "payload": section.payload,
+                    "metadata": section.metadata,
+                }
+                for section_id, section in sorted(sections.items())
+            },
+        }
+    )
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
 
 class MarketSnapshotService(BaseService):
@@ -143,19 +203,9 @@ class MarketSnapshotService(BaseService):
         candidate_pool_service = UniverseSnapshotService(base_dir=self._candidate_pool_root(base_dir=base_dir, loaded=loaded))
         return candidate_pool_service.load(trade_date, slot)
 
-    def _snapshot_id(self, *, trade_date: str, slot: str, market: str, data_version: str, sections: dict[str, MarketSnapshotSection]) -> str:
+    def _snapshot_id(self, *, trade_date: str, slot: str, content_fingerprint: str) -> str:
         """生成稳定的 snapshot_id。"""
-        seed = _stable_json(
-            {
-                "trade_date": trade_date,
-                "slot": slot,
-                "market": market,
-                "data_version": data_version,
-                "sections": {section_id: {"quality_status": section.quality_status, "record_count": section.record_count} for section_id, section in sections.items()},
-            }
-        )
-        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
-        return f"market-snapshot-{trade_date}-{slot}-{digest}"
+        return f"market-snapshot-{trade_date}-{slot}-{content_fingerprint[:16]}"
 
     def _build_section_results(self, sections: dict[str, MarketSnapshotSection]) -> list[dict[str, Any]]:
         """把 section 结果整理成 summary 用结构。"""
@@ -183,19 +233,24 @@ class MarketSnapshotService(BaseService):
         available = [item for item in section_results if item["quality_status"] == "ok"]
         partial = [item for item in section_results if item["quality_status"] == "partial"]
         missing = [item for item in section_results if item["quality_status"] == "missing"]
+        unavailable = [item for item in section_results if item["quality_status"] == "unavailable"]
         return {
             "snapshot_id": snapshot.snapshot_id,
             "trade_date": snapshot.trade_date,
+            "slot": snapshot.slot,
             "market": snapshot.market,
             "data_version": snapshot.data_version,
             "created_at": snapshot.created_at,
+            "available_at": snapshot.available_at,
+            "frozen_at": snapshot.frozen_at,
             "section_count": section_count,
             "available_section_count": len(available),
             "partial_section_count": len(partial),
-            "missing_section_count": len(missing),
+            "missing_section_count": len(missing) + len(unavailable),
+            "unavailable_section_count": len(unavailable),
             "coverage_rate": round(len(available) / section_count, 4) if section_count else 0.0,
             "section_ids": list(snapshot.sections.keys()),
-            "missing_sections": [item["section_id"] for item in missing],
+            "missing_sections": [item["section_id"] for item in [*missing, *unavailable]],
             "provider_sources": snapshot.provider_sources,
             "sections": section_results,
             "metadata": snapshot.metadata,
@@ -208,16 +263,21 @@ class MarketSnapshotService(BaseService):
         section_results: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """生成数据质量报告。"""
-        overall_status = "ok"
-        if any(item["quality_status"] == "partial" for item in section_results):
+        statuses = {item["quality_status"] for item in section_results}
+        if "conflict" in statuses:
+            overall_status = "conflict"
+        elif "invalid" in statuses:
+            overall_status = "invalid"
+        elif statuses and statuses <= {"missing", "unavailable"}:
+            overall_status = "unavailable" if "unavailable" in statuses else "missing"
+        elif {"partial", "missing", "unavailable", "insufficient_coverage"} & statuses:
             overall_status = "partial"
-        if any(item["quality_status"] == "missing" for item in section_results):
-            overall_status = "partial"
-        if section_results and all(item["quality_status"] == "missing" for item in section_results):
-            overall_status = "missing"
+        else:
+            overall_status = "ok"
         return {
             "snapshot_id": snapshot.snapshot_id,
             "trade_date": snapshot.trade_date,
+            "slot": snapshot.slot,
             "market": snapshot.market,
             "data_version": snapshot.data_version,
             "overall_status": overall_status,
@@ -228,6 +288,7 @@ class MarketSnapshotService(BaseService):
                 "ok_count": sum(1 for item in section_results if item["quality_status"] == "ok"),
                 "partial_count": sum(1 for item in section_results if item["quality_status"] == "partial"),
                 "missing_count": sum(1 for item in section_results if item["quality_status"] == "missing"),
+                "unavailable_count": sum(1 for item in section_results if item["quality_status"] == "unavailable"),
             },
         }
 
@@ -306,33 +367,58 @@ class MarketSnapshotService(BaseService):
             if section.quality_status != "ok" and section.missing_reason:
                 warnings.append(f"{builder.section_id}: {section.missing_reason}")
 
-        snapshot_id = self._snapshot_id(
+        content_fingerprint = _snapshot_content_fingerprint(
             trade_date=context.trade_date,
             slot=context.slot,
             market=context.market,
-            data_version="market-snapshot-v1",
+            data_version=CANONICAL_SNAPSHOT_VERSION,
             sections=sections,
+        )
+        snapshot_id = self._snapshot_id(
+            trade_date=context.trade_date,
+            slot=context.slot,
+            content_fingerprint=content_fingerprint,
         )
         provider_sources = []
         for section in sections.values():
             if section.provider and section.provider not in provider_sources:
                 provider_sources.append(section.provider)
+        section_source_times = [section.source_time for section in sections.values() if section.source_time is not None]
+        section_captured_at = [section.captured_at for section in sections.values() if section.captured_at is not None]
+        section_ingested_at = [section.ingested_at for section in sections.values() if section.ingested_at is not None]
+        section_available_at = [section.available_at for section in sections.values() if section.available_at is not None]
+        snapshot_available_at = max(section_available_at, default=_slot_timestamp_utc(context.trade_date, context.slot))
+        snapshot_ingested_at = max(section_ingested_at, default=snapshot_available_at)
+        snapshot_captured_at = max(section_captured_at, default=snapshot_available_at)
+        snapshot_source_time = max(section_source_times, default=None)
 
         snapshot = MarketSnapshot(
             snapshot_id=snapshot_id,
             trade_date=context.trade_date,
+            slot=context.slot,
             market=context.market,
-            data_version="market-snapshot-v1",
+            data_version=CANONICAL_SNAPSHOT_VERSION,
             provider_sources=provider_sources,
-            created_at=datetime.now(UTC),
+            source_time=snapshot_source_time,
+            captured_at=snapshot_captured_at,
+            ingested_at=snapshot_ingested_at,
+            available_at=snapshot_available_at,
+            frozen_at=snapshot_ingested_at,
+            content_fingerprint=content_fingerprint,
+            created_at=snapshot_ingested_at,
             data_quality={
                 "overall_status": "ok" if not warnings else "partial",
                 "section_count": len(section_results),
                 "ok_count": sum(1 for item in section_results if item["quality_status"] == "ok"),
                 "partial_count": sum(1 for item in section_results if item["quality_status"] == "partial"),
                 "missing_count": sum(1 for item in section_results if item["quality_status"] == "missing"),
+                "unavailable_count": sum(1 for item in section_results if item["quality_status"] == "unavailable"),
             },
             sections=sections,
+            storage_ref={
+                "logical_snapshot_id": f"kaipan:{context.market}:{context.trade_date}:{context.slot}",
+                "content_fingerprint": content_fingerprint,
+            },
             metadata={
                 "config_ref": _relative_path_or_name(loaded.config_path, base_dir),
                 "slot": slot,
@@ -344,6 +430,7 @@ class MarketSnapshotService(BaseService):
                 "candidate_pool_path": str(
                     self._candidate_pool_root(base_dir=base_dir, loaded=loaded) / trade_date / f"{slot}.json"
                 ),
+                "normalization_version": KAIPAN_NORMALIZATION_VERSION,
                 # 兼容字段：仅供内部加载器 / 回测复用，不作为新的对外快照入口。
                 "candidate_pool": candidate_pool,
             },
@@ -446,22 +533,38 @@ class MarketSnapshotService(BaseService):
                     continue
                 sections[section_id] = MarketSnapshotSection(
                     section_id=section_payload.get("section_id", section_id),
+                    trade_date=section_payload.get("trade_date"),
+                    slot=section_payload.get("slot"),
+                    source_dataset=section_payload.get("source_dataset"),
                     provider=section_payload.get("provider"),
                     source_time=datetime.fromisoformat(section_payload["source_time"]) if section_payload.get("source_time") else None,
+                    captured_at=datetime.fromisoformat(section_payload["captured_at"]) if section_payload.get("captured_at") else None,
+                    ingested_at=datetime.fromisoformat(section_payload["ingested_at"]) if section_payload.get("ingested_at") else None,
+                    available_at=datetime.fromisoformat(section_payload["available_at"]) if section_payload.get("available_at") else None,
                     record_count=int(section_payload.get("record_count", 0)),
                     missing_reason=section_payload.get("missing_reason"),
                     quality_status=section_payload.get("quality_status", "missing"),
+                    raw_payload_fingerprint=section_payload.get("raw_payload_fingerprint"),
+                    normalization_version=section_payload.get("normalization_version"),
                     payload=section_payload.get("payload", {}) if isinstance(section_payload.get("payload"), dict) else {},
                     metadata=section_payload.get("metadata", {}) if isinstance(section_payload.get("metadata"), dict) else {},
                 )
         return MarketSnapshot(
             snapshot_id=payload.get("snapshot_id", ""),
             trade_date=payload.get("trade_date", trade_date),
+            slot=payload.get("slot", slot),
             market=payload.get("market", "CN"),
-            data_version=payload.get("data_version", "market-snapshot-v1"),
+            data_version=payload.get("data_version", CANONICAL_SNAPSHOT_VERSION),
             provider_sources=payload.get("provider_sources", []),
+            source_time=datetime.fromisoformat(payload["source_time"]) if payload.get("source_time") else None,
+            captured_at=datetime.fromisoformat(payload["captured_at"]) if payload.get("captured_at") else None,
+            ingested_at=datetime.fromisoformat(payload["ingested_at"]) if payload.get("ingested_at") else None,
+            available_at=datetime.fromisoformat(payload["available_at"]) if payload.get("available_at") else None,
+            frozen_at=datetime.fromisoformat(payload["frozen_at"]) if payload.get("frozen_at") else None,
+            content_fingerprint=payload.get("content_fingerprint"),
             created_at=datetime.fromisoformat(payload["created_at"]) if payload.get("created_at") else datetime.now(UTC),
             data_quality=payload.get("data_quality", {}),
             sections=sections,
+            storage_ref=payload.get("storage_ref", {}) if isinstance(payload.get("storage_ref"), dict) else {},
             metadata=payload.get("metadata", {}),
         )

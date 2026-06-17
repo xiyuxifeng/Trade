@@ -16,10 +16,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 5 基础数据、数据调度与数据质量`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`Stage 5 Bootstrap` 已完成。
+- 当前 Task：`RT-S5-002 Kaipan 数据体系` 已完成。
 - 计划：[Stage 5 实施计划](refactor-implementation-plans/stage-5-implementation-plan.md)
 - 详细日志：[Stage 5](refactor-implementation-logs/stage-5.md)
-- 下一步：可开始 `RT-S5-001 OHLCV 数据体系`；不得自动开始，需用户明确授权。
+- 下一步：可开始 `RT-S5-003 调度和系统管理`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -35,7 +35,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
 - Stage 4 Gate 最终 `ACCEPTED`；Stage 5 Bootstrap may begin after explicit user instruction.
 - 2026-06-17 已完成 Stage 4 Pre-Stage-5 cleanup review；异步数据库清理 warning、批量审核原子性、正式变更入口授权和低风险批量合同一致性均已复验并修复/核实。
-- 2026-06-17 已完成 Stage 5 Bootstrap；Stage 5 计划、数据/时间/快照合同、兼容/退役边界和执行顺序已冻结；`RT-S5-001` may begin after explicit user instruction.
+- 2026-06-17 已完成 Stage 5 Bootstrap；Stage 5 计划、数据/时间/快照合同、兼容/退役边界和执行顺序已冻结。
+- 2026-06-17 `RT-S5-001` 已接受；OHLCV/DatasetSnapshot canonical contract 已落地。
+- 2026-06-17 `RT-S5-002` 已接受；Kaipan/MarketSnapshot canonical slot、provenance、freeze 与 market-state coverage boundary 已落地。
 
 ## Task 状态
 
@@ -58,7 +60,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S4-001 | `[x]` | deterministic automatic review、canonical human-review service/router/workbench、batch approve/reject、审计与 fixed-set gate 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | Stage 5 Bootstrap | `[x]` | Stage 5 范围、数据时间语义、DatasetSnapshot/MarketSnapshot 合同、兼容/退役边界、执行顺序和 RT-S5-001 next prompt 已冻结；未实施生产代码 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-001 | `[x]` | OHLCV canonical identity/time/provenance、calendar-aware gap repair、indicator invalidation boundary、canonical `dataset_snapshots` runtime path 与 immutable snapshot freeze 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-002 | `[ ]` | Kaipan 数据体系；可与 RT-S5-001 同 Parent session 但必须 separate acceptance batch | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-002 | `[x]` | Kaipan canonical slot/time/provenance、truthful coverage/availability、immutable MarketSnapshot freeze、market-state recompute boundary、compatibility read surfaces 与 migration/test evidence 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-003 | `[ ]` | 调度和系统管理；数据合同稳定后后置单独执行 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 状态
@@ -70,7 +72,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
-| Stage 5 | `[-]` | Bootstrap accepted；RT-S5-001 accepted；RT-S5-002/003 pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 5 | `[-]` | Bootstrap accepted；RT-S5-001 and RT-S5-002 accepted；RT-S5-003 pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -172,6 +174,47 @@ trade-strategy-ai/docs/refactor-implementation-logs/
   - Stage 6 当前仍从 DB 读取 OHLCV 并按需计算指标；本任务只交付其所需 canonical data contract，不包含 Stage 6 runtime 切换或 backtest 执行。
   - 当前 Web 仍保留技术型 market workspace/调度页面；普通用户正式“数据与调度”入口收口属于 `RT-S5-003`。
 - 验收结论：`RT-S5-001 ACCEPTED`。OHLCV canonical identity/time/provenance、calendar-aware repair、truthful availability、indicator invalidation boundary、immutable DatasetSnapshot freeze、canonical dataset runtime path 与受影响回归验证均满足当前 Stage 5 冻结合同；`RT-S5-002` 可在新 acceptance batch 中开始，但不得自动开始。
+
+## 2026-06-17 RT-S5-002 Kaipan 数据体系
+
+- Task ID：`RT-S5-002`
+- 状态：`[x] 已完成`
+- 修改范围：`src/models/market_snapshot.py`、`src/models/market_data_snapshot.py`、`src/models/market_data_snapshot_section.py`、`src/services/market_snapshot_builders.py`、`src/services/market_snapshot_service.py`、`src/services/market_data_storage_service.py`、`src/db/repositories/market_snapshot_repository.py`、`src/db/repositories/market_snapshot_section_repository.py`、`src/services/market_regime_service.py`、`src/models/__init__.py`、`src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py`、相关 unit/api/frontend tests、Stage 5 docs/logs。
+- 关键决定：
+  - Kaipan canonical slot 固定为 `09-25`（盘前）和 `17-30`（盘后）；两者形成不同 formal snapshot identity，不得合并或互相覆写。
+  - `MarketSnapshot` formal source 继续为 `market_snapshots` 及 child tables；formal identity 改为 `content_fingerprint` + immutable `snapshot_id`，允许同一 `trade_date/slot` 在内容变化时形成新 frozen version。
+  - `MarketSnapshotSection` 与 snapshot 主记录显式记录 `source_time`、`captured_at`、`ingested_at`、`available_at`、`trade_date`、`slot`、`source_dataset`、`raw_payload_fingerprint`、`normalization_version`；缺失/历史 unavailable 不伪造时间。
+  - canonical payload 会移除 `fetched_at` 这类 rerun 易变字段，保证 normalization/freeze fingerprint deterministic；同内容 rerun 复用同一 frozen snapshot identity。
+  - 历史 Kaipan 不可得时保持 `unavailable/missing/partial` truthful semantics，不合成历史盘前/盘后内容，不把缺失 Kaipan 转成 `false`、`0`、`ready` 或 satisfied rule condition。
+  - `market_datasets` compatibility write 继续拒绝；legacy/file snapshot paths 保留 compatibility-only，formal runtime source 不回退。
+  - market-state recompute 继续绑定 canonical snapshot + OHLCV/indicator coverage；当 snapshot coverage 不足时，feature/regime 构建维持 truthful `partial`/warning，而不是伪造 ready。
+- 数据库迁移：新增 `src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py`，补齐 `market_snapshots`/`market_snapshot_sections` 的 slot/provenance/freeze 字段，移除会阻塞 versioned snapshot 的 `(market, trade_date, slot, data_version)` 唯一约束，并在 downgrade 会塌缩 frozen version 时显式拒绝。
+- 兼容处理：
+  - `market_datasets` 继续 compatibility read-only；相关 repository tests 已切到拒写预期。
+  - file-based snapshot 路径仍保留给 compatibility loader/UI，但 formal snapshot freeze 语义由 DB canonical records 承担。
+  - 现有 `/api/ui/v1/kaipan/*`、market workspace、snapshot browser 和 legacy snapshot routes 保持入口，只修复为 truthful slot/coverage/readiness 表达。
+- 已运行测试：
+  - `../.venv/bin/python -m pytest tests/unit/models/test_market_snapshot.py tests/unit/providers/test_kaipan_provider.py tests/unit/providers/test_kaipan_normalizer.py tests/providers/test_kaipan_scheduler.py tests/providers/test_kaipan_pipeline.py tests/unit/services/test_market_snapshot_builders.py tests/unit/services/test_market_snapshot_registry.py tests/unit/services/test_market_snapshot_service.py tests/unit/services/test_market_data_storage_service.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_market_regime_feature_service.py tests/unit/services/test_market_regime_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/services/test_kaipan_dashboard_service.py tests/api/routers/ui/test_kaipan.py tests/api/routers/test_ui_snapshots.py tests/api/routers/test_market_ui.py tests/unit/db/repositories/test_market_data_repositories.py tests/unit/db/test_migrations.py -q`
+  - `pnpm vitest run src/features/market-workspace/market-workspace-shell.test.tsx src/pages/market/snapshots/index.test.tsx src/pages/market/index.test.tsx`
+  - `pnpm typecheck`
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - `../.venv/bin/python -m compileall src api cli`
+  - `git diff --check`
+- 测试结果：
+  - Focused backend/API/provider/database/migration/market-state suite：`119 passed`
+  - Frontend targeted suite：`14 passed`
+  - TypeScript：passed
+  - Stage 3 fixed-set regression：`{"status":"passed","article_count":12,"processed_count":12,"validation_failures":[]}`
+  - `compileall`：passed
+  - `git diff --check`：passed
+- 未完成项：
+  - `RT-S5-003` 调度与系统管理正式收口未开始。
+  - Stage 6 backtest execution / rule applicability 仍未开始。
+- 已知风险：
+  - 本次 migration 证据仍以 migration-definition tests、downgrade guard、sqlite runtime path 与 code review 为主；未在本 session 内额外执行独立 PostgreSQL upgrade/downgrade/re-upgrade operational replay。
+  - raw Kaipan 历史可用性仍受 provider/credential/network 限制；本批 acceptance 以 deterministic fixtures/fake providers 验证合同，不代表外部 provider 对所有历史日期都可 operational 成功。
+  - formal normal-user 数据与调度入口收口仍属于 `RT-S5-003`；当前 Web 仍保留 admin/compatibility technical surfaces。
+- 验收结论：`RT-S5-002 ACCEPTED`。Kaipan canonical slot/time/provenance、truthful historical availability、idempotent freeze/retry/rerun、immutable versioned `MarketSnapshot`、market-state truthful degradation、compatibility-only legacy paths 与受影响回归验证满足当前 Stage 5 冻结合同；`RT-S5-003` 可在新 acceptance batch 中开始，但不得自动开始。
 
 ## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review
 

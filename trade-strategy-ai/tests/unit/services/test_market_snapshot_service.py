@@ -357,6 +357,134 @@ def test_market_snapshot_service_reports_partial_coverage(tmp_path: Path) -> Non
     assert any("overview" in warning or "sector_activity" in warning for warning in result.warnings)
 
 
+def test_market_snapshot_service_freezes_slot_specific_snapshot_identity_and_time(tmp_path: Path) -> None:
+    """09-25 与 17-30 快照必须分槽冻结，且可用时间不可碰撞。"""
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    pre_market = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="09-25",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+    post_close = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="17-30",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+
+    assert pre_market.payload["snapshot"]["slot"] == "09-25"
+    assert post_close.payload["snapshot"]["slot"] == "17-30"
+    assert pre_market.payload["snapshot_id"] != post_close.payload["snapshot_id"]
+    assert pre_market.payload["snapshot"]["available_at"] != post_close.payload["snapshot"]["available_at"]
+
+
+def test_market_snapshot_service_is_idempotent_for_same_slot_content(tmp_path: Path) -> None:
+    """同一 trade_date/slot 内容不变时，freeze 应复用同一 snapshot identity。"""
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _FakeProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    first = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="17-30",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+    second = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-16",
+            slot="17-30",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+
+    assert first.payload["snapshot_id"] == second.payload["snapshot_id"]
+    assert first.payload["snapshot"]["content_fingerprint"] == second.payload["snapshot"]["content_fingerprint"]
+
+
+def test_market_snapshot_service_marks_missing_historical_kaipan_as_unavailable(tmp_path: Path) -> None:
+    """历史 Kaipan 数据不存在时，必须 truthful partial/unavailable，不得伪造成功。"""
+    from src.services.market_snapshot_service import MarketSnapshotService
+
+    class _UnavailableProvider(_FakeProvider):
+        def fetch_hot_topics(self, *, trade_date, slot, offline=False):
+            raise RuntimeError("historical kaipan unavailable")
+
+        def fetch_topic_constituents(self, *, trade_date, slot, offline=False):
+            raise RuntimeError("historical kaipan unavailable")
+
+        def fetch_strong_symbols(self, *, trade_date, slot, offline=False):
+            raise RuntimeError("historical kaipan unavailable")
+
+    config_path = tmp_path / "config" / "app.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("timezone: Asia/Shanghai\ntraders: []\n", encoding="utf-8")
+
+    service = MarketSnapshotService(
+        provider_factory=lambda **kwargs: _UnavailableProvider(raw_dir=tmp_path / "raw"),
+        market_service=_FakeMarketService(),
+        persona_service=_FakePersonaService(),
+        snapshot_root=tmp_path / "market_snapshot",
+    )
+
+    result = asyncio.run(
+        service.build_market_snapshot(
+            config_path=config_path,
+            benchmark_symbol="000300.SH",
+            trade_date="2026-05-01",
+            slot="09-25",
+            profile_id="default",
+            offline=False,
+            force=True,
+        )
+    )
+
+    assert result.status == "partial"
+    assert result.payload["snapshot"]["data_quality"]["overall_status"] in {"partial", "unavailable"}
+    assert any("unavailable" in warning for warning in result.warnings)
+
+
 @pytest.mark.asyncio()
 async def test_market_snapshot_service_persists_snapshot_to_database(tmp_path: Path, market_data_session_factory) -> None:
     """MarketSnapshotService 真实编排路径应把 snapshot 写入 DB。"""
@@ -390,4 +518,4 @@ async def test_market_snapshot_service_persists_snapshot_to_database(tmp_path: P
     assert result.payload["db_storage"]["snapshot_id"] == result.payload["snapshot_id"]
     assert loaded.status == "ok"
     assert loaded.payload["snapshot"]["snapshot_id"] == result.payload["snapshot_id"]
-    assert loaded.payload["dataset"]["dataset_id"] == f"{result.payload['snapshot_id']}:dataset"
+    assert loaded.payload["dataset"] is None

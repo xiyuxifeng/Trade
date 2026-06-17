@@ -25,12 +25,20 @@ class MarketSnapshotSectionRepository:
             return section
 
         for field in (
+            "trade_date",
+            "slot",
+            "source_dataset",
             "provider",
             "source_time",
+            "captured_at",
+            "ingested_at",
+            "available_at",
             "record_count",
             "missing_reason",
             "quality_status",
             "section_version",
+            "raw_payload_fingerprint",
+            "normalization_version",
             "storage_ref",
             "payload_json",
         ):

@@ -14,16 +14,16 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 ## 当前状态
 
-- 当前 Stage：`Stage 4 规则管理、去重和规则族`
-- Stage 状态：`[x] 已完成`
-- 当前 Task：`Stage 4 Review and Gate` 已接受。
-- 计划：[Stage 4 实施计划](refactor-implementation-plans/stage-4-implementation-plan.md)
-- 详细日志：[Stage 4](refactor-implementation-logs/stage-4.md)
-- 下一步：可开始 `Stage 5 Bootstrap`；不得自动开始，需用户明确授权。
+- 当前 Stage：`Stage 5 基础数据、数据调度与数据质量`
+- Stage 状态：`[-] 进行中`
+- 当前 Task：`Stage 5 Bootstrap` 已完成。
+- 计划：[Stage 5 实施计划](refactor-implementation-plans/stage-5-implementation-plan.md)
+- 详细日志：[Stage 5](refactor-implementation-logs/stage-5.md)
+- 下一步：可开始 `RT-S5-001 OHLCV 数据体系`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
-- 当前无 Stage 4 Bootstrap blocker。
+- 当前无 Stage 5 Bootstrap blocker。
 - Stage 2 Gate 最终 `ACCEPTED`。
 - Stage 3 Bootstrap 已复核 canonical writer effective true、legacy writer rejection 和 no dual-write；当前无 Bootstrap blocker。
 - RT-S3-001 已接受；Stage 3 canonical Prompt registry、Pydantic Schema、Prompt runtime foundation 和 canonical PromptRun/ArticleStructure/RuleCandidate 写入已建立。
@@ -35,6 +35,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
 - Stage 4 Gate 最终 `ACCEPTED`；Stage 5 Bootstrap may begin after explicit user instruction.
 - 2026-06-17 已完成 Stage 4 Pre-Stage-5 cleanup review；异步数据库清理 warning、批量审核原子性、正式变更入口授权和低风险批量合同一致性均已复验并修复/核实。
+- 2026-06-17 已完成 Stage 5 Bootstrap；Stage 5 计划、数据/时间/快照合同、兼容/退役边界和执行顺序已冻结；`RT-S5-001` may begin after explicit user instruction.
 
 ## Task 状态
 
@@ -55,6 +56,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S4-002 | `[x]` | canonical fingerprint/family/runtime、duplicate/variant/conflict detection、source-link provenance、fixed-set gate enforcement、focused API/schema/migration/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | RT-S4-003 | `[x]` | canonical 规则生命周期、单一路径 transition/audit、idempotency/stale-write 保护、legacy rule_pool 拒写和 focused API/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | RT-S4-001 | `[x]` | deterministic automatic review、canonical human-review service/router/workbench、batch approve/reject、审计与 fixed-set gate 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| Stage 5 Bootstrap | `[x]` | Stage 5 范围、数据时间语义、DatasetSnapshot/MarketSnapshot 合同、兼容/退役边界、执行顺序和 RT-S5-001 next prompt 已冻结；未实施生产代码 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-001 | `[ ]` | OHLCV 数据体系；下一可执行 Task，需用户明确授权 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-002 | `[ ]` | Kaipan 数据体系；可与 RT-S5-001 同 Parent session 但必须 separate acceptance batch | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-003 | `[ ]` | 调度和系统管理；数据合同稳定后后置单独执行 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 状态
 
@@ -65,6 +70,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
+| Stage 5 | `[-]` | Bootstrap `READY`；Stage 5 plan and contracts frozen；RT-S5-001 may begin after explicit user authorization | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -98,6 +104,33 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - legacy `rule_pool` / `strategy_studio` UI 与 CLI 写路径已在 RT-S4-003 显式拒绝 formal lifecycle 写入；RT-S4-001 已新增 `/rules/review` 正式审核工作台和 canonical `/api/ui/v1/rule-review` 写路径。
 - RT-S4-001 automatic review 使用五状态：`auto_pass`、`recommend_pass`、`manual_review`、`not_backtestable`、`recommend_reject`。其中低风险批量通过只允许 `auto_pass/recommend_pass`，会全批预检后把可回测的新规则推进到 `待回测`；精确重复规则复用既有 RuleVersion 且不重复进入回测；批量驳回只允许 `recommend_reject/not_backtestable`；全部 formal mutation 继续受 fixed-set gate 约束。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
+- Stage 5 Bootstrap 冻结：`DatasetSnapshot` formal source is `dataset_snapshots`；`market_datasets` is compatibility read-only under canonical writer routing；`MarketSnapshot` formal source is `market_snapshots` and child tables；missing data must remain truthful and must not become false/zero/success.
+- Stage 5 Bootstrap 冻结：`RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Stage 5 Gate；`RT-S5-003` must not start until data contracts stabilize；Stage 6 backtest execution remains out of scope.
+
+## 2026-06-17 Stage 5 Bootstrap
+
+- Task ID：`Stage 5 Bootstrap`
+- 状态：`[x] 已完成`
+- 修改范围：`docs/refactor-implementation-plans/stage-5-implementation-plan.md`、`docs/refactor-implementation-logs/stage-5.md`、`docs/Refactor-Implementation-Log.md`
+- 关键决定：
+  - Stage 5 task order 冻结为 `RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Gate。
+  - `RT-S5-001` 与 `RT-S5-002` 可以在同一 Parent session 中分 acceptance batch 执行；`RT-S5-003` 后置且单独执行。
+  - Stage 5 time contract 区分 `trade_date`、event/source/captured/ingested/available time，并要求 `Asia/Shanghai` 调度语义和无未来数据泄漏。
+  - `DatasetSnapshot` formal source 为 `dataset_snapshots`；`market_datasets` 仅 compatibility read-only。
+  - `MarketSnapshot` formal source 为 `market_snapshots` 及 child tables。
+  - OHLCV missing numeric data 不得继续默认为 0；必须进入 validation/quality/rejection path。
+  - 正式用户表面必须使用业务中文；调度和作业系统保留为内部执行基础设施。
+- 数据库迁移：Bootstrap 未新增迁移；计划识别 RT-S5-001/002 需要新增 OHLCV provenance/time/quality、canonical DatasetSnapshot runtime path、coverage/repair、Kaipan provenance/coverage 和 snapshot immutability 相关迁移。
+- 兼容处理：保留 legacy `/market*`、`/api/ui/v1/kaipan/*`、`/api/ui/v1/market/ohlcv/*`、legacy snapshot routes、`market_universe` files、`market_datasets` view、technical Job/Workflow/Pipeline/Artifact routes 为 compatibility-only until retirement evidence.
+- 已运行测试：未运行测试；Bootstrap 为 analysis and planning only。
+- 测试结果：不适用。
+- 未完成项：`RT-S5-001`、`RT-S5-002`、`RT-S5-003` 均未开始。
+- 已知风险：
+  - OHLCV 当前实现仍存在 missing numeric -> zero 风险，需 RT-S5-001 修复。
+  - DatasetSnapshot runtime 仍混用 `MarketDataset` compatibility read path，需 RT-S5-001 收敛。
+  - 调度/系统管理入口仍分散，需 RT-S5-003 在数据合同稳定后收口。
+  - Web compatibility body copy 仍有技术词暴露，需 RT-S5-003 修复。
+- 验收结论：Bootstrap `READY`；`RT-S5-001` 可在用户明确授权后开始；不得自动开始。
 
 ## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review
 
@@ -138,7 +171,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 新 Session 或恢复任务时：
 
 1. 先读本文件。
-2. 读取 Stage 4 计划和详细日志。
+2. 读取 Stage 5 计划和详细日志。
 3. 再读当前 Task Card、上游 handoff、当前 `git status` 和完整 diff。
 4. 不默认读取已完成 Stage 详细日志；仅在 single-writer 证据失效或合同冲突时回读 Stage 2。
 

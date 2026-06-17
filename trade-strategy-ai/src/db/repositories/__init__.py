@@ -1,4 +1,5 @@
 from src.db.repositories.market_data_quality_repository import MarketDataQualityRepository
+from src.db.repositories.dataset_snapshot_repository import DatasetSnapshotRepository
 from src.db.repositories.market_dataset_repository import MarketDatasetRepository
 from src.db.repositories.backtest_result_run_repository import BacktestResultRunRepository
 from src.db.repositories.market_regime_repository import MarketRegimeRepository
@@ -15,6 +16,7 @@ __all__ = [
     "MarketSnapshotRepository",
     "MarketSnapshotSectionRepository",
     "MarketSnapshotItemRepository",
+    "DatasetSnapshotRepository",
     "MarketDatasetRepository",
     "MarketDataQualityRepository",
     "BacktestResultRunRepository",

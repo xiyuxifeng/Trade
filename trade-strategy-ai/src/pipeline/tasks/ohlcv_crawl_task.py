@@ -29,6 +29,7 @@ async def handle_ohlcv_crawl(
     """
     from config.database import get_session_factory
     from src.market_data.ohlcv_service import OHLCVService
+    from src.services.dataset_snapshot_service import DatasetSnapshotService
 
     mode = details.get("mode", "incremental")
     symbols = details.get("symbols")
@@ -91,6 +92,21 @@ async def handle_ohlcv_crawl(
             start_date=end_date,
             end_date=end_date,
             market_kind_by_symbol=market_kind_by_symbol,
+        )
+
+    effective_start = start_date if mode == "full" and start_date is not None else end_date
+    effective_end = end_date
+    if effective_start is not None and effective_end is not None and any(count > 0 for count in results.values()):
+        snapshot = await DatasetSnapshotService(session_factory=factory).freeze_ohlcv_snapshot(
+            trade_date=effective_end,
+            date_from=effective_start,
+            date_to=effective_end,
+            market="CN",
+        )
+        logger.info(
+            "ohlcv dataset snapshot frozen: dataset_id=%s fingerprint=%s",
+            snapshot.to_dict()["dataset_id"],
+            snapshot.content_fingerprint,
         )
 
     success = sum(1 for c in results.values() if c > 0)

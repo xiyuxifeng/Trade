@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -14,6 +15,24 @@ import pytest
 class _FakeMarketUniverse:
     trade_date: str
     slot: str
+
+
+class _FakeDatasetSnapshot:
+    def __init__(self) -> None:
+        self.dataset_snapshot_id = uuid4()
+        self.content_fingerprint = "fp-test"
+
+    def to_dict(self) -> dict[str, str]:
+        return {"dataset_id": "ohlcv:CN:2026-04-01:2026-04-28"}
+
+
+class _FakeDatasetSnapshotService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[date, date, date, str]] = []
+
+    async def freeze_ohlcv_snapshot(self, *, trade_date: date, date_from: date, date_to: date, market: str):
+        self.calls.append((trade_date, date_from, date_to, market))
+        return _FakeDatasetSnapshot()
 
 
 def test_snapshot_service_build_and_query(tmp_path: Path) -> None:
@@ -118,7 +137,8 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: py
         return SimpleNamespace(profile_id="default", config=loaded.config, base_dir=tmp_path, profile_snapshot_id="snap-1")
 
     monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _fake_load_profile_runtime_config)
-    service = MarketService(ohlcv_service=_FakeOhlcv())
+    fake_snapshot_service = _FakeDatasetSnapshotService()
+    service = MarketService(ohlcv_service=_FakeOhlcv(), dataset_snapshot_service=fake_snapshot_service)
 
     crawl_result = asyncio.run(
         service.crawl_ohlcv(
@@ -141,6 +161,7 @@ def test_market_service_crawls_and_queries_ohlcv(tmp_path: Path, monkeypatch: py
     assert bars.payload["count"] == 1
     assert bars_df.payload["rows"] == 1
     assert service._ohlcv_service.crawl_calls[0][0] == ("000001.SZ", "000300.SH")
+    assert fake_snapshot_service.calls == [(date(2026, 4, 28), date(2026, 4, 1), date(2026, 4, 28), "CN")]
 
 
 def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_path: Path) -> None:
@@ -163,7 +184,8 @@ def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_pat
             return 10.5
 
     fake_ohlcv = _FakeOhlcv()
-    service = MarketService(ohlcv_service=fake_ohlcv)
+    fake_snapshot_service = _FakeDatasetSnapshotService()
+    service = MarketService(ohlcv_service=fake_ohlcv, dataset_snapshot_service=fake_snapshot_service)
 
     result = asyncio.run(
         service.crawl_ohlcv(
@@ -179,6 +201,7 @@ def test_market_service_incremental_crawl_keeps_the_requested_date_range(tmp_pat
     assert fake_ohlcv.crawl_calls == [
         (("000001.SZ",), date(2026, 4, 1), date(2026, 4, 28))
     ]
+    assert fake_snapshot_service.calls == [(date(2026, 4, 28), date(2026, 4, 1), date(2026, 4, 28), "CN")]
 
 
 def test_market_service_lists_symbols_and_ohlcv_from_session(tmp_path: Path) -> None:

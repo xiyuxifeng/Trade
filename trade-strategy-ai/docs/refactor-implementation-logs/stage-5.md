@@ -267,3 +267,81 @@ Updated:
 `READY`
 
 `RT-S5-001` may begin after explicit user authorization. Do not begin `RT-S5-001` automatically.
+
+## 2026-06-17 RT-S5-001 OHLCV 数据体系
+
+### Decision
+
+`ACCEPTED`
+
+### Scope Executed
+
+- Canonical OHLCV identity for stock, index, and ETF now includes `symbol`, `exchange`, `asset_type`, `frequency`, `adjustment_policy`, and `trade_date`.
+- Added explicit provenance/time fields: `source_symbol`, `source`, `source_payload_fingerprint`, `event_time`, `source_time`, `source_time_reason`, `captured_at`, `ingested_at`, and `available_at`.
+- Enforced `Asia/Shanghai` trading-date semantics for day-bar event/availability boundaries.
+- Historical backfill, incremental update, and repair now preserve idempotency under canonical payload fingerprinting.
+- Added trading-calendar-aware gap planning and deterministic repair path.
+- Added truthful indicator recompute boundary by invalidating affected cached indicators from the earliest changed trade date forward.
+- Added canonical immutable `DatasetSnapshot` freeze path over `dataset_snapshots`.
+- Switched dataset query runtime path from `MarketDataset` compatibility reads to canonical `DatasetSnapshotRepository`.
+
+### Implementation Notes
+
+- Missing or malformed numeric OHLCV fields now raise validation errors instead of becoming `0.0`.
+- Unknown adjustment policy is rejected.
+- Duplicate provider rows for the same canonical identity are deduped when payloads match and rejected when payloads conflict.
+- `available_at` is set to post-close availability and therefore cannot be reused as pre-market availability.
+- `DatasetSnapshotRepository.save()` now canonicalizes the content fingerprint from snapshot content, preventing placeholder-fingerprint writes from becoming the formal identity.
+- `market_datasets` remains compatibility-only. The user-facing dataset browsing route still exists, but the backend data source is now `dataset_snapshots`.
+
+### Files Changed
+
+- `src/models/ohlcv_bar.py`
+- `src/market_data/ohlcv_service.py`
+- `src/models/stage2_canonical.py`
+- `src/db/repositories/dataset_snapshot_repository.py`
+- `src/db/repositories/__init__.py`
+- `src/services/dataset_snapshot_service.py`
+- `src/services/market_service.py`
+- `src/services/market_snapshot_query_service.py`
+- `cli/ohlcv.py`
+- `src/pipeline/tasks/ohlcv_crawl_task.py`
+- `src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py`
+- `tests/unit/market_data/test_ohlcv_service.py`
+- `tests/unit/db/repositories/test_dataset_snapshot_repository.py`
+- `tests/unit/services/test_dataset_snapshot_service.py`
+- `tests/unit/services/test_market_snapshot_query_service.py`
+- `tests/unit/services/test_snapshot_market_service.py`
+- `tests/unit/pipeline/test_ohlcv_crawl_task.py`
+- `tests/unit/models/test_ohlcv_bar.py`
+- `tests/unit/db/test_migrations.py`
+
+### Verification
+
+Commands run:
+
+- `../.venv/bin/python -m pytest tests/unit/cli/test_ohlcv.py tests/unit/pipeline/test_ohlcv_crawl_task.py tests/unit/models/test_ohlcv_bar.py tests/unit/market_data/test_ohlcv_service.py tests/unit/db/repositories/test_dataset_snapshot_repository.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_dataset_snapshot_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/db/test_migrations.py tests/api/routers/test_market_ui.py -q`
+- `pnpm test -- src/pages/market/datasets/index.test.tsx src/pages/market/index.test.tsx src/lib/api/market.test.ts`
+- `pnpm typecheck`
+- `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+- `../.venv/bin/python -m compileall src api cli`
+- `git diff --check`
+
+Results:
+
+- Backend/API/database/CLI/job/migration targeted suite: `51 passed`
+- Frontend targeted suite: `10 passed`
+- TypeScript: passed
+- Stage 3 fixed-set regression: `passed`
+- `compileall`: passed
+- `git diff --check`: passed
+
+### Remaining Risks
+
+- Migration evidence in this batch is based on migration-definition tests, downgrade guard logic, and code-path review. A separate real PostgreSQL upgrade/downgrade/re-upgrade operational replay is still advisable before Stage 5 Gate.
+- Stage 6 snapshot-bound backtest runtime is out of scope here; this task only establishes the canonical OHLCV and DatasetSnapshot contract that Stage 6 must consume.
+- Formal normal-user `系统管理 -> 数据与调度` surface remains owned by `RT-S5-003`.
+
+### Next Task
+
+`RT-S5-002` may begin in a separate acceptance batch. Do not begin it automatically.

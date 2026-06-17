@@ -72,3 +72,20 @@ def test_stage2_migration_chain_defines_linear_metadata_schema_and_compatibility
     assert "regime_rule_selections" in compatibility
     assert "market_datasets" in compatibility
     assert "CREATE VIEW" in compatibility or "create_view" in compatibility.lower()
+
+
+def test_stage5_ohlcv_contract_migration_defines_identity_and_time_fields() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_17_0008"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_16_0007"' in content
+    assert "uq_ohlcv_identity_trade_date" in content
+    assert "source_symbol" in content
+    assert "adjustment_policy" in content
+    assert "available_at" in content
+    assert "captured_at" in content
+    assert "ingested_at" in content

@@ -6,8 +6,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.db.repositories import (
+    DatasetSnapshotRepository,
     MarketDataQualityRepository,
-    MarketDatasetRepository,
     MarketSnapshotItemRepository,
     MarketSnapshotRepository,
     MarketSnapshotSectionRepository,
@@ -52,14 +52,14 @@ class MarketSnapshotQueryService(BaseService):
         snapshot_repository: MarketSnapshotRepository | None = None,
         section_repository: MarketSnapshotSectionRepository | None = None,
         item_repository: MarketSnapshotItemRepository | None = None,
-        dataset_repository: MarketDatasetRepository | None = None,
+        dataset_repository: DatasetSnapshotRepository | None = None,
         quality_repository: MarketDataQualityRepository | None = None,
     ) -> None:
         self._session_factory = session_factory or get_session_factory()
         self._snapshot_repository = snapshot_repository or MarketSnapshotRepository()
         self._section_repository = section_repository or MarketSnapshotSectionRepository()
         self._item_repository = item_repository or MarketSnapshotItemRepository()
-        self._dataset_repository = dataset_repository or MarketDatasetRepository()
+        self._dataset_repository = dataset_repository or DatasetSnapshotRepository()
         self._quality_repository = quality_repository or MarketDataQualityRepository()
 
     def _error(
@@ -171,6 +171,9 @@ class MarketSnapshotQueryService(BaseService):
             "quality_status": item.quality_status,
             "payload_json": item.payload_json,
         }
+
+    def _dataset_summary(self, dataset) -> dict[str, Any]:
+        return dataset.to_dict() if hasattr(dataset, "to_dict") else dict(vars(dataset))
 
     def _matches_filters(
         self,
@@ -482,14 +485,14 @@ class MarketSnapshotQueryService(BaseService):
             )
 
         async with self._session_factory() as session:
-            total = await self._dataset_repository.count_datasets(
+            total = await self._dataset_repository.count_snapshots(
                 session,
                 trade_date=normalized_trade_date,
                 market=market,
                 dataset_type=dataset_type,
                 quality_status=quality_status,
             )
-            page_items = await self._dataset_repository.list_datasets(
+            page_items = await self._dataset_repository.list_snapshots(
                 session,
                 trade_date=normalized_trade_date,
                 market=market,
@@ -509,7 +512,7 @@ class MarketSnapshotQueryService(BaseService):
                     "quality_status": quality_status,
                 },
                 "page": self._page_payload(total=total, limit=limit, offset=offset, count=len(page_items)),
-                "items": [dataset.to_dict() for dataset in page_items],
+                "items": [self._dataset_summary(dataset) for dataset in page_items],
             },
         )
 
@@ -534,8 +537,10 @@ class MarketSnapshotQueryService(BaseService):
                     detail=dataset_id,
                     metadata={"dataset_id": dataset_id},
                 )
+            dataset_payload = self._dataset_summary(dataset)
+            snapshot_id = dataset_payload.get("snapshot_id")
             items = await self._item_repository.list_by_dataset_id(session, dataset_id)
-            snapshot = await self._snapshot_repository.get_by_snapshot_id(session, dataset.snapshot_id) if dataset.snapshot_id else None
+            snapshot = await self._snapshot_repository.get_by_snapshot_id(session, snapshot_id) if snapshot_id else None
 
         if not items:
             return self._empty_data(
@@ -544,7 +549,7 @@ class MarketSnapshotQueryService(BaseService):
                 metadata={"dataset_id": dataset_id},
             )
         page_items = items[offset : offset + limit]
-        warnings = ["source snapshot missing"] if dataset.snapshot_id and snapshot is None else []
+        warnings = ["source snapshot missing"] if snapshot_id and snapshot is None else []
         if warnings:
             return self._partial_data(
                 message="market dataset detail is partial",
@@ -555,7 +560,7 @@ class MarketSnapshotQueryService(BaseService):
             status="ok",
             message="market dataset detail loaded",
             payload={
-                "dataset": dataset.to_dict(),
+                "dataset": dataset_payload,
                 "snapshot": self._snapshot_summary(snapshot) if snapshot is not None else None,
                 "page": self._page_payload(total=len(items), limit=limit, offset=offset, count=len(page_items)),
                 "items": [self._item_summary(item) for item in page_items],

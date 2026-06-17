@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    JSON as SAJSON,
     Numeric,
     String,
     Text,
@@ -44,6 +45,10 @@ def _enum(enum_cls: type[StrEnum], name: str) -> SAEnum:
         values_callable=lambda enum: [member.value for member in enum],
         validate_strings=True,
     )
+
+
+def _jsonb_type() -> JSONB:
+    return JSONB(astext_type=Text()).with_variant(SAJSON(), "sqlite")
 
 
 class PromptValidationState(StrEnum):
@@ -504,16 +509,46 @@ class DatasetSnapshot(TimestampMixin, Base):
     dataset_type: Mapped[str | None] = mapped_column(String(64))
     date_from: Mapped[date | None] = mapped_column(Date)
     date_to: Mapped[date | None] = mapped_column(Date)
-    symbol_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    ohlcv_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    kaipan_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    symbol_manifest: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    ohlcv_manifest: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    kaipan_manifest: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
     benchmark_symbol: Mapped[str | None] = mapped_column(String(32))
     market_state_definition_version: Mapped[str | None] = mapped_column(String(64))
     available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lifecycle_state: Mapped[DatasetLifecycleState] = mapped_column(_enum(DatasetLifecycleState, "dataset_lifecycle_state"), nullable=False)
     quality_report_id: Mapped[UUID | None] = mapped_column(Uuid)
-    storage_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    storage_ref: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
+
+    def to_dict(self) -> dict[str, Any]:
+        storage_ref = self.storage_ref or {}
+        dataset_id = storage_ref.get("logical_dataset_id") or self.content_fingerprint
+        snapshot_id = storage_ref.get("snapshot_id")
+        return {
+            "id": str(self.dataset_snapshot_id),
+            "dataset_snapshot_id": str(self.dataset_snapshot_id),
+            "dataset_id": dataset_id,
+            "content_fingerprint": self.content_fingerprint,
+            "dataset_type": self.dataset_type,
+            "trade_date": self.trade_date.isoformat() if isinstance(self.trade_date, date) else self.trade_date,
+            "market": self.market,
+            "source": storage_ref.get("source"),
+            "storage_ref": storage_ref,
+            "snapshot_id": snapshot_id,
+            "profile_id": storage_ref.get("profile_id"),
+            "quality_status": self.lifecycle_state.value if hasattr(self.lifecycle_state, "value") else self.lifecycle_state,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "available_at": self.available_at.isoformat() if self.available_at else None,
+            "frozen_at": self.frozen_at.isoformat() if self.frozen_at else None,
+            "benchmark_symbol": self.benchmark_symbol,
+            "market_state_definition_version": self.market_state_definition_version,
+            "symbol_manifest": self.symbol_manifest,
+            "ohlcv_manifest": self.ohlcv_manifest,
+            "kaipan_manifest": self.kaipan_manifest,
+            "date_from": self.date_from.isoformat() if isinstance(self.date_from, date) else self.date_from,
+            "date_to": self.date_to.isoformat() if isinstance(self.date_to, date) else self.date_to,
+        }
 
 
 class AuthorProfileVersion(TimestampMixin, Base):

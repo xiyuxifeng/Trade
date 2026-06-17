@@ -57,7 +57,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S4-003 | `[x]` | canonical 规则生命周期、单一路径 transition/audit、idempotency/stale-write 保护、legacy rule_pool 拒写和 focused API/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | RT-S4-001 | `[x]` | deterministic automatic review、canonical human-review service/router/workbench、batch approve/reject、审计与 fixed-set gate 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
 | Stage 5 Bootstrap | `[x]` | Stage 5 范围、数据时间语义、DatasetSnapshot/MarketSnapshot 合同、兼容/退役边界、执行顺序和 RT-S5-001 next prompt 已冻结；未实施生产代码 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-001 | `[ ]` | OHLCV 数据体系；下一可执行 Task，需用户明确授权 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-001 | `[x]` | OHLCV canonical identity/time/provenance、calendar-aware gap repair、indicator invalidation boundary、canonical `dataset_snapshots` runtime path 与 immutable snapshot freeze 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-002 | `[ ]` | Kaipan 数据体系；可与 RT-S5-001 同 Parent session 但必须 separate acceptance batch | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-003 | `[ ]` | 调度和系统管理；数据合同稳定后后置单独执行 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 
@@ -70,7 +70,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
-| Stage 5 | `[-]` | Bootstrap `READY`；Stage 5 plan and contracts frozen；RT-S5-001 may begin after explicit user authorization | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 5 | `[-]` | Bootstrap accepted；RT-S5-001 accepted；RT-S5-002/003 pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -131,6 +131,47 @@ trade-strategy-ai/docs/refactor-implementation-logs/
   - 调度/系统管理入口仍分散，需 RT-S5-003 在数据合同稳定后收口。
   - Web compatibility body copy 仍有技术词暴露，需 RT-S5-003 修复。
 - 验收结论：Bootstrap `READY`；`RT-S5-001` 可在用户明确授权后开始；不得自动开始。
+
+## 2026-06-17 RT-S5-001 OHLCV 数据体系
+
+- Task ID：`RT-S5-001`
+- 状态：`[x] 已完成`
+- 修改范围：`src/models/ohlcv_bar.py`、`src/market_data/ohlcv_service.py`、`src/models/stage2_canonical.py`、`src/db/repositories/dataset_snapshot_repository.py`、`src/db/repositories/__init__.py`、`src/services/dataset_snapshot_service.py`、`src/services/market_service.py`、`src/services/market_snapshot_query_service.py`、`cli/ohlcv.py`、`src/pipeline/tasks/ohlcv_crawl_task.py`、`src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py`、相关 unit/api/frontend tests、Stage 5 docs/logs。
+- 关键决定：
+  - OHLCV canonical identity 固定为 `symbol + exchange + asset_type + frequency + adjustment_policy + trade_date`；股票/指数/ETF 不得共用同一 formal identity。
+  - `trade_date` 使用 `Asia/Shanghai` 交易日语义；`event_time` 固定为当日 15:00 CST 对应 UTC，`available_at` 固定为当日 17:00 CST 对应 UTC；`source_time` 缺失时保留缺失并记录 `provider_time_unavailable`。
+  - 缺失或非法 OHLCV 数值显式拒绝；不得默认成 `0`、`false`、`ready` 或 success。
+  - provider duplicate rows 按 canonical payload fingerprint 去重；同一 identity 冲突 payload 直接报错，不伪造“成功写入”。
+  - 历史回灌、增量更新与 repair 均保持 idempotent；仅在 canonical payload 真正变化时更新行并触发后续指标缓存失效边界。
+  - 指标边界采取 truthful invalidation：当某 symbol 的 OHLCV 从某交易日起被修复后，删除该交易日及之后的 `indicators` 缓存，留待后续正式读取按 canonical OHLCV 重算；不在 RT-S5-001 内扩展到 Stage 6 回测执行。
+  - `DatasetSnapshot` formal runtime path 已切到 `dataset_snapshots` repository/service；formal key 为 `content_fingerprint`，`logical_dataset_id`/`dataset_id` 仅作 compatibility mapping。
+  - frozen `DatasetSnapshot` 不做原地修改；同内容 rerun 复用既有 snapshot，不同内容生成新 fingerprint/new snapshot。
+- 数据库迁移：新增 `src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py`，补齐 OHLCV provenance/time/identity 字段，回填 legacy 数据，替换唯一约束，并在 downgrade 会导致 canonical identity 塌缩时显式拒绝降级。
+- 兼容处理：
+  - `market_datasets` 保持 compatibility-only；用户可见 dataset 浏览仍走原有 `/market/datasets` 页面，但后端读取已切换到 canonical `dataset_snapshots` repository。
+  - 现有 OHLCV 抓取、CLI、pipeline task 和 Web 工作台继续保留入口，只增加 canonical snapshot freeze 和 truthful dataset metadata。
+- 已运行测试：
+  - `../.venv/bin/python -m pytest tests/unit/cli/test_ohlcv.py tests/unit/pipeline/test_ohlcv_crawl_task.py tests/unit/models/test_ohlcv_bar.py tests/unit/market_data/test_ohlcv_service.py tests/unit/db/repositories/test_dataset_snapshot_repository.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_dataset_snapshot_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/db/test_migrations.py tests/api/routers/test_market_ui.py -q`
+  - `pnpm test -- src/pages/market/datasets/index.test.tsx src/pages/market/index.test.tsx src/lib/api/market.test.ts`
+  - `pnpm typecheck`
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+  - `../.venv/bin/python -m compileall src api cli`
+  - `git diff --check`
+- 测试结果：
+  - Focused backend/API/database/CLI/job/migration suite：`51 passed`
+  - Frontend targeted suite：`10 passed`
+  - TypeScript：passed
+  - Stage 3 fixed-set regression：`passed`
+  - `compileall`：passed
+  - `git diff --check`：passed
+- 未完成项：
+  - `RT-S5-002` Kaipan 数据体系未开始。
+  - `RT-S5-003` 调度与系统管理正式收口未开始。
+- 已知风险：
+  - 本次 migration 证据以迁移定义测试、upgrade/downgrade 守卫逻辑和 existing-data backfill 代码审查为主，未在本 session 内额外跑独立 PostgreSQL 真实 upgrade/downgrade/re-upgrade 回放。
+  - Stage 6 当前仍从 DB 读取 OHLCV 并按需计算指标；本任务只交付其所需 canonical data contract，不包含 Stage 6 runtime 切换或 backtest 执行。
+  - 当前 Web 仍保留技术型 market workspace/调度页面；普通用户正式“数据与调度”入口收口属于 `RT-S5-003`。
+- 验收结论：`RT-S5-001 ACCEPTED`。OHLCV canonical identity/time/provenance、calendar-aware repair、truthful availability、indicator invalidation boundary、immutable DatasetSnapshot freeze、canonical dataset runtime path 与受影响回归验证均满足当前 Stage 5 冻结合同；`RT-S5-002` 可在新 acceptance batch 中开始，但不得自动开始。
 
 ## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review
 

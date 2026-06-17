@@ -137,6 +137,7 @@ Missing data is never converted to `false`, `0`, condition-not-met, or success.
 ### DatasetSnapshot and MarketSnapshot
 
 - `DatasetSnapshot` formal source is `dataset_snapshots`.
+- Formal runtime identity is `dataset_snapshots.content_fingerprint`; any human-facing or compatibility `dataset_id` is a logical mapping and must not replace the canonical snapshot key.
 - `MarketSnapshot` formal source is `market_snapshots` and child tables.
 - Snapshots are immutable once `frozen_at` is set.
 - Recomputing creates a new version/fingerprint, not an in-place mutation of a frozen snapshot.

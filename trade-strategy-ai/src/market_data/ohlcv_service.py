@@ -2,18 +2,32 @@
 """OHLCV 数据服务 - 抓取并存储日线行情数据"""
 from __future__ import annotations
 
-from datetime import date
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.models.indicator import Indicator
 from src.models.ohlcv_bar import OHLCVBar
 from src.models.stock_info import StockInfo
 from src.common.logger import get_logger
 
 logger = get_logger(__name__)
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+SUPPORTED_ADJUSTMENT_POLICIES = {"unadjusted", "forward_adjusted", "backward_adjusted"}
+
+
+@dataclass(frozen=True)
+class _UpsertOutcome:
+    count: int
+    earliest_changed_trade_date: date | None
+    latest_changed_trade_date: date | None
 
 
 class OHLCVService:
@@ -48,6 +62,7 @@ class OHLCVService:
         start_date: date | None = None,
         end_date: date | None = None,
         market_kind_by_symbol: dict[str, str] | None = None,
+        adjustment_policy_by_symbol: dict[str, str] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         runtime_state: dict[str, Any] | None = None,
     ) -> dict[str, int]:
@@ -75,6 +90,7 @@ class OHLCVService:
         start_index = int(checkpoint.get("symbol_index") or 0)
         results: dict[str, int] = dict(checkpoint.get("results") or {})
         kind_map = market_kind_by_symbol or {}
+        adjustment_map = adjustment_policy_by_symbol or {}
         total = len(symbols)
 
         for index, symbol in enumerate(symbols, start=1):
@@ -84,13 +100,26 @@ class OHLCVService:
                 market_kind = kind_map.get(symbol)
                 if not market_kind:
                     market_kind = await self._resolve_market_kind(symbol)
+                adjustment_policy = adjustment_map.get(symbol) or "unadjusted"
+                self._validate_adjustment_policy(adjustment_policy)
                 df = provider.fetch_ohlcv_1d(
                     symbol=symbol,
                     start_date=start_date,
                     end_date=end_date,
                     market_kind=market_kind,
                 )
-                count = await self._upsert_bars(symbol, df)
+                outcome = await self._upsert_bars(
+                    symbol,
+                    df,
+                    market_kind=market_kind,
+                    adjustment_policy=adjustment_policy,
+                )
+                count = outcome.count
+                if outcome.earliest_changed_trade_date is not None:
+                    await self._invalidate_indicators(
+                        symbol=symbol,
+                        start_date=outcome.earliest_changed_trade_date,
+                    )
                 results[symbol] = count
                 logger.info(f"抓取成功: {symbol}, {count} 条记录")
             except Exception as e:
@@ -102,6 +131,8 @@ class OHLCVService:
                     kind_map.get(symbol) or "auto",
                     e,
                 )
+                if isinstance(e, ValueError):
+                    raise
                 results[symbol] = 0
             if progress_callback is not None:
                 runtime_state_update = {
@@ -141,48 +172,112 @@ class OHLCVService:
             return "etf"
         return "stock"
 
-    async def _upsert_bars(self, symbol: str, df: pd.DataFrame) -> int:
+    def _validate_adjustment_policy(self, value: str) -> None:
+        if value not in SUPPORTED_ADJUSTMENT_POLICIES:
+            raise ValueError(f"unknown adjustment policy: {value}")
+
+    def _infer_exchange(self, symbol: str) -> str:
+        if "." in symbol:
+            return symbol.rsplit(".", 1)[-1]
+        return "UNKNOWN"
+
+    def _event_time_for_trade_date(self, trade_date: date) -> datetime:
+        return datetime.combine(trade_date, time(hour=15, minute=0), SHANGHAI).astimezone(UTC)
+
+    def _available_at_for_trade_date(self, trade_date: date) -> datetime:
+        return datetime.combine(trade_date, time(hour=17, minute=0), SHANGHAI).astimezone(UTC)
+
+    def _normalize_trade_date(self, value: Any) -> date | None:
+        if value is None or value == "" or pd.isna(value):
+            return None
+        if isinstance(value, date):
+            return value
+        if hasattr(value, "date"):
+            normalized = value.date()
+            if isinstance(normalized, date):
+                return normalized
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
+
+    def _normalize_required_float(self, value: Any, *, field_name: str) -> float:
+        if value is None or value == "" or pd.isna(value):
+            raise ValueError(f"missing numeric field: {field_name}")
+        return float(value)
+
+    def _fingerprint_row(self, *, symbol: str, trade_date: date, normalized: dict[str, Any]) -> str:
+        payload = {
+            "symbol": symbol,
+            "trade_date": trade_date.isoformat(),
+            **normalized,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        ).hexdigest()
+
+    def _dedupe_records(self, symbol: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: dict[date, dict[str, Any]] = {}
+        for row in records:
+            trade_date = self._normalize_trade_date(row.get("date"))
+            if trade_date is None:
+                continue
+            normalized = {
+                "open": self._normalize_required_float(row.get("open"), field_name="open"),
+                "high": self._normalize_required_float(row.get("high"), field_name="high"),
+                "low": self._normalize_required_float(row.get("low"), field_name="low"),
+                "close": self._normalize_required_float(row.get("close"), field_name="close"),
+                "volume": self._normalize_required_float(row.get("volume"), field_name="volume"),
+                "turnover": None if row.get("turnover") is None or row.get("turnover") == "" or pd.isna(row.get("turnover")) else float(row.get("turnover")),
+            }
+            fingerprint = self._fingerprint_row(symbol=symbol, trade_date=trade_date, normalized=normalized)
+            existing = deduped.get(trade_date)
+            candidate = {
+                "trade_date": trade_date,
+                "normalized": normalized,
+                "fingerprint": fingerprint,
+            }
+            if existing is None:
+                deduped[trade_date] = candidate
+                continue
+            if existing["fingerprint"] != fingerprint:
+                raise ValueError(f"conflicting provider rows for {symbol} on {trade_date.isoformat()}")
+        return list(deduped.values())
+
+    async def _upsert_bars(
+        self,
+        symbol: str,
+        df: pd.DataFrame,
+        *,
+        market_kind: str,
+        adjustment_policy: str,
+    ) -> _UpsertOutcome:
         """批量 upsert bars 到数据库。
 
         先按 symbol 一次性加载目标区间内已有记录，再在内存中区分
         更新与新增，避免逐行 `SELECT + UPDATE/INSERT` 带来的放大开销。
         """
         if df is None or df.empty:
-            return 0
+            return _UpsertOutcome(count=0, earliest_changed_trade_date=None, latest_changed_trade_date=None)
 
-        records = df.to_dict(orient="records")
-
-        def _normalize_trade_date(value: Any) -> date | None:
-            """把 DataFrame 里的日期值统一成 Python `date`。"""
-            if value is None or value == "" or pd.isna(value):
-                return None
-            if isinstance(value, date):
-                return value
-            if hasattr(value, "date"):
-                normalized = value.date()
-                if isinstance(normalized, date):
-                    return normalized
-            parsed = pd.to_datetime(value, errors="coerce")
-            if pd.isna(parsed):
-                return None
-            return parsed.date()
-
-        def _to_float(value: Any, *, default: float = 0.0) -> float:
-            """把数值列统一转成 float，空值回退到默认值。"""
-            if value is None or value == "" or pd.isna(value):
-                return default
-            return float(value)
-
-        trade_dates = [normalized for row in records if (normalized := _normalize_trade_date(row.get("date"))) is not None]
+        records = self._dedupe_records(symbol, df.to_dict(orient="records"))
+        trade_dates = [row["trade_date"] for row in records]
         if not trade_dates:
-            return 0
+            return _UpsertOutcome(count=0, earliest_changed_trade_date=None, latest_changed_trade_date=None)
 
         min_trade_date = min(trade_dates)
         max_trade_date = max(trade_dates)
+        exchange = self._infer_exchange(symbol)
+        asset_type = "etf" if market_kind == "etf" else "index" if market_kind == "index" else "stock"
+        captured_at = datetime.now(UTC)
 
         async with self._factory() as session:
             stmt = select(OHLCVBar).where(
                 OHLCVBar.symbol == symbol,
+                OHLCVBar.exchange == exchange,
+                OHLCVBar.asset_type == asset_type,
+                OHLCVBar.frequency == "1d",
+                OHLCVBar.adjustment_policy == adjustment_policy,
                 OHLCVBar.trade_date >= min_trade_date,
                 OHLCVBar.trade_date <= max_trade_date,
             )
@@ -191,47 +286,93 @@ class OHLCVService:
 
             new_rows: list[OHLCVBar] = []
             count = 0
+            changed_trade_dates: list[date] = []
             for row in records:
-                trade_date = _normalize_trade_date(row.get("date"))
-                if trade_date is None:
-                    continue
-
-                open_value = _to_float(row.get("open"))
-                high_value = _to_float(row.get("high"))
-                low_value = _to_float(row.get("low"))
-                close_value = _to_float(row.get("close"))
-                volume_value = _to_float(row.get("volume"))
-                turnover_raw = row.get("turnover")
-                turnover_value = None if turnover_raw is None or turnover_raw == "" or pd.isna(turnover_raw) else float(turnover_raw)
+                trade_date = row["trade_date"]
+                normalized = row["normalized"]
+                ingested_at = datetime.now(UTC)
+                available_at = self._available_at_for_trade_date(trade_date)
+                fingerprint = row["fingerprint"]
 
                 existing = existing_by_trade_date.get(trade_date)
                 if existing is not None:
-                    existing.open = open_value
-                    existing.high = high_value
-                    existing.low = low_value
-                    existing.close = close_value
-                    existing.volume = volume_value
-                    existing.turnover = turnover_value
+                    if existing.source_payload_fingerprint == fingerprint:
+                        continue
+                    existing.open = normalized["open"]
+                    existing.high = normalized["high"]
+                    existing.low = normalized["low"]
+                    existing.close = normalized["close"]
+                    existing.volume = normalized["volume"]
+                    existing.turnover = normalized["turnover"]
+                    existing.source_payload_fingerprint = fingerprint
+                    existing.source = "akshare"
+                    existing.source_symbol = symbol
+                    existing.captured_at = captured_at
+                    existing.ingested_at = ingested_at
+                    existing.event_time = self._event_time_for_trade_date(trade_date)
+                    existing.available_at = available_at
+                    existing.source_time = None
+                    existing.source_time_reason = "provider_time_unavailable"
+                    changed_trade_dates.append(trade_date)
                 else:
                     new_rows.append(
                         OHLCVBar(
                             symbol=symbol,
+                            source_symbol=symbol,
+                            exchange=exchange,
+                            asset_type=asset_type,
+                            frequency="1d",
+                            adjustment_policy=adjustment_policy,
+                            source="akshare",
+                            source_payload_fingerprint=fingerprint,
                             trade_date=trade_date,
-                            open=open_value,
-                            high=high_value,
-                            low=low_value,
-                            close=close_value,
-                            volume=volume_value,
-                            turnover=turnover_value,
+                            open=normalized["open"],
+                            high=normalized["high"],
+                            low=normalized["low"],
+                            close=normalized["close"],
+                            volume=normalized["volume"],
+                            turnover=normalized["turnover"],
+                            event_time=self._event_time_for_trade_date(trade_date),
+                            source_time=None,
+                            source_time_reason="provider_time_unavailable",
+                            captured_at=captured_at,
+                            ingested_at=ingested_at,
+                            available_at=available_at,
                         )
                     )
+                    changed_trade_dates.append(trade_date)
                 count += 1
 
             if new_rows:
                 session.add_all(new_rows)
 
             await session.commit()
-            return count
+            if not changed_trade_dates:
+                return _UpsertOutcome(count=0, earliest_changed_trade_date=None, latest_changed_trade_date=None)
+            return _UpsertOutcome(
+                count=count,
+                earliest_changed_trade_date=min(changed_trade_dates),
+                latest_changed_trade_date=max(changed_trade_dates),
+            )
+
+    async def _invalidate_indicators(self, *, symbol: str, start_date: date) -> int:
+        """当 OHLCV 被修复后，删除受影响日期及之后的指标缓存。"""
+        async with self._factory() as session:
+            result = await session.execute(
+                delete(Indicator).where(
+                    Indicator.symbol == symbol,
+                    Indicator.trade_date >= start_date,
+                )
+            )
+            await session.commit()
+        deleted = int(result.rowcount or 0)
+        logger.info(
+            "指标缓存失效: symbol=%s, start_date=%s, deleted=%s",
+            symbol,
+            start_date,
+            deleted,
+        )
+        return deleted
 
     async def get_bars(
         self,
@@ -248,6 +389,58 @@ class OHLCVService:
             ).order_by(OHLCVBar.trade_date)
             result = await session.scalars(stmt)
             return list(result.all())
+
+    async def plan_trade_date_coverage(
+        self,
+        *,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, list[date]]:
+        requested_trade_dates: list[date] = []
+        skipped_non_trading_dates: list[date] = []
+        from src.backtest.engine import TradeCalendar
+        current = start_date
+        while current <= end_date:
+            if TradeCalendar.is_trade_date(current):
+                requested_trade_dates.append(current)
+            else:
+                skipped_non_trading_dates.append(current)
+            current = current.fromordinal(current.toordinal() + 1)
+
+        async with self._factory() as session:
+            result = await session.scalars(
+                select(OHLCVBar.trade_date).where(
+                    OHLCVBar.symbol == symbol,
+                    OHLCVBar.trade_date >= start_date,
+                    OHLCVBar.trade_date <= end_date,
+                )
+            )
+            present = set(result.all())
+
+        missing_trade_dates = [trade_date for trade_date in requested_trade_dates if trade_date not in present]
+        return {
+            "requested_trade_dates": requested_trade_dates,
+            "skipped_non_trading_dates": skipped_non_trading_dates,
+            "missing_trade_dates": missing_trade_dates,
+        }
+
+    async def repair_bars(
+        self,
+        *,
+        symbols: list[str],
+        start_date: date,
+        end_date: date,
+        market_kind_by_symbol: dict[str, str] | None = None,
+        adjustment_policy_by_symbol: dict[str, str] | None = None,
+    ) -> dict[str, int]:
+        return await self.crawl_bars(
+            symbols=symbols,
+            start_date=start_date,
+            end_date=end_date,
+            market_kind_by_symbol=market_kind_by_symbol,
+            adjustment_policy_by_symbol=adjustment_policy_by_symbol,
+        )
 
     async def get_latest_close(self, symbol: str) -> float | None:
         """获取某标的最新收盘价。

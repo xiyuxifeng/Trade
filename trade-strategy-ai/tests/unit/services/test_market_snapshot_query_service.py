@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -11,16 +12,16 @@ async def market_snapshot_query_session_factory(tmp_path):
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     from src.models.market_data_quality_report import MarketDataQualityReport
-    from src.models.market_dataset import MarketDataset
     from src.models.market_data_snapshot import MarketSnapshot as MarketDataSnapshotRecord
     from src.models.market_data_snapshot_item import MarketSnapshotItem
     from src.models.market_data_snapshot_section import MarketSnapshotSection
+    from src.models.stage2_canonical import DatasetSnapshot
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'market_snapshot_query.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(MarketDataSnapshotRecord.__table__.create)
         await conn.run_sync(MarketSnapshotSection.__table__.create)
-        await conn.run_sync(MarketDataset.__table__.create)
+        await conn.run_sync(DatasetSnapshot.__table__.create)
         await conn.run_sync(MarketSnapshotItem.__table__.create)
         await conn.run_sync(MarketDataQualityReport.__table__.create)
 
@@ -104,27 +105,43 @@ async def market_snapshot_query_session_factory(tmp_path):
             storage_ref={"snapshot_id": "snap-002", "section_id": "overview"},
             payload_json={"sentiment": "neutral"},
         )
-        dataset_1 = MarketDataset(
-            dataset_id="snap-001:dataset",
-            dataset_type="market_snapshot",
+        dataset_1 = DatasetSnapshot(
+            dataset_snapshot_id=uuid4(),
+            content_fingerprint="dataset-snap-001:fingerprint",
             trade_date=date(2026, 5, 16),
             market="CN",
-            source="snapshot-build",
-            storage_ref={"snapshot_id": "snap-001", "dataset_id": "snap-001:dataset"},
-            snapshot_id="snap-001",
-            profile_id="default",
-            quality_status="ok",
-        )
-        dataset_2 = MarketDataset(
-            dataset_id="snap-002:dataset",
             dataset_type="market_snapshot",
+            date_from=date(2026, 5, 16),
+            date_to=date(2026, 5, 16),
+            symbol_manifest={"symbols": ["000001.SZ"]},
+            ohlcv_manifest={"row_count": 2, "symbols": ["000001.SZ"]},
+            kaipan_manifest={"slot": "17-30"},
+            benchmark_symbol="000300.SH",
+            market_state_definition_version="market-state-v1",
+            available_at=datetime(2026, 5, 16, 9, 30, tzinfo=UTC),
+            frozen_at=datetime(2026, 5, 16, 9, 31, tzinfo=UTC),
+            lifecycle_state="ready",
+            quality_report_id=None,
+            storage_ref={"snapshot_id": "snap-001", "logical_dataset_id": "snap-001:dataset"},
+        )
+        dataset_2 = DatasetSnapshot(
+            dataset_snapshot_id=uuid4(),
+            content_fingerprint="dataset-snap-002:fingerprint",
             trade_date=date(2026, 5, 17),
             market="HK",
-            source="snapshot-build",
-            storage_ref={"snapshot_id": "snap-002", "dataset_id": "snap-002:dataset"},
-            snapshot_id="snap-002",
-            profile_id="default",
-            quality_status="partial",
+            dataset_type="market_snapshot",
+            date_from=date(2026, 5, 17),
+            date_to=date(2026, 5, 17),
+            symbol_manifest={"symbols": ["HK0001"]},
+            ohlcv_manifest={"row_count": 1, "symbols": ["HK0001"]},
+            kaipan_manifest={"slot": "17-30"},
+            benchmark_symbol="HSI",
+            market_state_definition_version="market-state-v1",
+            available_at=datetime(2026, 5, 17, 9, 30, tzinfo=UTC),
+            frozen_at=None,
+            lifecycle_state="partial",
+            quality_report_id=None,
+            storage_ref={"snapshot_id": "snap-002", "logical_dataset_id": "snap-002:dataset"},
         )
         item_1 = MarketSnapshotItem(
             snapshot_id="snap-001",
@@ -275,6 +292,7 @@ async def test_get_snapshot_detail_returns_sections_quality_and_dataset(market_s
     assert len(result.payload["sections"]) == 2
     assert result.payload["quality_report"]["overall_status"] == "ok"
     assert result.payload["dataset"]["dataset_id"] == "snap-001:dataset"
+    assert result.payload["dataset"]["snapshot_id"] == "snap-001"
 
 
 @pytest.mark.asyncio()
@@ -328,7 +346,7 @@ async def test_list_datasets_uses_requested_page_window() -> None:
     calls: list[dict[str, object]] = []
 
     class _DatasetRepository:
-        async def list_datasets(self, session, **kwargs):  # noqa: ANN001
+        async def list_snapshots(self, session, **kwargs):  # noqa: ANN001
             calls.append(kwargs)
             class _DatasetRecord(SimpleNamespace):
                 def to_dict(self):  # noqa: ANN001
@@ -336,21 +354,20 @@ async def test_list_datasets_uses_requested_page_window() -> None:
 
             return [
                 _DatasetRecord(
+                    dataset_snapshot_id="dataset-snap-002",
+                    content_fingerprint="snap-002:dataset",
                     dataset_id="snap-002:dataset",
                     dataset_type="market_snapshot",
                     trade_date=date(2026, 5, 17),
                     market="HK",
-                    source="snapshot-build",
-                    storage_ref={"snapshot_id": "snap-002"},
-                    snapshot_id="snap-002",
-                    profile_id="default",
-                    quality_status="partial",
+                    storage_ref={"snapshot_id": "snap-002", "logical_dataset_id": "snap-002:dataset"},
+                    lifecycle_state="partial",
                     created_at=datetime(2026, 5, 17, 9, 0, tzinfo=UTC),
                     updated_at=datetime(2026, 5, 17, 9, 10, tzinfo=UTC),
                 ),
             ]
 
-        async def count_datasets(self, session, **kwargs):  # noqa: ANN001
+        async def count_snapshots(self, session, **kwargs):  # noqa: ANN001
             calls.append({"count": kwargs})
             return 2
 

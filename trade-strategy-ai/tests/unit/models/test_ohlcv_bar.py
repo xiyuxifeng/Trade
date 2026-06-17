@@ -1,6 +1,7 @@
 # tests/unit/models/test_ohlcv_bar.py
 import pytest
 from datetime import date
+from sqlalchemy import UniqueConstraint
 from src.models.ohlcv_bar import OHLCVBar
 
 
@@ -39,3 +40,14 @@ def test_ohlcv_bar_all_fields():
     assert bar.close == 1830.0
     assert bar.volume == 5000000.0
     assert bar.turnover == 9150000000.0
+
+
+def test_ohlcv_identity_constraint_includes_asset_and_adjustment_dimensions():
+    constraints = [
+        constraint
+        for constraint in OHLCVBar.__table__.constraints
+        if isinstance(constraint, UniqueConstraint) and constraint.name == "uq_ohlcv_identity_trade_date"
+    ]
+    assert len(constraints) == 1
+    columns = {column.name for column in constraints[0].columns}
+    assert columns == {"symbol", "exchange", "asset_type", "frequency", "adjustment_policy", "trade_date"}

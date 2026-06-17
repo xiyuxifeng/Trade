@@ -18,6 +18,7 @@ from src.common.logger import get_logger
 from src.db.session import session_scope
 from src.market_data.ohlcv_service import OHLCVService
 from src.models.stock_info import StockInfo
+from src.services.dataset_snapshot_service import DatasetSnapshotService
 
 logger = get_logger(__name__)
 
@@ -111,17 +112,30 @@ def crawl_ohlcv(
                     end_date=end,
                 )
 
-            return len(symbols), results
+            snapshot = None
+            effective_start = start if mode == "full" and start is not None else end
+            effective_end = end
+            if effective_start is not None and effective_end is not None and any(count > 0 for count in results.values()):
+                snapshot = await DatasetSnapshotService(session_factory=factory).freeze_ohlcv_snapshot(
+                    trade_date=effective_end,
+                    date_from=effective_start,
+                    date_to=effective_end,
+                    market="CN",
+                )
+
+            return len(symbols), results, snapshot
         finally:
             # 优雅关闭数据库连接池
             await get_engine().dispose()
 
-    num_symbols, results = run_async_with_cleanup(_run_all())
+    num_symbols, results, snapshot = run_async_with_cleanup(_run_all())
 
     # 输出摘要
     success = sum(1 for c in results.values() if c > 0)
     total = sum(results.values())
     typer.echo(f"抓取完成: {success}/{num_symbols} 标的成功, 共 {total} 条记录")
+    if snapshot is not None:
+        typer.echo(f"已冻结数据快照: {snapshot.to_dict()['dataset_id']} ({snapshot.content_fingerprint})")
 
 
 if __name__ == "__main__":

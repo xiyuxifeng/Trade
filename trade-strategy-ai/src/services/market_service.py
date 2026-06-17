@@ -17,6 +17,7 @@ from src.db.session import get_session_factory
 from src.market_data.ohlcv_service import OHLCVService
 from src.models.ohlcv_bar import OHLCVBar
 from src.models.stock_info import StockInfo
+from src.services.dataset_snapshot_service import DatasetSnapshotService
 from src.services.config_profile_service import ConfigProfileService
 from src.services.base import BaseService, ServiceResult
 
@@ -59,10 +60,12 @@ class MarketService(BaseService):
         ohlcv_service: OHLCVService | None = None,
         ohlcv_service_factory: Callable[..., OHLCVService] | None = None,
         session_factory: Callable[..., Any] | None = None,
+        dataset_snapshot_service: DatasetSnapshotService | None = None,
     ) -> None:
         self._ohlcv_service = ohlcv_service
         self._ohlcv_service_factory = ohlcv_service_factory
         self._session_factory = session_factory
+        self._dataset_snapshot_service = dataset_snapshot_service
 
     def _progress_payload(
         self,
@@ -249,6 +252,23 @@ class MarketService(BaseService):
             crawl_kwargs.pop("progress_callback", None)
             results = await service.crawl_bars(**crawl_kwargs)
 
+        dataset_snapshot_payload = None
+        effective_start = start_date or end_date
+        effective_end = end_date or start_date
+        if effective_start is not None and effective_end is not None and any(count > 0 for count in results.values()):
+            snapshot_service = self._dataset_snapshot_service or DatasetSnapshotService(session_factory=get_session_factory())
+            snapshot = await snapshot_service.freeze_ohlcv_snapshot(
+                trade_date=effective_end,
+                date_from=effective_start,
+                date_to=effective_end,
+                market="CN",
+            )
+            dataset_snapshot_payload = {
+                "dataset_snapshot_id": str(snapshot.dataset_snapshot_id),
+                "content_fingerprint": snapshot.content_fingerprint,
+                "dataset_id": snapshot.to_dict()["dataset_id"],
+            }
+
         if progress_callback is not None and total > 0:
             completed = sum(1 for count in results.values() if count > 0)
             self._emit_progress(
@@ -275,6 +295,7 @@ class MarketService(BaseService):
                 "base_dir": str(base_dir),
                 "mode": mode,
                 "results": results,
+                "dataset_snapshot": dataset_snapshot_payload,
             },
         )
 

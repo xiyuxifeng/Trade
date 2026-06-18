@@ -14,12 +14,12 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 ## 当前状态
 
-- 当前 Stage：`Stage 5 基础数据、数据调度与数据质量`
-- Stage 状态：`[x] 已完成`
-- 当前 Task：`Stage 5 Gate` 已接受。
-- 计划：[Stage 5 实施计划](refactor-implementation-plans/stage-5-implementation-plan.md)
-- 详细日志：[Stage 5](refactor-implementation-logs/stage-5.md)
-- 下一步：可开始 `Stage 6 Bootstrap`；不得自动开始，需用户明确授权。
+- 当前 Stage：`Stage 6 回测与规则适用性`
+- Stage 状态：`[-] Bootstrap READY；Tasks 未开始`
+- 当前 Task：`Stage 6 Bootstrap` 已完成，未接受任何 Stage 6 Task。
+- 计划：[Stage 6 实施计划](refactor-implementation-plans/stage-6-implementation-plan.md)
+- 详细日志：[Stage 6](refactor-implementation-logs/stage-6.md)
+- 下一步：可开始 `RT-S6-001 回测工作台`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -39,6 +39,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 2026-06-17 `RT-S5-001` 已接受；OHLCV/DatasetSnapshot canonical contract 已落地。
 - 2026-06-17 `RT-S5-002` 已接受；Kaipan/MarketSnapshot canonical slot、provenance、freeze 与 market-state coverage boundary 已落地。
 - 2026-06-18 `Stage 5 Gate` 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，canonical data ownership、legacy bypass rejection、真实 PostgreSQL migration/recovery、readiness/scheduling/authorization 和固定集回归已验证。
+- 2026-06-18 已完成 Stage 6 Bootstrap；Stage 6 canonical data flow、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、API/UI/permission/audit、compatibility boundary 和四张 Task Card 已冻结；未实施生产代码，未接受任何 Stage 6 Task。
 
 ## Task 状态
 
@@ -64,6 +65,11 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S5-002 | `[x]` | Kaipan canonical slot/time/provenance、truthful coverage/availability、immutable MarketSnapshot freeze、market-state recompute boundary、compatibility read surfaces 与 migration/test evidence 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-003 | `[x]` | formal `系统管理 -> 数据与调度` 门面、canonical readiness/API/Web、legacy mutation rejection、job integration 与 focused regression 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | Stage 5 Gate | `[x]` | 最终 `ACCEPTED`；修复 raw data job/workflow/low-level create bypass、DatasetSnapshot row-level fingerprint、普通用户 readiness 技术词暴露，并完成真实 PostgreSQL upgrade/downgrade/re-upgrade/existing-data recovery 证据 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| Stage 6 Bootstrap | `[-]` | Bootstrap `READY`；Stage 6 合同、兼容边界、执行顺序和四张 Task Card 已冻结；未实施生产代码，未接受任何 Stage 6 Task | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-001 | `[ ]` | 未开始；下一可执行 Task | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-002 | `[ ]` | 未开始 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-003 | `[ ]` | 未开始 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-004 | `[ ]` | 未开始 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 
 ## Stage 状态
 
@@ -75,6 +81,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，基础数据、快照、调度、readiness、legacy bypass rejection、迁移/recovery 和 Web 业务中文已验证 | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 6 | `[-]` | Bootstrap `READY`；正式回测与规则适用性合同、兼容边界和 Task Cards 已冻结；Tasks 未开始，Stage 未完成 | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -110,6 +117,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 - Stage 5 Bootstrap 冻结：`DatasetSnapshot` formal source is `dataset_snapshots`；`market_datasets` is compatibility read-only under canonical writer routing；`MarketSnapshot` formal source is `market_snapshots` and child tables；missing data must remain truthful and must not become false/zero/success.
 - Stage 5 Bootstrap 冻结：`RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Stage 5 Gate；`RT-S5-003` must not start until data contracts stabilize；Stage 6 backtest execution remains out of scope.
+- Stage 6 Bootstrap 冻结：formal backtests and rule applicability must consume only canonical DatasetSnapshot, MarketSnapshot, canonical services/repositories, immutable IDs/fingerprints/versions/provenance/availability timestamps；legacy API/CLI/raw Job/Workflow/Pipeline/compatibility views/file snapshots/EvidencePack/config_path/live Provider/latest records/old JSON files are not formal inputs.
+- Stage 6 Bootstrap 冻结：formal business entry is Web/API -> BacktestApplicationService -> canonical dependency check -> immutable BacktestRun -> internal execution transport if needed -> immutable BacktestResult -> RuleApplicabilityProfile draft/review；raw Job remains internal or compatibility-only.
+- Stage 6 Bootstrap 冻结：Task order is `RT-S6-001` -> `RT-S6-002` -> `RT-S6-004` -> `RT-S6-003`；no Stage 6 Task has started or been accepted.
 
 ## 2026-06-17 Stage 5 Bootstrap
 

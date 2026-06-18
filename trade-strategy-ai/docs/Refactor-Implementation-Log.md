@@ -15,11 +15,11 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 ## 当前状态
 
 - 当前 Stage：`Stage 5 基础数据、数据调度与数据质量`
-- Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S5-003 调度和系统管理` 已接受。
+- Stage 状态：`[x] 已完成`
+- 当前 Task：`Stage 5 Gate` 已接受。
 - 计划：[Stage 5 实施计划](refactor-implementation-plans/stage-5-implementation-plan.md)
 - 详细日志：[Stage 5](refactor-implementation-logs/stage-5.md)
-- 下一步：可开始 `Stage 5 Review`；不得自动开始，需用户明确授权。
+- 下一步：可开始 `Stage 6 Bootstrap`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -38,6 +38,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 2026-06-17 已完成 Stage 5 Bootstrap；Stage 5 计划、数据/时间/快照合同、兼容/退役边界和执行顺序已冻结。
 - 2026-06-17 `RT-S5-001` 已接受；OHLCV/DatasetSnapshot canonical contract 已落地。
 - 2026-06-17 `RT-S5-002` 已接受；Kaipan/MarketSnapshot canonical slot、provenance、freeze 与 market-state coverage boundary 已落地。
+- 2026-06-18 `Stage 5 Gate` 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，canonical data ownership、legacy bypass rejection、真实 PostgreSQL migration/recovery、readiness/scheduling/authorization 和固定集回归已验证。
 
 ## Task 状态
 
@@ -62,6 +63,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S5-001 | `[x]` | OHLCV canonical identity/time/provenance、calendar-aware gap repair、indicator invalidation boundary、canonical `dataset_snapshots` runtime path 与 immutable snapshot freeze 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-002 | `[x]` | Kaipan canonical slot/time/provenance、truthful coverage/availability、immutable MarketSnapshot freeze、market-state recompute boundary、compatibility read surfaces 与 migration/test evidence 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-003 | `[x]` | formal `系统管理 -> 数据与调度` 门面、canonical readiness/API/Web、legacy mutation rejection、job integration 与 focused regression 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| Stage 5 Gate | `[x]` | 最终 `ACCEPTED`；修复 raw data job/workflow/low-level create bypass、DatasetSnapshot row-level fingerprint、普通用户 readiness 技术词暴露，并完成真实 PostgreSQL upgrade/downgrade/re-upgrade/existing-data recovery 证据 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 状态
 
@@ -72,7 +74,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
-| Stage 5 | `[-]` | Bootstrap、RT-S5-001、RT-S5-002、RT-S5-003 accepted；Stage 5 Review pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 5 | `[x]` | Gate 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，基础数据、快照、调度、readiness、legacy bypass rejection、迁移/recovery 和 Web 业务中文已验证 | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -250,6 +252,43 @@ trade-strategy-ai/docs/refactor-implementation-logs/
   - 当前结论基于本地可访问 PostgreSQL/asyncpg 与 targeted regression evidence；仓库全量后端测试未在本次 bounded review 中重跑。
   - React Query 测试仍输出既有 query-data warning，不属于本次 Stage 4 formal contract。
 - 验收结论：Stage 4 `ACCEPTED` 保持不变；Pre-Stage-5 cleanup review 结论为 verified and fixed；Stage 5 Bootstrap 仍需用户明确授权后方可开始。
+
+## 2026-06-18 Stage 5 Gate
+
+- Task ID：`Stage 5 Review and Gate`
+- 状态：`[x] 已完成`
+- 修改范围：`src/services/job_registry.py`、`src/services/job_service.py`、`src/services/dataset_snapshot_service.py`、`web/src/pages/system/index.tsx`、相关 job/workflow/API/service/frontend tests、`docs/refactor-implementation-logs/stage-5.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定：
+  - Raw Stage 5 data job types 不再是正式 mutation 入口；generic job/workflow/low-level create 均必须拒绝并指向 `system-data-operation` / `系统管理 -> 数据与调度`。
+  - `DatasetSnapshot` content fingerprint 必须包含 OHLCV row-level fingerprint，避免同一 symbol/date 修复后复用旧 frozen snapshot。
+  - 普通用户页面只展示中文业务词“就绪状态”，不暴露 `readiness`。
+  - `system-data-operation` 保留 provider failure 分类，避免把正式数据源故障误归为普通 pipeline 失败。
+- 数据库迁移：
+  - 未新增迁移。
+  - 已执行真实 PostgreSQL Stage 5 migration Gate：fresh upgrade head、downgrade 到 `2026_06_16_0007`、re-upgrade head、existing-data upgrade、existing-data downgrade/recovery、row-count/provenance/fingerprint/uniqueness/nullability checks。
+  - 临时数据库 `trade_stage5_gate_fresh`、`trade_stage5_gate_existing` 已清理。
+- 兼容处理：
+  - Legacy API/UI mutation endpoints for OHLCV/Kaipan 保持 compatibility-only rejection。
+  - Raw Stage 5 data jobs/workflows 由 runnable 改为 compatibility-only rejection。
+  - Legacy internal CLI/tooling retirement 继续延后，不在缺少迁移/观察/回滚证据时强制删除。
+- 已运行测试：
+  - Stage 5 OHLCV/DatasetSnapshot/migration/API suite：`53 passed`
+  - Stage 5 Kaipan/MarketSnapshot/market-state suite：`87 passed`
+  - Stage 5 readiness/scheduler/job/API/workflow suite：`93 passed`
+  - Affected Stage 3 regression suite：`39 passed`
+  - Affected Stage 4 regression suite：`41 passed`
+  - Frontend targeted suite：`6 files passed`, `38 tests passed`
+  - `pnpm typecheck`：`TypeScript: No errors found`
+  - `../.venv/bin/python -m compileall src api cli`：passed
+  - `git diff --check`：passed
+  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`：`status=passed`, `article_count=12`, no persistence/provider/semantic/validation failures
+- 测试结果：全部通过；PostgreSQL localhost 连接在 sandbox 内被拒绝，已按 Gate 要求使用 approved unsandboxed local PostgreSQL path 重跑并记录。
+- 未完成项：无阻塞项；Stage 6 未开始。
+- 已知风险：
+  - Legacy internal tooling retirement remains deferred。
+  - Readiness coverage persistence 仍偏浅，若 Stage 6 需要历史 readiness audit 查询需继续加深。
+  - Historical Kaipan availability 仍需对真实 provider/credential/network 保持 truthful unavailable 表达。
+- 验收结论：Stage 5 Gate `ACCEPTED`；Stage 6 Bootstrap 可在用户明确授权后开始，不得自动开始。
 
 ## 日志读取规则
 

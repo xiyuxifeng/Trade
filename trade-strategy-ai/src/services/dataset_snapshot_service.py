@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+import hashlib
+import json
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -23,6 +25,28 @@ class DatasetSnapshotService:
         self._session_factory = session_factory or get_session_factory()
         self._repository = repository or DatasetSnapshotRepository()
 
+    def _row_fingerprint(self, row: OHLCVBar) -> str:
+        if row.source_payload_fingerprint:
+            return row.source_payload_fingerprint
+        payload = {
+            "symbol": row.symbol,
+            "exchange": row.exchange,
+            "asset_type": row.asset_type,
+            "frequency": row.frequency,
+            "adjustment_policy": row.adjustment_policy,
+            "trade_date": row.trade_date.isoformat(),
+            "open": row.open,
+            "high": row.high,
+            "low": row.low,
+            "close": row.close,
+            "volume": row.volume,
+            "turnover": row.turnover,
+            "source": row.source,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        ).hexdigest()
+
     async def freeze_ohlcv_snapshot(
         self,
         *,
@@ -36,10 +60,31 @@ class DatasetSnapshotService:
                 select(OHLCVBar)
                 .where(OHLCVBar.trade_date >= date_from)
                 .where(OHLCVBar.trade_date <= date_to)
-                .order_by(OHLCVBar.trade_date.asc(), OHLCVBar.symbol.asc())
+                .order_by(
+                    OHLCVBar.trade_date.asc(),
+                    OHLCVBar.symbol.asc(),
+                    OHLCVBar.exchange.asc(),
+                    OHLCVBar.asset_type.asc(),
+                    OHLCVBar.frequency.asc(),
+                    OHLCVBar.adjustment_policy.asc(),
+                )
             )
             rows = list(bars.all())
             latest_available_at = max((row.available_at for row in rows if row.available_at is not None), default=None)
+            row_manifest = [
+                {
+                    "symbol": row.symbol,
+                    "exchange": row.exchange,
+                    "asset_type": row.asset_type,
+                    "frequency": row.frequency,
+                    "adjustment_policy": row.adjustment_policy,
+                    "trade_date": row.trade_date.isoformat(),
+                    "source": row.source,
+                    "row_fingerprint": self._row_fingerprint(row),
+                    "available_at": row.available_at.isoformat() if row.available_at else None,
+                }
+                for row in rows
+            ]
             now = datetime.now(UTC)
             snapshot = DatasetSnapshot(
                 trade_date=trade_date,
@@ -51,6 +96,8 @@ class DatasetSnapshotService:
                 ohlcv_manifest={
                     "row_count": len(rows),
                     "symbols": [row.symbol for row in rows],
+                    "row_fingerprints": [item["row_fingerprint"] for item in row_manifest],
+                    "rows": row_manifest,
                     "date_range": [date_from.isoformat(), date_to.isoformat()],
                     "adjustment_policies": sorted({row.adjustment_policy for row in rows}),
                     "sources": sorted({row.source for row in rows if row.source}),

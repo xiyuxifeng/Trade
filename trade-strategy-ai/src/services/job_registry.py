@@ -113,6 +113,21 @@ class JobDefinition(BaseModel):
         return self.model_dump(mode="json")
 
 
+STAGE5_CANONICAL_DATA_LEGACY_JOB_TYPES = {
+    "ohlcv-crawl",
+    "kaipan-fetch",
+    "kaipan-normalize",
+    "kaipan-run",
+    "snapshot-build",
+    "market-state-build",
+}
+
+_STAGE5_CANONICAL_DATA_REJECTION = (
+    "legacy Stage 5 data job is compatibility-only; use system-data-operation "
+    "through 系统管理 -> 数据与调度"
+)
+
+
 def _string(description: str, *, required: bool = False, default: Any = None) -> JobParamField:
     return JobParamField(type=JobFieldType.string, description=description, required=required, default=default)
 
@@ -704,7 +719,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="persona",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="构建 MarketState JSON。",
         param_schema=_schema(
             "市场状态参数",
@@ -732,7 +747,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="snapshot",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="构建候选池快照。",
         param_schema=_schema(
             "快照构建参数",
@@ -794,7 +809,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="market",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="抓取行情 OHLCV 日线数据。",
         param_schema=_schema(
             "OHLCV 抓取参数",
@@ -1016,7 +1031,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="kaipan",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="抓取指定交易日的 Kaipan 原始数据。",
         param_schema=_schema(
             "Kaipan 抓取参数",
@@ -1044,7 +1059,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="kaipan",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="仅执行 Kaipan 归一化。",
         param_schema=_schema(
             "Kaipan 归一化参数",
@@ -1069,7 +1084,7 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         can_run_concurrently=False,
         concurrency_group="kaipan",
         requires_confirmation=False,
-        runnable=True,
+        runnable=False,
         description="构建 Kaipan 调度计划或启动调度器。",
         param_schema=_schema(
             "Kaipan 运行参数",
@@ -1137,6 +1152,20 @@ def validate_job_submission(
             status="error",
             message=f"unknown job type: {job_type}",
             payload={"job_type": job_type, "known_job_types": [item.job_type for item in JOB_DEFINITIONS]},
+        )
+
+    if job_type in STAGE5_CANONICAL_DATA_LEGACY_JOB_TYPES:
+        return ServiceResult(
+            status="error",
+            message=_STAGE5_CANONICAL_DATA_REJECTION,
+            payload={
+                "job_type": job_type,
+                "definition": definition.summary(),
+                "created_by": created_by,
+                "compatibility_only": True,
+                "replacement_job_type": "system-data-operation",
+                "replacement_surface": "系统管理 -> 数据与调度",
+            },
         )
 
     requires_confirmation = definition.requires_confirmation or definition.risk in {JobRisk.high, JobRisk.critical}

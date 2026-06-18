@@ -207,7 +207,7 @@ function SystemDataSummary() {
   });
 
   if ((readinessQuery.isLoading || scheduleQuery.isLoading) && !readinessQuery.data && !scheduleQuery.data) {
-    return <LoadingState label="正在检查数据与调度" description="正在读取正式数据 readiness、时间窗口和最近操作记录。" />;
+    return <LoadingState label="正在检查数据与调度" description="正在读取正式数据就绪状态、时间窗口和最近操作记录。" />;
   }
 
   const readinessError = readinessQuery.error;
@@ -221,7 +221,7 @@ function SystemDataSummary() {
   }
 
   if (!readinessQuery.data || !scheduleQuery.data) {
-    return <EmptyState title="暂无数据状态" description="当前没有可用的正式 readiness 或调度窗口信息。" />;
+    return <EmptyState title="暂无数据状态" description="当前没有可用的正式就绪状态或调度窗口信息。" />;
   }
 
   const readiness = readinessQuery.data;
@@ -509,16 +509,16 @@ export function SystemDataPage({ availability }: FormalSystemPageProps = {}) {
   if (availability == null) {
     if (readinessQuery.isLoading && !readinessQuery.data) {
       state = 'loading';
-      stateTitle = '正在检查 readiness';
+      stateTitle = '正在检查就绪状态';
       stateDescription = '系统正在读取正式数据事实与最近操作状态。';
     } else if (readinessQuery.error instanceof ApiError && readinessQuery.error.status === 403) {
       state = 'permission_denied';
       stateTitle = '无权限查看数据与调度';
-      stateDescription = '当前账号无法查看 readiness 和处理记录。';
+      stateDescription = '当前账号无法查看就绪状态和处理记录。';
     } else if (readinessQuery.error) {
       state = 'error';
       stateTitle = '数据与调度状态加载失败';
-      stateDescription = '暂时无法读取正式 readiness。';
+      stateDescription = '暂时无法读取正式就绪状态。';
     } else if (readinessQuery.data) {
       state = mapReadinessAvailability(readinessQuery.data.status);
       stateTitle = statusLabel(readinessQuery.data.status);
@@ -538,8 +538,8 @@ export function SystemDataPage({ availability }: FormalSystemPageProps = {}) {
       queryState={state}
       purpose="查看正式数据是否就绪，并在需要时按最小范围补齐、回灌和重算。"
       inputDescription="输入包括当前交易日、历史日期范围和操作员选择的正式处理动作。"
-      processingDescription="系统基于正式数据事实判断 readiness，并通过统一门面协调更新、补齐、回灌和重算。"
-      outputDescription="输出包括 readiness、缺失影响、业务时间窗口、最近处理记录和下一步可执行动作。"
+      processingDescription="系统基于正式数据事实判断就绪状态，并通过统一门面协调更新、补齐、回灌和重算。"
+      outputDescription="输出包括就绪状态、缺失影响、业务时间窗口、最近处理记录和下一步可执行动作。"
       businessAction={{ label: '返回系统状态', to: '/system/status' }}
       stateTitle={stateTitle}
       stateDescription={stateDescription}

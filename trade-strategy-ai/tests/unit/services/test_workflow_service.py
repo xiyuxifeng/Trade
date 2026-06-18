@@ -71,8 +71,8 @@ def test_workflow_service_exports_and_lists_default_definitions() -> None:
     ]
 
 
-def test_workflow_service_runs_workflow_through_job_service() -> None:
-    """WorkflowService 应将工作流运行委托给 WorkflowRunner。"""
+def test_workflow_service_rejects_legacy_stage5_scheduler_workflow() -> None:
+    """Legacy Stage 5 scheduler workflow must not bypass system-data-operation."""
     from src.services import WorkflowService
 
     fake_runner = _FakeWorkflowRunner(calls=[])
@@ -93,16 +93,14 @@ def test_workflow_service_runs_workflow_through_job_service() -> None:
         )
     )
 
-    assert result.status == "ok"
-    assert result.payload["workflow"]["workflow_id"] == "scheduler"
-    assert result.payload["job"]["job_type"] == "kaipan-run"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "scheduler"
-    assert fake_runner.calls[0]["params"]["config_path"] == "config/app.yaml"
-    assert fake_runner.calls[0]["confirmed"] is False
+    assert result.status == "error"
+    assert "system-data-operation" in (result.message or "")
+    assert result.payload["replacement_job_type"] == "system-data-operation"
+    assert fake_runner.calls == []
 
 
-def test_workflow_service_accepts_market_scheduler_params() -> None:
-    """Scheduler 工作流应能承接 market 数据所需的联合参数。"""
+def test_workflow_service_rejects_market_scheduler_params_as_compatibility_only() -> None:
+    """Scheduler workflow params are preserved as metadata but no longer submit raw jobs."""
     from src.services import WorkflowService
 
     fake_runner = _FakeWorkflowRunner(calls=[])
@@ -123,9 +121,9 @@ def test_workflow_service_accepts_market_scheduler_params() -> None:
         )
     )
 
-    assert result.status == "ok"
-    assert fake_runner.calls[0]["workflow"].workflow_id == "scheduler"
-    assert fake_runner.calls[0]["params"]["symbols"] == ["000001.SZ"]
+    assert result.status == "error"
+    assert "系统管理 -> 数据与调度" in (result.message or "")
+    assert fake_runner.calls == []
 
 
 def test_workflow_service_reports_removed_backtest_workflow() -> None:

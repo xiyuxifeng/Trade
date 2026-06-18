@@ -71,18 +71,12 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
         "pipeline-step",
         "run-pre-market",
         "run-after-close",
-        "market-state-build",
-        "snapshot-build",
         "strategy-build",
-        "ohlcv-crawl",
         "backtest-run",
         "backtest-validate-rules",
         "backtest-reproducibility-check",
         "rule-pool-backtest",
         "candidate-review",
-        "kaipan-fetch",
-        "kaipan-normalize",
-        "kaipan-run",
     ]
 
 
@@ -166,16 +160,6 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert rule_pool.status == "ok"
     assert rule_pool.payload["params"]["market_regime_version"] == "market-regime-v3"
 
-    market = validate_job_submission(
-        job_type="ohlcv-crawl",
-        params={"profile_id": "default", "symbols": ["000001.SZ"]},
-        created_by="web",
-    )
-    assert market.status == "ok"
-    assert market.payload["params"]["symbols"] == ["000001.SZ"]
-    assert market.payload["params"]["profile_id"] == "default"
-    assert "config_path" not in market.payload["params"]
-
     crawl = validate_job_submission(
         job_type="crawl",
         params={"config_path": "config/app.yaml", "max_articles": 20, "force": True},
@@ -183,50 +167,6 @@ def test_validate_job_submission_enforces_schema() -> None:
     )
     assert crawl.status == "ok"
     assert crawl.payload["params"]["force"] is True
-
-    market_state = validate_job_submission(
-        job_type="market-state-build",
-        params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "as_of": "2026-05-09"},
-        created_by="web",
-    )
-    assert market_state.status == "ok"
-    assert market_state.payload["params"]["benchmark_symbol"] == "000300.SH"
-
-    kaipan = validate_job_submission(
-        job_type="kaipan-run",
-        params={"profile_id": "default", "trade_date": "2026-05-09", "slot": "17-30"},
-        created_by="web",
-    )
-    assert kaipan.status == "ok"
-    assert kaipan.payload["params"]["profile_id"] == "default"
-    assert "config_path" not in kaipan.payload["params"]
-
-    kaipan_fetch = validate_job_submission(
-        job_type="kaipan-fetch",
-        params={
-            "profile_id": "default",
-            "start_date": "2026-05-01",
-            "end_date": "2026-05-03",
-            "slot": "09-25",
-        },
-        created_by="web",
-    )
-    assert kaipan_fetch.status == "ok"
-    assert kaipan_fetch.payload["params"]["start_date"] == "2026-05-01"
-    assert kaipan_fetch.payload["params"]["end_date"] == "2026-05-03"
-
-    kaipan_normalize = validate_job_submission(
-        job_type="kaipan-normalize",
-        params={
-            "profile_id": "default",
-            "start_date": "2026-05-01",
-            "end_date": "2026-05-03",
-            "slot": "17-30",
-        },
-        created_by="web",
-    )
-    assert kaipan_normalize.status == "ok"
-    assert kaipan_normalize.payload["params"]["start_date"] == "2026-05-01"
 
     target_jobs = {
         "ohlcv-crawl",
@@ -249,14 +189,30 @@ def test_validate_job_submission_enforces_schema() -> None:
     assert rule_pool_definition is not None
     assert rule_pool_definition.can_retry is True
 
-    snapshot = validate_job_submission(
-        job_type="snapshot-build",
-        params={"profile_id": "default", "date": "2026-05-09", "snapshot_type": "all"},
+    system_data = validate_job_submission(
+        job_type="system-data-operation",
+        params={"action": "repair", "target_trade_date": "2026-05-09"},
         created_by="web",
     )
-    assert snapshot.status == "ok"
-    assert snapshot.payload["params"]["profile_id"] == "default"
-    assert snapshot.payload["params"]["date"] == "2026-05-09"
+    assert system_data.status == "ok"
+    assert system_data.payload["params"]["action"] == "repair"
+
+
+def test_stage5_raw_data_jobs_are_compatibility_only() -> None:
+    """Stage 5 data mutations must enter through system-data-operation."""
+    legacy_jobs = {
+        "ohlcv-crawl": {"profile_id": "default", "symbols": ["000001.SZ"]},
+        "kaipan-fetch": {"profile_id": "default", "trade_date": "2026-05-09", "slot": "09-25"},
+        "kaipan-normalize": {"profile_id": "default", "trade_date": "2026-05-09", "slot": "17-30"},
+        "kaipan-run": {"profile_id": "default", "trade_date": "2026-05-09", "slot": "17-30"},
+        "snapshot-build": {"profile_id": "default", "date": "2026-05-09", "snapshot_type": "all"},
+        "market-state-build": {"profile_id": "default", "benchmark_symbol": "000300.SH", "as_of": "2026-05-09"},
+    }
+    for job_type, params in legacy_jobs.items():
+        result = validate_job_submission(job_type=job_type, params=params, created_by="web")
+        assert result.status == "error"
+        assert "system-data-operation" in (result.message or "")
+        assert result.payload["replacement_job_type"] == "system-data-operation"
 
 
 def test_job_definition_lookup_exposes_metadata() -> None:

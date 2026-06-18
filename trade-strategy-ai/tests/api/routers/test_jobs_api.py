@@ -314,13 +314,30 @@ async def test_create_list_detail_logs_and_cancel_jobs(client: AsyncClient) -> N
 
 
 @pytest.mark.asyncio
+async def test_stage5_raw_data_jobs_rejected_by_generic_job_api(client: AsyncClient) -> None:
+    """Raw Stage 5 data jobs must not bypass 系统管理 -> 数据与调度."""
+    response = await client.post(
+        "/api/ui/v1/jobs",
+        json={
+            "job_type": "ohlcv-crawl",
+            "params": {"profile_id": "default", "symbols": ["000001.SZ"]},
+            "created_by": "web",
+        },
+    )
+    assert response.status_code == 400
+    assert "system-data-operation" in response.json()["detail"]
+    assert _job_service_spy is not None
+    assert _job_service_spy.create_calls == []
+
+
+@pytest.mark.asyncio
 async def test_pause_resume_and_retry_job_controls(client: AsyncClient) -> None:
     """Job UI API 应支持暂停、恢复和重试控制。"""
     created = await client.post(
         "/api/ui/v1/jobs",
         json={
-            "job_type": "ohlcv-crawl",
-            "params": {"profile_id": "default", "symbols": ["000001.SZ"]},
+            "job_type": "pipeline-run",
+            "params": {"config_path": "config/app.yaml"},
             "created_by": "web",
         },
     )

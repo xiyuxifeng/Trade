@@ -3,12 +3,11 @@
 ## Current Status
 
 - Stage：`Stage 5 基础数据、数据调度与数据质量`
-- Stage 状态：`[-] 进行中`
-- 当前活动：`2026-06-18 RT-S5-003 调度和系统管理` 已完成并待 Stage 5 Review。
-- 当前已接受：`Stage 5 Bootstrap`、`RT-S5-001`、`RT-S5-002`
-- 当前已接受补充：`RT-S5-003`
-- 下一可执行 Task：`Stage 5 Review`
-- 不得自动开始：`Stage 5 Review` 需用户明确触发。
+- Stage 状态：`[x] 已完成`
+- 当前活动：`2026-06-18 Stage 5 Review and Gate` 已完成。
+- 当前已接受：`Stage 5 Bootstrap`、`RT-S5-001`、`RT-S5-002`、`RT-S5-003`、`Stage 5 Gate`
+- 下一可执行 Task：`Stage 6 Bootstrap`
+- 不得自动开始：`Stage 6 Bootstrap` 需用户明确触发。
 - 计划：`docs/refactor-implementation-plans/stage-5-implementation-plan.md`
 
 ## 2026-06-17 Stage 5 Bootstrap
@@ -527,3 +526,74 @@ Results:
 ### Next Task
 
 `RT-S5-003` may begin in a separate acceptance batch. Do not begin it automatically.
+
+## 2026-06-18 Stage 5 Review and Gate
+
+### Decision
+
+`ACCEPTED`
+
+### Findings Discovered
+
+- Generic job/workflow paths could still submit raw Stage 5 data job types (`ohlcv-crawl`、`kaipan-fetch`、`kaipan-normalize`、`kaipan-run`、`snapshot-build`、`market-state-build`), bypassing the formal `system-data-operation` entry.
+- `DatasetSnapshotService.freeze_ohlcv_snapshot()` fingerprinted aggregate metadata but not individual OHLCV row payload/content, so repaired same-symbol/same-date rows could reuse an old frozen snapshot.
+- Normal-user `/system/data` page copy exposed the English technical term `readiness`.
+- Low-level `JobService.create_job()` could still create raw Stage 5 data jobs even after `JobRunner.submit_job()` and UI API validation were repaired.
+
+### Repairs Applied
+
+- Marked raw Stage 5 data job definitions as compatibility-only and made `validate_job_submission()` reject them with replacement guidance to `system-data-operation` / `系统管理 -> 数据与调度`.
+- Added targeted `JobService.create_job()` rejection for raw Stage 5 data job types so internal callers cannot bypass the formal data entry point.
+- Updated workflow/job tests so legacy scheduler/raw data paths are rejected and existing compatibility jobs do not execute formal writes.
+- Added OHLCV row-level fingerprints to DatasetSnapshot manifest/fingerprint inputs, ordered by the full canonical OHLCV identity.
+- Replaced user-visible `readiness` copy with Chinese business wording `就绪状态` and added a page-shell regression test.
+- Preserved formal `system-data-operation` external dependency failure classification for provider alerts.
+
+### Verification
+
+Commands run and results:
+
+- `../.venv/bin/python -m pytest tests/unit/cli/test_ohlcv.py tests/unit/pipeline/test_ohlcv_crawl_task.py tests/unit/models/test_ohlcv_bar.py tests/unit/market_data/test_ohlcv_service.py tests/unit/db/repositories/test_dataset_snapshot_repository.py tests/unit/services/test_dataset_snapshot_service.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/db/test_migrations.py tests/api/routers/test_market_ui.py -q` -> `53 passed`
+- `../.venv/bin/python -m pytest tests/unit/models/test_market_snapshot.py tests/unit/providers/test_kaipan_provider.py tests/unit/providers/test_kaipan_normalizer.py tests/providers/test_kaipan_scheduler.py tests/providers/test_kaipan_pipeline.py tests/unit/services/test_market_snapshot_builders.py tests/unit/services/test_market_snapshot_registry.py tests/unit/services/test_market_snapshot_service.py tests/unit/services/test_market_data_storage_service.py tests/unit/services/test_market_regime_feature_service.py tests/unit/services/test_market_regime_service.py tests/unit/services/test_kaipan_dashboard_service.py tests/api/routers/ui/test_kaipan.py tests/api/routers/test_ui_snapshots.py tests/unit/db/repositories/test_market_data_repositories.py -q` -> `87 passed`
+- `../.venv/bin/python -m pytest tests/unit/services/test_job_runner.py tests/unit/services/test_job_registry.py tests/unit/services/test_job_service.py tests/unit/services/test_data_scheduling_service.py tests/api/routers/test_system_data_api.py tests/api/routers/test_jobs_api.py tests/unit/services/test_workflow_service.py tests/unit/services/test_workflow_runner.py tests/api/routers/test_workflows.py -q` -> `93 passed`
+- `../.venv/bin/python -m pytest tests/unit/services/test_stage2_writer_routing.py tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py -q` -> `39 passed`
+- `../.venv/bin/python -m pytest tests/unit/services/test_optimize_rule_pool_service.py tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/unit/services/test_rule_governance_service.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/cli/test_rule_pool_cli.py -q` -> `41 passed`
+- `pnpm vitest run src/pages/system/index.test.tsx src/pages/product-entry-pages.test.tsx src/app/route-config.test.tsx src/pages/market/index.test.tsx src/features/market-workspace/market-workspace-shell.test.tsx src/pages/market/snapshots/index.test.tsx` -> `6 files passed`, `38 tests passed`
+- `pnpm typecheck` -> `TypeScript: No errors found`
+- `../.venv/bin/python -m compileall src api cli` -> passed
+- `git diff --check` -> passed
+- `../.venv/bin/python -m cli.main stage3-regression run --fixed-set` -> `{"status":"passed","article_count":12,"cached_count":12,"processed_count":12,"human_attention_count":6,"persistence_failures":[],"provider_failures":[],"semantic_failures":[],"validation_failures":[]}`
+
+### PostgreSQL Migration Evidence
+
+- Sandbox PostgreSQL connection to localhost was blocked with `Operation not permitted`; the same checks were rerun through approved unsandboxed local PostgreSQL access.
+- PostgreSQL version: `PostgreSQL 15.17 (Homebrew)`.
+- Fresh database `trade_stage5_gate_fresh`: `upgrade head` reached `2026_06_17_0009`; verified `dataset_snapshots`、`ohlcv_bars`、`market_snapshots`、`market_snapshot_sections`; verified `uq_ohlcv_identity_trade_date`; verified Stage 5 OHLCV and section provenance/time columns.
+- Fresh downgrade: `downgrade 2026_06_16_0007` succeeded; verified old `uq_ohlcv_symbol_date`; verified Stage 5 OHLCV and section columns removed.
+- Fresh re-upgrade: `upgrade head` succeeded through `2026_06_17_0008` and `2026_06_17_0009`.
+- Existing-data database `trade_stage5_gate_existing`: upgraded to `2026_06_16_0007`, inserted deterministic legacy data (`ohlcv_bars=2`, `market_snapshots=1`, `market_snapshot_sections=1`), then upgraded to head.
+- Existing-data post-upgrade checks: row counts preserved (`2/1/1`); OHLCV backfilled `exchange` (`SZ`/`SH`), `asset_type=stock`, `frequency=1d`, `adjustment_policy=unadjusted`, `source=legacy_import`, `source_time_reason=provider_time_unavailable`, `event_time=2026-05-15 15:00:00+08`, `available_at=2026-05-15 17:00:00+08`; duplicate OHLCV identity count `0`.
+- Existing-data MarketSnapshot checks: snapshot retained `content_fingerprint=fp-market-0925`; section backfilled `trade_date=2026-05-15`, `slot=09-25`, `source_dataset=hot_topics`, `raw_payload_fingerprint=d7e5fe6a0c702d8f8fae58c2fb8ff58a`, `normalization_version=kaipan-normalizer-v2`; duplicate legacy snapshot identity count `0`.
+- Existing-data downgrade/recovery: downgrade to `2026_06_16_0007` preserved row counts (`2/1/1`) and restored old OHLCV constraint; re-upgrade to head preserved row counts (`2/1/1`), duplicate OHLCV identity count `0`, required Stage 5 OHLCV null count `0`, required Stage 5 section null count `0`.
+- Temporary PostgreSQL databases `trade_stage5_gate_fresh` and `trade_stage5_gate_existing` were dropped after verification.
+
+### Canonical and Legacy Path Review
+
+- Formal data mutations are owned by `/api/ui/v1/system/data/*`, `DataSchedulingService`, and `system-data-operation`.
+- Readiness is derived from canonical data facts and repair plan status, not generic job success.
+- Duplicate manual/scheduled formal operations are deduplicated by idempotency keys and operation state.
+- Formal mutation endpoints require `operator` role and write audit events.
+- `SystemDataFacade` remains a thin orchestration/facade layer over domain services; data quality, readiness, and repair logic remain in canonical services.
+- Legacy API/UI mutation endpoints for OHLCV/Kaipan are compatibility-only rejected; raw data job/workflow paths are compatibility-only rejected; low-level job creation now also rejects raw Stage 5 data jobs.
+- Legacy internal CLI/workflow/tooling retirement remains deferred where deletion would require additional migration, observation, or rollback evidence; current Gate requires no deletion.
+
+### Remaining Non-Blocking Risks
+
+- Legacy internal tooling retirement remains deferred; each path must retain compatibility-only/read-only/rejected behavior until retirement evidence is complete.
+- Readiness coverage persistence is still intentionally shallow for Stage 5 and should be deepened if Stage 6 needs historical readiness audit queries.
+- Historical Kaipan availability remains truthful but provider/network/credential dependent; deterministic fake providers were used where live upstream evidence was not available.
+- No Stage 6 backtest execution, strategy behavior, or future Prompt activation was introduced.
+
+### Next Step
+
+Stage 6 Bootstrap may begin only after explicit user instruction. Do not begin Stage 6 automatically.

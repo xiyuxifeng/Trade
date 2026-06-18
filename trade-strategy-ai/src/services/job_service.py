@@ -16,7 +16,7 @@ from src.services.config_service import ConfigService
 from src.services.config_snapshot_service import ConfigSnapshotService
 from src.services.config_profile_service import ConfigProfileService
 from src.db.repositories import BacktestResultRunRepository
-from src.services.job_registry import get_job_definition
+from src.services.job_registry import STAGE5_CANONICAL_DATA_LEGACY_JOB_TYPES, get_job_definition
 from src.services.job_control import JobControlState
 from src.models.job_audit_event import JobAuditEvent
 from src.models.job import Job, JobStatus
@@ -512,6 +512,20 @@ class JobService(BaseService):
         audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """创建新的 Job 记录。"""
+        if job_type in STAGE5_CANONICAL_DATA_LEGACY_JOB_TYPES:
+            return ServiceResult(
+                status="error",
+                message=(
+                    "legacy Stage 5 data job is compatibility-only; use system-data-operation "
+                    "through 系统管理 -> 数据与调度"
+                ),
+                payload={
+                    "job_type": job_type,
+                    "compatibility_only": True,
+                    "replacement_job_type": "system-data-operation",
+                    "replacement_surface": "系统管理 -> 数据与调度",
+                },
+            )
         session_scope = self._ensure_session_factory()
         config_snapshot_payload: dict[str, Any] | None = None
         profile_snapshot_payload: dict[str, Any] | None = None
@@ -910,7 +924,7 @@ class JobService(BaseService):
             run_type = "pre_market" if normalized_job_type == "run-pre-market" else "after_close"
             return ("agent", {"agent_name": "ManagerAgent", "run_type": run_type})
 
-        if normalized_job_type in {"kaipan-fetch", "kaipan-normalize", "ohlcv-crawl"}:
+        if normalized_job_type in {"system-data-operation", "kaipan-fetch", "kaipan-normalize", "ohlcv-crawl"}:
             provider = "kaipan" if normalized_job_type.startswith("kaipan-") else "akshare"
             capability = normalized_job_type.replace("-", "_")
             if any(token in f"{error_type} {error_text}".lower() for token in ("provider", "akshare", "network", "timeout", "fetch")):

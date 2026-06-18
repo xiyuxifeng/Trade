@@ -637,10 +637,10 @@ def test_kaipan_run_handler_accepts_profile_only_and_resolves_config_path(
     asyncio.run(engine.dispose())
 
 
-def test_kaipan_fetch_job_writes_progress_to_job_record(
+def test_kaipan_fetch_job_submission_is_compatibility_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Kaipan 抓取 Job 执行时应把结构化进度写回 Job 记录。"""
+    """Kaipan 抓取 Job 不得绕过系统数据入口提交。"""
     from src.services import job_runner as job_runner_module
 
     calls: dict[str, Any] = {}
@@ -708,7 +708,7 @@ def test_kaipan_fetch_job_writes_progress_to_job_record(
     monkeypatch.setattr(job_runner_module.ConfigProfileService, "resolve_profile_config_path", _fake_resolve_profile_config_path, raising=False)
     monkeypatch.setattr(job_runner_module, "KaipanService", _FakeKaipanService)
 
-    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    runner, _job_service, engine, _ = _build_job_runner(tmp_path)
     submitted = asyncio.run(
         runner.submit_job(
             job_type="kaipan-fetch",
@@ -721,18 +721,9 @@ def test_kaipan_fetch_job_writes_progress_to_job_record(
             created_by="web",
         )
     )
-    job_id = submitted.payload["execution"]["job"]["id"]
-    loaded = asyncio.run(job_service.get_job(job_id))
-
-    assert submitted.status == "ok"
-    assert calls["profile_id"] == "default"
-    assert calls["start_date"] == "2026-05-01"
-    assert calls["end_date"] == "2026-05-01"
-    assert calls["slot"] == "09-25"
-    assert loaded.payload["job"]["status"] == "success"
-    assert loaded.payload["job"]["progress"]["current"] == 2
-    assert loaded.payload["job"]["progress"]["current_step"] == "normalize:hot_topics"
-    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    assert submitted.status == "error"
+    assert submitted.payload["replacement_job_type"] == "system-data-operation"
+    assert calls == {}
 
     asyncio.run(engine.dispose())
 
@@ -913,8 +904,8 @@ def test_snapshot_build_handler_keeps_config_path_only_without_profile_id(tmp_pa
     asyncio.run(engine.dispose())
 
 
-def test_submit_ohlcv_crawl_writes_progress_to_job_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """ohlcv-crawl 执行时应把 symbol 级进度写回 Job 记录。"""
+def test_submit_ohlcv_crawl_is_compatibility_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ohlcv-crawl 不得绕过系统数据入口提交。"""
     from src.services import job_runner as job_runner_module
 
     calls: dict[str, Any] = {}
@@ -954,7 +945,7 @@ def test_submit_ohlcv_crawl_writes_progress_to_job_record(tmp_path: Path, monkey
 
     monkeypatch.setattr(job_runner_module, "MarketService", lambda: _FakeMarketService())
 
-    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    runner, _job_service, engine, _ = _build_job_runner(tmp_path)
     submitted = asyncio.run(
         runner.submit_job(
             job_type="ohlcv-crawl",
@@ -968,19 +959,14 @@ def test_submit_ohlcv_crawl_writes_progress_to_job_record(tmp_path: Path, monkey
             created_by="web",
         )
     )
-    job_id = submitted.payload["execution"]["job"]["id"]
-    loaded = asyncio.run(job_service.get_job(job_id))
-
-    assert submitted.status == "ok"
-    assert calls["symbols"] == ["000001.SZ", "000300.SH"]
-    assert loaded.payload["job"]["progress"]["current"] == 2
-    assert loaded.payload["job"]["progress"]["current_step"] == "crawl:000300.SH"
-    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    assert submitted.status == "error"
+    assert submitted.payload["replacement_job_type"] == "system-data-operation"
+    assert calls == {}
     asyncio.run(engine.dispose())
 
 
-def test_submit_snapshot_build_writes_progress_to_job_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """snapshot-build 执行时应把日期 x 快照类型进度写回 Job 记录。"""
+def test_submit_snapshot_build_is_compatibility_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """snapshot-build 不得绕过系统数据入口提交。"""
     from src.services import job_runner as job_runner_module
 
     calls: dict[str, Any] = {}
@@ -1022,7 +1008,7 @@ def test_submit_snapshot_build_writes_progress_to_job_record(tmp_path: Path, mon
 
     monkeypatch.setattr(job_runner_module, "SnapshotService", lambda: _FakeSnapshotService())
 
-    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    runner, _job_service, engine, _ = _build_job_runner(tmp_path)
     submitted = asyncio.run(
         runner.submit_job(
             job_type="snapshot-build",
@@ -1037,15 +1023,9 @@ def test_submit_snapshot_build_writes_progress_to_job_record(tmp_path: Path, mon
             created_by="web",
         )
     )
-    job_id = submitted.payload["execution"]["job"]["id"]
-    loaded = asyncio.run(job_service.get_job(job_id))
-
-    assert submitted.status == "ok"
-    assert calls["start_date"] == "2026-05-01"
-    assert calls["end_date"] == "2026-05-02"
-    assert loaded.payload["job"]["progress"]["current"] == 4
-    assert loaded.payload["job"]["progress"]["current_step"] == "snapshot:strong_symbols"
-    assert loaded.payload["job"]["progress"]["percent"] == 100.0
+    assert submitted.status == "error"
+    assert submitted.payload["replacement_job_type"] == "system-data-operation"
+    assert calls == {}
     asyncio.run(engine.dispose())
 
 
@@ -1611,8 +1591,8 @@ def test_submit_backtest_validate_rules_binds_validation_report(tmp_path: Path) 
     asyncio.run(engine.dispose())
 
 
-def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
-    """Market state job 应能绑定结构化产物引用。"""
+def test_submit_market_state_job_is_compatibility_only(tmp_path: Path) -> None:
+    """Market state job 不得作为正式数据入口提交。"""
 
     async def _handler(params: dict[str, Any]) -> Any:
         artifact_path = tmp_path / "market_state.json"
@@ -1627,7 +1607,7 @@ def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
             message="market state done",
         )
 
-    runner, job_service, engine, ServiceResult = _build_job_runner(
+    runner, _job_service, engine, ServiceResult = _build_job_runner(
         tmp_path,
         handlers={"market-state-build": _handler},
     )
@@ -1638,18 +1618,13 @@ def test_submit_market_state_job_binds_result_artifact(tmp_path: Path) -> None:
             created_by="web",
         )
     )
-    job_id = submitted.payload["execution"]["job"]["id"]
-    loaded = asyncio.run(job_service.get_job(job_id))
-
-    assert submitted.status == "ok"
-    assert loaded.payload["job"]["status"] == "success"
-    assert loaded.payload["job"]["artifacts"][0]["kind"] == "result-json"
-    assert any(item["kind"] == "market-state-json" for item in loaded.payload["job"]["artifacts"])
+    assert submitted.status == "error"
+    assert submitted.payload["replacement_job_type"] == "system-data-operation"
     asyncio.run(engine.dispose())
 
 
-def test_submit_snapshot_job_binds_summary_and_quality_artifacts(tmp_path: Path) -> None:
-    """结构化 snapshot job 应绑定摘要与质量报告产物。"""
+def test_execute_existing_snapshot_job_is_not_supported_after_stage5_gate(tmp_path: Path) -> None:
+    """已存在的 snapshot-build 兼容 job 不得继续执行写入正式数据。"""
 
     async def _handler(params: dict[str, Any]) -> Any:
         del params
@@ -1673,32 +1648,46 @@ def test_submit_snapshot_job_binds_summary_and_quality_artifacts(tmp_path: Path)
         tmp_path,
         handlers={"snapshot-build": _handler},
     )
-    created = asyncio.run(
-        job_service.create_job(
-            job_type="snapshot-build",
-            params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "trade_date": "2026-05-16"},
-            created_by="web",
-        )
-    )
-    job_id = created.payload["job"]["id"]
+    async def _insert_legacy_job() -> str:
+        from src.models.job import Job
+        from src.models.job_audit_event import JobAuditEvent
+        from datetime import UTC, datetime
+
+        async with job_service._ensure_session_factory()() as session:  # noqa: SLF001
+            job = Job(
+                job_type="snapshot-build",
+                params={"config_path": "config/app.yaml", "benchmark_symbol": "000300.SH", "trade_date": "2026-05-16"},
+                status="pending",
+                created_by="legacy-test",
+            )
+            session.add(job)
+            await session.flush()
+            session.add(
+                JobAuditEvent(
+                    job_id=job.id,
+                    operation="create",
+                    actor="legacy-test",
+                    source="legacy-test",
+                    params_summary={},
+                    event_at=datetime.now(UTC),
+                )
+            )
+            await session.flush()
+            return str(job.id)
+
+    job_id = asyncio.run(_insert_legacy_job())
     executed = asyncio.run(runner.execute_job(job_id=job_id))
     loaded = asyncio.run(job_service.get_job(job_id))
-    result_payload = json.loads((tmp_path / "jobs" / str(job_id) / "result.json").read_text(encoding="utf-8"))
 
-    kinds = [item["kind"] for item in loaded.payload["job"]["artifacts"]]
     assert executed.status == "ok"
-    assert str(tmp_path) not in json.dumps(result_payload, ensure_ascii=False)
-    assert result_payload["result"]["payload"]["snapshot_path"] == "snapshot.json"
-    assert result_payload["result"]["payload"]["snapshot_summary_path"] == "snapshot.summary.json"
-    assert result_payload["result"]["payload"]["quality_report_path"] == "snapshot.quality.json"
-    assert "snapshot-json" in kinds
-    assert "snapshot-summary-json" in kinds
-    assert "snapshot-quality-json" in kinds
+    assert executed.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["status"] == "failed"
+    assert loaded.payload["job"]["error"]["type"] == "unsupported_job_type"
     asyncio.run(engine.dispose())
 
 
 def test_submit_market_job_classifies_external_dependency_failure(tmp_path: Path) -> None:
-    """市场 job 失败时应保留结构化错误分类。"""
+    """正式数据 job 失败时应保留结构化错误分类。"""
 
     async def _handler(params: dict[str, Any]) -> Any:
         del params
@@ -1706,12 +1695,12 @@ def test_submit_market_job_classifies_external_dependency_failure(tmp_path: Path
 
     runner, job_service, engine, ServiceResult = _build_job_runner(
         tmp_path,
-        handlers={"ohlcv-crawl": _handler},
+        handlers={"system-data-operation": _handler},
     )
     submitted = asyncio.run(
         runner.submit_job(
-            job_type="ohlcv-crawl",
-            params={"config_path": "config/app.yaml", "symbols": ["000001.SZ"]},
+            job_type="system-data-operation",
+            params={"action": "update", "target_trade_date": "2026-05-16"},
             created_by="web",
         )
     )

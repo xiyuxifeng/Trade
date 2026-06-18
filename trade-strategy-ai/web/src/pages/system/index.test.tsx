@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
-import { SystemPage } from './index';
+import { SystemDataPage, SystemPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 
 describe('SystemPage', () => {
@@ -20,5 +20,23 @@ describe('SystemPage', () => {
     expect(screen.getByRole('button', { name: /系统健康检查/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /数据库迁移/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /数据备份与恢复/ })).toBeInTheDocument();
+  });
+
+  it('uses Chinese business wording on the data scheduling page shell', async () => {
+    const { container } = renderWithRouter(
+      [{ path: '/system/data', element: <SystemDataPage availability="error" /> }],
+      ['/system/data'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByRole('heading', { name: '数据与调度' })).toBeInTheDocument();
+    expect(container.textContent).not.toContain('readiness');
   });
 });

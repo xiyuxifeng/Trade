@@ -157,7 +157,7 @@ def test_update_job_progress_persists_and_serializes(tmp_path: Path) -> None:
     """JobService 应支持写入并读取结构化进度。"""
     service, engine = _build_job_service(tmp_path)
 
-    created = asyncio.run(service.create_job(job_type="kaipan-fetch", params={}, created_by="web"))
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={}, created_by="web"))
     job_id = created.payload["job"]["id"]
 
     progress = {
@@ -188,11 +188,23 @@ def test_update_job_progress_persists_and_serializes(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_create_stage5_raw_data_job_is_compatibility_only(tmp_path: Path) -> None:
+    """低层 JobService 不得绕过正式系统数据入口创建原始 Stage 5 数据 job。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="ohlcv-crawl", params={"symbols": ["000001.SZ"]}, created_by="web"))
+
+    assert created.status == "error"
+    assert created.payload["replacement_job_type"] == "system-data-operation"
+
+    asyncio.run(engine.dispose())
+
+
 def test_serialize_job_includes_runtime_state(tmp_path: Path) -> None:
     """Job 详情序列化应透出 runtime_state，供 pause/resume checkpoint 使用。"""
     service, engine = _build_job_service(tmp_path)
 
-    created = asyncio.run(service.create_job(job_type="ohlcv-crawl", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
     job_id = created.payload["job"]["id"]
 
     async def _set_runtime_state() -> None:
@@ -350,13 +362,13 @@ def test_fail_job_emits_alerts_by_job_type(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr("src.alerting.rules.fire_agent_failure_alert", record("agent"))
 
     job_ids = {}
-    for job_type in ("pipeline-run", "backtest-run", "kaipan-fetch", "run-pre-market"):
+    for job_type in ("pipeline-run", "backtest-run", "system-data-operation", "run-pre-market"):
         created = asyncio.run(service.create_job(job_type=job_type, params={}, created_by="web"))
         job_ids[job_type] = created.payload["job"]["id"]
 
     asyncio.run(service.fail_job(job_id=job_ids["pipeline-run"], error="boom"))
     asyncio.run(service.fail_job(job_id=job_ids["backtest-run"], error="boom"))
-    asyncio.run(service.fail_job(job_id=job_ids["kaipan-fetch"], error="akshare timeout"))
+    asyncio.run(service.fail_job(job_id=job_ids["system-data-operation"], error="akshare timeout"))
     asyncio.run(service.fail_job(job_id=job_ids["run-pre-market"], error="boom"))
 
     assert [item[0] for item in calls] == ["pipeline", "backtest", "provider", "agent"]
@@ -368,7 +380,7 @@ def test_job_pause_resume_and_retry_flow(tmp_path: Path) -> None:
     """JobService 应支持暂停、恢复和错误重试。"""
     service, engine = _build_job_service(tmp_path)
 
-    created = asyncio.run(service.create_job(job_type="ohlcv-crawl", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
     job_id = created.payload["job"]["id"]
 
     paused = asyncio.run(service.pause_job(job_id=job_id, actor="web", reason="need to wait"))
@@ -460,7 +472,8 @@ def test_complete_backtest_job_persists_summary_run(tmp_path: Path) -> None:
             run = await repo.get_by_source_job_id(session, job_id)
             assert run is not None
             assert run.request_trader_id == "trader_a"
-            assert run.strategy_version_id == "sv-1"
+            assert run.strategy_version_id is None
+            assert run.legacy_strategy_version_id == "sv-1"
             assert run.summary_json["total_days"] == 5
             assert run.fingerprint == "fp-1"
 

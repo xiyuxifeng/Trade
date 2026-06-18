@@ -284,6 +284,26 @@ Stage 12 必须：
 
 ---
 
+## 6.x Canonical Data Path 永久收敛规则
+
+当 Stage 5 Gate 为 ACCEPTED 后：
+
+- Stage 6+ 的正式数据读取只能通过 canonical DatasetSnapshot、
+  MarketSnapshot 及其 canonical repositories/services。
+- Legacy API、CLI、Job、Workflow、Pipeline、compatibility view、
+  file-based snapshot 或旧 market-state artifact 不得成为正式数据入口、
+  回测输入或事实源。
+- Legacy tooling 只能保持 read-only、compatibility-only 或明确拒绝状态，
+  直到迁移、引用扫描、观察期和 rollback/recovery 证据满足退役条件。
+- 不得为了后续 Task 的实现便利而恢复 legacy read/write/scheduling path。
+- 缺失 canonical snapshot 或 coverage 时必须返回 unavailable、
+  partial、conflict 或 insufficient_coverage；不得从 legacy 数据补齐或伪造。
+- Stage 6+ 的所有 Bootstrap、Task Review 和 Stage Gate 自动继承本规则。
+- 涉及数据消费、回测、市场状态、调度、迁移、策略、盘前盘后或
+  legacy 路径的 Task Card，必须再次显式写出本规则。
+
+---
+
 ## 7. Task 验证与 Review
 
 ### 7.1 普通 Task
@@ -738,6 +758,12 @@ agreement, single official fact source/writer, scope, truthful states,
 migration/recovery, point-in-time, compatibility/retirement, logs and
 preservation of user changes. For Stage 3+, verify canonical writer is active;
 for Stage 12, verify the switch and legacy writer paths are removed.
+
+Verify that no legacy API, CLI, Job, Workflow, Pipeline, compatibility view,
+file-based artifact, or live Provider has become a formal downstream data source.
+
+Verify all formal downstream results bind to canonical immutable snapshot IDs,
+fingerprints, versions, provenance, and availability timestamps.
 
 Run or verify every applicable test, typecheck, lint, build, migration/
 rollback/safe-rerun, critical E2E, compatibility/retirement check,

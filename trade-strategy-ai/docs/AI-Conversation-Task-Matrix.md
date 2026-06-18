@@ -59,13 +59,12 @@ Stage 5 和 Stage 6 的“部分并行”不表示可在一个 Prompt 中跨 Sta
 | RT-S3-003 | 回归样本与批处理 | Prompt 迁移与退役 |
 | RT-S4-* | 规则治理 | 数据库迁移安全 |
 | RT-S5-* | 数据时间语义与调度 | 运行保障与系统管理 |
-| RT-S6-* | 回测安全 | 数据时间语义与调度 |
-| RT-S7-* | 作者画像边界 | Prompt 迁移与退役 |
-| RT-S8-* | 策略版本与 Proposal | 规则治理 |
-| RT-S9-* | 每日盘前 | 策略版本与 Proposal |
-| RT-S10-* | 每日盘后归因 | 策略版本与 Proposal |
-| RT-S11-* | 运行保障与系统管理 | 数据时间语义与调度 |
-| RT-S12-* | 最终退役与交付 | 当前被退役领域的对应约束 |
+| RT-S6-* | 回测安全 + Canonical 数据消费与 Legacy 隔离 | 数据时间语义与调度 |
+| RT-S8-* | 策略版本与 Proposal + Canonical 数据消费与 Legacy 隔离 | 规则治理 |
+| RT-S9-* | 每日盘前 + Canonical 数据消费与 Legacy 隔离 | 策略版本与 Proposal |
+| RT-S10-* | 每日盘后归因 + Canonical 数据消费与 Legacy 隔离 | 策略版本与 Proposal |
+| RT-S11-* | 运行保障与系统管理 + Canonical 数据消费与 Legacy 隔离 | 数据时间语义与调度 |
+| RT-S12-* | 最终退役与交付 + Canonical 数据消费与 Legacy 隔离 | 被退役领域约束 |
 
 可选约束只有在当前 Task 实际触及该风险时才追加。
 

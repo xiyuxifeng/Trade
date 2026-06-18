@@ -12,6 +12,24 @@ Data and scheduling constraints:
 - Backtests do not call live Providers during execution.
 ```
 
+### 11.8A Canonical 数据消费与 Legacy 隔离
+
+Canonical data consumption constraints:
+
+- Formal downstream consumers must read through canonical DatasetSnapshot,
+  MarketSnapshot, and their canonical repositories/services.
+- Legacy API, CLI, Job, Workflow, Pipeline, compatibility views, file snapshots,
+  and old market-state artifacts are not formal data sources.
+- Backtests, strategy generation, pre-market, and post-market flows must bind to
+  immutable canonical snapshot IDs, fingerprints, versions, and availability time.
+- Do not call live Providers during snapshot-bound execution.
+- Do not use legacy or live data to fill missing canonical snapshot coverage.
+- Missing canonical data remains unavailable, partial, conflict, invalid, or
+  insufficient_coverage.
+- Legacy paths remain read-only, compatibility-only, or rejected until formal
+  retirement evidence passes.
+- No downstream Task may reintroduce a second formal data entry point.
+
 ### 11.9 回测安全
 
 ```text

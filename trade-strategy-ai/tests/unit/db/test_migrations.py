@@ -107,3 +107,27 @@ def test_stage5_kaipan_contract_migration_defines_slot_provenance_and_freeze_fie
     assert "raw_payload_fingerprint" in content
     assert "normalization_version" in content
     assert "uq_market_snapshots_market_date_slot_version" in content
+
+
+def test_stage6_backtest_run_contract_migration_defines_immutable_foundation() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_18_0010_stage6_backtest_run_foundation.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_18_0010"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_17_0009"' in content
+    assert "backtest_runs" in content
+    assert "rule_version_id" in content
+    assert "rule_family_id" in content
+    assert "frozen_rule_version_ids" in content
+    assert "dataset_snapshot_id" in content
+    assert "market_snapshot_ids" in content
+    assert "request_fingerprint" in content
+    assert "reproducibility_fingerprint" in content
+    assert "snapshot_only" in content
+    assert "actor_id" in content
+    assert "source_surface" in content
+    assert "before_state_json" in content
+    assert "after_state_json" in content

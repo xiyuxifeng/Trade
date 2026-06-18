@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    Boolean,
     JSON as SAJSON,
     Numeric,
     String,
@@ -105,6 +106,17 @@ class RuleApplicabilityResultStatus(StrEnum):
     insufficient_sample = "insufficient_sample"
     partial = "partial"
     invalid = "invalid"
+
+
+class BacktestRunStatus(StrEnum):
+    dependency_checked = "dependency_checked"
+    dependency_failed = "dependency_failed"
+    queued = "queued"
+    running = "running"
+    cancelled = "cancelled"
+    failed = "failed"
+    completed_invalid = "completed_invalid"
+    completed_valid = "completed_valid"
 
 
 class Authors(TimestampMixin, Base):
@@ -549,6 +561,69 @@ class DatasetSnapshot(TimestampMixin, Base):
             "date_from": self.date_from.isoformat() if isinstance(self.date_from, date) else self.date_from,
             "date_to": self.date_to.isoformat() if isinstance(self.date_to, date) else self.date_to,
         }
+
+
+class BacktestRun(TimestampMixin, Base):
+    __tablename__ = "backtest_runs"
+    __table_args__ = (
+        Index("uq_btrun_request_fingerprint", "request_fingerprint", unique=True),
+        Index("ix_btrun_rule_version_created", "rule_version_id", "created_at"),
+        Index("ix_btrun_rule_family_created", "rule_family_id", "created_at"),
+        Index("ix_btrun_dataset_snapshot", "dataset_snapshot_id"),
+        Index("ix_btrun_status_created", "status", "created_at"),
+    )
+
+    run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    rule_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("rule_versions.rule_version_id", name="fk_btrun_rule_version", ondelete="RESTRICT"),
+    )
+    rule_version_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    rule_version_no: Mapped[int | None] = mapped_column(Integer)
+    rule_family_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("rule_families.rule_family_id", name="fk_btrun_rule_family", ondelete="RESTRICT"),
+    )
+    rule_family_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    frozen_rule_version_ids: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    frozen_rule_version_fingerprints: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    date_from: Mapped[date] = mapped_column(Date, nullable=False)
+    date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    universe_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    benchmark_symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    requested_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    effective_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    dataset_snapshot_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("dataset_snapshots.dataset_snapshot_id", name="fk_btrun_dataset_snapshot", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dataset_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    market_snapshot_ids: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    market_snapshot_fingerprints: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    market_state_model_version: Mapped[str | None] = mapped_column(String(64))
+    indicator_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    execution_policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    recommendation_policy_version: Mapped[str | None] = mapped_column(String(64))
+    decision_time_policy: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    reproducibility_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    snapshot_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[BacktestRunStatus] = mapped_column(_enum(BacktestRunStatus, "backtest_run_status"), nullable=False)
+    coverage_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    quality_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    unavailable_reasons: Mapped[list[dict[str, Any]]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    limitations: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    progress_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    audit_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    source_surface: Mapped[str] = mapped_column(String(128), nullable=False)
+    before_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
+    after_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
 
 
 class AuthorProfileVersion(TimestampMixin, Base):

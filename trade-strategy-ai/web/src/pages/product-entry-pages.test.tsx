@@ -225,7 +225,7 @@ describe('formal product entry pages', () => {
     [<ResearchAddPage />, 'article-add'],
     [<ResearchResultsPage />, 'article-results'],
     [<RulesLibraryPage />, 'rule-pool-product'],
-    [<RulesBacktestsPage />, 'backtest-product'],
+    [<RulesBacktestsPage />, 'formal-backtest-product'],
     [<RulesResultsPage />, 'regime-backtest-product'],
     [<StrategyCandidatesPage />, 'strategy-candidates-product'],
     [<SystemStatusPage />, 'system-status-product'],

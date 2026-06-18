@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState, SectionCard } from '@/components/
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/http';
 import { getRuleReviewCandidate, listRuleReviewCandidates, submitRuleReviewAction } from '@/lib/api/rule-review';
-import { BacktestPage } from '@/pages/backtest';
+import { FormalBacktestWorkbench } from '@/features/backtest/formal-backtest-workbench';
 import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { RulePoolPage } from '@/pages/rule-pool';
 import type { RuleReviewCandidateListItem } from '@/types/rule-review';
@@ -307,12 +307,12 @@ export function RulesBacktestsPage({ availability }: FormalPageProps = {}) {
     <ProductPageAdapter
       title="回测实验"
       queryState={state}
-      purpose="使用固定历史数据验证规则表现，并保留真实运行结果。"
-      inputDescription="选择已有规则、日期范围、基准和可用数据。"
-      processingDescription="系统使用现有回测能力提交验证并读取真实结果。"
-      outputDescription="输出为全周期回测结果和当前可用的验证证据。"
+      purpose="检查规则回测所需数据，并创建可追溯的正式回测记录。"
+      inputDescription="选择规则或规则族、回测区间、标的范围、基准、回测模式和数据等级。"
+      processingDescription="系统只核对正式规则版本、正式数据快照和所需市场状态，不用临时文件或实时数据补齐。"
+      outputDescription="输出为可运行、可降级、需修复或不可运行的依赖结论，以及正式回测记录入口。"
       businessAction={{ label: '查看作者画像', to: '/authors' }}
-      result={availability ? undefined : <BacktestPage productMode />}
+      result={availability ? undefined : <FormalBacktestWorkbench />}
     />
   );
 }

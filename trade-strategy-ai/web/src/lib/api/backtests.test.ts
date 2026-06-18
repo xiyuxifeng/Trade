@@ -5,7 +5,10 @@ import {
   buildBacktestValidateRulesParams,
   downloadBacktestReport,
   downloadBacktestValidationReport,
+  checkFormalBacktestDependencies,
+  createFormalBacktestRun,
   getBacktestResult,
+  getFormalBacktestRun,
   listBacktestResults,
 } from './backtests';
 
@@ -136,5 +139,64 @@ describe('backtests api client', () => {
       use_snapshot_only: true,
       scoring_profile: 'stage5',
     });
+  });
+
+  it('uses the formal rules backtest API instead of raw job submission', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          business_state: '可运行',
+          canonical_state: 'runnable',
+          can_create_run: true,
+          requested_level: 'level_1',
+          effective_level: 'level_1',
+          coverage: {},
+          unavailable_reasons: [],
+          limitations: [],
+          next_actions: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          run_id: 'run-1',
+          status: 'dependency_checked',
+          snapshot_only: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          run_id: 'run-1',
+          status: 'dependency_checked',
+          snapshot_only: true,
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const selection = {
+      rule_version_id: '00000000-0000-0000-0000-000000000001',
+      date_from: '2026-04-01',
+      date_to: '2026-04-10',
+      universe: { symbols: ['000001.SZ'] },
+      benchmark_symbol: '000300.SH',
+      mode: 'full' as const,
+      requested_level: 'level_1' as const,
+      profile_id: 'context-only',
+    };
+
+    await checkFormalBacktestDependencies(selection);
+    await createFormalBacktestRun({ selection, reason: '验证规则' });
+    await getFormalBacktestRun('run-1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/ui/v1/rules/backtests/dependency-check', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ui/v1/rules/backtests/runs', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ui/v1/rules/backtests/runs/run-1', expect.any(Object));
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.includes('/api/ui/v1/jobs'))).toBe(false);
   });
 });

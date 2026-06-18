@@ -1,9 +1,13 @@
-import { fetchRootJson, fetchRootText } from './http';
+import { fetchJson, fetchRootJson, fetchRootText } from './http';
 import type {
   BacktestJobSubmission,
   BacktestResultResponse,
   BacktestResultsResponse,
   BacktestSummary,
+  FormalBacktestDependencyResult,
+  FormalBacktestRun,
+  FormalBacktestRunCreateRequest,
+  FormalBacktestSelection,
 } from '@/types/backtests';
 
 type BacktestResultsQuery = {
@@ -36,6 +40,24 @@ export function downloadBacktestReport(resultId: string) {
 
 export function downloadBacktestValidationReport(resultId: string) {
   return fetchRootText(`/backtest_results/${resultId}/validate_rules`);
+}
+
+export function checkFormalBacktestDependencies(selection: FormalBacktestSelection) {
+  return fetchJson<FormalBacktestDependencyResult>('/rules/backtests/dependency-check', {
+    method: 'POST',
+    body: JSON.stringify(selection),
+  });
+}
+
+export function createFormalBacktestRun(request: FormalBacktestRunCreateRequest) {
+  return fetchJson<FormalBacktestRun>('/rules/backtests/runs', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+export function getFormalBacktestRun(runId: string) {
+  return fetchJson<FormalBacktestRun>(`/rules/backtests/runs/${runId}`);
 }
 
 export function buildBacktestRunParams(submission: BacktestJobSubmission): Record<string, unknown> {

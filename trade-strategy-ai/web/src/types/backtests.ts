@@ -98,3 +98,53 @@ export type BacktestJobSubmission = {
   useSnapshotOnly: boolean;
   scoringProfile: string;
 };
+
+export type FormalBacktestLevel = 'level_1' | 'level_2' | 'level_3';
+
+export type FormalBacktestSelection = {
+  rule_version_id?: string | null;
+  rule_family_id?: string | null;
+  date_from: string;
+  date_to: string;
+  universe: Record<string, unknown>;
+  benchmark_symbol: string;
+  mode: 'full' | 'replay' | 'rule_validation';
+  requested_level: FormalBacktestLevel;
+  profile_id?: string | null;
+};
+
+export type FormalBacktestDependencyResult = {
+  business_state: string;
+  canonical_state: string;
+  can_create_run: boolean;
+  requested_level: FormalBacktestLevel;
+  effective_level: FormalBacktestLevel | 'unavailable';
+  selection: FormalBacktestSelection;
+  coverage: Record<string, Record<string, unknown>>;
+  unavailable_reasons: Array<{ code: string; message: string }>;
+  limitations: string[];
+  next_actions: string[];
+  canonical_ids?: Record<string, unknown>;
+  fingerprints?: Record<string, unknown>;
+};
+
+export type FormalBacktestRunCreateRequest = {
+  selection: FormalBacktestSelection;
+  reason?: string | null;
+};
+
+export type FormalBacktestRun = {
+  run_id: string;
+  status: string;
+  business_status: string;
+  rule_version_id?: string | null;
+  rule_family_id?: string | null;
+  frozen_rule_version_ids: string[];
+  dataset_snapshot_id: string;
+  request_fingerprint: string;
+  reproducibility_fingerprint: string;
+  snapshot_only: boolean;
+  progress: Record<string, unknown>;
+  limitations: string[];
+  next_actions: string[];
+};

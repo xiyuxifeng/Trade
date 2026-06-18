@@ -41,6 +41,7 @@ from api.routers.ui import signals_router as ui_signals_router
 from api.routers.ui import settings_router as ui_settings_router
 from api.routers.ui import strategy_studio_router as ui_strategy_studio_router
 from api.routers.ui import system_router as ui_system_router
+from api.routers.ui import system_data as ui_system_data_router
 from api.routers.ui.workflows import router as ui_workflows_router
 from api.routes import articles_router, market_router, trades_router
 from src.common.paths import resolve_project_path
@@ -188,6 +189,7 @@ def create_app() -> FastAPI:
     app.include_router(alerts.router)
     app.include_router(run.router)
     app.include_router(ui_system_router)
+    app.include_router(ui_system_data_router.router)
     app.include_router(ui_legacy_system_router)
     app.include_router(ui_auth_router)
     app.include_router(ui_imports_router)

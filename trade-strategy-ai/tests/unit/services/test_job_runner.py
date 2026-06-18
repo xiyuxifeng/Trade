@@ -376,6 +376,53 @@ def test_job_runner_is_exported_and_instantiable() -> None:
     assert runner.supported_job_types() == get_runnable_job_types()
 
 
+def test_submit_system_data_operation_uses_canonical_facade(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """system-data-operation 应通过正式数据与调度门面执行。"""
+    from src.services import job_runner as job_runner_module
+
+    calls: list[dict[str, Any]] = []
+
+    class _FakeDataSchedulingService:
+        async def execute_operation(self, *, params: dict[str, Any], progress_callback: Any = None):
+            calls.append({"params": params, "has_progress_callback": progress_callback is not None})
+            return ServiceResult(
+                status="ok",
+                message="system data operation completed",
+                payload={
+                    "action": params["action"],
+                    "executed_steps": [{"action": "refresh_post_close_kaipan", "status": "ok"}],
+                    "status": "ready",
+                },
+            )
+
+    monkeypatch.setattr(job_runner_module, "DataSchedulingService", _FakeDataSchedulingService)
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="system-data-operation",
+            params={
+                "action": "repair",
+                "profile_id": "default",
+                "target_trade_date": "2026-06-18",
+                "trigger_source": "manual",
+                "steps": [],
+            },
+            created_by="web",
+            idempotency_key="system-data-operation-001",
+        )
+    )
+    job_id = submitted.payload["execution"]["job"]["id"]
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert submitted.status == "ok"
+    assert calls[0]["params"]["action"] == "repair"
+    assert calls[0]["has_progress_callback"] is True
+    assert loaded.payload["job"]["status"] == "success"
+    assert loaded.payload["job"]["result"]["payload"]["action"] == "repair"
+    asyncio.run(engine.dispose())
+
+
 def test_submit_job_executes_supported_job(tmp_path: Path) -> None:
     """JobRunner 应能通过 Job 执行受控任务。"""
     runner, job_service, engine, ServiceResult = _build_job_runner(

@@ -39,6 +39,7 @@ from src.services.persona_service import PersonaService
 from src.services.run_service import RunService
 from src.services.snapshot_service import SnapshotService
 from src.services.strategy_service import StrategyService
+from src.services.data_scheduling_service import DataSchedulingService
 from src.services.job_control import JobControlInterrupted, JobControlState
 from src.models.job import JobStatus
 from src.common.logger import bind_log_context, get_logger
@@ -735,7 +736,15 @@ class JobRunner(BaseService):
                 confirmed=_parse_bool(params.get("force"), default=False),
             )
 
+        async def _system_data_operation(params: dict[str, Any]) -> ServiceResult:
+            service = DataSchedulingService()
+            return await service.execute_operation(
+                params=params,
+                progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
+            )
+
         return {
+            "system-data-operation": _system_data_operation,
             "crawl": _crawl,
             "clean": _clean,
             "validate": _validate,
@@ -926,6 +935,7 @@ class JobRunner(BaseService):
         control_state: dict[str, str | None] = {"action": None}
         control_poll_interval = max(0.5, min(self._heartbeat_interval_seconds, 2.0))
         if job_payload["job_type"] in {
+            "system-data-operation",
             "crawl",
             "kaipan-fetch",
             "kaipan-normalize",

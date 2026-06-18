@@ -414,7 +414,7 @@ async def test_list_symbols_and_ohlcv(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_ohlcv_scheduler_endpoints(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
-    """Market OHLCV scheduler API 应支持状态、启动和停止。"""
+    """Legacy OHLCV 调度写入口应拒绝，状态查询仍保持只读。"""
     missing_profile = await client.get("/api/ui/v1/market/ohlcv/status")
     assert missing_profile.status_code == 422
 
@@ -424,14 +424,12 @@ async def test_ohlcv_scheduler_endpoints(monkeypatch: pytest.MonkeyPatch, client
     assert status.json()["profile_id"] == "default"
 
     started = await client.post("/api/ui/v1/market/ohlcv/run", params={"profile_id": "default"})
-    assert started.status_code == 200
-    assert started.json()["scheduler_started"] is True
-    assert started.json()["profile_id"] == "default"
+    assert started.status_code == 409
+    assert "数据与调度" in str(started.json()["detail"])
 
     stopped = await client.post("/api/ui/v1/market/ohlcv/stop", params={"profile_id": "default"})
-    assert stopped.status_code == 200
-    assert stopped.json()["started"] is False
-    assert stopped.json()["profile_id"] == "default"
+    assert stopped.status_code == 409
+    assert "数据与调度" in str(stopped.json()["detail"])
 
 
 @pytest.mark.asyncio

@@ -35,6 +35,7 @@ from src.services import MarketRegimeFeatureService, MarketRegimeService, Market
 
 
 router = APIRouter(prefix="/api/ui/v1/market", tags=["ui-market"])
+_LEGACY_SYSTEM_DATA_WRITE_REDIRECT = "该入口已退役，请使用 系统管理 -> 数据与调度 执行正式数据操作。"
 
 
 def get_market_service() -> MarketService:
@@ -189,10 +190,8 @@ async def run_ohlcv_scheduler(
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """启动 OHLCV 调度器。"""
-    result = await market_service.run_ohlcv_scheduler(profile_id=profile_id, start_scheduler=True, block=False)
-    if result.status not in {"ok", "partial"}:
-        raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler start failed")
-    return result.payload
+    del profile_id, market_service
+    raise HTTPException(status_code=409, detail=_LEGACY_SYSTEM_DATA_WRITE_REDIRECT)
 
 
 @router.post("/ohlcv/stop", response_model=OhlcvSchedulerStopResponse, dependencies=[Depends(verify_api_key)])
@@ -201,10 +200,8 @@ async def stop_ohlcv_scheduler(
     market_service: MarketService = Depends(get_market_service),
 ) -> dict[str, Any]:
     """停止 OHLCV 调度器。"""
-    result = await market_service.stop_ohlcv_scheduler(profile_id=profile_id)
-    if result.status not in {"ok", "partial"}:
-        raise HTTPException(status_code=400, detail=result.message or "ohlcv scheduler stop failed")
-    return result.payload
+    del profile_id, market_service
+    raise HTTPException(status_code=409, detail=_LEGACY_SYSTEM_DATA_WRITE_REDIRECT)
 
 
 @router.get("/snapshots", response_model=MarketSnapshotListResponse)

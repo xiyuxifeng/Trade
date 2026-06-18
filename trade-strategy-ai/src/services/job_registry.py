@@ -237,6 +237,37 @@ def _def(
 
 JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
     _def(
+        job_type="system-data-operation",
+        title="数据与调度操作",
+        service_name="system-data",
+        handler_name="execute_operation",
+        permission=JobPermission.operator,
+        risk=JobRisk.medium,
+        can_retry=True,
+        can_pause=False,
+        can_resume=True,
+        can_cancel=True,
+        can_run_concurrently=False,
+        concurrency_group="system-data",
+        requires_confirmation=False,
+        runnable=True,
+        description="通过正式数据与调度入口执行更新、补齐、回灌和重算。",
+        param_schema=_schema(
+            "数据与调度参数",
+            {
+                "action": _string("操作类型", required=True),
+                "profile_id": _string("Profile ID"),
+                "config_path": _path_field("配置文件路径"),
+                "target_trade_date": _date_field("目标交易日"),
+                "start_date": _date_field("开始日期"),
+                "end_date": _date_field("结束日期"),
+                "schedule_key": _string("调度窗口"),
+                "trigger_source": _string("触发来源", default="manual"),
+                "steps": _array_field("计划步骤", default=[]),
+            },
+        ),
+    ),
+    _def(
         job_type="db-migrate",
         title="数据库迁移",
         service_name="system",

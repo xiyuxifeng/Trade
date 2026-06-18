@@ -9,6 +9,7 @@ from src.services.data_scheduling_service import (
     DataSchedulingService,
     DataSchedulingFacts,
     DataSchedulingOperationRecord,
+    DataSchedulingRepairStep,
     DataSchedulingSnapshotFact,
 )
 
@@ -144,3 +145,104 @@ def test_schedule_uses_asia_shanghai_boundaries() -> None:
     assert schedule.timezone == "Asia/Shanghai"
     assert [entry.window_start for entry in schedule.entries] == ["09:20", "17:00", "17:30", "22:00"]
     assert schedule.entries[0].window_end == "09:25"
+
+
+def test_invalid_canonical_state_never_reports_ready() -> None:
+    service = DataSchedulingService()
+    facts = replace(
+        _facts(),
+        latest_dataset_snapshot=_snapshot(
+            trade_date=date(2026, 6, 17),
+            status="invalid",
+            available_at=_dt(2026, 6, 17, 9, 8),
+        ),
+    )
+
+    readiness = service.evaluate_readiness(
+        facts=facts,
+        now_shanghai=datetime(2026, 6, 17, 18, 10),
+        operations=[],
+    )
+
+    assert readiness.status == "invalid"
+    assert readiness.repair_plan.status == "needs_repair"
+
+
+def test_conflict_state_remains_conflict() -> None:
+    service = DataSchedulingService()
+    facts = replace(
+        _facts(),
+        latest_post_close_snapshot=_snapshot(
+            trade_date=date(2026, 6, 17),
+            status="conflict",
+            available_at=_dt(2026, 6, 17, 9, 30),
+        ),
+    )
+
+    readiness = service.evaluate_readiness(
+        facts=facts,
+        now_shanghai=datetime(2026, 6, 17, 18, 10),
+        operations=[],
+    )
+
+    assert readiness.status == "conflict"
+
+
+def test_cancelled_operation_state_is_truthful_when_data_is_still_missing() -> None:
+    service = DataSchedulingService()
+    facts = replace(
+        _facts(),
+        latest_pre_market_snapshot=_snapshot(
+            trade_date=date(2026, 6, 16),
+            status="missing",
+            available_at=None,
+        ),
+    )
+    operations = [
+        DataSchedulingOperationRecord(
+            operation_id="op-cancelled",
+            action="repair",
+            label="补齐盘前市场数据",
+            status="cancelled",
+            operation_date=date(2026, 6, 17),
+            scheduled_kind="manual",
+            created_at=_dt(2026, 6, 17, 1, 23),
+            updated_at=_dt(2026, 6, 17, 1, 24),
+        )
+    ]
+
+    readiness = service.evaluate_readiness(
+        facts=facts,
+        now_shanghai=datetime(2026, 6, 17, 9, 24),
+        operations=operations,
+    )
+
+    assert readiness.status == "cancelled"
+    assert readiness.repair_plan.status == "needs_repair"
+
+
+def test_operation_identity_deduplicates_manual_and_scheduled_same_scope() -> None:
+    service = DataSchedulingService()
+    steps = [
+        DataSchedulingRepairStep(
+            action="refresh_pre_market_kaipan",
+            label="补齐盘前市场数据",
+            reason="今天盘前可用数据仍未准备完成。",
+            target_trade_date=date(2026, 6, 17),
+        )
+    ]
+
+    manual_key = service.build_operation_key(
+        action="repair",
+        target_trade_date=date(2026, 6, 17),
+        steps=steps,
+        trigger_source="manual",
+    )
+    scheduled_key = service.build_operation_key(
+        action="repair",
+        target_trade_date=date(2026, 6, 17),
+        steps=steps,
+        trigger_source="scheduled",
+    )
+
+    assert manual_key == scheduled_key

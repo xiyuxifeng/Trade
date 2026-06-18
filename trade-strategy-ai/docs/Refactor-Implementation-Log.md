@@ -16,10 +16,10 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 - 当前 Stage：`Stage 5 基础数据、数据调度与数据质量`
 - Stage 状态：`[-] 进行中`
-- 当前 Task：`RT-S5-002 Kaipan 数据体系` 已完成。
+- 当前 Task：`RT-S5-003 调度和系统管理` 已接受。
 - 计划：[Stage 5 实施计划](refactor-implementation-plans/stage-5-implementation-plan.md)
 - 详细日志：[Stage 5](refactor-implementation-logs/stage-5.md)
-- 下一步：可开始 `RT-S5-003 调度和系统管理`；不得自动开始，需用户明确授权。
+- 下一步：可开始 `Stage 5 Review`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -61,7 +61,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 5 Bootstrap | `[x]` | Stage 5 范围、数据时间语义、DatasetSnapshot/MarketSnapshot 合同、兼容/退役边界、执行顺序和 RT-S5-001 next prompt 已冻结；未实施生产代码 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-001 | `[x]` | OHLCV canonical identity/time/provenance、calendar-aware gap repair、indicator invalidation boundary、canonical `dataset_snapshots` runtime path 与 immutable snapshot freeze 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 | RT-S5-002 | `[x]` | Kaipan canonical slot/time/provenance、truthful coverage/availability、immutable MarketSnapshot freeze、market-state recompute boundary、compatibility read surfaces 与 migration/test evidence 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-003 | `[ ]` | 调度和系统管理；数据合同稳定后后置单独执行 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-003 | `[x]` | formal `系统管理 -> 数据与调度` 门面、canonical readiness/API/Web、legacy mutation rejection、job integration 与 focused regression 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 状态
 
@@ -72,7 +72,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
-| Stage 5 | `[-]` | Bootstrap accepted；RT-S5-001 and RT-S5-002 accepted；RT-S5-003 pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 5 | `[-]` | Bootstrap、RT-S5-001、RT-S5-002、RT-S5-003 accepted；Stage 5 Review pending | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -213,7 +213,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 已知风险：
   - 本次 migration 证据仍以 migration-definition tests、downgrade guard、sqlite runtime path 与 code review 为主；未在本 session 内额外执行独立 PostgreSQL upgrade/downgrade/re-upgrade operational replay。
   - raw Kaipan 历史可用性仍受 provider/credential/network 限制；本批 acceptance 以 deterministic fixtures/fake providers 验证合同，不代表外部 provider 对所有历史日期都可 operational 成功。
-  - formal normal-user 数据与调度入口收口仍属于 `RT-S5-003`；当前 Web 仍保留 admin/compatibility technical surfaces。
+- `RT-S5-003` 已将 formal normal-user 数据与调度入口收口到 `/system/data` 与 `/api/ui/v1/system/data/*`；legacy OHLCV/Kaipan UI mutation endpoints 已改为 compatibility-only explicit rejection。
+- Stage 5 fixed-set regression 在 sandbox 内会因本机权限报 `Operation not permitted`；已在外部环境重跑同一命令并通过，不代表业务回归失败。
 - 验收结论：`RT-S5-002 ACCEPTED`。Kaipan canonical slot/time/provenance、truthful historical availability、idempotent freeze/retry/rerun、immutable versioned `MarketSnapshot`、market-state truthful degradation、compatibility-only legacy paths 与受影响回归验证满足当前 Stage 5 冻结合同；`RT-S5-003` 可在新 acceptance batch 中开始，但不得自动开始。
 
 ## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review

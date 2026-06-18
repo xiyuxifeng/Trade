@@ -188,40 +188,31 @@ async def test_kaipan_status_returns_latest_slot(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_kaipan_fetch_returns_payload(client: AsyncClient) -> None:
-    """抓取接口应返回槽位结果。"""
+    """Legacy Kaipan 抓取写入口应显式拒绝。"""
     response = await client.post("/api/ui/v1/kaipan/fetch?slot=all")
-    assert response.status_code == 200
-    payload = response.json()
-    assert "slot_results" in payload
-    assert payload["profile_id"] == "default"
+    assert response.status_code == 409
+    assert "数据与调度" in str(response.json()["detail"])
 
 
 @pytest.mark.asyncio
 async def test_kaipan_normalize_returns_results(client: AsyncClient) -> None:
-    """标准化接口应返回结果列表。"""
+    """Legacy Kaipan 标准化写入口应显式拒绝。"""
     response = await client.post("/api/ui/v1/kaipan/normalize", json={"slot": "all"})
-    assert response.status_code == 200
-    payload = response.json()
-    assert "results" in payload
-    assert payload["profile_id"] == "default"
+    assert response.status_code == 409
+    assert "数据与调度" in str(response.json()["detail"])
 
 
 @pytest.mark.asyncio
 async def test_kaipan_run_returns_payload(client: AsyncClient) -> None:
-    """run 接口应返回计划或启动状态。"""
+    """Legacy Kaipan run 写入口应显式拒绝。"""
     response = await client.post("/api/ui/v1/kaipan/run", json={"start_scheduler": True, "block": False})
-    assert response.status_code == 200
-    payload = response.json()
-    assert "started" in payload or "pre_market" in payload
-    assert payload["scheduler_started"] is True
-    assert payload["profile_id"] == "default"
+    assert response.status_code == 409
+    assert "数据与调度" in str(response.json()["detail"])
 
 
 @pytest.mark.asyncio
 async def test_kaipan_stop_returns_payload(client: AsyncClient) -> None:
-    """stop 接口应返回停止状态。"""
+    """Legacy Kaipan stop 写入口也应显式拒绝。"""
     response = await client.post("/api/ui/v1/kaipan/stop")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["started"] is False
-    assert payload["profile_id"] == "default"
+    assert response.status_code == 409
+    assert "数据与调度" in str(response.json()["detail"])

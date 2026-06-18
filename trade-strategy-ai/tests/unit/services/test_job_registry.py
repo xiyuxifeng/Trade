@@ -16,6 +16,7 @@ from src.services.job_registry import (
 def test_job_registry_covers_user_manual_long_tasks() -> None:
     """Job 注册表应覆盖 UserManual 中的长任务白名单。"""
     expected = {
+        "system-data-operation",
         "db-migrate",
         "init-project",
         "seed-data",
@@ -58,6 +59,7 @@ def test_job_registry_covers_user_manual_long_tasks() -> None:
 def test_job_registry_marks_only_connected_jobs_runnable() -> None:
     """只有已接通 handler 的 job type 才能进入 runner 白名单。"""
     assert get_runnable_job_types() == [
+        "system-data-operation",
         "backup-data",
         "restore-data",
         "crawl",

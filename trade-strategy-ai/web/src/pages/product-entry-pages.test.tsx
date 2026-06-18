@@ -99,6 +99,76 @@ vi.mock('@/lib/api/system', () => ({
     },
     traces: [],
   }),
+  getSystemDataReadiness: vi.fn().mockResolvedValue({
+    profile_id: 'default',
+    market: 'CN',
+    timezone: 'Asia/Shanghai',
+    status: 'partial',
+    summary: '盘后数据链路尚未全部完成，当前只能判定为部分就绪。',
+    phase: 'post_close',
+    target_trade_date: '2026-06-13',
+    latest_update_at: '2026-06-13T09:25:00Z',
+    latest_successful_update_at: '2026-06-13T09:25:00Z',
+    repair_available: true,
+    repair_plan: {
+      status: 'needs_repair',
+      steps: [{
+        action: 'refresh_post_close_kaipan',
+        label: '补齐盘后市场数据',
+        reason: '今日盘后 Kaipan 快照缺失或非 ready。',
+        target_trade_date: '2026-06-13',
+      }],
+    },
+    facts: {
+      latest_ohlcv_trade_date: '2026-06-13',
+      latest_indicator_trade_date: '2026-06-13',
+      dataset_snapshot_status: 'ready',
+      pre_market_snapshot_status: 'ready',
+      post_close_snapshot_status: 'missing',
+      market_state_status: 'partial',
+      missing_coverages: ['盘后市场数据'],
+      unavailable_reasons: [],
+    },
+  }),
+  getSystemDataSchedule: vi.fn().mockResolvedValue({
+    timezone: 'Asia/Shanghai',
+    entries: [{
+      key: 'post_close_kaipan',
+      label: '盘后 Kaipan 更新',
+      window_start: '17:30',
+      window_end: '17:30',
+      dependency_order: ['refresh_post_close_kaipan', 'recompute_market_state'],
+    }],
+  }),
+  listSystemDataOperations: vi.fn().mockResolvedValue({
+    count: 1,
+    items: [{
+      operation_id: 'op-1',
+      label: '补齐缺失数据',
+      action: 'repair',
+      status: 'failed',
+      target_trade_date: '2026-06-13',
+      created_at: '2026-06-13T17:31:00Z',
+      updated_at: '2026-06-13T17:32:00Z',
+      cancel_requested: false,
+    }],
+  }),
+  createSystemDataOperation: vi.fn().mockResolvedValue({
+    created: true,
+    operation: {
+      operation_id: 'op-2',
+      label: '补齐缺失数据',
+      action: 'repair',
+      status: 'pending',
+      target_trade_date: '2026-06-13',
+      created_at: '2026-06-13T17:33:00Z',
+      updated_at: '2026-06-13T17:33:00Z',
+      cancel_requested: false,
+    },
+  }),
+  cancelSystemDataOperation: vi.fn().mockResolvedValue({ operation: { operation_id: 'op-1' } }),
+  retrySystemDataOperation: vi.fn().mockResolvedValue({ operation: { operation_id: 'op-1' } }),
+  resumeSystemDataOperation: vi.fn().mockResolvedValue({ operation: { operation_id: 'op-1' } }),
 }));
 
 import {
@@ -154,15 +224,14 @@ describe('formal product entry pages', () => {
     [<ResearchArticlesPage />, 'article-list'],
     [<ResearchAddPage />, 'article-add'],
     [<ResearchResultsPage />, 'article-results'],
-    [<RulesReviewPage />, 'rule-pool-product'],
     [<RulesLibraryPage />, 'rule-pool-product'],
     [<RulesBacktestsPage />, 'backtest-product'],
     [<RulesResultsPage />, 'regime-backtest-product'],
     [<StrategyCandidatesPage />, 'strategy-candidates-product'],
     [<SystemStatusPage />, 'system-status-product'],
-  ])('mounts the existing real capability', (page, testId) => {
+  ])('mounts the existing real capability', async (page, testId) => {
     renderPage(page);
-    expect(screen.getByTestId(testId)).toBeInTheDocument();
+    expect(await screen.findByTestId(testId)).toBeInTheDocument();
   });
 
   it('connects result and system pages to truthful real capability summaries', async () => {
@@ -171,8 +240,8 @@ describe('formal product entry pages', () => {
     cleanup();
 
     renderPage(<SystemDataPage />);
-    expect(await screen.findByText('历史行情')).toBeInTheDocument();
-    expect(screen.getByText('需要更新')).toBeInTheDocument();
+    expect(await screen.findByText('补齐盘后市场数据')).toBeInTheDocument();
+    expect(screen.getByText('盘后 Kaipan 更新')).toBeInTheDocument();
     cleanup();
 
     renderPage(<SystemRunsPage />);
@@ -194,10 +263,10 @@ describe('formal product entry pages', () => {
     expect(screen.queryByText(/共 \d+ 个正式策略/)).not.toBeInTheDocument();
   });
 
-  it('does not require the administrator technical-details slot for formal real capabilities', () => {
+  it('does not require the administrator technical-details slot for formal rule review entry', async () => {
     renderPage(<RulesReviewPage />);
     expect(screen.queryByText('管理员查看技术细节')).not.toBeInTheDocument();
-    expect(screen.getByTestId('rule-pool-product')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '规则审核工作台' })).toBeInTheDocument();
   });
 
   it('connects system configuration to saved records without exposing technical fields', async () => {

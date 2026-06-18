@@ -138,3 +138,91 @@ export type SystemDashboardResponse = {
   }>;
   report?: Record<string, unknown>;
 };
+
+export type SystemDataReadinessStatus =
+  | 'ready'
+  | 'running'
+  | 'missing'
+  | 'partial'
+  | 'unavailable'
+  | 'invalid'
+  | 'conflict'
+  | 'insufficient_coverage'
+  | 'failed'
+  | 'cancelled';
+
+export type SystemDataRepairStep = {
+  action: string;
+  label: string;
+  reason: string;
+  target_trade_date: string;
+};
+
+export type SystemDataReadinessResponse = {
+  profile_id: string | null;
+  market: string;
+  timezone: string;
+  status: SystemDataReadinessStatus;
+  summary: string;
+  phase: string;
+  target_trade_date: string;
+  latest_update_at: string | null;
+  latest_successful_update_at: string | null;
+  repair_available: boolean;
+  repair_plan: {
+    status: string;
+    steps: SystemDataRepairStep[];
+  };
+  facts: {
+    latest_ohlcv_trade_date: string | null;
+    latest_indicator_trade_date: string | null;
+    dataset_snapshot_status: string;
+    pre_market_snapshot_status: string;
+    post_close_snapshot_status: string;
+    market_state_status: string;
+    missing_coverages: string[];
+    unavailable_reasons: string[];
+  };
+};
+
+export type SystemDataScheduleResponse = {
+  timezone: string;
+  entries: Array<{
+    key: string;
+    label: string;
+    window_start: string;
+    window_end: string;
+    dependency_order: string[];
+  }>;
+};
+
+export type SystemDataOperation = {
+  operation_id: string;
+  label: string;
+  action: string;
+  status: string;
+  target_trade_date: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  cancel_requested: boolean;
+};
+
+export type SystemDataOperationListResponse = {
+  count: number;
+  items: SystemDataOperation[];
+};
+
+export type SystemDataOperationRequest = {
+  action: string;
+  profile_id?: string | null;
+  target_trade_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  schedule_key?: string | null;
+};
+
+export type SystemDataOperationMutationResponse = {
+  created?: boolean;
+  operation?: SystemDataOperation;
+  [key: string]: unknown;
+};

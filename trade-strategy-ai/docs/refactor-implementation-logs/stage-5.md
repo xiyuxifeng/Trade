@@ -4,10 +4,11 @@
 
 - Stage：`Stage 5 基础数据、数据调度与数据质量`
 - Stage 状态：`[-] 进行中`
-- 当前活动：`2026-06-17 RT-S5-002 Kaipan 数据体系` 已完成。
+- 当前活动：`2026-06-18 RT-S5-003 调度和系统管理` 已完成并待 Stage 5 Review。
 - 当前已接受：`Stage 5 Bootstrap`、`RT-S5-001`、`RT-S5-002`
-- 下一可执行 Task：`RT-S5-003 调度和系统管理`
-- 不得自动开始：`RT-S5-003` 需要用户明确授权。
+- 当前已接受补充：`RT-S5-003`
+- 下一可执行 Task：`Stage 5 Review`
+- 不得自动开始：`Stage 5 Review` 需用户明确触发。
 - 计划：`docs/refactor-implementation-plans/stage-5-implementation-plan.md`
 
 ## 2026-06-17 Stage 5 Bootstrap
@@ -257,6 +258,110 @@ Created:
 
 - `docs/refactor-implementation-plans/stage-5-implementation-plan.md`
 - `docs/refactor-implementation-logs/stage-5.md`
+
+## 2026-06-18 RT-S5-003 调度和系统管理
+
+- Task ID：`RT-S5-003`
+- 状态：`[x] 已完成`
+- Repository recovery：
+  - remote：`git@github.com:xiyuxifeng/Trade.git`
+  - branch：`main`
+  - recovered HEAD：`243d71357bc639543142b2d2a7f3fe0f9d5173d7`
+  - fast-forward update：`git fetch --prune origin` 和 `git pull --ff-only origin main` 后仍为 same HEAD
+  - working tree before implementation：clean
+  - partial commit `243d71357bc639543142b2d2a7f3fe0f9d5173d7` exists in current branch history and remained preserved
+- Partial commit recovery conclusion：
+  - recovered partial commit changed only `src/services/data_scheduling_service.py` and `tests/unit/services/test_data_scheduling_service.py`
+  - already present work was a thin readiness/schedule policy skeleton with fixed schedule windows, basic repair-step planning, and initial unit tests
+  - missing before this session: formal API router, Web page, JobRunner/job-registry integration, truthful legacy write rejection, operation identity/dedup evidence, progress tracking, operator mutation surface, and implementation/test/docs closure
+- 修改范围：
+  - backend/API：`api/app.py`、`api/routers/ui/system_data.py`、`api/routers/ui/market.py`、`api/routers/ui/kaipan.py`
+  - orchestration/runtime：`src/services/data_scheduling_service.py`、`src/services/job_registry.py`、`src/services/job_runner.py`
+  - tests：`tests/api/routers/test_system_data_api.py`、`tests/api/routers/test_market_ui.py`、`tests/api/routers/ui/test_kaipan.py`、`tests/unit/services/test_data_scheduling_service.py`、`tests/unit/services/test_job_registry.py`、`tests/unit/services/test_job_runner.py`
+  - Web：`web/src/types/system.ts`、`web/src/lib/api/system.ts`、`web/src/pages/system/index.tsx`、`web/src/pages/product-entry-pages.test.tsx`
+- 关键决定：
+  - formal Stage 5 mutation surface is `系统管理 -> 数据与调度` and `/api/ui/v1/system/data/*`
+  - readiness remains derived from canonical data facts, not from `Job success`
+  - truthful readiness precedence is `conflict -> invalid -> insufficient_coverage -> unavailable`, then running/failed/cancelled/missing/partial, and only then `ready`
+  - deterministic operation identity uses action + target scope + concrete planned steps and intentionally ignores trigger source, so equivalent manual/scheduled requests deduplicate into the same formal run
+  - `system-data-operation` is the only formal Stage 5 job type for update/repair/backfill/recompute orchestration; it reuses existing job infrastructure instead of creating a second scheduler or workflow engine
+  - legacy UI write endpoints for OHLCV/Kaipan (`/market/ohlcv/run|stop`, `/kaipan/fetch|normalize|run|stop`) are now compatibility-only and reject with explicit `409` guidance to `系统管理 -> 数据与调度`
+  - legacy job/workflow/pipeline/CLI primitives remain internal or compatibility-only; Stage 5 formal user-facing mutation no longer goes through those raw paths
+  - JobRunner now writes formal progress for `system-data-operation`
+- Readiness contract evidence：
+  - readiness payload now exposes canonical facts for OHLCV trade-date coverage, indicator coverage, DatasetSnapshot state, pre-market/post-close MarketSnapshot state, market-state state, latest availability time, missing coverage, and unavailable reasons
+  - running or successful jobs alone do not make readiness `ready`
+  - cancelled/failed latest operation remains truthful when canonical data is still missing
+  - pre-market and post-close slot statuses remain distinct and are not collapsed into one success state
+- Scheduling and dependency order：
+  - `09:20-09:25`：盘前 Kaipan 更新 -> 市场状态重算
+  - `17:00`：收盘后行情更新 -> 指标重算 -> 市场状态重算
+  - `17:30`：盘后 Kaipan 更新 -> 市场状态重算
+  - `22:00-23:59`：夜间健康检查与最小修复
+- Repair-plan behavior：
+  - repair uses deterministic minimal steps derived from current facts and current phase
+  - pre-market repair only targets pre-market snapshot and dependent market-state work
+  - post-close repair targets only missing OHLCV/indicator/post-close snapshot/market-state steps needed for the target trade date
+  - backfill keeps explicit start/end date scope and recomputes indicators only for the requested trade-date range
+- Authorization / audit / retry / resume / cancellation / idempotency：
+  - all formal mutation endpoints require `operator`
+  - viewer/anonymous callers are rejected before operation creation and corresponding API tests verify denial
+  - job creation goes through canonical `JobService` with idempotency key and audit source
+  - cancel/retry/resume are delegated to existing job control, but only through the canonical `system-data-operation` surface
+  - duplicate manual and scheduled requests for the same scope reuse one formal operation identity
+- Canonical vs compatibility path decisions：
+  - canonical：`/api/ui/v1/system/data/*` + `system-data-operation`
+  - compatibility-only rejection：legacy OHLCV/Kaipan UI mutation endpoints
+  - read-only compatibility retained：legacy OHLCV/Kaipan status endpoints and existing market/system read pages
+  - workflow/pipeline/job registry internals remain implementation infrastructure and do not become a second formal Stage 5 business surface
+  - CLI legacy `ohlcv` / scheduler / raw market-state utilities remain compatibility/internal tooling; retirement condition is Stage 5 Review + later legacy cleanup batch, not this task
+- Runtime integration notes：
+  - `DataSchedulingService.execute_operation()` now invokes accepted canonical services for OHLCV crawl, Kaipan fetch/normalize, MarketSnapshot build, and MarketRegime build
+  - indicator recompute uses the canonical async indicator service session factory rather than an invalid session-scope instance
+  - market-state recompute chooses a ready same-day canonical MarketSnapshot, preferring `17-30` then `09-25`, rather than a broken slot comparison
+- Web outcome：
+  - `/system/data` now renders formal Chinese `数据与调度` content instead of placeholder copy
+  - normal users see readiness, impact, missing scope, time windows, and recent operation truthfully
+  - operators can trigger `立即更新数据`、`一键补齐`、`重算指标`、`重算市场状态`、`回灌历史数据` and can cancel/retry/resume allowed formal operations
+  - page covers loading / partial / unavailable / error / permission denied / empty and does not expose raw job names on the normal-user surface
+- 数据库迁移：无新增 migration；本任务建立 orchestration facade 和 formal surfaces，不改变 accepted RT-S5-001/002 schema contracts
+- 已运行测试：
+  - baseline before continuing：
+    - `../.venv/bin/python -m pytest tests/unit/services/test_data_scheduling_service.py -q`
+    - `../.venv/bin/python -m pytest tests/api/routers/test_market_ui.py -q`
+    - `pnpm vitest run src/pages/system/index.test.tsx src/app/route-config.test.tsx src/pages/market/index.test.tsx`
+  - focused backend/API/job/service suite：
+    - `../.venv/bin/python -m pytest tests/unit/services/test_job_runner.py tests/unit/services/test_job_registry.py tests/unit/services/test_data_scheduling_service.py tests/api/routers/test_system_data_api.py tests/api/routers/test_market_ui.py tests/api/routers/ui/test_kaipan.py -q`
+  - frontend targeted suite：
+    - `pnpm vitest run src/pages/product-entry-pages.test.tsx src/pages/system/index.test.tsx src/app/route-config.test.tsx`
+  - required verification：
+    - `pnpm typecheck`
+    - `../.venv/bin/python -m compileall src api cli`
+    - `git diff --check`
+    - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
+- 测试结果：
+  - focused backend/API/job/service suite：`63 passed`
+  - frontend targeted suite：`23 passed`
+  - `pnpm typecheck`：passed
+  - `compileall`：passed
+  - `git diff --check`：passed
+  - Stage 3 fixed-set regression：
+    - sandbox run failed with `Operation not permitted` during persistence
+    - rerun outside sandbox passed with `{"status":"passed","article_count":12,"processed_count":12,"cached_count":12,"human_attention_count":6,"persistence_failures":[],"provider_failures":[],"semantic_failures":[],"validation_failures":[]}`
+- Self-review findings and repairs：
+  - found and fixed truthful readiness precedence gaps for `invalid` / `conflict` / `cancelled`
+  - found and fixed missing progress tracking for `system-data-operation` inside JobRunner
+  - found and fixed legacy OHLCV/Kaipan write endpoints still mutating outside the formal facade
+  - found and fixed indicator recompute session-factory misuse
+  - found and fixed broken market-state snapshot slot selection
+- 未完成项：
+  - Stage 5 Review has not started
+  - broader legacy CLI/workflow/pipeline retirement is deferred to later cleanup/retirement work after Review evidence
+- 已知风险：
+  - legacy CLI and internal workflow primitives still exist as compatibility/internal tools; this task classifies them but does not yet retire them
+  - readiness facts are currently derived from latest canonical records; if future Stage 5 Review requires richer persisted coverage/audit tables, that should be treated as a follow-up refinement rather than a blocker to RT-S5-003 acceptance
+  - fixed-set regression required unsandboxed execution because sandbox persistence produced local permission errors
+- 验收结论：`RT-S5-003 ACCEPTED`。Formal data-readiness facade, operator authorization, deterministic operation identity, canonical mutation surface, truthful legacy-path rejection, JobRunner/job-registry integration, Web/API surfaces, and focused regression evidence satisfy the frozen Stage 5 contract. Stage 5 Review may begin after explicit user instruction, but must not auto-start.
 
 Updated:
 

@@ -7,8 +7,8 @@ import { EmptyState, ErrorState, LoadingState, SectionCard } from '@/components/
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/http';
 import { getRuleReviewCandidate, listRuleReviewCandidates, submitRuleReviewAction } from '@/lib/api/rule-review';
+import { FormalBacktestResults } from '@/features/backtest/formal-backtest-results';
 import { FormalBacktestWorkbench } from '@/features/backtest/formal-backtest-workbench';
-import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { RulePoolPage } from '@/pages/rule-pool';
 import type { RuleReviewCandidateListItem } from '@/types/rule-review';
 
@@ -326,9 +326,9 @@ export function RulesResultsPage({ availability }: FormalPageProps = {}) {
       purpose="查看全周期及分市场状态的回测验证结果。"
       inputDescription="输入来自已经完成且可追溯的回测记录。"
       processingDescription="系统只展示已保存的真实结果和明确的数据缺口。"
-      outputDescription="输出为现有全周期和分市场状态结果；统一结果契约仍待后续任务建立。"
+      outputDescription="输出为全周期和分市场状态结果、覆盖情况、限制说明和可复现证据。"
       businessAction={{ label: '返回回测实验', to: '/rules/backtests' }}
-      result={availability ? undefined : <RegimeBacktestReportPage productMode />}
+      result={availability ? undefined : <FormalBacktestResults />}
     />
   );
 }

@@ -626,6 +626,41 @@ class BacktestRun(TimestampMixin, Base):
     after_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
 
 
+class BacktestResult(TimestampMixin, Base):
+    __tablename__ = "backtest_results"
+    __table_args__ = (
+        Index("uq_btres_run", "run_id", unique=True),
+        Index("uq_btres_result_fingerprint", "result_fingerprint", unique=True),
+        Index("ix_btres_status_created", "status", "created_at"),
+    )
+
+    result_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("backtest_runs.run_id", name="fk_btres_run", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    input_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    result_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    reproducibility_fingerprint: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    requested_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    effective_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    market_state_model_version: Mapped[str | None] = mapped_column(String(64))
+    market_state_source_version: Mapped[str | None] = mapped_column(String(64))
+    market_state_result_version: Mapped[str | None] = mapped_column(String(64))
+    decision_time_policy: Mapped[str] = mapped_column(String(128), nullable=False)
+    overall_metrics: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    per_market_state_metrics: Mapped[list[dict[str, Any]]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    per_rule_metrics: Mapped[list[dict[str, Any]]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    sample_state_counts: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    coverage_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    warnings: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    limitations: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    audit_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+
+
 class AuthorProfileVersion(TimestampMixin, Base):
     __tablename__ = "author_profile_versions"
     __table_args__ = (

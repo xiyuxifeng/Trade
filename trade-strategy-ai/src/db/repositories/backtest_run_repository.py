@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot import MarketSnapshot
-from src.models.stage2_canonical import BacktestRun, DatasetSnapshot, RuleFamily, RuleFamilyMembership, RuleVersion
+from src.models.market_regime_record import MarketRegimeRecord
+from src.models.stage2_canonical import BacktestResult, BacktestRun, DatasetSnapshot, RuleFamily, RuleFamilyMembership, RuleVersion
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,65 @@ class BacktestRunRepository:
         )
         return list((await session.execute(stmt)).scalars().all())
 
+    async def list_market_states_for_run(
+        self,
+        session: AsyncSession,
+        *,
+        date_from: date,
+        date_to: date,
+        market: str,
+        definition_version: str | None,
+        decision_times: dict[date, datetime],
+        market_snapshot_ids: list[str] | None = None,
+    ) -> list[MarketRegimeRecord]:
+        stmt = (
+            select(MarketRegimeRecord)
+            .join(MarketSnapshot, MarketSnapshot.id == MarketRegimeRecord.market_snapshot_id)
+            .where(MarketRegimeRecord.trade_date >= date_from)
+            .where(MarketRegimeRecord.trade_date <= date_to)
+            .where(MarketRegimeRecord.market == market)
+            .where(MarketSnapshot.available_at <= MarketRegimeRecord.available_at)
+        )
+        if definition_version:
+            stmt = stmt.where(MarketRegimeRecord.definition_version == definition_version)
+        if market_snapshot_ids:
+            parsed_ids = [UUID(item) for item in market_snapshot_ids]
+            stmt = stmt.where(MarketRegimeRecord.market_snapshot_id.in_(parsed_ids))
+        stmt = stmt.order_by(
+            MarketRegimeRecord.trade_date.asc(),
+            MarketRegimeRecord.available_at.desc(),
+            MarketRegimeRecord.created_at.desc(),
+        )
+        candidates = list((await session.execute(stmt)).scalars().all())
+        selected: dict[date, MarketRegimeRecord] = {}
+        for candidate in candidates:
+            decision_time = decision_times.get(candidate.trade_date)
+            if decision_time is None or candidate.available_at is None:
+                continue
+            if candidate.available_at <= decision_time:
+                selected.setdefault(candidate.trade_date, candidate)
+        return list(selected.values())
+
+    async def list_formal_samples_for_run(self, session: AsyncSession, *, run: BacktestRun) -> list[Any]:
+        dataset = await session.get(DatasetSnapshot, run.dataset_snapshot_id)
+        if dataset is None:
+            return []
+        storage_ref = dataset.storage_ref or {}
+        samples = storage_ref.get("formal_samples")
+        if not isinstance(samples, list):
+            samples = (dataset.ohlcv_manifest or {}).get("formal_samples")
+        if not isinstance(samples, list):
+            return []
+        normalized = []
+        for item in samples:
+            if not isinstance(item, dict):
+                continue
+            trade_date = item.get("trade_date")
+            if isinstance(trade_date, str):
+                trade_date = date.fromisoformat(trade_date)
+            normalized.append(SimpleNamespace(**{**item, "trade_date": trade_date}))
+        return normalized
+
     async def create_backtest_run(self, session: AsyncSession, payload: dict[str, Any]) -> BacktestRun:
         run = BacktestRun(**payload)
         session.add(run)
@@ -86,3 +147,12 @@ class BacktestRunRepository:
 
     async def get_backtest_run(self, session: AsyncSession, run_id: UUID) -> BacktestRun | None:
         return await session.get(BacktestRun, run_id)
+
+    async def create_backtest_result(self, session: AsyncSession, payload: dict[str, Any]) -> BacktestResult:
+        result = BacktestResult(**payload)
+        session.add(result)
+        await session.flush()
+        return result
+
+    async def get_backtest_result_by_run(self, session: AsyncSession, run_id: UUID) -> BacktestResult | None:
+        return await session.scalar(select(BacktestResult).where(BacktestResult.run_id == run_id))

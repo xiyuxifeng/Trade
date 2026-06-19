@@ -43,9 +43,30 @@ class _FakeRun:
     next_actions: list[str] | None = None
 
 
+@dataclass
+class _FakeResult:
+    result_id: str = "result-1"
+    run_id: str = "run-1"
+    status: str = "completed_valid"
+    requested_level: str = "level_2"
+    effective_level: str = "level_2"
+    market_state_model_version: str | None = "market-state-v1"
+    market_state_source_version: str | None = "features-v1"
+    market_state_result_version: str = "stage6-market-state-result-v1"
+    overall_metrics: dict[str, Any] | None = None
+    per_market_state_metrics: list[dict[str, Any]] | None = None
+    sample_state_counts: dict[str, int] | None = None
+    coverage: dict[str, Any] | None = None
+    warnings: list[str] | None = None
+    limitations: list[str] | None = None
+    result_fingerprint: str = "result-fp"
+    reproducibility_fingerprint: str = "market-state-v1:features-v1:result-fp"
+
+
 class _FakeBacktestApplicationService:
     def __init__(self) -> None:
         self.create_calls = 0
+        self.execute_calls = 0
 
     async def check_dependencies(self, selection, *, actor_id: str, actor_role: str):
         assert actor_role == "viewer"
@@ -60,6 +81,46 @@ class _FakeBacktestApplicationService:
     async def get_run(self, run_id: str, *, actor_id: str, actor_role: str):
         assert run_id == "run-1"
         return _FakeRun()
+
+    async def execute_run(self, run_id: str, *, actor_id: str, actor_role: str):
+        self.execute_calls += 1
+        assert run_id == "run-1"
+        assert actor_role == "operator"
+        return _FakeResult(
+            overall_metrics={"hit_trade_count": 1},
+            per_market_state_metrics=[
+                {
+                    "market_state_label": "强势",
+                    "market_state_model_version": "market-state-v1",
+                    "market_state_source_version": "features-v1",
+                    "eligible_sample_count": 2,
+                    "evaluated_sample_count": 2,
+                    "unavailable_sample_count": 0,
+                    "invalid_sample_count": 0,
+                    "conflict_sample_count": 0,
+                    "hit_trade_count": 1,
+                    "win_rate": 1.0,
+                    "coverage": 1.0,
+                    "warnings": [],
+                    "result_fingerprint": "bucket-fp",
+                }
+            ],
+            sample_state_counts={"eligible": 2, "condition_unavailable": 1},
+            coverage={"market_state": {"state": "ready", "available": True}},
+            warnings=[],
+            limitations=[],
+        )
+
+    async def get_result(self, run_id: str, *, actor_id: str, actor_role: str):
+        assert run_id == "run-1"
+        assert actor_role in {"viewer", "operator"}
+        return _FakeResult(
+            per_market_state_metrics=[],
+            sample_state_counts={},
+            coverage={"market_state": {"state": "ready", "available": True}},
+            warnings=[],
+            limitations=[],
+        )
 
 
 @pytest_asyncio.fixture
@@ -159,3 +220,62 @@ async def test_operator_can_create_and_read_formal_run() -> None:
     assert loaded.status_code == 200
     assert loaded.json()["request_fingerprint"] == "request-fp"
     assert fake_service.create_calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_execute_and_viewer_can_read_formal_result() -> None:
+    fake_service = _FakeBacktestApplicationService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            executed = await ac.post("/api/ui/v1/rules/backtests/runs/run-1/execute")
+
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="viewer",
+            api_key_label="viewer",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            loaded = await ac.get("/api/ui/v1/rules/backtests/runs/run-1/result")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert executed.status_code == 200
+    assert executed.json()["market_state_model_version"] == "market-state-v1"
+    assert executed.json()["per_market_state_metrics"][0]["market_state_label"] == "强势"
+    assert "features-v1" in executed.json()["reproducibility_fingerprint"]
+    assert loaded.status_code == 200
+    assert loaded.json()["result_fingerprint"] == "result-fp"
+    assert fake_service.execute_calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_viewer_cannot_execute_formal_result() -> None:
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: _FakeBacktestApplicationService()
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="viewer",
+            api_key_label="viewer",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/api/ui/v1/rules/backtests/runs/run-1/execute")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403

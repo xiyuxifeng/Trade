@@ -11,6 +11,7 @@ from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.db.session import get_session_factory as async_session_factory
 from src.services.backtest_application_service import (
     BacktestApplicationService,
+    BacktestResultView,
     BacktestRunCreateRequest,
     BacktestRunView,
     BacktestSelection,
@@ -111,4 +112,44 @@ async def get_formal_backtest_run(
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到正式回测记录") from exc
+    return _serialize(result)
+
+
+@router.post("/runs/{run_id}/execute")
+async def execute_formal_backtest_run(
+    run_id: str,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: BacktestApplicationService = Depends(get_backtest_application_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result: BacktestResultView = await service.execute_run(
+            run_id,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到正式回测记录") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
+    return _serialize(result)
+
+
+@router.get("/runs/{run_id}/result")
+async def get_formal_backtest_result(
+    run_id: str,
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: BacktestApplicationService = Depends(get_backtest_application_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result: BacktestResultView = await service.get_result(
+            run_id,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到正式回测结果") from exc
     return _serialize(result)

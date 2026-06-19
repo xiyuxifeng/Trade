@@ -5,6 +5,7 @@ import type {
   BacktestResultsResponse,
   BacktestSummary,
   FormalBacktestDependencyResult,
+  FormalBacktestResult,
   FormalBacktestRun,
   FormalBacktestRunCreateRequest,
   FormalBacktestSelection,
@@ -58,6 +59,16 @@ export function createFormalBacktestRun(request: FormalBacktestRunCreateRequest)
 
 export function getFormalBacktestRun(runId: string) {
   return fetchJson<FormalBacktestRun>(`/rules/backtests/runs/${runId}`);
+}
+
+export function executeFormalBacktestRun(runId: string) {
+  return fetchJson<FormalBacktestResult>(`/rules/backtests/runs/${runId}/execute`, {
+    method: 'POST',
+  });
+}
+
+export function getFormalBacktestResult(runId: string) {
+  return fetchJson<FormalBacktestResult>(`/rules/backtests/runs/${runId}/result`);
 }
 
 export function buildBacktestRunParams(submission: BacktestJobSubmission): Record<string, unknown> {

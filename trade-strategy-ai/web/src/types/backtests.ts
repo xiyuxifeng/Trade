@@ -148,3 +148,41 @@ export type FormalBacktestRun = {
   limitations: string[];
   next_actions: string[];
 };
+
+export type FormalMarketStateMetric = {
+  market_state_label: string;
+  market_state_model_version?: string | null;
+  market_state_source_version?: string | null;
+  eligible_sample_count: number;
+  evaluated_sample_count: number;
+  unavailable_sample_count: number;
+  invalid_sample_count: number;
+  conflict_sample_count: number;
+  hit_trade_count: number;
+  avg_return?: number | null;
+  total_return?: number | null;
+  win_rate?: number | null;
+  max_drawdown?: number | null;
+  coverage?: number | null;
+  warnings: string[];
+  result_fingerprint?: string | null;
+};
+
+export type FormalBacktestResult = {
+  result_id: string;
+  run_id: string;
+  status: string;
+  requested_level: FormalBacktestLevel;
+  effective_level: FormalBacktestLevel | 'unavailable';
+  market_state_model_version?: string | null;
+  market_state_source_version?: string | null;
+  market_state_result_version: string;
+  overall_metrics: Record<string, unknown>;
+  per_market_state_metrics: FormalMarketStateMetric[];
+  sample_state_counts: Record<string, number>;
+  coverage: Record<string, Record<string, unknown>>;
+  warnings: string[];
+  limitations: string[];
+  result_fingerprint: string;
+  reproducibility_fingerprint: string;
+};

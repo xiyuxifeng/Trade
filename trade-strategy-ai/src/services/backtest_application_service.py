@@ -5,8 +5,10 @@ from datetime import UTC, date, datetime
 import hashlib
 import inspect
 import json
+import statistics
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -31,6 +33,20 @@ FORMAL_BACKTEST_ENGINE_VERSION = "stage6-foundation-v1"
 FORMAL_INDICATOR_VERSION = "dataset-bound-v1"
 FORMAL_EXECUTION_POLICY_VERSION = "stage6-snapshot-only-v1"
 FORMAL_DECISION_TIME_POLICY = "cn-a-share-close-plus-availability-v1"
+FORMAL_MARKET_STATE_RESULT_VERSION = "stage6-market-state-result-v1"
+CN_TZ = ZoneInfo("Asia/Shanghai")
+SAMPLE_STATES = (
+    "eligible",
+    "evaluated_true",
+    "evaluated_false",
+    "condition_unavailable",
+    "data_missing",
+    "unsupported",
+    "invalid",
+    "skipped",
+    "conflict",
+    "market_state_unavailable",
+)
 
 
 class BacktestSelection(BaseModel):
@@ -99,6 +115,44 @@ class BacktestRunView(BaseModel):
     next_actions: list[str] = Field(default_factory=list)
 
 
+class MarketStateMetricView(BaseModel):
+    market_state_label: str
+    market_state_model_version: str | None = None
+    market_state_source_version: str | None = None
+    eligible_sample_count: int = 0
+    evaluated_sample_count: int = 0
+    unavailable_sample_count: int = 0
+    invalid_sample_count: int = 0
+    conflict_sample_count: int = 0
+    hit_trade_count: int = 0
+    avg_return: float | None = None
+    total_return: float | None = None
+    win_rate: float | None = None
+    max_drawdown: float | None = None
+    coverage: float | None = None
+    warnings: list[str] = Field(default_factory=list)
+    result_fingerprint: str | None = None
+
+
+class BacktestResultView(BaseModel):
+    result_id: str
+    run_id: str
+    status: str
+    requested_level: str
+    effective_level: str
+    market_state_model_version: str | None = None
+    market_state_source_version: str | None = None
+    market_state_result_version: str
+    overall_metrics: dict[str, Any] = Field(default_factory=dict)
+    per_market_state_metrics: list[MarketStateMetricView] = Field(default_factory=list)
+    sample_state_counts: dict[str, int] = Field(default_factory=dict)
+    coverage: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    result_fingerprint: str
+    reproducibility_fingerprint: str
+
+
 def _fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
@@ -113,6 +167,12 @@ def _value(value: Any) -> Any:
 
 def _id(value: Any) -> str | None:
     return str(value) if value is not None else None
+
+
+def _get(obj: Any, key: str, default: Any = None) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 def _business_state(canonical_state: str) -> str:
@@ -241,17 +301,80 @@ class BacktestApplicationService:
                 reasons.append({"code": "market_state_insufficient_coverage", "message": "没有覆盖本次区间的正式市场状态快照。"})
                 coverage["market_state"] = {"state": "insufficient_coverage", "available": None, "impact": "需要补齐市场状态数据。"}
             else:
-                coverage["market_state"] = {
-                    "state": "ready",
-                    "available": True,
-                    "snapshot_count": len(market_snapshots),
-                }
-                canonical_ids["market_snapshot_ids"] = [
-                    _id(getattr(snapshot, "id", getattr(snapshot, "snapshot_id", None))) for snapshot in market_snapshots
-                ]
-                fingerprints["market_snapshots"] = [
-                    getattr(snapshot, "content_fingerprint", None) for snapshot in market_snapshots
-                ]
+                decision_times = self._decision_times(selection.date_from, selection.date_to)
+                market_snapshot_ids: list[str] = []
+                market_snapshot_fingerprints: list[str] = []
+                future_snapshot_dates: list[str] = []
+                for snapshot in market_snapshots:
+                    trade_date = _get(snapshot, "trade_date")
+                    available_at = self._aware(_get(snapshot, "available_at"))
+                    decision_time = decision_times.get(trade_date)
+                    if available_at is None or decision_time is None or available_at > decision_time:
+                        future_snapshot_dates.append(str(trade_date))
+                        continue
+                    market_snapshot_ids.append(str(_get(snapshot, "id", _get(snapshot, "snapshot_id"))))
+                    market_snapshot_fingerprints.append(_get(snapshot, "content_fingerprint"))
+
+                definition_version = _get(dataset, "market_state_definition_version") or "market-state-v1"
+                states = []
+                if market_snapshot_ids:
+                    states = await _repo_call(
+                        self.repository,
+                        "list_market_states_for_run",
+                        session,
+                        date_from=selection.date_from,
+                        date_to=selection.date_to,
+                        market="CN",
+                        definition_version=definition_version,
+                        decision_times=decision_times,
+                        market_snapshot_ids=market_snapshot_ids,
+                    )
+                source_versions = sorted(
+                    {
+                        str(_get(state, "source_feature_version"))
+                        for state in states
+                        if _get(state, "source_feature_version")
+                    }
+                )
+                state_dates = {_get(state, "trade_date") for state in states}
+                missing_dates = sorted(str(item) for item in (set(decision_times) - state_dates))
+                if future_snapshot_dates:
+                    reasons.append({
+                        "code": "market_state_future_snapshot",
+                        "message": "存在晚于模拟决策时间才可用的市场状态快照，不能用于正式回测。",
+                    })
+                if missing_dates:
+                    reasons.append({
+                        "code": "market_state_insufficient_coverage",
+                        "message": "没有覆盖本次区间且可证明当时可用的正式市场状态。",
+                    })
+                if len(source_versions) > 1:
+                    reasons.append({
+                        "code": "market_state_source_conflict",
+                        "message": "本次区间存在多个市场状态来源版本，不能混合作为正式结果。",
+                    })
+
+                if any(reason["code"].startswith("market_state_") for reason in reasons):
+                    coverage["market_state"] = {
+                        "state": "insufficient_coverage",
+                        "available": None,
+                        "snapshot_count": len(market_snapshots),
+                        "point_in_time_state_count": len(states),
+                        "impact": "无法创建 Level 2 分市场状态正式回测。",
+                    }
+                else:
+                    coverage["market_state"] = {
+                        "state": "ready",
+                        "available": True,
+                        "snapshot_count": len(market_snapshots),
+                        "point_in_time_state_count": len(states),
+                        "market_state_model_version": definition_version,
+                        "market_state_source_version": source_versions[0] if source_versions else None,
+                    }
+                    canonical_ids["market_snapshot_ids"] = market_snapshot_ids
+                    fingerprints["market_snapshots"] = market_snapshot_fingerprints
+                    fingerprints["market_state_model_version"] = definition_version
+                    fingerprints["market_state_source_version"] = source_versions[0] if source_versions else None
         elif selection.requested_level == "level_1":
             coverage["market_state"] = {"state": "not_required", "available": None}
 
@@ -349,7 +472,7 @@ class BacktestApplicationService:
                 "dataset_fingerprint": fps["dataset_snapshot"],
                 "market_snapshot_ids": ids.get("market_snapshot_ids") or [],
                 "market_snapshot_fingerprints": fps.get("market_snapshots") or [],
-                "market_state_model_version": None,
+                "market_state_model_version": fps.get("market_state_model_version"),
                 "indicator_version": FORMAL_INDICATOR_VERSION,
                 "engine_version": FORMAL_BACKTEST_ENGINE_VERSION,
                 "execution_policy_version": FORMAL_EXECUTION_POLICY_VERSION,
@@ -383,6 +506,236 @@ class BacktestApplicationService:
                 raise LookupError("backtest run not found")
             return self._run_view(run)
 
+    async def execute_run(self, run_id: str, *, actor_id: str, actor_role: str) -> BacktestResultView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to execute a formal backtest run")
+        async with self._session_scope_factory() as session:
+            existing = await _repo_call(self.repository, "get_backtest_result_by_run", session, run_id=UUID(run_id))
+            if existing is not None:
+                return self._result_view(existing)
+            run = await _repo_call(self.repository, "get_backtest_run", session, run_id=UUID(run_id))
+            if run is None:
+                raise LookupError("backtest run not found")
+            payload = await self._execute_run_payload(session, run, actor_id=actor_id, actor_role=actor_role)
+            created = await _repo_call(self.repository, "create_backtest_result", session, payload=payload)
+            return self._result_view(created)
+
+    async def get_result(self, run_id: str, *, actor_id: str, actor_role: str) -> BacktestResultView:
+        del actor_id, actor_role
+        async with self._session_scope_factory() as session:
+            result = await _repo_call(self.repository, "get_backtest_result_by_run", session, run_id=UUID(run_id))
+            if result is None:
+                raise LookupError("backtest result not found")
+            return self._result_view(result)
+
+    async def _execute_run_payload(self, session: Any, run: Any, *, actor_id: str, actor_role: str) -> dict[str, Any]:
+        if not bool(_get(run, "snapshot_only", True)):
+            raise ValueError("正式回测只能使用固定快照执行。")
+        date_from = _get(run, "date_from")
+        date_to = _get(run, "date_to")
+        effective_level = str(_get(run, "effective_level"))
+        decision_times = self._decision_times(date_from, date_to)
+        samples = await _repo_call(self.repository, "list_formal_samples_for_run", session, run=run)
+        sample_state_counts = {state: 0 for state in SAMPLE_STATES}
+        coverage = {
+            "market_state": {"state": "not_required" if effective_level == "level_1" else "insufficient_coverage", "available": None},
+            "samples": {"state": "ready" if samples else "insufficient_coverage", "count": len(samples)},
+        }
+        warnings: list[str] = []
+        limitations = list(_get(run, "limitations", []) or [])
+        states_by_date: dict[date, Any] = {}
+        source_versions: set[str] = set()
+        model_version = _get(run, "market_state_model_version")
+
+        if effective_level != "level_1":
+            states = await _repo_call(
+                self.repository,
+                "list_market_states_for_run",
+                session,
+                date_from=date_from,
+                date_to=date_to,
+                market="CN",
+                definition_version=model_version,
+                decision_times=decision_times,
+                market_snapshot_ids=list(_get(run, "market_snapshot_ids", []) or []),
+            )
+            for state in states:
+                trade_date = _get(state, "trade_date")
+                available_at = self._aware(_get(state, "available_at"))
+                decision_time = decision_times.get(trade_date)
+                if available_at is None or decision_time is None or available_at > decision_time:
+                    continue
+                states_by_date.setdefault(trade_date, state)
+                if _get(state, "source_feature_version"):
+                    source_versions.add(str(_get(state, "source_feature_version")))
+            missing_trade_dates = sorted(str(item) for item in (set(decision_times) - set(states_by_date)))
+            market_state_ready = bool(states_by_date) and not missing_trade_dates
+            coverage["market_state"] = {
+                "state": "ready" if market_state_ready else "insufficient_coverage",
+                "available": True if market_state_ready else None,
+                "point_in_time_state_count": len(states_by_date),
+                "required_trade_date_count": len(decision_times),
+                "missing_trade_dates": missing_trade_dates,
+            }
+            if not states_by_date:
+                warnings.append("缺少可证明当时可用的市场状态，样本不会计入亏损或胜率分母。")
+            elif missing_trade_dates:
+                warnings.append("部分交易日缺少可证明当时可用的市场状态，缺失日期样本不会计入亏损或胜率分母。")
+            if len(source_versions) > 1:
+                warnings.append("市场状态来源版本不一致，本次结果标记为无效。")
+
+        buckets: dict[str, dict[str, Any]] = {}
+        all_return_values: list[float] = []
+        for sample in samples:
+            sample_state = str(_get(sample, "sample_state", "invalid"))
+            trade_date = _get(sample, "trade_date")
+            if effective_level != "level_1" and trade_date not in states_by_date:
+                sample_state_counts["market_state_unavailable"] += 1
+                continue
+            if sample_state not in sample_state_counts:
+                sample_state = "invalid"
+            sample_state_counts[sample_state] += 1
+            if sample_state == "eligible":
+                condition_result = _get(sample, "condition_result")
+                sample_state_counts["evaluated_true" if condition_result is True else "evaluated_false"] += 1
+            if sample_state != "eligible":
+                continue
+            state = states_by_date.get(trade_date)
+            label = "全周期" if effective_level == "level_1" else str(_get(state, "primary_label"))
+            bucket = buckets.setdefault(
+                label,
+                {
+                    "market_state_label": label,
+                    "market_state_model_version": model_version,
+                    "market_state_source_version": _get(state, "source_feature_version") if state is not None else None,
+                    "eligible_sample_count": 0,
+                    "evaluated_sample_count": 0,
+                    "unavailable_sample_count": 0,
+                    "invalid_sample_count": 0,
+                    "conflict_sample_count": 0,
+                    "hit_trade_count": 0,
+                    "warnings": [],
+                    "returns": [],
+                },
+            )
+            bucket["eligible_sample_count"] += 1
+            bucket["evaluated_sample_count"] += 1
+            return_pct = _get(sample, "return_pct")
+            if _get(sample, "condition_result") is True and return_pct is not None:
+                value = float(return_pct)
+                bucket["returns"].append(value)
+                bucket["hit_trade_count"] += 1
+                all_return_values.append(value)
+
+        per_market_metrics = [self._build_market_metric(bucket) for bucket in buckets.values()]
+        overall_metrics = {
+            "eligible_sample_count": sum(item["eligible_sample_count"] for item in per_market_metrics),
+            "evaluated_sample_count": sum(item["evaluated_sample_count"] for item in per_market_metrics),
+            "hit_trade_count": sum(item["hit_trade_count"] for item in per_market_metrics),
+            "avg_return": statistics.mean(all_return_values) if all_return_values else None,
+            "total_return": sum(all_return_values) if all_return_values else None,
+        }
+        status = "completed_valid"
+        market_state_incomplete = (
+            effective_level != "level_1"
+            and set(decision_times) != set(states_by_date)
+        )
+        if not samples or market_state_incomplete or (effective_level != "level_1" and len(source_versions) > 1):
+            status = "completed_invalid"
+        if not samples:
+            warnings.append("没有可执行的固定样本，结果仅记录覆盖状态。")
+        identity = {
+            "run_id": _id(_get(run, "run_id")),
+            "request_fingerprint": _get(run, "request_fingerprint"),
+            "dataset_fingerprint": _get(run, "dataset_fingerprint"),
+            "market_snapshot_fingerprints": _get(run, "market_snapshot_fingerprints", []) or [],
+            "market_state_model_version": model_version,
+            "market_state_source_version": sorted(source_versions),
+            "market_state_result_version": FORMAL_MARKET_STATE_RESULT_VERSION,
+            "decision_time_policy": _get(run, "decision_time_policy"),
+            "sample_state_counts": sample_state_counts,
+            "per_market_state_metrics": per_market_metrics,
+        }
+        result_fingerprint = _fingerprint(identity)
+        source_version_text = ",".join(sorted(source_versions)) or "unavailable"
+        reproducibility_fingerprint = f"{model_version or 'market-state-unbound'}:{source_version_text}:{result_fingerprint}"
+        audit = {
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "time": datetime.now(UTC).isoformat(),
+            "source_surface": "/rules/backtests",
+            "run_id": _id(_get(run, "run_id")),
+            "before_state": _value(_get(run, "status")),
+            "after_state": status,
+        }
+        return {
+            "result_id": uuid4(),
+            "run_id": _get(run, "run_id"),
+            "input_fingerprint": str(_get(run, "request_fingerprint")),
+            "result_fingerprint": result_fingerprint,
+            "reproducibility_fingerprint": reproducibility_fingerprint,
+            "status": status,
+            "requested_level": str(_get(run, "requested_level")),
+            "effective_level": effective_level,
+            "market_state_model_version": model_version,
+            "market_state_source_version": sorted(source_versions)[0] if len(source_versions) == 1 else None,
+            "market_state_result_version": FORMAL_MARKET_STATE_RESULT_VERSION,
+            "decision_time_policy": str(_get(run, "decision_time_policy")),
+            "overall_metrics": overall_metrics,
+            "per_market_state_metrics": per_market_metrics,
+            "per_rule_metrics": [],
+            "sample_state_counts": sample_state_counts,
+            "coverage_json": coverage,
+            "warnings": warnings,
+            "limitations": limitations,
+            "provenance_json": identity,
+            "audit_json": audit,
+        }
+
+    def _build_market_metric(self, bucket: dict[str, Any]) -> dict[str, Any]:
+        returns = list(bucket.pop("returns"))
+        wins = [value for value in returns if value > 0]
+        metric = {
+            **bucket,
+            "avg_return": statistics.mean(returns) if returns else None,
+            "total_return": sum(returns) if returns else None,
+            "win_rate": len(wins) / len(returns) if returns else None,
+            "max_drawdown": self._max_drawdown(returns) if returns else None,
+            "coverage": bucket["evaluated_sample_count"] / bucket["eligible_sample_count"] if bucket["eligible_sample_count"] else None,
+        }
+        metric["result_fingerprint"] = _fingerprint(metric)
+        return metric
+
+    @staticmethod
+    def _max_drawdown(returns: list[float]) -> float | None:
+        if not returns:
+            return None
+        equity = 1.0
+        peak = 1.0
+        max_drawdown = 0.0
+        for value in returns:
+            equity *= 1 + value
+            peak = max(peak, equity)
+            max_drawdown = min(max_drawdown, equity / peak - 1)
+        return max_drawdown
+
+    @staticmethod
+    def _aware(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
+
+    @classmethod
+    def _decision_times(cls, date_from: date, date_to: date) -> dict[date, datetime]:
+        current = date_from
+        result: dict[date, datetime] = {}
+        while current <= date_to:
+            result[current] = datetime(current.year, current.month, current.day, 9, 30, tzinfo=CN_TZ)
+            current = date.fromordinal(current.toordinal() + 1)
+        return result
+
     def _run_view(self, run: Any) -> BacktestRunView:
         if isinstance(run, dict):
             get = run.get
@@ -403,4 +756,27 @@ class BacktestApplicationService:
             progress=get("progress_json", {}) or {},
             limitations=get("limitations", []) or [],
             next_actions=["查看运行进度", "查看数据覆盖和限制", "查看可复现证据"],
+        )
+
+    def _result_view(self, result: Any) -> BacktestResultView:
+        return BacktestResultView(
+            result_id=str(_get(result, "result_id")),
+            run_id=str(_get(result, "run_id")),
+            status=str(_get(result, "status")),
+            requested_level=str(_get(result, "requested_level")),
+            effective_level=str(_get(result, "effective_level")),
+            market_state_model_version=_get(result, "market_state_model_version"),
+            market_state_source_version=_get(result, "market_state_source_version"),
+            market_state_result_version=str(_get(result, "market_state_result_version")),
+            overall_metrics=_get(result, "overall_metrics", {}) or {},
+            per_market_state_metrics=[
+                MarketStateMetricView.model_validate(item)
+                for item in (_get(result, "per_market_state_metrics", []) or [])
+            ],
+            sample_state_counts={key: int(value) for key, value in (_get(result, "sample_state_counts", {}) or {}).items()},
+            coverage=_get(result, "coverage_json", _get(result, "coverage", {})) or {},
+            warnings=_get(result, "warnings", []) or [],
+            limitations=_get(result, "limitations", []) or [],
+            result_fingerprint=str(_get(result, "result_fingerprint")),
+            reproducibility_fingerprint=str(_get(result, "reproducibility_fingerprint")),
         )

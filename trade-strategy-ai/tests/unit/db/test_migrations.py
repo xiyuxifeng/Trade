@@ -131,3 +131,26 @@ def test_stage6_backtest_run_contract_migration_defines_immutable_foundation() -
     assert "source_surface" in content
     assert "before_state_json" in content
     assert "after_state_json" in content
+
+
+def test_stage6_market_state_backtest_result_migration_defines_immutable_metrics() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_19_0011_stage6_market_state_backtest_results.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_19_0011"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_18_0010"' in content
+    assert "backtest_results" in content
+    assert "fk_btres_run" in content
+    assert "input_fingerprint" in content
+    assert "result_fingerprint" in content
+    assert "reproducibility_fingerprint" in content
+    assert "market_state_model_version" in content
+    assert "market_state_source_version" in content
+    assert "market_state_result_version" in content
+    assert "per_market_state_metrics" in content
+    assert "sample_state_counts" in content
+    assert "coverage_json" in content
+    assert "provenance_json" in content

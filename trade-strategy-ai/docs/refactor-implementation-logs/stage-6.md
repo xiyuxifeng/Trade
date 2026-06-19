@@ -3,11 +3,11 @@
 ## 当前状态
 
 - Stage：`Stage 6 回测与规则适用性`
-- 当前活动：`2026-06-18 RT-S6-001 回测工作台`
-- 当前状态：`RT-S6-001 ACCEPTED`
-- 当前已接受：`RT-S6-001`
-- 下一可执行 Task：`RT-S6-002 分市场状态回测`
-- 不得自动开始：`RT-S6-002` 需用户明确触发
+- 当前活动：`2026-06-19 RT-S6-002 分市场状态回测`
+- 当前状态：`RT-S6-002 ACCEPTED`
+- 当前已接受：`RT-S6-001`, `RT-S6-002`
+- 下一可执行 Task：`RT-S6-004 回测分级`
+- 不得自动开始：`RT-S6-004` 需用户明确触发；`RT-S6-003` 不得在 `RT-S6-004` 前开始
 
 ## 2026-06-18 Stage 6 Bootstrap
 
@@ -335,3 +335,130 @@ Non-blocking:
 `RT-S6-001 ACCEPTED`.
 
 `RT-S6-002` may begin only after explicit user instruction. `RT-S6-002` has not been started.
+
+## 2026-06-19 RT-S6-002 分市场状态回测
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented the formal Level 2 market-state-aware execution/results portion only:
+
+- point-in-time market-state lookup from canonical `MarketSnapshot`-derived `MarketRegimeRecord` facts;
+- `available_at <= decision_time` enforcement for market snapshots and market-state records using Asia/Shanghai decision-time semantics;
+- immutable `BacktestResult` foundation in `backtest_results`;
+- formal per-market-state metrics, sample-state counts, coverage, warnings, limitations, provenance and fingerprints;
+- formal execute/read API under `/api/ui/v1/rules/backtests/runs/{run_id}/execute` and `/result`;
+- `/rules/results` formal result reader using business wording “市场状态”;
+- migration and focused backend/API/frontend verification.
+
+Did not start or implement:
+
+- `RT-S6-004` full Level 1/2/3 downgrade/reject policy;
+- `RT-S6-003` RuleApplicabilityProfile generation/review;
+- Stage 7 author profile, strategy publication, daily trading objects, Prompt changes, Workflow/CLI/raw Job entries, or legacy retirement.
+
+### Delegation
+
+Used two bounded read-only subagents:
+
+- Stage 6 docs/task-card explorer: verified `RT-S6-001` acceptance, exact `RT-S6-002` requirements, log requirements, and M3 risks.
+- Backend/API/UI explorer: mapped accepted `RT-S6-001` service/model/API/UI surfaces, canonical MarketSnapshot/market-state fields, result gaps, and legacy paths to avoid.
+
+Parent implemented the schema, service, API, UI, tests, migration replay, review, and acceptance decision.
+
+### Files Changed
+
+- `src/models/stage2_canonical.py`
+- `src/db/repositories/backtest_run_repository.py`
+- `src/services/backtest_application_service.py`
+- `src/db/migrations/versions/2026_06_19_0011_stage6_market_state_backtest_results.py`
+- `api/routers/ui/formal_backtests.py`
+- `tests/unit/services/test_backtest_application_service.py`
+- `tests/unit/db/repositories/test_backtest_run_repository.py`
+- `tests/api/routers/test_formal_backtests.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `tests/unit/db/test_migrations.py`
+- `web/src/features/backtest/formal-backtest-results.tsx`
+- `web/src/features/backtest/backtest-center.stage6.test.tsx`
+- `web/src/lib/api/backtests.ts`
+- `web/src/lib/api/backtests.test.ts`
+- `web/src/types/backtests.ts`
+- `web/src/pages/rules/index.tsx`
+- `web/src/pages/product-entry-pages.test.tsx`
+- `docs/refactor-implementation-logs/stage-6.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Key Design Decisions
+
+- Kept the formal entry under `BacktestApplicationService`; no raw Job, Workflow, CLI, file artifact, `config_path`, EvidencePack, live Provider or legacy result fallback was added.
+- Added immutable `backtest_results` instead of promoting legacy `backtest_result_runs` / legacy `regime_metrics` to formal truth.
+- Bound result identity to `request_fingerprint`, DatasetSnapshot fingerprint, MarketSnapshot fingerprints, market-state model/source version, market-state result version, decision-time policy, sample-state counts, and per-market-state metrics.
+- Missing market-state is recorded as `insufficient_coverage` / `market_state_unavailable` and excluded from loss, return and win-rate denominators.
+- `/rules/results` now uses the formal result API and user-facing “市场状态” wording.
+
+### Database Migration
+
+- Added one linear Alembic revision: `2026_06_19_0011_stage6_market_state_backtest_results`.
+- Creates `backtest_results` with unique `run_id`, unique `result_fingerprint`, per-market-state metrics, sample-state counts, coverage, warnings, limitations, provenance, audit and fingerprint fields.
+- PostgreSQL replay evidence on a temporary database:
+  - `upgrade head` passed;
+  - `downgrade 2026_06_18_0010` passed;
+  - re-`upgrade head` passed.
+- `alembic heads` returned single head `2026_06_19_0011`.
+- SQLite replay was attempted but blocked by an older pre-existing migration using unsupported SQLite constraint ALTER before this revision; PostgreSQL replay was used as authoritative evidence.
+
+### Compatibility Handling
+
+- Legacy `/backtest`, `/backtest/regime`, `/backtest_results`, raw Job, Workflow, CLI, JSON result files and legacy `regime_metrics` remain compatibility-only/non-formal.
+- No legacy fallback is used by the formal result API or `/rules/results` product page.
+- `RT-S6-001` formal run contract remains intact; `backtest_runs` is only extended by reading the existing frozen market-state fields.
+
+### Validation
+
+Run and passed:
+
+- `python -m pytest tests/unit/db/repositories/test_backtest_run_repository.py tests/unit/services/test_backtest_application_service.py tests/api/routers/test_formal_backtests.py tests/unit/db/test_migrations.py tests/api/test_ui_openapi_contract.py -q` -> `22 passed`, 1 existing async cleanup warning.
+- `python -m pytest tests/unit/db/repositories/test_backtest_run_repository.py tests/unit/services/test_backtest_application_service.py -q` -> `9 passed`.
+- `python -m compileall src/models/stage2_canonical.py src/services/backtest_application_service.py src/db/repositories/backtest_run_repository.py api/routers/ui/formal_backtests.py src/db/migrations/versions/2026_06_19_0011_stage6_market_state_backtest_results.py` -> passed.
+- `pnpm test -- src/lib/api/backtests.test.ts src/features/backtest/backtest-center.stage6.test.tsx src/pages/product-entry-pages.test.tsx` -> `19 passed`.
+- `pnpm typecheck` -> passed.
+- `git diff --check` -> passed.
+- Alembic PostgreSQL `upgrade head`, `downgrade 2026_06_18_0010`, re-`upgrade head` -> passed.
+- `alembic heads` -> single head `2026_06_19_0011`.
+
+Warnings observed:
+
+- existing async connection cleanup warning in OpenAPI/router-related pytest.
+- existing React Router future-flag warnings in frontend tests.
+- shell startup warnings from local RVM `ps` sandbox restriction.
+
+### Review Findings and Repairs
+
+- RED tests first showed existing code treated future market snapshots as ready and lacked formal execution/result methods.
+- Repaired by adding point-in-time repository lookup, service availability proof, immutable result persistence and API read/execute endpoints.
+- Frontend product page initially still pointed at the legacy result component; repaired by introducing a formal result component and updating product page tests.
+- Migration replay initially failed against a removed local database, then SQLite was blocked by an older migration; repaired verification by creating a temporary PostgreSQL database and replaying upgrade/downgrade/re-upgrade.
+- Final review found oldest-eligible market-state selection and partial coverage validity issues; repaired by selecting latest market-state record available at decision time and marking partial market-state coverage as `insufficient_coverage` / `completed_invalid`.
+
+### Risks
+
+Blocking:
+
+- None identified for `RT-S6-002`.
+
+Non-blocking:
+
+- Formal sample generation/evaluation remains intentionally narrow: RT-S6-002 aggregates deterministic canonical samples supplied through the frozen DatasetSnapshot contract and does not implement broader Level 1/2/3 policy enforcement. Full level policy remains `RT-S6-004`.
+- Legacy result/report pages still exist as compatibility surfaces outside the formal `/rules/results` product page.
+- Temporary PostgreSQL migration database was created for verification and dropped after replay.
+
+### Acceptance Conclusion
+
+`RT-S6-002 ACCEPTED`.
+
+`RT-S6-004` may begin only after explicit user instruction. `RT-S6-004` has not been started.
+
+`RT-S6-003` has not been started and must not begin before `RT-S6-004`. Stage 6 is not complete.

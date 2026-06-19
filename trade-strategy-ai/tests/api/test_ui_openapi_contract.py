@@ -41,6 +41,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/rules/backtests/dependency-check": {"post"},
         "/api/ui/v1/rules/backtests/runs": {"post"},
         "/api/ui/v1/rules/backtests/runs/{run_id}": {"get"},
+        "/api/ui/v1/rules/backtests/runs/{run_id}/execute": {"post"},
+        "/api/ui/v1/rules/backtests/runs/{run_id}/result": {"get"},
         "/api/ui/v1/workflows": {"get"},
         "/api/ui/v1/workflows/runs": {"get"},
         "/api/ui/v1/workflows/runs/{workflow_run_id}": {"get"},

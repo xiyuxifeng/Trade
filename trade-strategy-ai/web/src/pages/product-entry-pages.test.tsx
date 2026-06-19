@@ -226,7 +226,7 @@ describe('formal product entry pages', () => {
     [<ResearchResultsPage />, 'article-results'],
     [<RulesLibraryPage />, 'rule-pool-product'],
     [<RulesBacktestsPage />, 'formal-backtest-product'],
-    [<RulesResultsPage />, 'regime-backtest-product'],
+    [<RulesResultsPage />, 'formal-backtest-results-product'],
     [<StrategyCandidatesPage />, 'strategy-candidates-product'],
     [<SystemStatusPage />, 'system-status-product'],
   ])('mounts the existing real capability', async (page, testId) => {
@@ -236,7 +236,7 @@ describe('formal product entry pages', () => {
 
   it('connects result and system pages to truthful real capability summaries', async () => {
     renderPage(<RulesResultsPage />);
-    expect(screen.getByTestId('regime-backtest-product')).toBeInTheDocument();
+    expect(screen.getByTestId('formal-backtest-results-product')).toBeInTheDocument();
     cleanup();
 
     renderPage(<SystemDataPage />);

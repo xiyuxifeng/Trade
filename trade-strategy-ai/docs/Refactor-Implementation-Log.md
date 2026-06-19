@@ -1,352 +1,108 @@
 # Trade Strategy AI 重构实施状态
 
-本文件只保存当前状态、Task 索引、阻塞项、下一步和 Stage 日志链接。
+本文件是重构工作的**当前状态总入口**，只保存当前状态、下一步、硬约束、仍有效风险、Task/Stage 索引和详细日志链接。
 
-详细历史记录位于：
+详细历史、测试输出、迁移证据、修复记录和 Task 级实施细节请查看：
 
-```text
-trade-strategy-ai/docs/refactor-implementation-logs/
-```
-
-日志管理规则见：
-
-- [重构实施日志管理规则](refactor-implementation-logs/README.md)
+- [重构实施日志目录](refactor-implementation-logs/README.md)
+- [Stage 0 日志](refactor-implementation-logs/stage-0.md)
+- [Stage 1 日志](refactor-implementation-logs/stage-1.md)
+- [Stage 2 日志](refactor-implementation-logs/stage-2.md)
+- [Stage 3 日志](refactor-implementation-logs/stage-3.md)
+- [Stage 4 日志](refactor-implementation-logs/stage-4.md)
+- [Stage 5 日志](refactor-implementation-logs/stage-5.md)
+- [Stage 6 日志](refactor-implementation-logs/stage-6.md)
+- [Stage 7 日志](refactor-implementation-logs/stage-7.md)
 
 ## 当前状态
 
 - 当前 Stage：`Stage 7 作者画像`
-- Stage 状态：`[-] RT-S7-004 已接受；RT-S7-001、RT-S7-002、RT-S7-003 未开始`
-- 当前 Task：`RT-S7-004 画像版本与时间分段` 已完成并接受；下一 Task 未开始。
-- 计划：[Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
+- Stage 状态：`[-] 进行中`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`
+- 当前未开始 Task：`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`
+- 当前计划：[Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
 - 详细日志：[Stage 7](refactor-implementation-logs/stage-7.md)
 - 下一步：可开始 `RT-S7-001 作者方法画像`；不得自动开始，需用户明确授权。
 
-## 当前阻塞项
+## 当前硬约束
 
-- 当前无 Stage 5 Bootstrap blocker。
-- Stage 2 Gate 最终 `ACCEPTED`。
-- Stage 3 Bootstrap 已复核 canonical writer effective true、legacy writer rejection 和 no dual-write；当前无 Bootstrap blocker。
-- RT-S3-001 已接受；Stage 3 canonical Prompt registry、Pydantic Schema、Prompt runtime foundation 和 canonical PromptRun/ArticleStructure/RuleCandidate 写入已建立。
-- RT-S3-002 provenance repair 已接受；human-review/RuleVersion/canonical-writer 工作保留，summary 与 ArticleStructure provenance 已补齐。
-- RT-S3-003 已接受；固定 12 篇 regression set、bulk gate 和可恢复 dry-run batch 已建立。
-- RT-S3-004 已接受；legacy Prompt 已删除，历史读取兼容、fixed-set compatibility comparison、rollback 与 deletion gate 证据已补齐。
-- Stage 3 Gate 最终 `ACCEPTED`；Stage 4 Bootstrap may begin。
-- Stage 4 Bootstrap 已完成；Stage 4 范围冻结为 `RT-S4-001`、`RT-S4-002`、`RT-S4-003`。
-- Stage 4 执行顺序冻结为：`RT-S4-002` -> `RT-S4-003` -> `RT-S4-001` -> Stage 4 Gate。
-- Stage 4 Gate 最终 `ACCEPTED`；Stage 5 Bootstrap may begin after explicit user instruction.
-- 2026-06-17 已完成 Stage 4 Pre-Stage-5 cleanup review；异步数据库清理 warning、批量审核原子性、正式变更入口授权和低风险批量合同一致性均已复验并修复/核实。
-- 2026-06-17 已完成 Stage 5 Bootstrap；Stage 5 计划、数据/时间/快照合同、兼容/退役边界和执行顺序已冻结。
-- 2026-06-17 `RT-S5-001` 已接受；OHLCV/DatasetSnapshot canonical contract 已落地。
-- 2026-06-17 `RT-S5-002` 已接受；Kaipan/MarketSnapshot canonical slot、provenance、freeze 与 market-state coverage boundary 已落地。
-- 2026-06-18 `Stage 5 Gate` 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，canonical data ownership、legacy bypass rejection、真实 PostgreSQL migration/recovery、readiness/scheduling/authorization 和固定集回归已验证。
-- 2026-06-18 已完成 Stage 6 Bootstrap；Stage 6 canonical data flow、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、API/UI/permission/audit、compatibility boundary 和四张 Task Card 已冻结；未实施生产代码，未接受任何 Stage 6 Task。
-- 2026-06-18 `RT-S6-001` 已接受；正式 `/rules/backtests` 工作台、BacktestApplicationService、canonical dependency check、immutable `backtest_runs` foundation、viewer/operator permission、audit、snapshot-only formal path 和 legacy/raw entry isolation 已落地；未开始 `RT-S6-002/003/004`。
-- 2026-06-19 `RT-S6-002` 已接受；正式 point-in-time 市场状态查询、immutable `backtest_results`、分市场状态样本状态/指标、结果 API 和 `/rules/results` 正式结果页已落地；未开始 `RT-S6-003/004`。
-- 2026-06-19 `RT-S6-004` 已接受；正式 Level 1/2/3 数据等级、requested/effective level、降级/拒绝策略、RuleFamily mixed-level、缺失 Kaipan 限制语义、显式降级审计和 UI/API 可见性已落地。
-- 2026-06-19 `RT-S6-003` 已接受；正式 RuleApplicabilityProfile 草稿/版本、BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计已落地。
-- 2026-06-19 `Stage 6 Gate` 最终 `ACCEPTED`；四个 Stage 6 Task 均保持 accepted，canonical-only formal path、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、缺失 Kaipan 限制语义、profile review/no-overwrite、legacy isolation、migration/recovery、API/UI/runtime contract、权限和审计均已验证；Stage 7 Bootstrap 需用户明确授权后方可开始。
-- 2026-06-19 已完成 Stage 7 Bootstrap；三层作者画像合同、证据分离、LLM/人工审核边界、版本/时间分段、legacy isolation 和四张 Task Card 已冻结；未实施生产代码，未创建迁移，未启动任何 RT-S7 Task。
-- 2026-06-19 `RT-S7-004` 已接受；共享作者画像版本、生命周期、审核审计、时间分段、来源版本绑定、版本差异、发布/归档保护和 `/authors` 正式 API/UI foundation 已落地；未开始 `RT-S7-001/002/003`，未开始 Stage 7 Gate。
+- 后续 Task 不得自动开始；每个 Stage / Task / Gate 都需要用户明确授权。
+- legacy internal tooling / Job / Workflow / Pipeline / Artifact / file JSON / `config_path` / live Provider / mutable latest records 不得成为后续 Stage 的 formal data input。
+- Stage 6 formal backtest 和 rule applicability 只能消费 canonical DatasetSnapshot、MarketSnapshot、BacktestRun、BacktestResult、RuleApplicabilityProfile 及其 immutable IDs/fingerprints/versions/provenance/availability timestamps。
+- Stage 7 正式作者画像分为：`AuthorMethodProfile`、`AuthorRuleProfile`、`AuthorValidatedProfile`。
+- Stage 7 三类作者画像必须共享版本、生命周期、审核、审计、证据指纹、画像指纹、supersession 和时间分段规则。
+- 正式作者验证画像只能消费 formal `RuleApplicabilityProfile`、formal `BacktestRun`、formal `BacktestResult` 和 Stage 6 level/市场状态/sample evidence。
+- 新证据只能生成草稿/修订，不得自动覆盖已发布画像。
+- `RT-S7-004` 已先行冻结版本、生命周期、审核、审计和时间分段合同；后续 `RT-S7-001/002/003` 必须复用该 foundation。
+- `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
-## Task 状态
+## 当前残余风险
 
-| Task | 当前状态 | 实施结论 | 详细记录 |
+- Stage 7 仍未完成作者方法画像、作者规则画像、作者验证画像和 Stage 7 Gate。
+- `RT-S7-004` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；这是 frozen RT-S7-004 范围内的折中。完成 `RT-S7-001/002/003` 后可再评估是否需要独立明细表。
+- `RT-S7-004` 未扩展 `invalidated` 生命周期；当前最小正式生命周期为 `draft/review-pending/published/archived`。如后续 Task 需要失效语义，应在新 Task 中显式设计。
+- legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only；formal `/rules/*` 与 Stage 7 formal author profiles 不得使用它们作为正式事实源。
+- UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
+
+## Task 状态索引
+
+| Task | 状态 | 简短结论 | 详细记录 |
 | --- | --- | --- | --- |
 | RT-S0-001 | `[x]` | 现状审计已接受 | [Stage 0](refactor-implementation-logs/stage-0.md) |
 | RT-S0-002 | `[x]` | 迁移矩阵已接受 | [Stage 0](refactor-implementation-logs/stage-0.md) |
-| RT-S1-001 | `[x]` | 导航和路由实现、回归和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
-| RT-S1-002 | `[x]` | 统一页面体验、真实能力接入和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
-| RT-S1-003 | `[x]` | 首页实现、聚焦回归和用户 UI 检查已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
-| RT-S2-001 | `[x]` | canonical domain contracts、typed refs、lifecycle validator、legacy mapping 与 compatibility adapters 已接受；未改 DB/运行行为 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-002 | `[x]` | Gate 重开后补齐 reused-table frozen fields/FKs、MarketState typed FKs、linear repair migrations；metadata、实际 PostgreSQL、rollback/re-upgrade 与 existing-data preservation 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S2-003 | `[x]` | Gate 重开后 feature flag 已控制 runtime writer routing；canonical application-service boundary、legacy write rejection、no-dual-write 与 migration isolation tests 通过 | [Stage 2](refactor-implementation-logs/stage-2.md) |
-| RT-S3-001 | `[x]` | versioned Prompt registry、Pydantic Schema、single-call/one-repair runtime、cache/idempotency 和 canonical persistence foundation 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-002 | `[x]` | human-review/RuleVersion contracts 保留；summary/ArticleStructure provenance repair 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-003 | `[x]` | 12 篇 fixed regression set、semantic assertions、gate、recoverable dry-run batch、CLI/readiness evidence 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S3-004 | `[x]` | legacy Prompt migration / retirement 已接受；Stage 3 Gate 可开始 | [Stage 3](refactor-implementation-logs/stage-3.md) |
-| RT-S4-002 | `[x]` | canonical fingerprint/family/runtime、duplicate/variant/conflict detection、source-link provenance、fixed-set gate enforcement、focused API/schema/migration/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
-| RT-S4-003 | `[x]` | canonical 规则生命周期、单一路径 transition/audit、idempotency/stale-write 保护、legacy rule_pool 拒写和 focused API/tests 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
-| RT-S4-001 | `[x]` | deterministic automatic review、canonical human-review service/router/workbench、batch approve/reject、审计与 fixed-set gate 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
-| Stage 5 Bootstrap | `[x]` | Stage 5 范围、数据时间语义、DatasetSnapshot/MarketSnapshot 合同、兼容/退役边界、执行顺序和 RT-S5-001 next prompt 已冻结；未实施生产代码 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-001 | `[x]` | OHLCV canonical identity/time/provenance、calendar-aware gap repair、indicator invalidation boundary、canonical `dataset_snapshots` runtime path 与 immutable snapshot freeze 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-002 | `[x]` | Kaipan canonical slot/time/provenance、truthful coverage/availability、immutable MarketSnapshot freeze、market-state recompute boundary、compatibility read surfaces 与 migration/test evidence 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| RT-S5-003 | `[x]` | formal `系统管理 -> 数据与调度` 门面、canonical readiness/API/Web、legacy mutation rejection、job integration 与 focused regression 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| Stage 5 Gate | `[x]` | 最终 `ACCEPTED`；修复 raw data job/workflow/low-level create bypass、DatasetSnapshot row-level fingerprint、普通用户 readiness 技术词暴露，并完成真实 PostgreSQL upgrade/downgrade/re-upgrade/existing-data recovery 证据 | [Stage 5](refactor-implementation-logs/stage-5.md) |
-| Stage 6 Bootstrap | `[x]` | Bootstrap `READY`；Stage 6 合同、兼容边界、执行顺序和四张 Task Card 已冻结；未实施生产代码 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| RT-S6-001 | `[x]` | 正式回测工作台 foundation、依赖检查、immutable BacktestRun、权限/审计和 legacy isolation 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| RT-S6-002 | `[x]` | point-in-time 市场状态回测结果、immutable BacktestResult、分市场状态指标/API/UI 和 migration/test evidence 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| RT-S6-003 | `[x]` | 正式规则适用性画像草稿/版本、immutable run/result source binding、人工审核和审计已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| RT-S6-004 | `[x]` | Level 1/2/3 回测分级、降级/拒绝策略、缺失 Kaipan 限制语义、RuleFamily mixed-level、审计/API/UI 和 migration/test evidence 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| Stage 6 Gate | `[x]` | 最终 `ACCEPTED`；有界修复 formal result evidence API 暴露和 profile review 权限一致性，focused Gate suite、PostgreSQL migration replay、frontend/typecheck/compileall/diff checks 通过 | [Stage 6](refactor-implementation-logs/stage-6.md) |
-| Stage 7 Bootstrap | `[x]` | Bootstrap `READY`；作者方法/规则/验证画像、版本与时间分段、证据分离、review/audit、legacy isolation 和 Task order 已冻结；未启动任何 RT-S7 Task | [Stage 7](refactor-implementation-logs/stage-7.md) |
-| RT-S7-004 | `[x]` | 作者画像版本、生命周期、审核审计、时间分段、来源绑定、差异查看和 no-overwrite 发布保护已接受；未生成画像内容 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S1-001 | `[x]` | 导航和路由实现已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S1-002 | `[x]` | 统一页面体验和真实能力接入已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S1-003 | `[x]` | 首页实现已接受 | [Stage 1](refactor-implementation-logs/stage-1.md) |
+| RT-S2-001 | `[x]` | canonical domain contracts 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-002 | `[x]` | schema convergence 和 migration/recovery 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S2-003 | `[x]` | canonical writer routing 与 legacy write rejection 已接受 | [Stage 2](refactor-implementation-logs/stage-2.md) |
+| RT-S3-001 | `[x]` | versioned Prompt registry 与 canonical persistence foundation 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-002 | `[x]` | provenance repair 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-003 | `[x]` | fixed regression set 和 recoverable dry-run batch 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S3-004 | `[x]` | legacy Prompt migration / retirement 已接受 | [Stage 3](refactor-implementation-logs/stage-3.md) |
+| RT-S4-001 | `[x]` | automatic review 与 human-review workbench 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| RT-S4-002 | `[x]` | fingerprint/family/runtime 与 duplicate/conflict detection 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| RT-S4-003 | `[x]` | canonical rule lifecycle 已接受 | [Stage 4](refactor-implementation-logs/stage-4.md) |
+| Stage 5 Bootstrap | `[x]` | Stage 5 data contracts 和 task order 已冻结 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-001 | `[x]` | OHLCV DatasetSnapshot canonical contract 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-002 | `[x]` | Kaipan/MarketSnapshot canonical contract 已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| RT-S5-003 | `[x]` | 系统管理数据与调度门面已接受 | [Stage 5](refactor-implementation-logs/stage-5.md) |
+| Stage 6 Bootstrap | `[x]` | Stage 6 backtest/applicability contracts 已冻结 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-001 | `[x]` | formal backtest workbench foundation 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-002 | `[x]` | point-in-time market-state results 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-003 | `[x]` | RuleApplicabilityProfile 草稿/版本和审核已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| RT-S6-004 | `[x]` | Level 1/2/3 backtest levels 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| Stage 7 Bootstrap | `[x]` | Stage 7 author profile contracts 和 task order 已冻结 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S7-004 | `[x]` | 作者画像版本、生命周期、审核审计和时间分段 foundation 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S7-001 | `[ ]` | 未开始；下一步建议任务 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S7-002 | `[ ]` | 未开始 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S7-003 | `[ ]` | 未开始 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 
-## Stage 状态
+## Stage 状态索引
 
 | Stage | 状态 | 结论 | 详细记录 |
 | --- | --- | --- | --- |
 | Stage 0 | `[x]` | 已完成并接受 | [stage-0.md](refactor-implementation-logs/stage-0.md) |
 | Stage 1 | `[x]` | 功能、契约、自动验证和用户 UI 检查已接受 | [stage-1.md](refactor-implementation-logs/stage-1.md) |
-| Stage 2 | `[x]` | Gate escalation 后 preserve contract；Schema convergence、single-writer runtime routing、migration/recovery 与 compatibility re-review 全部接受 | [stage-2.md](refactor-implementation-logs/stage-2.md) |
-| Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
-| Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
-| Stage 5 | `[x]` | Gate 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，基础数据、快照、调度、readiness、legacy bypass rejection、迁移/recovery 和 Web 业务中文已验证 | [stage-5.md](refactor-implementation-logs/stage-5.md) |
-| Stage 6 | `[x]` | Gate 最终 `ACCEPTED`；RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 均保持 accepted，正式回测、分市场状态结果、数据等级、规则适用性画像、迁移/recovery 和 legacy isolation 已验证 | [stage-6.md](refactor-implementation-logs/stage-6.md) |
-| Stage 7 | `[-]` | `RT-S7-004` 已接受；下一步为 `RT-S7-001 作者方法画像`，Stage 7 Gate 未开始 | [stage-7.md](refactor-implementation-logs/stage-7.md) |
+| Stage 2 | `[x]` | Gate 最终 `ACCEPTED` | [stage-2.md](refactor-implementation-logs/stage-2.md) |
+| Stage 3 | `[x]` | Gate 最终 `ACCEPTED` | [stage-3.md](refactor-implementation-logs/stage-3.md) |
+| Stage 4 | `[x]` | Gate 最终 `ACCEPTED` | [stage-4.md](refactor-implementation-logs/stage-4.md) |
+| Stage 5 | `[x]` | Gate 最终 `ACCEPTED` | [stage-5.md](refactor-implementation-logs/stage-5.md) |
+| Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
+| Stage 7 | `[-]` | `RT-S7-004` 已接受；`RT-S7-001/002/003` 和 Stage 7 Gate 未开始 | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 
-## Stage 1 已接受证据摘要
+## 下一步建议
 
-- 前端全量：`90/90` 个文件、`283/283` 个测试通过。
-- TypeScript、ESLint、Vite 生产构建通过。
-- 后端受影响套件：`25 passed`；存在 2 条既有异步连接清理 warning。
-- 系统状态定向：`4 passed`。
-- app factory、唯一入口和 OpenAPI：`5 passed`。
-- Web 静态/API 路由优先级：`3 passed`。
-- Web E2E：`1 passed`。
-- `git diff --check` 通过。
-- `/dashboard` 生产引用仅保留在集中兼容配置。
-- 未新增数据库迁移、Prompt 或 Stage 2 领域对象。
-- 用户已完成 Stage 1 UI 检查并确认可接受。
+建议下一次用户明确授权后开始：
 
-以上摘要不表示仓库后端全量测试已通过。仓库级后端全量测试曾中止，相关 Stage 1 失败已通过定向套件修复和复验。
+```text
+RT-S7-001 作者方法画像
+```
 
-## 当前残余风险
+执行前应读取：
 
-- React Router v7 future flag warning 尚未治理，记录为非阻塞技术债。
-- 2026-06-16 及更早日志中记录的 async cleanup warning 已在 2026-06-17 Pre-Stage-5 cleanup review 中修复；相关历史条目仅保留为当时 Gate 证据，不再代表当前状态。
-- 视觉一致性、非关键响应式细节和文案润色进入 UI backlog，不阻塞 Stage 2。
-- Stage 3 legacy article extraction 仍存在，但在 canonical writer enabled 时不能形成正式 Stage 3 formal writer。
-- 旧 revision summary 仅在 `ArticleRevision.source_payload` 含 frozen summary 时可展示；否则 API 需 truthful unavailable，不得回退到当前 `BlogArticle.summary`。
-- Stage 3 Gate dry-run batch 在 sandbox 内因本地 PostgreSQL socket 权限失败；已按权限流程在外部执行同一命令并通过。该 sandbox 限制不影响 Stage 3 runtime contract。
-- Stage 3 Gate 发现 postmortem future-stage Prompt 可被旧 pipeline opt-in 触达；已在 Stage 3 hard-disable future-stage LLM Prompt invocation，保留 deterministic fallback 和 historical read compatibility。
-- 后续操作必须保持 canonical writer effective true，不得以关闭 feature flag 恢复 legacy writer。
-- Stage 4 Gate 已验证 legacy `rule_pool` / `strategy_studio` / job / CLI review paths 不能绕过 canonical governance；旧 review 写入口保持 compatibility-only 拒写。
-- Stage 4 Gate 已修正受影响规则审核页面的普通用户技术词暴露；内部组件/import 名称中仍可能存在 legacy `Regime` 等代码命名，但不作为 Stage 4 普通用户显示文本。
-- RT-S4-003 已将 canonical 规则生命周期收口为单一路径：`候选 -> 待审核 -> 已批准 -> 待回测 -> 验证中 -> 可用/限定使用 -> 已停用`。`FormalLifecycleState.approved` 在当前 Stage 仍无可证明用户态映射时返回 truthful unavailable/compatibility-only，不伪造“可用”。
-- legacy `rule_pool` / `strategy_studio` UI 与 CLI 写路径已在 RT-S4-003 显式拒绝 formal lifecycle 写入；RT-S4-001 已新增 `/rules/review` 正式审核工作台和 canonical `/api/ui/v1/rule-review` 写路径。
-- RT-S4-001 automatic review 使用五状态：`auto_pass`、`recommend_pass`、`manual_review`、`not_backtestable`、`recommend_reject`。其中低风险批量通过只允许 `auto_pass/recommend_pass`，会全批预检后把可回测的新规则推进到 `待回测`；精确重复规则复用既有 RuleVersion 且不重复进入回测；批量驳回只允许 `recommend_reject/not_backtestable`；全部 formal mutation 继续受 fixed-set gate 约束。
-- `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
-- Stage 5 Bootstrap 冻结：`DatasetSnapshot` formal source is `dataset_snapshots`；`market_datasets` is compatibility read-only under canonical writer routing；`MarketSnapshot` formal source is `market_snapshots` and child tables；missing data must remain truthful and must not become false/zero/success.
-- Stage 5 Bootstrap 冻结：`RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Stage 5 Gate；`RT-S5-003` must not start until data contracts stabilize；Stage 6 backtest execution remains out of scope.
-- Stage 6 Bootstrap 冻结：formal backtests and rule applicability must consume only canonical DatasetSnapshot, MarketSnapshot, canonical services/repositories, immutable IDs/fingerprints/versions/provenance/availability timestamps；legacy API/CLI/raw Job/Workflow/Pipeline/compatibility views/file snapshots/EvidencePack/config_path/live Provider/latest records/old JSON files are not formal inputs.
-- Stage 6 Bootstrap 冻结：formal business entry is Web/API -> BacktestApplicationService -> canonical dependency check -> immutable BacktestRun -> internal execution transport if needed -> immutable BacktestResult -> RuleApplicabilityProfile draft/review；raw Job remains internal or compatibility-only.
-- Stage 6 Gate 最终 `ACCEPTED`；Task order `RT-S6-001` -> `RT-S6-002` -> `RT-S6-004` -> `RT-S6-003` 已完成并复验；Stage 7 Bootstrap 不得自动开始。
-- RT-S6-001 已建立正式 `BacktestApplicationService`、`/api/ui/v1/rules/backtests/*`、`backtest_runs` 和 `/rules/backtests` 普通用户工作台；raw Job/Workflow/CLI/legacy result fallback 仍非正式入口。
-- RT-S6-002 已建立正式 point-in-time 市场状态查询、`backtest_results`、分市场状态指标、结果 API 和 `/rules/results` 正式结果页。
-- RT-S6-004 已建立正式 Level 1/2/3 数据等级、降级/拒绝策略、缺失 Kaipan 限制语义、RuleFamily mixed-level、显式降级审计和 UI/API 可见性。
-- RT-S6-003 已建立正式 RuleApplicabilityProfile 草稿/版本、immutable BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计。
-- Stage 6 Gate 有界修复：formal result API 暴露 `per_rule_metrics`、`provenance`、`audit`；profile review 权限收敛到当前 runtime operator/admin 层级。
-- Stage 6 Gate 残余非阻塞风险：legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only，并可在旧/admin/compatibility surfaces 暴露旧术语；formal `/rules/*` 不使用它们作为正式事实源。
-- Stage 7 Bootstrap 冻结：正式作者画像分为 `AuthorMethodProfile`、`AuthorRuleProfile`、`AuthorValidatedProfile`；三类画像必须共享版本、生命周期、审核、审计、证据指纹、画像指纹、supersession 和时间分段规则。
-- Stage 7 Bootstrap 冻结：正式作者验证画像只能消费 formal `RuleApplicabilityProfile`、formal `BacktestRun`、formal `BacktestResult` 和 Stage 6 level/市场状态/sample evidence；legacy `/persona`、legacy persona/profile services、legacy rule-pool profile UI、`RuleApplicabilityService.build_profile()`、Job/Workflow/Pipeline/Artifact/file JSON、`SnapshotLoader`、`config_path`、EvidencePack、live Provider、mutable latest、`backtest_result_runs` 和 `regime_metrics` 均不得作为正式事实源。
-- Stage 7 Bootstrap 冻结：Task order 为 `RT-S7-004` -> `RT-S7-001` -> `RT-S7-002` -> `RT-S7-003`；`RT-S7-004` 提前执行以先冻结版本、生命周期、审核、审计和时间分段合同；不得自动开始。
-- RT-S7-004 已建立正式 `/api/ui/v1/authors` 和 `/authors` 版本 foundation；新证据只生成草稿/修订，不自动覆盖已发布画像；Stage 7 仍需完成方法画像、规则画像、验证画像和 Gate。
+- [Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
+- [Stage 7 日志](refactor-implementation-logs/stage-7.md)
+- 本文件的“当前硬约束”和“当前残余风险”
 
-## 2026-06-19 RT-S6-003 规则适用性画像
-
-- Task ID：`RT-S6-003`
-- 状态：`[x] 已完成`
-- 修改范围：`RuleApplicabilityProfile` model/repository/service、正式 `/api/ui/v1/rules/backtests/*` profile API、`/rules/results` UI、Alembic migration、backend/API/frontend tests、Stage 6 logs。
-- 关键设计决定：
-  - 正式画像只从 immutable `backtest_runs` / `backtest_results` 生成，不从 Job payload、file artifact、legacy JSON、SnapshotLoader、EvidencePack、config_path 或 live Provider 生成。
-  - 保留 legacy `build_profile()` 为 compatibility-only，不提升旧 profile 为正式 Stage 6 accepted profile。
-  - 画像推荐、样本、覆盖、置信和人工审核状态分离；样本不足输出 `insufficient_sample`，不转成 `not_recommended` 或零分。
-  - 审核通过只批准画像证据，不发布策略、不修改 RuleVersion、不修改 RuleFamily membership。
-- 数据库迁移：新增 `2026_06_19_0013_stage6_rule_applicability_profiles`，扩展 `rule_applicability_profiles` 并新增 `rule_applicability_profile_audits`；PostgreSQL clean upgrade、downgrade、re-upgrade、current 均通过。
-- 兼容处理：旧 rule-pool / Job/file profile 生成路径保留为 compatibility-only；正式 `/rules/results` 使用新的 immutable source-bound API。
-- 已运行测试：详见 [Stage 6](refactor-implementation-logs/stage-6.md) RT-S6-003 Validation；包含 focused backend/API/migration/frontend/typecheck/compileall/git diff checks 和 PostgreSQL migration replay。
-- 测试结果：受影响自动化检查通过；OpenAPI/router pytest 仍有既有 async cleanup warning；shell 启动仍有本地 RVM `ps` sandbox warning。
-- 未完成项：无；Stage 6 Gate 已接受。
-- 已知风险：legacy rule-pool profile UI 仍是 compatibility surface；正式 profile history browser 可在后续 UX 中增强但不阻塞 RT-S6-003。
-- 验收结论：`RT-S6-003 ACCEPTED`；Stage 6 Gate 只能在用户明确指令后开始。
-- 代码审查修复：正式画像唯一约束已包含 `profile_version_no`；审核 API/UI 权限已收敛到当前 operator/admin 角色体系；downgrade 在存在正式画像审计数据时会显式拒绝，避免静默丢失证据。
-
-## 2026-06-17 Stage 5 Bootstrap
-
-- Task ID：`Stage 5 Bootstrap`
-- 状态：`[x] 已完成`
-- 修改范围：`docs/refactor-implementation-plans/stage-5-implementation-plan.md`、`docs/refactor-implementation-logs/stage-5.md`、`docs/Refactor-Implementation-Log.md`
-- 关键决定：
-  - Stage 5 task order 冻结为 `RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Gate。
-  - `RT-S5-001` 与 `RT-S5-002` 可以在同一 Parent session 中分 acceptance batch 执行；`RT-S5-003` 后置且单独执行。
-  - Stage 5 time contract 区分 `trade_date`、event/source/captured/ingested/available time，并要求 `Asia/Shanghai` 调度语义和无未来数据泄漏。
-  - `DatasetSnapshot` formal source 为 `dataset_snapshots`；`market_datasets` 仅 compatibility read-only。
-  - `MarketSnapshot` formal source 为 `market_snapshots` 及 child tables。
-  - OHLCV missing numeric data 不得继续默认为 0；必须进入 validation/quality/rejection path。
-  - 正式用户表面必须使用业务中文；调度和作业系统保留为内部执行基础设施。
-- 数据库迁移：Bootstrap 未新增迁移；计划识别 RT-S5-001/002 需要新增 OHLCV provenance/time/quality、canonical DatasetSnapshot runtime path、coverage/repair、Kaipan provenance/coverage 和 snapshot immutability 相关迁移。
-- 兼容处理：保留 legacy `/market*`、`/api/ui/v1/kaipan/*`、`/api/ui/v1/market/ohlcv/*`、legacy snapshot routes、`market_universe` files、`market_datasets` view、technical Job/Workflow/Pipeline/Artifact routes 为 compatibility-only until retirement evidence.
-- 已运行测试：未运行测试；Bootstrap 为 analysis and planning only。
-- 测试结果：不适用。
-- 未完成项：`RT-S5-001`、`RT-S5-002`、`RT-S5-003` 均未开始。
-- 已知风险：
-  - OHLCV 当前实现仍存在 missing numeric -> zero 风险，需 RT-S5-001 修复。
-  - DatasetSnapshot runtime 仍混用 `MarketDataset` compatibility read path，需 RT-S5-001 收敛。
-  - 调度/系统管理入口仍分散，需 RT-S5-003 在数据合同稳定后收口。
-  - Web compatibility body copy 仍有技术词暴露，需 RT-S5-003 修复。
-- 验收结论：Bootstrap `READY`；`RT-S5-001` 可在用户明确授权后开始；不得自动开始。
-
-## 2026-06-17 RT-S5-001 OHLCV 数据体系
-
-- Task ID：`RT-S5-001`
-- 状态：`[x] 已完成`
-- 修改范围：`src/models/ohlcv_bar.py`、`src/market_data/ohlcv_service.py`、`src/models/stage2_canonical.py`、`src/db/repositories/dataset_snapshot_repository.py`、`src/db/repositories/__init__.py`、`src/services/dataset_snapshot_service.py`、`src/services/market_service.py`、`src/services/market_snapshot_query_service.py`、`cli/ohlcv.py`、`src/pipeline/tasks/ohlcv_crawl_task.py`、`src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py`、相关 unit/api/frontend tests、Stage 5 docs/logs。
-- 关键决定：
-  - OHLCV canonical identity 固定为 `symbol + exchange + asset_type + frequency + adjustment_policy + trade_date`；股票/指数/ETF 不得共用同一 formal identity。
-  - `trade_date` 使用 `Asia/Shanghai` 交易日语义；`event_time` 固定为当日 15:00 CST 对应 UTC，`available_at` 固定为当日 17:00 CST 对应 UTC；`source_time` 缺失时保留缺失并记录 `provider_time_unavailable`。
-  - 缺失或非法 OHLCV 数值显式拒绝；不得默认成 `0`、`false`、`ready` 或 success。
-  - provider duplicate rows 按 canonical payload fingerprint 去重；同一 identity 冲突 payload 直接报错，不伪造“成功写入”。
-  - 历史回灌、增量更新与 repair 均保持 idempotent；仅在 canonical payload 真正变化时更新行并触发后续指标缓存失效边界。
-  - 指标边界采取 truthful invalidation：当某 symbol 的 OHLCV 从某交易日起被修复后，删除该交易日及之后的 `indicators` 缓存，留待后续正式读取按 canonical OHLCV 重算；不在 RT-S5-001 内扩展到 Stage 6 回测执行。
-  - `DatasetSnapshot` formal runtime path 已切到 `dataset_snapshots` repository/service；formal key 为 `content_fingerprint`，`logical_dataset_id`/`dataset_id` 仅作 compatibility mapping。
-  - frozen `DatasetSnapshot` 不做原地修改；同内容 rerun 复用既有 snapshot，不同内容生成新 fingerprint/new snapshot。
-- 数据库迁移：新增 `src/db/migrations/versions/2026_06_17_0008_stage5_ohlcv_contract.py`，补齐 OHLCV provenance/time/identity 字段，回填 legacy 数据，替换唯一约束，并在 downgrade 会导致 canonical identity 塌缩时显式拒绝降级。
-- 兼容处理：
-  - `market_datasets` 保持 compatibility-only；用户可见 dataset 浏览仍走原有 `/market/datasets` 页面，但后端读取已切换到 canonical `dataset_snapshots` repository。
-  - 现有 OHLCV 抓取、CLI、pipeline task 和 Web 工作台继续保留入口，只增加 canonical snapshot freeze 和 truthful dataset metadata。
-- 已运行测试：
-  - `../.venv/bin/python -m pytest tests/unit/cli/test_ohlcv.py tests/unit/pipeline/test_ohlcv_crawl_task.py tests/unit/models/test_ohlcv_bar.py tests/unit/market_data/test_ohlcv_service.py tests/unit/db/repositories/test_dataset_snapshot_repository.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_dataset_snapshot_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/db/test_migrations.py tests/api/routers/test_market_ui.py -q`
-  - `pnpm test -- src/pages/market/datasets/index.test.tsx src/pages/market/index.test.tsx src/lib/api/market.test.ts`
-  - `pnpm typecheck`
-  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
-  - `../.venv/bin/python -m compileall src api cli`
-  - `git diff --check`
-- 测试结果：
-  - Focused backend/API/database/CLI/job/migration suite：`51 passed`
-  - Frontend targeted suite：`10 passed`
-  - TypeScript：passed
-  - Stage 3 fixed-set regression：`passed`
-  - `compileall`：passed
-  - `git diff --check`：passed
-- 未完成项：
-  - `RT-S5-002` Kaipan 数据体系未开始。
-  - `RT-S5-003` 调度与系统管理正式收口未开始。
-- 已知风险：
-  - 本次 migration 证据以迁移定义测试、upgrade/downgrade 守卫逻辑和 existing-data backfill 代码审查为主，未在本 session 内额外跑独立 PostgreSQL 真实 upgrade/downgrade/re-upgrade 回放。
-  - Stage 6 当前仍从 DB 读取 OHLCV 并按需计算指标；本任务只交付其所需 canonical data contract，不包含 Stage 6 runtime 切换或 backtest 执行。
-  - 当前 Web 仍保留技术型 market workspace/调度页面；普通用户正式“数据与调度”入口收口属于 `RT-S5-003`。
-- 验收结论：`RT-S5-001 ACCEPTED`。OHLCV canonical identity/time/provenance、calendar-aware repair、truthful availability、indicator invalidation boundary、immutable DatasetSnapshot freeze、canonical dataset runtime path 与受影响回归验证均满足当前 Stage 5 冻结合同；`RT-S5-002` 可在新 acceptance batch 中开始，但不得自动开始。
-
-## 2026-06-17 RT-S5-002 Kaipan 数据体系
-
-- Task ID：`RT-S5-002`
-- 状态：`[x] 已完成`
-- 修改范围：`src/models/market_snapshot.py`、`src/models/market_data_snapshot.py`、`src/models/market_data_snapshot_section.py`、`src/services/market_snapshot_builders.py`、`src/services/market_snapshot_service.py`、`src/services/market_data_storage_service.py`、`src/db/repositories/market_snapshot_repository.py`、`src/db/repositories/market_snapshot_section_repository.py`、`src/services/market_regime_service.py`、`src/models/__init__.py`、`src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py`、相关 unit/api/frontend tests、Stage 5 docs/logs。
-- 关键决定：
-  - Kaipan canonical slot 固定为 `09-25`（盘前）和 `17-30`（盘后）；两者形成不同 formal snapshot identity，不得合并或互相覆写。
-  - `MarketSnapshot` formal source 继续为 `market_snapshots` 及 child tables；formal identity 改为 `content_fingerprint` + immutable `snapshot_id`，允许同一 `trade_date/slot` 在内容变化时形成新 frozen version。
-  - `MarketSnapshotSection` 与 snapshot 主记录显式记录 `source_time`、`captured_at`、`ingested_at`、`available_at`、`trade_date`、`slot`、`source_dataset`、`raw_payload_fingerprint`、`normalization_version`；缺失/历史 unavailable 不伪造时间。
-  - canonical payload 会移除 `fetched_at` 这类 rerun 易变字段，保证 normalization/freeze fingerprint deterministic；同内容 rerun 复用同一 frozen snapshot identity。
-  - 历史 Kaipan 不可得时保持 `unavailable/missing/partial` truthful semantics，不合成历史盘前/盘后内容，不把缺失 Kaipan 转成 `false`、`0`、`ready` 或 satisfied rule condition。
-  - `market_datasets` compatibility write 继续拒绝；legacy/file snapshot paths 保留 compatibility-only，formal runtime source 不回退。
-  - market-state recompute 继续绑定 canonical snapshot + OHLCV/indicator coverage；当 snapshot coverage 不足时，feature/regime 构建维持 truthful `partial`/warning，而不是伪造 ready。
-- 数据库迁移：新增 `src/db/migrations/versions/2026_06_17_0009_stage5_kaipan_contract.py`，补齐 `market_snapshots`/`market_snapshot_sections` 的 slot/provenance/freeze 字段，移除会阻塞 versioned snapshot 的 `(market, trade_date, slot, data_version)` 唯一约束，并在 downgrade 会塌缩 frozen version 时显式拒绝。
-- 兼容处理：
-  - `market_datasets` 继续 compatibility read-only；相关 repository tests 已切到拒写预期。
-  - file-based snapshot 路径仍保留给 compatibility loader/UI，但 formal snapshot freeze 语义由 DB canonical records 承担。
-  - 现有 `/api/ui/v1/kaipan/*`、market workspace、snapshot browser 和 legacy snapshot routes 保持入口，只修复为 truthful slot/coverage/readiness 表达。
-- 已运行测试：
-  - `../.venv/bin/python -m pytest tests/unit/models/test_market_snapshot.py tests/unit/providers/test_kaipan_provider.py tests/unit/providers/test_kaipan_normalizer.py tests/providers/test_kaipan_scheduler.py tests/providers/test_kaipan_pipeline.py tests/unit/services/test_market_snapshot_builders.py tests/unit/services/test_market_snapshot_registry.py tests/unit/services/test_market_snapshot_service.py tests/unit/services/test_market_data_storage_service.py tests/unit/services/test_market_snapshot_query_service.py tests/unit/services/test_market_regime_feature_service.py tests/unit/services/test_market_regime_service.py tests/unit/services/test_snapshot_market_service.py tests/unit/services/test_kaipan_dashboard_service.py tests/api/routers/ui/test_kaipan.py tests/api/routers/test_ui_snapshots.py tests/api/routers/test_market_ui.py tests/unit/db/repositories/test_market_data_repositories.py tests/unit/db/test_migrations.py -q`
-  - `pnpm vitest run src/features/market-workspace/market-workspace-shell.test.tsx src/pages/market/snapshots/index.test.tsx src/pages/market/index.test.tsx`
-  - `pnpm typecheck`
-  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
-  - `../.venv/bin/python -m compileall src api cli`
-  - `git diff --check`
-- 测试结果：
-  - Focused backend/API/provider/database/migration/market-state suite：`119 passed`
-  - Frontend targeted suite：`14 passed`
-  - TypeScript：passed
-  - Stage 3 fixed-set regression：`{"status":"passed","article_count":12,"processed_count":12,"validation_failures":[]}`
-  - `compileall`：passed
-  - `git diff --check`：passed
-- 未完成项：
-  - `RT-S5-003` 调度与系统管理正式收口未开始。
-  - Stage 6 backtest execution / rule applicability 仍未开始。
-- 已知风险：
-  - 本次 migration 证据仍以 migration-definition tests、downgrade guard、sqlite runtime path 与 code review 为主；未在本 session 内额外执行独立 PostgreSQL upgrade/downgrade/re-upgrade operational replay。
-  - raw Kaipan 历史可用性仍受 provider/credential/network 限制；本批 acceptance 以 deterministic fixtures/fake providers 验证合同，不代表外部 provider 对所有历史日期都可 operational 成功。
-- `RT-S5-003` 已将 formal normal-user 数据与调度入口收口到 `/system/data` 与 `/api/ui/v1/system/data/*`；legacy OHLCV/Kaipan UI mutation endpoints 已改为 compatibility-only explicit rejection。
-- Stage 5 fixed-set regression 在 sandbox 内会因本机权限报 `Operation not permitted`；已在外部环境重跑同一命令并通过，不代表业务回归失败。
-- 验收结论：`RT-S5-002 ACCEPTED`。Kaipan canonical slot/time/provenance、truthful historical availability、idempotent freeze/retry/rerun、immutable versioned `MarketSnapshot`、market-state truthful degradation、compatibility-only legacy paths 与受影响回归验证满足当前 Stage 5 冻结合同；`RT-S5-003` 可在新 acceptance batch 中开始，但不得自动开始。
-
-## 2026-06-17 Stage 4 Pre-Stage-5 Cleanup Review
-
-- Task ID：`Stage 4 Pre-Stage-5 Cleanup Review`
-- 状态：`[x] 已完成`
-- 修改范围：`config/database.py`、`api/app.py`、`src/services/rule_review_service.py`、`src/services/rule_lifecycle_service.py`、`api/routers/ui/rule_pool.py`、`api/routers/ui/strategy_studio.py`、相关 Stage 4 API/integration tests、Stage 4 日志。
-- 关键决定：
-  - 缓存 async engine 必须在应用 shutdown 时显式 `dispose`，不能把 asyncpg 连接清理留给解释器/事件循环收尾。
-  - `approve_low_risk` / `reject_invalid` 必须在单个事务单元内执行，且批内每项在写入时重新校验资格，不能只依赖批前预检。
-  - `/api/ui/v1/rule-review`、`/api/ui/v1/rule-lifecycle` 以及兼容 `rule-pool` / `strategy-studio` 正式变更入口均要求 `operator+`。
-  - 低风险批量合同保持为：新规则进入 `待回测`；精确重复复用既有 `RuleVersion` 且不重复进入回测；不伪造验证/可用/发布语义。
-- 数据库迁移：无新增迁移。
-- 兼容处理：保留 legacy `rule-pool` / `strategy-studio` 写入口为 compatibility-only，同时新增 operator 授权拦截，拒绝在拒写逻辑之前触达服务。
-- 已运行测试：
-  - `../.venv/bin/python -m pytest tests/integration/test_stage4_rule_governance.py tests/integration/test_stage4_rule_lifecycle.py tests/integration/test_stage4_rule_review.py tests/api/routers/test_rule_lifecycle.py tests/api/routers/test_rule_review.py tests/api/routers/test_rule_pool.py tests/api/routers/ui/test_strategy_studio.py tests/unit/services/test_rule_governance_service.py tests/unit/db/test_stage4_rule_governance_migration.py tests/unit/cli/test_rule_pool_cli.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py -q`
-  - `../.venv/bin/python -m pytest tests/unit/services/test_stage2_writer_routing.py tests/regression/stage3 tests/unit/stage3 tests/integration/test_stage3_single_article.py tests/integration/test_stage3_batch.py tests/integration/test_stage3_legacy_compatibility.py tests/api/routers/ui/test_article_metadata.py tests/unit/services/test_optimize_rule_pool_service.py -q`
-  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`
-  - `PYTHONASYNCIODEBUG=1 PYTHONTRACEMALLOC=1 ../.venv/bin/python -W error::RuntimeWarning -m pytest tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py::test_app_lifespan_disposes_cached_engine_on_shutdown -q` repeated 3 times
-  - `pnpm test -- src/pages/rules/review.test.tsx src/pages/rule-pool/index.test.tsx`
-  - `pnpm typecheck`
-  - `../.venv/bin/python -m compileall src api cli`
-  - `git diff --check`
-- 测试结果：
-  - Stage 4 focused governance/API/CLI/migration/auth suite：`41 passed`
-  - Affected Stage 3/4 regression suite：`43 passed`
-  - Stage 3 fixed-set gate：`passed`
-  - RuntimeWarning diagnostic repeat：`3/3` runs passed with no `Connection._cancel` warning
-  - Frontend targeted tests：`5 passed`
-  - TypeScript、compileall、`git diff --check`：passed
-- 未完成项：无。
-- 已知风险：
-  - 当前结论基于本地可访问 PostgreSQL/asyncpg 与 targeted regression evidence；仓库全量后端测试未在本次 bounded review 中重跑。
-  - React Query 测试仍输出既有 query-data warning，不属于本次 Stage 4 formal contract。
-- 验收结论：Stage 4 `ACCEPTED` 保持不变；Pre-Stage-5 cleanup review 结论为 verified and fixed；Stage 5 Bootstrap 仍需用户明确授权后方可开始。
-
-## 2026-06-18 Stage 5 Gate
-
-- Task ID：`Stage 5 Review and Gate`
-- 状态：`[x] 已完成`
-- 修改范围：`src/services/job_registry.py`、`src/services/job_service.py`、`src/services/dataset_snapshot_service.py`、`web/src/pages/system/index.tsx`、相关 job/workflow/API/service/frontend tests、`docs/refactor-implementation-logs/stage-5.md`、`docs/Refactor-Implementation-Log.md`
-- 关键设计决定：
-  - Raw Stage 5 data job types 不再是正式 mutation 入口；generic job/workflow/low-level create 均必须拒绝并指向 `system-data-operation` / `系统管理 -> 数据与调度`。
-  - `DatasetSnapshot` content fingerprint 必须包含 OHLCV row-level fingerprint，避免同一 symbol/date 修复后复用旧 frozen snapshot。
-  - 普通用户页面只展示中文业务词“就绪状态”，不暴露 `readiness`。
-  - `system-data-operation` 保留 provider failure 分类，避免把正式数据源故障误归为普通 pipeline 失败。
-- 数据库迁移：
-  - 未新增迁移。
-  - 已执行真实 PostgreSQL Stage 5 migration Gate：fresh upgrade head、downgrade 到 `2026_06_16_0007`、re-upgrade head、existing-data upgrade、existing-data downgrade/recovery、row-count/provenance/fingerprint/uniqueness/nullability checks。
-  - 临时数据库 `trade_stage5_gate_fresh`、`trade_stage5_gate_existing` 已清理。
-- 兼容处理：
-  - Legacy API/UI mutation endpoints for OHLCV/Kaipan 保持 compatibility-only rejection。
-  - Raw Stage 5 data jobs/workflows 由 runnable 改为 compatibility-only rejection。
-  - Legacy internal CLI/tooling retirement 继续延后，不在缺少迁移/观察/回滚证据时强制删除。
-- 已运行测试：
-  - Stage 5 OHLCV/DatasetSnapshot/migration/API suite：`53 passed`
-  - Stage 5 Kaipan/MarketSnapshot/market-state suite：`87 passed`
-  - Stage 5 readiness/scheduler/job/API/workflow suite：`93 passed`
-  - Affected Stage 3 regression suite：`39 passed`
-  - Affected Stage 4 regression suite：`41 passed`
-  - Frontend targeted suite：`6 files passed`, `38 tests passed`
-  - `pnpm typecheck`：`TypeScript: No errors found`
-  - `../.venv/bin/python -m compileall src api cli`：passed
-  - `git diff --check`：passed
-  - `../.venv/bin/python -m cli.main stage3-regression run --fixed-set`：`status=passed`, `article_count=12`, no persistence/provider/semantic/validation failures
-- 测试结果：全部通过；PostgreSQL localhost 连接在 sandbox 内被拒绝，已按 Gate 要求使用 approved unsandboxed local PostgreSQL path 重跑并记录。
-- 未完成项：无阻塞项；Stage 6 未开始。
-- 已知风险：
-  - Legacy internal tooling retirement remains deferred。
-  - Readiness coverage persistence 仍偏浅，若 Stage 6 需要历史 readiness audit 查询需继续加深。
-  - Historical Kaipan availability 仍需对真实 provider/credential/network 保持 truthful unavailable 表达。
-- 验收结论：Stage 5 Gate `ACCEPTED`；Stage 6 Bootstrap 可在用户明确授权后开始，不得自动开始。
-
-## 日志读取规则
-
-新 Session 或恢复任务时：
-
-1. 先读本文件。
-2. 读取 Stage 7 计划和详细日志。
-3. 再读当前 Task Card、上游 handoff、当前 `git status` 和完整 diff。
-4. 不默认读取已完成 Stage 详细日志；仅在 Stage 7 入口证据、Stage 6 formal applicability source 或合同冲突不明确时回读相关已完成 Stage。
-
-同一 Stage 延续时，只读取本文件变化、当前 Stage 日志新增条目和当前 Task 直接相关证据。
+不得跳过 `RT-S7-001` 直接实现 `RT-S7-002/003`，除非用户明确重新冻结 Stage 7 task order。

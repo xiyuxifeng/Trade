@@ -3,11 +3,11 @@
 ## 当前状态
 
 - Stage：`Stage 6 回测与规则适用性`
-- 当前活动：`2026-06-19 RT-S6-004 回测分级`
-- 当前状态：`RT-S6-004 ACCEPTED`
-- 当前已接受：`RT-S6-001`, `RT-S6-002`, `RT-S6-004`
-- 下一可执行 Task：`RT-S6-003 规则适用性画像`
-- 不得自动开始：`RT-S6-003` 需用户明确触发；Stage 6 未完成
+- 当前活动：`2026-06-19 RT-S6-003 规则适用性画像`
+- 当前状态：`RT-S6-003 ACCEPTED`
+- 当前已接受：`RT-S6-001`, `RT-S6-002`, `RT-S6-004`, `RT-S6-003`
+- 下一可执行 Task：`Stage 6 Gate`
+- 不得自动开始：Stage 6 Gate 需用户明确触发；Stage 6 未完成
 
 ## 2026-06-18 Stage 6 Bootstrap
 
@@ -590,3 +590,146 @@ Non-blocking:
 `RT-S6-003` may begin only after explicit user instruction. `RT-S6-003` has not been started.
 
 Stage 6 is not complete.
+
+## 2026-06-19 RT-S6-003 规则适用性画像
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented the formal RuleApplicabilityProfile draft/version and review foundation only:
+
+- versioned, auditable `RuleApplicabilityProfile` drafts generated from immutable `backtest_runs` and `backtest_results`;
+- source binding to BacktestRun IDs, BacktestResult IDs and result fingerprints;
+- frozen RuleVersion identity and RuleFamily identity/frozen member IDs when applicable;
+- market-state model/source version, DatasetSnapshot fingerprint and MarketSnapshot fingerprint binding;
+- requested/effective level, level policy version, Level 3 limitations, warnings and coverage visibility;
+- deterministic recommendation states separated from sample count, coverage, confidence and human review;
+- insufficient sample behavior that does not become `not_recommended` or zero score;
+- reviewed profiles are not overwritten; new evidence creates a new version or superseding draft;
+- formal generation/review API under `/api/ui/v1/rules/backtests/*`;
+- formal `/rules/results` UI panel for draft generation, sample/coverage/recommendation/review display and approve/reject actions;
+- audit rows for draft creation, supersession and review transitions.
+
+Did not start or implement:
+
+- Stage 6 Gate;
+- Stage 7 author profile;
+- strategy publication;
+- daily pre-market or post-market behavior;
+- automatic formal rule publication;
+- RuleVersion content mutation;
+- RuleFamily membership mutation;
+- legacy profile migration as formal accepted profiles;
+- legacy retirement.
+
+### Delegation
+
+Used three bounded read-only subagents:
+
+- Explorer Alpha: verified Stage 6 docs, RT-S6-001/002/004 acceptance handoffs, RT-S6-003 task card and log conventions.
+- Explorer Beta: mapped backend/API/database profile, backtest, rule identity, level-policy, audit/permission and legacy compatibility surfaces.
+- Explorer Gamma: mapped frontend formal `/rules/backtests` and `/rules/results` surfaces, existing rule-pool profile UI, client/types/tests and user-facing terminology risks.
+
+Parent implemented all M3 decisions, schema/migration, service/API, UI, tests, migration replay, review and acceptance decision.
+
+### Files Changed
+
+- `src/models/rule_applicability.py`
+- `src/models/__init__.py`
+- `src/db/repositories/rule_applicability_repository.py`
+- `src/services/rule_applicability_service.py`
+- `src/services/backtest_application_service.py`
+- `src/db/migrations/versions/2026_06_19_0013_stage6_rule_applicability_profiles.py`
+- `api/routers/ui/formal_backtests.py`
+- `tests/unit/services/test_rule_applicability_service.py`
+- `tests/api/routers/test_formal_backtests.py`
+- `tests/unit/db/test_migrations.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `web/src/types/backtests.ts`
+- `web/src/lib/api/backtests.ts`
+- `web/src/lib/api/backtests.test.ts`
+- `web/src/features/backtest/formal-backtest-results.tsx`
+- `web/src/features/backtest/backtest-center.stage6.test.tsx`
+
+### Key Design Decisions
+
+- Kept legacy `build_profile()` behavior as compatibility-only; it may still read Job payloads and write sidecar artifacts, but it is not used by the formal Stage 6 API.
+- Added formal `generate_formal_draft()` and `review_formal_profile()` methods that consume only immutable BacktestRun/BacktestResult rows.
+- Kept recommendation, confidence, sample status and review status as separate fields.
+- Used `approved/rejected/invalidated/superseded` for profile review state without changing Stage 4 rule lifecycle.
+- Did not mutate RuleVersion content, RuleFamily membership, rule lifecycle or strategy assets.
+
+### Database Migration
+
+- Added one linear Alembic revision: `2026_06_19_0013_stage6_rule_applicability_profiles`.
+- Migration additively extends `rule_applicability_profiles` with formal source bindings, frozen identity, level, sample, coverage, recommendation, review, limitation and supersession fields.
+- Migration creates `rule_applicability_profile_audits` for review/state transition audit.
+- Existing legacy profile rows are preserved; they are not promoted to formal accepted profiles.
+- PostgreSQL replay evidence on temporary database `rt_s6_003_migration_0619`:
+  - clean `upgrade head` passed;
+  - `downgrade 2026_06_19_0012` passed;
+  - re-`upgrade head` passed;
+  - final `alembic current` reported `2026_06_19_0013 (head)`.
+- Temporary database was dropped after verification.
+
+### Compatibility Handling
+
+- RT-S6-001 formal BacktestApplicationService and `/rules/backtests` workbench remain intact.
+- RT-S6-002 immutable `backtest_results` and `/rules/results` result view remain intact.
+- RT-S6-004 requested/effective level and Level 3 limitation semantics remain intact and are preserved on profiles.
+- Legacy Job/file/artifact profile generation remains compatibility-only and is not the formal profile source.
+- Legacy rule-pool profile UI remains outside the formal Stage 6 product surface.
+
+### Validation
+
+Run and passed:
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_rule_applicability_service.py -q` -> `7 passed`.
+- `../.venv/bin/python -m pytest tests/api/routers/test_formal_backtests.py -q` -> `9 passed`.
+- `../.venv/bin/python -m pytest tests/unit/services/test_rule_applicability_service.py tests/api/routers/test_formal_backtests.py tests/unit/db/test_migrations.py -q` -> `25 passed`.
+- `../.venv/bin/python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py tests/api/routers/test_formal_backtests.py tests/unit/db/test_migrations.py tests/api/test_ui_openapi_contract.py -q` -> `40 passed`, 1 existing async cleanup warning.
+- `pnpm test -- src/lib/api/backtests.test.ts src/features/backtest/backtest-center.stage6.test.tsx` -> `7 passed`.
+- `pnpm typecheck` -> passed.
+- `../.venv/bin/python -m compileall src/models/rule_applicability.py src/db/repositories/rule_applicability_repository.py src/services/rule_applicability_service.py src/services/backtest_application_service.py api/routers/ui/formal_backtests.py src/db/migrations/versions/2026_06_19_0013_stage6_rule_applicability_profiles.py` -> passed.
+- `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini heads` -> single head `2026_06_19_0013`.
+- PostgreSQL `upgrade head`, `downgrade 2026_06_19_0012`, re-`upgrade head`, `current` -> passed as listed above.
+- `git diff --check` -> passed.
+
+Warnings observed:
+
+- Existing async connection cleanup warning in OpenAPI/router-related pytest.
+- Shell startup warning from local RVM `ps` sandbox restriction.
+
+### Review Findings and Repairs
+
+- RED tests first showed formal profile methods and formal API routes did not exist.
+- Repaired by adding canonical draft/review service methods, repository reads from BacktestRun/BacktestResult, API routes and frontend client/types.
+- Initial model initialization converted UUID fields to strings, preventing prior reviewed profiles from being found as the same formal identity. Repaired by preserving scalar UUID fields and serializing only JSON fields.
+- Frontend typecheck found the Web role model has no `reviewer` role. Repaired UI permission check to use existing operator/admin hierarchy while backend continues to allow reviewer/operator/admin.
+- Contract review found legacy Job/file references still exist in compatibility `build_profile()` only; formal generation does not call that path.
+- Final review found the legacy `rule_id/profile_version/source_backtest_id` uniqueness constraint would block multiple formal versions for the same immutable run. Repaired by including `profile_version_no` in the uniqueness key.
+- Final review found UI/service/router review permissions were inconsistent. Repaired router and tests to use the existing operator/admin hierarchy for the current auth model.
+- Final review found downgrade could silently drop formal profile/audit data. Repaired downgrade with an explicit refusal when formal profile audit rows exist.
+
+### Risks
+
+Blocking:
+
+- None identified for `RT-S6-003`.
+
+Non-blocking:
+
+- Legacy rule-pool profile generation remains compatibility-only and can still expose old wording on its legacy surface until future retirement work.
+- Formal profile list/detail beyond the generated/reviewed draft response remains minimal; future UX may add a dedicated profile history browser before Stage 7 consumes profiles.
+- Existing async cleanup warning remains outside this task.
+
+### Acceptance Conclusion
+
+`RT-S6-003 ACCEPTED`.
+
+Stage 6 Gate may begin only after explicit user instruction. Stage 6 Gate has not been started.
+
+Stage 6 is not complete until Gate acceptance.

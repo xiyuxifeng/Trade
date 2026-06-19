@@ -19,7 +19,7 @@ from src.models.market_data_quality_report import MarketDataQualityReport
 from src.models.market_regime_record import MarketRegimeRecord, RegimeEvidenceRecord, RegimeFeatureRecord, RegimeLabelRecord
 from src.models.backtest_result_run import BacktestResultRun
 from src.models.market_regime import MarketRegimeFeature
-from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityRegimeRecord
+from src.models.rule_applicability import RuleApplicabilityProfile, RuleApplicabilityProfileAudit, RuleApplicabilityRegimeRecord
 from src.models.strategy_regime_selection import StrategyRegimeSelection, RegimeRuleSelection
 from src.models.raw_article import RawArticle
 from src.models.market_data import MarketData
@@ -65,6 +65,7 @@ __all__ = [
     "BacktestResultRun",
     "MarketRegimeFeature",
     "RuleApplicabilityProfile",
+    "RuleApplicabilityProfileAudit",
     "RuleApplicabilityRegimeRecord",
     "StrategyRegimeSelection",
     "RegimeRuleSelection",

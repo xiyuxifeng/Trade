@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.db.repositories.backtest_run_repository import BacktestRunRepository
 from src.db.session import get_session_factory
+from src.services.rule_applicability_service import RuleApplicabilityService
 
 
 BUSINESS_STATE_LABELS = {
@@ -729,6 +730,62 @@ class BacktestApplicationService:
             if result is None:
                 raise LookupError("backtest result not found")
             return self._result_view(result)
+
+    async def generate_applicability_draft(
+        self,
+        run_id: str,
+        result_id: str | None,
+        *,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None,
+    ) -> dict[str, Any]:
+        service = RuleApplicabilityService(session_scope_factory=self._session_scope_factory)
+        result = await service.generate_formal_draft(
+            run_id=run_id,
+            result_id=result_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            reason=reason,
+            source_surface="/rules/results",
+        )
+        if result.status != "ok":
+            error = result.payload.get("error", {})
+            error_type = error.get("type")
+            if error_type == "permission_denied":
+                raise PermissionError(error.get("message") or "permission denied")
+            if error_type in {"formal_evidence_not_found", "profile_not_found"}:
+                raise LookupError(error.get("message") or "not found")
+            raise ValueError(error.get("message") or result.message)
+        return result.payload["profile"]
+
+    async def review_applicability_profile(
+        self,
+        profile_id: str,
+        review_status: str,
+        *,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None,
+    ) -> dict[str, Any]:
+        service = RuleApplicabilityService(session_scope_factory=self._session_scope_factory)
+        result = await service.review_formal_profile(
+            profile_id=profile_id,
+            review_status=review_status,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            reason=reason,
+            source_surface="/rules/results",
+        )
+        if result.status != "ok":
+            error = result.payload.get("error", {})
+            error_type = error.get("type")
+            if error_type == "permission_denied":
+                raise PermissionError(error.get("message") or "permission denied")
+            if error_type == "profile_not_found":
+                raise LookupError(error.get("message") or "not found")
+            raise ValueError(error.get("message") or result.message)
+        return result.payload["profile"]
 
     async def _execute_run_payload(self, session: Any, run: Any, *, actor_id: str, actor_role: str) -> dict[str, Any]:
         if not bool(_get(run, "snapshot_only", True)):

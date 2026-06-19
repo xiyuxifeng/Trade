@@ -5,17 +5,24 @@ from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+from uuid import UUID, uuid4
 
 from src.backtest.schemas import BacktestResult, RegimeBacktestMetric
 from src.common.paths import resolve_project_path
 from src.db.repositories import RuleApplicabilityRepository
 from src.models.rule_applicability import RuleApplicabilityProfile
+from src.domain.enums import FormalLifecycleState
+from src.models.stage2_canonical import RuleApplicabilityResultStatus
 from src.services.base import BaseService, ServiceResult
 from src.services.job_service import JobService
 from src.common.stage2_writer_routing import canonical_write_scope
 
 DEFAULT_PROFILE_VERSION = "rule-applicability-v1"
 DEFAULT_MIN_SAMPLE_COUNT = 5
+FORMAL_PROFILE_VERSION = "rule-applicability-stage6-v1"
+FORMAL_RECOMMENDATION_POLICY_VERSION = "rule-applicability-policy-v1"
+FORMAL_MIN_SAMPLE_COUNT = 5
+FORMAL_MIN_COVERAGE = 0.5
 
 
 def _to_plain(value: Any) -> Any:
@@ -33,6 +40,16 @@ def _to_plain(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
     return value
+
+
+def _get(value: Any, key: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _value(value: Any) -> Any:
+    return value.value if hasattr(value, "value") else value
 
 
 def _coerce_backtest_result(value: Any) -> BacktestResult:
@@ -497,6 +514,299 @@ class RuleApplicabilityService(BaseService):
             },
             warnings=["database persistence failed"] if db_warning else [],
         )
+
+    def _formal_error(self, *, error_type: str, message: str, detail: str | None = None, metadata: dict[str, Any] | None = None) -> ServiceResult:
+        return self._error(status="error", error_type=error_type, message=message, detail=detail, metadata=metadata)
+
+    def _formal_profile_metrics(self, result: Any) -> dict[str, Any]:
+        sample_counts = _get(result, "sample_state_counts", {}) or {}
+        buckets = _get(result, "per_market_state_metrics", []) or []
+        overall = _get(result, "overall_metrics", {}) or {}
+        eligible = int(sample_counts.get("eligible") or sum(int(_get(item, "eligible_sample_count", 0) or 0) for item in buckets))
+        evaluated = int(
+            sample_counts.get("evaluated_true")
+            or sample_counts.get("evaluated")
+            or sum(int(_get(item, "evaluated_sample_count", 0) or 0) for item in buckets)
+        )
+        sample_count = eligible or evaluated
+        coverages = [
+            float(_get(item, "coverage"))
+            for item in buckets
+            if _get(item, "coverage") is not None
+        ]
+        coverage = coverages[0] if len(coverages) == 1 else (sum(coverages) / len(coverages) if coverages else None)
+        total_return = overall.get("total_return")
+        if total_return is None:
+            returns = [float(_get(item, "total_return")) for item in buckets if _get(item, "total_return") is not None]
+            total_return = sum(returns) if returns else None
+        win_rate = overall.get("win_rate")
+        if win_rate is None:
+            win_rates = [float(_get(item, "win_rate")) for item in buckets if _get(item, "win_rate") is not None]
+            win_rate = sum(win_rates) / len(win_rates) if win_rates else None
+        max_drawdown = overall.get("max_drawdown")
+        if max_drawdown is None:
+            drawdowns = [float(_get(item, "max_drawdown")) for item in buckets if _get(item, "max_drawdown") is not None]
+            max_drawdown = min(drawdowns) if drawdowns else None
+
+        insufficient = sample_count < FORMAL_MIN_SAMPLE_COUNT
+        insufficient_coverage = coverage is None or coverage < FORMAL_MIN_COVERAGE
+        status = _get(result, "status")
+        limitations = list(_get(result, "limitations", []) or [])
+        warnings = list(_get(result, "warnings", []) or [])
+        if status == "completed_invalid":
+            recommendation = "invalid"
+            confidence = 0.0
+            quality = "invalid"
+            insufficient_status = "invalid"
+        elif insufficient:
+            recommendation = "insufficient_sample"
+            confidence = min(0.4, max(0.0, sample_count / FORMAL_MIN_SAMPLE_COUNT * 0.4))
+            quality = "partial"
+            insufficient_status = "insufficient_sample"
+        elif insufficient_coverage:
+            recommendation = "limited"
+            confidence = min(0.6, max(0.0, float(coverage or 0) * 0.8))
+            quality = "partial"
+            insufficient_status = "insufficient_coverage"
+        elif total_return is None or win_rate is None or max_drawdown is None:
+            recommendation = "unavailable"
+            confidence = 0.0
+            quality = "partial"
+            insufficient_status = "unavailable"
+        elif float(total_return) > 0 and float(win_rate) >= 0.5:
+            recommendation = "recommended"
+            confidence = min(1.0, max(0.0, float(coverage or 0) * 0.6 + min(sample_count, 50) / 50 * 0.4))
+            quality = "complete"
+            insufficient_status = "sufficient"
+        elif float(total_return) < 0 and float(win_rate) < 0.45:
+            recommendation = "not_recommended"
+            confidence = min(1.0, max(0.0, float(coverage or 0) * 0.6 + min(sample_count, 50) / 50 * 0.4))
+            quality = "complete"
+            insufficient_status = "sufficient"
+        else:
+            recommendation = "limited"
+            confidence = min(0.8, max(0.0, float(coverage or 0) * 0.6 + min(sample_count, 50) / 50 * 0.3))
+            quality = "partial"
+            insufficient_status = "sufficient"
+
+        return {
+            "sample_count": sample_count,
+            "eligible_sample_count": eligible,
+            "evaluated_sample_count": evaluated,
+            "coverage": coverage,
+            "return_metric": total_return,
+            "win_rate": win_rate,
+            "maximum_drawdown": max_drawdown,
+            "confidence": round(confidence, 4),
+            "recommendation_status": recommendation,
+            "quality_status": quality,
+            "insufficient_sample_status": insufficient_status,
+            "limitations": limitations,
+            "warnings": warnings,
+            "per_market_state_metrics": _to_plain(buckets),
+        }
+
+    async def generate_formal_draft(
+        self,
+        *,
+        run_id: str,
+        result_id: str | None = None,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None = None,
+        source_surface: str = "/rules/results",
+    ) -> ServiceResult:
+        """Generate a formal Stage 6 draft only from immutable BacktestRun/BacktestResult."""
+        if actor_role not in {"operator", "admin"}:
+            return self._formal_error(
+                error_type="permission_denied",
+                message="生成适用性画像草稿需要 operator 权限。",
+                metadata={"actor_role": actor_role},
+            )
+        try:
+            parsed_run_id = UUID(str(run_id))
+            parsed_result_id = UUID(str(result_id)) if result_id else None
+        except ValueError:
+            return self._formal_error(
+                error_type="invalid_formal_source",
+                message="正式适用性画像只能从正式回测运行和结果生成。",
+                detail="run_id/result_id must be immutable Stage 6 UUIDs",
+                metadata={"run_id": run_id, "result_id": result_id},
+            )
+
+        session_scope = self._ensure_session_factory()
+        async with session_scope() as session:
+            repo = self._repo_factory()
+            run = await repo.get_formal_backtest_run(session, run_id=parsed_run_id)
+            result = await repo.get_formal_backtest_result(session, result_id=parsed_result_id, run_id=parsed_run_id)
+            if run is None or result is None or str(_get(result, "run_id")) != str(parsed_run_id):
+                return self._formal_error(
+                    error_type="formal_evidence_not_found",
+                    message="没有找到可用于生成画像的正式回测证据。",
+                    metadata={"run_id": str(parsed_run_id), "result_id": str(parsed_result_id) if parsed_result_id else None},
+                )
+            if _get(result, "result_fingerprint") in {None, ""}:
+                return self._formal_error(
+                    error_type="missing_result_fingerprint",
+                    message="正式回测结果缺少结果指纹，不能生成画像。",
+                    metadata={"run_id": str(parsed_run_id), "result_id": str(_get(result, "result_id"))},
+                )
+
+            current = await repo.find_current_formal_profile(session, run=run)
+            applicability_profile_id = _get(current, "applicability_profile_id", None) or uuid4()
+            version_no = await repo.next_formal_version_no(session, applicability_profile_id=applicability_profile_id)
+            metrics = self._formal_profile_metrics(result)
+            profile = RuleApplicabilityProfile(
+                rule_id=str(_get(run, "rule_version_id") or _get(run, "rule_family_id")),
+                profile_version=FORMAL_PROFILE_VERSION,
+                source_backtest_id=str(parsed_run_id),
+                review_status="draft",
+                min_sample_count=FORMAL_MIN_SAMPLE_COUNT,
+                confidence=metrics["confidence"],
+                applicable_regimes=[],
+                blocked_regimes=[],
+                neutral_regimes=[],
+                summary={
+                    "profile_version_no": version_no,
+                    "result_status": _get(result, "status"),
+                    "sample_state_counts": _to_plain(_get(result, "sample_state_counts", {}) or {}),
+                    "coverage": _to_plain(_get(result, "coverage_json", {}) or {}),
+                },
+                storage_ref={"formal_source": "backtest_runs/backtest_results"},
+                applicability_profile_id=applicability_profile_id,
+                rule_version_id=_get(run, "rule_version_id"),
+                rule_version_fingerprint=_get(run, "rule_version_fingerprint"),
+                rule_version_no=_get(run, "rule_version_no"),
+                rule_family_id=_get(run, "rule_family_id"),
+                rule_family_fingerprint=_get(run, "rule_family_fingerprint"),
+                frozen_rule_version_ids=_get(run, "frozen_rule_version_ids", []) or [],
+                frozen_rule_version_fingerprints=_get(run, "frozen_rule_version_fingerprints", []) or [],
+                dataset_snapshot_id=_get(run, "dataset_snapshot_id"),
+                dataset_fingerprint=_get(run, "dataset_fingerprint"),
+                market_state_definition_version=_get(run, "market_state_model_version"),
+                market_state_model_version=_get(result, "market_state_model_version") or _get(run, "market_state_model_version"),
+                market_state_source_version=_get(result, "market_state_source_version"),
+                market_snapshot_ids=_get(run, "market_snapshot_ids", []) or [],
+                market_snapshot_fingerprints=_get(run, "market_snapshot_fingerprints", []) or [],
+                profile_version_no=version_no,
+                source_backtest_run_ids=[str(parsed_run_id)],
+                source_backtest_result_ids=[str(_get(result, "result_id"))],
+                source_result_fingerprints=[str(_get(result, "result_fingerprint"))],
+                sample_count=metrics["sample_count"],
+                eligible_sample_count=metrics["eligible_sample_count"],
+                evaluated_sample_count=metrics["evaluated_sample_count"],
+                coverage=metrics["coverage"],
+                return_metric=metrics["return_metric"],
+                win_rate=metrics["win_rate"],
+                maximum_drawdown=metrics["maximum_drawdown"],
+                recommendation_status=metrics["recommendation_status"],
+                data_level=_get(result, "effective_level"),
+                requested_level=_get(result, "requested_level"),
+                effective_level=_get(result, "effective_level"),
+                level_policy_version=_get(result, "level_policy_version") or _get(run, "level_policy_version"),
+                quality_status=metrics["quality_status"],
+                insufficient_sample_status=metrics["insufficient_sample_status"],
+                limitations=metrics["limitations"],
+                warnings=metrics["warnings"],
+                recommendation_policy_version=_get(run, "recommendation_policy_version") or FORMAL_RECOMMENDATION_POLICY_VERSION,
+                created_by=actor_id,
+                supersedes_profile_id=_get(current, "profile_id", None) if current and _get(current, "review_status") != "draft" else None,
+            )
+            if metrics["quality_status"] == "complete":
+                profile.result_status = RuleApplicabilityResultStatus.ready
+                profile.lifecycle_state = FormalLifecycleState.draft
+            elif metrics["insufficient_sample_status"] == "insufficient_sample":
+                profile.result_status = RuleApplicabilityResultStatus.insufficient_sample
+            elif metrics["recommendation_status"] == "invalid":
+                profile.result_status = RuleApplicabilityResultStatus.invalid
+            else:
+                profile.result_status = RuleApplicabilityResultStatus.partial
+
+            with canonical_write_scope("rule_applicability", self.service_name):
+                saved = await repo.create_formal_profile(session, profile)
+                if current and _get(current, "review_status") == "draft":
+                    await repo.supersede_profile(session, profile=current, superseded_by=saved.profile_id, actor_id=actor_id, reason=reason)
+                await repo.record_audit_event(
+                    session,
+                    profile=saved,
+                    event={
+                        "transition": "draft_created",
+                        "actor_id": actor_id,
+                        "actor_role": actor_role,
+                        "reason": reason,
+                        "source_surface": source_surface,
+                        "before_state": None,
+                        "after_state": {
+                            "review_status": saved.review_status,
+                            "recommendation_status": saved.recommendation_status,
+                            "source_backtest_run_ids": saved.source_backtest_run_ids,
+                            "source_backtest_result_ids": saved.source_backtest_result_ids,
+                        },
+                    },
+                )
+            await session.commit()
+
+        return ServiceResult(status="ok", message="formal rule applicability draft generated", payload={"profile": saved.to_dict()})
+
+    async def review_formal_profile(
+        self,
+        *,
+        profile_id: str,
+        review_status: str,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None = None,
+        source_surface: str = "/rules/results",
+    ) -> ServiceResult:
+        """Review a formal applicability profile without publishing rules or strategies."""
+        if actor_role not in {"reviewer", "operator", "admin"}:
+            return self._formal_error(error_type="permission_denied", message="审核适用性画像需要 reviewer 或 operator 权限。")
+        if review_status not in {"pending_review", "approved", "rejected", "invalidated"}:
+            return self._formal_error(
+                error_type="invalid_review_status",
+                message="审核状态无效。",
+                metadata={"review_status": review_status},
+            )
+        try:
+            parsed_profile_id = UUID(str(profile_id))
+        except ValueError:
+            return self._formal_error(error_type="invalid_profile_id", message="画像编号无效。", metadata={"profile_id": profile_id})
+
+        lifecycle_map = {
+            "pending_review": FormalLifecycleState.in_review,
+            "approved": FormalLifecycleState.approved,
+            "rejected": FormalLifecycleState.rejected,
+            "invalidated": FormalLifecycleState.archived,
+        }
+        session_scope = self._ensure_session_factory()
+        async with session_scope() as session:
+            repo = self._repo_factory()
+            row = await repo.get_by_id(session, parsed_profile_id)
+            if row is None:
+                return self._formal_error(error_type="profile_not_found", message="未找到适用性画像。", metadata={"profile_id": profile_id})
+            before = {"review_status": row.review_status, "reviewed_by": row.reviewed_by}
+            row.review_status = review_status
+            row.lifecycle_state = lifecycle_map[review_status]
+            row.reviewed_by = actor_id
+            row.reviewed_at = datetime.now(UTC)
+            row.review_reason = reason
+            with canonical_write_scope("rule_applicability", self.service_name):
+                await repo.record_audit_event(
+                    session,
+                    profile=row,
+                    event={
+                        "transition": review_status,
+                        "actor_id": actor_id,
+                        "actor_role": actor_role,
+                        "reason": reason,
+                        "source_surface": source_surface,
+                        "before_state": before,
+                        "after_state": {"review_status": review_status, "reviewed_by": actor_id},
+                    },
+                )
+                await session.flush()
+            await session.commit()
+        return ServiceResult(status="ok", message="formal rule applicability profile reviewed", payload={"profile": row.to_dict()})
 
     async def list_profiles(
         self,

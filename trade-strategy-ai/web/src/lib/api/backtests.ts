@@ -4,6 +4,9 @@ import type {
   BacktestResultResponse,
   BacktestResultsResponse,
   BacktestSummary,
+  FormalApplicabilityDraftRequest,
+  FormalApplicabilityProfile,
+  FormalApplicabilityReviewRequest,
   FormalBacktestDependencyResult,
   FormalBacktestResult,
   FormalBacktestRun,
@@ -69,6 +72,20 @@ export function executeFormalBacktestRun(runId: string) {
 
 export function getFormalBacktestResult(runId: string) {
   return fetchJson<FormalBacktestResult>(`/rules/backtests/runs/${runId}/result`);
+}
+
+export function generateFormalApplicabilityProfileDraft(runId: string, request: FormalApplicabilityDraftRequest) {
+  return fetchJson<FormalApplicabilityProfile>(`/rules/backtests/runs/${runId}/applicability-profiles`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+export function reviewFormalApplicabilityProfile(profileId: string, request: FormalApplicabilityReviewRequest) {
+  return fetchJson<FormalApplicabilityProfile>(`/rules/backtests/applicability-profiles/${profileId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
 }
 
 export function buildBacktestRunParams(submission: BacktestJobSubmission): Record<string, unknown> {

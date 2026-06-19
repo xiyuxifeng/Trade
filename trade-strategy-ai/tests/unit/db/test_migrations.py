@@ -170,3 +170,33 @@ def test_stage6_backtest_level_policy_migration_defines_downgrade_audit_fields()
     assert "repair_guidance" in content
     assert "backtest_runs" in content
     assert "backtest_results" in content
+
+
+def test_stage6_rule_applicability_profile_migration_defines_formal_contract() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_19_0013_stage6_rule_applicability_profiles.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_19_0013"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_19_0012"' in content
+    assert "rule_applicability_profiles" in content
+    assert "source_backtest_run_ids" in content
+    assert "source_backtest_result_ids" in content
+    assert "source_result_fingerprints" in content
+    assert '["rule_id", "profile_version", "source_backtest_id", "profile_version_no"]' in content
+    assert "rule_version_fingerprint" in content
+    assert "rule_family_id" in content
+    assert "frozen_rule_version_ids" in content
+    assert "requested_level" in content
+    assert "effective_level" in content
+    assert "level_policy_version" in content
+    assert "recommendation_status" in content
+    assert "insufficient_sample_status" in content
+    assert "supersedes_profile_id" in content
+    assert "rule_applicability_profile_audits" in content
+    assert "transition" in content
+    assert "before_state_json" in content
+    assert "after_state_json" in content
+    assert "Refusing to downgrade RT-S6-003" in content

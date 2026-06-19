@@ -8,10 +8,12 @@ import {
   checkFormalBacktestDependencies,
   createFormalBacktestRun,
   executeFormalBacktestRun,
+  generateFormalApplicabilityProfileDraft,
   getBacktestResult,
   getFormalBacktestResult,
   getFormalBacktestRun,
   listBacktestResults,
+  reviewFormalApplicabilityProfile,
 } from './backtests';
 
 describe('backtests api client', () => {
@@ -203,6 +205,24 @@ describe('backtests api client', () => {
           per_market_state_metrics: [],
           sample_state_counts: {},
         }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          profile_id: 'profile-1',
+          review_status: 'draft',
+          recommendation_status: 'recommended',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          profile_id: 'profile-1',
+          review_status: 'approved',
+          recommendation_status: 'recommended',
+        }),
       });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -222,14 +242,19 @@ describe('backtests api client', () => {
     await getFormalBacktestRun('run-1');
     await executeFormalBacktestRun('run-1');
     await getFormalBacktestResult('run-1');
+    await generateFormalApplicabilityProfileDraft('run-1', { result_id: 'result-1', reason: '生成草稿' });
+    await reviewFormalApplicabilityProfile('profile-1', { review_status: 'approved', reason: '证据充分' });
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/ui/v1/rules/backtests/dependency-check', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ui/v1/rules/backtests/runs', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ui/v1/rules/backtests/runs/run-1', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/ui/v1/rules/backtests/runs/run-1/execute', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/ui/v1/rules/backtests/runs/run-1/result', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/ui/v1/rules/backtests/runs/run-1/applicability-profiles', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/ui/v1/rules/backtests/applicability-profiles/profile-1/review', expect.any(Object));
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls.some((url) => url.includes('/api/ui/v1/jobs'))).toBe(false);
     expect(urls.some((url) => url.includes('/backtest_results'))).toBe(false);
+    expect(urls.some((url) => url.includes('/rule-pool'))).toBe(false);
   });
 });

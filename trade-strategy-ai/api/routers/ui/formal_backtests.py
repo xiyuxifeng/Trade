@@ -28,6 +28,16 @@ class FormalBacktestCreateRequest(BaseModel):
     accepted_effective_level: str | None = None
 
 
+class FormalApplicabilityDraftRequest(BaseModel):
+    result_id: str | None = None
+    reason: str | None = None
+
+
+class FormalApplicabilityReviewRequest(BaseModel):
+    review_status: str
+    reason: str | None = None
+
+
 def get_backtest_application_service() -> BacktestApplicationService:
     session_factory = async_session_factory()
 
@@ -156,4 +166,54 @@ async def get_formal_backtest_result(
         )
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到正式回测结果") from exc
+    return _serialize(result)
+
+
+@router.post("/runs/{run_id}/applicability-profiles", status_code=status.HTTP_201_CREATED)
+async def generate_formal_applicability_profile_draft(
+    run_id: str,
+    request: FormalApplicabilityDraftRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: BacktestApplicationService = Depends(get_backtest_application_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result = await service.generate_applicability_draft(
+            run_id,
+            request.result_id,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+            reason=request.reason,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到可生成画像的正式回测证据") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
+    return _serialize(result)
+
+
+@router.post("/applicability-profiles/{profile_id}/review")
+async def review_formal_applicability_profile(
+    profile_id: str,
+    request: FormalApplicabilityReviewRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: BacktestApplicationService = Depends(get_backtest_application_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result = await service.review_applicability_profile(
+            profile_id,
+            request.review_status,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+            reason=request.reason,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到适用性画像") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
     return _serialize(result)

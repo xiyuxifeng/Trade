@@ -218,3 +218,40 @@ export type FormalBacktestResult = {
   reproducibility_fingerprint: string;
   level_policy_version: string;
 };
+
+export type FormalApplicabilityProfile = {
+  profile_id: string;
+  profile_version_no: number;
+  rule_version_id?: string | null;
+  rule_family_id?: string | null;
+  market_state_model_version?: string | null;
+  source_backtest_run_ids: string[];
+  source_backtest_result_ids: string[];
+  source_result_fingerprints: string[];
+  sample_count: number;
+  eligible_sample_count: number;
+  evaluated_sample_count: number;
+  coverage?: number | null;
+  return_metric?: number | null;
+  win_rate?: number | null;
+  maximum_drawdown?: number | null;
+  confidence: number;
+  recommendation_status: 'recommended' | 'limited' | 'not_recommended' | 'insufficient_sample' | 'unavailable' | 'conflict' | 'invalid' | string;
+  requested_level: FormalBacktestLevel;
+  effective_level: FormalBacktestLevel | 'unavailable';
+  level_policy_version: string;
+  insufficient_sample_status: string;
+  limitations: string[];
+  warnings: string[];
+  review_status: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'invalidated' | 'superseded' | string;
+};
+
+export type FormalApplicabilityDraftRequest = {
+  result_id?: string | null;
+  reason?: string | null;
+};
+
+export type FormalApplicabilityReviewRequest = {
+  review_status: 'pending_review' | 'approved' | 'rejected' | 'invalidated';
+  reason?: string | null;
+};

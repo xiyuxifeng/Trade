@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -69,6 +69,7 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
             "rule_id",
             "profile_version",
             "source_backtest_id",
+            "profile_version_no",
             name="uq_rule_applicability_profiles_rule_profile_source",
         ),
         Index("ix_rule_applicability_profiles_rule_id", "rule_id"),
@@ -88,11 +89,23 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
         Uuid,
         ForeignKey("rule_versions.rule_version_id", name="fk_rap_rule_version", ondelete="SET NULL"),
     )
+    rule_version_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    rule_version_no: Mapped[int | None] = mapped_column(Integer)
+    rule_family_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("rule_families.rule_family_id", name="fk_rap_rule_family", ondelete="SET NULL"),
+    )
+    rule_family_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    frozen_rule_version_ids: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    frozen_rule_version_fingerprints: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
     dataset_snapshot_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("dataset_snapshots.dataset_snapshot_id", name="fk_rap_dataset_snapshot", ondelete="SET NULL"),
     )
+    dataset_fingerprint: Mapped[str | None] = mapped_column(String(128))
     market_state_definition_version: Mapped[str | None] = mapped_column(String(64))
+    market_state_model_version: Mapped[str | None] = mapped_column(String(64))
+    market_state_source_version: Mapped[str | None] = mapped_column(String(64))
     lifecycle_state: Mapped[FormalLifecycleState] = mapped_column(
         _enum(FormalLifecycleState, "formal_lifecycle"),
         nullable=False,
@@ -109,6 +122,33 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
     source_rule_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     market_regime_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_feature_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    profile_version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    source_backtest_run_ids: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    source_backtest_result_ids: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    source_result_fingerprints: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    market_snapshot_ids: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    market_snapshot_fingerprints: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    eligible_sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evaluated_sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    coverage: Mapped[float | None] = mapped_column(nullable=True)
+    return_metric: Mapped[float | None] = mapped_column(nullable=True)
+    win_rate: Mapped[float | None] = mapped_column(nullable=True)
+    maximum_drawdown: Mapped[float | None] = mapped_column(nullable=True)
+    recommendation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unavailable")
+    data_level: Mapped[str | None] = mapped_column(String(32))
+    requested_level: Mapped[str | None] = mapped_column(String(32))
+    effective_level: Mapped[str | None] = mapped_column(String(32))
+    level_policy_version: Mapped[str | None] = mapped_column(String(64))
+    quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="partial")
+    insufficient_sample_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    limitations: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    warnings: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    recommendation_policy_version: Mapped[str | None] = mapped_column(String(64))
+    review_reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str | None] = mapped_column(String(128))
+    supersedes_profile_id: Mapped[UUID | None] = mapped_column(Uuid)
+    superseded_by_profile_id: Mapped[UUID | None] = mapped_column(Uuid)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     min_sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     confidence: Mapped[float] = mapped_column(nullable=False, default=0.0)
@@ -146,6 +186,7 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
         reviewed_at: datetime | None = None,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
+        **formal_fields: Any,
     ) -> None:
         self.profile_id = profile_id or uuid4()
         self.rule_id = rule_id
@@ -166,6 +207,20 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
         self.storage_ref = _to_plain(storage_ref or {})
         self.reviewed_by = reviewed_by
         self.reviewed_at = reviewed_at
+        json_formal_fields = {
+            "frozen_rule_version_ids",
+            "frozen_rule_version_fingerprints",
+            "source_backtest_run_ids",
+            "source_backtest_result_ids",
+            "source_result_fingerprints",
+            "market_snapshot_ids",
+            "market_snapshot_fingerprints",
+            "limitations",
+            "warnings",
+        }
+        for key, value in formal_fields.items():
+            if hasattr(type(self), key):
+                setattr(self, key, _to_plain(value) if key in json_formal_fields else value)
         if created_at is not None:
             self.created_at = created_at
         if updated_at is not None:
@@ -190,15 +245,50 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
         """返回 JSON 兼容字典。"""
         return {
             "profile_id": str(self.profile_id),
+            "applicability_profile_id": str(self.applicability_profile_id),
             "rule_id": self.rule_id,
+            "rule_version_id": str(self.rule_version_id) if self.rule_version_id else None,
+            "rule_version_fingerprint": self.rule_version_fingerprint,
+            "rule_version_no": self.rule_version_no,
+            "rule_family_id": str(self.rule_family_id) if self.rule_family_id else None,
+            "rule_family_fingerprint": self.rule_family_fingerprint,
+            "frozen_rule_version_ids": self.frozen_rule_version_ids,
+            "frozen_rule_version_fingerprints": self.frozen_rule_version_fingerprints,
             "profile_version": self.profile_version,
+            "profile_version_no": self.profile_version_no,
             "source_backtest_id": self.source_backtest_id,
+            "source_backtest_run_ids": self.source_backtest_run_ids,
+            "source_backtest_result_ids": self.source_backtest_result_ids,
+            "source_result_fingerprints": self.source_result_fingerprints,
             "source_rule_version": self.source_rule_version,
             "market_regime_version": self.market_regime_version,
+            "market_state_model_version": self.market_state_model_version,
+            "market_state_source_version": self.market_state_source_version,
             "source_feature_version": self.source_feature_version,
             "review_status": self.review_status,
+            "quality_status": self.quality_status,
+            "insufficient_sample_status": self.insufficient_sample_status,
             "min_sample_count": self.min_sample_count,
+            "sample_count": self.sample_count,
+            "eligible_sample_count": self.eligible_sample_count,
+            "evaluated_sample_count": self.evaluated_sample_count,
+            "coverage": self.coverage,
+            "return_metric": self.return_metric,
+            "win_rate": self.win_rate,
+            "maximum_drawdown": self.maximum_drawdown,
             "confidence": self.confidence,
+            "recommendation_status": self.recommendation_status,
+            "data_level": self.data_level,
+            "requested_level": self.requested_level,
+            "effective_level": self.effective_level,
+            "level_policy_version": self.level_policy_version,
+            "limitations": self.limitations,
+            "warnings": self.warnings,
+            "recommendation_policy_version": self.recommendation_policy_version,
+            "dataset_snapshot_id": str(self.dataset_snapshot_id) if self.dataset_snapshot_id else None,
+            "dataset_fingerprint": self.dataset_fingerprint,
+            "market_snapshot_ids": self.market_snapshot_ids,
+            "market_snapshot_fingerprints": self.market_snapshot_fingerprints,
             "applicable_regimes": self.applicable_regimes_json,
             "blocked_regimes": self.blocked_regimes_json,
             "neutral_regimes": self.neutral_regimes_json,
@@ -206,8 +296,36 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
             "worst_market_conditions": self.worst_market_conditions_json,
             "summary": self.summary_json,
             "storage_ref": self.storage_ref,
+            "created_by": self.created_by,
             "reviewed_by": self.reviewed_by,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "review_reason": self.review_reason,
+            "supersedes_profile_id": str(self.supersedes_profile_id) if self.supersedes_profile_id else None,
+            "superseded_by_profile_id": str(self.superseded_by_profile_id) if self.superseded_by_profile_id else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class RuleApplicabilityProfileAudit(TimestampMixin, Base):
+    """Formal RuleApplicabilityProfile state transition audit."""
+
+    __tablename__ = "rule_applicability_profile_audits"
+    __table_args__ = (
+        Index("ix_rap_audit_profile_created", "profile_id", "created_at"),
+        Index("ix_rap_audit_transition", "transition"),
+    )
+
+    audit_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    profile_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("rule_applicability_profiles.profile_id", name="fk_rap_audit_profile", ondelete="CASCADE"),
+        nullable=False,
+    )
+    transition: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    source_surface: Mapped[str] = mapped_column(String(128), nullable=False, default="/rules/backtests")
+    before_state_json: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
+    after_state_json: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)

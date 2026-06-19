@@ -80,6 +80,34 @@ class _FakeResult:
     level_policy_version: str = "stage6-level-policy-v1"
 
 
+@dataclass
+class _FakeProfile:
+    profile_id: str = "profile-1"
+    profile_version_no: int = 1
+    rule_version_id: str | None = "rv-1"
+    rule_family_id: str | None = None
+    market_state_model_version: str | None = "market-state-v1"
+    source_backtest_run_ids: list[str] | None = None
+    source_backtest_result_ids: list[str] | None = None
+    source_result_fingerprints: list[str] | None = None
+    sample_count: int = 12
+    eligible_sample_count: int = 12
+    evaluated_sample_count: int = 12
+    coverage: float = 0.92
+    return_metric: float = 0.18
+    win_rate: float = 0.64
+    maximum_drawdown: float = -0.08
+    confidence: float = 0.9
+    recommendation_status: str = "recommended"
+    requested_level: str = "level_3"
+    effective_level: str = "level_2"
+    level_policy_version: str = "stage6-level-policy-v1"
+    insufficient_sample_status: str = "sufficient"
+    limitations: list[str] | None = None
+    warnings: list[str] | None = None
+    review_status: str = "draft"
+
+
 class _FakeBacktestApplicationService:
     def __init__(self) -> None:
         self.create_calls = 0
@@ -141,6 +169,24 @@ class _FakeBacktestApplicationService:
             warnings=[],
             limitations=[],
         )
+
+    async def generate_applicability_draft(self, run_id: str, result_id: str | None, *, actor_id: str, actor_role: str, reason: str | None):
+        assert run_id == "run-1"
+        assert result_id == "result-1"
+        assert actor_role == "operator"
+        return _FakeProfile(
+            source_backtest_run_ids=["run-1"],
+            source_backtest_result_ids=["result-1"],
+            source_result_fingerprints=["result-fp"],
+            limitations=["Level 3 缺少 Kaipan 数据，画像只能按有效等级解释。"],
+            warnings=["样本包含缺失 Kaipan 数据。"],
+        )
+
+    async def review_applicability_profile(self, profile_id: str, review_status: str, *, actor_id: str, actor_role: str, reason: str | None):
+        assert profile_id == "profile-1"
+        assert actor_role == "operator"
+        assert review_status == "approved"
+        return _FakeProfile(review_status="approved")
 
 
 @pytest_asyncio.fixture
@@ -338,3 +384,86 @@ async def test_viewer_cannot_execute_formal_result() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_generate_formal_applicability_profile_draft() -> None:
+    fake_service = _FakeBacktestApplicationService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rules/backtests/runs/run-1/applicability-profiles",
+                json={"result_id": "result-1", "reason": "生成草稿"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["review_status"] == "draft"
+    assert body["source_backtest_run_ids"] == ["run-1"]
+    assert body["source_backtest_result_ids"] == ["result-1"]
+    assert body["source_result_fingerprints"] == ["result-fp"]
+    assert body["requested_level"] == "level_3"
+    assert body["effective_level"] == "level_2"
+    assert body["recommendation_status"] == "recommended"
+
+
+@pytest.mark.asyncio()
+async def test_viewer_cannot_generate_formal_applicability_profile_draft() -> None:
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: _FakeBacktestApplicationService()
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="viewer",
+            api_key_label="viewer",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rules/backtests/runs/run-1/applicability-profiles",
+                json={"result_id": "result-1", "reason": "生成草稿"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_review_formal_applicability_profile() -> None:
+    fake_service = _FakeBacktestApplicationService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rules/backtests/applicability-profiles/profile-1/review",
+                json={"review_status": "approved", "reason": "证据充分"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["review_status"] == "approved"

@@ -58,5 +58,10 @@ describe('/rules/backtests formal workbench copy', () => {
     expect(resultsSource).toContain('Kaipan 数据不可用');
     expect(resultsSource).toContain('覆盖率');
     expect(resultsSource).toContain('可复现证据');
+    expect(resultsSource).toContain('规则适用性画像');
+    expect(resultsSource).toContain('生成适用性画像草稿');
+    expect(resultsSource).toContain('系统建议');
+    expect(resultsSource).toContain('人工审核状态');
+    expect(resultsSource).toContain('批准画像');
   });
 });

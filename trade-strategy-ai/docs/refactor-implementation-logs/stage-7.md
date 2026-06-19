@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 7 作者画像`
-- 当前活动：`2026-06-19 Stage 7 Bootstrap`
-- 当前状态：`Bootstrap READY`
-- 当前 Task：无 RT-S7 Task 已开始
-- 下一可执行 Task：`RT-S7-004 画像版本与时间分段`
-- 不得自动开始：`RT-S7-004` 需用户明确触发；本 Bootstrap 未启动任何 Stage 7 Task
+- 当前活动：`2026-06-19 RT-S7-004 画像版本与时间分段`
+- 当前状态：`RT-S7-004 ACCEPTED`
+- 当前 Task：`RT-S7-004` 已完成并接受；`RT-S7-001/002/003` 未开始
+- 下一可执行 Task：`RT-S7-001 作者方法画像`
+- 不得自动开始：`RT-S7-001` 需用户明确触发；不得开始 Stage 7 Gate
 
 ## 2026-06-19 Stage 7 Bootstrap
 
@@ -161,3 +161,107 @@ Non-blocking:
 `Bootstrap READY`.
 
 Next executable Task is `RT-S7-004 画像版本与时间分段`, recommended model `gpt-5.5`. The next Task has not been started.
+
+## 2026-06-19 RT-S7-004 画像版本与时间分段
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented only the shared author-profile version, lifecycle, audit, time-segment and diff foundation required by `RT-S7-004`.
+
+Out of scope and not implemented: method/rule/validated profile content generation, author-profile Prompt runtime changes, Stage 8 strategy publication, daily strategy behavior, Stage 7 Gate, legacy persona retirement.
+
+### Delegation
+
+Used one bounded read-only `refactor_explorer_mini` subagent to inspect current author-profile/persona schema, API, UI, migration and test surfaces. Runtime probe script path remained unavailable; configured role files existed and declared `gpt-5.4-mini`, but effective runtime metadata was not independently verified.
+
+No executor subagent was used. Parent retained implementation and final acceptance because lifecycle/version identity, migration safety and publication semantics are M3.
+
+### Implemented Behavior
+
+- Extended `AuthorProfileVersion` as the single formal author-profile version table for all three separated kinds: `method`, `rule`, `validated`.
+- Added `pending_review` lifecycle support and `AuthorProfileVersionAudit` for actor, role, reason, source surface, before state and after state.
+- Added explicit evidence period, effective period, source-version bindings, rule-family/applicability/backtest-result source bindings, evidence fingerprint, profile fingerprint and supersession fields.
+- Added `AuthorProfileService` and repository operations for draft creation, list/get, submit for review, publish, archive and version diff.
+- Enforced that new evidence creates a draft/revision and does not overwrite published profiles automatically.
+- Enforced publish guard against overlapping already-published effective periods.
+- Required profile conclusions in draft payloads to carry evidence, confidence, provenance and version binding.
+- Added `/api/ui/v1/authors/profiles` list/get/create/review/publish/archive/diff API with viewer/operator boundaries and user-facing error messages.
+- Updated `/authors` UI to consume the formal author-profile API and removed the default legacy persona fallback from the canonical `/authors` page.
+- UI truthfully shows empty, loading, error, permission denied, partial evidence, draft, pending review, published and archived states, and states that author profiles are not real trading performance.
+
+### Migration
+
+Added `2026_06_19_0014_stage7_author_profile_versions`.
+
+The migration is safe for both existing upgraded databases and fresh databases because Stage 2 table creation uses current ORM metadata. It conditionally adds missing columns, constraints and indexes, creates the audit table, and refuses downgrade when reviewed/published author-profile or audit data exists.
+
+### Review Findings and Repairs
+
+- `BLOCKER`: initial PostgreSQL fresh upgrade failed because `prompt_version` already existed when Stage 2 created `author_profile_versions` from current ORM metadata. Repaired by making the migration conditional for existing and fresh schema paths.
+- `HIGH`: frontend `/authors` still used legacy persona fallback before implementation. Repaired by wiring `/authors` to the formal author-profile API and updating tests.
+- `MEDIUM`: direct tests for service/router/migration were missing before this task. Added focused backend/API/frontend coverage.
+
+No unresolved BLOCKER or required HIGH finding remains within the frozen `RT-S7-004` contract.
+
+### Validation
+
+Passed:
+
+- `python -m pytest tests/unit/services/test_author_profile_service.py tests/api/routers/test_authors.py tests/unit/models/test_stage2_canonical_models.py tests/unit/db/test_migrations.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py tests/unit/domain/test_core_contracts.py tests/unit/services/test_home_dashboard_service.py`：`34 passed`
+- `pnpm test -- src/lib/api/authors.test.ts src/pages/authors/index.test.tsx src/app/route-config.test.tsx src/app/navigation.test.ts src/app/product-journey.test.tsx src/pages/product-entry-pages.test.tsx`：`29 passed`
+- `pnpm typecheck`：passed
+- `python -m compileall api src tests/api/routers/test_authors.py tests/unit/services/test_author_profile_service.py`：passed
+- PostgreSQL migration clean upgrade to head on temp DB `rt_s7_004_0619`：passed
+- PostgreSQL migration safe re-run `upgrade head`：passed
+- PostgreSQL migration `current`：`2026_06_19_0014 (head)`
+- PostgreSQL migration rollback `downgrade 2026_06_19_0013`：passed
+- PostgreSQL migration re-upgrade to head：passed
+- `git diff --check`：passed
+
+Notes:
+
+- Sandbox local PostgreSQL connection was blocked by `PermissionError: Operation not permitted`; the same Alembic checks were rerun through approved unsandboxed local PostgreSQL commands.
+- Frontend tests still print existing React Router future-flag warnings; this is existing non-blocking frontend technical debt.
+
+### Files Changed
+
+- `api/app.py`
+- `api/routers/ui/__init__.py`
+- `api/routers/ui/authors.py`
+- `src/db/migrations/versions/2026_06_19_0014_stage7_author_profile_versions.py`
+- `src/db/repositories/author_profile_repository.py`
+- `src/domain/enums.py`
+- `src/models/stage2_canonical.py`
+- `src/services/author_profile_service.py`
+- `tests/api/routers/test_authors.py`
+- `tests/unit/db/test_migrations.py`
+- `tests/unit/models/test_stage2_canonical_models.py`
+- `tests/unit/services/test_author_profile_service.py`
+- `web/src/lib/api/authors.ts`
+- `web/src/lib/api/authors.test.ts`
+- `web/src/pages/authors/index.tsx`
+- `web/src/pages/authors/index.test.tsx`
+- `web/src/pages/product-entry-pages.test.tsx`
+- `web/src/types/authors.ts`
+
+### Known Risks
+
+- Source ID bindings are JSON fields with service-level validation rather than normalized FK tables. This preserves the frozen shared table contract for RT-S7-004 and avoids creating a second formal source, but later tasks must keep provenance explicit.
+- `review_status` is stored as controlled service text rather than a separate DB enum; lifecycle remains the formal state axis.
+- `invalidated` was not added because user and Task Card requested lifecycle support at minimum for draft/review-pending/published/archived and frozen RT-S7-004 scope did not require introducing new invalidation semantics. If future Gate requires invalidation, it should be handled as a bounded extension.
+
+### Acceptance Conclusion
+
+`RT-S7-004 ACCEPTED`.
+
+Remaining Stage 7 tasks before Gate:
+
+1. `RT-S7-001 作者方法画像`
+2. `RT-S7-002 作者规则画像`
+3. `RT-S7-003 作者验证画像`
+
+Stage 7 is not complete. Stage 7 Gate has not started.

@@ -47,6 +47,7 @@ class QualityStatus(StrEnum):
 class FormalLifecycleState(StrEnum):
     draft = "draft"
     in_review = "in_review"
+    pending_review = "pending_review"
     approved = "approved"
     published = "published"
     archived = "archived"

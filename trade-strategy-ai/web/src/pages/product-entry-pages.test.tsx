@@ -66,6 +66,14 @@ vi.mock('@/lib/api/profiles', () => ({
   }),
 }));
 
+vi.mock('@/lib/api/authors', () => ({
+  listAuthorProfiles: vi.fn().mockResolvedValue({
+    state: 'empty',
+    items: [],
+    count: 0,
+  }),
+}));
+
 vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn().mockResolvedValue({
     status: 'partial',
@@ -250,11 +258,12 @@ describe('formal product entry pages', () => {
     expect(screen.getByText('一般提醒')).toBeInTheDocument();
   });
 
-  it('does not invent author profile or strategy version counts', () => {
+  it('does not invent author profile or strategy version counts', async () => {
     renderPage(<AuthorsPage />);
-    expect(screen.getByTestId('persona-product')).toBeInTheDocument();
-    expect(screen.getAllByText(/正式三层画像尚未建立/).length).toBeGreaterThan(0);
+    expect(await screen.findAllByText('暂无正式画像版本')).toHaveLength(2);
+    expect(screen.getByText('新证据会先生成草稿或修订建议，不会自动覆盖已发布画像。')).toBeInTheDocument();
     expect(screen.queryByText(/共 \d+ 个正式画像/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('persona-product')).not.toBeInTheDocument();
     cleanup();
 
     renderPage(<StrategyOverviewPage />);

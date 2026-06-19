@@ -16,6 +16,7 @@ from api.dependencies import describe_api_key
 from config.database import dispose_cached_engine
 from api.routers import alerts, backtest_results, rankings, reports, run, snapshots, strategy_versions
 from api.routers.ui import artifacts_router as ui_artifacts_router
+from api.routers.ui import authors_router as ui_authors_router
 from api.routers.ui import auth_router as ui_auth_router
 from api.routers.ui import imports_router as ui_imports_router
 from api.routers.ui import job_audits_router as ui_job_audits_router
@@ -198,6 +199,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_jobs_router)
     app.include_router(ui_pipelines_router)
     app.include_router(ui_artifacts_router)
+    app.include_router(ui_authors_router)
     app.include_router(ui_market_router)
     app.include_router(ui_profiles_router)
     app.include_router(ui_settings_router)

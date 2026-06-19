@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .artifacts import router as artifacts_router
+from .authors import router as authors_router
 from .auth import router as auth_router
 from .imports import router as imports_router
 from .kaipan import router as kaipan_router
@@ -30,6 +31,7 @@ from api.routers.ui.jobs import router as jobs_router
 
 __all__ = [
     "artifacts_router",
+    "authors_router",
     "auth_router",
     "imports_router",
     "job_audits_router",

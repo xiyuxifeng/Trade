@@ -58,6 +58,24 @@ def test_stage2_canonical_tables_expose_frozen_identity_columns() -> None:
     assert {"daily_rule_selection_id", "strategy_version_id", "market_state_id", "trade_date"}.issubset(
         Base.metadata.tables["daily_rule_selections"].columns.keys()
     )
+    assert {
+        "author_profile_version_id",
+        "author_profile_id",
+        "profile_kind",
+        "version_no",
+        "lifecycle_state",
+        "evidence_from",
+        "evidence_to",
+        "effective_from",
+        "effective_to",
+        "source_versions_json",
+        "evidence_fingerprint",
+        "profile_fingerprint",
+        "review_status",
+        "supersedes_version_id",
+        "superseded_by_version_id",
+    }.issubset(Base.metadata.tables["author_profile_versions"].columns.keys())
+    assert "author_profile_version_audits" in Base.metadata.tables
 
 
 def test_reused_stage2_tables_expose_frozen_canonical_columns_and_foreign_keys() -> None:

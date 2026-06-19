@@ -128,6 +128,25 @@ def test_stage6_backtest_run_contract_migration_defines_immutable_foundation() -
     assert "reproducibility_fingerprint" in content
     assert "snapshot_only" in content
     assert "actor_id" in content
+
+
+def test_stage7_author_profile_version_migration_defines_lifecycle_and_time_segments() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_19_0014_stage7_author_profile_versions.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_19_0014"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_19_0013"' in content
+    assert "pending_review" in content
+    assert "evidence_from" in content
+    assert "effective_from" in content
+    assert "source_versions_json" in content
+    assert "evidence_fingerprint" in content
+    assert "profile_fingerprint" in content
+    assert "author_profile_version_audits" in content
+    assert "Refusing to downgrade RT-S7-004" in content
     assert "source_surface" in content
     assert "before_state_json" in content
     assert "after_state_json" in content

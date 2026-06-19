@@ -1,28 +1,114 @@
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
-import { PersonaPage } from '@/pages/persona';
+import { useQuery } from '@tanstack/react-query';
+import { ApiError } from '@/lib/api/http';
+import { listAuthorProfiles } from '@/lib/api/authors';
+import type { AuthorProfileVersion } from '@/types/authors';
 
 type AuthorsPageProps = {
   availability?: PageAvailability;
 };
 
 export function AuthorsPage({ availability }: AuthorsPageProps = {}) {
-  const state = availability ?? 'partial';
+  const profilesQuery = useQuery({
+    queryKey: ['author-profiles'],
+    queryFn: listAuthorProfiles,
+    enabled: availability === undefined,
+  });
+  const permissionDenied = profilesQuery.error instanceof ApiError && (profilesQuery.error.status === 401 || profilesQuery.error.status === 403);
+  const state: PageAvailability = availability ?? (
+    profilesQuery.isLoading
+      ? 'loading'
+      : permissionDenied
+        ? 'permission_denied'
+        : profilesQuery.error
+          ? 'error'
+          : profilesQuery.data?.state === 'empty'
+            ? 'empty'
+            : profilesQuery.data?.state === 'partial'
+              ? 'partial'
+              : 'ready'
+  );
+  const items = profilesQuery.data?.items ?? [];
   return (
     <ProductPageAdapter
       title="作者画像"
       queryState={state}
       purpose="汇总作者文章表达的方法、规则证据和验证观察。"
       inputDescription="输入来自已确认文章、规则证据和回测观察。"
-      processingDescription="系统保留文章声明、模型推断、程序统计和人工批准的来源区别。"
-      outputDescription="正式三层画像尚未建立；当前仅提供现有画像能力和明确边界。"
-      businessAction={{ label: '进入策略中心', to: '/strategies' }}
-      result={availability ? undefined : (
-        <div className="space-y-4">
-          <p>正式三层画像尚未建立，以下内容来自现有真实画像规则能力。</p>
-          <PersonaPage productMode />
-        </div>
-      )}
+      processingDescription="系统只展示已落库的画像版本、审核状态、证据区间和生效时间段。"
+      outputDescription="输出是方法、规则和验证三类画像的版本记录，不代表作者真实实盘表现。"
+      businessAction={{ label: '查看规则验证结果', to: '/rules/results' }}
+      stateTitle={state === 'empty' ? '暂无正式画像版本' : undefined}
+      stateDescription={state === 'empty' ? '当前没有可展示的作者画像版本；新文章、新回测或每日证据只会先形成草稿。' : undefined}
+      impact={state === 'empty' ? '策略流程不能把作者画像当作已发布输入。' : undefined}
+      result={<AuthorProfileVersions items={items} isLoading={profilesQuery.isLoading} error={profilesQuery.error} />}
     />
+  );
+}
+
+function formatPeriod(period: { from?: string | null; to?: string | null }) {
+  if (!period.from && !period.to) {
+    return '未完整绑定';
+  }
+  return `${period.from ?? '未定'} 至 ${period.to ?? '长期'}`;
+}
+
+function AuthorProfileVersions({
+  items,
+  isLoading,
+  error,
+}: {
+  items: AuthorProfileVersion[];
+  isLoading: boolean;
+  error: Error | null;
+}) {
+  if (isLoading) {
+    return <p className="text-sm text-slate-600">正在读取画像版本...</p>;
+  }
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p className="m-0 font-medium">作者画像读取失败</p>
+        <p className="mt-1">页面无法确认画像版本状态，请稍后重试或检查权限。</p>
+      </div>
+    );
+  }
+  if (!items.length) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <p className="m-0 font-medium text-slate-900">暂无作者画像版本</p>
+        <p className="mt-1">新证据会先生成草稿或修订建议，不会自动覆盖已发布画像。</p>
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3">
+      {items.map((item) => (
+        <article key={item.author_profile_version_id} className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="m-0 text-base font-semibold text-slate-950">
+                {item.profile_kind_label} v{item.version_no}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {item.lifecycle_label} · 证据区间：{formatPeriod(item.evidence_period)} · 生效区间：{formatPeriod(item.effective_period)}
+              </p>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+              {item.review_status === 'pending_review' ? '待审核' : item.lifecycle_label}
+            </span>
+          </div>
+          {item.partial_reasons.length ? (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-800">
+              {item.partial_reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mt-3 text-xs text-slate-500">画像来自文章、规则和回测证据版本绑定，不是作者真实实盘收益描述。</p>
+        </article>
+      ))}
+    </div>
   );
 }

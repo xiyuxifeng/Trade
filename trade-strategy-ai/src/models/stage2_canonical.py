@@ -669,6 +669,8 @@ class AuthorProfileVersion(TimestampMixin, Base):
     __tablename__ = "author_profile_versions"
     __table_args__ = (
         Index("uq_apv_asset_kind_ver", "author_profile_id", "profile_kind", "version_no", unique=True),
+        Index("ix_apv_author_kind_state", "author_id", "profile_kind", "lifecycle_state"),
+        Index("ix_apv_kind_effective", "author_profile_id", "profile_kind", "effective_from", "effective_to"),
     )
 
     author_profile_version_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -681,15 +683,26 @@ class AuthorProfileVersion(TimestampMixin, Base):
     profile_kind: Mapped[AuthorProfileKind] = mapped_column(_enum(AuthorProfileKind, "author_profile_kind"), nullable=False)
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_version: Mapped[str | None] = mapped_column(String(64))
     lifecycle_state: Mapped[FormalLifecycleState] = mapped_column(_enum(FormalLifecycleState, "formal_lifecycle"), nullable=False)
     as_of_from: Mapped[date | None] = mapped_column(Date)
     as_of_to: Mapped[date | None] = mapped_column(Date)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    source_article_ids: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    source_rule_version_ids: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    source_backtest_run_ids: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    source_daily_review_ids: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    evidence_from: Mapped[date | None] = mapped_column(Date)
+    evidence_to: Mapped[date | None] = mapped_column(Date)
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+    payload: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_article_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_rule_version_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_rule_family_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_applicability_profile_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_backtest_run_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_backtest_result_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_daily_review_ids: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    source_versions_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
+    evidence_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    profile_fingerprint: Mapped[str | None] = mapped_column(String(128))
     prompt_run_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("prompt_runs.prompt_run_id", name="fk_apv_prompt_run", ondelete="SET NULL"),
@@ -698,11 +711,45 @@ class AuthorProfileVersion(TimestampMixin, Base):
         Uuid,
         ForeignKey("author_profile_versions.author_profile_version_id", name="fk_apv_parent", ondelete="SET NULL"),
     )
+    supersedes_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("author_profile_versions.author_profile_version_id", name="fk_apv_supersedes", ondelete="SET NULL"),
+    )
+    superseded_by_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("author_profile_versions.author_profile_version_id", name="fk_apv_superseded_by", ondelete="SET NULL"),
+    )
     quality_status: Mapped[QualityStatus] = mapped_column(_enum(QualityStatus, "quality_status"), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    review_reason: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[str | None] = mapped_column(String(64))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_by: Mapped[str | None] = mapped_column(String(64))
     created_by: Mapped[str | None] = mapped_column(String(64))
     updated_by: Mapped[str | None] = mapped_column(String(64))
+
+
+class AuthorProfileVersionAudit(TimestampMixin, Base):
+    __tablename__ = "author_profile_version_audits"
+    __table_args__ = (
+        Index("ix_apv_audit_profile_created", "author_profile_version_id", "created_at"),
+        Index("ix_apv_audit_transition", "transition"),
+    )
+
+    audit_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    author_profile_version_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("author_profile_versions.author_profile_version_id", name="fk_apv_audit_version", ondelete="CASCADE"),
+        nullable=False,
+    )
+    transition: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    source_surface: Mapped[str] = mapped_column(String(128), nullable=False)
+    before_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
+    after_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
 
 
 class Strategy(Base):

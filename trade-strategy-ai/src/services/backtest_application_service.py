@@ -168,10 +168,13 @@ class BacktestResultView(BaseModel):
     market_state_result_version: str
     overall_metrics: dict[str, Any] = Field(default_factory=dict)
     per_market_state_metrics: list[MarketStateMetricView] = Field(default_factory=list)
+    per_rule_metrics: list[dict[str, Any]] = Field(default_factory=list)
     sample_state_counts: dict[str, int] = Field(default_factory=dict)
     coverage: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    audit: dict[str, Any] = Field(default_factory=dict)
     result_fingerprint: str
     reproducibility_fingerprint: str
     level_policy_version: str = FORMAL_LEVEL_POLICY_VERSION
@@ -1054,10 +1057,13 @@ class BacktestApplicationService:
                 MarketStateMetricView.model_validate(item)
                 for item in (_get(result, "per_market_state_metrics", []) or [])
             ],
+            per_rule_metrics=_get(result, "per_rule_metrics", []) or [],
             sample_state_counts={key: int(value) for key, value in (_get(result, "sample_state_counts", {}) or {}).items()},
             coverage=_get(result, "coverage_json", _get(result, "coverage", {})) or {},
             warnings=_get(result, "warnings", []) or [],
             limitations=_get(result, "limitations", []) or [],
+            provenance=_get(result, "provenance_json", _get(result, "provenance", {})) or {},
+            audit=_get(result, "audit_json", _get(result, "audit", {})) or {},
             result_fingerprint=str(_get(result, "result_fingerprint")),
             reproducibility_fingerprint=str(_get(result, "reproducibility_fingerprint")),
             level_policy_version=str(_get(result, "level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),

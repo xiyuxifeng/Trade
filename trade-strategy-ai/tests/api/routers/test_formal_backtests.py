@@ -71,10 +71,13 @@ class _FakeResult:
     market_state_result_version: str = "stage6-market-state-result-v1"
     overall_metrics: dict[str, Any] | None = None
     per_market_state_metrics: list[dict[str, Any]] | None = None
+    per_rule_metrics: list[dict[str, Any]] | None = None
     sample_state_counts: dict[str, int] | None = None
     coverage: dict[str, Any] | None = None
     warnings: list[str] | None = None
     limitations: list[str] | None = None
+    provenance: dict[str, Any] | None = None
+    audit: dict[str, Any] | None = None
     result_fingerprint: str = "result-fp"
     reproducibility_fingerprint: str = "market-state-v1:features-v1:result-fp"
     level_policy_version: str = "stage6-level-policy-v1"
@@ -153,10 +156,13 @@ class _FakeBacktestApplicationService:
                     "result_fingerprint": "bucket-fp",
                 }
             ],
+            per_rule_metrics=[{"rule_version_id": "rv-1", "eligible_sample_count": 2}],
             sample_state_counts={"eligible": 2, "condition_unavailable": 1},
             coverage={"market_state": {"state": "ready", "available": True}},
             warnings=[],
             limitations=[],
+            provenance={"run_id": "run-1", "dataset_fingerprint": "ds-fp"},
+            audit={"source_surface": "/rules/backtests", "actor_role": "operator"},
         )
 
     async def get_result(self, run_id: str, *, actor_id: str, actor_role: str):
@@ -359,6 +365,9 @@ async def test_operator_can_execute_and_viewer_can_read_formal_result() -> None:
     assert executed.status_code == 200
     assert executed.json()["market_state_model_version"] == "market-state-v1"
     assert executed.json()["per_market_state_metrics"][0]["market_state_label"] == "强势"
+    assert executed.json()["per_rule_metrics"][0]["rule_version_id"] == "rv-1"
+    assert executed.json()["provenance"]["run_id"] == "run-1"
+    assert executed.json()["audit"]["source_surface"] == "/rules/backtests"
     assert "features-v1" in executed.json()["reproducibility_fingerprint"]
     assert loaded.status_code == 200
     assert loaded.json()["result_fingerprint"] == "result-fp"

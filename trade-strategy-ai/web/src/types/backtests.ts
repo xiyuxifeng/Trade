@@ -210,10 +210,13 @@ export type FormalBacktestResult = {
   market_state_result_version: string;
   overall_metrics: Record<string, unknown>;
   per_market_state_metrics: FormalMarketStateMetric[];
+  per_rule_metrics: Array<Record<string, unknown>>;
   sample_state_counts: Record<string, number>;
   coverage: Record<string, Record<string, unknown>>;
   warnings: string[];
   limitations: string[];
+  provenance: Record<string, unknown>;
+  audit: Record<string, unknown>;
   result_fingerprint: string;
   reproducibility_fingerprint: string;
   level_policy_version: string;

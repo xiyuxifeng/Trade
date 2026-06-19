@@ -441,8 +441,8 @@ async def test_generate_formal_draft_does_not_overwrite_reviewed_profile(tmp_pat
     reviewed = await service.review_formal_profile(
         profile_id=first.payload["profile"]["profile_id"],
         review_status="approved",
-        actor_id="reviewer-1",
-        actor_role="reviewer",
+        actor_id="operator-1",
+        actor_role="operator",
         reason="审核通过",
     )
     second = await service.generate_formal_draft(run_id=str(run.run_id), result_id=str(result.result_id), actor_id="operator-1", actor_role="operator", reason="new evidence")

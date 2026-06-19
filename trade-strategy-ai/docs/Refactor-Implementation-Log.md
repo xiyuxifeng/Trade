@@ -15,11 +15,11 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 ## 当前状态
 
 - 当前 Stage：`Stage 6 回测与规则适用性`
-- Stage 状态：`[-] RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 已接受；Stage 6 Gate 未开始，Stage 6 未完成`
-- 当前 Task：`RT-S6-003 规则适用性画像` 已接受；Stage 6 Gate 未开始。
+- Stage 状态：`[x] Stage 6 Gate ACCEPTED；RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 均保持 accepted`
+- 当前 Task：`Stage 6 Gate` 已接受；Stage 7 Bootstrap 未开始。
 - 计划：[Stage 6 实施计划](refactor-implementation-plans/stage-6-implementation-plan.md)
 - 详细日志：[Stage 6](refactor-implementation-logs/stage-6.md)
-- 下一步：可开始 `Stage 6 Gate`；不得自动开始，需用户明确授权。Stage 6 仍未完成。
+- 下一步：可开始 `Stage 7 Bootstrap`；不得自动开始，需用户明确授权。Stage 7 尚未开始。
 
 ## 当前阻塞项
 
@@ -42,8 +42,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 2026-06-18 已完成 Stage 6 Bootstrap；Stage 6 canonical data flow、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、API/UI/permission/audit、compatibility boundary 和四张 Task Card 已冻结；未实施生产代码，未接受任何 Stage 6 Task。
 - 2026-06-18 `RT-S6-001` 已接受；正式 `/rules/backtests` 工作台、BacktestApplicationService、canonical dependency check、immutable `backtest_runs` foundation、viewer/operator permission、audit、snapshot-only formal path 和 legacy/raw entry isolation 已落地；未开始 `RT-S6-002/003/004`。
 - 2026-06-19 `RT-S6-002` 已接受；正式 point-in-time 市场状态查询、immutable `backtest_results`、分市场状态样本状态/指标、结果 API 和 `/rules/results` 正式结果页已落地；未开始 `RT-S6-003/004`。
-- 2026-06-19 `RT-S6-004` 已接受；正式 Level 1/2/3 数据等级、requested/effective level、降级/拒绝策略、RuleFamily mixed-level、缺失 Kaipan 限制语义、显式降级审计和 UI/API 可见性已落地；未开始 `RT-S6-003`，Stage 6 未完成。
-- 2026-06-19 `RT-S6-003` 已接受；正式 RuleApplicabilityProfile 草稿/版本、BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计已落地；Stage 6 Gate 未开始，Stage 6 未完成。
+- 2026-06-19 `RT-S6-004` 已接受；正式 Level 1/2/3 数据等级、requested/effective level、降级/拒绝策略、RuleFamily mixed-level、缺失 Kaipan 限制语义、显式降级审计和 UI/API 可见性已落地。
+- 2026-06-19 `RT-S6-003` 已接受；正式 RuleApplicabilityProfile 草稿/版本、BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计已落地。
+- 2026-06-19 `Stage 6 Gate` 最终 `ACCEPTED`；四个 Stage 6 Task 均保持 accepted，canonical-only formal path、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、缺失 Kaipan 限制语义、profile review/no-overwrite、legacy isolation、migration/recovery、API/UI/runtime contract、权限和审计均已验证；Stage 7 Bootstrap 需用户明确授权后方可开始。
 
 ## Task 状态
 
@@ -74,6 +75,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S6-002 | `[x]` | point-in-time 市场状态回测结果、immutable BacktestResult、分市场状态指标/API/UI 和 migration/test evidence 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 | RT-S6-003 | `[x]` | 正式规则适用性画像草稿/版本、immutable run/result source binding、人工审核和审计已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 | RT-S6-004 | `[x]` | Level 1/2/3 回测分级、降级/拒绝策略、缺失 Kaipan 限制语义、RuleFamily mixed-level、审计/API/UI 和 migration/test evidence 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| Stage 6 Gate | `[x]` | 最终 `ACCEPTED`；有界修复 formal result evidence API 暴露和 profile review 权限一致性，focused Gate suite、PostgreSQL migration replay、frontend/typecheck/compileall/diff checks 通过 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 
 ## Stage 状态
 
@@ -85,7 +87,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 3 | `[x]` | Gate 最终 `ACCEPTED`；RT-S3-001～RT-S3-004 均保持 accepted，Prompt/article pipeline、fixed regression、recoverable batch、legacy Prompt retirement 和 historical-read compatibility 已验证 | [stage-3.md](refactor-implementation-logs/stage-3.md) |
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，基础数据、快照、调度、readiness、legacy bypass rejection、迁移/recovery 和 Web 业务中文已验证 | [stage-5.md](refactor-implementation-logs/stage-5.md) |
-| Stage 6 | `[-]` | `RT-S6-001/RT-S6-002/RT-S6-004/RT-S6-003` 已接受；Stage 6 Gate 未开始，Stage 未完成 | [stage-6.md](refactor-implementation-logs/stage-6.md) |
+| Stage 6 | `[x]` | Gate 最终 `ACCEPTED`；RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 均保持 accepted，正式回测、分市场状态结果、数据等级、规则适用性画像、迁移/recovery 和 legacy isolation 已验证 | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -123,11 +125,13 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - Stage 5 Bootstrap 冻结：`RT-S5-001` -> `RT-S5-002` -> `RT-S5-003` -> Stage 5 Gate；`RT-S5-003` must not start until data contracts stabilize；Stage 6 backtest execution remains out of scope.
 - Stage 6 Bootstrap 冻结：formal backtests and rule applicability must consume only canonical DatasetSnapshot, MarketSnapshot, canonical services/repositories, immutable IDs/fingerprints/versions/provenance/availability timestamps；legacy API/CLI/raw Job/Workflow/Pipeline/compatibility views/file snapshots/EvidencePack/config_path/live Provider/latest records/old JSON files are not formal inputs.
 - Stage 6 Bootstrap 冻结：formal business entry is Web/API -> BacktestApplicationService -> canonical dependency check -> immutable BacktestRun -> internal execution transport if needed -> immutable BacktestResult -> RuleApplicabilityProfile draft/review；raw Job remains internal or compatibility-only.
-- Stage 6 Bootstrap 冻结：Task order is `RT-S6-001` -> `RT-S6-002` -> `RT-S6-004` -> `RT-S6-003`；Stage 6 Gate 需在四个 Task 均接受后由用户明确触发。
+- Stage 6 Gate 最终 `ACCEPTED`；Task order `RT-S6-001` -> `RT-S6-002` -> `RT-S6-004` -> `RT-S6-003` 已完成并复验；Stage 7 Bootstrap 不得自动开始。
 - RT-S6-001 已建立正式 `BacktestApplicationService`、`/api/ui/v1/rules/backtests/*`、`backtest_runs` 和 `/rules/backtests` 普通用户工作台；raw Job/Workflow/CLI/legacy result fallback 仍非正式入口。
 - RT-S6-002 已建立正式 point-in-time 市场状态查询、`backtest_results`、分市场状态指标、结果 API 和 `/rules/results` 正式结果页。
 - RT-S6-004 已建立正式 Level 1/2/3 数据等级、降级/拒绝策略、缺失 Kaipan 限制语义、RuleFamily mixed-level、显式降级审计和 UI/API 可见性。
-- RT-S6-003 已建立正式 RuleApplicabilityProfile 草稿/版本、immutable BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计；Stage 6 Gate 未开始，Stage 6 未完成。
+- RT-S6-003 已建立正式 RuleApplicabilityProfile 草稿/版本、immutable BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计。
+- Stage 6 Gate 有界修复：formal result API 暴露 `per_rule_metrics`、`provenance`、`audit`；profile review 权限收敛到当前 runtime operator/admin 层级。
+- Stage 6 Gate 残余非阻塞风险：legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only，并可在旧/admin/compatibility surfaces 暴露旧术语；formal `/rules/*` 不使用它们作为正式事实源。
 
 ## 2026-06-19 RT-S6-003 规则适用性画像
 
@@ -143,7 +147,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 兼容处理：旧 rule-pool / Job/file profile 生成路径保留为 compatibility-only；正式 `/rules/results` 使用新的 immutable source-bound API。
 - 已运行测试：详见 [Stage 6](refactor-implementation-logs/stage-6.md) RT-S6-003 Validation；包含 focused backend/API/migration/frontend/typecheck/compileall/git diff checks 和 PostgreSQL migration replay。
 - 测试结果：受影响自动化检查通过；OpenAPI/router pytest 仍有既有 async cleanup warning；shell 启动仍有本地 RVM `ps` sandbox warning。
-- 未完成项：Stage 6 Gate 未开始；Stage 6 未完成。
+- 未完成项：无；Stage 6 Gate 已接受。
 - 已知风险：legacy rule-pool profile UI 仍是 compatibility surface；正式 profile history browser 可在后续 UX 中增强但不阻塞 RT-S6-003。
 - 验收结论：`RT-S6-003 ACCEPTED`；Stage 6 Gate 只能在用户明确指令后开始。
 - 代码审查修复：正式画像唯一约束已包含 `profile_version_no`；审核 API/UI 权限已收敛到当前 operator/admin 角色体系；downgrade 在存在正式画像审计数据时会显式拒绝，避免静默丢失证据。

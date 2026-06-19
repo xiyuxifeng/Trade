@@ -759,8 +759,8 @@ class RuleApplicabilityService(BaseService):
         source_surface: str = "/rules/results",
     ) -> ServiceResult:
         """Review a formal applicability profile without publishing rules or strategies."""
-        if actor_role not in {"reviewer", "operator", "admin"}:
-            return self._formal_error(error_type="permission_denied", message="审核适用性画像需要 reviewer 或 operator 权限。")
+        if actor_role not in {"operator", "admin"}:
+            return self._formal_error(error_type="permission_denied", message="审核适用性画像需要 operator 权限。")
         if review_status not in {"pending_review", "approved", "rejected", "invalidated"}:
             return self._formal_error(
                 error_type="invalid_review_status",

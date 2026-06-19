@@ -3,11 +3,11 @@
 ## 当前状态
 
 - Stage：`Stage 6 回测与规则适用性`
-- 当前活动：`2026-06-19 RT-S6-003 规则适用性画像`
-- 当前状态：`RT-S6-003 ACCEPTED`
+- 当前活动：`2026-06-19 Stage 6 Gate`
+- 当前状态：`Stage 6 Gate ACCEPTED`
 - 当前已接受：`RT-S6-001`, `RT-S6-002`, `RT-S6-004`, `RT-S6-003`
-- 下一可执行 Task：`Stage 6 Gate`
-- 不得自动开始：Stage 6 Gate 需用户明确触发；Stage 6 未完成
+- 下一可执行 Task：`Stage 7 Bootstrap`
+- 不得自动开始：Stage 7 需用户明确触发；本 Gate 未启动 Stage 7
 
 ## 2026-06-18 Stage 6 Bootstrap
 
@@ -733,3 +733,102 @@ Non-blocking:
 Stage 6 Gate may begin only after explicit user instruction. Stage 6 Gate has not been started.
 
 Stage 6 is not complete until Gate acceptance.
+
+## 2026-06-19 Stage 6 Gate
+
+### Gate Decision
+
+`ACCEPTED`
+
+### Entry Verification
+
+- Stage 5 Gate remains `ACCEPTED`.
+- Stage 6 Bootstrap remains `READY`.
+- `RT-S6-001`, `RT-S6-002`, `RT-S6-004`, and `RT-S6-003` are all accepted and were re-verified against current code.
+- Stage 6 Gate was the documented next step.
+- Stage 7 was not started.
+- Repository baseline before Gate repairs:
+  - Branch：`main`
+  - HEAD：`d548aab`
+  - Working tree：clean
+  - User-owned changes：none found
+
+### Delegation
+
+Used three bounded read-only subagents:
+
+- Backend/runtime/database/migration explorer.
+- Frontend/API/client/permission/UI wording explorer.
+- Compatibility/legacy isolation/future-data leakage explorer.
+
+Final acceptance was not delegated. Parent performed the final Gate decision and bounded repairs.
+
+### Contract Verification
+
+- Formal Stage 6 path remains `Web/API -> BacktestApplicationService -> canonical repositories -> backtest_runs/backtest_results -> RuleApplicabilityProfile`.
+- Formal backtests consume canonical `RuleVersion` / `RuleFamily`, `DatasetSnapshot`, `MarketSnapshot`, market-state records and immutable IDs/fingerprints/versions/provenance/availability timestamps.
+- Raw Job, Workflow, Pipeline, CLI, file snapshots, `config_path`, EvidencePack, live Provider, mutable latest records, old JSON result files and `backtest_result_runs` are not formal Stage 6 truth sources.
+- `BacktestRun` remains immutable, snapshot-only and audit-bound with RuleVersion/RuleFamily identity, frozen family members, DatasetSnapshot fingerprint, requested/effective level, level policy, status, coverage and reproducibility fields.
+- `BacktestResult` remains immutable and bound to `BacktestRun`, input/result fingerprints, per-market-state metrics, sample-state counts, coverage, limitations, provenance and audit.
+- `RuleApplicabilityProfile` formal generation reads only immutable `BacktestRun` and `BacktestResult`, persists source run/result IDs and result fingerprints, preserves RuleVersion/RuleFamily/DatasetSnapshot/MarketSnapshot/level binding, and does not overwrite reviewed profiles.
+- Point-in-time checks enforce `available_at <= decision_time`; future market snapshots and future market-state records are rejected or excluded.
+- Level 1/2/3 semantics remain enforced; missing Kaipan remains a visible limitation/downgrade condition, not false/no signal/loss/success.
+- Profile review is permissioned and audited under the current runtime operator/admin hierarchy; no automatic rule usability publication, RuleVersion mutation, RuleFamily membership mutation, strategy publication, daily behavior or author-profile behavior was introduced.
+- Formal `/rules/backtests` and `/rules/results` use business Chinese and “市场状态”; Stage 6 product tests guard against Job/Workflow/Pipeline/Artifact/Provider/config_path/Schema/regime wording in formal components.
+
+### Bounded Repairs
+
+- `MEDIUM` repaired: formal result API now exposes stored `per_rule_metrics`, `provenance`, and `audit` fields from canonical `backtest_results`; frontend type contract and API router tests were updated.
+- `LOW` repaired: formal profile review permission was made consistent with the current runtime operator/admin hierarchy across service/router/UI/tests.
+
+### Validation
+
+Run and passed:
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py tests/unit/db/repositories/test_backtest_run_repository.py tests/api/routers/test_formal_backtests.py tests/unit/db/test_migrations.py tests/api/test_ui_openapi_contract.py -q`
+  - `41 passed`, 1 existing async cleanup warning.
+- `pnpm test -- src/lib/api/backtests.test.ts src/features/backtest/backtest-center.stage6.test.tsx src/pages/product-entry-pages.test.tsx src/app/route-config.test.tsx`
+  - `4 files passed`, `29 tests passed`, existing React Router future-flag warnings.
+- `pnpm typecheck`
+  - passed.
+- `../.venv/bin/python -m compileall src api cli`
+  - passed.
+- `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini heads`
+  - single head `2026_06_19_0013`.
+- PostgreSQL migration replay on temporary database:
+  - clean `upgrade head` passed;
+  - `downgrade 2026_06_17_0009` passed;
+  - re-`upgrade head` passed;
+  - final `current` reported `2026_06_19_0013 (head)`;
+  - temporary database was dropped.
+- `git diff --check`
+  - passed.
+
+### Remaining Risks
+
+Blocking:
+
+- None.
+
+Non-blocking:
+
+- Legacy `/backtest`, `/backtest/regime`, `/backtest/candidates`, `/backtest_results`, legacy `BacktestService`, `SnapshotLoader`, raw backtest jobs, pipeline specs and old profile UI remain compatibility-only and still contain legacy terminology on old/admin/compatibility surfaces.
+- Legacy `RuleApplicabilityService.build_profile()` remains compatibility-only and may update legacy profile rows in place; formal profile generation/review does not call it and remains insert/version/audit based.
+- Shared frontend backtest API module still contains legacy helpers next to formal helpers; formal `/rules/*` components use only formal helper functions.
+- Existing async cleanup warning in OpenAPI/router pytest and React Router future-flag warnings remain outside Stage 6 contract.
+
+### Files Changed During Gate
+
+- `src/services/backtest_application_service.py`
+- `src/services/rule_applicability_service.py`
+- `tests/api/routers/test_formal_backtests.py`
+- `tests/unit/services/test_rule_applicability_service.py`
+- `web/src/types/backtests.ts`
+- `docs/refactor-implementation-logs/stage-6.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Acceptance Conclusion
+
+`Stage 6 Gate ACCEPTED`.
+
+Stage 7 Bootstrap may begin only after explicit user instruction. Stage 7 has not been started.

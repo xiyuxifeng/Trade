@@ -14,12 +14,12 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 
 ## 当前状态
 
-- 当前 Stage：`Stage 6 回测与规则适用性`
-- Stage 状态：`[x] Stage 6 Gate ACCEPTED；RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 均保持 accepted`
-- 当前 Task：`Stage 6 Gate` 已接受；Stage 7 Bootstrap 未开始。
-- 计划：[Stage 6 实施计划](refactor-implementation-plans/stage-6-implementation-plan.md)
-- 详细日志：[Stage 6](refactor-implementation-logs/stage-6.md)
-- 下一步：可开始 `Stage 7 Bootstrap`；不得自动开始，需用户明确授权。Stage 7 尚未开始。
+- 当前 Stage：`Stage 7 作者画像`
+- Stage 状态：`[-] Stage 7 Bootstrap READY；RT-S7-004、RT-S7-001、RT-S7-002、RT-S7-003 均未开始`
+- 当前 Task：`Stage 7 Bootstrap` 已完成；下一 Task 未开始。
+- 计划：[Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
+- 详细日志：[Stage 7](refactor-implementation-logs/stage-7.md)
+- 下一步：可开始 `RT-S7-004 画像版本与时间分段`；推荐 `gpt-5.5`；不得自动开始，需用户明确授权。
 
 ## 当前阻塞项
 
@@ -45,6 +45,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - 2026-06-19 `RT-S6-004` 已接受；正式 Level 1/2/3 数据等级、requested/effective level、降级/拒绝策略、RuleFamily mixed-level、缺失 Kaipan 限制语义、显式降级审计和 UI/API 可见性已落地。
 - 2026-06-19 `RT-S6-003` 已接受；正式 RuleApplicabilityProfile 草稿/版本、BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计已落地。
 - 2026-06-19 `Stage 6 Gate` 最终 `ACCEPTED`；四个 Stage 6 Task 均保持 accepted，canonical-only formal path、BacktestRun/BacktestResult/RuleApplicabilityProfile、point-in-time、Level 1/2/3、缺失 Kaipan 限制语义、profile review/no-overwrite、legacy isolation、migration/recovery、API/UI/runtime contract、权限和审计均已验证；Stage 7 Bootstrap 需用户明确授权后方可开始。
+- 2026-06-19 已完成 Stage 7 Bootstrap；三层作者画像合同、证据分离、LLM/人工审核边界、版本/时间分段、legacy isolation 和四张 Task Card 已冻结；未实施生产代码，未创建迁移，未启动任何 RT-S7 Task。
 
 ## Task 状态
 
@@ -76,6 +77,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | RT-S6-003 | `[x]` | 正式规则适用性画像草稿/版本、immutable run/result source binding、人工审核和审计已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 | RT-S6-004 | `[x]` | Level 1/2/3 回测分级、降级/拒绝策略、缺失 Kaipan 限制语义、RuleFamily mixed-level、审计/API/UI 和 migration/test evidence 已接受 | [Stage 6](refactor-implementation-logs/stage-6.md) |
 | Stage 6 Gate | `[x]` | 最终 `ACCEPTED`；有界修复 formal result evidence API 暴露和 profile review 权限一致性，focused Gate suite、PostgreSQL migration replay、frontend/typecheck/compileall/diff checks 通过 | [Stage 6](refactor-implementation-logs/stage-6.md) |
+| Stage 7 Bootstrap | `[x]` | Bootstrap `READY`；作者方法/规则/验证画像、版本与时间分段、证据分离、review/audit、legacy isolation 和 Task order 已冻结；未启动任何 RT-S7 Task | [Stage 7](refactor-implementation-logs/stage-7.md) |
 
 ## Stage 状态
 
@@ -88,6 +90,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED`；RT-S4-001、RT-S4-002、RT-S4-003 均保持 accepted，规则治理、去重/规则族、生命周期、审核工作台、迁移和 legacy 拒写已验证 | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED`；RT-S5-001、RT-S5-002、RT-S5-003 均保持 accepted，基础数据、快照、调度、readiness、legacy bypass rejection、迁移/recovery 和 Web 业务中文已验证 | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED`；RT-S6-001、RT-S6-002、RT-S6-004、RT-S6-003 均保持 accepted，正式回测、分市场状态结果、数据等级、规则适用性画像、迁移/recovery 和 legacy isolation 已验证 | [stage-6.md](refactor-implementation-logs/stage-6.md) |
+| Stage 7 | `[-]` | Bootstrap `READY`；下一步为 `RT-S7-004 画像版本与时间分段`，尚未启动任何 RT-S7 Task | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 
 ## Stage 1 已接受证据摘要
 
@@ -132,6 +135,9 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 - RT-S6-003 已建立正式 RuleApplicabilityProfile 草稿/版本、immutable BacktestRun/BacktestResult source binding、结果指纹、RuleVersion/RuleFamily frozen identity、requested/effective level、Level 3 limitations、样本/置信/推荐/审核分离、人工审核和审计。
 - Stage 6 Gate 有界修复：formal result API 暴露 `per_rule_metrics`、`provenance`、`audit`；profile review 权限收敛到当前 runtime operator/admin 层级。
 - Stage 6 Gate 残余非阻塞风险：legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only，并可在旧/admin/compatibility surfaces 暴露旧术语；formal `/rules/*` 不使用它们作为正式事实源。
+- Stage 7 Bootstrap 冻结：正式作者画像分为 `AuthorMethodProfile`、`AuthorRuleProfile`、`AuthorValidatedProfile`；三类画像必须共享版本、生命周期、审核、审计、证据指纹、画像指纹、supersession 和时间分段规则。
+- Stage 7 Bootstrap 冻结：正式作者验证画像只能消费 formal `RuleApplicabilityProfile`、formal `BacktestRun`、formal `BacktestResult` 和 Stage 6 level/市场状态/sample evidence；legacy `/persona`、legacy persona/profile services、legacy rule-pool profile UI、`RuleApplicabilityService.build_profile()`、Job/Workflow/Pipeline/Artifact/file JSON、`SnapshotLoader`、`config_path`、EvidencePack、live Provider、mutable latest、`backtest_result_runs` 和 `regime_metrics` 均不得作为正式事实源。
+- Stage 7 Bootstrap 冻结：Task order 为 `RT-S7-004` -> `RT-S7-001` -> `RT-S7-002` -> `RT-S7-003`；`RT-S7-004` 提前执行以先冻结版本、生命周期、审核、审计和时间分段合同；不得自动开始。
 
 ## 2026-06-19 RT-S6-003 规则适用性画像
 
@@ -336,8 +342,8 @@ trade-strategy-ai/docs/refactor-implementation-logs/
 新 Session 或恢复任务时：
 
 1. 先读本文件。
-2. 读取 Stage 5 计划和详细日志。
+2. 读取 Stage 7 计划和详细日志。
 3. 再读当前 Task Card、上游 handoff、当前 `git status` 和完整 diff。
-4. 不默认读取已完成 Stage 详细日志；仅在 single-writer 证据失效或合同冲突时回读 Stage 2。
+4. 不默认读取已完成 Stage 详细日志；仅在 Stage 7 入口证据、Stage 6 formal applicability source 或合同冲突不明确时回读相关已完成 Stage。
 
 同一 Stage 延续时，只读取本文件变化、当前 Stage 日志新增条目和当前 Task 直接相关证据。

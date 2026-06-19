@@ -24,6 +24,15 @@ class _FakeDependencyResult:
     unavailable_reasons: list[dict[str, Any]] | None = None
     limitations: list[str] | None = None
     next_actions: list[str] | None = None
+    level_policy_version: str = "stage6-level-policy-v1"
+    minimum_required_level: str = "level_1"
+    missing_requirements: list[dict[str, Any]] | None = None
+    downgrade_reason: str | None = None
+    repair_guidance: list[str] | None = None
+    required_market_snapshot_slot: str | None = None
+    rule_dependency_details: list[dict[str, Any]] | None = None
+    downgrade_requires_confirmation: bool = False
+    downgrade_allowed: bool = False
 
 
 @dataclass
@@ -41,6 +50,13 @@ class _FakeRun:
     progress: dict[str, Any] | None = None
     limitations: list[str] | None = None
     next_actions: list[str] | None = None
+    requested_level: str = "level_1"
+    effective_level: str = "level_1"
+    level_policy_version: str = "stage6-level-policy-v1"
+    coverage_state: str = "runnable"
+    quality_state: str = "not_executed"
+    downgrade_reason: str | None = None
+    repair_guidance: list[str] | None = None
 
 
 @dataclass
@@ -61,6 +77,7 @@ class _FakeResult:
     limitations: list[str] | None = None
     result_fingerprint: str = "result-fp"
     reproducibility_fingerprint: str = "market-state-v1:features-v1:result-fp"
+    level_policy_version: str = "stage6-level-policy-v1"
 
 
 class _FakeBacktestApplicationService:
@@ -76,6 +93,9 @@ class _FakeBacktestApplicationService:
         self.create_calls += 1
         assert request.actor_role == "operator"
         assert request.source_surface == "/rules/backtests"
+        if request.selection.requested_level == "level_3":
+            assert request.accept_downgrade is True
+            assert request.accepted_effective_level == "level_1"
         return _FakeRun()
 
     async def get_run(self, run_id: str, *, actor_id: str, actor_role: str):
@@ -165,6 +185,8 @@ async def test_viewer_can_check_dependencies(client: AsyncClient) -> None:
     assert body["business_state"] == "可运行"
     assert body["canonical_state"] == "runnable"
     assert body["coverage"]["ohlcv"]["state"] == "ready"
+    assert body["level_policy_version"] == "stage6-level-policy-v1"
+    assert body["minimum_required_level"] == "level_1"
 
 
 @pytest.mark.asyncio()
@@ -219,6 +241,43 @@ async def test_operator_can_create_and_read_formal_run() -> None:
     assert created.json()["snapshot_only"] is True
     assert loaded.status_code == 200
     assert loaded.json()["request_fingerprint"] == "request-fp"
+    assert fake_service.create_calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_accept_visible_downgrade_when_creating_formal_run() -> None:
+    fake_service = _FakeBacktestApplicationService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        payload = {
+            **_selection_payload(),
+            "requested_level": "level_3",
+            "date_to": "2026-04-01",
+        }
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            created = await ac.post(
+                "/api/ui/v1/rules/backtests/runs",
+                json={
+                    "selection": payload,
+                    "reason": "接受缺少 Kaipan 数据时先按 Level 1 回测",
+                    "accept_downgrade": True,
+                    "accepted_effective_level": "level_1",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert created.status_code == 201
+    assert created.json()["level_policy_version"] == "stage6-level-policy-v1"
     assert fake_service.create_calls == 1
 
 

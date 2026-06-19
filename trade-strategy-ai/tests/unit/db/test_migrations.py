@@ -154,3 +154,19 @@ def test_stage6_market_state_backtest_result_migration_defines_immutable_metrics
     assert "sample_state_counts" in content
     assert "coverage_json" in content
     assert "provenance_json" in content
+
+
+def test_stage6_backtest_level_policy_migration_defines_downgrade_audit_fields() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_19_0012_stage6_backtest_level_policy.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_19_0012"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_19_0011"' in content
+    assert "level_policy_version" in content
+    assert "downgrade_reason" in content
+    assert "repair_guidance" in content
+    assert "backtest_runs" in content
+    assert "backtest_results" in content

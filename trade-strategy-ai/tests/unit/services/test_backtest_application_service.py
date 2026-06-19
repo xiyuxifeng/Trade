@@ -71,6 +71,9 @@ class _MarketSnapshotFact:
     trade_date: date
     slot: str
     available_at: datetime | None
+    captured_at: datetime | None = None
+    data_version: str = "kaipan-normalizer-v2"
+    provider_sources: list[str] | None = None
     quality_status: str = "ok"
 
 
@@ -169,12 +172,14 @@ def _selection(
     rule_version_id: UUID | None = None,
     rule_family_id: UUID | None = None,
     requested_level: str = "level_1",
+    date_from_value: date = date(2026, 4, 1),
+    date_to_value: date = date(2026, 4, 10),
 ) -> BacktestSelection:
     return BacktestSelection(
         rule_version_id=rule_version_id,
         rule_family_id=rule_family_id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 10),
+        date_from=date_from_value,
+        date_to=date_to_value,
         universe={"symbols": ["000001.SZ"]},
         benchmark_symbol="000300.SH",
         mode="full",
@@ -541,3 +546,235 @@ async def test_execute_run_marks_partial_market_state_coverage_invalid() -> None
     assert result.sample_state_counts["market_state_unavailable"] == 1
     assert result.per_market_state_metrics[0].hit_trade_count == 1
     assert result.per_market_state_metrics[0].win_rate == 1.0
+
+
+@pytest.mark.asyncio()
+async def test_level_3_missing_kaipan_is_downgradeable_limitation_not_success() -> None:
+    rule_version_id = uuid4()
+    snapshot_id = uuid4()
+    repository = _FakeRepository(
+        rule_version=_RuleVersionFact(
+            rule_version_id,
+            "rv-fp",
+            1,
+            data_dependencies={"minimum_level": "level_1", "requires": ["ohlcv"]},
+        ),
+        dataset=_DatasetFact(
+            dataset_snapshot_id=uuid4(),
+            content_fingerprint="ds-fp",
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 1),
+            benchmark_symbol="000300.SH",
+            available_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC),
+            symbol_manifest={"symbols": ["000001.SZ"]},
+            ohlcv_manifest={"coverage": "complete"},
+            market_state_definition_version="market-state-v1",
+        ),
+        market_snapshots=[
+            _MarketSnapshotFact(
+                id=snapshot_id,
+                snapshot_id="post-close",
+                content_fingerprint="post-close-fp",
+                trade_date=date(2026, 4, 1),
+                slot="17-30",
+                available_at=datetime(2026, 4, 1, 0, 30, tzinfo=UTC),
+                captured_at=datetime(2026, 4, 1, 0, 25, tzinfo=UTC),
+            )
+        ],
+        market_states=[
+            _MarketStateFact(
+                market_state_id=uuid4(),
+                market_snapshot_id=snapshot_id,
+                snapshot_id="post-close",
+                trade_date=date(2026, 4, 1),
+                market="CN",
+                definition_version="market-state-v1",
+                source_feature_version="features-v1",
+                available_at=datetime(2026, 4, 1, 0, 30, tzinfo=UTC),
+                primary_label="震荡",
+            )
+        ],
+    )
+    service = BacktestApplicationService(repository=repository)
+
+    result = await service.check_dependencies(
+        _selection(rule_version_id=rule_version_id, requested_level="level_3", date_to_value=date(2026, 4, 1)),
+        actor_id="viewer",
+        actor_role="viewer",
+    )
+
+    assert result.canonical_state == "downgradeable"
+    assert result.can_create_run is False
+    assert result.effective_level == "level_2"
+    assert result.minimum_required_level == "level_1"
+    assert result.coverage["kaipan"]["state"] == "insufficient_coverage"
+    assert result.coverage["kaipan"]["required_slot"] == "09-25"
+    assert result.downgrade_reason
+    assert any(item["code"] == "kaipan_slot_unavailable" for item in result.missing_requirements)
+    assert "缺失 Kaipan 数据" in result.limitations[0]
+
+
+@pytest.mark.asyncio()
+async def test_level_3_missing_kaipan_rejects_when_rule_requires_level_3() -> None:
+    rule_version_id = uuid4()
+    repository = _FakeRepository(
+        rule_version=_RuleVersionFact(
+            rule_version_id,
+            "rv-fp",
+            1,
+            data_dependencies={"minimum_level": "level_3", "requires": ["kaipan"]},
+        ),
+        dataset=_DatasetFact(
+            dataset_snapshot_id=uuid4(),
+            content_fingerprint="ds-fp",
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 1),
+            benchmark_symbol="000300.SH",
+            available_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC),
+            symbol_manifest={"symbols": ["000001.SZ"]},
+            ohlcv_manifest={"coverage": "complete"},
+            market_state_definition_version="market-state-v1",
+        ),
+        market_snapshots=[],
+    )
+    service = BacktestApplicationService(repository=repository)
+
+    result = await service.check_dependencies(
+        _selection(rule_version_id=rule_version_id, requested_level="level_3", date_to_value=date(2026, 4, 1)),
+        actor_id="viewer",
+        actor_role="viewer",
+    )
+
+    assert result.canonical_state == "not_runnable"
+    assert result.effective_level == "unavailable"
+    assert result.minimum_required_level == "level_3"
+    assert any(item["code"] == "kaipan_slot_unavailable" for item in result.missing_requirements)
+    assert result.coverage["kaipan"]["available"] is None
+
+
+@pytest.mark.asyncio()
+async def test_explicit_downgrade_acceptance_persists_effective_level_and_audit() -> None:
+    rule_version_id = uuid4()
+    repository = _FakeRepository(
+        rule_version=_RuleVersionFact(rule_version_id, "rv-fp", 1),
+        dataset=_DatasetFact(
+            dataset_snapshot_id=uuid4(),
+            content_fingerprint="ds-fp",
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 1),
+            benchmark_symbol="000300.SH",
+            available_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC),
+            symbol_manifest={"symbols": ["000001.SZ"]},
+            ohlcv_manifest={"coverage": "complete"},
+            market_state_definition_version="market-state-v1",
+        ),
+    )
+    service = BacktestApplicationService(repository=repository)
+
+    with pytest.raises(ValueError):
+        await service.create_run(
+            BacktestRunCreateRequest(
+                selection=_selection(rule_version_id=rule_version_id, requested_level="level_3", date_to_value=date(2026, 4, 1)),
+                actor_id="operator-1",
+                actor_role="operator",
+                reason="没有确认降级",
+            )
+        )
+
+    run = await service.create_run(
+            BacktestRunCreateRequest(
+                selection=_selection(rule_version_id=rule_version_id, requested_level="level_3", date_to_value=date(2026, 4, 1)),
+            actor_id="operator-1",
+            actor_role="operator",
+            reason="接受缺少 Kaipan 数据时先按 Level 1 回测",
+            accept_downgrade=True,
+            accepted_effective_level="level_1",
+        )
+    )
+
+    payload = repository.created_runs[0]
+    assert run.requested_level == "level_3"
+    assert run.effective_level == "level_1"
+    assert payload["level_policy_version"] == "stage6-level-policy-v1"
+    assert payload["audit_json"]["downgrade_acceptance"]["actor_id"] == "operator-1"
+    assert payload["audit_json"]["downgrade_acceptance"]["accepted_effective_level"] == "level_1"
+    assert "Kaipan" in payload["downgrade_reason"]
+
+
+@pytest.mark.asyncio()
+async def test_rule_family_mixed_level_reports_blocking_member() -> None:
+    level_1_rule = _RuleVersionFact(uuid4(), "rv-fp-1", 1, data_dependencies={"minimum_level": "level_1"})
+    level_3_rule = _RuleVersionFact(uuid4(), "rv-fp-3", 1, data_dependencies={"minimum_level": "level_3", "requires": ["kaipan"]})
+    family_id = uuid4()
+    service = BacktestApplicationService(
+        repository=_FakeRepository(
+            rule_family=_RuleFamilyFact(family_id, "family-fp", [level_1_rule, level_3_rule]),
+            dataset=_DatasetFact(
+                dataset_snapshot_id=uuid4(),
+                content_fingerprint="ds-fp",
+                date_from=date(2026, 4, 1),
+                date_to=date(2026, 4, 1),
+                benchmark_symbol="000300.SH",
+                available_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC),
+                symbol_manifest={"symbols": ["000001.SZ"]},
+                ohlcv_manifest={"coverage": "complete"},
+                market_state_definition_version="market-state-v1",
+            ),
+        )
+    )
+
+    result = await service.check_dependencies(
+        _selection(rule_family_id=family_id, requested_level="level_2", date_to_value=date(2026, 4, 1)),
+        actor_id="viewer",
+        actor_role="viewer",
+    )
+
+    assert result.canonical_state == "not_runnable"
+    assert result.minimum_required_level == "level_3"
+    assert result.effective_level == "unavailable"
+    assert result.rule_dependency_details[1]["rule_version_id"] == str(level_3_rule.rule_version_id)
+    assert result.rule_dependency_details[1]["status"] == "unsupported_by_requested_level"
+    assert result.missing_requirements[0]["rule_version_id"] == str(level_3_rule.rule_version_id)
+
+
+@pytest.mark.asyncio()
+async def test_level_3_execution_keeps_missing_kaipan_out_of_false_loss_and_success_counts() -> None:
+    run_id = uuid4()
+    repository = _FakeRepository(
+        backtest_run={
+            "run_id": run_id,
+            "requested_level": "level_3",
+            "effective_level": "level_3",
+            "date_from": date(2026, 4, 1),
+            "date_to": date(2026, 4, 1),
+            "dataset_snapshot_id": uuid4(),
+            "dataset_fingerprint": "ds-fp",
+            "market_snapshot_ids": [],
+            "market_snapshot_fingerprints": [],
+            "market_state_model_version": "market-state-v1",
+            "indicator_version": "dataset-bound-v1",
+            "engine_version": "stage6-foundation-v1",
+            "execution_policy_version": "stage6-snapshot-only-v1",
+            "decision_time_policy": "cn-a-share-close-plus-availability-v1",
+            "request_fingerprint": "request-fp",
+            "reproducibility_fingerprint": "run-rp-fp",
+            "snapshot_only": True,
+            "status": "dependency_checked",
+            "coverage_state": "runnable",
+            "quality_state": "not_executed",
+            "unavailable_reasons": [],
+            "limitations": ["缺失 Kaipan 数据时样本只能标记为限制，不能计为条件不成立。"],
+        },
+        market_states=[],
+        samples=[_FormalSampleFact(date(2026, 4, 1), "000001.SZ", "eligible", True, -0.08)],
+    )
+    service = BacktestApplicationService(repository=repository)
+
+    result = await service.execute_run(run_id=str(run_id), actor_id="operator", actor_role="operator")
+
+    assert result.status == "completed_invalid"
+    assert result.coverage["kaipan"]["state"] == "insufficient_coverage"
+    assert result.sample_state_counts["kaipan_unavailable"] == 1
+    assert result.sample_state_counts["evaluated_false"] == 0
+    assert result.overall_metrics["hit_trade_count"] == 0
+    assert result.overall_metrics["total_return"] is None

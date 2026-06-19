@@ -28,6 +28,8 @@ describe('/rules/backtests formal workbench copy', () => {
     expect(source).toContain('选择规则');
     expect(source).toContain('数据依赖');
     expect(source).toContain('市场状态');
+    expect(source).toContain('Kaipan');
+    expect(source).toContain('确认降级');
     expect(source).toContain('开始回测');
     expect(source).toContain('可复现证据');
     expect(source).toContain('适用性画像草稿');
@@ -53,6 +55,7 @@ describe('/rules/backtests formal workbench copy', () => {
     }
     expect(resultsSource).toContain('分市场状态结果');
     expect(resultsSource).toContain('市场状态模型');
+    expect(resultsSource).toContain('Kaipan 数据不可用');
     expect(resultsSource).toContain('覆盖率');
     expect(resultsSource).toContain('可复现证据');
   });

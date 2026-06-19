@@ -594,6 +594,7 @@ class BacktestRun(TimestampMixin, Base):
     mode: Mapped[str] = mapped_column(String(32), nullable=False)
     requested_level: Mapped[str] = mapped_column(String(32), nullable=False)
     effective_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    level_policy_version: Mapped[str] = mapped_column(String(64), nullable=False, default="stage6-level-policy-v1")
     dataset_snapshot_id: Mapped[UUID] = mapped_column(
         Uuid,
         ForeignKey("dataset_snapshots.dataset_snapshot_id", name="fk_btrun_dataset_snapshot", ondelete="RESTRICT"),
@@ -614,6 +615,8 @@ class BacktestRun(TimestampMixin, Base):
     status: Mapped[BacktestRunStatus] = mapped_column(_enum(BacktestRunStatus, "backtest_run_status"), nullable=False)
     coverage_state: Mapped[str] = mapped_column(String(32), nullable=False)
     quality_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    downgrade_reason: Mapped[str | None] = mapped_column(Text)
+    repair_guidance: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
     unavailable_reasons: Mapped[list[dict[str, Any]]] = mapped_column(_jsonb_type(), nullable=False, default=list)
     limitations: Mapped[list[str]] = mapped_column(_jsonb_type(), nullable=False, default=list)
     progress_json: Mapped[dict[str, Any]] = mapped_column(_jsonb_type(), nullable=False, default=dict)
@@ -646,6 +649,7 @@ class BacktestResult(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     requested_level: Mapped[str] = mapped_column(String(32), nullable=False)
     effective_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    level_policy_version: Mapped[str] = mapped_column(String(64), nullable=False, default="stage6-level-policy-v1")
     market_state_model_version: Mapped[str | None] = mapped_column(String(64))
     market_state_source_version: Mapped[str | None] = mapped_column(String(64))
     market_state_result_version: Mapped[str | None] = mapped_column(String(64))

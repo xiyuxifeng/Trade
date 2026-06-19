@@ -3,11 +3,11 @@
 ## 当前状态
 
 - Stage：`Stage 6 回测与规则适用性`
-- 当前活动：`2026-06-19 RT-S6-002 分市场状态回测`
-- 当前状态：`RT-S6-002 ACCEPTED`
-- 当前已接受：`RT-S6-001`, `RT-S6-002`
-- 下一可执行 Task：`RT-S6-004 回测分级`
-- 不得自动开始：`RT-S6-004` 需用户明确触发；`RT-S6-003` 不得在 `RT-S6-004` 前开始
+- 当前活动：`2026-06-19 RT-S6-004 回测分级`
+- 当前状态：`RT-S6-004 ACCEPTED`
+- 当前已接受：`RT-S6-001`, `RT-S6-002`, `RT-S6-004`
+- 下一可执行 Task：`RT-S6-003 规则适用性画像`
+- 不得自动开始：`RT-S6-003` 需用户明确触发；Stage 6 未完成
 
 ## 2026-06-18 Stage 6 Bootstrap
 
@@ -462,3 +462,131 @@ Non-blocking:
 `RT-S6-004` may begin only after explicit user instruction. `RT-S6-004` has not been started.
 
 `RT-S6-003` has not been started and must not begin before `RT-S6-004`. Stage 6 is not complete.
+
+## 2026-06-19 RT-S6-004 回测分级
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented the formal Level 1 / Level 2 / Level 3 data-level policy only:
+
+- Level 1 OHLCV, Level 2 OHLCV + 市场状态, Level 3 OHLCV + 市场状态 + Kaipan 数据 enforcement;
+- rule minimum-level detection from `RuleVersion.data_dependencies`;
+- RuleFamily strictest-member minimum-level behavior with member-level dependency details;
+- dependency-check states for runnable, downgradeable, repair-needed/insufficient coverage, not-runnable, unavailable, conflict and invalid;
+- Level 3 Kaipan slot proof using canonical `MarketSnapshot` slot, captured/available time and decision-time policy;
+- explicit downgrade acceptance with actor/reason/effective-level audit;
+- immutable run/result level policy persistence and API/UI visibility;
+- missing Kaipan limitation semantics so missing Kaipan is not false, no signal, loss, success or silent downgrade.
+
+Did not start or implement:
+
+- `RT-S6-003` RuleApplicabilityProfile generation/review;
+- Stage 7 author profile;
+- Stage 8 strategy publication;
+- daily selection, strategy publication, Prompt changes, Workflow/CLI/raw Job entries, or legacy retirement.
+
+### Delegation
+
+Used one bounded read-only subagent:
+
+- Explorer Alpha: mapped formal backtest service/repository/model/API/UI/migration/test surfaces, verified RT-S6-001 and RT-S6-002 acceptance evidence, and identified RT-S6-004 gaps. It did not edit files.
+
+Parent implemented the level policy, schema/migration, API, UI, tests, migration replay, semantic review and acceptance decision.
+
+### Files Changed
+
+- `src/services/backtest_application_service.py`
+- `src/models/stage2_canonical.py`
+- `src/db/migrations/versions/2026_06_19_0012_stage6_backtest_level_policy.py`
+- `api/routers/ui/formal_backtests.py`
+- `tests/unit/services/test_backtest_application_service.py`
+- `tests/api/routers/test_formal_backtests.py`
+- `tests/unit/db/test_migrations.py`
+- `web/src/types/backtests.ts`
+- `web/src/features/backtest/formal-backtest-workbench.tsx`
+- `web/src/features/backtest/formal-backtest-results.tsx`
+- `web/src/features/backtest/backtest-center.stage6.test.tsx`
+
+### Key Design Decisions
+
+- Kept the formal path under `BacktestApplicationService`; no raw Job, Workflow, CLI, file artifact, `config_path`, EvidencePack, live Provider or legacy result fallback was added.
+- Added a bounded level-policy contract in the formal service instead of introducing a second formal backtest source.
+- Persisted `level_policy_version`, `downgrade_reason` and `repair_guidance` on `backtest_runs`, and `level_policy_version` on `backtest_results`.
+- Used existing `RuleVersion.data_dependencies` as the smallest safe rule minimum-level extension surface; no Stage 4 lifecycle redesign was needed.
+- RuleFamily dependency checks use the strictest member minimum level and report the blocking member instead of silently dropping unsupported members.
+- Level 3 requires the configured Kaipan slot `09-25` to be captured and available before simulated decision time; other slots cannot satisfy Level 3.
+- Level 3 downgrade is never silent: dependency check returns `downgradeable`, creation remains blocked unless the operator sends explicit acceptance, and audit records actor, role, reason, accepted effective level and time.
+- Missing Kaipan during execution is counted as `kaipan_unavailable` and excluded from false/loss/success metrics.
+
+### Database Migration
+
+- Added one linear Alembic revision: `2026_06_19_0012_stage6_backtest_level_policy`.
+- Migration is additive:
+  - `backtest_runs.level_policy_version`;
+  - `backtest_runs.downgrade_reason`;
+  - `backtest_runs.repair_guidance`;
+  - `backtest_results.level_policy_version`.
+- PostgreSQL replay evidence on temporary database `rt_s6_004_migration_0619`:
+  - `upgrade head` passed;
+  - `downgrade 2026_06_19_0011` passed;
+  - re-`upgrade head` passed;
+  - clean replay `upgrade head` passed;
+  - final `alembic current` reported `2026_06_19_0012 (head)`.
+- Temporary database was dropped after verification.
+
+### Compatibility Handling
+
+- RT-S6-001 formal run foundation remains intact; `backtest_runs` is only additively extended.
+- RT-S6-002 formal result foundation remains intact; `backtest_results` is only additively extended.
+- Legacy `/backtest`, `/backtest/regime`, `/backtest_results`, raw Job, Workflow, CLI, JSON result files and legacy result tables remain compatibility-only/non-formal.
+- A completed internal job remains insufficient evidence for a valid formal level result.
+
+### Validation
+
+Run and passed:
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_backtest_application_service.py -q` -> `14 passed`.
+- `../.venv/bin/python -m pytest tests/unit/services/test_backtest_application_service.py tests/api/routers/test_formal_backtests.py tests/unit/db/test_migrations.py tests/api/test_ui_openapi_contract.py -q` -> `29 passed`, 1 existing async cleanup warning.
+- `pnpm test -- src/lib/api/backtests.test.ts src/features/backtest/backtest-center.stage6.test.tsx src/pages/product-entry-pages.test.tsx` -> `19 passed`.
+- `pnpm typecheck` -> passed.
+- `../.venv/bin/python -m compileall src/models/stage2_canonical.py src/services/backtest_application_service.py api/routers/ui/formal_backtests.py src/db/migrations/versions/2026_06_19_0012_stage6_backtest_level_policy.py` -> passed.
+- `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini heads` -> single head `2026_06_19_0012`.
+- PostgreSQL `upgrade head`, `downgrade 2026_06_19_0011`, re-`upgrade head`, clean `upgrade head`, `current` -> passed as listed above.
+
+Warnings observed:
+
+- Existing async connection cleanup warning in OpenAPI/router-related pytest.
+- Existing React Router future-flag warnings in frontend tests.
+- Shell startup warning from local RVM `ps` sandbox restriction.
+
+### Review Findings and Repairs
+
+- RED tests first showed Level 3 still returned generic insufficient coverage, allowed no explicit downgrade audit, lacked RuleFamily mixed-level details, and did not represent missing Kaipan in execution coverage. Repaired through the formal level-policy path and new persistence/API/UI fields.
+- Initial downgrade fixture also lacked Level 1 OHLCV coverage for the requested range, which correctly blocked downgrade. Repaired the test fixture to isolate Level 3 Kaipan behavior.
+- Review found rule minimum-level rejection could also invent a DatasetSnapshot missing reason because dependency checks were skipped after the rule blocker. Repaired so the OHLCV check is marked not checked instead of creating a false missing-data fact.
+- Frontend test found Level 3 workbench wording did not include established “Kaipan 数据”; repaired the label.
+- Migration final `current` check was first run in parallel with dropping the temporary database, causing an expected missing-database error after successful re-upgrade. Re-ran serial clean upgrade/current and confirmed `2026_06_19_0012 (head)`.
+
+### Risks
+
+Blocking:
+
+- None identified for `RT-S6-004`.
+
+Non-blocking:
+
+- Rule dependencies are interpreted from existing `RuleVersion.data_dependencies`; richer future structured dependency metadata can be added later without changing the RT-S6-004 formal policy.
+- Level 3 exact slot is frozen to `09-25` for this task; additional decision policies would require explicit future contract work.
+- Legacy result/report pages still exist as compatibility surfaces outside the formal `/rules/backtests` and `/rules/results` product surfaces.
+
+### Acceptance Conclusion
+
+`RT-S6-004 ACCEPTED`.
+
+`RT-S6-003` may begin only after explicit user instruction. `RT-S6-003` has not been started.
+
+Stage 6 is not complete.

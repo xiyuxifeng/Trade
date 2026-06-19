@@ -24,6 +24,8 @@ router = APIRouter(prefix="/api/ui/v1/rules/backtests", tags=["ui-formal-backtes
 class FormalBacktestCreateRequest(BaseModel):
     selection: BacktestSelection
     reason: str | None = None
+    accept_downgrade: bool = False
+    accepted_effective_level: str | None = None
 
 
 def get_backtest_application_service() -> BacktestApplicationService:
@@ -88,6 +90,8 @@ async def create_formal_backtest_run(
                 actor_role=principal.role,
                 reason=request.reason,
                 source_surface="/rules/backtests",
+                accept_downgrade=request.accept_downgrade,
+                accepted_effective_level=request.accepted_effective_level,
             )
         )
     except PermissionError as exc:

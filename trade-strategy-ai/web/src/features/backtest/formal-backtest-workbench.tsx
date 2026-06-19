@@ -40,7 +40,7 @@ function stateTone(state: string) {
 function levelLabel(level: string) {
   if (level === 'level_1') return 'Level 1：历史行情';
   if (level === 'level_2') return 'Level 2：历史行情 + 市场状态';
-  if (level === 'level_3') return 'Level 3：历史行情 + 市场状态 + 盘前增强数据';
+  if (level === 'level_3') return 'Level 3：历史行情 + 市场状态 + Kaipan 数据';
   return level;
 }
 
@@ -59,6 +59,7 @@ export function FormalBacktestWorkbench() {
   const [profileId, setProfileId] = useState('');
   const [reason, setReason] = useState('验证规则在固定历史数据中的表现');
   const [runId, setRunId] = useState<string | null>(null);
+  const [acceptDowngrade, setAcceptDowngrade] = useState(false);
 
   const selection: FormalBacktestSelection = {
     rule_version_id: ruleMode === 'rule_version' ? ruleId || null : null,
@@ -77,7 +78,12 @@ export function FormalBacktestWorkbench() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createFormalBacktestRun({ selection, reason }),
+    mutationFn: () => createFormalBacktestRun({
+      selection,
+      reason,
+      accept_downgrade: acceptDowngrade,
+      accepted_effective_level: acceptDowngrade && dependency?.effective_level !== 'unavailable' ? dependency?.effective_level : null,
+    }),
     onSuccess: (run) => setRunId(run.run_id),
   });
 
@@ -89,7 +95,7 @@ export function FormalBacktestWorkbench() {
   });
 
   const dependency = dependencyMutation.data;
-  const canSubmit = canAccess('operator') && Boolean(dependency?.can_create_run) && !createMutation.isPending;
+  const canSubmit = canAccess('operator') && Boolean(dependency?.can_create_run || (dependency?.downgrade_allowed && acceptDowngrade)) && !createMutation.isPending;
   const dependencyError = dependencyMutation.error ?? createMutation.error;
 
   return (
@@ -184,10 +190,25 @@ export function FormalBacktestWorkbench() {
                 <p className="font-medium">{dependency.business_state}</p>
                 <p className="mt-1">请求等级：{levelLabel(dependency.requested_level)}</p>
                 <p>有效等级：{dependency.effective_level === 'unavailable' ? '不可用' : levelLabel(dependency.effective_level)}</p>
+                <p>规则最低等级：{levelLabel(dependency.minimum_required_level)}</p>
               </div>
             ) : (
               <p className="mt-2 text-sm text-slate-600">请先填写输入并检查数据依赖。</p>
             )}
+            {dependency?.downgrade_allowed ? (
+              <label className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={acceptDowngrade}
+                  onChange={(event) => setAcceptDowngrade(event.target.checked)}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>
+                  确认降级为{dependency.effective_level === 'unavailable' ? '可用等级' : levelLabel(dependency.effective_level)}回测。
+                  {dependency.downgrade_reason ? ` ${dependency.downgrade_reason}` : ''}
+                </span>
+              </label>
+            ) : null}
             {dependencyError ? <p className="mt-3 text-sm text-rose-700">{dependencyMessage(dependencyError)}</p> : null}
           </div>
 
@@ -212,9 +233,9 @@ export function FormalBacktestWorkbench() {
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <p className="font-semibold text-slate-950">数据覆盖和限制</p>
-          {dependency?.unavailable_reasons.length ? (
+          {dependency?.missing_requirements.length ? (
             <ul className="mt-2 space-y-2 text-sm text-slate-600">
-              {dependency.unavailable_reasons.map((reason) => (
+              {dependency.missing_requirements.map((reason) => (
                 <li key={reason.code}>{reason.message}</li>
               ))}
             </ul>
@@ -223,6 +244,9 @@ export function FormalBacktestWorkbench() {
           )}
           {dependency?.limitations.map((item) => (
             <p className="mt-2 text-sm text-amber-700" key={item}>{item}</p>
+          ))}
+          {dependency?.repair_guidance.map((item) => (
+            <p className="mt-2 text-sm text-slate-700" key={item}>{item}</p>
           ))}
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4">

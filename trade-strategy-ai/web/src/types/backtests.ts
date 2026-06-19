@@ -126,11 +126,35 @@ export type FormalBacktestDependencyResult = {
   next_actions: string[];
   canonical_ids?: Record<string, unknown>;
   fingerprints?: Record<string, unknown>;
+  level_policy_version: string;
+  minimum_required_level: FormalBacktestLevel;
+  missing_requirements: Array<{
+    code: string;
+    message: string;
+    required_slot?: string;
+    rule_version_id?: string;
+    minimum_required_level?: FormalBacktestLevel;
+    missing_trade_dates?: string[];
+  }>;
+  downgrade_reason?: string | null;
+  repair_guidance: string[];
+  required_market_snapshot_slot?: string | null;
+  rule_dependency_details: Array<{
+    rule_version_id?: string | null;
+    minimum_required_level: FormalBacktestLevel;
+    required_dependencies?: unknown[];
+    required_fields?: unknown[];
+    status: string;
+  }>;
+  downgrade_requires_confirmation: boolean;
+  downgrade_allowed: boolean;
 };
 
 export type FormalBacktestRunCreateRequest = {
   selection: FormalBacktestSelection;
   reason?: string | null;
+  accept_downgrade?: boolean;
+  accepted_effective_level?: FormalBacktestLevel | null;
 };
 
 export type FormalBacktestRun = {
@@ -147,6 +171,13 @@ export type FormalBacktestRun = {
   progress: Record<string, unknown>;
   limitations: string[];
   next_actions: string[];
+  requested_level: FormalBacktestLevel;
+  effective_level: FormalBacktestLevel | 'unavailable';
+  level_policy_version: string;
+  coverage_state?: string | null;
+  quality_state?: string | null;
+  downgrade_reason?: string | null;
+  repair_guidance: string[];
 };
 
 export type FormalMarketStateMetric = {
@@ -185,4 +216,5 @@ export type FormalBacktestResult = {
   limitations: string[];
   result_fingerprint: string;
   reproducibility_fingerprint: string;
+  level_policy_version: string;
 };

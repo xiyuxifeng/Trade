@@ -19,6 +19,7 @@ from src.db.session import get_session_factory
 BUSINESS_STATE_LABELS = {
     "runnable": "可运行",
     "downgradeable": "可降级",
+    "repair_needed": "需修复",
     "repair_required": "需修复",
     "not_runnable": "不可运行",
     "unavailable": "数据不可用",
@@ -34,6 +35,8 @@ FORMAL_INDICATOR_VERSION = "dataset-bound-v1"
 FORMAL_EXECUTION_POLICY_VERSION = "stage6-snapshot-only-v1"
 FORMAL_DECISION_TIME_POLICY = "cn-a-share-close-plus-availability-v1"
 FORMAL_MARKET_STATE_RESULT_VERSION = "stage6-market-state-result-v1"
+FORMAL_LEVEL_POLICY_VERSION = "stage6-level-policy-v1"
+FORMAL_LEVEL3_KAIPAN_SLOT = "09-25"
 CN_TZ = ZoneInfo("Asia/Shanghai")
 SAMPLE_STATES = (
     "eligible",
@@ -46,6 +49,7 @@ SAMPLE_STATES = (
     "skipped",
     "conflict",
     "market_state_unavailable",
+    "kaipan_unavailable",
 )
 
 
@@ -89,6 +93,15 @@ class BacktestDependencyResult(BaseModel):
     next_actions: list[str] = Field(default_factory=list)
     canonical_ids: dict[str, Any] = Field(default_factory=dict)
     fingerprints: dict[str, Any] = Field(default_factory=dict)
+    level_policy_version: str = FORMAL_LEVEL_POLICY_VERSION
+    minimum_required_level: str = "level_1"
+    missing_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    downgrade_reason: str | None = None
+    repair_guidance: list[str] = Field(default_factory=list)
+    required_market_snapshot_slot: str | None = None
+    rule_dependency_details: list[dict[str, Any]] = Field(default_factory=list)
+    downgrade_requires_confirmation: bool = False
+    downgrade_allowed: bool = False
 
 
 class BacktestRunCreateRequest(BaseModel):
@@ -97,6 +110,8 @@ class BacktestRunCreateRequest(BaseModel):
     actor_role: str
     reason: str | None = None
     source_surface: str = "/rules/backtests"
+    accept_downgrade: bool = False
+    accepted_effective_level: str | None = None
 
 
 class BacktestRunView(BaseModel):
@@ -113,6 +128,13 @@ class BacktestRunView(BaseModel):
     progress: dict[str, Any] = Field(default_factory=dict)
     limitations: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
+    requested_level: str
+    effective_level: str
+    level_policy_version: str = FORMAL_LEVEL_POLICY_VERSION
+    coverage_state: str | None = None
+    quality_state: str | None = None
+    downgrade_reason: str | None = None
+    repair_guidance: list[str] = Field(default_factory=list)
 
 
 class MarketStateMetricView(BaseModel):
@@ -151,6 +173,7 @@ class BacktestResultView(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     result_fingerprint: str
     reproducibility_fingerprint: str
+    level_policy_version: str = FORMAL_LEVEL_POLICY_VERSION
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:
@@ -177,6 +200,41 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
 
 def _business_state(canonical_state: str) -> str:
     return BUSINESS_STATE_LABELS.get(canonical_state, "不可运行")
+
+
+def _max_level(levels: list[str]) -> str:
+    return max(levels or ["level_1"], key=lambda item: LEVEL_ORDER.get(item, 0))
+
+
+def _dependency_level(rule: Any) -> str:
+    dependencies = _get(rule, "data_dependencies", {}) or {}
+    if not isinstance(dependencies, dict):
+        return "level_1"
+    for key in ("minimum_level", "required_level", "minimum_data_level", "data_level"):
+        value = dependencies.get(key)
+        if value in LEVEL_ORDER:
+            return value
+    requires_blob = json.dumps(dependencies.get("requires", dependencies), ensure_ascii=False).lower()
+    if "kaipan" in requires_blob or "market_snapshot" in requires_blob:
+        return "level_3"
+    if "market_state" in requires_blob or "regime" in requires_blob or "市场状态" in requires_blob:
+        return "level_2"
+    return "level_1"
+
+
+def _dependency_detail(rule: Any, requested_level: str) -> dict[str, Any]:
+    minimum_level = _dependency_level(rule)
+    dependencies = _get(rule, "data_dependencies", {}) or {}
+    status = "ready"
+    if LEVEL_ORDER[minimum_level] > LEVEL_ORDER[requested_level]:
+        status = "unsupported_by_requested_level"
+    return {
+        "rule_version_id": _id(_get(rule, "rule_version_id")),
+        "minimum_required_level": minimum_level,
+        "required_dependencies": dependencies.get("requires", []) if isinstance(dependencies, dict) else [],
+        "required_fields": dependencies.get("required_fields", []) if isinstance(dependencies, dict) else [],
+        "status": status,
+    }
 
 
 async def _repo_call(repository: Any, method_name: str, session: Any, **kwargs: Any) -> Any:
@@ -239,6 +297,10 @@ class BacktestApplicationService:
         next_actions: list[str] = []
         canonical_ids: dict[str, Any] = {}
         fingerprints: dict[str, Any] = {}
+        missing_requirements: list[dict[str, Any]] = []
+        repair_guidance: list[str] = []
+        downgrade_reason: str | None = None
+        required_market_snapshot_slot: str | None = None
 
         if rule_version is not None:
             canonical_ids["rule_version_id"] = _id(getattr(rule_version, "rule_version_id", None))
@@ -253,8 +315,26 @@ class BacktestApplicationService:
                 getattr(member, "canonical_fingerprint", None) for member in rule_members
             ]
 
+        rule_dependency_details = [_dependency_detail(member, selection.requested_level) for member in rule_members]
+        minimum_required_level = _max_level([detail["minimum_required_level"] for detail in rule_dependency_details])
+        if LEVEL_ORDER[selection.requested_level] < LEVEL_ORDER[minimum_required_level]:
+            for detail in rule_dependency_details:
+                if detail["status"] == "unsupported_by_requested_level":
+                    missing_requirements.append({
+                        "code": "rule_minimum_level_not_met",
+                        "message": "所选规则需要更高的数据等级，不能在当前请求等级下回测。",
+                        "rule_version_id": detail["rule_version_id"],
+                        "minimum_required_level": detail["minimum_required_level"],
+                    })
+            reasons.append({
+                "code": "rule_minimum_level_not_met",
+                "message": "规则依赖的数据等级高于本次请求等级。",
+            })
+
         dataset = None
+        dataset_checked = False
         if not reasons:
+            dataset_checked = True
             dataset = await _repo_call(
                 self.repository,
                 "find_dataset_snapshot",
@@ -264,8 +344,11 @@ class BacktestApplicationService:
                 benchmark_symbol=selection.benchmark_symbol,
                 universe=selection.universe,
             )
-        if dataset is None:
+        if not dataset_checked:
+            coverage["ohlcv"] = {"state": "not_checked", "available": None, "impact": "当前规则等级不满足，尚未检查历史行情快照。"}
+        elif dataset is None:
             reasons.append({"code": "dataset_snapshot_unavailable", "message": "没有覆盖本次区间和基准的正式历史行情快照。"})
+            missing_requirements.append({"code": "dataset_snapshot_unavailable", "message": "缺少正式历史行情快照。"})
             coverage["ohlcv"] = {"state": "unavailable", "available": None, "impact": "无法创建正式回测。"}
         else:
             dataset_state = _value(getattr(dataset, "lifecycle_state", None))
@@ -273,9 +356,11 @@ class BacktestApplicationService:
             date_to = getattr(dataset, "date_to", None)
             if dataset_state != "ready":
                 reasons.append({"code": "dataset_snapshot_invalid", "message": "历史行情快照当前不可用。"})
+                missing_requirements.append({"code": "dataset_snapshot_invalid", "message": "历史行情快照当前不可用。"})
                 coverage["ohlcv"] = {"state": "invalid", "available": False, "impact": "需要重新冻结数据快照。"}
             elif date_from and date_to and (date_from > selection.date_from or date_to < selection.date_to):
                 reasons.append({"code": "dataset_snapshot_insufficient_coverage", "message": "历史行情快照没有完整覆盖回测区间。"})
+                missing_requirements.append({"code": "dataset_snapshot_insufficient_coverage", "message": "历史行情快照没有完整覆盖回测区间。"})
                 coverage["ohlcv"] = {"state": "insufficient_coverage", "available": None, "impact": "需要补齐历史行情。"}
             else:
                 coverage["ohlcv"] = {
@@ -299,6 +384,7 @@ class BacktestApplicationService:
             )
             if not market_snapshots:
                 reasons.append({"code": "market_state_insufficient_coverage", "message": "没有覆盖本次区间的正式市场状态快照。"})
+                missing_requirements.append({"code": "market_state_insufficient_coverage", "message": "缺少可证明当时可用的市场状态数据。"})
                 coverage["market_state"] = {"state": "insufficient_coverage", "available": None, "impact": "需要补齐市场状态数据。"}
             else:
                 decision_times = self._decision_times(selection.date_from, selection.date_to)
@@ -343,8 +429,16 @@ class BacktestApplicationService:
                         "code": "market_state_future_snapshot",
                         "message": "存在晚于模拟决策时间才可用的市场状态快照，不能用于正式回测。",
                     })
+                    missing_requirements.append({
+                        "code": "market_state_future_snapshot",
+                        "message": "存在晚于模拟决策时间才可用的市场状态快照。",
+                    })
                 if missing_dates:
                     reasons.append({
+                        "code": "market_state_insufficient_coverage",
+                        "message": "没有覆盖本次区间且可证明当时可用的正式市场状态。",
+                    })
+                    missing_requirements.append({
                         "code": "market_state_insufficient_coverage",
                         "message": "没有覆盖本次区间且可证明当时可用的正式市场状态。",
                     })
@@ -352,6 +446,10 @@ class BacktestApplicationService:
                     reasons.append({
                         "code": "market_state_source_conflict",
                         "message": "本次区间存在多个市场状态来源版本，不能混合作为正式结果。",
+                    })
+                    missing_requirements.append({
+                        "code": "market_state_source_conflict",
+                        "message": "市场状态来源版本冲突。",
                     })
 
                 if any(reason["code"].startswith("market_state_") for reason in reasons):
@@ -379,28 +477,102 @@ class BacktestApplicationService:
             coverage["market_state"] = {"state": "not_required", "available": None}
 
         if selection.requested_level == "level_3":
-            limitations.append("Level 3 的完整 Kaipan 强制校验将在后续任务中收口；本次基础仅记录请求等级。")
+            required_market_snapshot_slot = FORMAL_LEVEL3_KAIPAN_SLOT
+            decision_times = self._decision_times(selection.date_from, selection.date_to)
+            available_kaipan_snapshots: list[Any] = []
+            for snapshot in market_snapshots:
+                trade_date = _get(snapshot, "trade_date")
+                decision_time = decision_times.get(trade_date)
+                if _get(snapshot, "slot") != FORMAL_LEVEL3_KAIPAN_SLOT:
+                    continue
+                available_at = self._aware(_get(snapshot, "available_at"))
+                captured_at = self._aware(_get(snapshot, "captured_at"))
+                if available_at is None or captured_at is None or decision_time is None:
+                    continue
+                if available_at <= decision_time and captured_at <= decision_time:
+                    available_kaipan_snapshots.append(snapshot)
+            kaipan_dates = {_get(snapshot, "trade_date") for snapshot in available_kaipan_snapshots}
+            missing_kaipan_dates = sorted(str(item) for item in (set(decision_times) - kaipan_dates))
+            if missing_kaipan_dates:
+                missing_requirement = {
+                    "code": "kaipan_slot_unavailable",
+                    "message": "缺少可证明模拟决策前可用的 Kaipan 数据。",
+                    "required_slot": FORMAL_LEVEL3_KAIPAN_SLOT,
+                    "missing_trade_dates": missing_kaipan_dates,
+                }
+                missing_requirements.append(missing_requirement)
+                reasons.append({
+                    "code": "kaipan_slot_unavailable",
+                    "message": "Level 3 缺少可证明模拟决策前可用的 Kaipan 数据。",
+                })
+                coverage["kaipan"] = {
+                    "state": "insufficient_coverage",
+                    "available": None,
+                    "required_slot": FORMAL_LEVEL3_KAIPAN_SLOT,
+                    "missing_trade_dates": missing_kaipan_dates,
+                    "impact": "不能生成 Level 3 覆盖，缺失样本不会按条件不成立、亏损或成功处理。",
+                }
+                limitations.append("缺失 Kaipan 数据只能作为数据限制展示，不能计为条件不成立、无信号、亏损或成功覆盖。")
+                repair_guidance.append("到 系统管理 -> 数据与调度 补齐盘前市场数据后重新检查。")
+            else:
+                coverage["kaipan"] = {
+                    "state": "ready",
+                    "available": True,
+                    "required_slot": FORMAL_LEVEL3_KAIPAN_SLOT,
+                    "snapshot_count": len(available_kaipan_snapshots),
+                    "fingerprints": [_get(snapshot, "content_fingerprint") for snapshot in available_kaipan_snapshots],
+                    "normalization_versions": sorted({str(_get(snapshot, "data_version")) for snapshot in available_kaipan_snapshots if _get(snapshot, "data_version")}),
+                    "sources": sorted({str(source) for snapshot in available_kaipan_snapshots for source in (_get(snapshot, "provider_sources", []) or [])}),
+                }
+                canonical_ids["level3_market_snapshot_ids"] = [
+                    str(_get(snapshot, "id", _get(snapshot, "snapshot_id"))) for snapshot in available_kaipan_snapshots
+                ]
+                fingerprints["level3_market_snapshots"] = [
+                    _get(snapshot, "content_fingerprint") for snapshot in available_kaipan_snapshots
+                ]
+
+        downgradeable_reason_codes = {"market_state_insufficient_coverage", "market_state_future_snapshot", "kaipan_slot_unavailable"}
+        has_only_downgradeable_level_gap = (
+            selection.requested_level == "level_3"
+            and bool(reasons)
+            and all(reason["code"] in downgradeable_reason_codes for reason in reasons)
+        )
+        has_rule_level_gap = any(reason["code"] == "rule_minimum_level_not_met" for reason in reasons)
+        candidate_level = selection.requested_level
+        if selection.requested_level == "level_3" and any(item["code"] == "kaipan_slot_unavailable" for item in missing_requirements):
+            candidate_level = "level_2" if coverage.get("market_state", {}).get("state") == "ready" else "level_1"
 
         if not reasons:
             canonical_state = "runnable"
             next_actions.append("提交正式回测")
+        elif has_rule_level_gap or LEVEL_ORDER.get(candidate_level, 0) < LEVEL_ORDER.get(minimum_required_level, 0):
+            canonical_state = "not_runnable"
+            next_actions.append("提高数据等级或选择其他规则")
+            repair_guidance.append("选择满足规则最低数据等级的数据后重新检查。")
+        elif has_only_downgradeable_level_gap and LEVEL_ORDER[candidate_level] >= LEVEL_ORDER[minimum_required_level]:
+            canonical_state = "downgradeable"
+            downgrade_reason = "缺失市场状态或 Kaipan 高等级数据，允许在明确确认后降级为已证明可用的数据等级回测。"
+            next_actions.append("确认降级后开始回测")
         elif any(reason["code"].endswith("insufficient_coverage") for reason in reasons):
             canonical_state = "insufficient_coverage"
             next_actions.append("补齐缺失数据")
+            repair_guidance.append("到 系统管理 -> 数据与调度 补齐缺失数据后重新检查。")
         elif any(reason["code"].endswith("invalid") for reason in reasons):
             canonical_state = "invalid"
             next_actions.append("重新冻结可用数据")
+            repair_guidance.append("重新冻结可用数据快照后再检查。")
         else:
             canonical_state = "unavailable"
             next_actions.append("选择其他规则或数据区间")
+            repair_guidance.append("调整规则、区间或数据等级后重新检查。")
 
         can_create_run = canonical_state == "runnable"
         return BacktestDependencyResult(
-            business_state=_business_state(canonical_state if canonical_state != "insufficient_coverage" else "repair_required"),
+            business_state=_business_state(canonical_state if canonical_state != "insufficient_coverage" else "repair_needed"),
             canonical_state=canonical_state,
             can_create_run=can_create_run,
             requested_level=selection.requested_level,
-            effective_level=selection.requested_level if can_create_run else "unavailable",
+            effective_level=selection.requested_level if can_create_run else (candidate_level if canonical_state == "downgradeable" else "unavailable"),
             selection=selection.model_dump(mode="json"),
             coverage=coverage,
             unavailable_reasons=reasons,
@@ -408,6 +580,14 @@ class BacktestApplicationService:
             next_actions=next_actions,
             canonical_ids=canonical_ids,
             fingerprints=fingerprints,
+            minimum_required_level=minimum_required_level,
+            missing_requirements=missing_requirements,
+            downgrade_reason=downgrade_reason,
+            repair_guidance=repair_guidance,
+            required_market_snapshot_slot=required_market_snapshot_slot,
+            rule_dependency_details=rule_dependency_details,
+            downgrade_requires_confirmation=canonical_state == "downgradeable",
+            downgrade_allowed=canonical_state == "downgradeable",
         )
 
     async def check_dependencies(self, selection: BacktestSelection, *, actor_id: str, actor_role: str) -> BacktestDependencyResult:
@@ -421,7 +601,11 @@ class BacktestApplicationService:
 
         async with self._session_scope_factory() as session:
             dependency = await self._dependency_result(session, request.selection)
-            if not dependency.can_create_run:
+            accepted_effective_level = request.accepted_effective_level
+            if dependency.canonical_state == "downgradeable" and request.accept_downgrade:
+                if accepted_effective_level != dependency.effective_level:
+                    raise ValueError("确认降级的有效等级与依赖检查结果不一致。")
+            elif not dependency.can_create_run:
                 raise ValueError(dependency.business_state)
 
             ids = dependency.canonical_ids
@@ -467,7 +651,8 @@ class BacktestApplicationService:
                 "benchmark_symbol": request.selection.benchmark_symbol,
                 "mode": request.selection.mode,
                 "requested_level": request.selection.requested_level,
-                "effective_level": dependency.effective_level,
+                "effective_level": accepted_effective_level or dependency.effective_level,
+                "level_policy_version": dependency.level_policy_version,
                 "dataset_snapshot_id": UUID(ids["dataset_snapshot_id"]),
                 "dataset_fingerprint": fps["dataset_snapshot"],
                 "market_snapshot_ids": ids.get("market_snapshot_ids") or [],
@@ -484,16 +669,33 @@ class BacktestApplicationService:
                 "status": "dependency_checked",
                 "coverage_state": dependency.canonical_state,
                 "quality_state": "not_executed",
+                "downgrade_reason": dependency.downgrade_reason,
+                "repair_guidance": dependency.repair_guidance,
                 "unavailable_reasons": dependency.unavailable_reasons,
                 "limitations": dependency.limitations,
                 "progress_json": {"current_step": "已完成数据依赖检查", "percent": 0},
-                "audit_json": audit,
+                "audit_json": {
+                    **audit,
+                    "level_policy_version": dependency.level_policy_version,
+                    "downgrade_acceptance": {
+                        "actor_id": request.actor_id,
+                        "actor_role": request.actor_role,
+                        "reason": request.reason,
+                        "accepted_effective_level": accepted_effective_level,
+                        "accepted_at": audit["time"],
+                    } if request.accept_downgrade else None,
+                },
                 "actor_id": request.actor_id,
                 "actor_role": request.actor_role,
                 "reason": request.reason,
                 "source_surface": request.source_surface,
                 "before_state_json": None,
-                "after_state_json": {"status": "dependency_checked"},
+                "after_state_json": {
+                    "status": "dependency_checked",
+                    "requested_level": request.selection.requested_level,
+                    "effective_level": accepted_effective_level or dependency.effective_level,
+                    "coverage_state": dependency.canonical_state,
+                },
             }
             created = await _repo_call(self.repository, "create_backtest_run", session, payload=payload)
             return self._run_view(created)
@@ -541,6 +743,13 @@ class BacktestApplicationService:
             "market_state": {"state": "not_required" if effective_level == "level_1" else "insufficient_coverage", "available": None},
             "samples": {"state": "ready" if samples else "insufficient_coverage", "count": len(samples)},
         }
+        if effective_level == "level_3":
+            coverage["kaipan"] = {
+                "state": "ready" if _get(run, "market_snapshot_ids", []) else "insufficient_coverage",
+                "available": True if _get(run, "market_snapshot_ids", []) else None,
+                "required_slot": FORMAL_LEVEL3_KAIPAN_SLOT,
+                "impact": "缺失 Kaipan 数据的样本不会计入条件不成立、亏损或成功覆盖。",
+            }
         warnings: list[str] = []
         limitations = list(_get(run, "limitations", []) or [])
         states_by_date: dict[date, Any] = {}
@@ -589,6 +798,9 @@ class BacktestApplicationService:
         for sample in samples:
             sample_state = str(_get(sample, "sample_state", "invalid"))
             trade_date = _get(sample, "trade_date")
+            if effective_level == "level_3" and coverage.get("kaipan", {}).get("state") != "ready":
+                sample_state_counts["kaipan_unavailable"] += 1
+                continue
             if effective_level != "level_1" and trade_date not in states_by_date:
                 sample_state_counts["market_state_unavailable"] += 1
                 continue
@@ -640,10 +852,13 @@ class BacktestApplicationService:
             effective_level != "level_1"
             and set(decision_times) != set(states_by_date)
         )
-        if not samples or market_state_incomplete or (effective_level != "level_1" and len(source_versions) > 1):
+        kaipan_incomplete = effective_level == "level_3" and coverage.get("kaipan", {}).get("state") != "ready"
+        if not samples or market_state_incomplete or kaipan_incomplete or (effective_level != "level_1" and len(source_versions) > 1):
             status = "completed_invalid"
         if not samples:
             warnings.append("没有可执行的固定样本，结果仅记录覆盖状态。")
+        if kaipan_incomplete:
+            warnings.append("缺少可证明模拟决策前可用的 Kaipan 数据，相关样本不会计入条件不成立、亏损或成功覆盖。")
         identity = {
             "run_id": _id(_get(run, "run_id")),
             "request_fingerprint": _get(run, "request_fingerprint"),
@@ -652,6 +867,7 @@ class BacktestApplicationService:
             "market_state_model_version": model_version,
             "market_state_source_version": sorted(source_versions),
             "market_state_result_version": FORMAL_MARKET_STATE_RESULT_VERSION,
+            "level_policy_version": str(_get(run, "level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),
             "decision_time_policy": _get(run, "decision_time_policy"),
             "sample_state_counts": sample_state_counts,
             "per_market_state_metrics": per_market_metrics,
@@ -680,6 +896,7 @@ class BacktestApplicationService:
             "market_state_model_version": model_version,
             "market_state_source_version": sorted(source_versions)[0] if len(source_versions) == 1 else None,
             "market_state_result_version": FORMAL_MARKET_STATE_RESULT_VERSION,
+            "level_policy_version": str(_get(run, "level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),
             "decision_time_policy": str(_get(run, "decision_time_policy")),
             "overall_metrics": overall_metrics,
             "per_market_state_metrics": per_market_metrics,
@@ -756,6 +973,13 @@ class BacktestApplicationService:
             progress=get("progress_json", {}) or {},
             limitations=get("limitations", []) or [],
             next_actions=["查看运行进度", "查看数据覆盖和限制", "查看可复现证据"],
+            requested_level=str(get("requested_level")),
+            effective_level=str(get("effective_level")),
+            level_policy_version=str(get("level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),
+            coverage_state=get("coverage_state"),
+            quality_state=get("quality_state"),
+            downgrade_reason=get("downgrade_reason"),
+            repair_guidance=get("repair_guidance", []) or [],
         )
 
     def _result_view(self, result: Any) -> BacktestResultView:
@@ -779,4 +1003,5 @@ class BacktestApplicationService:
             limitations=_get(result, "limitations", []) or [],
             result_fingerprint=str(_get(result, "result_fingerprint")),
             reproducibility_fingerprint=str(_get(result, "reproducibility_fingerprint")),
+            level_policy_version=str(_get(result, "level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),
         )

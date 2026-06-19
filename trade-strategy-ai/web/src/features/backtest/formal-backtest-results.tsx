@@ -23,6 +23,30 @@ function formatNumber(value: number | null | undefined) {
   return value.toLocaleString('zh-CN');
 }
 
+function levelLabel(level: string) {
+  if (level === 'level_1') return 'Level 1：历史行情';
+  if (level === 'level_2') return 'Level 2：历史行情 + 市场状态';
+  if (level === 'level_3') return 'Level 3：历史行情 + 市场状态 + Kaipan 数据';
+  return level;
+}
+
+function sampleStateLabel(key: string) {
+  const labels: Record<string, string> = {
+    eligible: '可评估样本',
+    evaluated_true: '条件成立',
+    evaluated_false: '条件不成立',
+    condition_unavailable: '条件数据不可用',
+    data_missing: '数据缺失',
+    unsupported: '暂不支持',
+    invalid: '无效样本',
+    skipped: '已跳过',
+    conflict: '数据冲突',
+    market_state_unavailable: '市场状态不可用',
+    kaipan_unavailable: 'Kaipan 数据不可用',
+  };
+  return labels[key] ?? key;
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 404) {
     return '没有找到这次正式回测的结果，请确认运行编号或先生成结果。';
@@ -110,6 +134,8 @@ export function FormalBacktestResults() {
                 结果状态
               </p>
               <p className="mt-2 text-sm text-slate-700">{result.status === 'completed_valid' ? '结果有效' : '结果存在限制'}</p>
+              <p className="mt-1 text-sm text-slate-600">请求等级：{levelLabel(result.requested_level)}</p>
+              <p className="mt-1 text-sm text-slate-600">有效等级：{levelLabel(result.effective_level)}</p>
               <p className="mt-1 text-sm text-slate-600">市场状态模型：{result.market_state_model_version ?? '未记录'}</p>
               <p className="mt-1 text-sm text-slate-600">来源版本：{result.market_state_source_version ?? '未记录'}</p>
             </div>
@@ -117,7 +143,7 @@ export function FormalBacktestResults() {
               <p className="font-semibold text-slate-950">样本状态</p>
               <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-600">
                 {Object.entries(result.sample_state_counts).map(([key, value]) => (
-                  <span key={key}>{key}: {value}</span>
+                  <span key={key}>{sampleStateLabel(key)}: {value}</span>
                 ))}
               </div>
             </div>

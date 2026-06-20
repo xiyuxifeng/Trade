@@ -395,6 +395,23 @@ class AuthorValidatedProfileService:
             schema_version=AUTHOR_VALIDATED_PROFILE_SCHEMA_VERSION,
             payload=profile_payload,
             evidence=evidence,
+            source_rule_version_ids={
+                "resolved_rule_version_ids": sorted(
+                    {
+                        str(lineage.rule_version.rule_version_id)
+                        for bundle in bundles
+                        for lineage in bundle.rule_lineages
+                    }
+                ),
+                "rule_version_fingerprints": sorted(
+                    {
+                        lineage.rule_version.canonical_fingerprint
+                        for bundle in bundles
+                        for lineage in bundle.rule_lineages
+                        if lineage.rule_version.canonical_fingerprint
+                    }
+                ),
+            },
             source_applicability_profile_ids={
                 "requested_profile_ids": [str(profile_id) for profile_id in request.applicability_profile_ids],
                 "resolved_profile_ids": [str(bundle.profile.profile_id) for bundle in bundles],

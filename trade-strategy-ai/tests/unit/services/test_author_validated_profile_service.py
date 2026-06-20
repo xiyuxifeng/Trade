@@ -506,6 +506,8 @@ async def test_generate_validated_profile_draft_uses_formal_sources_only_and_pre
     assert validated_profile["sample_count"]["total"] == 21
     assert validated_profile["confidence"]["overall"] > 0
     assert draft.source_bindings["rule_applicability_profile_ids"]["requested_profile_ids"] == [str(strong_profile_id), str(weak_profile_id)]
+    assert len(draft.source_bindings["rule_version_ids"]["resolved_rule_version_ids"]) == 2
+    assert all(fingerprint.startswith("rv-fp-") for fingerprint in draft.source_bindings["rule_version_ids"]["rule_version_fingerprints"])
     assert len(draft.source_bindings["backtest_run_ids"]["resolved_run_ids"]) == 2
     assert len(draft.source_bindings["backtest_result_ids"]["resolved_result_ids"]) == 2
     assert draft.source_versions["aggregation_version"] == "author_validated_profile_summary_deterministic_v1"

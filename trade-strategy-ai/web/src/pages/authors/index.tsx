@@ -16,12 +16,15 @@ export function AuthorsPage({ availability }: AuthorsPageProps = {}) {
     enabled: availability === undefined,
   });
   const permissionDenied = profilesQuery.error instanceof ApiError && (profilesQuery.error.status === 401 || profilesQuery.error.status === 403);
+  const unavailable = profilesQuery.error instanceof ApiError && profilesQuery.error.status >= 500;
   const state: PageAvailability = availability ?? (
     profilesQuery.isLoading
       ? 'loading'
       : permissionDenied
         ? 'permission_denied'
-        : profilesQuery.error
+        : unavailable
+          ? 'unavailable'
+          : profilesQuery.error
           ? 'error'
           : profilesQuery.data?.state === 'empty'
             ? 'empty'

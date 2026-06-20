@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 7 作者画像`
-- 当前活动：`2026-06-20 RT-S7-002 作者规则画像`
-- 当前状态：`RT-S7-002 ACCEPTED`
-- 当前 Task：`RT-S7-004`、`RT-S7-001`、`RT-S7-002` 已完成并接受；`RT-S7-003` 未开始
-- 下一可执行 Task：`RT-S7-003 作者验证画像`
-- 不得自动开始：`RT-S7-003` 需用户明确触发；不得开始 Stage 7 Gate
+- 当前活动：`2026-06-20 Stage 7 Gate`
+- 当前状态：`Stage 7 Gate ACCEPTED`
+- 当前 Task：无未完成 RT-S7 Task
+- 下一可执行项：用户明确授权后可开始 `Stage 8 策略中心`
+- 不得自动开始：不得开始 Stage 8、不得发布策略、不得启动每日盘前或盘后行为
 
 ## 2026-06-19 Stage 7 Bootstrap
 
@@ -265,6 +265,127 @@ Remaining Stage 7 tasks before Gate:
 3. `RT-S7-003 作者验证画像`
 
 Stage 7 is not complete. Stage 7 Gate has not started.
+
+## 2026-06-20 Stage 7 Gate 作者画像
+
+### Gate Decision
+
+`ACCEPTED`
+
+Stage 8 may begin only after explicit user authorization. This Gate did not start Stage 8, publish strategies, or introduce daily pre-market/post-market behavior.
+
+### Delegation
+
+Used `refactor-orchestrator` with two bounded read-only `refactor_explorer_mini` subagents:
+
+- Backend/domain/API/migration/provenance lane: inspected author profile models, services, API, migrations, prompt registry coverage and tests.
+- Frontend/UI/product-surface lane: inspected `/authors`, `/persona`, `/profiles`, route metadata, API client/types and UI tests.
+
+No executor subagent was used. Parent retained final Stage Gate review, risk classification, repairs and acceptance. Runtime probe passed repository readiness checks; exact effective child runtime metadata remains not independently verified beyond configured role files.
+
+### Verified Status
+
+- `RT-S7-004 ACCEPTED`
+- `RT-S7-001 ACCEPTED`
+- `RT-S7-002 ACCEPTED`
+- `RT-S7-003 ACCEPTED`
+- Main log and Stage 7 detailed entries both record all four RT-S7 tasks accepted after bounded documentation repair.
+- Working tree was clean before Gate repairs.
+- Stage 8 had not started.
+- Stage 7 Gate had not already been completed.
+
+### Bounded Repairs
+
+- Repaired stale Stage 7 log summary that still described `RT-S7-003` as not started despite detailed `RT-S7-003 ACCEPTED` evidence and main-log acceptance.
+- Added validated-profile `source_rule_version_ids` bindings so shared JSON source bindings explicitly include resolved rule-version IDs and rule-version fingerprints alongside formal applicability/backtest bindings.
+- Added regression assertion for validated-profile rule-version source bindings.
+- Mapped `/authors` API 5xx failures to the shared `unavailable` UI state and added a focused frontend regression test.
+
+### Findings
+
+`BLOCKER`: none remaining.
+
+`HIGH`: repaired.
+
+- Validated-profile shared source bindings did not explicitly populate `source_rule_version_ids`; repaired with resolved rule-version IDs and fingerprints.
+
+`MEDIUM`: accepted as non-blocking for Stage 8 readiness.
+
+- Generic author-profile draft endpoint remains broader than the kind-specific draft generation endpoints. It writes to the same canonical `AuthorProfileVersion` table and incomplete source bindings become partial, but kind-specific generators are the formal product paths.
+- Frontend API client does not yet expose helper methods for submit-review, publish, archive and diff. Backend API and `/authors` review display exist; full operator workflow ergonomics are not required by the frozen Gate.
+- Explicit `rejected`, `invalidated`, and automatic `superseded_by_version_id` operations are not exposed as Stage 7 product actions. Current accepted lifecycle supports `draft/pending_review/published/archived`, version diff, supersession metadata and no-overwrite behavior; stronger lifecycle actions are future hardening unless a later frozen contract requires them.
+- Broader full-repo regression, build and E2E suites were not rerun; focused Stage 4/6/7, frontend, type, static and migration checks passed.
+
+`LOW`: accepted.
+
+- Source bindings are JSON service-validated fields rather than normalized FK detail tables.
+- Frontend author profile types still use flexible payload maps for profile sections.
+- Existing React Router future-flag warnings remain in frontend tests.
+
+### Known-Risk Decisions
+
+- Shared JSON source bindings instead of normalized FK detail tables: `ACCEPTABLE` for Stage 7 acceptance. Gate repaired the only required missing binding and retained future FK-detail normalization as hardening.
+- No full `/authors` page selection workflow for `ArticleStructure` / `RuleVersion` / `RuleApplicabilityProfile`: `ACCEPTABLE`. Formal runtime/API paths and reviewer-visible profile display exist; full operator selection workflow is later ergonomics.
+- Deterministic aggregation without RT-S7-002/003 LLM explanatory lanes: `ACCEPTABLE`. Program facts remain authoritative and no frozen Gate criterion requires LLM explanation for rule/validated profiles.
+- Runtime probe script path missing/effective runtime metadata not independently verified: `ACCEPTABLE` after current probe found repository readiness files. Exact child runtime remains unverified but non-blocking.
+- Broader regression suites not rerun: `ACCEPTABLE` with recorded focused evidence and residual risk.
+
+### Contract Compliance
+
+- `/authors` is the formal author-profile product surface.
+- `/persona` and `/profiles` remain compatibility-only; `/profiles` is configuration profile UI and not an author-profile source.
+- UI uses business Chinese and “市场状态”; no formal `/authors` exposure of `Regime`, Job, Workflow, Pipeline, Artifact, Provider, `config_path`, DB table names, Schema names, internal functions, file paths or legacy rule-pool terms was found.
+- `AuthorMethodProfile`, `AuthorRuleProfile` and `AuthorValidatedProfile` remain separated by `profile_kind` and by source lanes.
+- Method profile consumes structured article evidence and prompt-run metadata; no full-text bulk author prompt was introduced.
+- Rule profile consumes reviewed rule/rule-family evidence and does not mutate rule governance state.
+- Validated profile consumes formal Stage 6 `RuleApplicabilityProfile`, `BacktestRun`, `BacktestResult` evidence and inherited fingerprints; no legacy applicability builder, legacy backtest result source, file artifact, live Provider or mutable latest source was used.
+- Author profiles are presented as research/evidence profiles, not author real trading performance.
+- New evidence creates drafts/revisions and does not silently overwrite reviewed or published profiles.
+- Review/publication/archive transitions record actor, role, time, reason, source surface, before state, after state and affected profile version through `AuthorProfileVersionAudit`.
+- Published effective-period overlap is rejected at publish time.
+- Stage 3+ canonical writer remains the formal writer; no dual-write author-profile source was introduced.
+- No strategy publication, official strategy update, daily pre-market, or daily post-market behavior was introduced.
+
+### Validation
+
+Passed:
+
+- `python -m pytest tests/unit/services/test_author_validated_profile_service.py tests/api/routers/test_authors.py`: `8 passed`
+- `python -m pytest tests/unit/services/test_author_profile_service.py tests/unit/services/test_author_method_profile_service.py tests/unit/services/test_author_rule_profile_service.py tests/unit/llm/test_prompt_registry.py tests/api/test_ui_openapi_contract.py`: `11 passed`
+- `python -m pytest tests/unit/services/test_rule_governance_service.py tests/integration/test_stage4_rule_governance.py`: `4 passed`
+- `python -m pytest tests/unit/services/test_rule_applicability_service.py tests/unit/services/test_backtest_application_service.py tests/api/routers/test_formal_backtests.py`: `30 passed`
+- `python -m pytest tests/unit/db/test_migrations.py tests/unit/models/test_stage2_canonical_models.py tests/api/test_api_app_factory.py tests/unit/domain/test_core_contracts.py`: `24 passed`
+- `python -m compileall src/services/author_validated_profile_service.py api/routers/ui/authors.py tests/unit/services/test_author_validated_profile_service.py`: passed
+- `pnpm test -- src/pages/authors/index.test.tsx src/lib/api/authors.test.ts`: `10 passed`
+- `pnpm test -- src/lib/api/authors.test.ts src/pages/authors/index.test.tsx src/app/route-config.test.tsx src/app/navigation.test.ts src/app/product-journey.test.tsx src/pages/product-entry-pages.test.tsx`: `35 passed`
+- `pnpm typecheck`: passed
+- PostgreSQL migration fresh upgrade to head on temp DB `rt_s7_gate_0620`: passed
+- PostgreSQL migration safe re-run `upgrade head`: passed
+- PostgreSQL migration `current`: `2026_06_19_0014 (head)`
+- PostgreSQL migration rollback `downgrade 2026_06_19_0013`: passed
+- PostgreSQL migration re-upgrade to head: passed
+- `git diff --check`: passed
+
+Not run:
+
+- Full backend test suite: not run because Gate repairs were bounded to Stage 7 author-profile source bindings, `/authors` UI state and docs; focused Stage 4/6/7 suites passed.
+- Full frontend build/E2E: not run because focused author/profile, route, navigation, product-entry tests and typecheck passed; remaining risk is non-blocking.
+- Real LLM prompt regression with fixed samples: not run during Gate; current coverage verifies registry/schema wiring and method-profile fake-gateway runtime. This remains future hardening and does not block Stage 8.
+
+### Files Changed During Gate
+
+- `docs/Refactor-Implementation-Log.md`
+- `docs/refactor-implementation-logs/stage-7.md`
+- `src/services/author_validated_profile_service.py`
+- `tests/unit/services/test_author_validated_profile_service.py`
+- `web/src/pages/authors/index.tsx`
+- `web/src/pages/authors/index.test.tsx`
+
+### Acceptance Conclusion
+
+`Stage 7 Gate ACCEPTED`.
+
+Stage 8 may begin only after explicit user authorization. Stage 7 is complete and accepted.
 
 ## 2026-06-20 RT-S7-003 作者验证画像
 
@@ -555,3 +676,17 @@ Remaining Stage 7 tasks before Gate:
 2. `Stage 7 Gate`
 
 Stage 7 is not complete. Stage 7 Gate has not started.
+
+## 2026-06-20 Stage 7 Gate Final EOF Mirror
+
+This final EOF mirror supersedes earlier historical “Stage 7 Gate has not started” notes in individual Task entries.
+
+- Final Gate decision: `ACCEPTED`
+- Accepted tasks: `RT-S7-004`、`RT-S7-001`、`RT-S7-002`、`RT-S7-003`
+- Bounded repairs: Stage 7 log summary repair, validated-profile rule-version source bindings, `/authors` unavailable-state mapping
+- Final migration evidence: fresh upgrade, safe rerun, current, rollback to `2026_06_19_0013`, and re-upgrade to head passed on temp DB `rt_s7_gate_0620`
+- Final verification evidence: focused Stage 4/6/7 backend tests, focused `/authors` frontend tests, frontend typecheck, compileall and `git diff --check` passed
+- Stage 8 readiness: Stage 8 may begin only after explicit user authorization
+- Forbidden behavior not started: Stage 8, strategy publication, daily pre-market behavior, daily post-market behavior
+
+Stage 7 is complete and accepted.

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithRouter } from '@/test/test-utils';
+import { ApiError } from '@/lib/api/http';
 import { AuthorsPage } from './index';
 
 vi.mock('@/lib/api/authors', () => ({
@@ -22,6 +23,16 @@ describe('authors page', () => {
     expect(await screen.findAllByText('暂无正式画像版本')).toHaveLength(2);
     expect(screen.getByText('新证据会先生成草稿或修订建议，不会自动覆盖已发布画像。')).toBeInTheDocument();
     expect(screen.queryByText('交易风格画像')).not.toBeInTheDocument();
+  });
+
+  it('shows unavailable state when the formal author profile API is unavailable', async () => {
+    vi.mocked(listAuthorProfiles).mockRejectedValueOnce(new ApiError(503, 'service unavailable'));
+
+    renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
+
+    expect(await screen.findAllByText('当前不可用')).toHaveLength(2);
+    expect(screen.getByText('相关服务或数据暂时不可用。')).toBeInTheDocument();
+    expect(screen.getByText('作者画像读取失败')).toBeInTheDocument();
   });
 
   it('shows draft, pending review, published, archived and partial evidence states truthfully', async () => {

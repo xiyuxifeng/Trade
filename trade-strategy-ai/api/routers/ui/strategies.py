@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.db.session import get_session_factory as async_session_factory
-from src.services.strategy_center_service import StrategyCenterService, StrategyDraftRequest, StrategyTransitionRequest
+from src.services.strategy_center_service import (
+    StrategyCenterService,
+    StrategyDraftRequest,
+    StrategyRollbackRequest,
+    StrategyTransitionRequest,
+    StrategyValidationRequest,
+)
 
 
 router = APIRouter(prefix="/api/ui/v1/strategies", tags=["ui-strategies"])
@@ -132,3 +138,75 @@ async def publish_strategy(
         raise _error(status.HTTP_404_NOT_FOUND, "未找到策略版本", "当前版本不能发布。", "返回列表重新选择。") from exc
     except ValueError as exc:
         raise _error(status.HTTP_409_CONFLICT, str(exc), "策略未发布，当前正式版本不会被静默覆盖。", "先完成审核或修正正式输入后重试。") from exc
+
+
+@router.post("/{version_id}/validate")
+async def validate_strategy(
+    version_id: str,
+    request: StrategyValidationRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.validate_version(version_id, request, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "策略不会进入正式验证。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略版本", "当前版本不能验证。", "返回列表重新选择。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "验证状态未更新。", "检查正式证据绑定后重试。") from exc
+
+
+@router.get("/{version_id}/comparison")
+async def compare_strategy(
+    version_id: str,
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return await service.compare_with_current(version_id, actor_id=_actor_id(principal), actor_role=principal.role)
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "你暂时不能查看策略对比。", "切换到有查看权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略版本", "当前版本不能对比。", "返回列表重新选择。") from exc
+
+
+@router.get("/{version_id}/diff")
+async def diff_strategy(
+    version_id: str,
+    base_version_id: str | None = Query(default=None),
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return await service.diff_versions(
+            version_id,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+            base_version_id=base_version_id,
+        )
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "你暂时不能查看版本差异。", "切换到有查看权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略版本", "当前版本不能查看差异。", "返回列表重新选择。") from exc
+
+
+@router.post("/{version_id}/rollback")
+async def rollback_strategy(
+    version_id: str,
+    request: StrategyRollbackRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.rollback_to_version(version_id, request, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "策略不会回退。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略版本", "当前版本不能回退。", "返回列表重新选择。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "当前正式策略未改变。", "修正回退目标或补充回退原因后重试。") from exc

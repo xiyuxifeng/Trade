@@ -2,10 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createStrategyDraft,
+  compareStrategyVersion,
+  diffStrategyVersion,
   getStrategyDraftOptions,
   listStrategies,
   publishStrategy,
+  rollbackStrategyVersion,
   submitStrategyReview,
+  validateStrategyVersion,
 } from './strategies';
 
 describe('strategies api client', () => {
@@ -71,6 +75,75 @@ describe('strategies api client', () => {
         ok: true,
         status: 200,
         json: async () => ({ strategy_version_id: 'version-1', lifecycle_state: 'published' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          strategy_version_id: 'version-1',
+          strategy_id: 'strategy-1',
+          business_key: 'cn-swing-core',
+          title: 'A股趋势轮动策略',
+          version_no: 1,
+          lifecycle_state: 'draft',
+          lifecycle_label: '草稿',
+          review_status: 'draft',
+          status_state: 'draft',
+          schema_version: 'strategy-schema-v1',
+          quality_status: 'verified',
+          rule_pool: [],
+          profiles: {},
+          policies: {},
+          evidence: { market_snapshot_ids: [], rule_applicability_profile_ids: [], backtest_run_ids: [], backtest_result_ids: [] },
+          current_status: { is_current: false, current_version_id: null, previous_current_version_id: null },
+          validation: { state: 'passed', label: '验证通过', reviewer_decision: 'approved', reviewer_decision_label: '已批准' },
+          partial_reasons: [],
+          limitations: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          state: 'ready',
+          current_version: { strategy_version_id: 'version-0' },
+          candidate_version: { strategy_version_id: 'version-1' },
+          delta: { rule_weight_changes: 1 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          state: 'ready',
+          base_version: { strategy_version_id: 'version-0' },
+          target_version: { strategy_version_id: 'version-1' },
+          changes: [{ field: 'title', label: '策略名称', before: '旧策略', after: '新策略' }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          strategy_version_id: 'version-0',
+          strategy_id: 'strategy-1',
+          business_key: 'cn-swing-core',
+          title: 'A股趋势轮动策略',
+          version_no: 1,
+          lifecycle_state: 'published',
+          lifecycle_label: '已发布',
+          review_status: 'published',
+          status_state: 'published',
+          schema_version: 'strategy-schema-v1',
+          quality_status: 'verified',
+          rule_pool: [],
+          profiles: {},
+          policies: {},
+          evidence: { market_snapshot_ids: [], rule_applicability_profile_ids: [], backtest_run_ids: [], backtest_result_ids: [] },
+          current_status: { is_current: true, current_version_id: 'version-0', previous_current_version_id: 'version-1' },
+          partial_reasons: [],
+          limitations: [],
+        }),
       });
 
     vi.stubGlobal('fetch', fetchMock);
@@ -94,12 +167,20 @@ describe('strategies api client', () => {
     });
     await submitStrategyReview('version-1', { reason: '提交审核' });
     await publishStrategy('version-1', { reason: '审核通过' });
+    await validateStrategyVersion('version-1', { reason: '校验正式策略' });
+    await compareStrategyVersion('version-1');
+    await diffStrategyVersion('version-1');
+    await rollbackStrategyVersion('version-0', { reason: '回退到上一正式版本' });
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/ui/v1/strategies', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ui/v1/strategies/draft-options', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ui/v1/strategies', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/ui/v1/strategies/version-1/submit-review', expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/ui/v1/strategies/version-1/publish', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/ui/v1/strategies/version-1/validate', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/ui/v1/strategies/version-1/comparison', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/ui/v1/strategies/version-1/diff', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(9, '/api/ui/v1/strategies/version-0/rollback', expect.any(Object));
 
     const firstInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect((firstInit.headers as Headers).get('Accept')).toBe('application/json');

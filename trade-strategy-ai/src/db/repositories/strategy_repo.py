@@ -12,6 +12,8 @@ from src.models.market_data_snapshot import MarketSnapshot
 from src.models.rule_applicability import RuleApplicabilityProfile
 from src.models.stage2_canonical import (
     AuthorProfileVersion,
+    BacktestResult,
+    BacktestRun,
     DatasetLifecycleState,
     DatasetSnapshot,
     RuleVersion,
@@ -83,6 +85,14 @@ class StrategyRepository:
         )
         return list(result.all())
 
+    async def list_versions_for_strategy(self, session: AsyncSession, *, strategy_id: UUID) -> list[StrategyVersion]:
+        result = await session.scalars(
+            select(StrategyVersion)
+            .where(StrategyVersion.strategy_id == strategy_id)
+            .order_by(StrategyVersion.version_no.asc(), StrategyVersion.updated_at.asc())
+        )
+        return list(result.all())
+
     async def set_current_published_version(
         self,
         session: AsyncSession,
@@ -135,6 +145,12 @@ class StrategyRepository:
         )
         return list(result.all())
 
+    async def list_rule_versions_by_ids(self, session: AsyncSession, *, rule_version_ids: list[UUID]) -> list[RuleVersion]:
+        if not rule_version_ids:
+            return []
+        result = await session.scalars(select(RuleVersion).where(RuleVersion.rule_version_id.in_(rule_version_ids)))
+        return list(result.all())
+
     async def list_published_author_profiles(self, session: AsyncSession, *, profile_kind: AuthorProfileKind) -> list[AuthorProfileVersion]:
         result = await session.scalars(
             select(AuthorProfileVersion)
@@ -160,10 +176,43 @@ class StrategyRepository:
         )
         return list(result.all())
 
+    async def list_market_snapshots_by_ids(self, session: AsyncSession, *, market_snapshot_ids: list[UUID]) -> list[MarketSnapshot]:
+        if not market_snapshot_ids:
+            return []
+        result = await session.scalars(select(MarketSnapshot).where(MarketSnapshot.id.in_(market_snapshot_ids)))
+        return list(result.all())
+
     async def list_published_rule_applicability_profiles(self, session: AsyncSession) -> list[RuleApplicabilityProfile]:
         result = await session.scalars(
             select(RuleApplicabilityProfile)
             .where(RuleApplicabilityProfile.lifecycle_state == FormalLifecycleState.published)
             .order_by(RuleApplicabilityProfile.reviewed_at.desc(), RuleApplicabilityProfile.sample_count.desc())
         )
+        return list(result.all())
+
+    async def list_rule_applicability_profiles_by_ids(
+        self,
+        session: AsyncSession,
+        *,
+        applicability_profile_ids: list[UUID],
+    ) -> list[RuleApplicabilityProfile]:
+        if not applicability_profile_ids:
+            return []
+        result = await session.scalars(
+            select(RuleApplicabilityProfile).where(
+                RuleApplicabilityProfile.applicability_profile_id.in_(applicability_profile_ids)
+            )
+        )
+        return list(result.all())
+
+    async def list_backtest_runs_by_ids(self, session: AsyncSession, *, run_ids: list[UUID]) -> list[BacktestRun]:
+        if not run_ids:
+            return []
+        result = await session.scalars(select(BacktestRun).where(BacktestRun.run_id.in_(run_ids)))
+        return list(result.all())
+
+    async def list_backtest_results_by_ids(self, session: AsyncSession, *, result_ids: list[UUID]) -> list[BacktestResult]:
+        if not result_ids:
+            return []
+        result = await session.scalars(select(BacktestResult).where(BacktestResult.result_id.in_(result_ids)))
         return list(result.all())

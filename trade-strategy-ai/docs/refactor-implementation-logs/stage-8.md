@@ -258,6 +258,110 @@ Static checks:
 - `git diff --check`
   - passed
 
+## 2026-06-20 RT-S8-002 策略验证和回滚
+
+### Task Status
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现 RT-S8-002 正式策略验证、当前版对比、版本 diff 和审计回滚：
+
+- canonical strategy validation read model；
+- `/api/ui/v1/strategies/{version_id}/validate|comparison|diff|rollback`；
+- canonical BacktestRun / BacktestResult / RuleApplicabilityProfile evidence aggregation；
+- `/strategies` 验证面板、当前版对比、版本差异、回退原因确认；
+- focused backend / API / frontend / OpenAPI / typecheck 验证；
+- Stage 8 / 主实施日志更新。
+
+未实现：
+
+- `RT-S8-003` StrategyRevisionProposal flow；
+- Stage 9 每日盘前选择或 `TradingDayPlan`；
+- Stage 10 盘后复盘/归因/提案生成；
+- legacy `BacktestService`、live Provider、strategy jobs、compatibility view 作为正式验证输入；
+- 新 schema migration。
+
+### Key Decisions
+
+- 正式策略验证继续复用 `StrategyVersion.evidence_json`，在其中增加 `validation_summary`，不建立第二套正式策略事实源。
+- 策略验证只读取 canonical `DatasetSnapshot`、`MarketSnapshot`、`BacktestRun`、`BacktestResult`、`RuleApplicabilityProfile`、`AuthorProfileVersion`、`StrategyVersion` 和 `StrategyRuleMembership`。
+- `validation_summary.state` 统一落到 `not_run / passed / unavailable / partial / invalid / insufficient_coverage / insufficient_sample`，并明确把 `unavailable`、`insufficient_sample`、`insufficient_coverage` 作为非通过状态展示。
+- reviewer decision 通过验证摘要的 `reviewer_decision` 暴露；通过时自动记录 `approved`，不足或缺失时保持 `review_required`。
+- 当前版对比与版本 diff 使用 canonical strategy service 计算，不引入新的持久化表。
+- 回滚只移动 `strategies.current_published_version_id`，并在 `strategy_version_audits` 记录 `rollback_to_current`；不修改、删除或覆盖任何历史 `StrategyVersion` 行。
+
+### Files Changed
+
+- `src/services/strategy_center_service.py`
+- `src/db/repositories/strategy_repo.py`
+- `api/routers/ui/strategies.py`
+- `tests/unit/services/test_strategy_center_service.py`
+- `tests/api/routers/test_strategies.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `web/src/types/strategies.ts`
+- `web/src/lib/api/strategies.ts`
+- `web/src/lib/api/strategies.test.ts`
+- `web/src/pages/strategies/StrategyOverviewPage.tsx`
+- `web/src/pages/strategies/index.test.tsx`
+- `docs/refactor-implementation-logs/stage-8.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Database Migration
+
+- 无新增 migration。
+- 继续复用 `strategy_version_audits` 和 `StrategyVersion.evidence_json`。
+- 本 Task 不需要修改 `BacktestRun` / `BacktestResult` 公共 schema，因此未触发 `ESCALATION_REQUIRED`。
+
+### Verification
+
+Backend / API:
+
+- `python -m pytest tests/unit/services/test_strategy_center_service.py tests/api/routers/test_strategies.py`
+  - `5 passed`
+
+OpenAPI / app factory:
+
+- `python -m pytest tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py`
+  - `4 passed`
+
+Frontend:
+
+- `node web/node_modules/vitest/vitest.mjs run src/lib/api/strategies.test.ts src/pages/strategies/index.test.tsx`
+  - `3 passed`
+
+Frontend type safety:
+
+- `node web/node_modules/typescript/bin/tsc --noEmit -p web/tsconfig.json`
+  - passed
+
+Static checks:
+
+- `git diff --check`
+  - passed
+
+### Acceptance Review
+
+- 验证接口不会调用 legacy `BacktestService`、live Provider 或 legacy backtest tables；所有证据都来自 strategy version 已绑定的 canonical IDs。
+- `validation_summary` 能区分 `passed`、`unavailable`、`partial`、`insufficient_coverage` 和 `insufficient_sample`，并在 UI 中直接可见。
+- 当前版对比和版本 diff 均基于 canonical `StrategyVersion` 与 `StrategyRuleMembership`，没有引入第二套正式策略 source。
+- 回滚后历史 `StrategyVersion` 行数保持不变，只有当前指针变更，并写入 `strategy_version_audits`。
+- 同一 `business_key` 仍只保留一个 current pointer。
+- Stage 9 / Stage 10 行为仍未开始。
+
+### Residual Risks
+
+- 当前验证摘要使用 `evidence_json.validation_summary`，后续如果策略验证维度继续膨胀，可能需要单独 normalized read relation，但本 Task 下尚不需要。
+- 当前 UI 仍以正式策略中心单页承载验证、对比、diff 和回退；若后续版本量显著增长，可能需要独立版本列表或筛选体验增强。
+- 本 Task 仍未引入浏览器级 E2E；现阶段依赖 focused API / frontend / OpenAPI / typecheck 证据。
+
+### Task Conclusion
+
+`RT-S8-002 ACCEPTED`。
+
+下一未开始 Task 仍为 `RT-S8-003 策略优化建议`，不得自动开始。
+
 ### Legacy Isolation Evidence
 
 Formal RT-S8-001 path files:

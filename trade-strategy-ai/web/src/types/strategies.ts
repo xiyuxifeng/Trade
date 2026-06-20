@@ -17,6 +17,53 @@ export type StrategyCurrentStatus = {
   previous_current_version_id?: string | null;
 };
 
+export type StrategyValidationSummary = {
+  state: string;
+  label: string;
+  reviewer_decision: string;
+  reviewer_decision_label: string;
+  checked_at?: string | null;
+  checked_by?: string | null;
+  reason?: string | null;
+  dataset_binding: {
+    state: string;
+    dataset_snapshot_id?: string | null;
+    market_state_definition_version?: string | null;
+  };
+  market_snapshot_binding: {
+    state: string;
+    market_snapshot_ids: string[];
+  };
+  backtest: {
+    state: string;
+    out_of_sample_state: string;
+    backtest_run_ids: string[];
+    backtest_result_ids: string[];
+    requested_level?: string | null;
+    effective_level?: string | null;
+    annual_return?: number | null;
+    max_drawdown?: number | null;
+    win_rate?: number | null;
+  };
+  rule_applicability: {
+    state: string;
+    covered_rule_count: number;
+    total_rule_count: number;
+    coverage_ratio: number;
+    uncovered_rule_version_ids?: string[];
+  };
+  sample_coverage: {
+    state: string;
+    sample_count?: number | null;
+    insufficient_sample: boolean;
+  };
+  data_quality: {
+    state: string;
+    warnings: string[];
+    limitations: string[];
+  };
+};
+
 export type StrategyVersion = {
   strategy_version_id: string;
   strategy_id: string;
@@ -56,6 +103,7 @@ export type StrategyVersion = {
     evidence_fingerprint?: string | null;
   };
   current_status: StrategyCurrentStatus;
+  validation: StrategyValidationSummary;
   published_at?: string | null;
   partial_reasons: string[];
   limitations: string[];
@@ -113,4 +161,39 @@ export type StrategyTransitionRequest = {
 export type StrategyTransitionResponse = {
   strategy_version_id: string;
   lifecycle_state: string;
+};
+
+export type StrategyValidationRequest = {
+  reason?: string | null;
+};
+
+export type StrategyRollbackRequest = {
+  reason: string;
+};
+
+export type StrategyComparisonResponse = {
+  state: 'ready' | 'unavailable';
+  current_version: Partial<StrategyVersion> | null;
+  candidate_version: Partial<StrategyVersion>;
+  delta: {
+    rule_count_change: number;
+    rule_weight_changes: number;
+    annual_return_change?: number | null;
+    max_drawdown_change?: number | null;
+  };
+};
+
+export type StrategyDiffResponse = {
+  state: 'ready' | 'unavailable';
+  base_version: Partial<StrategyVersion> | null;
+  target_version: Partial<StrategyVersion>;
+  changes: Array<{
+    field: string;
+    label: string;
+    before: unknown;
+    after: unknown;
+  }>;
+  summary?: {
+    rule_weight_changes: number;
+  };
 };

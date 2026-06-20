@@ -19,12 +19,12 @@
 
 - 当前 Stage：`Stage 8 策略中心`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`
-- 当前未开始 Task：`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`
+- 当前未开始 Task：`RT-S8-003 策略优化建议`
 - 当前计划：[Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
 - 详细日志：[Stage 8](refactor-implementation-logs/stage-8.md)
-- 下一步：仅可在用户明确授权后开始 `RT-S8-002 策略验证和回滚`；不得自动开始。
+- 下一步：仅可在用户明确授权后开始 `RT-S8-003 策略优化建议`；不得自动开始。
 
 ## 当前硬约束
 
@@ -46,12 +46,12 @@
 
 ## 当前残余风险
 
-- Stage 8 Bootstrap 为 `READY`；`RT-S8-001` 已接受，后续仅剩 `RT-S8-002/003`。
+- Stage 8 Bootstrap 为 `READY`；`RT-S8-001/002` 已接受，后续仅剩 `RT-S8-003`。
 - `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
 - legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only；formal `/rules/*` 与 Stage 7 formal author profiles 不得使用它们作为正式事实源。
-- `RT-S8-001` 已建立 canonical strategy repository/service/API/UI 和审计/当前指针 migration；`RT-S8-002` 之前仍缺 formal diff / rollback surface。
+- `RT-S8-001/002` 已建立 canonical strategy repository/service/API/UI、验证摘要、当前版对比、版本 diff、审计回滚和当前指针安全切换；`RT-S8-003` 之前仍缺 proposal-only strategy revision surface。
 - `/strategies/candidates` 仍为 compatibility notice page，后续退役工作未完成。
 - Stage 8 未运行浏览器级 E2E；当前依赖 focused API/frontend/migration verification。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
@@ -91,7 +91,7 @@
 | RT-S7-003 | `[x]` | formal Stage 6 validation evidence 生成 AuthorValidatedProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 | Stage 8 Bootstrap | `[x]` | Stage 8 strategy contracts 和 task order 已冻结 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 | RT-S8-001 | `[x]` | canonical draft/review/publish foundation、正式策略中心、migration 和 focused verification 已接受 | [Stage 8](refactor-implementation-logs/stage-8.md) |
-| RT-S8-002 | `[ ]` | 策略验证和回滚尚未开始 | [Stage 8](refactor-implementation-logs/stage-8.md) |
+| RT-S8-002 | `[x]` | canonical validation summary、current-vs-candidate comparison、version diff、audited rollback 和 focused verification 已接受 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 | RT-S8-003 | `[ ]` | 策略优化建议尚未开始 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 
 ## Stage 状态索引
@@ -106,14 +106,14 @@
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED` | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
-| Stage 8 | `[-]` | Bootstrap `READY`；`RT-S8-001` 已接受，待后续授权执行 `RT-S8-002/003` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
+| Stage 8 | `[-]` | Bootstrap `READY`；`RT-S8-001/002` 已接受，待后续授权执行 `RT-S8-003` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-RT-S8-002 策略验证和回滚
+RT-S8-003 策略优化建议
 ```
 
 执行前应读取：
@@ -122,4 +122,4 @@ RT-S8-002 策略验证和回滚
 - [Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S8-002`；必须等待用户明确授权。
+不得自动开始 `RT-S8-003`；必须等待用户明确授权。

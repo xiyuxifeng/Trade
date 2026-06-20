@@ -38,6 +38,7 @@ class _FakeStrategyVersion:
     policies: dict[str, Any] | None = None
     evidence: dict[str, Any] | None = None
     current_status: dict[str, Any] | None = None
+    validation: dict[str, Any] | None = None
     published_at: str | None = None
     partial_reasons: list[str] | None = None
     limitations: list[str] | None = None
@@ -81,6 +82,35 @@ class _FakeStrategyVersion:
                 "is_current": False,
                 "current_version_id": None,
                 "previous_current_version_id": None,
+            },
+            "validation": self.validation
+            or {
+                "state": "not_run",
+                "label": "尚未验证",
+                "reviewer_decision": "review_required",
+                "reviewer_decision_label": "待复核",
+                "dataset_binding": {"state": "unavailable", "dataset_snapshot_id": None, "market_state_definition_version": None},
+                "market_snapshot_binding": {"state": "unavailable", "market_snapshot_ids": []},
+                "backtest": {
+                    "state": "unavailable",
+                    "out_of_sample_state": "unavailable",
+                    "backtest_run_ids": [],
+                    "backtest_result_ids": [],
+                    "requested_level": None,
+                    "effective_level": None,
+                    "annual_return": None,
+                    "max_drawdown": None,
+                    "win_rate": None,
+                },
+                "rule_applicability": {
+                    "state": "unavailable",
+                    "covered_rule_count": 0,
+                    "total_rule_count": 0,
+                    "coverage_ratio": 0.0,
+                    "uncovered_rule_version_ids": [],
+                },
+                "sample_coverage": {"state": "unknown", "sample_count": None, "insufficient_sample": False},
+                "data_quality": {"state": "unavailable", "warnings": [], "limitations": []},
             },
             "published_at": self.published_at,
             "partial_reasons": self.partial_reasons or [],
@@ -147,6 +177,69 @@ class _FakeStrategyCenterService:
             },
             published_at="2026-06-20T12:00:00+00:00",
         )
+
+    async def validate_version(self, version_id: str, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert request.reason == "校验正式策略"
+        version = _FakeStrategyVersion(
+            strategy_version_id=version_id,
+            lifecycle_state="draft",
+            lifecycle_label="草稿",
+        ).model_dump()
+        version["validation"] = {
+            "state": "passed",
+            "label": "验证通过",
+            "reviewer_decision": "approved",
+            "reviewer_decision_label": "已批准",
+            "reason": "校验正式策略",
+            "backtest": {"out_of_sample_state": "available"},
+            "rule_applicability": {"coverage_ratio": 1.0},
+            "sample_coverage": {"state": "sufficient"},
+            "data_quality": {"state": "verified", "warnings": [], "limitations": []},
+        }
+        return version
+
+    async def compare_with_current(self, version_id: str, *, actor_id: str, actor_role: str):
+        assert actor_role == "viewer"
+        return {
+            "state": "ready",
+            "current_version": _FakeStrategyVersion(strategy_version_id="strategy-version-current", lifecycle_state="published", lifecycle_label="已发布").model_dump(),
+            "candidate_version": _FakeStrategyVersion(strategy_version_id=version_id).model_dump(),
+            "delta": {
+                "rule_count_change": 0,
+                "rule_weight_changes": 1,
+                "annual_return_change": 0.03,
+                "max_drawdown_change": -0.01,
+            },
+        }
+
+    async def diff_versions(self, version_id: str, *, actor_id: str, actor_role: str, base_version_id: str | None = None):
+        assert actor_role == "viewer"
+        assert base_version_id in {None, "strategy-version-current"}
+        return {
+            "state": "ready",
+            "base_version": _FakeStrategyVersion(strategy_version_id="strategy-version-current", lifecycle_state="published", lifecycle_label="已发布").model_dump(),
+            "target_version": _FakeStrategyVersion(strategy_version_id=version_id).model_dump(),
+            "changes": [
+                {"field": "title", "label": "策略名称", "before": "A股趋势轮动策略", "after": "A股趋势轮动策略 v2"},
+                {"field": "rule_pool", "label": "规则池", "before": [{"rule_version_id": RULE_VERSION_ID, "base_weight": 0.65}], "after": [{"rule_version_id": RULE_VERSION_ID, "base_weight": 0.8}]},
+            ],
+        }
+
+    async def rollback_to_version(self, version_id: str, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert request.reason == "回退到上一正式版本"
+        return _FakeStrategyVersion(
+            strategy_version_id=version_id,
+            lifecycle_state="published",
+            lifecycle_label="已发布",
+            current_status={
+                "is_current": True,
+                "current_version_id": version_id,
+                "previous_current_version_id": "strategy-version-2",
+            },
+            published_at="2026-06-20T12:00:00+00:00",
+        ).model_dump()
 
 
 @pytest_asyncio.fixture
@@ -229,3 +322,26 @@ async def test_strategy_routes_cover_list_detail_options_and_lifecycle_actions(c
     assert published.status_code == 200
     assert published.json()["lifecycle_state"] == "published"
     assert published.json()["current_status"]["is_current"] is True
+
+    validated = await client.post("/api/ui/v1/strategies/strategy-version-1/validate", json={"reason": "校验正式策略"})
+    assert validated.status_code == 200
+    assert validated.json()["validation"]["state"] == "passed"
+
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="viewer",
+        api_key_label="viewer",
+        authenticated=True,
+        source="api_key",
+    )
+    comparison = await client.get("/api/ui/v1/strategies/strategy-version-1/comparison")
+    assert comparison.status_code == 200
+    assert comparison.json()["delta"]["rule_weight_changes"] == 1
+
+    diff = await client.get("/api/ui/v1/strategies/strategy-version-1/diff")
+    assert diff.status_code == 200
+    assert diff.json()["changes"][0]["field"] == "title"
+
+    app.dependency_overrides[get_current_principal] = _operator_override
+    rolled_back = await client.post("/api/ui/v1/strategies/strategy-version-1/rollback", json={"reason": "回退到上一正式版本"})
+    assert rolled_back.status_code == 200
+    assert rolled_back.json()["current_status"]["is_current"] is True

@@ -7,17 +7,25 @@ import { StrategyOverviewPage } from './StrategyOverviewPage';
 vi.mock('@/lib/api/strategies', () => ({
   listStrategies: vi.fn(),
   getStrategyDraftOptions: vi.fn(),
+  compareStrategyVersion: vi.fn(),
   createStrategyDraft: vi.fn(),
+  diffStrategyVersion: vi.fn(),
   submitStrategyReview: vi.fn(),
   publishStrategy: vi.fn(),
+  rollbackStrategyVersion: vi.fn(),
+  validateStrategyVersion: vi.fn(),
 }));
 
 import {
+  compareStrategyVersion,
   createStrategyDraft,
+  diffStrategyVersion,
   getStrategyDraftOptions,
   listStrategies,
   publishStrategy,
+  rollbackStrategyVersion,
   submitStrategyReview,
+  validateStrategyVersion,
 } from '@/lib/api/strategies';
 
 const ruleVersionId = '11111111-1111-1111-1111-111111111111';
@@ -73,6 +81,30 @@ describe('strategies page', () => {
           },
           current_status: { is_current: true, current_version_id: 'version-2', previous_current_version_id: 'version-1' },
           published_at: '2026-06-20T12:00:00+00:00',
+          validation: {
+            state: 'passed',
+            label: '验证通过',
+            reviewer_decision: 'approved',
+            reviewer_decision_label: '已批准',
+            checked_at: '2026-06-20T12:00:00+00:00',
+            reason: '正式策略校验完成',
+            dataset_binding: { state: 'ready', dataset_snapshot_id: datasetSnapshotId, market_state_definition_version: 'market-state-v2' },
+            market_snapshot_binding: { state: 'ready', market_snapshot_ids: [marketSnapshotId] },
+            backtest: {
+              state: 'ready',
+              out_of_sample_state: 'available',
+              backtest_run_ids: ['backtest-run-1'],
+              backtest_result_ids: ['backtest-result-1'],
+              requested_level: 'L2',
+              effective_level: 'L2',
+              annual_return: 0.18,
+              max_drawdown: 0.09,
+              win_rate: 0.56,
+            },
+            rule_applicability: { state: 'ready', covered_rule_count: 1, total_rule_count: 1, coverage_ratio: 1 },
+            sample_coverage: { state: 'sufficient', sample_count: 48, insufficient_sample: false },
+            data_quality: { state: 'verified', warnings: [], limitations: [] },
+          },
           partial_reasons: [],
           limitations: [],
         },
@@ -147,6 +179,28 @@ describe('strategies page', () => {
         evidence_fingerprint: 'fp-evidence-1',
       },
       current_status: { is_current: false, current_version_id: null, previous_current_version_id: null },
+      validation: {
+        state: 'not_run',
+        label: '尚未验证',
+        reviewer_decision: 'review_required',
+        reviewer_decision_label: '待复核',
+        dataset_binding: { state: 'ready', dataset_snapshot_id: datasetSnapshotId, market_state_definition_version: 'market-state-v2' },
+        market_snapshot_binding: { state: 'ready', market_snapshot_ids: [marketSnapshotId] },
+        backtest: {
+          state: 'unavailable',
+          out_of_sample_state: 'unavailable',
+          backtest_run_ids: [],
+          backtest_result_ids: [],
+          requested_level: null,
+          effective_level: null,
+          annual_return: null,
+          max_drawdown: null,
+          win_rate: null,
+        },
+        rule_applicability: { state: 'ready', covered_rule_count: 1, total_rule_count: 1, coverage_ratio: 1 },
+        sample_coverage: { state: 'unknown', sample_count: null, insufficient_sample: false },
+        data_quality: { state: 'verified', warnings: [], limitations: [] },
+      },
       partial_reasons: [],
       limitations: [],
     });
@@ -157,6 +211,141 @@ describe('strategies page', () => {
     vi.mocked(publishStrategy).mockResolvedValueOnce({
       strategy_version_id: 'version-1',
       lifecycle_state: 'published',
+    });
+    vi.mocked(validateStrategyVersion).mockResolvedValueOnce({
+      strategy_version_id: 'version-1',
+      strategy_id: 'strategy-1',
+      business_key: 'cn-swing-core',
+      title: 'A股趋势轮动策略',
+      summary: '正式策略草稿',
+      version_no: 1,
+      lifecycle_state: 'draft',
+      lifecycle_label: '草稿',
+      review_status: 'draft',
+      status_state: 'draft',
+      schema_version: 'strategy-schema-v1',
+      quality_status: 'verified',
+      rule_pool: [{ rule_version_id: ruleVersionId, title: '放量突破', base_weight: 0.65, status: 'active', configuration_json: {} }],
+      profiles: {
+        author_method_profile_version_id: methodProfileId,
+        author_rule_profile_version_id: ruleProfileId,
+        author_validated_profile_version_id: validatedProfileId,
+      },
+      policies: {
+        risk_policy_json: { position_constraints: { single_position_pct: 0.2 } },
+        selection_policy_json: { degradation_policy: { missing_canonical_data: 'unavailable' } },
+        universe_json: { market: 'CN' },
+      },
+      evidence: {
+        dataset_snapshot_id: datasetSnapshotId,
+        market_snapshot_ids: [marketSnapshotId],
+        rule_applicability_profile_ids: [applicabilityProfileId],
+        backtest_run_ids: ['backtest-run-1'],
+        backtest_result_ids: ['backtest-result-1'],
+        evidence_fingerprint: 'fp-evidence-1',
+      },
+      current_status: { is_current: false, current_version_id: null, previous_current_version_id: null },
+      validation: {
+        state: 'passed',
+        label: '验证通过',
+        reviewer_decision: 'approved',
+        reviewer_decision_label: '已批准',
+        checked_at: '2026-06-20T12:00:00+00:00',
+        reason: '正式策略校验完成',
+        dataset_binding: { state: 'ready', dataset_snapshot_id: datasetSnapshotId, market_state_definition_version: 'market-state-v2' },
+        market_snapshot_binding: { state: 'ready', market_snapshot_ids: [marketSnapshotId] },
+        backtest: {
+          state: 'ready',
+          out_of_sample_state: 'available',
+          backtest_run_ids: ['backtest-run-1'],
+          backtest_result_ids: ['backtest-result-1'],
+          requested_level: 'L2',
+          effective_level: 'L2',
+          annual_return: 0.18,
+          max_drawdown: 0.09,
+          win_rate: 0.56,
+        },
+        rule_applicability: { state: 'ready', covered_rule_count: 1, total_rule_count: 1, coverage_ratio: 1 },
+        sample_coverage: { state: 'sufficient', sample_count: 48, insufficient_sample: false },
+        data_quality: { state: 'verified', warnings: [], limitations: [] },
+      },
+      partial_reasons: [],
+      limitations: [],
+    });
+    vi.mocked(compareStrategyVersion).mockResolvedValueOnce({
+      state: 'ready',
+      current_version: { strategy_version_id: 'version-0', title: '当前正式策略' },
+      candidate_version: { strategy_version_id: 'version-1', title: 'A股趋势轮动策略' },
+      delta: {
+        rule_count_change: 0,
+        rule_weight_changes: 1,
+        annual_return_change: 0.03,
+        max_drawdown_change: -0.01,
+      },
+    } as never);
+    vi.mocked(diffStrategyVersion).mockResolvedValueOnce({
+      state: 'ready',
+      base_version: { strategy_version_id: 'version-0', title: '当前正式策略' },
+      target_version: { strategy_version_id: 'version-1', title: 'A股趋势轮动策略' },
+      changes: [{ field: 'title', label: '策略名称', before: '当前正式策略', after: 'A股趋势轮动策略' }],
+    } as never);
+    vi.mocked(rollbackStrategyVersion).mockResolvedValueOnce({
+      strategy_version_id: 'version-0',
+      strategy_id: 'strategy-1',
+      business_key: 'cn-swing-core',
+      title: '当前正式策略',
+      summary: '回退后的正式策略',
+      version_no: 1,
+      lifecycle_state: 'published',
+      lifecycle_label: '已发布',
+      review_status: 'published',
+      status_state: 'published',
+      schema_version: 'strategy-schema-v1',
+      quality_status: 'verified',
+      rule_pool: [{ rule_version_id: ruleVersionId, title: '放量突破', base_weight: 0.65, status: 'active', configuration_json: {} }],
+      profiles: {
+        author_method_profile_version_id: methodProfileId,
+        author_rule_profile_version_id: ruleProfileId,
+        author_validated_profile_version_id: validatedProfileId,
+      },
+      policies: {
+        risk_policy_json: { position_constraints: { single_position_pct: 0.2 } },
+        selection_policy_json: { degradation_policy: { missing_canonical_data: 'unavailable' } },
+        universe_json: { market: 'CN' },
+      },
+      evidence: {
+        dataset_snapshot_id: datasetSnapshotId,
+        market_snapshot_ids: [marketSnapshotId],
+        rule_applicability_profile_ids: [applicabilityProfileId],
+        backtest_run_ids: ['backtest-run-1'],
+        backtest_result_ids: ['backtest-result-1'],
+        evidence_fingerprint: 'fp-evidence-0',
+      },
+      current_status: { is_current: true, current_version_id: 'version-0', previous_current_version_id: 'version-1' },
+      validation: {
+        state: 'passed',
+        label: '验证通过',
+        reviewer_decision: 'approved',
+        reviewer_decision_label: '已批准',
+        dataset_binding: { state: 'ready', dataset_snapshot_id: datasetSnapshotId, market_state_definition_version: 'market-state-v2' },
+        market_snapshot_binding: { state: 'ready', market_snapshot_ids: [marketSnapshotId] },
+        backtest: {
+          state: 'ready',
+          out_of_sample_state: 'available',
+          backtest_run_ids: ['backtest-run-1'],
+          backtest_result_ids: ['backtest-result-1'],
+          requested_level: 'L2',
+          effective_level: 'L2',
+          annual_return: 0.18,
+          max_drawdown: 0.09,
+          win_rate: 0.56,
+        },
+        rule_applicability: { state: 'ready', covered_rule_count: 1, total_rule_count: 1, coverage_ratio: 1 },
+        sample_coverage: { state: 'sufficient', sample_count: 48, insufficient_sample: false },
+        data_quality: { state: 'verified', warnings: [], limitations: [] },
+      },
+      partial_reasons: [],
+      limitations: [],
     });
 
     renderWithRouter([{ path: '/strategies', element: <StrategyOverviewPage /> }], ['/strategies']);
@@ -190,7 +379,18 @@ describe('strategies page', () => {
     fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
     await waitFor(() => expect(submitStrategyReview).toHaveBeenCalledWith('version-1', { reason: '提交策略审核' }));
 
+    fireEvent.click(screen.getByRole('button', { name: '验证当前版本' }));
+    await waitFor(() => expect(validateStrategyVersion).toHaveBeenCalledWith('version-1', { reason: '校验正式策略' }));
+    expect((await screen.findAllByText('验证通过')).length).toBeGreaterThan(0);
+    expect(screen.getByText('当前策略对比')).toBeInTheDocument();
+    expect(screen.getByText('年化收益变化')).toBeInTheDocument();
+    expect(screen.getByText('版本差异')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: '发布为当前策略' }));
     await waitFor(() => expect(publishStrategy).toHaveBeenCalledWith('version-1', { reason: '发布正式策略' }));
+
+    fireEvent.change(screen.getByLabelText('回退原因'), { target: { value: '回退到上一正式版本' } });
+    fireEvent.click(screen.getByRole('button', { name: '确认回退到该版本' }));
+    await waitFor(() => expect(rollbackStrategyVersion).toHaveBeenCalledWith('version-0', { reason: '回退到上一正式版本' }));
   });
 });

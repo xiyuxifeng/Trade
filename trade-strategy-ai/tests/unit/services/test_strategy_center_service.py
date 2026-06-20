@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import select
 
 from src.domain.enums import AuthorProfileKind, FormalLifecycleState, QualityStatus
 from src.models.market_data_snapshot import MarketSnapshot
@@ -17,6 +18,8 @@ from src.models.rule_applicability import RuleApplicabilityProfile
 from src.models.stage2_canonical import (
     AuthorProfileVersion,
     Authors,
+    BacktestResult,
+    BacktestRun,
     DatasetLifecycleState,
     DatasetSnapshot,
     Rule,
@@ -47,6 +50,8 @@ async def _build_session_factory(tmp_path: Path):
         await conn.run_sync(StrategyVersion.__table__.create)
         await conn.run_sync(StrategyRuleMembership.__table__.create)
         await conn.run_sync(StrategyVersionAudit.__table__.create)
+        await conn.run_sync(BacktestRun.__table__.create)
+        await conn.run_sync(BacktestResult.__table__.create)
         await conn.run_sync(RuleApplicabilityProfile.__table__.create)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -73,6 +78,8 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
     dataset_snapshot_id = uuid4()
     market_snapshot_id = uuid4()
     applicability_profile_id = uuid4()
+    backtest_run_id = uuid4()
+    backtest_result_id = uuid4()
     now = datetime.now(UTC)
 
     async with session_factory() as session:
@@ -225,6 +232,71 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
                 created_by="seed",
             )
         )
+        session.add(
+            BacktestRun(
+                run_id=backtest_run_id,
+                rule_version_id=rule_version_id,
+                rule_version_fingerprint="rule-fingerprint-1",
+                rule_version_no=1,
+                frozen_rule_version_ids=[str(rule_version_id)],
+                frozen_rule_version_fingerprints=["rule-fingerprint-1"],
+                date_from=date(2026, 1, 1),
+                date_to=date(2026, 6, 19),
+                universe_json={"market": "CN"},
+                benchmark_symbol="000300.SH",
+                mode="backtest",
+                requested_level="L2",
+                effective_level="L2",
+                dataset_snapshot_id=dataset_snapshot_id,
+                dataset_fingerprint="dataset-fingerprint-1",
+                market_snapshot_ids=[str(market_snapshot_id)],
+                market_snapshot_fingerprints=["market-fingerprint-1"],
+                market_state_model_version="market-state-v2",
+                indicator_version="indicators-v1",
+                engine_version="engine-v1",
+                execution_policy_version="execution-v1",
+                decision_time_policy="next_open",
+                request_fingerprint="request-fingerprint-1",
+                reproducibility_fingerprint="reproducibility-fingerprint-1",
+                snapshot_only=True,
+                status="completed_valid",
+                coverage_state="ready",
+                quality_state="verified",
+                repair_guidance=[],
+                unavailable_reasons=[],
+                limitations=[],
+                progress_json={"step": "completed"},
+                audit_json={"out_of_sample_state": "available"},
+                actor_id="seed",
+                actor_role="system",
+                source_surface="/tests",
+            )
+        )
+        session.add(
+            BacktestResult(
+                result_id=backtest_result_id,
+                run_id=backtest_run_id,
+                input_fingerprint="input-fingerprint-1",
+                result_fingerprint="result-fingerprint-1",
+                reproducibility_fingerprint="result-reproducibility-1",
+                status="completed_valid",
+                requested_level="L2",
+                effective_level="L2",
+                market_state_model_version="market-state-v2",
+                market_state_source_version="market-state-source-v2",
+                market_state_result_version="market-state-result-v2",
+                decision_time_policy="next_open",
+                overall_metrics={"annual_return": 0.18, "max_drawdown": 0.09, "win_rate": 0.56},
+                per_market_state_metrics=[{"market_state": "强势上行", "annual_return": 0.24}],
+                per_rule_metrics=[{"rule_version_id": str(rule_version_id), "annual_return": 0.18}],
+                sample_state_counts={"total": 48, "insufficient_sample": 0},
+                coverage_json={"out_of_sample_state": "available", "sample_count": 48},
+                warnings=[],
+                limitations=[],
+                provenance_json={"dataset_snapshot_id": str(dataset_snapshot_id)},
+                audit_json={"quality_state": "verified"},
+            )
+        )
         await session.commit()
 
     return {
@@ -236,6 +308,8 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
         "dataset_snapshot_id": dataset_snapshot_id,
         "market_snapshot_id": market_snapshot_id,
         "applicability_profile_id": applicability_profile_id,
+        "backtest_run_id": backtest_run_id,
+        "backtest_result_id": backtest_result_id,
     }
 
 
@@ -272,8 +346,8 @@ def _draft_request(deps: dict[str, UUID], *, business_key: str = "cn-swing-core"
             "dataset_snapshot_id": str(deps["dataset_snapshot_id"]),
             "market_snapshot_ids": [str(deps["market_snapshot_id"])],
             "rule_applicability_profile_ids": [str(deps["applicability_profile_id"])],
-            "backtest_run_ids": ["backtest-run-1"],
-            "backtest_result_ids": ["backtest-result-1"],
+            "backtest_run_ids": [str(deps["backtest_run_id"])],
+            "backtest_result_ids": [str(deps["backtest_result_id"])],
         },
         reason="由正式规则和画像生成策略草稿",
     )
@@ -363,5 +437,122 @@ async def test_strategy_center_exposes_only_canonical_draft_inputs(tmp_path: Pat
     assert options["market_snapshot_options"][0]["market_snapshot_id"] == str(deps["market_snapshot_id"])
     assert options["rule_applicability_options"][0]["applicability_profile_id"] == str(deps["applicability_profile_id"])
     assert "trader_strategy_version_id" not in str(options)
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_center_validates_compares_diffs_and_rolls_back_with_audit(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import (
+        StrategyCenterService,
+        StrategyRollbackRequest,
+        StrategyRuleMembershipInput,
+        StrategyTransitionRequest,
+        StrategyValidationRequest,
+    )
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    service = StrategyCenterService(session_scope_factory=session_scope)
+
+    first = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
+    first = await service.submit_for_review(first.strategy_version_id, StrategyTransitionRequest(reason="提交审核"), actor_id="operator-a", actor_role="operator")
+    first = await service.publish(first.strategy_version_id, StrategyTransitionRequest(reason="首次发布"), actor_id="reviewer-a", actor_role="operator")
+
+    revision_request = _draft_request(deps, strategy_id=UUID(first.strategy_id))
+    revision_request.title = "A股趋势轮动策略 v2"
+    revision_request.summary = "加入趋势确认规则后的修订版本。"
+    revision_request.rule_memberships = [
+        StrategyRuleMembershipInput(
+            rule_version_id=deps["rule_version_id"],
+            base_weight=0.8,
+            status="active",
+            configuration_json={"position_role": "core", "confirm_trend": True},
+        )
+    ]
+    revision = await service.create_draft(revision_request, actor_id="operator-a", actor_role="operator")
+
+    validated = await service.validate_version(
+        revision.strategy_version_id,
+        StrategyValidationRequest(reason="校验候选策略"),
+        actor_id="reviewer-b",
+        actor_role="operator",
+    )
+    assert validated.validation.state == "passed"
+    assert validated.validation.backtest.out_of_sample_state == "available"
+    assert validated.validation.rule_applicability.coverage_ratio == 1.0
+    assert validated.validation.sample_coverage.state == "sufficient"
+    assert validated.validation.reviewer_decision == "approved"
+
+    comparison = await service.compare_with_current(revision.strategy_version_id, actor_id="viewer-a", actor_role="viewer")
+    assert comparison["state"] == "ready"
+    assert comparison["current_version"]["strategy_version_id"] == first.strategy_version_id
+    assert comparison["candidate_version"]["strategy_version_id"] == revision.strategy_version_id
+    assert comparison["delta"]["rule_weight_changes"] == 1
+
+    diff = await service.diff_versions(revision.strategy_version_id, actor_id="viewer-a", actor_role="viewer")
+    assert diff["base_version"]["strategy_version_id"] == first.strategy_version_id
+    assert any(change["field"] == "title" for change in diff["changes"])
+    assert any(change["field"] == "rule_pool" for change in diff["changes"])
+
+    revision = await service.submit_for_review(revision.strategy_version_id, StrategyTransitionRequest(reason="提交修订审核"), actor_id="operator-a", actor_role="operator")
+    revision = await service.publish(revision.strategy_version_id, StrategyTransitionRequest(reason="发布修订版本"), actor_id="reviewer-b", actor_role="operator")
+    assert revision.current_status.is_current is True
+
+    rolled_back = await service.rollback_to_version(
+        first.strategy_version_id,
+        StrategyRollbackRequest(reason="新版本样本覆盖不足，回退到上一正式版本"),
+        actor_id="reviewer-c",
+        actor_role="operator",
+    )
+    assert rolled_back.strategy_version_id == first.strategy_version_id
+    assert rolled_back.current_status.is_current is True
+    assert rolled_back.current_status.previous_current_version_id == revision.strategy_version_id
+
+    revision_after = await service.get_version(revision.strategy_version_id, actor_id="viewer-a", actor_role="viewer")
+    assert revision_after.current_status.is_current is False
+
+    async with session_factory() as session:
+        versions = list((await session.execute(select(StrategyVersion))).scalars().all())
+        assert len(versions) == 2
+        audits = list((await session.execute(select(StrategyVersionAudit).order_by(StrategyVersionAudit.created_at.asc()))).scalars().all())
+        assert any(audit.transition == "validated" for audit in audits)
+        rollback_audit = next(audit for audit in audits if audit.transition == "rollback_to_current")
+        assert rollback_audit.reason == "新版本样本覆盖不足，回退到上一正式版本"
+        assert rollback_audit.before_state_json["current_version_id"] == revision.strategy_version_id
+        assert rollback_audit.after_state_json["current_version_id"] == first.strategy_version_id
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_center_validation_marks_missing_canonical_coverage_as_insufficient(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import StrategyCenterService, StrategyValidationRequest
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    service = StrategyCenterService(session_scope_factory=session_scope)
+
+    request = _draft_request(deps)
+    request.evidence_json = {
+        "dataset_snapshot_id": str(deps["dataset_snapshot_id"]),
+        "market_snapshot_ids": [],
+        "rule_applicability_profile_ids": [],
+        "backtest_run_ids": [str(deps["backtest_run_id"])],
+        "backtest_result_ids": [str(deps["backtest_result_id"])],
+    }
+    draft = await service.create_draft(request, actor_id="operator-a", actor_role="operator")
+
+    validated = await service.validate_version(
+        draft.strategy_version_id,
+        StrategyValidationRequest(reason="缺少正式适用性覆盖"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+
+    assert validated.validation.state == "insufficient_coverage"
+    assert validated.validation.reviewer_decision == "review_required"
+    assert validated.validation.rule_applicability.coverage_ratio == 0.0
+    assert validated.validation.sample_coverage.state == "sufficient"
 
     await engine.dispose()

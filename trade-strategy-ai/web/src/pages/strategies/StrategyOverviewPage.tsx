@@ -4,13 +4,17 @@ import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { ApiError } from '@/lib/api/http';
 import {
+  compareStrategyVersion,
   createStrategyDraft,
+  diffStrategyVersion,
   getStrategyDraftOptions,
   listStrategies,
   publishStrategy,
+  rollbackStrategyVersion,
   submitStrategyReview,
+  validateStrategyVersion,
 } from '@/lib/api/strategies';
-import type { StrategyVersion } from '@/types/strategies';
+import type { StrategyComparisonResponse, StrategyDiffResponse, StrategyVersion } from '@/types/strategies';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 type FormalPageProps = {
@@ -31,6 +35,9 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [localVersion, setLocalVersion] = useState<StrategyVersion | null>(null);
+  const [comparison, setComparison] = useState<StrategyComparisonResponse | null>(null);
+  const [diff, setDiff] = useState<StrategyDiffResponse | null>(null);
+  const [rollbackReason, setRollbackReason] = useState('');
   const [riskPolicyText, setRiskPolicyText] = useState(
     JSON.stringify({ position_constraints: { single_position_pct: 0.2, total_position_pct: 0.8 } }, null, 2),
   );
@@ -95,6 +102,29 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     },
     onError: (error) => setStatusMessage(resolveErrorMessage(error)),
   });
+  const validate = useMutation({
+    mutationFn: (versionId: string) => validateStrategyVersion(versionId, { reason: '校验正式策略' }),
+    onSuccess: async (data) => {
+      setLocalVersion(data);
+      setStatusMessage(data.validation.label);
+      const [comparisonData, diffData] = await Promise.all([
+        compareStrategyVersion(data.strategy_version_id),
+        diffStrategyVersion(data.strategy_version_id),
+      ]);
+      setComparison(comparisonData);
+      setDiff(diffData);
+    },
+    onError: (error) => setStatusMessage(resolveErrorMessage(error)),
+  });
+  const rollback = useMutation({
+    mutationFn: (params: { versionId: string; reason: string }) => rollbackStrategyVersion(params.versionId, { reason: params.reason }),
+    onSuccess: (data) => {
+      setLocalVersion(data);
+      setSelectedVersionId(data.strategy_version_id);
+      setStatusMessage('已回退到所选正式版本');
+    },
+    onError: (error) => setStatusMessage(resolveErrorMessage(error)),
+  });
 
   const permissionDenied =
     (strategiesQuery.error instanceof ApiError && [401, 403].includes(strategiesQuery.error.status)) ||
@@ -137,6 +167,10 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     versions.find((item) => item.current_status.is_current) ??
     versions[0] ??
     null;
+  const rollbackTargetVersionId =
+    comparison?.current_version?.strategy_version_id && comparison.current_version.strategy_version_id !== activeVersion?.strategy_version_id
+      ? comparison.current_version.strategy_version_id
+      : null;
 
   const handleSaveDraft = () => {
     try {
@@ -214,6 +248,27 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
                     <InfoRow label="数据集快照" value={activeVersion.evidence.dataset_snapshot_id ?? '未绑定'} />
                     <InfoRow label="市场快照" value={activeVersion.evidence.market_snapshot_ids.join('、') || '未绑定'} />
                   </div>
+                  {versions.length > 1 ? (
+                    <div className="grid gap-2">
+                      <p className="m-0 text-xs font-medium text-slate-500">选择要查看的版本</p>
+                      <div className="flex flex-wrap gap-2">
+                        {versions.map((version) => (
+                          <button
+                            key={version.strategy_version_id}
+                            type="button"
+                            className={`rounded-full px-3 py-1 text-xs font-medium ${
+                              version.strategy_version_id === activeVersion.strategy_version_id
+                                ? 'bg-slate-900 text-white'
+                                : 'border border-slate-200 bg-white text-slate-700'
+                            }`}
+                            onClick={() => setSelectedVersionId(version.strategy_version_id)}
+                          >
+                            v{version.version_no} {version.lifecycle_label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </article>
               ) : (
                 <p className="m-0 text-sm text-slate-600">当前还没有正式策略版本。</p>
@@ -252,12 +307,79 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
                 <button
                   type="button"
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                  onClick={() => activeVersion && validate.mutate(activeVersion.strategy_version_id)}
+                  disabled={!activeVersion}
+                >
+                  验证当前版本
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
                   onClick={() => activeVersion && publish.mutate(activeVersion.strategy_version_id)}
                   disabled={!activeVersion}
                 >
                   发布为当前策略
                 </button>
               </div>
+              {activeVersion ? (
+                <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <h3 className="m-0 text-sm font-semibold text-slate-950">验证结果</h3>
+                  <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                    <InfoRow label="验证状态" value={activeVersion.validation.label} />
+                    <InfoRow label="复核结论" value={activeVersion.validation.reviewer_decision_label} />
+                    <InfoRow label="数据集快照" value={activeVersion.validation.dataset_binding.dataset_snapshot_id ?? '未绑定'} />
+                    <InfoRow label="样本覆盖" value={activeVersion.validation.sample_coverage.state} />
+                    <InfoRow label="样本数量" value={activeVersion.validation.sample_coverage.sample_count?.toString() ?? '未知'} />
+                    <InfoRow label="样本外验证" value={activeVersion.validation.backtest.out_of_sample_state} />
+                    <InfoRow label="规则覆盖率" value={`${Math.round(activeVersion.validation.rule_applicability.coverage_ratio * 100)}%`} />
+                    <InfoRow label="数据质量" value={activeVersion.validation.data_quality.state} />
+                  </div>
+                </div>
+              ) : null}
+              {comparison ? (
+                <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <h3 className="m-0 text-sm font-semibold text-slate-950">当前策略对比</h3>
+                  <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                    <InfoRow label="当前正式版本" value={comparison.current_version?.title?.toString() ?? '暂无'} />
+                    <InfoRow label="候选版本" value={comparison.candidate_version?.title?.toString() ?? '暂无'} />
+                    <InfoRow label="规则权重变化" value={comparison.delta.rule_weight_changes.toString()} />
+                    <InfoRow label="年化收益变化" value={formatPercentDelta(comparison.delta.annual_return_change)} />
+                    <InfoRow label="最大回撤变化" value={formatPercentDelta(comparison.delta.max_drawdown_change)} />
+                  </div>
+                </div>
+              ) : null}
+              {diff ? (
+                <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <h3 className="m-0 text-sm font-semibold text-slate-950">版本差异</h3>
+                  {diff.changes.length ? (
+                    <ul className="m-0 grid gap-2 pl-5 text-sm text-slate-700">
+                      {diff.changes.map((item) => (
+                        <li key={item.field}>
+                          {item.label}：{summarizeDiffValue(item.before)} {'->'} {summarizeDiffValue(item.after)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="m-0 text-sm text-slate-600">当前版本与对比基线没有发现结构差异。</p>
+                  )}
+                </div>
+              ) : null}
+              {rollbackTargetVersionId ? (
+                <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <h3 className="m-0 text-sm font-semibold text-amber-950">回退当前策略</h3>
+                  <LabeledInput label="回退原因" value={rollbackReason} onChange={setRollbackReason} />
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900"
+                      onClick={() => rollback.mutate({ versionId: rollbackTargetVersionId, reason: rollbackReason })}
+                      disabled={!rollbackReason.trim()}
+                    >
+                      确认回退到该版本
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {statusMessage ? <p className="m-0 text-sm text-slate-700">{statusMessage}</p> : null}
             </section>
           </div>
@@ -291,6 +413,26 @@ function resolveErrorMessage(error: unknown) {
     return error.message;
   }
   return '策略中心操作失败，请稍后重试。';
+}
+
+function formatPercentDelta(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return '暂无';
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function summarizeDiffValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return '未设置';
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `${value.length} 项`;
+  }
+  return '已变更';
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

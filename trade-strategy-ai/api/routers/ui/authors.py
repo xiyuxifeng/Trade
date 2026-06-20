@@ -23,6 +23,10 @@ from src.services.author_rule_profile_service import (
     AuthorRuleProfileGenerationRequest,
     AuthorRuleProfileService,
 )
+from src.services.author_validated_profile_service import (
+    AuthorValidatedProfileGenerationRequest,
+    AuthorValidatedProfileService,
+)
 
 
 router = APIRouter(prefix="/api/ui/v1/authors", tags=["ui-authors"])
@@ -74,6 +78,22 @@ def get_author_rule_profile_service() -> AuthorRuleProfileService:
                 raise
 
     return AuthorRuleProfileService(session_scope_factory=_session_scope)
+
+
+def get_author_validated_profile_service() -> AuthorValidatedProfileService:
+    session_factory = async_session_factory()
+
+    @asynccontextmanager
+    async def _session_scope():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    return AuthorValidatedProfileService(session_scope_factory=_session_scope)
 
 
 def _actor_id(principal: CurrentPrincipal) -> str:
@@ -180,6 +200,23 @@ async def create_author_rule_profile_draft(
         raise _error(status.HTTP_404_NOT_FOUND, "未找到作者或规则证据", "系统无法定位本次生成所需的正式输入。", "返回上一步重新选择作者或规则版本。") from exc
     except ValueError as exc:
         raise _error(status.HTTP_409_CONFLICT, str(exc), "草稿未创建，已发布画像不会被自动改写。", "修正规则版本、规则族或时间段后重试。") from exc
+
+
+@router.post("/validated-profiles/drafts", status_code=status.HTTP_201_CREATED)
+async def create_author_validated_profile_draft(
+    request: AuthorValidatedProfileGenerationRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: AuthorValidatedProfileService = Depends(get_author_validated_profile_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.generate_draft(request, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "不会创建作者验证画像草稿。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到作者或正式验证证据", "系统无法定位本次生成所需的正式输入。", "返回上一步重新选择作者或正式验证结果。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "草稿未创建，已发布画像不会被自动改写。", "修正正式适用性画像、回测证据或时间段后重试。") from exc
 
 
 @router.post("/profiles/{version_id}/submit-review")

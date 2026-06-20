@@ -156,6 +156,38 @@ class _FakeAuthorRuleProfileService:
         )
 
 
+class _FakeAuthorValidatedProfileService:
+    async def generate_draft(self, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert request.applicability_profile_ids
+        return _FakeVersion(
+            profile_kind="validated",
+            profile_kind_label="作者验证画像",
+            payload={
+                "validated_profile": {
+                    "strong_rule_types": [{"rule_type": "entry", "count": 1}],
+                    "weak_rule_types": [{"rule_type": "exit", "count": 1}],
+                    "strong_market_states": [{"market_state": "强势上行", "count": 1}],
+                    "weak_market_states": [{"market_state": "情绪退潮", "count": 1}],
+                    "common_failure_modes": [{"reason": "情绪退潮时回撤扩大", "count": 1}],
+                    "data_coverage": {"total_applicability_profiles": 1, "kaipan_limitation_profiles": 1},
+                    "sample_count": {"total": 6, "insufficient_sample_profiles": 0},
+                    "confidence": {"overall": 0.63},
+                },
+                "conclusions": [
+                    {
+                        "text": "强势上行市场状态下的验证观察更稳定",
+                        "evidence": [{"lane": "backtest_validation", "rule_applicability_profile_id": "profile-1"}],
+                        "confidence": 0.63,
+                        "provenance": {"lane": "backtest_validation"},
+                        "version_binding": {"schema_version": "author-profile-v1"},
+                    }
+                ],
+                "limitations": ["缺失 Kaipan 数据只会记为覆盖限制。"],
+            },
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
@@ -278,3 +310,30 @@ async def test_generate_author_rule_profile_draft_route(client: AsyncClient) -> 
     body = response.json()
     assert body["profile_kind"] == "rule"
     assert body["payload"]["rule_profile"]["rule_type_distribution"][0]["rule_type"] == "entry"
+
+
+async def test_generate_author_validated_profile_draft_route(client: AsyncClient) -> None:
+    from api.routers.ui.authors import get_author_validated_profile_service
+
+    app.dependency_overrides[get_current_principal] = _operator_override
+    app.dependency_overrides[get_author_validated_profile_service] = lambda: _FakeAuthorValidatedProfileService()
+
+    response = await client.post(
+        "/api/ui/v1/authors/validated-profiles/drafts",
+        json={
+            "author_id": "00000000-0000-0000-0000-000000000001",
+            "applicability_profile_ids": [
+                "00000000-0000-0000-0000-000000000401",
+                "00000000-0000-0000-0000-000000000402",
+            ],
+            "evidence_from": "2026-01-01",
+            "evidence_to": "2026-03-31",
+            "effective_from": "2026-04-01",
+            "reason": "生成作者验证画像草稿",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["profile_kind"] == "validated"
+    assert body["payload"]["validated_profile"]["strong_market_states"][0]["market_state"] == "强势上行"

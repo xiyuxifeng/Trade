@@ -248,4 +248,67 @@ describe('authors page', () => {
     expect(screen.getByText('发现 1 组冲突规则')).toBeInTheDocument();
     expect(screen.queryByText('rule pool')).not.toBeInTheDocument();
   });
+
+  it('shows validated-profile details from formal backtest and适用性证据', async () => {
+    vi.mocked(listAuthorProfiles).mockResolvedValueOnce({
+      state: 'partial',
+      count: 1,
+      items: [
+        {
+          author_profile_version_id: 'apv-validated-1',
+          author_profile_id: 'ap-validated-1',
+          author_id: 'author-1',
+          profile_kind: 'validated',
+          profile_kind_label: '作者验证画像',
+          version_no: 1,
+          lifecycle_state: 'draft',
+          lifecycle_label: '草稿',
+          review_status: 'draft',
+          status_state: 'partial',
+          schema_version: 'author-profile-v1',
+          evidence_period: { from: '2026-01-01', to: '2026-03-31' },
+          effective_period: { from: '2026-04-01', to: null },
+          source_versions: {},
+          evidence_fingerprint: 'validated-e1',
+          profile_fingerprint: 'validated-p1',
+          quality_status: 'partial',
+          partial_reasons: ['样本不足时只能作为部分验证证据查看。'],
+          limitations: ['缺失 Kaipan 数据只会记为覆盖限制，不会被当成规则失败。'],
+          payload: {
+            validated_profile: {
+              strong_rule_types: [{ rule_type: 'entry', count: 2 }],
+              weak_rule_types: [{ rule_type: 'exit', count: 1 }],
+              strong_market_states: [{ market_state: '强势上行', count: 2 }],
+              weak_market_states: [{ market_state: '情绪退潮', count: 1 }],
+              common_failure_modes: [{ reason: '情绪退潮时回撤扩大', count: 1 }],
+              data_coverage: { total_applicability_profiles: 2, kaipan_limitation_profiles: 1 },
+              sample_count: { total: 21, insufficient_sample_profiles: 1 },
+              confidence: { overall: 0.58 },
+            },
+            conclusions: [],
+          },
+          evidence: {},
+          source_bindings: {},
+          supersession: {},
+        },
+      ],
+    });
+
+    renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
+
+    expect(await screen.findByText('优势规则类型')).toBeInTheDocument();
+    expect(screen.getByText('entry：2 条')).toBeInTheDocument();
+    expect(screen.getByText('弱势规则类型')).toBeInTheDocument();
+    expect(screen.getByText('exit：1 条')).toBeInTheDocument();
+    expect(screen.getByText('优势市场状态')).toBeInTheDocument();
+    expect(screen.getByText('强势上行：2 次')).toBeInTheDocument();
+    expect(screen.getByText('弱势市场状态')).toBeInTheDocument();
+    expect(screen.getByText('情绪退潮：1 次')).toBeInTheDocument();
+    expect(screen.getByText('常见失效模式')).toBeInTheDocument();
+    expect(screen.getByText('情绪退潮时回撤扩大（1 次）')).toBeInTheDocument();
+    expect(screen.getByText('样本量')).toBeInTheDocument();
+    expect(screen.getByText(/21（样本不足画像 1 条）/)).toBeInTheDocument();
+    expect(screen.getByText('缺失 Kaipan 数据只会记为覆盖限制，不会被当成规则失败。')).toBeInTheDocument();
+    expect(screen.queryByText('Regime')).not.toBeInTheDocument();
+  });
 });

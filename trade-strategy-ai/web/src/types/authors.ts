@@ -66,3 +66,13 @@ export type AuthorRuleProfileDraftRequest = {
   effective_to?: string | null;
   reason?: string | null;
 };
+
+export type AuthorValidatedProfileDraftRequest = {
+  author_id: string;
+  applicability_profile_ids: string[];
+  evidence_from?: string | null;
+  evidence_to?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  reason?: string | null;
+};

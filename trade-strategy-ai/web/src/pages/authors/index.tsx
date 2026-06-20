@@ -129,7 +129,26 @@ function AuthorProfileVersions({
               <RuleProfileSection label="代表性规则" value={formatRepresentativeRules((item.payload.rule_profile as Record<string, unknown>).representative_rules)} />
             </div>
           ) : null}
+          {item.profile_kind === 'validated' && item.payload?.validated_profile ? (
+            <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3">
+              <RuleProfileSection label="优势规则类型" value={formatRuleTypes((item.payload.validated_profile as Record<string, unknown>).strong_rule_types)} />
+              <RuleProfileSection label="弱势规则类型" value={formatRuleTypes((item.payload.validated_profile as Record<string, unknown>).weak_rule_types)} />
+              <RuleProfileSection label="优势市场状态" value={formatMarketStates((item.payload.validated_profile as Record<string, unknown>).strong_market_states)} />
+              <RuleProfileSection label="弱势市场状态" value={formatMarketStates((item.payload.validated_profile as Record<string, unknown>).weak_market_states)} />
+              <RuleProfileSection label="常见失效模式" value={formatFailureModes((item.payload.validated_profile as Record<string, unknown>).common_failure_modes)} />
+              <RuleProfileSection label="数据覆盖" value={formatValidatedCoverage((item.payload.validated_profile as Record<string, unknown>).data_coverage)} />
+              <RuleProfileSection label="样本量" value={formatValidatedSampleCount((item.payload.validated_profile as Record<string, unknown>).sample_count)} />
+              <RuleProfileSection label="置信度" value={formatRuleText((item.payload.validated_profile as Record<string, unknown>).confidence, 'overall')} />
+            </div>
+          ) : null}
           <p className="mt-3 text-xs text-slate-500">画像来自文章、规则和回测证据版本绑定，不是作者真实实盘收益描述。</p>
+          {item.limitations.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500">
+              {item.limitations.map((limitation) => (
+                <li key={limitation}>{limitation}</li>
+              ))}
+            </ul>
+          ) : null}
         </article>
       ))}
     </div>
@@ -262,4 +281,64 @@ function formatRuleText(value: unknown, key: string) {
     return null;
   }
   return String((value as Record<string, unknown>)[key]);
+}
+
+function formatMarketStates(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const marketState = 'market_state' in item ? String((item as { market_state: unknown }).market_state) : null;
+      const count = 'count' in item ? String((item as { count: unknown }).count) : null;
+      return marketState && count ? `${marketState}：${count} 次` : null;
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('；') : null;
+}
+
+function formatFailureModes(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const reason = 'reason' in item ? String((item as { reason: unknown }).reason) : null;
+      const count = 'count' in item ? String((item as { count: unknown }).count) : null;
+      return reason && count ? `${reason}（${count} 次）` : null;
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('；') : null;
+}
+
+function formatValidatedCoverage(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const coverage = value as Record<string, unknown>;
+  const profiles = typeof coverage.total_applicability_profiles === 'number' ? coverage.total_applicability_profiles : null;
+  const kaipan = typeof coverage.kaipan_limitation_profiles === 'number' ? coverage.kaipan_limitation_profiles : null;
+  if (profiles === null) {
+    return null;
+  }
+  return kaipan !== null ? `正式适用性画像 ${profiles} 条，Kaipan 覆盖限制 ${kaipan} 条` : `正式适用性画像 ${profiles} 条`;
+}
+
+function formatValidatedSampleCount(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const counts = value as Record<string, unknown>;
+  const total = typeof counts.total === 'number' ? counts.total : null;
+  const insufficient = typeof counts.insufficient_sample_profiles === 'number' ? counts.insufficient_sample_profiles : null;
+  if (total === null) {
+    return null;
+  }
+  return insufficient !== null ? `${total}（样本不足画像 ${insufficient} 条）` : String(total);
 }

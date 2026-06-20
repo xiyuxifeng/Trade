@@ -18,11 +18,11 @@
 
 - 当前 Stage：`Stage 7 作者画像`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`
-- 当前未开始 Task：`RT-S7-003 作者验证画像`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`
+- 当前未开始 Task：无
 - 当前计划：[Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
 - 详细日志：[Stage 7](refactor-implementation-logs/stage-7.md)
-- 下一步：可开始 `RT-S7-003 作者验证画像`；不得自动开始，需用户明确授权。
+- 下一步：仅可在用户明确授权后开始 `Stage 7 Gate`；不得自动开始。
 
 ## 当前硬约束
 
@@ -38,7 +38,7 @@
 
 ## 当前残余风险
 
-- Stage 7 仍未完成作者验证画像和 Stage 7 Gate。
+- Stage 7 仍未完成 `Stage 7 Gate`。
 - `RT-S7-004` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；这是 frozen RT-S7-004 范围内的折中。完成 `RT-S7-001/002/003` 后可再评估是否需要独立明细表。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - `RT-S7-004` 未扩展 `invalidated` 生命周期；当前最小正式生命周期为 `draft/review-pending/published/archived`。如后续 Task 需要失效语义，应在新 Task 中显式设计。
@@ -77,7 +77,7 @@
 | RT-S7-004 | `[x]` | 作者画像版本、生命周期、审核审计和时间分段 foundation 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 | RT-S7-001 | `[x]` | 结构化文章批次生成 formal AuthorMethodProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 | RT-S7-002 | `[x]` | reviewed RuleVersion / RuleFamily 生成 formal AuthorRuleProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
-| RT-S7-003 | `[ ]` | 未开始 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| RT-S7-003 | `[x]` | formal Stage 6 validation evidence 生成 AuthorValidatedProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 
 ## Stage 状态索引
 
@@ -90,14 +90,14 @@
 | Stage 4 | `[x]` | Gate 最终 `ACCEPTED` | [stage-4.md](refactor-implementation-logs/stage-4.md) |
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED` | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
-| Stage 7 | `[-]` | `RT-S7-004`、`RT-S7-001`、`RT-S7-002` 已接受；`RT-S7-003` 和 Stage 7 Gate 未开始 | [stage-7.md](refactor-implementation-logs/stage-7.md) |
+| Stage 7 | `[-]` | `RT-S7-004`、`RT-S7-001`、`RT-S7-002`、`RT-S7-003` 已接受；`Stage 7 Gate` 未开始 | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-RT-S7-003 作者验证画像
+Stage 7 Gate
 ```
 
 执行前应读取：
@@ -106,4 +106,4 @@ RT-S7-003 作者验证画像
 - [Stage 7 日志](refactor-implementation-logs/stage-7.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得跳过 `RT-S7-003` 直接实现 Stage 7 Gate，除非用户明确重新冻结 Stage 7 task order。
+不得自动开始 `Stage 7 Gate`；必须等待用户明确授权。

@@ -266,6 +266,111 @@ Remaining Stage 7 tasks before Gate:
 
 Stage 7 is not complete. Stage 7 Gate has not started.
 
+## 2026-06-20 RT-S7-003 作者验证画像
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented only `RT-S7-003 AuthorValidatedProfile` draft generation from formal Stage 6 `RuleApplicabilityProfile` / `BacktestRun` / `BacktestResult` evidence, plus the minimal `/authors` validated section review display.
+
+Out of scope and not implemented: Stage 7 Gate, Stage 8 strategy behavior, strategy publication, new migrations/schema/table changes, Stage 6 contract changes, Prompt runtime wiring, legacy persona/profile/rule-pool replacement, and daily pre-market/post-market behavior.
+
+### Delegation
+
+Used one bounded read-only `refactor_explorer_mini` subagent to verify the formal Stage 6 source path, reusable Stage 7 foundation, rejected legacy paths, and RT-S7-003 test gaps.
+
+Also spawned one bounded `refactor_executor_mini` subagent for implementation, but it did not produce a finished verifiable handoff before the parent reached the red/green verification loop. Parent agent closed that subagent, completed implementation directly, ran verification, performed semantic review, and made the final acceptance decision. Runtime probe metadata for exact child runtime remained not independently verified.
+
+### Implemented Behavior
+
+- Added deterministic `AuthorValidatedProfileService` that consumes only canonical Stage 6 facts:
+  - formal `RuleApplicabilityProfile`
+  - formal `BacktestRun`
+  - formal `BacktestResult`
+  - inherited DatasetSnapshot / MarketSnapshot fingerprints and level/市场状态/source versions
+- Added author-alignment checks so validation evidence from missing, mismatched, or other-author sources becomes issue-backed partial evidence instead of false success.
+- Generated validated-profile draft payloads with:
+  - 优势规则类型
+  - 弱势规则类型
+  - 优势市场状态
+  - 弱势市场状态
+  - 常见失效模式
+  - 数据覆盖
+  - 样本量
+  - 置信度
+  - 限制说明
+- Kept program facts authoritative for coverage, sample counts, levels, fingerprints, market-state evidence, recommendation status, and confidence inputs. No LLM metrics calculation or strategy publication path was introduced.
+- Preserved explicit provenance inside shared JSON source bindings for:
+  - RuleApplicabilityProfile row IDs and stable applicability IDs
+  - Backtest run/result IDs
+  - result fingerprints
+  - dataset fingerprints
+  - market snapshot fingerprints
+  - level policy versions
+  - market-state model/source versions
+- Kept insufficient-sample evidence as `partial` / `insufficient_sample` with low-confidence limitations instead of strong conclusions.
+- Kept missing Kaipan as a coverage limitation instead of treating it as rule failure.
+- Reused the shared `AuthorProfileService` lifecycle/review/publish/archive flow; new validation evidence still creates a draft/revision and does not overwrite reviewed/published profiles.
+- Added `/api/ui/v1/authors/validated-profiles/drafts` for operator-triggered validated-profile draft generation with business-Chinese error messages.
+- Extended `/authors` to render validated-profile details in business Chinese using “市场状态”, without exposing `Regime`, legacy rule-pool terms, or internal pipeline vocabulary.
+
+### Review Findings and Repairs
+
+- `HIGH`: initial test fixtures used invalid Stage 6 enum values (`completed`, `complete`) for formal run/result state seeding. Repaired fixtures to use the accepted Stage 6 enum set before accepting the task.
+- `MEDIUM`: first frontend assertion expected a standalone `21` text node and failed against the combined sample-count string. Repaired the assertion to match the truthful rendered text.
+
+No unresolved `BLOCKER` or required `HIGH` finding remains within the frozen `RT-S7-003` contract.
+
+### Validation
+
+Passed:
+
+- `python -m pytest tests/unit/services/test_author_validated_profile_service.py tests/api/routers/test_authors.py`：`8 passed`
+- `pnpm test -- src/lib/api/authors.test.ts src/pages/authors/index.test.tsx`：`9 passed`
+- `python -m pytest tests/unit/services/test_author_profile_service.py`：`3 passed`
+- `python -m compileall src/services/author_validated_profile_service.py api/routers/ui/authors.py tests/unit/services/test_author_validated_profile_service.py`：passed
+- `git diff --check`：passed
+
+Not run:
+
+- Database migration upgrade/safe-rerun/rollback was not run for RT-S7-003 because this task does not add or modify migrations.
+- Additional broader Stage 6/Stage 7 suites were not rerun because the change stayed within the bounded author-profile/API/frontend surface and the directly affected focused suites passed.
+
+Notes:
+
+- `python -m compileall` printed an existing local shell warning from `/Users/wanghui/.rvm/scripts/rvm` about `ps` permissions before succeeding. The command exited `0`, so the static check is treated as passed.
+
+### Files Changed
+
+- `api/routers/ui/authors.py`
+- `src/services/author_validated_profile_service.py`
+- `tests/api/routers/test_authors.py`
+- `tests/unit/services/test_author_validated_profile_service.py`
+- `web/src/lib/api/authors.ts`
+- `web/src/lib/api/authors.test.ts`
+- `web/src/pages/authors/index.tsx`
+- `web/src/pages/authors/index.test.tsx`
+- `web/src/types/authors.ts`
+
+### Known Risks
+
+- Validated-profile provenance remains stored in shared JSON source bindings rather than normalized FK detail tables. This stays within the frozen RT-S7-004/RT-S7-003 contract and avoids introducing a second formal author-profile source, but later Stage 7 review should keep provenance checks explicit.
+- RT-S7-003 exposes formal validated draft generation and review display, but it does not add a full operator UI workflow for selecting formal applicability profiles directly from `/authors`. This remains within scope because the canonical runtime/API path and reviewer-visible display now exist.
+- Deterministic aggregation intentionally avoids adding a new Prompt runtime path for RT-S7-003. If later Gate explicitly requires an LLM explanatory lane for validated drafts, that should be handled as a bounded extension instead of changing the accepted formal source path.
+
+### Acceptance Conclusion
+
+`RT-S7-003 ACCEPTED`.
+
+Remaining Stage 7 items before completion:
+
+1. `Stage 7 Gate`
+
+Stage 7 is not complete. Stage 7 Gate has not started.
+
 ## 2026-06-20 RT-S7-001 作者方法画像
 
 ### Task Decision

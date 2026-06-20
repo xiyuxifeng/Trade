@@ -13,16 +13,18 @@
 - [Stage 5 日志](refactor-implementation-logs/stage-5.md)
 - [Stage 6 日志](refactor-implementation-logs/stage-6.md)
 - [Stage 7 日志](refactor-implementation-logs/stage-7.md)
+- [Stage 8 日志](refactor-implementation-logs/stage-8.md)
 
 ## 当前状态
 
-- 当前 Stage：`Stage 7 作者画像`
-- Stage 状态：`[x] 已完成`
+- 当前 Stage：`Stage 8 策略中心`
+- Stage 状态：`[-] 进行中`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`
-- 当前未开始 Task：无
-- 当前计划：[Stage 7 实施计划](refactor-implementation-plans/stage-7-implementation-plan.md)
-- 详细日志：[Stage 7](refactor-implementation-logs/stage-7.md)
-- 下一步：仅可在用户明确授权后开始 `Stage 8 策略中心`；不得自动开始。
+- 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`
+- 当前未开始 Task：`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`
+- 当前计划：[Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
+- 详细日志：[Stage 8](refactor-implementation-logs/stage-8.md)
+- 下一步：仅可在用户明确授权后开始 `RT-S8-001 策略草稿与发布`；不得自动开始。
 
 ## 当前硬约束
 
@@ -33,16 +35,25 @@
 - Stage 7 三类作者画像必须共享版本、生命周期、审核、审计、证据指纹、画像指纹、supersession 和时间分段规则。
 - 正式作者验证画像只能消费 formal `RuleApplicabilityProfile`、formal `BacktestRun`、formal `BacktestResult` 和 Stage 6 level/市场状态/sample evidence。
 - 新证据只能生成草稿/修订，不得自动覆盖已发布画像。
-- `RT-S7-004` 已先行冻结版本、生命周期、审核、审计和时间分段合同；后续 `RT-S7-001/002/003` 必须复用该 foundation。
+- Formal Stage 8 strategy source-of-truth is canonical `StrategyVersion` in `strategy_versions`, scoped by canonical `Strategy` in `strategies`; `TraderStrategyVersion` is compatibility-only.
+- Formal Stage 8 strategy contents must include rule pool, rule base weights, author profile versions, risk policy, position constraints, target universe, market-state selection policy, degradation policy and evidence bindings.
+- `StrategyVersion` is not regenerated daily.
+- `DailyStrategyInstance` is runtime-only and cannot become a formal strategy.
+- `StrategyRevisionProposal` is proposal-only and cannot directly modify a published/current strategy.
+- Only one current strategy per strategy scope unless a later explicit contract changes the scope rule.
+- Rollback must create/audit a version transition and cannot silently mutate history.
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 当前残余风险
 
-- Stage 7 Gate 最终 `ACCEPTED`；Stage 8 可在用户明确授权后开始。
+- Stage 8 Bootstrap 为 `READY`；RT-S8 Task 尚未开始。
 - `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
 - legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only；formal `/rules/*` 与 Stage 7 formal author profiles 不得使用它们作为正式事实源。
+- Stage 8 canonical schema exists, but concrete canonical strategy repository/service/API/UI is not implemented yet.
+- `strategies.current_published_version_id` currently lacks explicit FK enforcement and may need hardening during implementation.
+- Current `/strategies` page is a compatibility shell over candidate data and must be replaced by formal strategy-center behavior before Stage 8 acceptance.
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
 
 ## Task 状态索引
@@ -78,6 +89,10 @@
 | RT-S7-001 | `[x]` | 结构化文章批次生成 formal AuthorMethodProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 | RT-S7-002 | `[x]` | reviewed RuleVersion / RuleFamily 生成 formal AuthorRuleProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
 | RT-S7-003 | `[x]` | formal Stage 6 validation evidence 生成 AuthorValidatedProfile draft 已接受 | [Stage 7](refactor-implementation-logs/stage-7.md) |
+| Stage 8 Bootstrap | `[x]` | Stage 8 strategy contracts 和 task order 已冻结 | [Stage 8](refactor-implementation-logs/stage-8.md) |
+| RT-S8-001 | `[ ]` | 策略草稿与发布尚未开始 | [Stage 8](refactor-implementation-logs/stage-8.md) |
+| RT-S8-002 | `[ ]` | 策略验证和回滚尚未开始 | [Stage 8](refactor-implementation-logs/stage-8.md) |
+| RT-S8-003 | `[ ]` | 策略优化建议尚未开始 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 
 ## Stage 状态索引
 
@@ -91,19 +106,20 @@
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED` | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
+| Stage 8 | `[-]` | Bootstrap `READY`；RT-S8 Task 尚未开始 | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-Stage 8 策略中心
+RT-S8-001 策略草稿与发布
 ```
 
 执行前应读取：
 
-- [Stage 8 对应实施计划或 Bootstrap 输出]
-- [Stage 7 日志](refactor-implementation-logs/stage-7.md)
+- [Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
+- [Stage 8 日志](refactor-implementation-logs/stage-8.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `Stage 8`；必须等待用户明确授权。
+不得自动开始 `RT-S8-001`；必须等待用户明确授权。

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_KEY_STORAGE_KEY } from '@/lib/api/http';
-import { createAuthorMethodProfileDraft, listAuthorProfiles } from './authors';
+import { createAuthorMethodProfileDraft, createAuthorRuleProfileDraft, listAuthorProfiles } from './authors';
 
 describe('authors api', () => {
   beforeEach(() => {
@@ -43,6 +43,28 @@ describe('authors api', () => {
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(url).toBe('/api/ui/v1/authors/method-profiles/drafts');
+    expect(init?.method).toBe('POST');
+  });
+
+  it('creates author rule profile drafts from reviewed rule evidence', async () => {
+    window.localStorage.setItem(API_KEY_STORAGE_KEY, 'demo-key');
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ author_profile_version_id: 'apv-2' }),
+    } as Response);
+
+    await createAuthorRuleProfileDraft({
+      author_id: 'author-1',
+      rule_version_ids: ['rule-version-1', 'rule-version-2'],
+      rule_family_ids: ['rule-family-1'],
+      evidence_from: '2026-01-01',
+      evidence_to: '2026-01-10',
+      effective_from: '2026-01-11',
+      reason: '生成规则画像草稿',
+    });
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
+    expect(url).toBe('/api/ui/v1/authors/rule-profiles/drafts');
     expect(init?.method).toBe('POST');
   });
 });

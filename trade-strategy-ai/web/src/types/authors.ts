@@ -55,3 +55,14 @@ export type AuthorMethodProfileDraftRequest = {
   effective_to?: string | null;
   reason?: string | null;
 };
+
+export type AuthorRuleProfileDraftRequest = {
+  author_id: string;
+  rule_version_ids: string[];
+  rule_family_ids?: string[];
+  evidence_from?: string | null;
+  evidence_to?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  reason?: string | null;
+};

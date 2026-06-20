@@ -1,6 +1,7 @@
 import { fetchJson } from './http';
 import type {
   AuthorMethodProfileDraftRequest,
+  AuthorRuleProfileDraftRequest,
   AuthorProfileListResponse,
   AuthorProfileVersion,
 } from '@/types/authors';
@@ -20,6 +21,13 @@ export function getAuthorProfile(versionId: string) {
 
 export function createAuthorMethodProfileDraft(payload: AuthorMethodProfileDraftRequest) {
   return fetchJson<AuthorProfileVersion>('/authors/method-profiles/drafts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createAuthorRuleProfileDraft(payload: AuthorRuleProfileDraftRequest) {
+  return fetchJson<AuthorProfileVersion>('/authors/rule-profiles/drafts', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

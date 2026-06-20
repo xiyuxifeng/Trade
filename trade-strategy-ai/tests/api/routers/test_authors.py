@@ -126,6 +126,36 @@ class _FakeAuthorMethodProfileService:
         )
 
 
+class _FakeAuthorRuleProfileService:
+    async def generate_draft(self, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert request.rule_version_ids
+        return _FakeVersion(
+            profile_kind="rule",
+            profile_kind_label="作者规则画像",
+            payload={
+                "rule_profile": {
+                    "rule_type_distribution": [{"rule_type": "entry", "count": 2, "share": 1.0}],
+                    "rule_families": [{"name": "放量突破族", "member_count": 2}],
+                    "quantifiability": {"label": "部分可量化"},
+                    "data_dependencies": [{"name": "ohlcv_1d", "count": 2}],
+                    "repeat_conflict_summary": {"conflict_pair_count": 1},
+                    "representative_rules": [{"title": "放量突破介入"}],
+                },
+                "conclusions": [
+                    {
+                        "text": "规则以入场类为主",
+                        "evidence": [{"lane": "rule_statistics", "rule_version_id": "rule-1"}],
+                        "confidence": 0.74,
+                        "provenance": {"lane": "rule_statistics"},
+                        "version_binding": {"schema_version": "author-profile-v1"},
+                    }
+                ],
+                "limitations": ["画像来自已审核规则，不代表真实实盘表现。"],
+            },
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
@@ -220,3 +250,31 @@ async def test_generate_author_method_profile_draft_route(client: AsyncClient) -
     body = response.json()
     assert body["profile_kind"] == "method"
     assert body["payload"]["method_profile"]["trading_style"][0]["name"] == "趋势突破"
+
+
+async def test_generate_author_rule_profile_draft_route(client: AsyncClient) -> None:
+    from api.routers.ui.authors import get_author_rule_profile_service
+
+    app.dependency_overrides[get_current_principal] = _operator_override
+    app.dependency_overrides[get_author_rule_profile_service] = lambda: _FakeAuthorRuleProfileService()
+
+    response = await client.post(
+        "/api/ui/v1/authors/rule-profiles/drafts",
+        json={
+            "author_id": "00000000-0000-0000-0000-000000000001",
+            "rule_version_ids": [
+                "00000000-0000-0000-0000-000000000201",
+                "00000000-0000-0000-0000-000000000202",
+            ],
+            "rule_family_ids": ["00000000-0000-0000-0000-000000000301"],
+            "evidence_from": "2026-01-01",
+            "evidence_to": "2026-01-10",
+            "effective_from": "2026-01-11",
+            "reason": "生成作者规则画像草稿",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["profile_kind"] == "rule"
+    assert body["payload"]["rule_profile"]["rule_type_distribution"][0]["rule_type"] == "entry"

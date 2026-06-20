@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 7 作者画像`
-- 当前活动：`2026-06-20 RT-S7-001 作者方法画像`
-- 当前状态：`RT-S7-001 ACCEPTED`
-- 当前 Task：`RT-S7-004`、`RT-S7-001` 已完成并接受；`RT-S7-002/003` 未开始
-- 下一可执行 Task：`RT-S7-002 作者规则画像`
-- 不得自动开始：`RT-S7-002` 需用户明确触发；不得开始 Stage 7 Gate
+- 当前活动：`2026-06-20 RT-S7-002 作者规则画像`
+- 当前状态：`RT-S7-002 ACCEPTED`
+- 当前 Task：`RT-S7-004`、`RT-S7-001`、`RT-S7-002` 已完成并接受；`RT-S7-003` 未开始
+- 下一可执行 Task：`RT-S7-003 作者验证画像`
+- 不得自动开始：`RT-S7-003` 需用户明确触发；不得开始 Stage 7 Gate
 
 ## 2026-06-19 Stage 7 Bootstrap
 
@@ -361,5 +361,92 @@ Remaining Stage 7 tasks before Gate:
 1. `RT-S7-002 作者规则画像`
 2. `RT-S7-003 作者验证画像`
 3. `Stage 7 Gate`
+
+Stage 7 is not complete. Stage 7 Gate has not started.
+
+## 2026-06-20 RT-S7-002 作者规则画像
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented only `RT-S7-002 AuthorRuleProfile` draft generation from reviewed `RuleVersion` / `RuleFamily` governance evidence and the minimal `/authors` rule section review display.
+
+Out of scope and not implemented: `RT-S7-003`, Stage 7 Gate, Stage 8 strategy behavior, strategy publication, Stage 4 lifecycle/governance mutation, legacy rule-pool persona/profile sources, new migration/schema/table changes, new Prompt runtime path.
+
+### Delegation
+
+Used one bounded read-only `refactor_explorer_mini` subagent to map the RT-S7-002 implementation surface, reusable Stage 7 foundation, and Stage 4 rule-governance read paths.
+
+Also started one bounded `refactor_executor_mini` subagent for implementation, but it was stopped before acceptance because it left an incomplete `author_rule_profile_service.py` draft and did not produce a verifiable finished handoff. Parent agent took over implementation, review, bounded repairs and final acceptance. Runtime probe script remained unavailable in this repository; configured role files existed and declared `gpt-5.4-mini`, but effective runtime metadata was not independently verified.
+
+### Implemented Behavior
+
+- Added deterministic `AuthorRuleProfileService` that reads only canonical `RuleVersion`, `RuleCandidate`, `ArticleStructure`, `BlogArticle`, `RuleFamily`, and `RuleFamilyMembership` evidence, then writes drafts through the shared `AuthorProfileService`.
+- Added author-alignment checks so rule evidence from missing, unreviewed, or other-author sources becomes issue-backed partial evidence instead of a false success state.
+- Generated rule-profile draft payloads with:
+  - 规则类型分布
+  - 规则族
+  - 可量化程度
+  - 数据依赖
+  - 重复与冲突摘要
+  - 代表性规则
+  - 证据、置信度、限制说明
+- Kept evidence lanes explicit between `rule_statistics` and `rule_governance`, and preserved traceable rule IDs, family IDs, fingerprints, membership snapshots, and aggregation version bindings inside shared JSON source bindings.
+- Reused existing shared review/publish/archive lifecycle support from `AuthorProfileService`; no rule-governance or rule-lifecycle mutation path was introduced.
+- Added `/api/ui/v1/authors/rule-profiles/drafts` for operator-triggered rule-profile draft generation with business-Chinese error messages.
+- Extended `/authors` to render formal rule-profile details for reviewer inspection without exposing legacy rule-pool or internal pipeline terminology.
+
+### Review Findings and Repairs
+
+- `BLOCKER`: the delegated executor left an incomplete `author_rule_profile_service.py` draft with syntax/runtime issues and no verifiable test handoff. Repaired by replacing it with a parent-authored deterministic read-only aggregation service and rerunning focused verification.
+- `HIGH`: initial service draft did not preserve missing/unreviewed/unaligned rule evidence in source bindings for later review traceability. Repaired by carrying those IDs into draft source bindings and issue payloads.
+- `MEDIUM`: first unit-test seed attempted to create duplicate `RuleFamily.family_key` rows and overstated one parameter-variant expectation. Repaired test fixtures to reuse existing rule families and aligned expected duplicate/conflict counts with actual Stage 4 comparison semantics.
+
+No unresolved `BLOCKER` or required `HIGH` finding remains within the frozen `RT-S7-002` contract.
+
+### Validation
+
+Passed:
+
+- `python -m pytest tests/unit/services/test_author_rule_profile_service.py tests/api/routers/test_authors.py`：`6 passed`
+- `pnpm test -- src/lib/api/authors.test.ts src/pages/authors/index.test.tsx`：`7 passed`
+- `python -m pytest tests/unit/services/test_author_profile_service.py`：passed
+- `python -m compileall src/services/author_rule_profile_service.py api/routers/ui/authors.py tests/unit/services/test_author_rule_profile_service.py`：passed
+- `git diff --check`：passed
+
+Not run:
+
+- Database migration upgrade/safe-rerun/rollback was not run for RT-S7-002 because this task does not add or modify migrations.
+- Additional broader Stage 4 / Stage 7 suites were not rerun because the change stayed within the bounded author-profile/API/frontend surface and the directly affected focused suites passed.
+
+### Files Changed
+
+- `api/routers/ui/authors.py`
+- `src/services/author_rule_profile_service.py`
+- `tests/api/routers/test_authors.py`
+- `tests/unit/services/test_author_rule_profile_service.py`
+- `web/src/lib/api/authors.ts`
+- `web/src/lib/api/authors.test.ts`
+- `web/src/pages/authors/index.tsx`
+- `web/src/pages/authors/index.test.tsx`
+- `web/src/types/authors.ts`
+
+### Known Risks
+
+- Rule-profile source bindings remain JSON fields validated in service/runtime rather than normalized FK detail tables. This stays within the frozen RT-S7-004/RT-S7-002 contract and avoids introducing a second formal author-profile source, but later Stage 7 review should keep provenance checks explicit.
+- RT-S7-002 currently exposes draft generation and review display on `/authors`, but it does not add a full operator UI workflow for selecting rule versions from the page itself. This is within scope because formal draft generation and review support now exist.
+- Deterministic aggregation intentionally avoids adding a new Prompt runtime path for RT-S7-002. If later Gate explicitly requires an LLM explanatory lane for rule-profile drafts, that should be handled as a bounded extension rather than changing the accepted formal source path.
+
+### Acceptance Conclusion
+
+`RT-S7-002 ACCEPTED`.
+
+Remaining Stage 7 tasks before Gate:
+
+1. `RT-S7-003 作者验证画像`
+2. `Stage 7 Gate`
 
 Stage 7 is not complete. Stage 7 Gate has not started.

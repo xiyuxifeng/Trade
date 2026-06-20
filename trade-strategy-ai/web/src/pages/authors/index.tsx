@@ -119,6 +119,16 @@ function AuthorProfileVersions({
               <MethodField label="市场状态假设" values={(item.payload.method_profile as Record<string, unknown>).market_state_assumptions} />
             </div>
           ) : null}
+          {item.profile_kind === 'rule' && item.payload?.rule_profile ? (
+            <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3">
+              <RuleProfileSection label="规则类型分布" value={formatRuleTypes((item.payload.rule_profile as Record<string, unknown>).rule_type_distribution)} />
+              <RuleProfileSection label="规则族" value={formatRuleFamilies((item.payload.rule_profile as Record<string, unknown>).rule_families)} />
+              <RuleProfileSection label="可量化程度" value={formatRuleText((item.payload.rule_profile as Record<string, unknown>).quantifiability, 'label')} />
+              <RuleProfileSection label="数据依赖" value={formatRuleDependencies((item.payload.rule_profile as Record<string, unknown>).data_dependencies)} />
+              <RuleProfileSection label="重复与冲突" value={formatConflictSummary((item.payload.rule_profile as Record<string, unknown>).repeat_conflict_summary)} />
+              <RuleProfileSection label="代表性规则" value={formatRepresentativeRules((item.payload.rule_profile as Record<string, unknown>).representative_rules)} />
+            </div>
+          ) : null}
           <p className="mt-3 text-xs text-slate-500">画像来自文章、规则和回测证据版本绑定，不是作者真实实盘收益描述。</p>
         </article>
       ))}
@@ -152,4 +162,104 @@ function MethodField({ label, values }: { label: string; values: unknown }) {
       <p className="m-0 text-sm text-slate-800">{items.join('、')}</p>
     </div>
   );
+}
+
+function RuleProfileSection({ label, value }: { label: string; value: string | null }) {
+  if (!value) {
+    return null;
+  }
+  return (
+    <div className="grid gap-1">
+      <p className="m-0 text-xs font-medium text-slate-500">{label}</p>
+      <p className="m-0 text-sm text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function formatRuleTypes(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const ruleType = 'rule_type' in item ? String((item as { rule_type: unknown }).rule_type) : null;
+      const count = 'count' in item ? String((item as { count: unknown }).count) : null;
+      return ruleType && count ? `${ruleType}：${count} 条` : null;
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('；') : null;
+}
+
+function formatRuleFamilies(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const name = 'name' in item ? String((item as { name: unknown }).name) : null;
+      const count = 'member_count' in item ? String((item as { member_count: unknown }).member_count) : null;
+      return name && count ? `${name}（${count} 条）` : null;
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('；') : null;
+}
+
+function formatRuleDependencies(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      const name = 'name' in item ? String((item as { name: unknown }).name) : null;
+      const count = 'count' in item ? String((item as { count: unknown }).count) : null;
+      return name && count ? `${name}（${count} 条规则）` : null;
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('；') : null;
+}
+
+function formatConflictSummary(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const count = 'conflict_pair_count' in value ? Number((value as { conflict_pair_count: unknown }).conflict_pair_count) : 0;
+  if (count > 0) {
+    return `发现 ${count} 组冲突规则`;
+  }
+  const duplicateCount = 'exact_duplicate_pair_count' in value ? Number((value as { exact_duplicate_pair_count: unknown }).exact_duplicate_pair_count) : 0;
+  if (duplicateCount > 0) {
+    return `发现 ${duplicateCount} 组完全重复规则`;
+  }
+  return '当前未发现明显冲突';
+}
+
+function formatRepresentativeRules(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items = value
+    .map((item) => {
+      if (!item || typeof item !== 'object' || !('title' in item)) {
+        return null;
+      }
+      return String((item as { title: unknown }).title);
+    })
+    .filter((item): item is string => Boolean(item));
+  return items.length ? items.join('、') : null;
+}
+
+function formatRuleText(value: unknown, key: string) {
+  if (!value || typeof value !== 'object' || !(key in value)) {
+    return null;
+  }
+  return String((value as Record<string, unknown>)[key]);
 }

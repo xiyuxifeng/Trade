@@ -192,4 +192,60 @@ describe('authors page', () => {
     expect(screen.getByText('量价共振')).toBeInTheDocument();
     expect(screen.queryByText('交易风格画像')).not.toBeInTheDocument();
   });
+
+  it('shows rule-profile details from formal rule evidence instead of legacy rule-pool terms', async () => {
+    vi.mocked(listAuthorProfiles).mockResolvedValueOnce({
+      state: 'ready',
+      count: 1,
+      items: [
+        {
+          author_profile_version_id: 'apv-rule-1',
+          author_profile_id: 'ap-rule-1',
+          author_id: 'author-1',
+          profile_kind: 'rule',
+          profile_kind_label: '作者规则画像',
+          version_no: 1,
+          lifecycle_state: 'pending_review',
+          lifecycle_label: '待审核',
+          review_status: 'pending_review',
+          status_state: 'pending_review',
+          schema_version: 'author-profile-v1',
+          evidence_period: { from: '2026-01-01', to: '2026-03-31' },
+          effective_period: { from: '2026-04-01', to: null },
+          source_versions: {},
+          evidence_fingerprint: 'rule-e1',
+          profile_fingerprint: 'rule-p1',
+          quality_status: 'complete',
+          partial_reasons: [],
+          limitations: ['画像来自已审核的规则与规则族证据，不代表作者真实实盘表现。'],
+          payload: {
+            rule_profile: {
+              rule_type_distribution: [{ rule_type: 'entry', count: 2, share: 1 }],
+              rule_families: [{ name: '放量突破族', member_count: 2 }],
+              quantifiability: { label: '部分可量化' },
+              data_dependencies: [{ name: 'ohlcv_1d', count: 2 }],
+              repeat_conflict_summary: { conflict_pair_count: 1 },
+              representative_rules: [{ title: '放量突破介入' }],
+            },
+            conclusions: [],
+          },
+          evidence: {},
+          source_bindings: {},
+          supersession: {},
+        },
+      ],
+    });
+
+    renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
+
+    expect(await screen.findByText('规则类型分布')).toBeInTheDocument();
+    expect(screen.getByText('entry：2 条')).toBeInTheDocument();
+    expect(screen.getByText('规则族')).toBeInTheDocument();
+    expect(screen.getByText('放量突破族（2 条）')).toBeInTheDocument();
+    expect(screen.getByText('可量化程度')).toBeInTheDocument();
+    expect(screen.getByText('部分可量化')).toBeInTheDocument();
+    expect(screen.getByText('重复与冲突')).toBeInTheDocument();
+    expect(screen.getByText('发现 1 组冲突规则')).toBeInTheDocument();
+    expect(screen.queryByText('rule pool')).not.toBeInTheDocument();
+  });
 });

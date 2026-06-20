@@ -332,7 +332,7 @@ Run before the first delegated task in a repository and after Codex/agent
 configuration changes:
 
 ```bash
-bash .agents/skills/refactor-orchestrator/scripts/runtime-probe.sh
+bash .codex/skills/refactor-orchestrator/scripts/runtime-probe.sh
 ```
 
 The probe checks expected readiness, not proof of actual child model or effective

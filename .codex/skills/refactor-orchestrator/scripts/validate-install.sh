@@ -6,8 +6,8 @@ failed=0
 required=(
   ".codex/agents/refactor-explorer-mini.toml"
   ".codex/agents/refactor-executor-mini.toml"
-  ".agents/skills/refactor-orchestrator/SKILL.md"
-  ".agents/skills/refactor-orchestrator/agents/openai.yaml"
+  ".codex/skills/refactor-orchestrator/SKILL.md"
+  ".codex/skills/refactor-orchestrator/agents/openai.yaml"
 )
 
 if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -46,9 +46,9 @@ check_contains ".codex/agents/refactor-executor-mini.toml" 'name = "refactor_exe
 check_contains ".codex/agents/refactor-executor-mini.toml" 'model = "gpt-5.4-mini"' "Executor model is not gpt-5.4-mini"
 check_contains ".codex/agents/refactor-executor-mini.toml" 'sandbox_mode = "workspace-write"' "Executor default sandbox is not workspace-write"
 
-check_contains ".agents/skills/refactor-orchestrator/SKILL.md" 'name: refactor-orchestrator' "SKILL.md frontmatter name missing"
-check_contains ".agents/skills/refactor-orchestrator/SKILL.md" 'description:' "SKILL.md frontmatter description missing"
-check_contains ".agents/skills/refactor-orchestrator/agents/openai.yaml" 'allow_implicit_invocation: false' "Implicit invocation should be disabled"
+check_contains ".codex/skills/refactor-orchestrator/SKILL.md" 'name: refactor-orchestrator' "SKILL.md frontmatter name missing"
+check_contains ".codex/skills/refactor-orchestrator/SKILL.md" 'description:' "SKILL.md frontmatter description missing"
+check_contains ".codex/skills/refactor-orchestrator/agents/openai.yaml" 'allow_implicit_invocation: false' "Implicit invocation should be disabled"
 
 if [[ -f ".codex/config.toml" ]]; then
   check_contains ".codex/config.toml" '[agents]' ".codex/config.toml does not contain [agents]"
@@ -57,17 +57,17 @@ else
 fi
 
 # The old, unsupported repository Skill path was .codex/skills/.
-# The current supported path is .agents/skills/.
+# The current supported path is .codex/skills/.
 if [[ -d ".codex/skills/refactor-orchestrator" ]]; then
   echo "CONFLICT: obsolete path .codex/skills/refactor-orchestrator still exists"
-  echo "Remove it after confirming the Skill is installed at .agents/skills/refactor-orchestrator."
+  echo "Remove it after confirming the Skill is installed at .codex/skills/refactor-orchestrator."
   failed=1
 fi
 
-if [[ -d ".agents/skills/refactor-orchestrator" ]]; then
-  count="$(find .agents/skills/refactor-orchestrator -maxdepth 1 -name SKILL.md | wc -l | tr -d ' ')"
+if [[ -d ".codex/skills/refactor-orchestrator" ]]; then
+  count="$(find .codex/skills/refactor-orchestrator -maxdepth 1 -name SKILL.md | wc -l | tr -d ' ')"
   if [[ "$count" != "1" ]]; then
-    echo "INVALID: expected exactly one SKILL.md in .agents/skills/refactor-orchestrator"
+    echo "INVALID: expected exactly one SKILL.md in .codex/skills/refactor-orchestrator"
     failed=1
   fi
 fi

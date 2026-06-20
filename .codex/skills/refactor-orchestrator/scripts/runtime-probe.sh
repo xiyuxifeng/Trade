@@ -22,7 +22,7 @@ else
 fi
 
 required=(
-  ".agents/skills/refactor-orchestrator/SKILL.md"
+  ".codex/skills/refactor-orchestrator/SKILL.md"
   ".codex/agents/refactor-explorer-mini.toml"
   ".codex/agents/refactor-executor-mini.toml"
 )

@@ -41,6 +41,7 @@ from api.routers.ui import rule_review_router as ui_rule_review_router
 from api.routers.ui import formal_backtests_router as ui_formal_backtests_router
 from api.routers.ui import signals_router as ui_signals_router
 from api.routers.ui import settings_router as ui_settings_router
+from api.routers.ui import strategies_router as ui_strategies_router
 from api.routers.ui import strategy_studio_router as ui_strategy_studio_router
 from api.routers.ui import system_router as ui_system_router
 from api.routers.ui import system_data as ui_system_data_router
@@ -204,6 +205,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_profiles_router)
     app.include_router(ui_settings_router)
     app.include_router(ui_ops_router)
+    app.include_router(ui_strategies_router)
     app.include_router(ui_optimize_router)
     app.include_router(ui_traders_router)
     app.include_router(ui_security_audit_router)

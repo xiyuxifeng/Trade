@@ -219,3 +219,23 @@ def test_stage6_rule_applicability_profile_migration_defines_formal_contract() -
     assert "before_state_json" in content
     assert "after_state_json" in content
     assert "Refusing to downgrade RT-S6-003" in content
+
+
+def test_stage8_strategy_center_migration_defines_review_and_audit_contract() -> None:
+    migration_file = (
+        Path(__file__).parent.parent.parent.parent
+        / "src/db/migrations/versions/2026_06_20_0001_stage8_strategy_center_foundation.py"
+    )
+    content = migration_file.read_text(encoding="utf-8")
+
+    assert 'revision: str = "2026_06_20_0001"' in content
+    assert 'down_revision: Union[str, None] = "2026_06_19_0014"' in content
+    assert "review_status" in content
+    assert "review_reason" in content
+    assert "reviewed_at" in content
+    assert "reviewed_by" in content
+    assert "strategy_version_audits" in content
+    assert "fk_strategies_current_version" in content
+    assert "ix_sva_audit_version_created" in content
+    assert "ix_sva_audit_transition" in content
+    assert "Refusing to downgrade RT-S8-001" in content

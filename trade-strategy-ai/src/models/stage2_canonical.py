@@ -781,6 +781,8 @@ class StrategyVersion(TimestampMixin, Base):
     version_no: Mapped[int] = mapped_column(Integer, nullable=False)
     schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
     lifecycle_state: Mapped[FormalLifecycleState] = mapped_column(_enum(FormalLifecycleState, "formal_lifecycle"), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(256))
+    summary: Mapped[str | None] = mapped_column(Text)
     parent_version_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("strategy_versions.strategy_version_id", name="fk_sv_parent", ondelete="SET NULL"),
@@ -802,10 +804,36 @@ class StrategyVersion(TimestampMixin, Base):
     )
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     quality_status: Mapped[QualityStatus] = mapped_column(_enum(QualityStatus, "quality_status"), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    review_reason: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[str | None] = mapped_column(String(64))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_by: Mapped[str | None] = mapped_column(String(64))
     created_by: Mapped[str | None] = mapped_column(String(64))
     updated_by: Mapped[str | None] = mapped_column(String(64))
+
+
+class StrategyVersionAudit(TimestampMixin, Base):
+    __tablename__ = "strategy_version_audits"
+    __table_args__ = (
+        Index("ix_sva_audit_version_created", "strategy_version_id", "created_at"),
+        Index("ix_sva_audit_transition", "transition"),
+    )
+
+    audit_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    strategy_version_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("strategy_versions.strategy_version_id", name="fk_sva_audit_version", ondelete="CASCADE"),
+        nullable=False,
+    )
+    transition: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    source_surface: Mapped[str] = mapped_column(String(128), nullable=False)
+    before_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
+    after_state_json: Mapped[dict[str, Any] | None] = mapped_column(_jsonb_type())
 
 
 class StrategyRuleMembership(Base):

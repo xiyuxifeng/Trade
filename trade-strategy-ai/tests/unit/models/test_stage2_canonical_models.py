@@ -26,6 +26,7 @@ def test_stage2_canonical_tables_are_registered() -> None:
         "author_profile_versions",
         "strategies",
         "strategy_versions",
+        "strategy_version_audits",
         "strategy_rule_memberships",
         "daily_rule_selections",
         "daily_rule_selection_items",
@@ -55,6 +56,7 @@ def test_stage2_canonical_tables_expose_frozen_identity_columns() -> None:
     assert {"strategy_version_id", "strategy_id", "version_no", "lifecycle_state"}.issubset(
         Base.metadata.tables["strategy_versions"].columns.keys()
     )
+    assert "strategy_version_audits" in Base.metadata.tables
     assert {"daily_rule_selection_id", "strategy_version_id", "market_state_id", "trade_date"}.issubset(
         Base.metadata.tables["daily_rule_selections"].columns.keys()
     )
@@ -174,6 +176,7 @@ def test_stage2_canonical_object_names_fit_postgresql_identifier_limit() -> None
         "author_profile_versions",
         "strategies",
         "strategy_versions",
+        "strategy_version_audits",
         "strategy_rule_memberships",
         "daily_rule_selections",
         "daily_rule_selection_items",

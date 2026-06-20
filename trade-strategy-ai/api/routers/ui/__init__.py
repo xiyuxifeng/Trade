@@ -19,6 +19,7 @@ from .ops import router as ops_router
 from .optimize import router as optimize_router
 from .traders import router as traders_router
 from .security_audit import router as security_audit_router
+from .strategies import router as strategies_router
 from .strategy_studio import router as strategy_studio_router
 from .job_audits import router as job_audits_router
 from .rule_pool import router as rule_pool_router
@@ -50,6 +51,7 @@ __all__ = [
     "optimize_router",
     "traders_router",
     "security_audit_router",
+    "strategies_router",
     "snapshots_router",
     "signals_router",
     "rule_pool_router",

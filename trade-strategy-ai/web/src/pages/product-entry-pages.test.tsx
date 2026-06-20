@@ -74,6 +74,25 @@ vi.mock('@/lib/api/authors', () => ({
   }),
 }));
 
+vi.mock('@/lib/api/strategies', () => ({
+  listStrategies: vi.fn().mockResolvedValue({
+    state: 'empty',
+    current_strategy: null,
+    items: [],
+    count: 0,
+  }),
+  getStrategyDraftOptions: vi.fn().mockResolvedValue({
+    rule_options: [],
+    author_profile_options: { method: [], rule: [], validated: [] },
+    dataset_options: [],
+    market_snapshot_options: [],
+    rule_applicability_options: [],
+  }),
+  createStrategyDraft: vi.fn(),
+  submitStrategyReview: vi.fn(),
+  publishStrategy: vi.fn(),
+}));
+
 vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn().mockResolvedValue({
     status: 'partial',
@@ -235,11 +254,16 @@ describe('formal product entry pages', () => {
     [<RulesLibraryPage />, 'rule-pool-product'],
     [<RulesBacktestsPage />, 'formal-backtest-product'],
     [<RulesResultsPage />, 'formal-backtest-results-product'],
-    [<StrategyCandidatesPage />, 'strategy-candidates-product'],
     [<SystemStatusPage />, 'system-status-product'],
   ])('mounts the existing real capability', async (page, testId) => {
     renderPage(page);
     expect(await screen.findByTestId(testId)).toBeInTheDocument();
+  });
+
+  it('keeps strategies candidates as a compatibility notice page', async () => {
+    renderPage(<StrategyCandidatesPage />);
+    expect(await screen.findByRole('heading', { name: '候选版本' })).toBeInTheDocument();
+    expect(screen.getByText('该页面仅保留兼容入口，正式策略流程已迁移到“策略中心”。')).toBeInTheDocument();
   });
 
   it('connects result and system pages to truthful real capability summaries', async () => {
@@ -267,8 +291,9 @@ describe('formal product entry pages', () => {
     cleanup();
 
     renderPage(<StrategyOverviewPage />);
-    expect(screen.getByTestId('strategy-candidates-product')).toBeInTheDocument();
-    expect(screen.getAllByText(/正式策略版本尚未建立/).length).toBeGreaterThan(0);
+    expect(await screen.findByRole('heading', { name: '策略中心' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存策略草稿' })).toBeInTheDocument();
+    expect(screen.getAllByText(/暂无正式策略版本|当前还没有正式策略版本/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/共 \d+ 个正式策略/)).not.toBeInTheDocument();
   });
 

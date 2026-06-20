@@ -146,3 +146,161 @@ Non-blocking:
 `Bootstrap READY`.
 
 Next executable Task is `RT-S8-001 策略草稿与发布`, recommended model/session `gpt-5.4` Task Implementation using the frozen plan, with escalation to `gpt-5.5` if lifecycle, migration, current-use ownership, rollback, proposal boundary or canonical data path needs contract changes.
+
+## 2026-06-20 RT-S8-001 策略草稿与发布
+
+### Task Status
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现 RT-S8-001 正式策略草稿/审核/发布基础能力：
+
+- canonical strategy repository；
+- canonical strategy center service；
+- `/api/ui/v1/strategies` 正式 API；
+- `/strategies` 正式策略中心页面与 client/types；
+- bounded migration：正式审核字段、当前策略 FK、审计表；
+- focused backend / API / frontend / migration tests；
+- 实施记录更新。
+
+未实现：
+
+- `RT-S8-002` 策略验证、对比、回滚；
+- `RT-S8-003` StrategyRevisionProposal flow；
+- Stage 9 / Stage 10；
+- 生产策略发布或生产数据写入；
+- E2E 浏览器验收。
+
+### Key Decisions
+
+- 正式策略写入只走 `Strategy`、`StrategyVersion`、`StrategyRuleMembership`。
+- 当前正式策略指针只通过 `strategies.current_published_version_id` 更新，并增加 FK 约束防止悬挂。
+- 草稿、提交审核、发布均写入 `strategy_version_audits`，保留 before/after state、actor、reason、source surface。
+- UI 统一回到 `/strategies` 正式策略中心；`/strategies/candidates` 保留兼容提示页，不再作为正式事实源。
+- 缺失 canonical 输入不做 legacy 回填；只暴露 canonical rule/profile/policy/snapshot options。
+- 发布操作只允许 reviewed/audited transition，不静默覆盖既有 published/current 版本。
+
+### Files Changed
+
+- `src/models/stage2_canonical.py`
+- `src/db/repositories/strategy_repo.py`
+- `src/services/strategy_center_service.py`
+- `src/db/migrations/versions/2026_06_20_0001_stage8_strategy_center_foundation.py`
+- `api/app.py`
+- `api/routers/ui/__init__.py`
+- `api/routers/ui/strategies.py`
+- `tests/unit/services/test_strategy_center_service.py`
+- `tests/api/routers/test_strategies.py`
+- `tests/api/test_api_app_factory.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `tests/unit/models/test_stage2_canonical_models.py`
+- `tests/unit/db/test_migrations.py`
+- `web/src/types/strategies.ts`
+- `web/src/lib/api/strategies.ts`
+- `web/src/lib/api/strategies.test.ts`
+- `web/src/pages/strategies/StrategyOverviewPage.tsx`
+- `web/src/pages/strategies/index.test.tsx`
+- `web/src/pages/product-entry-pages.test.tsx`
+- `docs/refactor-implementation-logs/stage-8.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Database Migration
+
+新增 `2026_06_20_0001_stage8_strategy_center_foundation.py`：
+
+- `strategy_versions` 增加 `title`、`summary`、`review_status`、`review_reason`、`reviewed_at`、`reviewed_by`；
+- `strategies.current_published_version_id` 增加 FK `fk_strategies_current_version`；
+- 新增 `strategy_version_audits` 表及索引；
+- downgrade 在存在 reviewed/published strategy data 或 audit data 时拒绝回退。
+
+修复项：
+
+- 初次 PostgreSQL `upgrade head` 暴露 `formal_lifecycle` 枚举事务内使用 `pending_review` 的问题；
+- 通过把回填逻辑从 `lifecycle_state = 'pending_review'` 改为 `lifecycle_state = 'in_review' -> review_status = 'pending_review'` 修复；
+- 修复后 fresh upgrade、safe re-run、downgrade、re-upgrade 全部通过。
+
+### Verification
+
+Backend / API:
+
+- `python -m pytest tests/unit/services/test_strategy_center_service.py tests/api/routers/test_strategies.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py tests/unit/db/test_migrations.py`
+  - `18 passed`
+
+Migration unit contract:
+
+- `python -m pytest tests/unit/db/test_migrations.py`
+  - `11 passed`
+
+Frontend:
+
+- `pnpm test -- src/lib/api/strategies.test.ts src/pages/strategies/index.test.tsx src/app/route-config.test.tsx src/pages/product-entry-pages.test.tsx`
+  - `25 passed`
+
+Frontend type safety:
+
+- `pnpm typecheck`
+  - passed
+
+Migration runtime verification on temporary PostgreSQL database `rt_s8_001_migration_0620`:
+
+- fresh `upgrade head` -> passed to `2026_06_20_0001`
+- re-`upgrade head` -> passed as no-op
+- `current` -> `2026_06_20_0001 (head)`
+- `downgrade 2026_06_19_0014` -> passed
+- `current` -> `2026_06_19_0014`
+- re-`upgrade head` -> passed
+- final `current` -> `2026_06_20_0001 (head)`
+
+Static checks:
+
+- `git diff --check`
+  - passed
+
+### Legacy Isolation Evidence
+
+Formal RT-S8-001 path files:
+
+- `api/routers/ui/strategies.py`
+- `src/services/strategy_center_service.py`
+- `src/db/repositories/strategy_repo.py`
+- `web/src/lib/api/strategies.ts`
+- `web/src/pages/strategies/StrategyOverviewPage.tsx`
+
+对以上文件执行 legacy dependency grep：
+
+- `TraderStrategyVersion`
+- `strategy_studio`
+- `optimize`
+- `SnapshotLoader`
+- `config_path`
+- `strategy_library`
+- live `Provider`
+- mutable latest-record wording
+
+结果：`no matches`
+
+结论：RT-S8-001 formal path 不调用 legacy strategy jobs、`TraderStrategyVersion`、live Providers、file JSON、mutable latest records、legacy strategy-studio / optimize write paths。
+
+### Acceptance Summary
+
+- `/strategies` 已从 compatibility candidate shell 改为正式策略中心。
+- 用户可查看正式策略当前状态、规则池、基础权重、作者画像版本、风险政策、仓位约束、目标股票范围、市场状态选择政策、降级政策。
+- 用户可基于 canonical rule/profile/policy inputs 保存策略草稿。
+- 用户可提交审核、发布为当前正式策略。
+- 发布链路具备审计与 current pointer traceability。
+- 未引入第二正式事实源。
+
+### Residual Risks
+
+- RT-S8-001 仅实现发布基础，不包含 RT-S8-002 的正式 diff / comparison / rollback UI；
+- `/strategies/candidates` 仍保留兼容提示页，后续仍需在退役阶段清理；
+- 未运行浏览器级 E2E，仅完成 focused frontend tests 与 typecheck；
+- 临时数据库 `rt_s8_001_migration_0620` 仍存在于本地 PostgreSQL，后续可清理。
+
+### Conclusion
+
+`RT-S8-001 ACCEPTED`。
+
+Stage 8 仍未完成；下一推荐任务仅在再次授权后开始 `RT-S8-002 策略验证和回滚`。

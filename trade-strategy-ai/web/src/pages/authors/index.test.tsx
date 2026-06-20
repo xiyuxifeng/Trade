@@ -142,4 +142,54 @@ describe('authors page', () => {
     expect(screen.getByText('证据区间不完整，当前画像只能作为部分证据查看。')).toBeInTheDocument();
     expect(screen.getAllByText(/不是作者真实实盘收益描述/)).toHaveLength(4);
   });
+
+  it('shows method-profile details from formal payload instead of legacy persona text', async () => {
+    vi.mocked(listAuthorProfiles).mockResolvedValueOnce({
+      state: 'partial',
+      count: 1,
+      items: [
+        {
+          author_profile_version_id: 'apv-1',
+          author_profile_id: 'ap-1',
+          author_id: 'author-1',
+          profile_kind: 'method',
+          profile_kind_label: '作者方法画像',
+          version_no: 1,
+          lifecycle_state: 'draft',
+          lifecycle_label: '草稿',
+          review_status: 'draft',
+          status_state: 'partial',
+          schema_version: 'author-profile-v1',
+          prompt_version: 'author_method_profile_batch_v1',
+          evidence_period: { from: '2026-01-01', to: '2026-01-10' },
+          effective_period: { from: '2026-01-11', to: null },
+          source_versions: {},
+          evidence_fingerprint: null,
+          profile_fingerprint: null,
+          quality_status: 'partial',
+          partial_reasons: ['证据区间不完整，当前画像只能作为部分证据查看。'],
+          limitations: ['画像来自结构化文章表达，不代表真实实盘表现。'],
+          payload: {
+            method_profile: {
+              trading_style: [{ name: '趋势突破' }],
+              analysis_framework: [{ name: '量价共振' }],
+              stock_selection_preference: [{ name: '强势股' }],
+            },
+            conclusions: [],
+          },
+          evidence: {},
+          source_bindings: {},
+          supersession: {},
+        },
+      ],
+    });
+
+    renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
+
+    expect(await screen.findByText('交易风格')).toBeInTheDocument();
+    expect(screen.getByText('趋势突破')).toBeInTheDocument();
+    expect(screen.getByText('分析框架')).toBeInTheDocument();
+    expect(screen.getByText('量价共振')).toBeInTheDocument();
+    expect(screen.queryByText('交易风格画像')).not.toBeInTheDocument();
+  });
 });

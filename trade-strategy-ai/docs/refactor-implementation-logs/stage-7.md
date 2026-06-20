@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 7 作者画像`
-- 当前活动：`2026-06-19 RT-S7-004 画像版本与时间分段`
-- 当前状态：`RT-S7-004 ACCEPTED`
-- 当前 Task：`RT-S7-004` 已完成并接受；`RT-S7-001/002/003` 未开始
-- 下一可执行 Task：`RT-S7-001 作者方法画像`
-- 不得自动开始：`RT-S7-001` 需用户明确触发；不得开始 Stage 7 Gate
+- 当前活动：`2026-06-20 RT-S7-001 作者方法画像`
+- 当前状态：`RT-S7-001 ACCEPTED`
+- 当前 Task：`RT-S7-004`、`RT-S7-001` 已完成并接受；`RT-S7-002/003` 未开始
+- 下一可执行 Task：`RT-S7-002 作者规则画像`
+- 不得自动开始：`RT-S7-002` 需用户明确触发；不得开始 Stage 7 Gate
 
 ## 2026-06-19 Stage 7 Bootstrap
 
@@ -263,5 +263,103 @@ Remaining Stage 7 tasks before Gate:
 1. `RT-S7-001 作者方法画像`
 2. `RT-S7-002 作者规则画像`
 3. `RT-S7-003 作者验证画像`
+
+Stage 7 is not complete. Stage 7 Gate has not started.
+
+## 2026-06-20 RT-S7-001 作者方法画像
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+Implemented only `RT-S7-001 AuthorMethodProfile` draft generation from validated structured article results and the minimal `/authors` method section display.
+
+Out of scope and not implemented: `RT-S7-002`, `RT-S7-003`, new migration/schema foundation beyond `RT-S7-004`, article full-text author total-profile generation, rule statistics generation, validated profile generation, strategy publication, Stage 7 Gate, Stage 8.
+
+### Delegation
+
+Used `refactor-orchestrator` with explicit delegation.
+
+- One bounded read-only `refactor_explorer_mini` subagent mapped the RT-S7-001 implementation surface and confirmed no frozen-contract blocker.
+- One bounded `refactor_executor_mini` subagent was started with a Task Card, but it did not return a usable handoff within the bounded wait window.
+- Parent switched to the skill's `single-controller fallback`, kept the same frozen Task Card, completed implementation locally, and performed final semantic review and acceptance.
+
+### Implemented Behavior
+
+- Added formal `AuthorMethodProfile` generation runtime at `src/services/author_method_profile_service.py`.
+- Formal generation consumes only canonical `ArticleStructure`, `ArticleRevision`, `PromptRun`, and `Authors` records; it does not read raw unbounded article text.
+- Added `/api/ui/v1/authors/method-profiles/drafts` to generate method-profile drafts from explicit `article_structure_ids`.
+- Added prompt orchestration for `author_method_profile_batch_v1` with one batch call over structured article payloads only, capped at 20 structures per request.
+- Persisted prompt runtime evidence through `PromptRun` with `prompt/schema/model/token/cost/input_hash/run_id` metadata and reused cached runs by identity hash.
+- Ensured LLM raw output is not the final formal fact source: runtime validates `author_method_profile_batch_v1` output, transforms it into formal draft payload/evidence, and writes through `AuthorProfileService`.
+- Extended `AuthorProfileService` draft creation/view logic to preserve `prompt_run_id`, prompt metadata, and prompt-related partial-state checks.
+- Generated formal method-profile payload sections for trading style, analysis framework, stock selection preference, entry/exit preference, risk expression, holding period, data dependencies, market-state assumptions, evidence, confidence, provenance, and version binding.
+- Preserved separation from `AuthorRuleProfile` and `AuthorValidatedProfile`; method generation writes only `profile_kind=method` and keeps rule/backtest bindings empty.
+- Missing or version-unaligned evidence now produces partial/unresolved draft output with `quality.status=insufficient_evidence`; it is not represented as success/false/zero.
+- `/authors` now renders formal method-profile details from payload without reviving legacy persona behavior and without hiding other formal profile kinds.
+
+### Contract Compliance
+
+- No frozen Stage 7 foundation contract was redesigned.
+- No migration was added.
+- No second formal writer, fact source, Schema, or legacy entry point was introduced.
+- No per-article author total-profile Prompt was added.
+- Method generation uses structured-article batch input only and preserves review/publish semantics from `RT-S7-004`.
+- New evidence still creates draft/revision output only; published profiles are not overwritten.
+- UI text continues to state that author profiles are not real trading performance.
+
+### Review Findings and Repairs
+
+- `HIGH`: initial `/authors` method-section change filtered the canonical page down to method profiles only, which would have hidden later formal rule/validated versions. Repaired by restoring full formal list fetch and limiting the change to method-section rendering only.
+- `MEDIUM`: router initially did not surface prompt-runtime failures with a user-facing error response. Repaired with explicit `PromptRuntimeError -> 503` mapping.
+- `MEDIUM`: new unit tests initially failed on SQLite compatibility helpers; repaired by adding local SQLite compile helpers and `char_length` registration in the test fixture.
+
+No unresolved `BLOCKER` or required `HIGH` finding remains within the frozen `RT-S7-001` contract.
+
+### Validation
+
+Passed:
+
+- `python -m pytest tests/unit/services/test_author_method_profile_service.py tests/unit/services/test_author_profile_service.py tests/api/routers/test_authors.py tests/unit/llm/test_prompt_registry.py tests/api/test_ui_openapi_contract.py`：`12 passed`
+- `pnpm test -- src/lib/api/authors.test.ts src/pages/authors/index.test.tsx`：`5 passed`
+- `python -m compileall api src tests/api/routers/test_authors.py tests/unit/services/test_author_method_profile_service.py`：passed
+- `pnpm typecheck`：passed
+- `git diff --check`：passed
+
+Not run:
+
+- Database migration upgrade/safe-rerun/rollback was not run for RT-S7-001 because this task does not add or modify migrations.
+- Additional frontend/API regression suites outside the touched authors surfaces were not rerun because the change stayed within the RT-S7-001 bounded surface and targeted suites passed.
+
+### Files Changed
+
+- `api/routers/ui/authors.py`
+- `src/services/author_method_profile_service.py`
+- `src/services/author_profile_service.py`
+- `tests/api/routers/test_authors.py`
+- `tests/unit/services/test_author_method_profile_service.py`
+- `web/src/lib/api/authors.ts`
+- `web/src/lib/api/authors.test.ts`
+- `web/src/pages/authors/index.tsx`
+- `web/src/pages/authors/index.test.tsx`
+- `web/src/types/authors.ts`
+
+### Known Risks
+
+- `ArticleStructure` / `ArticleRevision` / content-hash bindings remain JSON source bindings plus `prompt_run_id`, not normalized FK detail rows. This stays within the frozen `RT-S7-004` storage contract and avoids a second formal table, but later Stage 7 tasks must continue to keep provenance explicit.
+- Method-profile draft generation currently accepts explicit `article_structure_ids` from the caller and does not yet provide a full UI workflow for selecting structured articles. This is within RT-S7-001 scope because the formal runtime and method section are now available, but broader operator workflow ergonomics remain for later work.
+- Batches under 10 structures are allowed only as partial evidence drafts with warnings. This matches the frozen “10–20 where applicable” constraint, but operator guidance still depends on choosing sensible batches.
+
+### Acceptance Conclusion
+
+`RT-S7-001 ACCEPTED`.
+
+Remaining Stage 7 tasks before Gate:
+
+1. `RT-S7-002 作者规则画像`
+2. `RT-S7-003 作者验证画像`
+3. `Stage 7 Gate`
 
 Stage 7 is not complete. Stage 7 Gate has not started.

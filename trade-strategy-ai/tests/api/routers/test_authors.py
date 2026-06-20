@@ -99,6 +99,33 @@ class _FakeAuthorProfileService:
         return _FakeVersion(lifecycle_state="archived", lifecycle_label="已归档", review_status="archived", status_state="archived", archived_at="2026-06-19T12:00:00+00:00")
 
 
+class _FakeAuthorMethodProfileService:
+    async def generate_draft(self, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert request.article_structure_ids
+        return _FakeVersion(
+            lifecycle_state="draft",
+            lifecycle_label="草稿",
+            review_status="draft",
+            status_state="partial",
+            payload={
+                "method_profile": {
+                    "trading_style": [{"name": "趋势突破"}],
+                },
+                "conclusions": [
+                    {
+                        "text": "偏好趋势突破",
+                        "evidence": [{"article_structure_id": "structure-1"}],
+                        "confidence": 0.7,
+                        "provenance": {"lane": "article_expression"},
+                        "version_binding": {"prompt_version": "author_method_profile_batch_v1"},
+                    }
+                ],
+                "limitations": ["画像来自结构化文章表达，不代表真实实盘表现。"],
+            },
+        )
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
@@ -166,3 +193,30 @@ async def test_create_submit_publish_and_archive_author_profile_routes(client: A
     archived = await client.post("/api/ui/v1/authors/profiles/version-1/archive", json={"reason": "归档"})
     assert archived.status_code == 200
     assert archived.json()["lifecycle_state"] == "archived"
+
+
+async def test_generate_author_method_profile_draft_route(client: AsyncClient) -> None:
+    from api.routers.ui.authors import get_author_method_profile_service
+
+    app.dependency_overrides[get_current_principal] = _operator_override
+    app.dependency_overrides[get_author_method_profile_service] = lambda: _FakeAuthorMethodProfileService()
+
+    response = await client.post(
+        "/api/ui/v1/authors/method-profiles/drafts",
+        json={
+            "author_id": "00000000-0000-0000-0000-000000000001",
+            "article_structure_ids": [
+                "00000000-0000-0000-0000-000000000101",
+                "00000000-0000-0000-0000-000000000102",
+            ],
+            "evidence_from": "2026-01-01",
+            "evidence_to": "2026-01-10",
+            "effective_from": "2026-01-11",
+            "reason": "生成作者方法画像草稿",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["profile_kind"] == "method"
+    assert body["payload"]["method_profile"]["trading_style"][0]["name"] == "趋势突破"

@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.stage2_writer_routing import canonical_write_scope
 from src.db.repositories.author_profile_repository import AuthorProfileRepository
@@ -40,6 +41,7 @@ class AuthorProfileDraftRequest(BaseModel):
     profile_kind: AuthorProfileKind
     schema_version: str
     prompt_version: str | None = None
+    prompt_run_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     evidence: dict[str, Any] = Field(default_factory=dict)
     source_article_ids: dict[str, Any] = Field(default_factory=dict)
@@ -103,6 +105,7 @@ class AuthorProfileVersionView(BaseModel):
     status_state: str
     schema_version: str
     prompt_version: str | None = None
+    prompt_run_id: str | None = None
     evidence_period: dict[str, Any]
     effective_period: dict[str, Any]
     source_versions: dict[str, Any]
@@ -168,6 +171,22 @@ class AuthorProfileService:
         if actor_role not in {"operator", "admin"}:
             raise PermissionError("operator permission is required to create an author profile draft")
 
+        async with self._session_scope_factory() as session:
+            return await self._create_draft_in_session(
+                session,
+                request,
+                actor_id=actor_id,
+                actor_role=actor_role,
+            )
+
+    async def _create_draft_in_session(
+        self,
+        session: AsyncSession,
+        request: AuthorProfileDraftRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> AuthorProfileVersionView:
         author_profile_id = request.author_profile_id or uuid4()
         evidence_payload = {
             "evidence": request.evidence,
@@ -182,68 +201,70 @@ class AuthorProfileService:
                 "versions": request.source_versions,
             },
             "evidence_period": {"from": request.evidence_from, "to": request.evidence_to},
+            "prompt_run_id": str(request.prompt_run_id) if request.prompt_run_id else None,
         }
         profile_payload = {
             "profile_kind": request.profile_kind.value,
             "schema_version": request.schema_version,
             "prompt_version": request.prompt_version,
+            "prompt_run_id": str(request.prompt_run_id) if request.prompt_run_id else None,
             "payload": request.payload,
             "effective_period": {"from": request.effective_from, "to": request.effective_to},
         }
 
-        async with self._session_scope_factory() as session:
-            version_no = await self.repository.next_version_no(
+        version_no = await self.repository.next_version_no(
+            session,
+            author_profile_id=author_profile_id,
+            profile_kind=request.profile_kind,
+        )
+        version = AuthorProfileVersion(
+            author_profile_id=author_profile_id,
+            author_id=request.author_id,
+            profile_kind=request.profile_kind,
+            version_no=version_no,
+            schema_version=request.schema_version,
+            prompt_version=request.prompt_version,
+            prompt_run_id=request.prompt_run_id,
+            lifecycle_state=FormalLifecycleState.draft,
+            review_status="draft",
+            as_of_from=request.evidence_from,
+            as_of_to=request.evidence_to,
+            evidence_from=request.evidence_from,
+            evidence_to=request.evidence_to,
+            effective_from=request.effective_from,
+            effective_to=request.effective_to,
+            payload=request.payload,
+            evidence_json=request.evidence,
+            source_article_ids=request.source_article_ids,
+            source_rule_version_ids=request.source_rule_version_ids,
+            source_rule_family_ids=request.source_rule_family_ids,
+            source_applicability_profile_ids=request.source_applicability_profile_ids,
+            source_backtest_run_ids=request.source_backtest_run_ids,
+            source_backtest_result_ids=request.source_backtest_result_ids,
+            source_daily_review_ids=request.source_daily_review_ids,
+            source_versions_json=request.source_versions,
+            evidence_fingerprint=_fingerprint(evidence_payload),
+            profile_fingerprint=_fingerprint(profile_payload),
+            parent_version_id=request.parent_version_id,
+            supersedes_version_id=request.supersedes_version_id,
+            quality_status=request.quality_status,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+        with canonical_write_scope("author_profile", "AuthorProfileService.create_draft"):
+            await self.repository.add_version(session, version)
+            await self.repository.record_audit(
                 session,
-                author_profile_id=author_profile_id,
-                profile_kind=request.profile_kind,
+                version=version,
+                transition="created_draft",
+                actor_id=actor_id,
+                actor_role=actor_role,
+                reason=request.reason,
+                source_surface=request.source_surface,
+                before_state=None,
+                after_state=self._audit_state(version),
             )
-            version = AuthorProfileVersion(
-                author_profile_id=author_profile_id,
-                author_id=request.author_id,
-                profile_kind=request.profile_kind,
-                version_no=version_no,
-                schema_version=request.schema_version,
-                prompt_version=request.prompt_version,
-                lifecycle_state=FormalLifecycleState.draft,
-                review_status="draft",
-                as_of_from=request.evidence_from,
-                as_of_to=request.evidence_to,
-                evidence_from=request.evidence_from,
-                evidence_to=request.evidence_to,
-                effective_from=request.effective_from,
-                effective_to=request.effective_to,
-                payload=request.payload,
-                evidence_json=request.evidence,
-                source_article_ids=request.source_article_ids,
-                source_rule_version_ids=request.source_rule_version_ids,
-                source_rule_family_ids=request.source_rule_family_ids,
-                source_applicability_profile_ids=request.source_applicability_profile_ids,
-                source_backtest_run_ids=request.source_backtest_run_ids,
-                source_backtest_result_ids=request.source_backtest_result_ids,
-                source_daily_review_ids=request.source_daily_review_ids,
-                source_versions_json=request.source_versions,
-                evidence_fingerprint=_fingerprint(evidence_payload),
-                profile_fingerprint=_fingerprint(profile_payload),
-                parent_version_id=request.parent_version_id,
-                supersedes_version_id=request.supersedes_version_id,
-                quality_status=request.quality_status,
-                created_by=actor_id,
-                updated_by=actor_id,
-            )
-            with canonical_write_scope("author_profile", "AuthorProfileService.create_draft"):
-                await self.repository.add_version(session, version)
-                await self.repository.record_audit(
-                    session,
-                    version=version,
-                    transition="created_draft",
-                    actor_id=actor_id,
-                    actor_role=actor_role,
-                    reason=request.reason,
-                    source_surface=request.source_surface,
-                    before_state=None,
-                    after_state=self._audit_state(version),
-                )
-            return self._to_view(version)
+        return self._to_view(version)
 
     async def list_versions(
         self,
@@ -467,6 +488,7 @@ class AuthorProfileService:
             status_state="partial" if partial_reasons else lifecycle_state.value,
             schema_version=version.schema_version,
             prompt_version=version.prompt_version,
+            prompt_run_id=str(version.prompt_run_id) if version.prompt_run_id else None,
             evidence_period={"from": version.evidence_from, "to": version.evidence_to},
             effective_period={"from": version.effective_from, "to": version.effective_to},
             source_versions=version.source_versions_json or {},
@@ -495,8 +517,14 @@ class AuthorProfileService:
             reasons.append("生效起点缺失，不能作为完整时间分段画像。")
         if not version.source_versions_json:
             reasons.append("来源版本未完整绑定，不能显示为完整画像。")
+        if version.prompt_version and not version.prompt_run_id:
+            reasons.append("提示运行记录缺失，不能显示为完整画像。")
         if version.quality_status in {QualityStatus.partial, QualityStatus.ambiguous, QualityStatus.unresolved, QualityStatus.legacy_only}:
             reasons.append("证据质量不是完整验证状态。")
+        quality = (version.payload or {}).get("quality") or {}
+        for warning in quality.get("warnings", []):
+            if isinstance(warning, str) and warning not in reasons:
+                reasons.append(warning)
         return reasons
 
     def _collection_state(self, rows: list[AuthorProfileVersion]) -> str:
@@ -509,6 +537,7 @@ class AuthorProfileService:
     def _source_bindings(self, version: AuthorProfileVersion) -> dict[str, Any]:
         return {
             "article_revision_ids": version.source_article_ids or {},
+            "prompt_run_id": str(version.prompt_run_id) if version.prompt_run_id else None,
             "rule_version_ids": version.source_rule_version_ids or {},
             "rule_family_ids": version.source_rule_family_ids or {},
             "rule_applicability_profile_ids": version.source_applicability_profile_ids or {},

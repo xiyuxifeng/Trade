@@ -12,7 +12,7 @@ type AuthorsPageProps = {
 export function AuthorsPage({ availability }: AuthorsPageProps = {}) {
   const profilesQuery = useQuery({
     queryKey: ['author-profiles'],
-    queryFn: listAuthorProfiles,
+    queryFn: () => listAuthorProfiles(),
     enabled: availability === undefined,
   });
   const permissionDenied = profilesQuery.error instanceof ApiError && (profilesQuery.error.status === 401 || profilesQuery.error.status === 403);
@@ -106,9 +106,50 @@ function AuthorProfileVersions({
               ))}
             </ul>
           ) : null}
+          {item.profile_kind === 'method' && item.payload?.method_profile ? (
+            <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3">
+              <MethodField label="交易风格" values={(item.payload.method_profile as Record<string, unknown>).trading_style} />
+              <MethodField label="分析框架" values={(item.payload.method_profile as Record<string, unknown>).analysis_framework} />
+              <MethodField label="选股偏好" values={(item.payload.method_profile as Record<string, unknown>).stock_selection_preference} />
+              <MethodField label="入场偏好" values={(item.payload.method_profile as Record<string, unknown>).entry_preferences} />
+              <MethodField label="退出偏好" values={(item.payload.method_profile as Record<string, unknown>).exit_preferences} />
+              <MethodField label="风险表达" values={(item.payload.method_profile as Record<string, unknown>).risk_expressions} />
+              <MethodField label="持有周期" values={(item.payload.method_profile as Record<string, unknown>).holding_period_preferences} />
+              <MethodField label="数据依赖" values={(item.payload.method_profile as Record<string, unknown>).data_dependency_preferences} />
+              <MethodField label="市场状态假设" values={(item.payload.method_profile as Record<string, unknown>).market_state_assumptions} />
+            </div>
+          ) : null}
           <p className="mt-3 text-xs text-slate-500">画像来自文章、规则和回测证据版本绑定，不是作者真实实盘收益描述。</p>
         </article>
       ))}
+    </div>
+  );
+}
+
+function MethodField({ label, values }: { label: string; values: unknown }) {
+  const items = Array.isArray(values)
+    ? values
+        .map((item) => {
+          if (typeof item === 'string') {
+            return item;
+          }
+          if (item && typeof item === 'object' && 'name' in item) {
+            return String((item as { name: unknown }).name);
+          }
+          if (item && typeof item === 'object' && 'market_state' in item) {
+            return String((item as { market_state: unknown }).market_state);
+          }
+          return null;
+        })
+        .filter((item): item is string => Boolean(item))
+    : [];
+  if (!items.length) {
+    return null;
+  }
+  return (
+    <div className="grid gap-1">
+      <p className="m-0 text-xs font-medium text-slate-500">{label}</p>
+      <p className="m-0 text-sm text-slate-800">{items.join('、')}</p>
     </div>
   );
 }

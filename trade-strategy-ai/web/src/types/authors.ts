@@ -45,3 +45,13 @@ export type AuthorProfileListResponse = {
   items: AuthorProfileVersion[];
   count: number;
 };
+
+export type AuthorMethodProfileDraftRequest = {
+  author_id: string;
+  article_structure_ids: string[];
+  evidence_from?: string | null;
+  evidence_to?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  reason?: string | null;
+};

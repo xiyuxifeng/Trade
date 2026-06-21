@@ -485,3 +485,143 @@ selection backend/API 文件复核未发现以下正式输入：
 `RT-S9-002 ACCEPTED`。
 
 下一推荐任务：`RT-S9-003 每日策略实例和盘前计划`。
+
+## 2026-06-21 RT-S9-003 每日策略实例和盘前计划
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现基于已接受 `DailyRuleSelection` 的正式 `DailyStrategyInstance` / `TradingDayPlan` 生成、审核和 `/daily/pre-market` 计划展示，不实现：
+
+- `StrategyVersion` 重建、发布、回滚或变更；
+- `Strategy.current_published_version_id` 变更；
+- `RuleVersion` / `RuleApplicabilityProfile` / `AuthorProfileVersion` 生命周期变更；
+- `StrategyRevisionProposal` / `OptimizationProposal` 状态变更；
+- Stage 10 信号结果评估、盘后归因或提案生成；
+- live Provider；
+- legacy pre-market job / file report / `config_path` / compatibility job cards 作为 formal input；
+- 第二套正式 daily-plan source-of-truth。
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定采用 single-controller fallback，选择 `0` 个 subagent。
+
+原因：
+
+- 当前会话仍无法独立证明 native child spawning、custom child model 与 effective permission 边界；
+- RT-S9-003 涉及同一 formal Stage 9 flow 上的 repository/service/API/UI/test 串行落地与复核，拆分 subagent 的收益不足；
+- 未出现需要并行写入的独立实现面。
+
+### Implementation Summary
+
+新增正式 Stage 9 daily trading plan repository / service / API / client / UI / tests：
+
+- 后端新增 `DailyTradingPlanRepository`，读取 canonical `DailyRuleSelection`、`StrategyVersion`、`StrategyRuleMembership`、`DatasetSnapshot`、`MarketSnapshot`、`MarketRegimeRecord`、`RuleApplicabilityProfile`、`AuthorProfileVersion`，并只写 canonical `DailyStrategyInstance`、`TradingDayPlan`、`Signal`。
+- 后端新增 `DailyTradingPlanService`，仅在 `DailyRuleSelection` 可接受时生成 runtime-only `DailyStrategyInstance` 和 user-facing `TradingDayPlan`，并支持计划 `approved / rejected` 审核流。
+- 新增 `/api/ui/v1/daily/pre-market/plan` 正式查询/按需生成接口。
+- 新增 `/api/ui/v1/daily/pre-market/plan/review` 正式审核接口。
+- 前端 `/daily/pre-market` 增加“每日运行计划”区块，以业务中文展示市场判断、启用/暂停规则、候选标的、信号、入场条件、失效条件、止盈止损、建议仓位、风险提示、置信度与批准/驳回动作，并明确标注“不是正式策略”。
+
+### Runtime Contract
+
+本次实现固定遵守：
+
+- `DailyStrategyInstance` 是 runtime-only，不是 `StrategyVersion`；
+- `TradingDayPlan` 是 user-facing daily plan，不是 `StrategyVersion`；
+- 计划只能基于已接受 `DailyRuleSelection` 生成；
+- selection `blocked / unavailable / degraded-without-planable-output` 时不会静默生成成功计划；
+- 计划审核只变更 runtime instance / plan / signal state，不触碰正式策略与画像/规则/提案对象；
+- unavailable / degraded / unresolved 输入保持显式可见，不会被压平成 false / 0 / success。
+
+### Traceability And Persistence
+
+`DailyStrategyInstance` / `TradingDayPlan` 均复用 canonical 表，并在 bounded JSON payload 中保留完整 traceability：
+
+- `trade_date`
+- `strategy_version_id`
+- `daily_rule_selection_id`
+- `dataset_snapshot_id`
+- `market_snapshot_id`
+- `market_state_id`
+- `rule_applicability_profile_ids`
+- `author_method_profile_version_id`
+- `author_rule_profile_version_id`
+- `author_validated_profile_version_id`
+- `data_quality_state`
+- `readiness_status`
+- selected / reduced / suspended 决策摘要
+- deterministic selection reasons
+- degraded / unresolved inputs
+
+当前 frozen Stage 9 contract 下，现有 canonical table + bounded JSON payload 足以安全承载 RT-S9-003 所需 traceability，因此未新增 schema，也未触发 schema hardening escalation。
+
+### Design Decisions
+
+- `DailyRuleSelection` 是生成 `DailyStrategyInstance` / `TradingDayPlan` 的唯一 formal precondition；selection 不可用时直接返回 blocked/unavailable，不生成成功计划。
+- 计划信号、候选标的、入场/失效条件、止盈止损、建议仓位与风险提示都从正式策略版本 + 当日规则选择 traceability 派生，不回写正式策略。
+- 计划审核状态采用 runtime review flow，明确支持 `approved / rejected`，并同步更新 plan 和 signal review state。
+- `/daily/pre-market` 的正式计划区块只消费 formal Stage 9 API，不把 `/daily` 总览里的 compatibility-only job cards 当成计划来源。
+- 后端内部仍使用 canonical `MarketRegimeRecord` 模型读取市场状态，但 UI 一律呈现“市场状态”，不暴露 `Regime` 术语。
+
+### Files Changed
+
+- `api/routers/ui/daily_pre_market.py`
+- `src/db/repositories/daily_trading_plan_repo.py`
+- `src/services/daily_trading_plan_service.py`
+- `tests/api/routers/ui/test_daily_pre_market_plan.py`
+- `tests/api/test_api_app_factory.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+- `web/src/lib/api/contract.test.ts`
+- `web/src/lib/api/daily.ts`
+- `web/src/pages/daily/index.tsx`
+- `web/src/pages/daily/pre-market.test.tsx`
+- `web/src/types/daily.ts`
+
+### Database Migration
+
+无。
+
+### Verification
+
+已运行：
+
+- `python -m pytest tests/unit/services/test_daily_trading_plan_service.py tests/api/routers/ui/test_daily_pre_market_plan.py tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py -q`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:/usr/bin:/bin:/usr/sbin:/sbin pnpm test -- src/pages/daily/pre-market.test.tsx src/lib/api/contract.test.ts'`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:/usr/bin:/bin:/usr/sbin:/sbin pnpm typecheck'`
+- `git diff --check`
+- `rg -n "run-pre-market|snapshot-build|config_path|ManagerAgent|legacy strategy service|legacy backtest service|Workflow|Pipeline|Artifact|Provider|Regime" src/services/daily_trading_plan_service.py src/db/repositories/daily_trading_plan_repo.py api/routers/ui/daily_pre_market.py web/src/pages/daily/index.tsx`
+
+结果：
+
+- backend/API tests：`9 passed`
+- frontend tests：`7 passed`
+- frontend typecheck：passed
+- diff hygiene：passed
+- legacy isolation grep：formal plan service/repository/router 未接入被禁 legacy input；命中仅包括 `web/src/pages/daily/index.tsx` 既有 compatibility-only overview job 卡片和后端内部 `MarketRegimeRecord` 模型引用
+
+专项确认：
+
+- accepted `DailyRuleSelection` 能稳定生成 `DailyStrategyInstance` / `TradingDayPlan`；
+- blocked/unavailable selection 不会生成成功计划；
+- degraded inputs 会保留在计划 payload 与风险提示中；
+- OpenAPI/UI contract 已覆盖正式计划查询和审核接口；
+- approval / rejection flow 已覆盖；
+- 未生成 Stage 10 结果评估、归因或 proposal；
+- 未修改 `StrategyVersion`、current strategy pointer、rule/profile/proposal 状态；
+- `/daily/pre-market` 使用正式 Stage 9 flow，未把 `/daily` 总览 compatibility 卡片作为 formal source。
+
+### Residual Risks
+
+- `DailyRuleSelection` 与 `TradingDayPlan` 的顶层 traceability 仍位于 canonical JSON payload，而不是独立列；当前 frozen contract 下可接受，但若后续需要更强 SQL-level filtering，可在后续 hardening 中评估。
+- `/daily` 总览页仍保留 compatibility-only job 摘要卡片；本次未把它们纳入 formal Stage 9 flow，但后续仍可继续收敛概览入口。
+- 尚未运行浏览器级 E2E；当前依赖 focused backend/API/frontend/typecheck 验证。
+
+### Conclusion
+
+`RT-S9-003 ACCEPTED`。
+
+Stage 9 Gate 不得自动开始；需等待后续明确授权。

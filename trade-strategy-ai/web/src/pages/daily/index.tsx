@@ -1,17 +1,25 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { StatusBadge } from '@/components/kit';
-import { getDailyRuleSelection, getPreMarketReadiness } from '@/lib/api/daily';
+import { getDailyRuleSelection, getPreMarketReadiness, getTradingDayPlan, reviewTradingDayPlan } from '@/lib/api/daily';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import { ApiError } from '@/lib/api/http';
 import { formatLocalDateInputOffset } from '@/lib/date';
-import type { DailyRuleDecision, DailyRuleSelectionResponse, PreMarketCheck, PreMarketReadinessResponse } from '@/types/daily';
+import type {
+  DailyRuleDecision,
+  DailyRuleSelectionResponse,
+  PreMarketCheck,
+  PreMarketReadinessResponse,
+  TradingDayPlanField,
+  TradingDayPlanResponse,
+  TradingPlanSignal,
+} from '@/types/daily';
 import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from '@/features/strategy-workspace/strategy-workspace-utils';
 import { StrategyAfterClosePage as StrategyAfterCloseWorkspacePage } from '@/features/strategy-workspace';
 
@@ -385,6 +393,11 @@ function PreMarketReadinessResult({ response }: { response: PreMarketReadinessRe
       </div>
 
       <DailyRuleSelectionPanel readiness={response} selection={selectionQuery.data} loading={selectionQuery.isLoading} error={selectionQuery.error} />
+      <TradingDayPlanPanel
+        readiness={response}
+        selection={selectionQuery.data}
+        selectionLoading={selectionQuery.isLoading}
+      />
     </div>
   );
 }
@@ -479,6 +492,281 @@ function DailyRuleDecisionColumn({ title, items }: { title: string; items: Daily
         ) : (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">当前没有规则。</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TradingDayPlanPanel({
+  readiness,
+  selection,
+  selectionLoading,
+}: {
+  readiness: PreMarketReadinessResponse;
+  selection?: DailyRuleSelectionResponse;
+  selectionLoading: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const planQuery = useQuery({
+    queryKey: ['daily-trading-plan', readiness.trade_date],
+    queryFn: () => getTradingDayPlan(readiness.trade_date),
+    staleTime: 15_000,
+    enabled: readiness.can_proceed && Boolean(selection?.generated),
+  });
+  const reviewMutation = useMutation({
+    mutationFn: (request: { action: 'approve' | 'reject'; reason?: string | null }) =>
+      reviewTradingDayPlan(readiness.trade_date, request),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['daily-trading-plan', readiness.trade_date] });
+    },
+  });
+
+  if (!readiness.can_proceed) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">每日运行计划</p>
+        <p className="mt-3 text-sm text-slate-700">正式盘前检查未通过，当前不生成每日运行计划。</p>
+      </div>
+    );
+  }
+  if (selectionLoading || (selection && !selection.generated)) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">每日运行计划</p>
+        <p className="mt-3 text-sm text-slate-700">等待每日规则选择完成后再生成每日运行计划。</p>
+      </div>
+    );
+  }
+  if (planQuery.isLoading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">每日运行计划</p>
+        <p className="mt-3 text-sm text-slate-700">正在生成每日运行计划。</p>
+      </div>
+    );
+  }
+  if (planQuery.error || !planQuery.data) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">每日运行计划</p>
+        <p className="mt-3 text-sm text-slate-700">读取每日运行计划时发生错误。</p>
+      </div>
+    );
+  }
+
+  const plan = planQuery.data;
+  const pending = reviewMutation.isPending;
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-slate-950">每日运行计划</p>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">不是正式策略</span>
+          </div>
+          <p className="mt-2 text-sm text-slate-700">{plan.happened}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge value={plan.plan_status} />
+          <StatusBadge value={plan.approval_state} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <TradingPlanFieldCard title="今日市场判断" field={plan.market_judgment} />
+        <TradingPlanFieldCard title="置信度" field={plan.confidence} />
+        <TradingPlanFieldCard title="入场条件" field={plan.entry_conditions} />
+        <TradingPlanFieldCard title="失效条件" field={plan.invalidation_conditions} />
+        <TradingPlanFieldCard title="止盈止损" field={plan.stop_loss_take_profit} />
+        <TradingPlanFieldCard title="建议仓位" field={plan.suggested_position} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <TradingPlanRuleColumn title="启用规则" items={plan.enabled_rules} />
+        <TradingPlanRuleColumn title="降权规则" items={plan.reduced_rules} />
+        <TradingPlanRuleColumn title="暂停规则" items={plan.suspended_rules} />
+      </div>
+
+      <TradingPlanCandidateSection plan={plan} />
+      <TradingPlanSignalSection signals={plan.signals} />
+      <TradingPlanFieldCard title="风险提示" field={plan.risk_warnings} />
+      <TradingPlanTraceabilitySection plan={plan} />
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-950">审批状态</p>
+            <p className="mt-2 text-sm text-slate-700">
+              {plan.approval_state === 'approved'
+                ? `已批准${plan.approved_by ? `：${plan.approved_by}` : ''}`
+                : plan.approval_state === 'rejected'
+                  ? `已驳回：${plan.rejection_reason ?? '未填写原因'}`
+                  : '待批准'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => reviewMutation.mutate({ action: 'reject', reason: '人工审核后暂不执行今日计划。' })}
+              disabled={pending}
+            >
+              驳回今日计划
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-sky-600 bg-sky-600 px-4 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => reviewMutation.mutate({ action: 'approve' })}
+              disabled={pending}
+            >
+              批准今日计划
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TradingPlanFieldCard({ title, field }: { title: string; field: TradingDayPlanField }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-950">{title}</p>
+        <StatusBadge value={field.state} />
+      </div>
+      <p className="mt-2 text-sm text-slate-700">{field.summary}</p>
+      {field.details.length ? (
+        <div className="mt-3 space-y-1 text-xs text-slate-600">
+          {field.details.map((item) => (
+            <div key={`${title}-${item}`}>{item}</div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TradingPlanRuleColumn({
+  title,
+  items,
+}: {
+  title: string;
+  items: TradingDayPlanResponse['enabled_rules'];
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-sm font-medium text-slate-950">{title}</p>
+      <div className="mt-3 space-y-3">
+        {items.length ? (
+          items.map((item) => (
+            <div key={`${title}-${item.rule_version_id}`} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="m-0 text-sm font-medium text-slate-950">{item.rule_title ?? item.rule_version_id}</p>
+                  <p className="mt-1 text-xs text-slate-600">{item.rule_version_id}</p>
+                </div>
+                <StatusBadge value={item.decision} />
+              </div>
+              <p className="mt-2 text-sm text-slate-700">{item.controlling_priority_label}</p>
+              <div className="mt-2 grid gap-1 text-xs text-slate-600">
+                {item.reason_list.map((reason) => (
+                  <div key={`${item.rule_version_id}-${reason}`}>{reason}</div>
+                ))}
+                {item.degraded_inputs.length ? <div>降级输入：{item.degraded_inputs.join('、')}</div> : null}
+                {item.unresolved_inputs.length ? <div>未解决输入：{item.unresolved_inputs.join('、')}</div> : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">当前没有内容。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TradingPlanCandidateSection({ plan }: { plan: TradingDayPlanResponse }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-950">候选标的</p>
+        <StatusBadge value={plan.candidate_symbols_state.state} />
+      </div>
+      <p className="mt-2 text-sm text-slate-700">{plan.candidate_symbols_state.summary}</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {plan.candidate_symbols.length ? (
+          plan.candidate_symbols.map((item) => (
+            <div key={item.symbol} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="m-0 text-sm font-medium text-slate-950">{item.symbol}</p>
+                <StatusBadge value={item.state} />
+              </div>
+              <p className="mt-1 text-sm text-slate-700">{item.name ?? '名称暂不可用'}</p>
+              <div className="mt-2 text-xs text-slate-600">
+                {item.rank ? <div>排序：{item.rank}</div> : null}
+                {typeof item.score === 'number' ? <div>分数：{item.score.toFixed(2)}</div> : null}
+                {item.note ? <div>{item.note}</div> : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">当前没有可展示的候选标的。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TradingPlanSignalSection({ signals }: { signals: TradingPlanSignal[] }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-medium text-slate-950">信号</p>
+      <div className="mt-3 grid gap-3 xl:grid-cols-2">
+        {signals.length ? (
+          signals.map((signal) => (
+            <div key={`${signal.symbol}-${signal.signal_id ?? signal.side}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="m-0 text-sm font-medium text-slate-950">{signal.symbol}</p>
+                  <p className="mt-1 text-xs text-slate-600">{signal.name ?? '名称暂不可用'}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge value={signal.side} />
+                  <StatusBadge value={signal.state} />
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                <div><span className="font-medium text-slate-900">入场条件：</span>{signal.entry_condition}</div>
+                <div><span className="font-medium text-slate-900">失效条件：</span>{signal.invalidation_condition}</div>
+                <div><span className="font-medium text-slate-900">止盈止损：</span>{signal.stop_loss_take_profit}</div>
+                <div><span className="font-medium text-slate-900">建议仓位：</span>{signal.suggested_position}</div>
+                <div><span className="font-medium text-slate-900">置信度：</span>{signal.confidence_label}</div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">当前没有可执行信号。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TradingPlanTraceabilitySection({ plan }: { plan: TradingDayPlanResponse }) {
+  if (!plan.traceability) {
+    return null;
+  }
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-medium text-slate-950">本次计划追溯</p>
+      <div className="mt-3 grid gap-2 text-xs text-slate-600">
+        {Object.entries(plan.traceability).map(([key, value]) => (
+          <div key={key} className="grid gap-1 md:grid-cols-[12rem,1fr]">
+            <span className="font-medium text-slate-700">{key}</span>
+            <span className="break-all">{formatTraceabilityValue(value)}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ def test_create_app_registers_critical_routes() -> None:
     assert "/api/ui/v1/market/ohlcv" in paths
     assert "/api/ui/v1/market/snapshots" in paths
     assert "/api/ui/v1/daily/pre-market/readiness" in paths
+    assert "/api/ui/v1/daily/pre-market/plan" in paths
 
 
 def test_request_middleware_injects_request_id(caplog) -> None:

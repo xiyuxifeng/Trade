@@ -1,21 +1,97 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 
 import { renderWithRouter } from '@/test/test-utils';
 import { ApiError } from '@/lib/api/http';
-import { getDailyRuleSelection, getPreMarketReadiness } from '@/lib/api/daily';
+import { getDailyRuleSelection, getPreMarketReadiness, getTradingDayPlan, reviewTradingDayPlan } from '@/lib/api/daily';
 import { TodayPreMarketPage } from './index';
 
 vi.mock('@/lib/api/daily', () => ({
   getPreMarketReadiness: vi.fn(),
   getDailyRuleSelection: vi.fn(),
+  getTradingDayPlan: vi.fn(),
+  reviewTradingDayPlan: vi.fn(),
 }));
 
 const mockedGetPreMarketReadiness = vi.mocked(getPreMarketReadiness);
 const mockedGetDailyRuleSelection = vi.mocked(getDailyRuleSelection);
+const mockedGetTradingDayPlan = vi.mocked(getTradingDayPlan);
+const mockedReviewTradingDayPlan = vi.mocked(reviewTradingDayPlan);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedGetTradingDayPlan.mockResolvedValue({
+    state: 'partial',
+    plan_status: 'degraded',
+    generated: true,
+    trade_date: '2026-06-21',
+    happened: '已根据已接受的每日规则选择生成每日运行计划。',
+    affected: '今日盘前执行对象、信号和风险提示已经固定，可在批准后执行。',
+    repair_guidance: '若需降低风险，请先补齐降级输入后重新生成计划。',
+    daily_strategy_instance_id: 'daily-instance-1',
+    trading_day_plan_id: 'daily-plan-1',
+    daily_rule_selection_id: 'selection-1',
+    revision_no: 1,
+    strategy_version_id: 'strategy-version-1',
+    instance_lifecycle_state: 'generated',
+    plan_lifecycle_state: 'in_review',
+    approval_state: 'pending',
+    market_judgment: { state: 'degraded', summary: '强势上行（置信度 74%（中等））', details: ['市场状态 ID：market-state-1'] },
+    enabled_rules: [],
+    reduced_rules: [],
+    suspended_rules: [],
+    candidate_symbols: [{ symbol: '000001.SZ', name: '平安银行', rank: 1, score: 0.91, state: 'ready' }],
+    candidate_symbols_state: { state: 'ready', summary: '候选标的来自正式盘前市场快照 strong_symbols section。', details: [] },
+    signals: [
+      {
+        signal_id: 'signal-1',
+        symbol: '000001.SZ',
+        name: '平安银行',
+        side: 'BUY',
+        confidence: 0.74,
+        confidence_label: '74%（中等）',
+        state: 'degraded',
+        entry_condition: '候选标的 000001.SZ 需满足已启用规则的盘前条件后再执行。',
+        invalidation_condition: '若竞价/盘前状态偏离当前市场判断或关键规则失效，则该信号失效。',
+        stop_loss_take_profit: '已绑定正式策略风险控制参数。',
+        suggested_position: '建议单日总仓位不超过 35.0%。',
+        triggered_rule_version_ids: ['rule-version-1'],
+        degraded_inputs: ['insufficient_sample'],
+        unresolved_inputs: [],
+      },
+    ],
+    entry_conditions: { state: 'ready', summary: '已整理入场条件。', details: ['竞价强势跟随：关注 竞价强度 条件成立。'] },
+    invalidation_conditions: { state: 'ready', summary: '若市场状态、规则适用性或关键数据质量发生变化，本计划即时失效。', details: [] },
+    stop_loss_take_profit: { state: 'ready', summary: '已绑定正式策略风险控制参数。', details: ['止损：5%', '止盈：12%'] },
+    suggested_position: { state: 'degraded', summary: '建议单日总仓位不超过 35.0%。', details: [] },
+    risk_warnings: { state: 'degraded', summary: '执行前请先确认今日盘前依赖状态。', details: ['降级输入：insufficient_sample'] },
+    confidence: { state: 'degraded', summary: '74%（中等）', details: [] },
+    traceability: {
+      trade_date: '2026-06-21',
+      strategy_version_id: 'strategy-version-1',
+      daily_rule_selection_id: 'selection-1',
+      dataset_snapshot_id: 'dataset-snapshot-1',
+      market_snapshot_id: 'market-snapshot-1',
+      market_state_id: 'market-state-1',
+      current_market_state_label: '强势上行',
+      rule_applicability_profile_ids: ['applicability-1', 'applicability-2'],
+      author_method_profile_version_id: 'author-method-1',
+      author_rule_profile_version_id: 'author-rule-1',
+      author_validated_profile_version_id: 'author-validated-1',
+      data_quality_state: 'degraded',
+      readiness_status: 'degraded',
+      selected_rules: [],
+      reduced_rules: [],
+      suspended_rules: [],
+      degraded_inputs: ['insufficient_sample'],
+      unresolved_inputs: [],
+    },
+  } as never);
+  mockedReviewTradingDayPlan.mockResolvedValue({
+    approval_state: 'approved',
+    approved_by: 'tester',
+    plan_lifecycle_state: 'approved',
+  } as never);
   mockedGetDailyRuleSelection.mockResolvedValue({
     state: 'partial',
     selection_status: 'degraded',
@@ -182,14 +258,61 @@ describe('TodayPreMarketPage', () => {
     renderWithRouter([{ path: '/daily/pre-market', element: <TodayPreMarketPage /> }], ['/daily/pre-market']);
 
     expect(await screen.findByText('今日规则选择')).toBeInTheDocument();
-    expect(await screen.findByText('启用规则')).toBeInTheDocument();
-    expect(await screen.findByText('降权规则')).toBeInTheDocument();
-    expect(await screen.findByText('暂停规则')).toBeInTheDocument();
+    expect(await screen.findByText('每日运行计划')).toBeInTheDocument();
+    expect(await screen.findAllByText('不是正式策略')).not.toHaveLength(0);
+    expect(await screen.findByText('候选标的')).toBeInTheDocument();
+    expect(await screen.findByText('信号')).toBeInTheDocument();
+    expect(await screen.findByText('入场条件')).toBeInTheDocument();
+    expect(await screen.findByText('失效条件')).toBeInTheDocument();
+    expect(await screen.findByText('止盈止损')).toBeInTheDocument();
+    expect(await screen.findByText('建议仓位')).toBeInTheDocument();
+    expect(await screen.findByText('风险提示')).toBeInTheDocument();
+    expect(await screen.findAllByText('74%（中等）')).not.toHaveLength(0);
+    expect(await screen.findAllByText('启用规则')).not.toHaveLength(0);
+    expect(await screen.findAllByText('降权规则')).not.toHaveLength(0);
+    expect(await screen.findAllByText('暂停规则')).not.toHaveLength(0);
     expect(await screen.findByText('当前市场状态')).toBeInTheDocument();
     expect(await screen.findAllByText('正式规则适用性')).not.toHaveLength(0);
     expect(await screen.findByText('样本不足，今日降权处理。')).toBeInTheDocument();
     expect(await screen.findByText('缺少正式规则适用性，今日暂停。')).toBeInTheDocument();
     expect(screen.queryByText('Regime')).not.toBeInTheDocument();
+  });
+
+  it('submits approval action for the daily plan', async () => {
+    mockedGetPreMarketReadiness.mockResolvedValue({
+      state: 'ready',
+      readiness_status: 'ready',
+      trade_date: '2026-06-21',
+      slot: '09-25',
+      summary_title: '已就绪',
+      happened: '正式盘前输入已齐备。',
+      affected: '可以继续正式盘前流程。',
+      repair_guidance: '当前无需修复。',
+      can_proceed: true,
+      can_proceed_in_degraded_mode: false,
+      checks: [],
+      traceability: {
+        trade_date: '2026-06-21',
+        strategy_version_id: 'strategy-version-1',
+        dataset_snapshot_id: 'dataset-snapshot-1',
+        market_snapshot_id: 'market-snapshot-1',
+        market_state_id: 'market-state-1',
+        rule_applicability_profile_ids: [],
+        author_validated_profile_version_id: 'author-validated-1',
+        data_quality_state: 'ready',
+      },
+      repair_actions: [],
+      warnings: [],
+    } as never);
+
+    renderWithRouter([{ path: '/daily/pre-market', element: <TodayPreMarketPage /> }], ['/daily/pre-market']);
+
+    const approveButton = await screen.findByRole('button', { name: '批准今日计划' });
+    approveButton.click();
+
+    await waitFor(() => {
+      expect(mockedReviewTradingDayPlan).toHaveBeenCalledWith('2026-06-21', { action: 'approve' });
+    });
   });
 
   it('shows permission denied truthfully', async () => {

@@ -54,7 +54,7 @@ import {
   runOhlcvScheduler,
   stopOhlcvScheduler,
 } from './market';
-import { getPreMarketReadiness, getDailyRuleSelection } from './daily';
+import { getPreMarketReadiness, getDailyRuleSelection, getTradingDayPlan, reviewTradingDayPlan } from './daily';
 
 describe('UI API client contract', () => {
   beforeEach(() => {
@@ -194,6 +194,8 @@ describe('UI API client contract', () => {
     await getMarketSnapshotQuality('snapshot-001');
     await getPreMarketReadiness('2026-06-21');
     await getDailyRuleSelection('2026-06-21');
+    await getTradingDayPlan('2026-06-21');
+    await reviewTradingDayPlan('2026-06-21', { action: 'approve' });
 
     const calls = vi.mocked(fetch).mock.calls.map(([url, init]) => ({
       url: String(url),
@@ -325,6 +327,8 @@ describe('UI API client contract', () => {
     expect(findCall('/api/ui/v1/market/snapshots/snapshot-001/quality')).toBeTruthy();
     expect(findCall('/api/ui/v1/daily/pre-market/readiness?trade_date=2026-06-21')).toBeTruthy();
     expect(findCall('/api/ui/v1/daily/pre-market/rule-selection?trade_date=2026-06-21')).toBeTruthy();
+    expect(findCall('/api/ui/v1/daily/pre-market/plan?trade_date=2026-06-21')).toBeTruthy();
+    expectJsonBody('/api/ui/v1/daily/pre-market/plan/review?trade_date=2026-06-21', 'POST', { action: 'approve' });
 
     for (const call of calls) {
       expect(call.headers.get('X-API-Key')).toBe('demo-key');

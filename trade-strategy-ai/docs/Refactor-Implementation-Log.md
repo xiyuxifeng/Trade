@@ -23,10 +23,10 @@
 - Stage 状态：`[-] 进行中`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`
-- 当前未开始 Task：`RT-S10-001 信号结果评估`
+- 当前阻塞 Task：`RT-S10-001 信号结果评估`
 - 当前计划：[Stage 10 实施计划](refactor-implementation-plans/stage-10-implementation-plan.md)
 - 详细日志：[Stage 10](refactor-implementation-logs/stage-10.md)
-- 下一步：仅可在用户明确授权后开始 `RT-S10-001 信号结果评估`；不得自动启动 Stage 11。
+- 下一步：等待 Stage 10 Contract Escalation 决定 formal post-close actuals source，再恢复 `RT-S10-001`；不得自动启动 `RT-S10-002` 或 Stage 11。
 
 ## 当前硬约束
 
@@ -53,6 +53,7 @@
 - Stage 10 proposal 必须分离 `RuleOptimizationProposal`、`AuthorProfileRevisionProposal`、`StrategyRevisionProposal`，不得合成泛化 AI suggestion。
 - Stage 10 单日结果不得直接覆盖 `RuleVersion`、`RuleApplicabilityProfile`、`AuthorProfileVersion`、`StrategyVersion`、`Strategy.current_published_version_id`、`DailyRuleSelection`、`DailyStrategyInstance` 或 `TradingDayPlan` source traceability。
 - Stage 10 formal flow must not consume legacy Job / Workflow / Pipeline / Artifact / file JSON / `config_path` / live Provider / mutable latest records / legacy post-market reports / `/daily/overview` compatibility job cards.
+- 在 `RT-S10-001` contract escalation 决定前，不得自行把 `OHLCVBar`、legacy report payload、`trade_logs` 或新建临时 JSON source 当作 formal post-close actuals source。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 当前残余风险
@@ -71,6 +72,7 @@
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
 - Stage 9 残余风险均判定为非阻塞：Daily traceability 位于 canonical JSON payload、`/daily` overview compatibility-only job summary cards、浏览器级 E2E 未运行、DailyRuleSelection 写入 guard 可后续 hardening。
 - Stage 10 Bootstrap 已完成 contract freezing；`PostMarketReview` table 存在但尚无正式 service/API/page，`/daily/after-close` 仍为 legacy job/report wrapper，后续 RT-S10-001 必须从 canonical signals 和 snapshots 建立 formal outcome path。
+- `RT-S10-001` 已在 2026-06-21 进入 `ESCALATION_REQUIRED`：当前仓库已验证 canonical `TradingDayPlan` / `Signal` / pre-market snapshot traceability 存在，但未验证到能为每个 signal 提供 `actual_result` / `MFE` / `MAE` / `return` 的 existing formal post-close actuals source。`MarketSnapshot` 当前只有 benchmark `ohlcv` 与市场级 sections，`DatasetSnapshot` 只冻结 manifest/fingerprint，`trade_logs` 未形成 approved imported actuals contract。
 
 ## Task 状态索引
 
@@ -114,7 +116,7 @@
 | RT-S9-002 | `[x]` | formal daily rule selection、traceability、正式 API/UI 和 focused verification 已接受 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 | RT-S9-003 | `[x]` | 每日策略实例和盘前计划、正式计划审核流和 focused verification 已接受 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 | Stage 10 Bootstrap | `[x]` | Stage 10 post-market contracts 和 task order 已冻结 | [Stage 10](refactor-implementation-logs/stage-10.md) |
-| RT-S10-001 | `[ ]` | 信号结果评估未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
+| RT-S10-001 | `[!]` | 已触发 Stage 10 contract escalation：缺少已验证的 formal post-close actuals source | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-002 | `[ ]` | 结构化归因未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-003 | `[ ]` | 优化建议未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-004 | `[ ]` | 盘后用户页面未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
@@ -133,14 +135,15 @@
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
-| Stage 10 | `[-]` | Bootstrap READY；Task implementation 未开始 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
+| Stage 10 | `[-]` | Bootstrap READY；`RT-S10-001` 因 post-close actuals source 未冻结而阻塞 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 
 ## 下一步建议
 
-建议下一次用户明确授权后开始：
+建议下一次先处理：
 
 ```text
-RT-S10-001 信号结果评估
+RT-S10-001 Contract Escalation：
+冻结 formal post-close actuals source
 ```
 
 执行前应读取：
@@ -149,4 +152,4 @@ RT-S10-001 信号结果评估
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S10-001` 或 `Stage 11`；必须等待用户明确授权。
+不得自动开始 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 `Stage 11`；必须先完成 escalation 决策并等待用户明确授权。

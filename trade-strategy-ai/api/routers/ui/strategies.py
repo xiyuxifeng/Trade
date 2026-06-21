@@ -10,6 +10,9 @@ from src.db.session import get_session_factory as async_session_factory
 from src.services.strategy_center_service import (
     StrategyCenterService,
     StrategyDraftRequest,
+    StrategyProposalAcceptRequest,
+    StrategyProposalCreateRequest,
+    StrategyProposalReviewRequest,
     StrategyRollbackRequest,
     StrategyTransitionRequest,
     StrategyValidationRequest,
@@ -72,6 +75,94 @@ async def get_strategy_draft_options(
         return await service.get_draft_options(actor_id=_actor_id(principal), actor_role=principal.role)
     except PermissionError as exc:
         raise _error(status.HTTP_403_FORBIDDEN, str(exc), "你暂时不能查看策略草稿输入项。", "切换到有查看权限的账号。") from exc
+
+
+@router.get("/proposals")
+async def list_strategy_proposals(
+    limit: int = Query(default=50, ge=1, le=100),
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return await service.list_proposals(actor_id=_actor_id(principal), actor_role=principal.role, limit=limit)
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "你暂时不能查看策略优化建议。", "切换到有查看权限的账号。") from exc
+
+
+@router.get("/proposals/{proposal_id}")
+async def get_strategy_proposal(
+    proposal_id: str,
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.get_proposal(proposal_id, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "你暂时不能查看该策略优化建议。", "切换到有查看权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略优化建议", "当前页面不能展示该建议。", "返回策略中心重新选择。") from exc
+
+
+@router.post("/proposals", status_code=status.HTTP_201_CREATED)
+async def create_strategy_proposal(
+    request: StrategyProposalCreateRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.create_proposal(request, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "不会保存策略优化建议。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到关联的正式复盘或策略版本", "当前建议无法建立可追溯关系。", "确认复盘记录和策略版本后重试。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "建议未保存，当前正式策略不会被改写。", "修正建议内容或证据后重试。") from exc
+
+
+@router.post("/proposals/{proposal_id}/review")
+async def review_strategy_proposal(
+    proposal_id: str,
+    request: StrategyProposalReviewRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(await service.review_proposal(proposal_id, request, actor_id=_actor_id(principal), actor_role=principal.role))
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "不会更新策略优化建议状态。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略优化建议", "当前建议不能处理。", "返回建议列表重新选择。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "建议状态未改变。", "查看当前建议状态后再选择下一步。") from exc
+
+
+@router.post("/proposals/{proposal_id}/accept-to-draft")
+async def accept_strategy_proposal_to_draft(
+    proposal_id: str,
+    request: StrategyProposalAcceptRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: StrategyCenterService = Depends(get_strategy_center_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        return _serialize(
+            await service.accept_proposal_to_draft(
+                proposal_id,
+                request,
+                actor_id=_actor_id(principal),
+                actor_role=principal.role,
+            )
+        )
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "不会生成策略草稿。", "切换到有操作权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到策略优化建议或关联草稿", "当前建议不能生成草稿。", "返回建议列表重新选择。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_409_CONFLICT, str(exc), "当前正式策略不会被发布或改写。", "先进入复核，或补齐可落地的草稿变更后重试。") from exc
 
 
 @router.get("/{version_id}")

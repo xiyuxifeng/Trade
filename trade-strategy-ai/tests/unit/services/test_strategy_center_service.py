@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import select
 
 from src.domain.enums import AuthorProfileKind, FormalLifecycleState, QualityStatus
+from src.models.market_regime_record import MarketRegimeRecord
 from src.models.market_data_snapshot import MarketSnapshot
 from src.models.market_data_snapshot_section import MarketSnapshotSection
 from src.models.rule_applicability import RuleApplicabilityProfile
@@ -22,10 +23,16 @@ from src.models.stage2_canonical import (
     BacktestRun,
     DatasetLifecycleState,
     DatasetSnapshot,
+    DailyRuleSelection,
+    DailyStrategyInstance,
+    LifecycleEvent,
+    OptimizationProposal,
+    PostMarketReview,
     Rule,
     RuleVersion,
     Strategy,
     StrategyRuleMembership,
+    TradingDayPlan,
     StrategyVersion,
     StrategyVersionAudit,
 )
@@ -50,9 +57,16 @@ async def _build_session_factory(tmp_path: Path):
         await conn.run_sync(StrategyVersion.__table__.create)
         await conn.run_sync(StrategyRuleMembership.__table__.create)
         await conn.run_sync(StrategyVersionAudit.__table__.create)
+        await conn.run_sync(LifecycleEvent.__table__.create)
         await conn.run_sync(BacktestRun.__table__.create)
         await conn.run_sync(BacktestResult.__table__.create)
         await conn.run_sync(RuleApplicabilityProfile.__table__.create)
+        await conn.run_sync(MarketRegimeRecord.__table__.create)
+        await conn.run_sync(DailyRuleSelection.__table__.create)
+        await conn.run_sync(DailyStrategyInstance.__table__.create)
+        await conn.run_sync(TradingDayPlan.__table__.create)
+        await conn.run_sync(PostMarketReview.__table__.create)
+        await conn.run_sync(OptimizationProposal.__table__.create)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     @asynccontextmanager
@@ -80,6 +94,11 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
     applicability_profile_id = uuid4()
     backtest_run_id = uuid4()
     backtest_result_id = uuid4()
+    market_state_id = uuid4()
+    daily_rule_selection_id = uuid4()
+    daily_strategy_instance_id = uuid4()
+    trading_day_plan_id = uuid4()
+    post_market_review_id = uuid4()
     now = datetime.now(UTC)
 
     async with session_factory() as session:
@@ -161,6 +180,27 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
                 effective_at=now,
                 content_fingerprint="market-fingerprint-1",
                 manifest_json={"slot": "17-30"},
+            )
+        )
+        session.add(
+            MarketRegimeRecord(
+                market_state_id=market_state_id,
+                regime_id="market-state-ready",
+                market_snapshot_id=market_snapshot_id,
+                snapshot_id="market-snapshot-2026-06-19-pm",
+                trade_date=date(2026, 6, 19),
+                market="CN",
+                regime_version="market-state-v2",
+                source_feature_version="features-v2",
+                primary_label="强势上行",
+                labels=[],
+                features=[],
+                confidence=0.8,
+                quality_status="ready",
+                storage_ref={"market_state_id": "market-state-ready"},
+                available_at=now,
+                created_at=now,
+                updated_at=now,
             )
         )
         for profile_version_id, profile_kind, version_no in (
@@ -297,6 +337,66 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
                 audit_json={"quality_state": "verified"},
             )
         )
+        session.add(
+            DailyRuleSelection(
+                daily_rule_selection_id=daily_rule_selection_id,
+                strategy_version_id=uuid4(),
+                market_state_id=market_state_id,
+                trade_date=date(2026, 6, 19),
+                revision_no=1,
+                selected_rules_json={},
+                reduced_rules_json={},
+                blocked_rules_json={},
+                quality_status=QualityStatus.verified,
+                lifecycle_state="approved",
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        session.add(
+            DailyStrategyInstance(
+                daily_strategy_instance_id=daily_strategy_instance_id,
+                strategy_version_id=uuid4(),
+                daily_rule_selection_id=daily_rule_selection_id,
+                market_snapshot_id=market_snapshot_id,
+                trade_date=date(2026, 6, 19),
+                revision_no=1,
+                risk_multiplier=1.0,
+                position_limit=0.8,
+                payload={},
+                lifecycle_state="approved",
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        session.add(
+            TradingDayPlan(
+                trading_day_plan_id=trading_day_plan_id,
+                daily_strategy_instance_id=daily_strategy_instance_id,
+                trade_date=date(2026, 6, 19),
+                revision_no=1,
+                lifecycle_state="approved",
+                payload={},
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        session.add(
+            PostMarketReview(
+                post_market_review_id=post_market_review_id,
+                trading_day_plan_id=trading_day_plan_id,
+                revision_no=1,
+                market_snapshot_id=market_snapshot_id,
+                market_state_id=market_state_id,
+                signal_results_json={},
+                attribution_json={},
+                evidence_json={"source": "formal"},
+                lifecycle_state="approved",
+                quality_status=QualityStatus.verified,
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
         await session.commit()
 
     return {
@@ -310,6 +410,7 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
         "applicability_profile_id": applicability_profile_id,
         "backtest_run_id": backtest_run_id,
         "backtest_result_id": backtest_result_id,
+        "post_market_review_id": post_market_review_id,
     }
 
 
@@ -521,6 +622,158 @@ async def test_strategy_center_validates_compares_diffs_and_rolls_back_with_audi
         assert rollback_audit.reason == "新版本样本覆盖不足，回退到上一正式版本"
         assert rollback_audit.before_state_json["current_version_id"] == revision.strategy_version_id
         assert rollback_audit.after_state_json["current_version_id"] == first.strategy_version_id
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_center_proposal_lifecycle_accepts_to_new_draft_without_publishing(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import (
+        StrategyCenterService,
+        StrategyProposalAcceptRequest,
+        StrategyProposalCreateRequest,
+        StrategyProposalReviewRequest,
+        StrategyTransitionRequest,
+    )
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    service = StrategyCenterService(session_scope_factory=session_scope)
+
+    published = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
+    published = await service.submit_for_review(
+        published.strategy_version_id,
+        StrategyTransitionRequest(reason="提交审核"),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+    published = await service.publish(
+        published.strategy_version_id,
+        StrategyTransitionRequest(reason="审核通过后发布"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    current_before = published.current_status.current_version_id
+
+    proposal = await service.create_proposal(
+        StrategyProposalCreateRequest(
+            post_market_review_id=deps["post_market_review_id"],
+            affected_strategy_version_id=UUID(published.strategy_version_id),
+            rationale="近期样本回撤扩大，建议降低核心规则权重。",
+            trigger_type="manual_review",
+            confidence=0.82,
+            proposed_changes={
+                "title": "A股趋势轮动策略 v2 草稿",
+                "summary": "降低核心规则仓位并保留当前正式版本不变。",
+                "proposed_weight_changes": [
+                    {"rule_version_id": str(deps["rule_version_id"]), "base_weight": 0.5}
+                ],
+            },
+            evidence_json={"evidence_state": "partial", "limitations": ["样本外验证待补齐"]},
+        ),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+    assert proposal.lifecycle_state == "draft"
+    assert proposal.accepted_draft_version_id is None
+    assert proposal.evidence_state == "partial"
+
+    in_review = await service.review_proposal(
+        proposal.proposal_id,
+        StrategyProposalReviewRequest(action="start_review", reason="开始复核"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    assert in_review.lifecycle_state == "in_review"
+
+    accepted = await service.accept_proposal_to_draft(
+        proposal.proposal_id,
+        StrategyProposalAcceptRequest(reason="生成草稿继续复核"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    assert accepted.lifecycle_state == "accepted"
+    assert accepted.accepted_draft_version_id is not None
+    assert accepted.affected_strategy_version.strategy_version_id == published.strategy_version_id
+
+    listing = await service.list_versions(actor_id="viewer-a", actor_role="viewer")
+    assert listing["current_strategy"]["current_version_id"] == current_before
+    assert len(listing["items"]) == 2
+    linked_draft = next(item for item in listing["items"] if item["strategy_version_id"] == accepted.accepted_draft_version_id)
+    assert linked_draft["lifecycle_state"] == "draft"
+    assert linked_draft["current_status"]["is_current"] is False
+
+    published_after = await service.get_version(published.strategy_version_id, actor_id="viewer-a", actor_role="viewer")
+    assert published_after.current_status.current_version_id == current_before
+    assert published_after.current_status.is_current is True
+
+    async with session_factory() as session:
+        proposal_row = await session.get(OptimizationProposal, UUID(proposal.proposal_id))
+        assert proposal_row is not None
+        assert proposal_row.accepted_draft_version_id == UUID(accepted.accepted_draft_version_id)
+        events = list((await session.execute(select(LifecycleEvent).order_by(LifecycleEvent.occurred_at.asc()))).scalars().all())
+        assert any(event.to_state == "accepted" for event in events)
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_center_proposal_can_link_existing_draft_without_mutating_current(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import (
+        StrategyCenterService,
+        StrategyProposalAcceptRequest,
+        StrategyProposalCreateRequest,
+        StrategyProposalReviewRequest,
+        StrategyTransitionRequest,
+    )
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    service = StrategyCenterService(session_scope_factory=session_scope)
+
+    published = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
+    published = await service.submit_for_review(published.strategy_version_id, StrategyTransitionRequest(reason="提交审核"), actor_id="operator-a", actor_role="operator")
+    published = await service.publish(published.strategy_version_id, StrategyTransitionRequest(reason="审核通过后发布"), actor_id="reviewer-a", actor_role="operator")
+
+    existing_draft = await service.create_draft(
+        _draft_request(deps, strategy_id=UUID(published.strategy_id)),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+
+    proposal = await service.create_proposal(
+        StrategyProposalCreateRequest(
+            post_market_review_id=deps["post_market_review_id"],
+            affected_strategy_version_id=UUID(published.strategy_version_id),
+            rationale="已有人工草稿，建议把本次修订挂接到现有草稿继续处理。",
+            trigger_type="manual_review",
+            confidence=0.7,
+            proposed_changes={"summary": "沿用现有草稿继续完善。"},
+            evidence_json={"evidence_state": "ready"},
+        ),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+    proposal = await service.review_proposal(
+        proposal.proposal_id,
+        StrategyProposalReviewRequest(action="start_review", reason="开始复核"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    accepted = await service.accept_proposal_to_draft(
+        proposal.proposal_id,
+        StrategyProposalAcceptRequest(
+            reason="关联现有草稿",
+            linked_draft_version_id=UUID(existing_draft.strategy_version_id),
+        ),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    assert accepted.accepted_draft_version_id == existing_draft.strategy_version_id
+
+    published_after = await service.get_version(published.strategy_version_id, actor_id="viewer-a", actor_role="viewer")
+    assert published_after.current_status.is_current is True
+    assert published_after.current_status.current_version_id == published.strategy_version_id
 
     await engine.dispose()
 

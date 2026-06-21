@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.stage2_writer_routing import require_canonical_write
-from src.domain.enums import AuthorProfileKind, FormalLifecycleState
+from src.domain.enums import AuthorProfileKind, CanonicalObjectType, FormalLifecycleState, ProposalType
 from src.models.market_data_snapshot import MarketSnapshot
 from src.models.rule_applicability import RuleApplicabilityProfile
 from src.models.stage2_canonical import (
@@ -16,6 +16,9 @@ from src.models.stage2_canonical import (
     BacktestRun,
     DatasetLifecycleState,
     DatasetSnapshot,
+    LifecycleEvent,
+    OptimizationProposal,
+    PostMarketReview,
     RuleVersion,
     Strategy,
     StrategyRuleMembership,
@@ -216,3 +219,78 @@ class StrategyRepository:
             return []
         result = await session.scalars(select(BacktestResult).where(BacktestResult.result_id.in_(result_ids)))
         return list(result.all())
+
+    async def get_post_market_review(self, session: AsyncSession, review_id: str | UUID) -> PostMarketReview | None:
+        if not isinstance(review_id, UUID):
+            review_id = UUID(str(review_id))
+        return await session.get(PostMarketReview, review_id)
+
+    async def next_proposal_revision_no(
+        self,
+        session: AsyncSession,
+        *,
+        post_market_review_id: UUID,
+        target_asset_id: UUID,
+        proposal_type: ProposalType,
+    ) -> int:
+        value = await session.scalar(
+            select(func.max(OptimizationProposal.revision_no)).where(
+                OptimizationProposal.post_market_review_id == post_market_review_id,
+                OptimizationProposal.target_asset_id == target_asset_id,
+                OptimizationProposal.proposal_type == proposal_type,
+            )
+        )
+        return int(value or 0) + 1
+
+    async def add_proposal(self, session: AsyncSession, proposal: OptimizationProposal) -> OptimizationProposal:
+        require_canonical_write("strategy", "StrategyRepository.add_proposal")
+        session.add(proposal)
+        await session.flush()
+        return proposal
+
+    async def get_proposal(self, session: AsyncSession, proposal_id: str | UUID) -> OptimizationProposal | None:
+        if not isinstance(proposal_id, UUID):
+            proposal_id = UUID(str(proposal_id))
+        return await session.get(OptimizationProposal, proposal_id)
+
+    async def list_strategy_revision_proposals(self, session: AsyncSession, *, limit: int = 50) -> list[OptimizationProposal]:
+        result = await session.scalars(
+            select(OptimizationProposal)
+            .where(OptimizationProposal.proposal_type == ProposalType.strategy_revision)
+            .order_by(OptimizationProposal.updated_at.desc(), OptimizationProposal.revision_no.desc())
+            .limit(limit)
+        )
+        return list(result.all())
+
+    async def record_lifecycle_event(
+        self,
+        session: AsyncSession,
+        *,
+        object_id: UUID,
+        from_state: str | None,
+        to_state: str,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None,
+        before_state: dict | None,
+        after_state: dict | None,
+        correlation_id: str | None = None,
+    ) -> None:
+        require_canonical_write("strategy", "StrategyRepository.record_lifecycle_event")
+        session.add(
+            LifecycleEvent(
+                event_id=uuid4(),
+                object_type=CanonicalObjectType.optimization_proposal.value,
+                object_id=object_id,
+                from_state=from_state,
+                to_state=to_state,
+                actor_type=actor_role,
+                actor_id=actor_id,
+                reason_text=reason,
+                before_json=before_state,
+                after_json=after_state,
+                occurred_at=datetime.now(UTC),
+                correlation_id=correlation_id,
+            )
+        )
+        await session.flush()

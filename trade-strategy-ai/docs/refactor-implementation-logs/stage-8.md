@@ -3,10 +3,10 @@
 ## 当前摘要
 
 - Stage：`Stage 8 策略中心`
-- 当前活动：`2026-06-20 Stage 8 Bootstrap`
-- 当前状态：`Bootstrap READY`
-- 当前 Task：无已开始 RT-S8 Task
-- 下一可执行项：`RT-S8-001 策略草稿与发布`
+- 当前活动：`2026-06-21 RT-S8-003 策略优化建议`
+- 当前状态：`RT-S8-003 ACCEPTED`
+- 当前 Task：`RT-S8-003 策略优化建议`
+- 下一可执行项：仅可在用户明确授权后开始 `Stage 8 Gate`
 - 不得自动开始：不得发布策略；不得启动 `Stage 9 每日盘前`；不得启动 `Stage 10 每日盘后`
 
 ## 2026-06-20 Stage 8 Bootstrap
@@ -408,3 +408,112 @@ Formal RT-S8-001 path files:
 `RT-S8-001 ACCEPTED`。
 
 Stage 8 仍未完成；下一推荐任务仅在再次授权后开始 `RT-S8-002 策略验证和回滚`。
+
+## 2026-06-21 RT-S8-003 策略优化建议
+
+### Task Status
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现 RT-S8-003 proposal-only 策略优化建议能力：
+
+- canonical `OptimizationProposal` strategy revision repository / service / API；
+- `/strategies` 正式策略中心建议列表、详情、复核动作、生成草稿动作；
+- 接受建议时复用 `StrategyCenterService` 草稿创建逻辑；
+- proposal lifecycle audit 和 evidence state 透传；
+- focused backend / API / OpenAPI / frontend / typecheck 验证；
+- Stage 8 / 主实施日志更新。
+
+未实现：
+
+- Stage 8 Gate；
+- Stage 9 每日盘前；
+- Stage 10 盘后复盘、归因或自动提案生成；
+- strategy publish/current pointer 变更；
+- dedicated `StrategyRevisionProposal` table；
+- legacy `/api/ui/v1/optimize` 或 legacy strategy job 作为正式 proposal 输入。
+
+### Delegation
+
+使用 `refactor-orchestrator`。
+
+- Parent：负责 canonical repository/service/API、契约核对、测试、日志与最终验收。
+- `Executor Gamma`：仅处理 `/strategies` proposal list/detail/action 的前端实现与测试草稿。
+
+子代理未接触 migration、策略发布、current pointer 写入或 Stage 9/10 行为。
+
+### Key Decisions
+
+- 正式 `StrategyRevisionProposal` 继续使用 `OptimizationProposal(proposal_type = strategy_revision)` 作为唯一正式 carrier，没有建立第二套 proposal facts。
+- proposal evidence 只锚定 canonical `StrategyVersion`、validation summary 和已有 canonical evidence IDs；缺失信息继续暴露为 `unavailable / partial / invalid / insufficient_coverage / insufficient_sample`，不做静默成功降级。
+- 建议接受动作只允许“生成草稿”，并且只会创建或链接 `draft` 状态 `StrategyVersion`，同时回写 `accepted_draft_version_id`。
+- proposal acceptance 通过 lifecycle validator 从 `in_review -> accepted`，不会发布策略，不会修改 `strategies.current_published_version_id`，不会覆盖任何 published/current `StrategyVersion` 行。
+- UI 文案明确区分“建议 -> 草稿 -> 审核 -> 发布 -> 当前使用”，避免把建议接受误写成发布。
+
+### Files Changed
+
+- `src/db/repositories/strategy_repo.py`
+- `src/services/strategy_center_service.py`
+- `api/routers/ui/strategies.py`
+- `tests/unit/services/test_strategy_center_service.py`
+- `tests/api/routers/test_strategies.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `web/src/types/strategies.ts`
+- `web/src/lib/api/strategies.ts`
+- `web/src/lib/api/strategies.test.ts`
+- `web/src/pages/strategies/StrategyOverviewPage.tsx`
+- `web/src/pages/strategies/index.test.tsx`
+- `web/src/pages/product-entry-pages.test.tsx`
+- `docs/refactor-implementation-logs/stage-8.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Database Migration
+
+- 无新增 migration。
+- 继续复用既有 canonical `OptimizationProposal.accepted_draft_version_id` 追踪建议接受后的草稿版本。
+- 本 Task 未修改 `StrategyVersion` published/current contract，也未触发 destructive rewrite。
+
+### Verification
+
+Backend / API / OpenAPI:
+
+- `python -m pytest tests/unit/services/test_strategy_center_service.py tests/api/routers/test_strategies.py tests/api/test_ui_openapi_contract.py`
+  - `8 passed`
+
+Frontend:
+
+- `pnpm test -- src/lib/api/strategies.test.ts src/pages/strategies/index.test.tsx src/pages/product-entry-pages.test.tsx`
+  - `15 passed`
+
+Frontend type safety:
+
+- `pnpm typecheck`
+  - passed
+
+Static checks:
+
+- `git diff --check`
+  - passed
+
+### Acceptance Review
+
+- proposal list/detail/create/review/accept-to-draft 均走 canonical strategy center API，不依赖 legacy `/api/ui/v1/optimize`、legacy strategy jobs、legacy `BacktestService`、live Provider、file JSON 或 mutable latest records。
+- proposal 详情可查看状态、受影响策略版本、理由、置信度、建议变更、证据状态、partial reasons 与 limitations。
+- `reject / archive / supersede` 生命周期由 formal review API 支持并保留 traceability；accepted proposal 会记录 `accepted_draft_version_id`。
+- 接受建议后只会生成或链接 `draft StrategyVersion`；不会发布草稿，不会变更 `strategies.current_published_version_id`，不会修改当前 published `StrategyVersion` 行。
+- `/strategies` 页面按钮使用“生成草稿”而不是“发布策略”，并明确把建议流和正式发布流拆开。
+- Stage 9 / Stage 10 行为仍未开始。
+
+### Residual Risks
+
+- 当前 `/strategies` proposal action 按钮仍是固定暴露，主要依赖后端生命周期校验拒绝非法动作；后续可补充基于 `available_actions` 的前端禁用态细化。
+- 本 Task 未增加浏览器级 E2E；当前依赖 focused API / frontend / OpenAPI / typecheck 证据。
+- `/strategies/candidates` compatibility notice page 仍未退役，但未作为 formal proposal input。
+
+### Task Conclusion
+
+`RT-S8-003 ACCEPTED`。
+
+Stage 8 仍未完成。下一步仅可在用户明确授权后开始 `Stage 8 Gate`，不得自动开始。

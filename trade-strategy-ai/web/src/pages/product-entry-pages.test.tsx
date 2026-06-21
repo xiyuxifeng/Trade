@@ -81,6 +81,40 @@ vi.mock('@/lib/api/strategies', () => ({
     items: [],
     count: 0,
   }),
+  listStrategyRevisionProposals: vi.fn().mockResolvedValue({
+    state: 'empty',
+    items: [],
+    count: 0,
+  }),
+  getStrategyRevisionProposal: vi.fn().mockResolvedValue({
+    proposal_id: 'proposal-0',
+    proposal_type: 'strategy_revision',
+    lifecycle_state: 'draft',
+    lifecycle_label: '草稿',
+    rationale: '暂无',
+    trigger_type: 'manual',
+    confidence: null,
+    evidence_state: 'unavailable',
+    evidence_label: '证据暂不可用',
+    affected_strategy_version: {
+      strategy_version_id: 'version-0',
+      strategy_id: 'strategy-0',
+      business_key: 'cn-swing-core',
+      title: '空状态建议',
+      version_no: 0,
+      lifecycle_state: 'draft',
+      lifecycle_label: '草稿',
+      validation_summary: null,
+      current_status: { is_current: false, current_version_id: null, previous_current_version_id: null },
+    },
+    base_version_id: null,
+    accepted_draft_version_id: null,
+    proposed_changes: {},
+    evidence: {},
+    available_actions: ['start_review', 'reject', 'generate_draft'],
+    partial_reasons: [],
+    limitations: [],
+  }),
   getStrategyDraftOptions: vi.fn().mockResolvedValue({
     rule_options: [],
     author_profile_options: { method: [], rule: [], validated: [] },
@@ -88,9 +122,15 @@ vi.mock('@/lib/api/strategies', () => ({
     market_snapshot_options: [],
     rule_applicability_options: [],
   }),
+  compareStrategyVersion: vi.fn(),
   createStrategyDraft: vi.fn(),
+  diffStrategyVersion: vi.fn(),
+  reviewStrategyRevisionProposal: vi.fn(),
+  acceptStrategyRevisionProposalToDraft: vi.fn(),
+  rollbackStrategyVersion: vi.fn(),
   submitStrategyReview: vi.fn(),
   publishStrategy: vi.fn(),
+  validateStrategyVersion: vi.fn(),
 }));
 
 vi.mock('@/lib/api/system', () => ({
@@ -294,6 +334,7 @@ describe('formal product entry pages', () => {
     expect(await screen.findByRole('heading', { name: '策略中心' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存策略草稿' })).toBeInTheDocument();
     expect(screen.getAllByText(/暂无正式策略版本|当前还没有正式策略版本/).length).toBeGreaterThan(0);
+    expect(await screen.findByText('当前还没有正式的策略优化建议。', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.queryByText(/共 \d+ 个正式策略/)).not.toBeInTheDocument();
   });
 

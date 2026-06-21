@@ -17,6 +17,9 @@ VALIDATED_PROFILE_ID = "44444444-4444-4444-4444-444444444444"
 DATASET_SNAPSHOT_ID = "55555555-5555-5555-5555-555555555555"
 MARKET_SNAPSHOT_ID = "66666666-6666-6666-6666-666666666666"
 APPLICABILITY_PROFILE_ID = "77777777-7777-7777-7777-777777777777"
+POST_MARKET_REVIEW_ID = "88888888-8888-8888-8888-888888888888"
+PROPOSAL_ID = "99999999-9999-9999-9999-999999999999"
+AFFECTED_STRATEGY_VERSION_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
 
 @dataclass
@@ -241,6 +244,98 @@ class _FakeStrategyCenterService:
             published_at="2026-06-20T12:00:00+00:00",
         ).model_dump()
 
+    async def list_proposals(self, **kwargs):
+        assert kwargs["actor_role"] == "viewer"
+        return {"state": "partial", "items": [self._proposal()], "count": 1}
+
+    async def get_proposal(self, proposal_id: str, *, actor_id: str, actor_role: str):
+        assert actor_role == "viewer"
+        assert proposal_id == PROPOSAL_ID
+        return _FakeProposal()
+
+    async def create_proposal(self, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert str(request.post_market_review_id) == POST_MARKET_REVIEW_ID
+        assert str(request.affected_strategy_version_id) == AFFECTED_STRATEGY_VERSION_ID
+        return _FakeProposal()
+
+    async def review_proposal(self, proposal_id: str, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert proposal_id == PROPOSAL_ID
+        assert request.action == "reject"
+        return _FakeProposal(lifecycle_state="rejected", lifecycle_label="已拒绝", available_actions=["archive"])
+
+    async def accept_proposal_to_draft(self, proposal_id: str, request, *, actor_id: str, actor_role: str):
+        assert actor_role == "operator"
+        assert proposal_id == PROPOSAL_ID
+        return _FakeProposal(
+            lifecycle_state="accepted",
+            lifecycle_label="已生成草稿",
+            accepted_draft_version_id="draft-version-2",
+            available_actions=["archive", "supersede"],
+        )
+
+    def _proposal(self) -> dict[str, Any]:
+        return _FakeProposal().model_dump()
+
+
+@dataclass
+class _FakeProposal:
+    proposal_id: str = PROPOSAL_ID
+    proposal_type: str = "strategy_revision"
+    lifecycle_state: str = "in_review"
+    lifecycle_label: str = "复核中"
+    revision_no: int = 1
+    confidence: float = 0.82
+    rationale: str = "近期样本表现回撤扩大，需要降低核心规则权重。"
+    trigger_type: str = "manual_review"
+    evidence_state: str = "partial"
+    evidence_label: str = "证据不完整"
+    accepted_draft_version_id: str | None = None
+    available_actions: list[str] | None = None
+
+    def model_dump(self, mode: str = "json") -> dict[str, Any]:
+        del mode
+        return {
+            "proposal_id": self.proposal_id,
+            "proposal_type": self.proposal_type,
+            "lifecycle_state": self.lifecycle_state,
+            "lifecycle_label": self.lifecycle_label,
+            "revision_no": self.revision_no,
+            "confidence": self.confidence,
+            "rationale": self.rationale,
+            "trigger_type": self.trigger_type,
+            "evidence_state": self.evidence_state,
+            "evidence_label": self.evidence_label,
+            "affected_strategy_version": {
+                "strategy_version_id": "strategy-version-1",
+                "strategy_id": "strategy-1",
+                "business_key": "cn-swing-core",
+                "title": "A股趋势轮动策略",
+                "version_no": 1,
+                "lifecycle_state": "published",
+                "lifecycle_label": "已发布",
+                "validation_summary": _FakeStrategyVersion().model_dump()["validation"],
+                "current_status": {"is_current": True, "current_version_id": "strategy-version-1", "previous_current_version_id": None},
+            },
+            "base_version_id": "strategy-version-1",
+            "accepted_draft_version_id": self.accepted_draft_version_id,
+            "proposed_changes": {
+                "summary": "降低核心规则仓位，增加回撤保护。",
+                "proposed_weight_changes": [{"rule_version_id": RULE_VERSION_ID, "base_weight": 0.5}],
+            },
+            "evidence": {
+                "rationale": self.rationale,
+                "trigger_type": self.trigger_type,
+                "validation_summary": _FakeStrategyVersion().model_dump()["validation"],
+            },
+            "created_at": "2026-06-20T12:00:00+00:00",
+            "updated_at": "2026-06-20T12:30:00+00:00",
+            "available_actions": self.available_actions or ["generate_draft", "reject", "return_to_draft"],
+            "partial_reasons": ["样本外验证仍在补齐"],
+            "limitations": ["尚未补齐全部市场状态切片"],
+        }
+
 
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
@@ -345,3 +440,49 @@ async def test_strategy_routes_cover_list_detail_options_and_lifecycle_actions(c
     rolled_back = await client.post("/api/ui/v1/strategies/strategy-version-1/rollback", json={"reason": "回退到上一正式版本"})
     assert rolled_back.status_code == 200
     assert rolled_back.json()["current_status"]["is_current"] is True
+
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="viewer",
+        api_key_label="viewer",
+        authenticated=True,
+        source="api_key",
+    )
+    proposals = await client.get("/api/ui/v1/strategies/proposals")
+    assert proposals.status_code == 200
+    assert proposals.json()["state"] == "partial"
+    assert proposals.json()["items"][0]["proposal_id"] == PROPOSAL_ID
+
+    proposal_detail = await client.get(f"/api/ui/v1/strategies/proposals/{PROPOSAL_ID}")
+    assert proposal_detail.status_code == 200
+    assert proposal_detail.json()["affected_strategy_version"]["strategy_version_id"] == "strategy-version-1"
+
+    app.dependency_overrides[get_current_principal] = _operator_override
+    created_proposal = await client.post(
+        "/api/ui/v1/strategies/proposals",
+        json={
+            "post_market_review_id": POST_MARKET_REVIEW_ID,
+            "affected_strategy_version_id": AFFECTED_STRATEGY_VERSION_ID,
+            "rationale": "近期样本表现回撤扩大，需要降低核心规则权重。",
+            "trigger_type": "manual_review",
+            "confidence": 0.82,
+            "proposed_changes": {"proposed_weight_changes": [{"rule_version_id": RULE_VERSION_ID, "base_weight": 0.5}]},
+            "evidence_json": {"evidence_state": "partial"},
+        },
+    )
+    assert created_proposal.status_code == 201
+    assert created_proposal.json()["proposal_type"] == "strategy_revision"
+
+    reviewed_proposal = await client.post(
+        f"/api/ui/v1/strategies/proposals/{PROPOSAL_ID}/review",
+        json={"action": "reject", "reason": "证据不足"},
+    )
+    assert reviewed_proposal.status_code == 200
+    assert reviewed_proposal.json()["lifecycle_state"] == "rejected"
+
+    accepted_proposal = await client.post(
+        f"/api/ui/v1/strategies/proposals/{PROPOSAL_ID}/accept-to-draft",
+        json={"reason": "生成策略草稿继续复核"},
+    )
+    assert accepted_proposal.status_code == 200
+    assert accepted_proposal.json()["lifecycle_state"] == "accepted"
+    assert accepted_proposal.json()["accepted_draft_version_id"] == "draft-version-2"

@@ -1,5 +1,10 @@
 import { fetchJson } from './http';
 import type {
+  StrategyRevisionProposalAcceptRequest,
+  StrategyRevisionProposalAcceptResponse,
+  StrategyRevisionProposalDetailResponse,
+  StrategyRevisionProposalListResponse,
+  StrategyRevisionProposalReviewRequest,
   StrategyComparisonResponse,
   StrategyDiffResponse,
   StrategyDraftOptionsResponse,
@@ -14,6 +19,16 @@ import type {
 
 export function listStrategies() {
   return fetchJson<StrategyListResponse>('/strategies', { method: 'GET' });
+}
+
+export function listStrategyRevisionProposals() {
+  return fetchJson<StrategyRevisionProposalListResponse>('/strategies/proposals', {
+    method: 'GET',
+  });
+}
+
+export function getStrategyRevisionProposal(proposalId: string) {
+  return fetchJson<StrategyRevisionProposalDetailResponse>(`/strategies/proposals/${proposalId}`, { method: 'GET' });
 }
 
 export function getStrategyDraftOptions() {
@@ -59,6 +74,23 @@ export function diffStrategyVersion(versionId: string, baseVersionId?: string) {
 
 export function rollbackStrategyVersion(versionId: string, payload: StrategyRollbackRequest) {
   return fetchJson<StrategyVersion>(`/strategies/${versionId}/rollback`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function reviewStrategyRevisionProposal(proposalId: string, payload: StrategyRevisionProposalReviewRequest) {
+  return fetchJson<StrategyRevisionProposalDetailResponse>(`/strategies/proposals/${proposalId}/review`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function acceptStrategyRevisionProposalToDraft(
+  proposalId: string,
+  payload: StrategyRevisionProposalAcceptRequest,
+) {
+  return fetchJson<StrategyRevisionProposalAcceptResponse>(`/strategies/proposals/${proposalId}/accept-to-draft`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

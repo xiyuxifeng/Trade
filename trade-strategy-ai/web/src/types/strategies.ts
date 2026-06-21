@@ -17,6 +17,70 @@ export type StrategyCurrentStatus = {
   previous_current_version_id?: string | null;
 };
 
+export type StrategyVersionSnapshot = {
+  strategy_version_id: string;
+  strategy_id: string;
+  business_key: string;
+  title: string;
+  version_no: number;
+  lifecycle_state: string;
+  lifecycle_label: string;
+  validation_summary?: StrategyValidationSummary | null;
+  current_status: StrategyCurrentStatus;
+};
+
+export type StrategyRevisionProposal = {
+  proposal_id: string;
+  proposal_type: 'strategy_revision';
+  lifecycle_state: string;
+  lifecycle_label: string;
+  revision_no: number;
+  rationale: string;
+  trigger_type?: string | null;
+  confidence: number | null;
+  evidence_state: string;
+  evidence_label: string;
+  affected_strategy_version: StrategyVersionSnapshot;
+  base_version_id?: string | null;
+  accepted_draft_version_id?: string | null;
+  proposed_changes: Record<string, unknown>;
+  evidence: {
+    dataset_snapshot_id?: string | null;
+    market_snapshot_ids?: string[];
+    rule_applicability_profile_ids?: string[];
+    backtest_run_ids?: string[];
+    backtest_result_ids?: string[];
+    evidence_fingerprint?: string | null;
+    [key: string]: unknown;
+  };
+  created_at?: string | null;
+  updated_at?: string | null;
+  available_actions: string[];
+  partial_reasons: string[];
+  limitations: string[];
+};
+
+export type StrategyRevisionProposalListResponse = {
+  state: 'ready' | 'empty' | 'partial';
+  count: number;
+  items: StrategyRevisionProposal[];
+};
+
+export type StrategyRevisionProposalDetailResponse = StrategyRevisionProposal;
+
+export type StrategyRevisionProposalReviewRequest = {
+  action: 'start_review' | 'return_to_draft' | 'reject' | 'archive' | 'supersede';
+  reason?: string | null;
+  superseded_by_proposal_id?: string | null;
+};
+
+export type StrategyRevisionProposalAcceptRequest = {
+  reason?: string | null;
+  linked_draft_version_id?: string | null;
+};
+
+export type StrategyRevisionProposalAcceptResponse = StrategyRevisionProposal;
+
 export type StrategyValidationSummary = {
   state: string;
   label: string;

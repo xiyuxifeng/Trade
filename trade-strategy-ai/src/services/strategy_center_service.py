@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.common.stage2_writer_routing import canonical_write_scope
 from src.db.repositories.strategy_repo import StrategyRepository
 from src.db.session import get_session_factory
-from src.domain.enums import AuthorProfileKind, FormalLifecycleState, QualityStatus
-from src.models.stage2_canonical import Strategy, StrategyRuleMembership, StrategyVersion
+from src.domain.enums import AuthorProfileKind, FormalLifecycleState, ProposalLifecycleState, ProposalType, QualityStatus
+from src.domain.lifecycle import DomainLifecycleTransitionError, LifecycleTransitionValidator
+from src.models.stage2_canonical import OptimizationProposal, Strategy, StrategyRuleMembership, StrategyVersion
 
 
 STATE_LABELS = {
@@ -43,6 +44,25 @@ REVIEW_DECISION_LABELS = {
     "approved": "已批准",
     "waived": "已豁免",
     "blocked": "暂不通过",
+}
+
+PROPOSAL_STATE_LABELS = {
+    ProposalLifecycleState.draft: "待处理",
+    ProposalLifecycleState.in_review: "复核中",
+    ProposalLifecycleState.accepted: "已生成草稿",
+    ProposalLifecycleState.rejected: "已拒绝",
+    ProposalLifecycleState.archived: "已归档",
+    ProposalLifecycleState.superseded: "已被替代",
+}
+
+PROPOSAL_EVIDENCE_LABELS = {
+    "ready": "证据完整",
+    "partial": "证据不完整",
+    "unavailable": "证据暂不可用",
+    "conflict": "证据冲突",
+    "invalid": "证据无效",
+    "insufficient_coverage": "覆盖不足",
+    "insufficient_sample": "样本不足",
 }
 
 
@@ -99,6 +119,55 @@ class StrategyRollbackRequest(BaseModel):
         if not value.strip():
             raise ValueError("回退原因不能为空。")
         return value
+
+
+class StrategyProposalCreateRequest(BaseModel):
+    post_market_review_id: UUID
+    affected_strategy_version_id: UUID
+    rationale: str
+    trigger_type: str | None = None
+    confidence: float | None = None
+    proposed_changes: dict[str, Any] = Field(default_factory=dict)
+    evidence_json: dict[str, Any] = Field(default_factory=dict)
+    source_surface: str = "/strategies"
+
+    @field_validator("rationale")
+    @classmethod
+    def _validate_rationale(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("建议理由不能为空。")
+        return value
+
+    @field_validator("confidence")
+    @classmethod
+    def _validate_confidence(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        if value < 0 or value > 1:
+            raise ValueError("建议置信度必须在 0 到 1 之间。")
+        return value
+
+
+class StrategyProposalReviewRequest(BaseModel):
+    action: str
+    reason: str | None = None
+    superseded_by_proposal_id: UUID | None = None
+    source_surface: str = "/strategies"
+
+    @field_validator("action")
+    @classmethod
+    def _validate_action(cls, value: str) -> str:
+        allowed = {"start_review", "return_to_draft", "reject", "archive", "supersede"}
+        normalized = value.strip()
+        if normalized not in allowed:
+            raise ValueError("建议操作无效。")
+        return normalized
+
+
+class StrategyProposalAcceptRequest(BaseModel):
+    reason: str | None = None
+    linked_draft_version_id: UUID | None = None
+    source_surface: str = "/strategies"
 
 
 class StrategyCurrentStatusView(BaseModel):
@@ -199,6 +268,41 @@ class StrategyVersionView(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class StrategyProposalAffectedVersionView(BaseModel):
+    strategy_version_id: str
+    strategy_id: str
+    business_key: str
+    title: str
+    version_no: int
+    lifecycle_state: str
+    lifecycle_label: str
+    validation_summary: StrategyValidationSummaryView
+    current_status: StrategyCurrentStatusView
+
+
+class StrategyProposalView(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    lifecycle_state: str
+    lifecycle_label: str
+    revision_no: int
+    confidence: float | None = None
+    rationale: str
+    trigger_type: str | None = None
+    evidence_state: str
+    evidence_label: str
+    affected_strategy_version: StrategyProposalAffectedVersionView
+    base_version_id: str | None = None
+    accepted_draft_version_id: str | None = None
+    proposed_changes: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+    available_actions: list[str] = Field(default_factory=list)
+    partial_reasons: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -234,6 +338,7 @@ class StrategyCenterService:
     def __init__(self, *, repository: StrategyRepository | None = None, session_scope_factory: Any | None = None) -> None:
         self.repository = repository or StrategyRepository()
         self._session_scope_factory = session_scope_factory or self._default_session_scope_factory
+        self._lifecycle_validator = LifecycleTransitionValidator()
 
     @staticmethod
     @asynccontextmanager
@@ -651,6 +756,225 @@ class StrategyCenterService:
                 ],
             }
 
+    async def list_proposals(self, *, actor_id: str, actor_role: str, limit: int = 50) -> dict[str, Any]:
+        del actor_id
+        if actor_role not in {"viewer", "operator", "admin"}:
+            raise PermissionError("viewer permission is required to view strategy proposals")
+        async with self._session_scope_factory() as session:
+            proposals = await self.repository.list_strategy_revision_proposals(session, limit=limit)
+            items = [await self._to_proposal_view(session, proposal) for proposal in proposals]
+            states = {item.evidence_state for item in items}
+            if not items:
+                state = "empty"
+            elif states - {"ready"}:
+                state = "partial"
+            else:
+                state = "ready"
+            return {
+                "state": state,
+                "items": [item.model_dump(mode="json") for item in items],
+                "count": len(items),
+            }
+
+    async def get_proposal(self, proposal_id: str | UUID, *, actor_id: str, actor_role: str) -> StrategyProposalView:
+        del actor_id
+        if actor_role not in {"viewer", "operator", "admin"}:
+            raise PermissionError("viewer permission is required to view strategy proposals")
+        async with self._session_scope_factory() as session:
+            proposal = await self.repository.get_proposal(session, proposal_id)
+            if proposal is None or proposal.proposal_type != ProposalType.strategy_revision:
+                raise LookupError("strategy proposal not found")
+            return await self._to_proposal_view(session, proposal)
+
+    async def create_proposal(
+        self,
+        request: StrategyProposalCreateRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> StrategyProposalView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to create a strategy proposal")
+        async with self._session_scope_factory() as session:
+            review = await self.repository.get_post_market_review(session, request.post_market_review_id)
+            if review is None:
+                raise LookupError("post market review not found")
+            target_version = await self.repository.get_version(session, request.affected_strategy_version_id)
+            if target_version is None:
+                raise LookupError("strategy version not found")
+            strategy = await self.repository.get_strategy(session, target_version.strategy_id)
+            assert strategy is not None
+            evidence_payload = self._normalize_proposal_evidence(
+                request.evidence_json,
+                target_version=target_version,
+                strategy=strategy,
+                rationale=request.rationale,
+                trigger_type=request.trigger_type,
+            )
+            proposal = OptimizationProposal(
+                optimization_proposal_id=uuid4(),
+                post_market_review_id=request.post_market_review_id,
+                proposal_type=ProposalType.strategy_revision,
+                target_asset_type="StrategyVersion",
+                target_asset_id=target_version.strategy_version_id,
+                revision_no=await self.repository.next_proposal_revision_no(
+                    session,
+                    post_market_review_id=request.post_market_review_id,
+                    target_asset_id=target_version.strategy_version_id,
+                    proposal_type=ProposalType.strategy_revision,
+                ),
+                base_version_id=target_version.strategy_version_id,
+                proposed_changes=request.proposed_changes,
+                evidence_json=evidence_payload,
+                confidence=request.confidence,
+                lifecycle_state=ProposalLifecycleState.draft,
+                accepted_draft_version_id=None,
+                created_at=_now(),
+                created_by=actor_id,
+                updated_at=_now(),
+                updated_by=actor_id,
+            )
+            with canonical_write_scope("strategy", "StrategyCenterService.create_proposal"):
+                await self.repository.add_proposal(session, proposal)
+                await self.repository.record_lifecycle_event(
+                    session,
+                    object_id=proposal.optimization_proposal_id,
+                    from_state=None,
+                    to_state=ProposalLifecycleState.draft.value,
+                    actor_id=actor_id,
+                    actor_role=actor_role,
+                    reason=request.rationale,
+                    before_state=None,
+                    after_state=self._proposal_audit_state(proposal),
+                    correlation_id=str(review.post_market_review_id),
+                )
+            return await self._to_proposal_view(session, proposal)
+
+    async def review_proposal(
+        self,
+        proposal_id: str | UUID,
+        request: StrategyProposalReviewRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> StrategyProposalView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to review a strategy proposal")
+        state_map = {
+            "start_review": ProposalLifecycleState.in_review,
+            "return_to_draft": ProposalLifecycleState.draft,
+            "reject": ProposalLifecycleState.rejected,
+            "archive": ProposalLifecycleState.archived,
+            "supersede": ProposalLifecycleState.superseded,
+        }
+        async with self._session_scope_factory() as session:
+            proposal = await self.repository.get_proposal(session, proposal_id)
+            if proposal is None or proposal.proposal_type != ProposalType.strategy_revision:
+                raise LookupError("strategy proposal not found")
+            from_state = proposal.lifecycle_state
+            to_state = state_map[request.action]
+            if request.action == "supersede" and request.superseded_by_proposal_id is None:
+                raise ValueError("标记为已被替代时，必须记录替代该建议的新建议。")
+            try:
+                self._lifecycle_validator.validate(from_state, to_state)
+            except DomainLifecycleTransitionError as exc:
+                raise ValueError("当前建议状态不支持所选处理动作。") from exc
+            before = self._proposal_audit_state(proposal)
+            proposal.lifecycle_state = to_state
+            proposal.updated_at = _now()
+            proposal.updated_by = actor_id
+            proposal.evidence_json = {
+                **(proposal.evidence_json or {}),
+                "last_review_action": request.action,
+                "last_review_reason": request.reason,
+                "superseded_by_proposal_id": str(request.superseded_by_proposal_id) if request.superseded_by_proposal_id else None,
+            }
+            with canonical_write_scope("strategy", "StrategyCenterService.review_proposal"):
+                await self.repository.record_lifecycle_event(
+                    session,
+                    object_id=proposal.optimization_proposal_id,
+                    from_state=from_state.value,
+                    to_state=to_state.value,
+                    actor_id=actor_id,
+                    actor_role=actor_role,
+                    reason=request.reason,
+                    before_state=before,
+                    after_state=self._proposal_audit_state(proposal),
+                    correlation_id=str(proposal.post_market_review_id),
+                )
+            return await self._to_proposal_view(session, proposal)
+
+    async def accept_proposal_to_draft(
+        self,
+        proposal_id: str | UUID,
+        request: StrategyProposalAcceptRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> StrategyProposalView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to accept a strategy proposal")
+        async with self._session_scope_factory() as session:
+            proposal = await self.repository.get_proposal(session, proposal_id)
+            if proposal is None or proposal.proposal_type != ProposalType.strategy_revision:
+                raise LookupError("strategy proposal not found")
+            try:
+                self._lifecycle_validator.validate(proposal.lifecycle_state, ProposalLifecycleState.accepted)
+                self._lifecycle_validator.validate_proposal_acceptance_target(FormalLifecycleState.draft)
+            except DomainLifecycleTransitionError as exc:
+                raise ValueError("当前建议不能直接生成草稿。请先进入复核，且只能落到草稿版本。") from exc
+            target_version = await self.repository.get_version(session, proposal.target_asset_id)
+            if target_version is None:
+                raise LookupError("strategy version not found")
+            strategy = await self.repository.get_strategy(session, target_version.strategy_id)
+            assert strategy is not None
+            before = self._proposal_audit_state(proposal)
+            if request.linked_draft_version_id is not None:
+                linked_draft = await self.repository.get_version(session, request.linked_draft_version_id)
+                if linked_draft is None:
+                    raise LookupError("linked draft version not found")
+                if linked_draft.strategy_id != strategy.strategy_id:
+                    raise ValueError("只能关联同一正式策略下的草稿版本。")
+                if linked_draft.lifecycle_state != FormalLifecycleState.draft:
+                    raise ValueError("只能关联仍处于草稿状态的策略版本。")
+                accepted_draft_id = linked_draft.strategy_version_id
+            else:
+                draft_request = await self._build_draft_request_from_proposal(
+                    session,
+                    proposal=proposal,
+                    target_version=target_version,
+                    strategy=strategy,
+                )
+                draft = await self._create_draft_in_session(
+                    session,
+                    draft_request,
+                    actor_id=actor_id,
+                    actor_role=actor_role,
+                )
+                accepted_draft_id = UUID(draft.strategy_version_id)
+            proposal.lifecycle_state = ProposalLifecycleState.accepted
+            proposal.accepted_draft_version_id = accepted_draft_id
+            proposal.updated_at = _now()
+            proposal.updated_by = actor_id
+            proposal.evidence_json = {
+                **(proposal.evidence_json or {}),
+                "accepted_reason": request.reason,
+            }
+            with canonical_write_scope("strategy", "StrategyCenterService.accept_proposal_to_draft"):
+                await self.repository.record_lifecycle_event(
+                    session,
+                    object_id=proposal.optimization_proposal_id,
+                    from_state=before["lifecycle_state"],
+                    to_state=ProposalLifecycleState.accepted.value,
+                    actor_id=actor_id,
+                    actor_role=actor_role,
+                    reason=request.reason,
+                    before_state=before,
+                    after_state=self._proposal_audit_state(proposal),
+                    correlation_id=str(proposal.post_market_review_id),
+                )
+            return await self._to_proposal_view(session, proposal)
+
     async def _resolve_strategy(self, session: AsyncSession, *, request: StrategyDraftRequest, actor_id: str) -> Strategy:
         strategy: Strategy | None = None
         if request.strategy_id is not None:
@@ -961,6 +1285,179 @@ class StrategyCenterService:
             "label": f"{label_prefix} v{profile.version_no}",
             "author_id": str(profile.author_id),
         }
+
+    async def _to_proposal_view(self, session: AsyncSession, proposal: OptimizationProposal) -> StrategyProposalView:
+        target_version = await self.repository.get_version(session, proposal.target_asset_id)
+        if target_version is None:
+            raise LookupError("strategy version not found")
+        strategy = await self.repository.get_strategy(session, target_version.strategy_id)
+        assert strategy is not None
+        target_view = await self._to_view(session, target_version, strategy)
+        evidence = proposal.evidence_json or {}
+        evidence_state = self._proposal_evidence_state(evidence, target_view.validation.state)
+        available_actions = self._proposal_available_actions(proposal.lifecycle_state)
+        return StrategyProposalView(
+            proposal_id=str(proposal.optimization_proposal_id),
+            proposal_type=proposal.proposal_type.value,
+            lifecycle_state=proposal.lifecycle_state.value,
+            lifecycle_label=PROPOSAL_STATE_LABELS[proposal.lifecycle_state],
+            revision_no=proposal.revision_no,
+            confidence=float(proposal.confidence) if proposal.confidence is not None else None,
+            rationale=str(evidence.get("rationale") or "未提供"),
+            trigger_type=evidence.get("trigger_type"),
+            evidence_state=evidence_state,
+            evidence_label=PROPOSAL_EVIDENCE_LABELS[evidence_state],
+            affected_strategy_version=StrategyProposalAffectedVersionView(
+                strategy_version_id=target_view.strategy_version_id,
+                strategy_id=target_view.strategy_id,
+                business_key=target_view.business_key,
+                title=target_view.title,
+                version_no=target_view.version_no,
+                lifecycle_state=target_view.lifecycle_state,
+                lifecycle_label=target_view.lifecycle_label,
+                validation_summary=target_view.validation,
+                current_status=target_view.current_status,
+            ),
+            base_version_id=str(proposal.base_version_id) if proposal.base_version_id else None,
+            accepted_draft_version_id=str(proposal.accepted_draft_version_id) if proposal.accepted_draft_version_id else None,
+            proposed_changes=proposal.proposed_changes or {},
+            evidence=evidence,
+            created_at=proposal.created_at.isoformat() if proposal.created_at else None,
+            updated_at=proposal.updated_at.isoformat() if proposal.updated_at else None,
+            available_actions=available_actions,
+            partial_reasons=list(evidence.get("partial_reasons", [])),
+            limitations=list(evidence.get("limitations", [])),
+        )
+
+    def _normalize_proposal_evidence(
+        self,
+        payload: dict[str, Any],
+        *,
+        target_version: StrategyVersion,
+        strategy: Strategy,
+        rationale: str,
+        trigger_type: str | None,
+    ) -> dict[str, Any]:
+        evidence = dict(payload)
+        validation_summary = (target_version.evidence_json or {}).get("validation_summary") or self._default_validation_summary()
+        evidence_state = self._proposal_evidence_state(evidence, validation_summary.get("state", "not_run"))
+        return {
+            **evidence,
+            "rationale": rationale,
+            "trigger_type": trigger_type,
+            "evidence_state": evidence_state,
+            "affected_strategy_version": {
+                "strategy_version_id": str(target_version.strategy_version_id),
+                "strategy_id": str(strategy.strategy_id),
+                "business_key": strategy.business_key,
+                "title": target_version.title,
+                "version_no": target_version.version_no,
+                "current_version_id": str(strategy.current_published_version_id) if strategy.current_published_version_id else None,
+            },
+            "validation_summary": validation_summary,
+        }
+
+    def _proposal_evidence_state(self, evidence: dict[str, Any], validation_state: str | None) -> str:
+        explicit = evidence.get("evidence_state")
+        if explicit in PROPOSAL_EVIDENCE_LABELS:
+            return explicit
+        if validation_state in {"partial", "invalid", "insufficient_coverage", "insufficient_sample"}:
+            return validation_state
+        if validation_state in {"passed", "ready"}:
+            return "ready"
+        return "unavailable"
+
+    def _proposal_available_actions(self, lifecycle_state: ProposalLifecycleState) -> list[str]:
+        actions = {
+            ProposalLifecycleState.draft: ["start_review", "reject"],
+            ProposalLifecycleState.in_review: ["generate_draft", "reject", "return_to_draft"],
+            ProposalLifecycleState.accepted: ["archive", "supersede"],
+            ProposalLifecycleState.rejected: ["archive"],
+            ProposalLifecycleState.archived: [],
+            ProposalLifecycleState.superseded: ["archive"],
+        }
+        return actions[lifecycle_state]
+
+    def _proposal_audit_state(self, proposal: OptimizationProposal) -> dict[str, Any]:
+        return {
+            "proposal_id": str(proposal.optimization_proposal_id),
+            "proposal_type": proposal.proposal_type.value,
+            "target_asset_type": proposal.target_asset_type,
+            "target_asset_id": str(proposal.target_asset_id),
+            "base_version_id": str(proposal.base_version_id) if proposal.base_version_id else None,
+            "accepted_draft_version_id": str(proposal.accepted_draft_version_id) if proposal.accepted_draft_version_id else None,
+            "lifecycle_state": proposal.lifecycle_state.value,
+            "revision_no": proposal.revision_no,
+        }
+
+    async def _build_draft_request_from_proposal(
+        self,
+        session: AsyncSession,
+        *,
+        proposal: OptimizationProposal,
+        target_version: StrategyVersion,
+        strategy: Strategy,
+    ) -> StrategyDraftRequest:
+        memberships = await self.repository.list_rule_memberships(session, strategy_version_id=target_version.strategy_version_id)
+        rule_memberships = [
+            StrategyRuleMembershipInput(
+                rule_version_id=item.rule_version_id,
+                base_weight=float(item.base_weight) if item.base_weight is not None else None,
+                status=item.status,
+                configuration_json=item.configuration_json or {},
+            )
+            for item in memberships
+        ]
+        changes = proposal.proposed_changes or {}
+        if "rule_memberships" in changes:
+            rule_memberships = [StrategyRuleMembershipInput.model_validate(item) for item in changes["rule_memberships"]]
+        elif "proposed_weight_changes" in changes:
+            weight_changes = changes.get("proposed_weight_changes", [])
+            weights = {
+                str(item.get("rule_version_id")): item.get("base_weight")
+                for item in weight_changes
+                if item.get("rule_version_id")
+            }
+            if not weights and weight_changes:
+                raise ValueError("建议中的权重变更格式无效，不能直接生成草稿。")
+            rule_memberships = [
+                StrategyRuleMembershipInput(
+                    rule_version_id=item.rule_version_id,
+                    base_weight=float(weights[str(item.rule_version_id)]) if str(item.rule_version_id) in weights else item.base_weight,
+                    status=item.status,
+                    configuration_json=item.configuration_json or {},
+                )
+                for item in memberships
+            ]
+        if not rule_memberships:
+            raise ValueError("建议没有可落地的正式规则变更，不能直接生成草稿。")
+        evidence_json = {
+            **(target_version.evidence_json or {}),
+            "proposal_acceptance": {
+                "optimization_proposal_id": str(proposal.optimization_proposal_id),
+                "proposal_revision_no": proposal.revision_no,
+            },
+        }
+        if isinstance(changes.get("evidence_json"), dict):
+            evidence_json.update(changes["evidence_json"])
+        return StrategyDraftRequest(
+            strategy_id=strategy.strategy_id,
+            business_key=strategy.business_key,
+            schema_version=changes.get("schema_version") or target_version.schema_version,
+            title=changes.get("title") or target_version.title or strategy.business_key,
+            summary=changes.get("summary", target_version.summary),
+            rule_memberships=rule_memberships,
+            author_method_profile_version_id=changes.get("author_method_profile_version_id") or target_version.author_method_profile_version_id,
+            author_rule_profile_version_id=changes.get("author_rule_profile_version_id") or target_version.author_rule_profile_version_id,
+            author_validated_profile_version_id=changes.get("author_validated_profile_version_id") or target_version.author_validated_profile_version_id,
+            risk_policy_json=changes.get("risk_policy_json") or target_version.risk_policy_json or {},
+            selection_policy_json=changes.get("selection_policy_json") or target_version.selection_policy_json or {},
+            universe_json=changes.get("universe_json") or target_version.universe_json or {},
+            evidence_json=evidence_json,
+            quality_status=target_version.quality_status,
+            reason=f"接受策略优化建议 {proposal.optimization_proposal_id} 生成草稿",
+            source_surface="/strategies",
+        )
 
     def _default_validation_summary(self) -> dict[str, Any]:
         return {

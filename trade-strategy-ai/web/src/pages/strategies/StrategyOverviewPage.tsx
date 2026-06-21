@@ -4,18 +4,27 @@ import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { ApiError } from '@/lib/api/http';
 import {
+  acceptStrategyRevisionProposalToDraft,
   compareStrategyVersion,
   createStrategyDraft,
   diffStrategyVersion,
+  getStrategyRevisionProposal,
   getStrategyDraftOptions,
   listStrategies,
+  listStrategyRevisionProposals,
   publishStrategy,
   rollbackStrategyVersion,
+  reviewStrategyRevisionProposal,
   submitStrategyReview,
   validateStrategyVersion,
 } from '@/lib/api/strategies';
-import type { StrategyComparisonResponse, StrategyDiffResponse, StrategyVersion } from '@/types/strategies';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import type {
+  StrategyComparisonResponse,
+  StrategyDiffResponse,
+  StrategyRevisionProposal,
+  StrategyVersion,
+} from '@/types/strategies';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 type FormalPageProps = {
   availability?: PageAvailability;
@@ -34,10 +43,13 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
   const [selectedApplicabilityProfileId, setSelectedApplicabilityProfileId] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [localVersion, setLocalVersion] = useState<StrategyVersion | null>(null);
   const [comparison, setComparison] = useState<StrategyComparisonResponse | null>(null);
   const [diff, setDiff] = useState<StrategyDiffResponse | null>(null);
   const [rollbackReason, setRollbackReason] = useState('');
+  const [proposalReviewReason, setProposalReviewReason] = useState('');
+  const [proposalDraftReason, setProposalDraftReason] = useState('');
   const [riskPolicyText, setRiskPolicyText] = useState(
     JSON.stringify({ position_constraints: { single_position_pct: 0.2, total_position_pct: 0.8 } }, null, 2),
   );
@@ -52,6 +64,7 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     ),
   );
   const [universeText, setUniverseText] = useState(JSON.stringify({ market: 'CN', boards: ['主板'] }, null, 2));
+  const queryClient = useQueryClient();
 
   const strategiesQuery = useQuery({
     queryKey: ['formal-strategies'],
@@ -63,6 +76,21 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     queryFn: () => getStrategyDraftOptions(),
     enabled: availability === undefined,
   });
+  const proposalsQuery = useQuery({
+    queryKey: ['formal-strategy-proposals'],
+    queryFn: () => listStrategyRevisionProposals(),
+    enabled: availability === undefined,
+  });
+
+  const proposalItems = proposalsQuery.data?.items ?? [];
+  const activeProposalId = selectedProposalId ?? proposalItems[0]?.proposal_id ?? null;
+  const activeProposalFromList = proposalItems.find((item) => item.proposal_id === activeProposalId) ?? null;
+  const proposalDetailQuery = useQuery({
+    queryKey: ['formal-strategy-proposal', activeProposalId],
+    queryFn: () => getStrategyRevisionProposal(activeProposalId ?? ''),
+    enabled: availability === undefined && activeProposalId !== null,
+  });
+  const activeProposal: StrategyRevisionProposal | null = proposalDetailQuery.data ?? activeProposalFromList;
 
   const saveDraft = useMutation({
     mutationFn: (draft: Parameters<typeof createStrategyDraft>[0]) => createStrategyDraft(draft),
@@ -125,26 +153,70 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     },
     onError: (error) => setStatusMessage(resolveErrorMessage(error)),
   });
+  const reviewProposal = useMutation({
+    mutationFn: (params: {
+      proposalId: string;
+      action: 'start_review' | 'return_to_draft' | 'reject' | 'archive' | 'supersede';
+      reason?: string | null;
+    }) => reviewStrategyRevisionProposal(params.proposalId, { action: params.action, reason: params.reason }),
+    onSuccess: async (data) => {
+      setStatusMessage('已更新策略优化建议复核状态');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['formal-strategy-proposals'] }),
+        queryClient.invalidateQueries({ queryKey: ['formal-strategy-proposal', data.proposal_id] }),
+      ]);
+    },
+    onError: (error) => setStatusMessage(resolveErrorMessage(error)),
+  });
+  const acceptProposal = useMutation({
+    mutationFn: (params: { proposalId: string; reason?: string | null }) =>
+      acceptStrategyRevisionProposalToDraft(params.proposalId, { reason: params.reason }),
+    onSuccess: async (data) => {
+      setStatusMessage('已生成策略草稿');
+      setSelectedProposalId(data.proposal_id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['formal-strategies'] }),
+        queryClient.invalidateQueries({ queryKey: ['formal-strategy-proposals'] }),
+        queryClient.invalidateQueries({ queryKey: ['formal-strategy-proposal', data.proposal_id] }),
+      ]);
+      if (data.accepted_draft_version_id) {
+        const refreshed = await queryClient.fetchQuery({
+          queryKey: ['formal-strategies'],
+          queryFn: () => listStrategies(),
+        });
+        const acceptedDraft = refreshed.items.find((item) => item.strategy_version_id === data.accepted_draft_version_id);
+        if (acceptedDraft) {
+          setLocalVersion(acceptedDraft);
+          setSelectedVersionId(acceptedDraft.strategy_version_id);
+        }
+      }
+    },
+    onError: (error) => setStatusMessage(resolveErrorMessage(error)),
+  });
 
   const permissionDenied =
     (strategiesQuery.error instanceof ApiError && [401, 403].includes(strategiesQuery.error.status)) ||
-    (optionsQuery.error instanceof ApiError && [401, 403].includes(optionsQuery.error.status));
+    (optionsQuery.error instanceof ApiError && [401, 403].includes(optionsQuery.error.status)) ||
+    (proposalsQuery.error instanceof ApiError && [401, 403].includes(proposalsQuery.error.status)) ||
+    (proposalDetailQuery.error instanceof ApiError && [401, 403].includes(proposalDetailQuery.error.status));
   const unavailable =
     (strategiesQuery.error instanceof ApiError && strategiesQuery.error.status >= 500) ||
-    (optionsQuery.error instanceof ApiError && optionsQuery.error.status >= 500);
+    (optionsQuery.error instanceof ApiError && optionsQuery.error.status >= 500) ||
+    (proposalsQuery.error instanceof ApiError && proposalsQuery.error.status >= 500) ||
+    (proposalDetailQuery.error instanceof ApiError && proposalDetailQuery.error.status >= 500);
   const state: PageAvailability =
     availability ??
-    (strategiesQuery.isLoading || optionsQuery.isLoading
+    (strategiesQuery.isLoading || optionsQuery.isLoading || proposalsQuery.isLoading
       ? 'loading'
       : permissionDenied
         ? 'permission_denied'
         : unavailable
           ? 'unavailable'
-          : strategiesQuery.error || optionsQuery.error
+          : strategiesQuery.error || optionsQuery.error || proposalsQuery.error || proposalDetailQuery.error
             ? 'error'
-            : strategiesQuery.data?.state === 'empty'
+            : strategiesQuery.data?.state === 'empty' && proposalsQuery.data?.state === 'empty'
               ? 'empty'
-              : strategiesQuery.data?.state === 'partial'
+              : strategiesQuery.data?.state === 'partial' || proposalsQuery.data?.state === 'partial'
                 ? 'partial'
                 : 'ready');
 
@@ -167,6 +239,7 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
     versions.find((item) => item.current_status.is_current) ??
     versions[0] ??
     null;
+  const selectedProposal = activeProposal;
   const rollbackTargetVersionId =
     comparison?.current_version?.strategy_version_id && comparison.current_version.strategy_version_id !== activeVersion?.strategy_version_id
       ? comparison.current_version.strategy_version_id
@@ -380,6 +453,198 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
                   </div>
                 </div>
               ) : null}
+              <section className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-4">
+                <div className="grid gap-2">
+                  <h3 className="m-0 text-base font-semibold text-slate-950">策略优化建议</h3>
+                  <p className="m-0 text-sm text-slate-600">
+                    这里展示正式优化建议。接受建议只会生成草稿，不会直接改写当前使用中的正式策略。
+                  </p>
+                </div>
+                {proposalsQuery.data?.state === 'empty' ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    当前还没有正式的策略优化建议。
+                  </div>
+                ) : selectedProposal ? (
+                  <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+                    <div className="grid gap-2">
+                      {proposalItems.map((proposal) => {
+                        const isSelected = proposal.proposal_id === selectedProposal.proposal_id;
+                        return (
+                          <button
+                            key={proposal.proposal_id}
+                            type="button"
+                            className={`grid gap-2 rounded-lg border px-4 py-3 text-left transition-colors ${
+                              isSelected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-800'
+                            }`}
+                            onClick={() => setSelectedProposalId(proposal.proposal_id)}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="m-0 text-sm font-medium">{proposal.affected_strategy_version.title}</p>
+                                <p className={`mt-1 text-xs ${isSelected ? 'text-slate-200' : 'text-slate-500'}`}>{proposal.lifecycle_label}</p>
+                              </div>
+                              <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${isSelected ? 'bg-white/10 text-white' : 'bg-white text-slate-600'}`}>
+                                置信度 {formatConfidence(proposal.confidence)}
+                              </span>
+                            </div>
+                            <p className={`m-0 text-xs ${isSelected ? 'text-slate-200' : 'text-slate-500'}`}>
+                              影响版本：{proposal.affected_strategy_version.title}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <article className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h4 className="m-0 text-base font-semibold text-slate-950">{selectedProposal.affected_strategy_version.title}</h4>
+                          <p className="mt-1 text-sm text-slate-600">
+                            策略修订建议 · {selectedProposal.lifecycle_label} · {selectedProposal.evidence_label}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                            置信度 {formatConfidence(selectedProposal.confidence)}
+                          </span>
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                            {selectedProposal.lifecycle_label}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                        <InfoRow label="影响版本" value={renderVersionSnapshot(selectedProposal.affected_strategy_version)} />
+                        <InfoRow label="基础版本" value={selectedProposal.base_version_id ?? '未记录'} />
+                        <InfoRow label="建议触发" value={selectedProposal.trigger_type || '未说明'} />
+                        <InfoRow label="证据状态" value={selectedProposal.evidence_label} />
+                        <InfoRow label="当前使用中" value={selectedProposal.affected_strategy_version.current_status.is_current ? '是' : '否'} />
+                        <InfoRow label="当前正式版本" value={selectedProposal.affected_strategy_version.current_status.current_version_id ?? '未记录'} />
+                        <InfoRow label="已生成草稿" value={selectedProposal.accepted_draft_version_id ?? '尚未生成'} />
+                        <InfoRow label="最近更新时间" value={selectedProposal.updated_at ?? '未记录'} />
+                      </div>
+
+                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                        <p className="m-0 text-sm font-medium text-slate-900">建议理由</p>
+                        <p className="m-0 text-sm text-slate-700">{selectedProposal.rationale}</p>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="grid gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                          <p className="m-0 text-sm font-medium text-slate-900">证据</p>
+                          <div className="grid gap-2 text-sm text-slate-700">
+                            <InfoRow label="数据集快照" value={selectedProposal.evidence.dataset_snapshot_id ?? '未绑定'} />
+                            <InfoRow label="市场快照" value={(selectedProposal.evidence.market_snapshot_ids ?? []).join('、') || '未绑定'} />
+                            <InfoRow label="规则适用性画像" value={(selectedProposal.evidence.rule_applicability_profile_ids ?? []).join('、') || '未绑定'} />
+                            <InfoRow label="回测记录" value={(selectedProposal.evidence.backtest_run_ids ?? []).join('、') || '未绑定'} />
+                            <InfoRow label="回测结果" value={(selectedProposal.evidence.backtest_result_ids ?? []).join('、') || '未绑定'} />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                          <p className="m-0 text-sm font-medium text-slate-900">复核可用动作</p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedProposal.available_actions.map((action) => (
+                              <span key={action} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                                {proposalActionLabel(action)}
+                              </span>
+                            ))}
+                          </div>
+                          {selectedProposal.partial_reasons.length ? (
+                            <p className="m-0 text-sm text-amber-800">部分说明：{selectedProposal.partial_reasons.join('；')}</p>
+                          ) : null}
+                          {selectedProposal.limitations.length ? (
+                            <p className="m-0 text-sm text-slate-600">限制：{selectedProposal.limitations.join('；')}</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                        <p className="m-0 text-sm font-medium text-slate-900">建议变更</p>
+                        {Object.keys(selectedProposal.proposed_changes).length ? (
+                          <div className="grid gap-2 text-sm text-slate-700">
+                            {Object.entries(selectedProposal.proposed_changes).map(([field, value]) => (
+                              <InfoRow key={field} label={proposalChangeLabel(field)} value={summarizeDiffValue(value)} />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="m-0 text-sm text-slate-600">当前建议没有新增字段差异。</p>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                        <p className="m-0 text-sm font-medium text-slate-900">复核与生成草稿</p>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <LabeledTextarea
+                            label="复核说明"
+                            value={proposalReviewReason}
+                            onChange={setProposalReviewReason}
+                            className="md:col-span-1"
+                          />
+                          <LabeledTextarea
+                            label="生成草稿说明"
+                            value={proposalDraftReason}
+                            onChange={setProposalDraftReason}
+                            className="md:col-span-1"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                            onClick={() =>
+                              reviewProposal.mutate({
+                                proposalId: selectedProposal.proposal_id,
+                                action: 'start_review',
+                                reason: proposalReviewReason.trim() || undefined,
+                              })
+                            }
+                            disabled={reviewProposal.isPending || acceptProposal.isPending}
+                          >
+                            开始复核
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                            onClick={() =>
+                              reviewProposal.mutate({
+                                proposalId: selectedProposal.proposal_id,
+                                action: 'reject',
+                                reason: proposalReviewReason.trim() || undefined,
+                              })
+                            }
+                            disabled={reviewProposal.isPending || acceptProposal.isPending}
+                          >
+                            驳回建议
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                            onClick={() =>
+                              acceptProposal.mutate({
+                                proposalId: selectedProposal.proposal_id,
+                                reason: proposalDraftReason.trim() || undefined,
+                              })
+                            }
+                            disabled={acceptProposal.isPending || reviewProposal.isPending}
+                          >
+                            生成草稿
+                          </button>
+                        </div>
+                        {selectedProposal.accepted_draft_version_id ? (
+                          <p className="m-0 text-sm text-emerald-700">
+                            已生成草稿版本：{selectedProposal.accepted_draft_version_id}
+                          </p>
+                        ) : null}
+                      </div>
+                    </article>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    当前还没有可查看的策略优化建议详情。
+                  </div>
+                )}
+              </section>
               {statusMessage ? <p className="m-0 text-sm text-slate-700">{statusMessage}</p> : null}
             </section>
           </div>
@@ -420,6 +685,60 @@ function formatPercentDelta(value: number | null | undefined) {
     return '暂无';
   }
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatConfidence(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return '未知';
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function renderVersionSnapshot(snapshot: StrategyRevisionProposal['affected_strategy_version']) {
+  const versionLabel = snapshot.version_no !== null && snapshot.version_no !== undefined ? `v${snapshot.version_no}` : '未知版本';
+  const title = snapshot.title ?? snapshot.strategy_version_id;
+  const lifecycle = snapshot.lifecycle_label ?? snapshot.lifecycle_state ?? '未说明';
+  return `${title} · ${versionLabel} · ${lifecycle}`;
+}
+
+function proposalActionLabel(action: string) {
+  switch (action) {
+    case 'start_review':
+      return '开始复核';
+    case 'return_to_draft':
+      return '退回复核前';
+    case 'reject':
+      return '驳回建议';
+    case 'archive':
+      return '归档建议';
+    case 'supersede':
+      return '标记为已被替代';
+    case 'generate_draft':
+      return '生成草稿';
+    default:
+      return action;
+  }
+}
+
+function proposalChangeLabel(field: string) {
+  switch (field) {
+    case 'title':
+      return '策略名称';
+    case 'summary':
+      return '策略摘要';
+    case 'risk_policy_json':
+      return '风险政策';
+    case 'selection_policy_json':
+      return '市场状态与降级政策';
+    case 'universe_json':
+      return '目标股票范围';
+    case 'rule_memberships':
+      return '规则池';
+    case 'proposed_weight_changes':
+      return '规则权重调整';
+    default:
+      return field;
+  }
 }
 
 function summarizeDiffValue(value: unknown) {

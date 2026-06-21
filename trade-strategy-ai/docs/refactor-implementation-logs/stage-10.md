@@ -233,3 +233,202 @@ canonical snapshots or approved imported actuals cannot compute required metrics
 - 是否为 Stage 10 增补 formal canonical post-close actual snapshot contract；
 - 或是否引入 approved imported actuals formal contract；
 - 并明确其 immutable traceability、writer ownership、review/approval 和 safe-rerun boundary。
+
+## 2026-06-21 RT-S10-001 Contract Escalation Review
+
+### Status
+
+`[-] 进行中`
+
+`RT-S10-001` 的 source-of-truth 阻塞已解除为可执行契约，但 production implementation 尚未恢复、尚未接受。
+
+### Scope
+
+本次仅执行 gpt-5.5 contract escalation review，并更新 Stage 10 计划和日志。
+
+明确未执行：
+
+- production `RT-S10-001` outcome implementation
+- signal outcome generation
+- attribution generation
+- `RuleOptimizationProposal` / `AuthorProfileRevisionProposal` / `StrategyRevisionProposal` generation
+- `/daily/after-close` formal replacement
+- Stage 11 automation
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定委派 2 个 read-only `refactor_explorer_mini`：
+
+- Explorer Alpha：审计 canonical `DatasetSnapshot` / `MarketSnapshot` / OHLCV / snapshot read APIs 是否已能提供 immutable per-symbol post-close actuals。
+- Explorer Gamma：审计 Stage 10 bootstrap/status、`Signal` / `TradeLog` / `PostMarketReview` / `/daily/after-close` 现状和测试缺口。
+
+未使用 Executor。生产实现被禁止，Parent 保留 source-of-truth 决策、契约冻结、正式文档更新和最终判断。
+
+### Entry Verification
+
+- Stage 10 Bootstrap：`READY`。
+- `RT-S10-001`：进入本次 review 前为 `[!] 阻塞`，未接受。
+- 当前分支：`main`。
+- 当前 HEAD：`b375ca37c52283d72ac898b2d08630778525d8be`。
+- review 前 `git status --short`：clean。
+- review 前 `git diff --stat` / `git diff`：empty。
+- `bash .codex/skills/refactor-orchestrator/scripts/runtime-probe.sh`：`.codex/agents/refactor-explorer-mini.toml` 和 `.codex/agents/refactor-executor-mini.toml` 存在；native spawn、exact child model 和 effective read-only 权限仍属于运行时不可独立证明项。
+
+### Verified Blockers
+
+已复核并确认当前阻塞事实：
+
+1. `PostMarketReview` 可存储 `signal_results_json` / `evidence_json`，但没有 formal write service/API/page。
+2. `/daily/after-close` 当前仍在正常路径下返回 legacy `StrategyAfterCloseWorkspacePage`，依赖 `run-after-close` job/report workspace。
+3. `MarketSnapshot` 当前 canonical builders 只确认 benchmark OHLCV 与市场级 sections；没有 formal per-signal-symbol post-close OHLCV actual section。
+4. `DatasetSnapshot` 冻结 manifest/fingerprint/row_fingerprint/availability metadata，但没有 formal read API 暴露每个 signal 需要的 immutable OHLCV value rows。
+5. `TradeLog` 是 raw executed-trade ingestion，缺少 approved/import review/fingerprint/signal binding contract，且无法覆盖未执行 signal 的 close/MFE/MAE/return。
+6. 旧 postmortem/backtest/ranking 代码可计算 MFE/MAE/return，但不是 formal Stage 10 source-of-truth，也未接入 `PostMarketReview` writer。
+
+### Selected Contract Decision
+
+选择并冻结：
+
+```text
+Decision 1:
+Formal canonical post-close actual snapshot source is required and sufficient
+for signal outcome metrics. Approved imported actuals are optional supplement
+for execution-specific fields.
+```
+
+表示 `RT-S10-001` 恢复时必须先建立 formal canonical post-close actual snapshot source，然后才能计算 signal outcome。不得用 legacy reports、live Provider、mutable latest OHLCV、`trade_logs` 或文件 JSON 代替。
+
+### Rejected Alternatives
+
+- `Decision 2` rejected：approved imported actuals 只有在覆盖所有 signaled symbols 且包含 immutable OHLCV actual values 时才可能 sufficient。当前 `trade_logs` 不具备 approval/fingerprint/signal binding，也不能覆盖 unexecuted signals。
+- `Decision 3` rejected：不需要等待 Stage 11。可以在 Stage 10 内通过 bounded canonical post-close actual snapshot contract 解除 source-of-truth 阻塞。
+- `Option C` rejected for now：单纯扩展 `DatasetSnapshot` read contract 不足以承载盘后 review 与 market snapshot / post-close market state 的业务绑定，除非另行升级为正式 actuals read API 并绑定 `PostMarketReview`。
+- `Option B` deferred：new canonical actuals table/repository 只有在 Option A implementation review 证明 `MarketSnapshotSection` / `MarketSnapshotItem` 过弱时才允许再次升级。
+
+### Frozen Source-Of-Truth Contract
+
+优先采用：
+
+```text
+Option A:
+new canonical MarketSnapshot section/item contract for post-close symbol OHLCV actuals
+```
+
+正式 section：
+
+```text
+post_close_symbol_ohlcv_actuals
+```
+
+必须满足：
+
+- 对 approved `TradingDayPlan` 下每个 pre-market `Signal` 的 `symbol + trade_date` 提供一条 actual row，或一条明确 non-success state。
+- 每条 actual row 包含 `symbol`、`trade_date`、`open`、`high`、`low`、`close`、optional `previous_close`、`volume`、`turnover`、instrument metadata、source/available/frozen timestamps、`dataset_snapshot_id`、`dataset_content_fingerprint`、`row_fingerprint`、`quality_state`、`availability_state` 和 `evidence_window`。
+- section/manifest 绑定 contributing `DatasetSnapshot.dataset_snapshot_id`、`DatasetSnapshot.content_fingerprint`、row count、missing/conflict symbols、quality summary 和 actuals contract version。
+- `MarketSnapshot.content_fingerprint`、section `raw_payload_fingerprint`、row `row_fingerprint` 必须可追溯。
+- 若使用 daily-bar approximation，必须记录 `evidence_window = "daily_bar"` 与 `intraday_approximation = true`，不得暗示 intraday path precision。
+
+正式 read API / service contract：
+
+```text
+PostCloseActualsRepository.get_actuals_for_signals(
+    trading_day_plan_id,
+    post_close_market_snapshot_id,
+) -> PostCloseActualsReadResult
+```
+
+返回：
+
+- approved `TradingDayPlan` identity and trade date；
+- post-close `MarketSnapshot.id`、`snapshot_id`、`content_fingerprint`、`frozen_at`、`available_at`；
+- source `DatasetSnapshot.dataset_snapshot_id` and `content_fingerprint`；
+- one actual row or one explicit non-success state for every pre-market `Signal`；
+- per-row `row_fingerprint`；
+- coverage state: `ready` / `partial` / `unavailable` / `conflict` / `invalid` / `insufficient_coverage` / `degraded`。
+
+### Outcome Calculation Contract
+
+`RT-S10-001` 恢复时必须按以下口径：
+
+- `triggered`：来自 canonical `Signal` state / side / rule decision / approved plan evidence；缺失或矛盾必须为 `invalid` 或 `conflict`，不得默认为 `false`。
+- `executed`：来自 approved imported actuals supplement；没有 approved execution evidence 时只影响 execution-specific fields，不得阻断 unexecuted signal 的市场 actual metrics。
+- `actual result`：来自 formal post-close actual row 和 signal side / entry policy。
+- `MFE` / `MAE`：来自 formal post-close actual high/low；daily-bar approximation 必须在 evidence 中显式标注。
+- `return`：来自 formal post-close actual close 和明确 baseline；entry baseline 缺失或不合法时为 `invalid` / `unavailable`。只有 signal contract 明确以 previous close 为基准时才能使用 previous close。
+- `matched rule`：来自 `Signal.rule_version_ids` / `triggered_rules` / `DailyRuleSelectionItem`。
+- `market-state change`：比较 pre-market `DailyRuleSelection.market_state_id` / `DailyStrategyInstance.market_snapshot_id` 与 post-close `PostMarketReview.market_state_id` / `MarketRegimeRecord`；缺失 post-close market state 为 `unavailable`，不得默认为 unchanged。
+
+Write destination:
+
+- 优先写入 `PostMarketReview.signal_results_json`。
+- `PostMarketReview.evidence_json` 必须绑定 plan、signals、post-close market snapshot、dataset snapshot、row fingerprints、metric formula/policy version 和 unavailable/conflict reasons。
+- `Signal.evaluation_result_id` 继续是 compatibility placeholder，不得成为 formal outcome source。
+- `PostMarketReview.attribution_json` 在 `RT-S10-001` 中保持 empty/unavailable，除非之后明确授权 `RT-S10-002`。
+
+### Approved Imported Actuals Supplement
+
+Approved imported actuals 仅作为 execution supplement：
+
+- executed or not confirmed；
+- execution price；
+- execution time；
+- filled quantity；
+- fee；
+- import source；
+- immutable import fingerprint；
+- approval/review state；
+- optional Signal / TradingDayPlan link。
+
+它不得成为 unexecuted signal close/MFE/MAE/return 的唯一来源，除非另行扩展为覆盖所有 signaled symbols 的 immutable OHLCV actuals contract。
+
+### Required Schema/API/Service Implications
+
+- 需要新增 bounded Stage 10 post-close actuals builder/read contract，优先落在 `MarketSnapshot` section/item 层。
+- 需要新增 formal actuals repository/service API，至少提供 `get_actuals_for_signals(...)`。
+- 需要新增 schema validation/tests，确保 `post_close_symbol_ohlcv_actuals` payload rows 不被 free-form JSON 漂移破坏。
+- 若现有 `MarketSnapshotSection` / `MarketSnapshotItem` 无法安全约束或查询该 contract，需要 bounded migration 或升级为 new canonical actuals table，并再次 escalation。
+- 需要新增 `PostMarketReview` writer/service/API，将 outcome facts 和 evidence 写入 review revision。
+- `/daily/after-close` 可在 `RT-S10-001` 保持 compatibility-only；完整替换仍属于 `RT-S10-004`，除非用户另行授权合并。
+
+### Updated RT-S10-001 Acceptance Criteria
+
+恢复 implementation 后，`RT-S10-001` 只有满足以下条件才可接受：
+
+- formal `post_close_symbol_ohlcv_actuals` snapshot contract 已实现并验证；
+- every pre-market `Signal` has either an actual row or an explicit non-success state；
+- actual result / MFE / MAE / return 均来自 formal post-close actual snapshot；
+- approved imported actuals 只补充 execution-specific fields；
+- missing/conflict/invalid/insufficient coverage 不会被默认为 zero/false/success；
+- `PostMarketReview.signal_results_json` 和 `evidence_json` 绑定 plan、signal、market snapshot、dataset snapshot、fingerprints 和 metric policy；
+- no live Provider / legacy Job / Workflow / Pipeline / Artifact / file JSON / legacy post-market report / mutable latest source is formal input；
+- no attribution / proposals / Stage 11 automation is generated。
+
+### Tests
+
+未运行 production tests。
+
+原因：
+
+- 本次只修改 contract documentation，未实现 production code。
+- 当前 review 目标是解除 source-of-truth decision blocker，而不是验证实现。
+
+替代检查：
+
+- 读取 required docs、current git status/diff、相关 models/services/routes/tests。
+- 运行 `refactor-orchestrator` runtime probe。
+- 使用 2 个 read-only explorer 完成独立 repository mapping。
+
+### Files Updated
+
+- `docs/refactor-implementation-plans/stage-10-implementation-plan.md`
+- `docs/refactor-implementation-logs/stage-10.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Acceptance Conclusion
+
+`RT-S10-001` implementation may resume later under the frozen Decision 1 contract, but this Session did not resume implementation and did not accept `RT-S10-001`。
+
+推荐 resumed implementation session：
+
+- model/session：`gpt-5.4` Task Implementation
+- escalation back to `gpt-5.5` if Option A proves unsafe, migration/source-of-truth changes exceed this contract, or implementation needs attribution/proposals/Stage 11 behavior。

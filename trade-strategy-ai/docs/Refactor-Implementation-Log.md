@@ -14,17 +14,18 @@
 - [Stage 6 日志](refactor-implementation-logs/stage-6.md)
 - [Stage 7 日志](refactor-implementation-logs/stage-7.md)
 - [Stage 8 日志](refactor-implementation-logs/stage-8.md)
+- [Stage 9 日志](refactor-implementation-logs/stage-9.md)
 
 ## 当前状态
 
-- 当前 Stage：`Stage 8 策略中心`
-- Stage 状态：`[x] 已完成`
+- 当前 Stage：`Stage 9 每日盘前`
+- Stage 状态：`[-] 进行中`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`
-- 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`
-- 当前未开始 Task：无
-- 当前计划：[Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
-- 详细日志：[Stage 8](refactor-implementation-logs/stage-8.md)
-- 下一步：仅可在用户明确授权后开始 `Stage 9 Bootstrap`；不得自动开始。
+- 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`
+- 当前未开始 Task：`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`
+- 当前计划：[Stage 9 实施计划](refactor-implementation-plans/stage-9-implementation-plan.md)
+- 详细日志：[Stage 9](refactor-implementation-logs/stage-9.md)
+- 下一步：仅可在用户明确授权后开始 `RT-S9-001 自动前置检查`；不得自动实现每日盘前生成。
 
 ## 当前硬约束
 
@@ -42,11 +43,17 @@
 - `StrategyRevisionProposal` is proposal-only and cannot directly modify a published/current strategy.
 - Only one current strategy per strategy scope unless a later explicit contract changes the scope rule.
 - Rollback must create/audit a version transition and cannot silently mutate history.
+- Stage 9 Bootstrap 已冻结：`DailyRuleSelection` 是每日规则选择输出，不是正式策略；`DailyStrategyInstance` 是运行时对象，不是 `StrategyVersion`；`TradingDayPlan` 是用户可见每日计划。
+- Stage 9 current formal strategy must be read from canonical `Strategy.current_published_version_id` and its `StrategyVersion` / `StrategyRuleMembership` records.
+- Stage 9 formal inputs must be canonical `DatasetSnapshot`、`MarketSnapshot`、`BacktestRun`、`BacktestResult`、`RuleApplicabilityProfile`、`AuthorProfileVersion` and validated data-quality state.
+- Stage 9 formal flow must not consume legacy Job / Workflow / Pipeline / Artifact / file JSON / `config_path` / live Provider / mutable latest records / legacy strategy service / legacy backtest service / `strategy-studio` / `optimize` / compatibility views.
+- Stage 9 must not modify `StrategyVersion`、published/current strategy pointers、author profiles、rule versions、rule applicability profiles or proposal status.
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 当前残余风险
 
 - Stage 8 Gate 最终 `ACCEPTED`；`RT-S8-001/002/003` 已接受，策略中心 Stage 已完成。
+- Stage 9 Bootstrap 最终 `READY`；`RT-S9-001/002/003` 尚未实现，未生成每日规则选择、每日策略实例或盘前计划。
 - `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
@@ -93,6 +100,10 @@
 | RT-S8-001 | `[x]` | canonical draft/review/publish foundation、正式策略中心、migration 和 focused verification 已接受 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 | RT-S8-002 | `[x]` | canonical validation summary、current-vs-candidate comparison、version diff、audited rollback 和 focused verification 已接受 | [Stage 8](refactor-implementation-logs/stage-8.md) |
 | RT-S8-003 | `[x]` | canonical proposal service/API/UI、accept-to-draft traceability 和 focused verification 已接受 | [Stage 8](refactor-implementation-logs/stage-8.md) |
+| Stage 9 Bootstrap | `[x]` | Stage 9 pre-market contracts 和 task order 已冻结 | [Stage 9](refactor-implementation-logs/stage-9.md) |
+| RT-S9-001 | `[ ]` | 自动前置检查未开始 | [Stage 9](refactor-implementation-logs/stage-9.md) |
+| RT-S9-002 | `[ ]` | 每日规则选择未开始 | [Stage 9](refactor-implementation-logs/stage-9.md) |
+| RT-S9-003 | `[ ]` | 每日策略实例和盘前计划未开始 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 
 ## Stage 状态索引
 
@@ -107,19 +118,20 @@
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
+| Stage 9 | `[-]` | Bootstrap `READY`；Task 未开始 | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-Stage 9 Bootstrap
+RT-S9-001 自动前置检查
 ```
 
 执行前应读取：
 
-- [Stage 8 日志](refactor-implementation-logs/stage-8.md)
-- Stage 9 直接相关计划或 Bootstrap 输入
+- [Stage 9 实施计划](refactor-implementation-plans/stage-9-implementation-plan.md)
+- [Stage 9 日志](refactor-implementation-logs/stage-9.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `Stage 9`；必须等待用户明确授权。
+不得自动开始 `RT-S9-001` 实现；必须等待用户明确授权。`RT-S9-001` 和 `RT-S9-002` 可在后续同一 Task Session 串行执行，但 `RT-S9-003` 必须单独执行，且不得启动 Stage 10。

@@ -106,6 +106,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/market/regimes": {"get"},
         "/api/ui/v1/market/snapshots/{snapshot_id}/regime": {"get"},
         "/api/ui/v1/daily/pre-market/readiness": {"get"},
+        "/api/ui/v1/daily/pre-market/rule-selection": {"get"},
     }
 
     for path, methods in expected_methods.items():

@@ -316,3 +316,172 @@ Next executable Task is `RT-S9-001 自动前置检查`, recommended model/sessio
 `RT-S9-001 ACCEPTED`。
 
 下一推荐任务：`RT-S9-002 每日规则选择`。
+
+## 2026-06-21 RT-S9-002 每日规则选择
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现正式 `DailyRuleSelection` 生成、查询和 `/daily/pre-market` 规则选择展示，不实现：
+
+- `DailyStrategyInstance`
+- `TradingDayPlan`
+- `Signal`
+- `StrategyVersion` 变更
+- `Strategy.current_published_version_id` 变更
+- `RuleVersion` / `RuleApplicabilityProfile` / `AuthorProfileVersion` 生命周期变更
+- `StrategyRevisionProposal` / `OptimizationProposal` 状态变更
+- Stage 10 盘后行为
+- live Provider
+- legacy strategy selection artifacts / job / report / `config_path`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定采用 single-controller fallback，选择 `0` 个 subagent。
+
+原因：
+
+- 当前会话仍无法独立证明 native child spawning 和 child effective permissions；
+- RT-S9-002 依赖固定的 canonical source-of-truth 和 deterministic selection priority，Parent 直接实现与复核成本更低；
+- 未出现值得并行拆分的非重叠写入面。
+
+### Implementation Summary
+
+新增正式 Stage 9 每日规则选择 repository / service / API / client / UI / tests：
+
+- 后端新增 `DailyRuleSelectionRepository`，只读 `StrategyVersion`、`StrategyRuleMembership`、`MarketRegimeRecord`、`RuleApplicabilityProfile`、`AuthorProfileVersion`，并只写 canonical `DailyRuleSelection` / `DailyRuleSelectionItem`。
+- 后端新增 `DailyRuleSelectionService`，先调用已接受的 formal readiness 结果，再按固定优先级生成 `selected / reduced / suspended` 规则决策。
+- 新增 `/api/ui/v1/daily/pre-market/rule-selection` 正式只读/按需生成接口。
+- 前端 `getDailyRuleSelection(tradeDate)` 接入正式接口。
+- `/daily/pre-market` 增加“今日规则选择”区块，展示启用、降权、暂停规则，以及业务中文原因、降级输入和未解决输入。
+
+### Deterministic Selection Contract
+
+本次实现固定使用以下优先级，并把首个改变决策的 tier 记为 `controlling_priority_tier`：
+
+1. `formal_rule_applicability`
+2. `current_market_state`
+3. `formal_strategy`
+4. `data_quality`
+5. `author_validated_profile`
+6. `author_method_profile`
+
+每条规则决策都记录：
+
+- `rule_version_id`
+- `strategy_rule_membership_id`
+- `decision`
+- `controlling_priority_tier`
+- `evidence_ids`
+- `quality_states`
+- `reason_tiers`
+- `reason_list`
+- `degraded_inputs`
+- `unresolved_inputs`
+
+同一 canonical 输入会生成相同 `input_signature`；若同日同策略版本同市场状态的最新记录签名一致，则直接复用现有 `DailyRuleSelection`，避免产生第二套正式 daily-selection 事实源。
+
+### Traceability And Persistence
+
+`DailyRuleSelection` 持久化到 canonical `daily_rule_selections` / `daily_rule_selection_items`，并在 top-level JSON bucket + item payload 中保留：
+
+- `trade_date`
+- `strategy_version_id`
+- `dataset_snapshot_id`
+- `market_snapshot_id`
+- `market_state_id`
+- `rule_applicability_profile_ids`
+- `author_method_profile_version_id`
+- `author_rule_profile_version_id`
+- `author_validated_profile_version_id`
+- `data_quality_state`
+- `readiness_status`
+- deterministic `input_signature`
+- degraded / unresolved inputs
+
+未新增 schema。当前 frozen contract 下，现有 canonical table + bounded JSON payload 足以安全承载 RT-S9-002 所需 traceability。
+
+### Design Decisions
+
+- readiness `blocked` 时只返回 blocked 结果，不创建成功的 `DailyRuleSelection` 记录。
+- 缺失正式规则适用性不会默认变成 selected；缺失时直接 `suspended` 并暴露 `missing_rule_applicability`。
+- 规则适用性 `partial / insufficient_sample / insufficient_coverage` 会显式保留为 `reduced` 或 unresolved/degraded reason，不会被压平成成功。
+- 当前正式策略只作为 rule pool 和 membership source，不会被重写、发布、回滚或重新绑定。
+- RT-S9-003 / Stage 10 对象完全未生成。
+
+### Files Changed
+
+- `api/routers/ui/daily_pre_market.py`
+- `src/db/repositories/daily_rule_selection_repo.py`
+- `src/services/daily_rule_selection_service.py`
+- `tests/api/routers/ui/test_daily_pre_market_rule_selection.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `tests/unit/services/test_daily_rule_selection_service.py`
+- `web/src/lib/api/contract.test.ts`
+- `web/src/lib/api/daily.ts`
+- `web/src/pages/daily/index.tsx`
+- `web/src/pages/daily/pre-market.test.tsx`
+- `web/src/types/daily.ts`
+
+### Database Migration
+
+无。
+
+### Verification
+
+已运行：
+
+- `python -m pytest tests/unit/services/test_daily_rule_selection_service.py tests/api/routers/ui/test_daily_pre_market_rule_selection.py tests/api/test_ui_openapi_contract.py`
+- `/Users/wanghui/.nvm/versions/node/v18.20.8/bin/node /Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/web/node_modules/vitest/vitest.mjs run src/pages/daily/pre-market.test.tsx src/lib/api/contract.test.ts`
+- `/Users/wanghui/.nvm/versions/node/v18.20.8/bin/node /Users/wanghui/.nvm/versions/node/v18.20.8/lib/node_modules/pnpm/bin/pnpm.cjs typecheck`
+- `git diff --check`
+
+结果：
+
+- backend/API tests：`4 passed`
+- frontend tests：`5 passed`
+- frontend typecheck：passed
+- diff hygiene：passed
+
+专项确认：
+
+- same canonical inputs 复用同一 `DailyRuleSelection`，决策顺序与 reason tiers 保持一致；
+- blocked readiness 不会创建成功 selection；
+- missing applicability 不会默认 selected；
+- `/api/ui/v1/daily/pre-market/rule-selection` 已纳入 OpenAPI/UI contract；
+- 未生成 `DailyStrategyInstance` / `TradingDayPlan` / `Signal`；
+- 未修改 `StrategyVersion` 或 current strategy pointer；
+- formal selection backend 未接入 legacy job/report/config/live-provider 输入。
+
+### Legacy Isolation Verification
+
+selection backend/API 文件复核未发现以下正式输入：
+
+- legacy pre-market job
+- `snapshot-build`
+- `config_path`
+- live Provider
+- legacy strategy service / strategy library
+- legacy backtest service
+- file JSON report
+- compatibility view
+
+补充说明：
+
+- `web/src/pages/daily/index.tsx` 的“今日总览”区块仍保留 RT-S9-001 之前已有的 compatibility-only job 摘要卡片，这不是 RT-S9-002 规则选择的正式事实源。
+- 本次新增的 `/daily/pre-market` 规则选择区块只消费 `getDailyRuleSelection(tradeDate)`。
+
+### Residual Risks
+
+- `DailyRuleSelection` 顶层 traceability 目前保存在 canonical JSON payload 中，而不是独立列；在当前 frozen contract 下可接受，但后续若 Stage 9/10 需要更强 SQL-level filtering，可再评估 schema hardening。
+- `/daily` 总览页仍展示 compatibility-only job 摘要卡片；不影响 RT-S9-002 正式选择事实源，但后续可继续收敛总览入口。
+- 尚未运行浏览器级 E2E；当前依赖 focused backend/API/frontend/typecheck 验证。
+
+### Conclusion
+
+`RT-S9-002 ACCEPTED`。
+
+下一推荐任务：`RT-S9-003 每日策略实例和盘前计划`。

@@ -54,7 +54,7 @@ import {
   runOhlcvScheduler,
   stopOhlcvScheduler,
 } from './market';
-import { getPreMarketReadiness } from './daily';
+import { getPreMarketReadiness, getDailyRuleSelection } from './daily';
 
 describe('UI API client contract', () => {
   beforeEach(() => {
@@ -193,6 +193,7 @@ describe('UI API client contract', () => {
     await getMarketDataset('dataset-001', 10, 0);
     await getMarketSnapshotQuality('snapshot-001');
     await getPreMarketReadiness('2026-06-21');
+    await getDailyRuleSelection('2026-06-21');
 
     const calls = vi.mocked(fetch).mock.calls.map(([url, init]) => ({
       url: String(url),
@@ -323,6 +324,7 @@ describe('UI API client contract', () => {
     expect(findCall('/api/ui/v1/market/datasets/dataset-001?limit=10&offset=0')).toBeTruthy();
     expect(findCall('/api/ui/v1/market/snapshots/snapshot-001/quality')).toBeTruthy();
     expect(findCall('/api/ui/v1/daily/pre-market/readiness?trade_date=2026-06-21')).toBeTruthy();
+    expect(findCall('/api/ui/v1/daily/pre-market/rule-selection?trade_date=2026-06-21')).toBeTruthy();
 
     for (const call of calls) {
       expect(call.headers.get('X-API-Key')).toBe('demo-key');

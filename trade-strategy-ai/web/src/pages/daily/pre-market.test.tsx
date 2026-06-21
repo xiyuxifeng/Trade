@@ -3,17 +3,93 @@ import { screen } from '@testing-library/react';
 
 import { renderWithRouter } from '@/test/test-utils';
 import { ApiError } from '@/lib/api/http';
-import { getPreMarketReadiness } from '@/lib/api/daily';
+import { getDailyRuleSelection, getPreMarketReadiness } from '@/lib/api/daily';
 import { TodayPreMarketPage } from './index';
 
 vi.mock('@/lib/api/daily', () => ({
   getPreMarketReadiness: vi.fn(),
+  getDailyRuleSelection: vi.fn(),
 }));
 
 const mockedGetPreMarketReadiness = vi.mocked(getPreMarketReadiness);
+const mockedGetDailyRuleSelection = vi.mocked(getDailyRuleSelection);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedGetDailyRuleSelection.mockResolvedValue({
+    state: 'partial',
+    selection_status: 'degraded',
+    generated: true,
+    trade_date: '2026-06-21',
+    happened: '部分规则因为样本不足被降权。',
+    affected: '今日规则选择可继续，但需要关注降级输入。',
+    repair_guidance: '先补齐适用性证据，或按降级结果继续。',
+    daily_rule_selection_id: 'selection-1',
+    revision_no: 1,
+    strategy_version_id: 'strategy-version-1',
+    quality_status: 'partial',
+    readiness_status: 'degraded',
+    enabled_rules: [
+      {
+        rule_version_id: 'rule-version-1',
+        strategy_rule_membership_id: 'membership-1',
+        decision: 'selected',
+        controlling_priority_tier: 'current_market_state',
+        controlling_priority_label: '当前市场状态',
+        evidence_ids: ['applicability-1', 'market-state-1'],
+        quality_states: ['verified', 'ready'],
+        reason_tiers: ['formal_rule_applicability', 'current_market_state'],
+        reason_list: ['规则适用性已发布。', '当前市场状态与规则适配。'],
+        degraded_inputs: [],
+        unresolved_inputs: [],
+      },
+    ],
+    reduced_rules: [
+      {
+        rule_version_id: 'rule-version-2',
+        strategy_rule_membership_id: 'membership-2',
+        decision: 'reduced',
+        controlling_priority_tier: 'formal_rule_applicability',
+        controlling_priority_label: '正式规则适用性',
+        evidence_ids: ['applicability-2'],
+        quality_states: ['partial', 'insufficient_sample'],
+        reason_tiers: ['formal_rule_applicability'],
+        reason_list: ['样本不足，今日降权处理。'],
+        degraded_inputs: ['insufficient_sample'],
+        unresolved_inputs: [],
+      },
+    ],
+    suspended_rules: [
+      {
+        rule_version_id: 'rule-version-3',
+        strategy_rule_membership_id: 'membership-3',
+        decision: 'suspended',
+        controlling_priority_tier: 'formal_rule_applicability',
+        controlling_priority_label: '正式规则适用性',
+        evidence_ids: [],
+        quality_states: ['unavailable'],
+        reason_tiers: ['formal_rule_applicability'],
+        reason_list: ['缺少正式规则适用性，今日暂停。'],
+        degraded_inputs: [],
+        unresolved_inputs: ['missing_rule_applicability'],
+      },
+    ],
+    traceability: {
+      trade_date: '2026-06-21',
+      strategy_version_id: 'strategy-version-1',
+      dataset_snapshot_id: 'dataset-snapshot-1',
+      market_snapshot_id: 'market-snapshot-1',
+      market_state_id: 'market-state-1',
+      rule_applicability_profile_ids: ['applicability-1', 'applicability-2'],
+      author_method_profile_version_id: 'author-method-1',
+      author_rule_profile_version_id: 'author-rule-1',
+      author_validated_profile_version_id: 'author-validated-1',
+      data_quality_state: 'degraded',
+      readiness_status: 'degraded',
+    },
+    degraded_inputs: ['insufficient_sample'],
+    unresolved_inputs: [],
+  } as never);
 });
 
 describe('TodayPreMarketPage', () => {
@@ -72,6 +148,48 @@ describe('TodayPreMarketPage', () => {
     expect(screen.queryByText('Workflow')).not.toBeInTheDocument();
     expect(screen.queryByText('Pipeline')).not.toBeInTheDocument();
     expect(screen.queryByText('Artifact')).not.toBeInTheDocument();
+  });
+
+  it('shows enabled reduced and suspended rules with Chinese reason tiers', async () => {
+    mockedGetPreMarketReadiness.mockResolvedValue({
+      state: 'partial',
+      readiness_status: 'degraded',
+      trade_date: '2026-06-21',
+      slot: '09-25',
+      summary_title: '可降级继续',
+      happened: '正式规则适用性覆盖不完整。',
+      affected: '今日规则选择会缺少一部分正式适用性证据。',
+      repair_guidance: '先补齐规则适用性画像，或在降级模式下继续。',
+      can_proceed: true,
+      can_proceed_in_degraded_mode: true,
+      checks: [],
+      traceability: {
+        trade_date: '2026-06-21',
+        strategy_version_id: 'strategy-version-1',
+        dataset_snapshot_id: 'dataset-snapshot-1',
+        market_snapshot_id: 'market-snapshot-1',
+        market_state_id: 'market-state-1',
+        rule_applicability_profile_ids: ['applicability-1', 'applicability-2'],
+        author_method_profile_version_id: 'author-method-1',
+        author_rule_profile_version_id: 'author-rule-1',
+        author_validated_profile_version_id: 'author-validated-1',
+        data_quality_state: 'degraded',
+      },
+      repair_actions: [],
+      warnings: [],
+    } as never);
+
+    renderWithRouter([{ path: '/daily/pre-market', element: <TodayPreMarketPage /> }], ['/daily/pre-market']);
+
+    expect(await screen.findByText('今日规则选择')).toBeInTheDocument();
+    expect(await screen.findByText('启用规则')).toBeInTheDocument();
+    expect(await screen.findByText('降权规则')).toBeInTheDocument();
+    expect(await screen.findByText('暂停规则')).toBeInTheDocument();
+    expect(await screen.findByText('当前市场状态')).toBeInTheDocument();
+    expect(await screen.findAllByText('正式规则适用性')).not.toHaveLength(0);
+    expect(await screen.findByText('样本不足，今日降权处理。')).toBeInTheDocument();
+    expect(await screen.findByText('缺少正式规则适用性，今日暂停。')).toBeInTheDocument();
+    expect(screen.queryByText('Regime')).not.toBeInTheDocument();
   });
 
   it('shows permission denied truthfully', async () => {

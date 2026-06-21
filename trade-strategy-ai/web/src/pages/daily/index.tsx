@@ -5,13 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { StatusBadge } from '@/components/kit';
-import { getPreMarketReadiness } from '@/lib/api/daily';
+import { getDailyRuleSelection, getPreMarketReadiness } from '@/lib/api/daily';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import { ApiError } from '@/lib/api/http';
 import { formatLocalDateInputOffset } from '@/lib/date';
-import type { PreMarketCheck, PreMarketReadinessResponse } from '@/types/daily';
+import type { DailyRuleDecision, DailyRuleSelectionResponse, PreMarketCheck, PreMarketReadinessResponse } from '@/types/daily';
 import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from '@/features/strategy-workspace/strategy-workspace-utils';
 import { StrategyAfterClosePage as StrategyAfterCloseWorkspacePage } from '@/features/strategy-workspace';
 
@@ -331,6 +331,13 @@ function PreMarketCheckCard({ item }: { item: PreMarketCheck }) {
 }
 
 function PreMarketReadinessResult({ response }: { response: PreMarketReadinessResponse }) {
+  const selectionQuery = useQuery({
+    queryKey: ['daily-rule-selection', response.trade_date],
+    queryFn: () => getDailyRuleSelection(response.trade_date),
+    staleTime: 15_000,
+    enabled: response.can_proceed,
+  });
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -375,6 +382,103 @@ function PreMarketReadinessResult({ response }: { response: PreMarketReadinessRe
             </div>
           ))}
         </div>
+      </div>
+
+      <DailyRuleSelectionPanel readiness={response} selection={selectionQuery.data} loading={selectionQuery.isLoading} error={selectionQuery.error} />
+    </div>
+  );
+}
+
+function DailyRuleSelectionPanel({
+  readiness,
+  selection,
+  loading,
+  error,
+}: {
+  readiness: PreMarketReadinessResponse;
+  selection?: DailyRuleSelectionResponse;
+  loading: boolean;
+  error: unknown;
+}) {
+  if (!readiness.can_proceed) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">今日规则选择</p>
+        <p className="mt-3 text-sm text-slate-700">正式盘前检查还没有通过，当前不生成每日规则选择。</p>
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">今日规则选择</p>
+        <p className="mt-3 text-sm text-slate-700">正在生成今日规则选择。</p>
+      </div>
+    );
+  }
+  if (error || !selection) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">今日规则选择</p>
+        <p className="mt-3 text-sm text-slate-700">读取今日规则选择时发生错误。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-950">今日规则选择</p>
+          <p className="mt-2 text-sm text-slate-700">{selection.happened}</p>
+        </div>
+        <StatusBadge value={selection.selection_status} />
+      </div>
+      <div className="grid gap-2 text-sm text-slate-700">
+        <div>
+          <span className="font-medium text-slate-900">影响：</span>
+          {selection.affected}
+        </div>
+        <div>
+          <span className="font-medium text-slate-900">处理方式：</span>
+          {selection.repair_guidance}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DailyRuleDecisionColumn title="启用规则" items={selection.enabled_rules} />
+        <DailyRuleDecisionColumn title="降权规则" items={selection.reduced_rules} />
+        <DailyRuleDecisionColumn title="暂停规则" items={selection.suspended_rules} />
+      </div>
+    </div>
+  );
+}
+
+function DailyRuleDecisionColumn({ title, items }: { title: string; items: DailyRuleDecision[] }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <p className="text-sm font-medium text-slate-950">{title}</p>
+      <div className="mt-3 space-y-3">
+        {items.length ? (
+          items.map((item) => (
+            <div key={`${title}-${item.rule_version_id}`} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="m-0 text-sm font-medium text-slate-950">{item.rule_version_id}</p>
+                <StatusBadge value={item.decision} />
+              </div>
+              <p className="mt-2 text-sm text-slate-700">{item.controlling_priority_label}</p>
+              <div className="mt-2 grid gap-1 text-xs text-slate-600">
+                {item.reason_list.map((reason) => (
+                  <div key={`${item.rule_version_id}-${reason}`}>{reason}</div>
+                ))}
+                {item.degraded_inputs.length ? <div>降级输入：{item.degraded_inputs.join('、')}</div> : null}
+                {item.unresolved_inputs.length ? <div>未解决输入：{item.unresolved_inputs.join('、')}</div> : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">当前没有规则。</div>
+        )}
       </div>
     </div>
   );

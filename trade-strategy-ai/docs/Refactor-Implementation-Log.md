@@ -18,13 +18,13 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 8 策略中心`
-- Stage 状态：`[-] 进行中`
+- Stage 状态：`[x] 已完成`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`
 - 当前未开始 Task：无
 - 当前计划：[Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
 - 详细日志：[Stage 8](refactor-implementation-logs/stage-8.md)
-- 下一步：仅可在用户明确授权后开始 `Stage 8 Gate`；不得自动开始。
+- 下一步：仅可在用户明确授权后开始 `Stage 9 Bootstrap`；不得自动开始。
 
 ## 当前硬约束
 
@@ -46,14 +46,14 @@
 
 ## 当前残余风险
 
-- Stage 8 Bootstrap 为 `READY`；`RT-S8-001/002/003` 已接受，Stage 8 implementation scope 已完成，仍待后续授权执行 Gate。
+- Stage 8 Gate 最终 `ACCEPTED`；`RT-S8-001/002/003` 已接受，策略中心 Stage 已完成。
 - `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
 - legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only；formal `/rules/*` 与 Stage 7 formal author profiles 不得使用它们作为正式事实源。
-- `RT-S8-001/002/003` 已建立 canonical strategy repository/service/API/UI、验证摘要、当前版对比、版本 diff、审计回滚、proposal-only strategy revision surface 和当前指针安全切换。
+- `RT-S8-001/002/003` 已建立 canonical strategy repository/service/API/UI、验证摘要、当前版对比、版本 diff、审计回滚、proposal-only strategy revision surface 和当前指针安全切换；Gate 修复后发布/current 必须先通过正式验证。
 - `/strategies/candidates` 仍为 compatibility notice page，后续退役工作未完成。
-- Stage 8 未运行浏览器级 E2E；当前依赖 focused API/frontend/migration verification。
+- Stage 8 未运行浏览器级 E2E；Gate 判定为非阻塞，当前依赖 focused API/frontend/OpenAPI/typecheck/migration verification。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
 
 ## Task 状态索引
@@ -106,20 +106,20 @@
 | Stage 5 | `[x]` | Gate 最终 `ACCEPTED` | [stage-5.md](refactor-implementation-logs/stage-5.md) |
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
-| Stage 8 | `[-]` | Bootstrap `READY`；`RT-S8-001/002/003` 已接受，待后续授权执行 `Stage 8 Gate` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
+| Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-Stage 8 Gate
+Stage 9 Bootstrap
 ```
 
 执行前应读取：
 
 - [Stage 8 日志](refactor-implementation-logs/stage-8.md)
-- [Stage 8 实施计划](refactor-implementation-plans/stage-8-implementation-plan.md)
+- Stage 9 直接相关计划或 Bootstrap 输入
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `Stage 8 Gate`；必须等待用户明确授权。
+不得自动开始 `Stage 9`；必须等待用户明确授权。

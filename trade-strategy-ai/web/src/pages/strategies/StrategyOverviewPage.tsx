@@ -389,7 +389,7 @@ export function StrategyOverviewPage({ availability }: FormalPageProps = {}) {
                   type="button"
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
                   onClick={() => activeVersion && publish.mutate(activeVersion.strategy_version_id)}
-                  disabled={!activeVersion}
+                  disabled={!activeVersion || activeVersion.validation.state !== 'passed'}
                 >
                   发布为当前策略
                 </button>

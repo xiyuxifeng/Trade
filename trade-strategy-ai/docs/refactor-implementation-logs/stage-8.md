@@ -3,10 +3,10 @@
 ## 当前摘要
 
 - Stage：`Stage 8 策略中心`
-- 当前活动：`2026-06-21 RT-S8-003 策略优化建议`
-- 当前状态：`RT-S8-003 ACCEPTED`
-- 当前 Task：`RT-S8-003 策略优化建议`
-- 下一可执行项：仅可在用户明确授权后开始 `Stage 8 Gate`
+- 当前活动：`2026-06-21 Stage 8 Gate`
+- 当前状态：`Stage 8 Gate ACCEPTED`
+- 当前 Task：无
+- 下一可执行项：仅可在用户明确授权后开始 `Stage 9 Bootstrap`
 - 不得自动开始：不得发布策略；不得启动 `Stage 9 每日盘前`；不得启动 `Stage 10 每日盘后`
 
 ## 2026-06-20 Stage 8 Bootstrap
@@ -517,3 +517,128 @@ Static checks:
 `RT-S8-003 ACCEPTED`。
 
 Stage 8 仍未完成。下一步仅可在用户明确授权后开始 `Stage 8 Gate`，不得自动开始。
+
+## 2026-06-21 Stage 8 Gate
+
+### Gate Decision
+
+`ACCEPTED`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定委派两个 bounded read-only Explorer，最终验收由 Parent 执行：
+
+- Backend/Data Explorer：审计 canonical strategy repository/service/API/migration/tests、legacy isolation、validation/rollback/proposal boundary。
+- Frontend/API Explorer：审计 `/strategies` 正式策略中心、client/types/tests、路由边界、用户可见术语和 Stage 9/10 boundary。
+
+Runtime probe verified:
+
+- `.codex/skills/refactor-orchestrator/SKILL.md` exists.
+- `.codex/agents/refactor-explorer-mini.toml` exists and declares `gpt-5.4-mini`, `read-only`.
+- `.codex/agents/refactor-executor-mini.toml` exists and declares `gpt-5.4-mini`, `workspace-write`.
+- Native subagent spawning worked in this Gate session.
+- Effective child model and effective read-only permissions were not independently verified beyond configured role and successful read-only handoff.
+
+未委派最终验收；未使用 Executor。
+
+### Entry Verification
+
+- Branch：`main`。
+- Gate HEAD：`4386083c0f7aa4dd5a174abe52afd8806f0a8bdc`。
+- Stage 8 baseline：`f53027faf5d16dbed1735d0fc4aafd6edc17687d`。
+- Gate 前 working tree：clean。
+- Stage 8 baseline diff：22 files changed；范围与 `RT-S8-001/002/003` 记录一致。
+
+### Gate Checklist
+
+- Formal `StrategyVersion` is not rebuilt daily：`PASS`。正式 Stage 8 service/router 不引用 `DailyRuleSelection`、`DailyStrategyInstance`、`TradingDayPlan` 生成路径；`DailyStrategyInstance` 保持 runtime-only schema。
+- Formal strategy source of truth：`PASS`。正式事实源为 canonical `StrategyVersion`、`Strategy`、`StrategyRuleMembership`；proposal carrier 为 `OptimizationProposal(proposal_type = strategy_revision)`。
+- Strategy center user flow：`PASS`。`/strategies` 可查看规则池、规则权重、作者画像版本、风险政策、仓位约束、目标股票范围、市场状态选择政策、降级政策；支持保存草稿、提交审核、验证、对比、diff、发布为当前、带原因回退、查看建议、建议生成草稿。
+- UI separation：`PASS`。页面文案区分“策略优化建议 -> 生成草稿 -> 提交审核 -> 发布为当前策略”；接受建议不会显示为发布。
+- User-facing terminology：`PASS`。正式策略中心未暴露 Job、Workflow、Pipeline、Artifact、Provider、Schema、`config_path`、raw table names、file paths 或 Regime。
+- Validation / rollback：`PASS after bounded repair`。验证摘要绑定 canonical DatasetSnapshot、MarketSnapshot、BacktestRun、BacktestResult、RuleApplicabilityProfile、StrategyVersion、StrategyRuleMembership、AuthorProfileVersion；`unavailable / partial / invalid / insufficient_coverage / insufficient_sample` 不作为通过；publish/current 现在要求 `validation_summary.state = passed`；rollback 只移动 audited current pointer，不删除历史版本。
+- Proposal boundary：`PASS`。StrategyRevisionProposal 继续映射到 canonical OptimizationProposal；accept-to-draft 只创建或链接 `draft StrategyVersion` 并记录 `accepted_draft_version_id`；不发布、不修改 `strategies.current_published_version_id`。
+- Legacy isolation：`PASS for formal Stage 8 paths`。正式 `api/routers/ui/strategies.py`、`src/services/strategy_center_service.py`、`src/db/repositories/strategy_repo.py`、`web/src/lib/api/strategies.ts`、`web/src/pages/strategies/StrategyOverviewPage.tsx` 未使用 `TraderStrategyVersion`、`strategy_library`、legacy `strategy_service`、strategy-build jobs、`/api/ui/v1/strategy-studio` formal write path、`/api/ui/v1/optimize` formal input、legacy `BacktestService`、`backtest_result_runs`、`legacy_strategy_version_id`、`SnapshotLoader`、`config_path`、file JSON、live Providers、compatibility views 或 mutable latest records。
+- Stage boundary：`PASS after bounded repair`。Stage 9 daily pre-market selection / `DailyRuleSelection` / `DailyStrategyInstance` / `TradingDayPlan` generation 未实现；Stage 10 post-market review / attribution / automatic proposal generation 未实现。`/strategies/pre-market` 和 `/strategies/after-close` 在 route contract 中保持 compatibility-only，分别标记 Stage 9 / Stage 10 退役边界。
+
+### Bounded Repairs
+
+修复 Gate BLOCKER / required HIGH findings only:
+
+- `src/services/strategy_center_service.py`
+  - `publish()` 增加 guard：只有 `validation_summary.state == "passed"` 的 pending-review/in-review/approved strategy version 才能发布并成为 current。
+  - 防止 `not_run / unavailable / partial / invalid / insufficient_coverage / insufficient_sample` 被发布为当前正式策略。
+- `tests/unit/services/test_strategy_center_service.py`
+  - 更新发布路径测试，先执行正式验证再发布。
+  - 新增跳过验证发布失败测试。
+  - 增加 insufficient coverage 版本不能发布测试。
+  - 更新 proposal 测试 setup，确保 current strategy 先经过正式验证。
+- `web/src/pages/strategies/StrategyOverviewPage.tsx`
+  - “发布为当前策略”按钮在所选版本未验证通过时禁用；后端仍为权威校验。
+- `web/src/app/route-config.test.tsx`
+  - 修正 stale formal route expectation；`/strategies/pre-market` 和 `/strategies/after-close` 明确作为 compatibility-only，分别归属 Stage 9 / Stage 10，不作为 Stage 8 正式路径。
+- `web/src/pages/strategies/index.test.tsx`
+  - 增加发布按钮在验证通过前禁用的 UI 回归断言。
+
+未修改 schema、migration、proposal carrier、formal source-of-truth、Stage 9/10 runtime generation 或 legacy retirement scope。
+
+### Verification
+
+Backend / API / OpenAPI / migration / model:
+
+- `python -m pytest tests/unit/services/test_strategy_center_service.py tests/api/routers/test_strategies.py tests/api/test_api_app_factory.py tests/api/test_ui_openapi_contract.py tests/unit/db/test_migrations.py tests/unit/models/test_stage2_canonical_models.py`
+  - `27 passed`
+
+Frontend:
+
+- 初次 `pnpm test ...` and `pnpm typecheck` without Node override failed before tests because shell picked Node `v14.4.0`; rerun used project Node `v18.20.8`.
+- `PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/lib/api/strategies.test.ts src/pages/strategies/index.test.tsx src/pages/product-entry-pages.test.tsx src/app/route-config.test.tsx`
+  - `26 passed`
+- `PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck`
+  - passed
+
+Static:
+
+- `git diff --check`
+  - passed
+
+Legacy dependency grep:
+
+- Formal Stage 8 paths checked:
+  - `api/routers/ui/strategies.py`
+  - `src/services/strategy_center_service.py`
+  - `src/db/repositories/strategy_repo.py`
+  - `web/src/lib/api/strategies.ts`
+  - `web/src/pages/strategies/StrategyOverviewPage.tsx`
+  - `web/src/types/strategies.ts`
+- Forbidden dependency grep returned no matches for formal paths.
+
+Migration:
+
+- Stage 8 Gate did not change migration files.
+- Repository migration contract tests ran and passed.
+- Runtime PostgreSQL migration evidence remains from `RT-S8-001` on temporary database `rt_s8_001_migration_0620`; Gate did not create a new temporary PostgreSQL database.
+
+### Residual Risks
+
+Blocking:
+
+- None.
+
+Non-blocking:
+
+- `/strategies/candidates` compatibility notice remains discoverable, but it is explicit compatibility-only and not a formal strategy source.
+- Legacy `/api/ui/v1/strategy-studio` and `/api/ui/v1/optimize` remain mounted as compatibility/admin-era surfaces; formal Stage 8 paths do not use them. Full retirement remains future cleanup, not a Stage 8 Gate blocker.
+- Proposal frontend action buttons still rely primarily on backend lifecycle validation; UI now displays available actions, but not every unsupported action is hidden. Backend guard is authoritative; record as UX hardening.
+- Strategy page still links to `/daily/pre-market` as navigation only; no Stage 9 generation is implemented. Record as non-blocking cross-stage navigation affordance.
+- Browser-level E2E was not run; current Gate relies on focused API/frontend/OpenAPI/typecheck tests.
+- Temporary PostgreSQL database `rt_s8_001_migration_0620` mentioned in RT-S8-001 logs may still exist locally; it is test evidence residue, not a product data dependency.
+
+### Acceptance Conclusion
+
+- `RT-S8-001 策略草稿与发布`：`ACCEPTED`。
+- `RT-S8-002 策略验证和回滚`：`ACCEPTED`。
+- `RT-S8-003 策略优化建议`：`ACCEPTED`。
+- Stage 8 Gate：`ACCEPTED`。
+
+下一允许动作：仅可在用户明确授权后开始 `Stage 9 Bootstrap`。不得自动开始 Stage 9，不得在本 Gate 中实现每日盘前生成。

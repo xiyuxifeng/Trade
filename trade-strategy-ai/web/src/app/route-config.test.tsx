@@ -143,7 +143,6 @@ describe('route config', () => {
       '/rules/results',
       '/authors',
       '/strategies',
-      '/strategies/candidates',
       '/daily',
       '/daily/overview',
       '/daily/pre-market',
@@ -165,6 +164,14 @@ describe('route config', () => {
       const route = path === '*' ? routeConfig.find((item) => item.path === path) : resolveRoute(path);
       expect(route?.kind, path).toBe('canonical');
     }
+  });
+
+  it('keeps pre-market and after-close strategy legacy paths compatibility-only until their stages', () => {
+    expect(resolveRoute('/strategies/candidates')?.kind).toBe('canonical');
+    expect(resolveRoute('/strategies/pre-market')?.kind).toBe('compat');
+    expect(resolveRoute('/strategies/pre-market')?.legacy?.retireStage).toBe('Stage 9');
+    expect(resolveRoute('/strategies/after-close')?.kind).toBe('compat');
+    expect(resolveRoute('/strategies/after-close')?.legacy?.retireStage).toBe('Stage 10');
   });
 
   it('mounts the formal business contract at new product routes', () => {

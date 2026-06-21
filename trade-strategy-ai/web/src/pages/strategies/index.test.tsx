@@ -464,10 +464,11 @@ describe('strategies page', () => {
 
     expect(await screen.findByText('已保存策略草稿')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
-    await waitFor(() => expect(submitStrategyReview).toHaveBeenCalledWith('version-1', { reason: '提交策略审核' }));
+	    fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
+	    await waitFor(() => expect(submitStrategyReview).toHaveBeenCalledWith('version-1', { reason: '提交策略审核' }));
+	    expect(screen.getByRole('button', { name: '发布为当前策略' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: '验证当前版本' }));
+	    fireEvent.click(screen.getByRole('button', { name: '验证当前版本' }));
     await waitFor(() => expect(validateStrategyVersion).toHaveBeenCalledWith('version-1', { reason: '校验正式策略' }));
     expect((await screen.findAllByText('验证通过')).length).toBeGreaterThan(0);
     expect(screen.getByText('当前策略对比')).toBeInTheDocument();

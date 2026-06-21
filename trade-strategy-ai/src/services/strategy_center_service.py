@@ -496,6 +496,9 @@ class StrategyCenterService:
                 raise LookupError("strategy version not found")
             if version.lifecycle_state not in {FormalLifecycleState.pending_review, FormalLifecycleState.in_review, FormalLifecycleState.approved}:
                 raise ValueError("只有待审核或已审核的策略版本可以发布。")
+            validation_state = ((version.evidence_json or {}).get("validation_summary") or {}).get("state")
+            if validation_state != "passed":
+                raise ValueError("策略必须先完成正式验证且结果通过，才能发布为当前策略。")
             strategy = await self.repository.get_strategy(session, version.strategy_id)
             assert strategy is not None
             previous_current = strategy.current_published_version_id

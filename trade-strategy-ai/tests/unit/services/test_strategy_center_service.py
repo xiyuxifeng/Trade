@@ -456,7 +456,7 @@ def _draft_request(deps: dict[str, UUID], *, business_key: str = "cn-swing-core"
 
 @pytest.mark.asyncio()
 async def test_strategy_center_create_submit_publish_and_preserve_history(tmp_path: Path) -> None:
-    from src.services.strategy_center_service import StrategyCenterService, StrategyTransitionRequest
+    from src.services.strategy_center_service import StrategyCenterService, StrategyTransitionRequest, StrategyValidationRequest
 
     session_scope, session_factory, engine = await _build_session_factory(tmp_path)
     deps = await _seed_dependencies(session_factory)
@@ -476,6 +476,13 @@ async def test_strategy_center_create_submit_publish_and_preserve_history(tmp_pa
         actor_role="operator",
     )
     assert pending.lifecycle_state == "pending_review"
+    pending = await service.validate_version(
+        pending.strategy_version_id,
+        StrategyValidationRequest(reason="发布前验证"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    assert pending.validation.state == "passed"
 
     published = await service.publish(
         pending.strategy_version_id,
@@ -500,6 +507,13 @@ async def test_strategy_center_create_submit_publish_and_preserve_history(tmp_pa
         actor_id="operator-a",
         actor_role="operator",
     )
+    revision = await service.validate_version(
+        revision.strategy_version_id,
+        StrategyValidationRequest(reason="修订发布前验证"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+    assert revision.validation.state == "passed"
     revision = await service.publish(
         revision.strategy_version_id,
         StrategyTransitionRequest(reason="发布新正式版本"),
@@ -518,6 +532,33 @@ async def test_strategy_center_create_submit_publish_and_preserve_history(tmp_pa
     assert listing["state"] == "ready"
     assert listing["current_strategy"]["current_version_id"] == revision.strategy_version_id
     assert listing["count"] == 2
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_center_rejects_publish_before_validation_passes(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import StrategyCenterService, StrategyTransitionRequest
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    service = StrategyCenterService(session_scope_factory=session_scope)
+
+    draft = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
+    pending = await service.submit_for_review(
+        draft.strategy_version_id,
+        StrategyTransitionRequest(reason="提交审核"),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+
+    with pytest.raises(ValueError, match="必须先完成正式验证且结果通过"):
+        await service.publish(
+            pending.strategy_version_id,
+            StrategyTransitionRequest(reason="不能跳过验证"),
+            actor_id="reviewer-a",
+            actor_role="operator",
+        )
 
     await engine.dispose()
 
@@ -558,6 +599,7 @@ async def test_strategy_center_validates_compares_diffs_and_rolls_back_with_audi
 
     first = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
     first = await service.submit_for_review(first.strategy_version_id, StrategyTransitionRequest(reason="提交审核"), actor_id="operator-a", actor_role="operator")
+    first = await service.validate_version(first.strategy_version_id, StrategyValidationRequest(reason="首次发布前验证"), actor_id="reviewer-a", actor_role="operator")
     first = await service.publish(first.strategy_version_id, StrategyTransitionRequest(reason="首次发布"), actor_id="reviewer-a", actor_role="operator")
 
     revision_request = _draft_request(deps, strategy_id=UUID(first.strategy_id))
@@ -634,6 +676,7 @@ async def test_strategy_center_proposal_lifecycle_accepts_to_new_draft_without_p
         StrategyProposalCreateRequest,
         StrategyProposalReviewRequest,
         StrategyTransitionRequest,
+        StrategyValidationRequest,
     )
 
     session_scope, session_factory, engine = await _build_session_factory(tmp_path)
@@ -645,6 +688,12 @@ async def test_strategy_center_proposal_lifecycle_accepts_to_new_draft_without_p
         published.strategy_version_id,
         StrategyTransitionRequest(reason="提交审核"),
         actor_id="operator-a",
+        actor_role="operator",
+    )
+    published = await service.validate_version(
+        published.strategy_version_id,
+        StrategyValidationRequest(reason="发布前验证"),
+        actor_id="reviewer-a",
         actor_role="operator",
     )
     published = await service.publish(
@@ -725,6 +774,7 @@ async def test_strategy_center_proposal_can_link_existing_draft_without_mutating
         StrategyProposalCreateRequest,
         StrategyProposalReviewRequest,
         StrategyTransitionRequest,
+        StrategyValidationRequest,
     )
 
     session_scope, session_factory, engine = await _build_session_factory(tmp_path)
@@ -733,6 +783,7 @@ async def test_strategy_center_proposal_can_link_existing_draft_without_mutating
 
     published = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
     published = await service.submit_for_review(published.strategy_version_id, StrategyTransitionRequest(reason="提交审核"), actor_id="operator-a", actor_role="operator")
+    published = await service.validate_version(published.strategy_version_id, StrategyValidationRequest(reason="发布前验证"), actor_id="reviewer-a", actor_role="operator")
     published = await service.publish(published.strategy_version_id, StrategyTransitionRequest(reason="审核通过后发布"), actor_id="reviewer-a", actor_role="operator")
 
     existing_draft = await service.create_draft(
@@ -807,5 +858,21 @@ async def test_strategy_center_validation_marks_missing_canonical_coverage_as_in
     assert validated.validation.reviewer_decision == "review_required"
     assert validated.validation.rule_applicability.coverage_ratio == 0.0
     assert validated.validation.sample_coverage.state == "sufficient"
+
+    from src.services.strategy_center_service import StrategyTransitionRequest
+
+    submitted = await service.submit_for_review(
+        draft.strategy_version_id,
+        StrategyTransitionRequest(reason="尝试提交不足覆盖版本"),
+        actor_id="operator-a",
+        actor_role="operator",
+    )
+    with pytest.raises(ValueError, match="必须先完成正式验证且结果通过"):
+        await service.publish(
+            submitted.strategy_version_id,
+            StrategyTransitionRequest(reason="不足覆盖不能发布"),
+            actor_id="reviewer-a",
+            actor_role="operator",
+        )
 
     await engine.dispose()

@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 9 每日盘前`
-- 当前活动：`2026-06-21 Stage 9 Bootstrap`
-- 当前状态：`Bootstrap READY`
-- 当前 Task：无
-- 下一可执行项：仅可在用户明确授权后开始 `RT-S9-001 自动前置检查`
-- 不得自动开始：不得实现生产代码；不得生成 `DailyRuleSelection`、`DailyStrategyInstance`、`TradingDayPlan`；不得启动 `Stage 10 每日盘后`
+- 当前活动：`RT-S9-001 自动前置检查`
+- 当前状态：`RT-S9-001 ACCEPTED`
+- 当前 Task：`RT-S9-001 自动前置检查`
+- 下一可执行项：`RT-S9-002 每日规则选择`
+- 不得自动开始：不得生成 `DailyStrategyInstance`、`TradingDayPlan`；不得启动 `Stage 10 每日盘后`
 
 ## 2026-06-21 Stage 9 Bootstrap
 
@@ -166,3 +166,153 @@ Non-blocking:
 `Bootstrap READY`.
 
 Next executable Task is `RT-S9-001 自动前置检查`, recommended model/session `gpt-5.4` Task Implementation. `RT-S9-001` and `RT-S9-002` may share a later serial implementation session only if frozen contracts remain unchanged. Escalate to `gpt-5.5` if schema/source-of-truth, deterministic selection priority, live Provider avoidance, canonical coverage, strategy mutation boundary, Stage 10 behavior, Stage 11 automation, or second fact source decisions are required.
+
+## 2026-06-21 RT-S9-001 自动前置检查
+
+### Task Decision
+
+`ACCEPTED`
+
+### Scope
+
+本次仅实现正式盘前自动前置检查，不实现：
+
+- `DailyRuleSelection` 生成；
+- `DailyStrategyInstance` 生成；
+- `TradingDayPlan` 生成；
+- `StrategyVersion` 变更；
+- `Strategy.current_published_version_id` 变更；
+- rule/applicability/author profile/proposal 状态变更；
+- Stage 10 盘后行为；
+- Stage 11 调度自动化；
+- live Provider 调用；
+- legacy Job / Workflow / Pipeline / Artifact / file JSON / `config_path` 作为 formal input。
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 基于本任务的单一 canonical source-of-truth 约束、紧耦合 UI/API/service 验证链和较小实现面，决定采用 single-controller fallback，选择 `0` 个 subagent。
+
+### Implementation Summary
+
+新增正式 Stage 9 readiness repository / service / API / client / page：
+
+- 后端新增 `PreMarketReadinessRepository`，只读 canonical `Strategy`、`StrategyVersion`、`StrategyRuleMembership`、`DatasetSnapshot`、`MarketSnapshot`、`MarketRegimeRecord`、`RuleApplicabilityProfile`、`AuthorProfileVersion`。
+- 后端新增 `PreMarketReadinessService`，对 `trade_date` 执行正式盘前检查，固定 pre-market slot 语义为 `09-25`，输出 `ready / degraded / blocked` 与 `partial / unavailable / error / permission_denied` 对应 UI 状态。
+- 新增 `/api/ui/v1/daily/pre-market/readiness` 正式只读接口。
+- `/daily/pre-market` 已改为读取正式 readiness 接口，不再以 legacy pre-market job / file report 作为官方结果源。
+- 前端页面以业务中文展示：
+  - 发生了什么；
+  - 影响了什么；
+  - 用户可以修复什么；
+  - 是否允许降级继续。
+
+### Canonical Checks
+
+实现的自动检查项：
+
+1. `Kaipan 盘前数据`
+2. `最新 OHLCV`
+3. `当前市场状态`
+4. `当前正式策略`
+5. `规则适用性`
+6. `作者验证画像`
+7. `数据质量`
+
+每次 readiness 结果都追踪：
+
+- `trade_date`
+- `strategy_version_id`
+- `dataset_snapshot_id`
+- `market_snapshot_id`
+- `market_state_id` 或显式 unavailable
+- `rule_applicability_profile_ids`
+- `author_method_profile_version_id`
+- `author_rule_profile_version_id`
+- `author_validated_profile_version_id`
+- `data_quality_state`
+
+### Design Decisions
+
+- 不新增 schema，不写入持久化 readiness 记录；当前任务只需要 formal read model，现有 canonical schema 足够表达 immutable references。
+- 明确盘前快照 slot 为 `09-25`，避免误用 post-market `MarketSnapshot`。
+- 正式策略只从 `Strategy.current_published_version_id` 读取当前发布版本。
+- 数据质量不把缺失覆盖为 false/0/成功；缺失保持 `unavailable / degraded / blocked`。
+- repair action 仅链接现有业务页面：`/system/data`、`/rules/backtests`、`/strategies`。
+
+### Legacy Isolation Verification
+
+已验证 formal Stage 9 文件未把以下对象作为 formal input：
+
+- legacy pre-market job；
+- `snapshot-build` job；
+- `Workflow` / `Pipeline` / `Artifact`；
+- `config_path`；
+- live Provider；
+- file JSON report；
+- legacy strategy workspace pre-market page。
+
+`/daily/pre-market` 当前正式查询路径为 `getPreMarketReadiness(tradeDate)`，不再委托 legacy pre-market workspace 页面。
+
+### Files Changed
+
+- `api/app.py`
+- `api/routers/ui/__init__.py`
+- `api/routers/ui/daily_pre_market.py`
+- `src/db/repositories/pre_market_readiness_repo.py`
+- `src/services/pre_market_readiness_service.py`
+- `tests/api/routers/ui/test_daily_pre_market.py`
+- `tests/api/test_api_app_factory.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `tests/unit/services/test_pre_market_readiness_service.py`
+- `web/src/components/kit/status-badge.tsx`
+- `web/src/lib/api/contract.test.ts`
+- `web/src/lib/api/daily.ts`
+- `web/src/pages/daily/index.test.tsx`
+- `web/src/pages/daily/index.tsx`
+- `web/src/pages/daily/pre-market.test.tsx`
+- `web/src/types/daily.ts`
+
+### Database Migration
+
+无。
+
+### Verification
+
+已运行：
+
+- `python -m pytest tests/unit/services/test_pre_market_readiness_service.py`
+- `python -m pytest tests/api/routers/ui/test_daily_pre_market.py`
+- `python -m pytest tests/api/test_ui_openapi_contract.py`
+- `python -m pytest tests/api/test_api_app_factory.py`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/pages/daily/pre-market.test.tsx src/pages/daily/index.test.tsx src/lib/api/contract.test.ts'`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck'`
+- `git diff --check`
+
+结果：
+
+- backend/API tests：`9 passed`
+- frontend tests：`10 passed`
+- frontend typecheck：passed
+- diff hygiene：passed
+
+### Acceptance Notes
+
+本次验收确认：
+
+- `/daily/pre-market` 已显示真实 `ready / degraded / blocked` 正式前置检查状态；
+- loading / error / partial / permission_denied / unavailable / degraded / blocked 均有覆盖测试；
+- non-ready canonical coverage 不会被显示为 success；
+- RT-S9-002 / RT-S9-003 输出未生成；
+- Stage 10 未开始；
+- 未触发 schema/source-of-truth escalation 条件。
+
+### Residual Risks
+
+- 当前 `TodayOverviewPage` 仍以 compatibility-only job 摘要展示今日总览卡片；它不再是 `/daily/pre-market` 的正式事实源，但 Stage 9 后续仍可考虑收敛总览入口的 daily summary source。
+- 尚未运行浏览器级 E2E；当前依赖 focused backend/API/frontend/typecheck 验证。
+
+### Conclusion
+
+`RT-S9-001 ACCEPTED`。
+
+下一推荐任务：`RT-S9-002 每日规则选择`。

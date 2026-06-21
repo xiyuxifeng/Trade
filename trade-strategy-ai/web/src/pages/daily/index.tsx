@@ -5,11 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { StatusBadge } from '@/components/kit';
+import { getPreMarketReadiness } from '@/lib/api/daily';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
+import { ApiError } from '@/lib/api/http';
+import { formatLocalDateInputOffset } from '@/lib/date';
+import type { PreMarketCheck, PreMarketReadinessResponse } from '@/types/daily';
 import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from '@/features/strategy-workspace/strategy-workspace-utils';
-import { StrategyAfterClosePage as StrategyAfterCloseWorkspacePage, StrategyPreMarketPage as StrategyPreMarketWorkspacePage } from '@/features/strategy-workspace';
+import { StrategyAfterClosePage as StrategyAfterCloseWorkspacePage } from '@/features/strategy-workspace';
 
 function TodaySummaryCard({
   title,
@@ -186,15 +190,80 @@ export function TodayPreMarketPage({ availability }: { availability?: PageAvaila
       <ProductPageAdapter
         title="今日盘前"
         queryState={availability}
-        purpose="整理并生成今日盘前分析。"
-        inputDescription="需要画像、日期和基准指数。"
-        processingDescription="系统读取真实盘前处理状态。"
-        outputDescription="输出当前可确认的盘前结果。"
+        purpose="先确认今天是否具备正式盘前输入，再决定是否继续后续流程。"
+        inputDescription="需要交易日以及正式盘前检查依赖。"
+        processingDescription="系统读取正式策略、快照、市场状态和规则适用性。"
+        outputDescription="输出今天的盘前就绪状态、影响和修复入口。"
         businessAction={{ label: '返回今日总览', to: '/daily/overview' }}
       />
     );
   }
-  return <StrategyPreMarketWorkspacePage productMode navigationTarget="/daily" />;
+
+  const tradeDate = useMemo(() => formatLocalDateInputOffset(0), []);
+  const readinessQuery = useQuery({
+    queryKey: ['daily-pre-market-readiness', tradeDate],
+    queryFn: () => getPreMarketReadiness(tradeDate),
+    staleTime: 15_000,
+  });
+
+  const permissionDenied = readinessQuery.error instanceof ApiError && (readinessQuery.error.status === 401 || readinessQuery.error.status === 403);
+  const response = readinessQuery.data;
+  const queryState: PageAvailability = readinessQuery.isLoading
+    ? 'loading'
+    : permissionDenied
+      ? 'permission_denied'
+      : readinessQuery.error
+        ? 'error'
+        : response?.state ?? 'empty';
+
+  const primaryRepairAction = response?.repair_actions?.[0];
+  const stateDescription = queryState === 'error'
+    ? '读取正式盘前检查时发生错误。'
+    : response?.happened;
+  const impact = queryState === 'error'
+    ? '当前无法确认今天是否可以继续正式盘前流程。'
+    : response?.affected;
+
+  return (
+    <ProductPageAdapter
+      title="今日盘前"
+      queryState={queryState}
+      purpose="先确认今天是否具备正式盘前输入，再决定是否继续后续流程。"
+      inputDescription="需要交易日，以及正式策略、历史行情、盘前市场快照、当前市场状态、规则适用性和作者验证画像。"
+      processingDescription="系统只读取 canonical DatasetSnapshot、MarketSnapshot、市场状态、正式策略和画像绑定，检查今天是否就绪。"
+      outputDescription="输出 ready / degraded / blocked 的盘前检查结果、影响说明和修复入口。"
+      businessAction={{ label: '返回今日总览', to: '/daily/overview' }}
+      currentStep="先完成正式盘前前置检查，再决定是否进入下一步。"
+      stateTitle={queryState === 'error' ? '出现问题' : response?.summary_title}
+      stateDescription={stateDescription}
+      impact={impact}
+      recoveryAction={primaryRepairAction}
+      input={
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">交易日</p>
+            <p className="mt-2 text-sm font-medium text-slate-950">{tradeDate}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">盘前时段</p>
+            <p className="mt-2 text-sm font-medium text-slate-950">{response?.slot ?? '09-25'}</p>
+          </div>
+        </div>
+      }
+      result={response ? <PreMarketReadinessResult response={response} /> : undefined}
+      help={
+        response ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {response.can_proceed
+              ? response.can_proceed_in_degraded_mode
+                ? '可按降级模式继续后续流程。'
+                : '可以继续正式盘前流程。'
+              : '当前不能继续后续流程。'}
+          </div>
+        ) : undefined
+      }
+    />
+  );
 }
 
 export function TodayAfterClosePage({ availability }: { availability?: PageAvailability } = {}) {
@@ -217,3 +286,96 @@ export function TodayAfterClosePage({ availability }: { availability?: PageAvail
 export const DailyOverviewPage = TodayOverviewPage;
 export const DailyPreMarketPage = TodayPreMarketPage;
 export const DailyAfterClosePage = TodayAfterClosePage;
+
+function formatTraceabilityValue(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return '未绑定';
+  }
+  if (Array.isArray(value)) {
+    return value.length ? value.join('、') : '未绑定';
+  }
+  return String(value);
+}
+
+function PreMarketCheckCard({ item }: { item: PreMarketCheck }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="m-0 text-sm font-medium text-slate-950">{item.label}</p>
+          <p className="mt-1 text-sm text-slate-700">{item.happened}</p>
+        </div>
+        <StatusBadge value={item.status} />
+      </div>
+      <div className="mt-3 grid gap-2 text-sm text-slate-700">
+        <div>
+          <span className="font-medium text-slate-900">影响：</span>
+          {item.affected}
+        </div>
+        <div>
+          <span className="font-medium text-slate-900">处理方式：</span>
+          {item.repair_guidance}
+        </div>
+        {item.status === 'degraded' ? <div>可按降级模式继续。</div> : null}
+      </div>
+      <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+        {Object.entries(item.traceability).map(([key, value]) => (
+          <div key={key} className="grid gap-1 md:grid-cols-[9rem,1fr]">
+            <span className="font-medium text-slate-700">{key}</span>
+            <span className="break-all">{formatTraceabilityValue(value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PreMarketReadinessResult({ response }: { response: PreMarketReadinessResponse }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge value={response.readiness_status} />
+          <span className="text-sm font-medium text-slate-950">{response.summary_title}</span>
+        </div>
+        <p className="mt-3 text-sm text-slate-700">{response.happened}</p>
+        <div className="mt-3 grid gap-2 text-sm text-slate-700">
+          <div>
+            <span className="font-medium text-slate-900">影响：</span>
+            {response.affected}
+          </div>
+          <div>
+            <span className="font-medium text-slate-900">处理方式：</span>
+            {response.repair_guidance}
+          </div>
+          <div>
+            <span className="font-medium text-slate-900">是否可继续：</span>
+            {response.can_proceed
+              ? response.can_proceed_in_degraded_mode
+                ? '可按降级模式继续后续流程。'
+                : '可以继续正式盘前流程。'
+              : '当前不能继续后续流程。'}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        {response.checks.map((item) => (
+          <PreMarketCheckCard key={item.code} item={item} />
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-medium text-slate-950">本次绑定的正式输入</p>
+        <div className="mt-3 grid gap-2 text-xs text-slate-600">
+          {Object.entries(response.traceability).map(([key, value]) => (
+            <div key={key} className="grid gap-1 md:grid-cols-[12rem,1fr]">
+              <span className="font-medium text-slate-700">{key}</span>
+              <span className="break-all">{formatTraceabilityValue(value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

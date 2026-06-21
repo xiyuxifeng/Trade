@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob, listJobs } from '@/lib/api/jobs';
+import { getPreMarketReadiness } from '@/lib/api/daily';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { listProfiles } from '@/lib/api/profiles';
 import { TodayAfterClosePage, TodayOverviewPage, TodayPreMarketPage } from './index';
@@ -10,6 +11,9 @@ import { TodayAfterClosePage, TodayOverviewPage, TodayPreMarketPage } from './in
 vi.mock('@/lib/api/jobs', () => ({
   listJobs: vi.fn(),
   createJob: vi.fn(),
+}));
+vi.mock('@/lib/api/daily', () => ({
+  getPreMarketReadiness: vi.fn(),
 }));
 vi.mock('@/lib/api/market', () => ({
   listBenchmarkOptions: vi.fn(),
@@ -20,6 +24,7 @@ vi.mock('@/lib/api/profiles', () => ({
 
 const mockedListJobs = vi.mocked(listJobs);
 const mockedCreateJob = vi.mocked(createJob);
+const mockedGetPreMarketReadiness = vi.mocked(getPreMarketReadiness);
 const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 const mockedListProfiles = vi.mocked(listProfiles);
 
@@ -191,6 +196,31 @@ beforeEach(() => {
     limit: 20,
     items: [],
   } as never);
+  mockedGetPreMarketReadiness.mockResolvedValue({
+    state: 'ready',
+    readiness_status: 'ready',
+    trade_date: '2026-06-13',
+    slot: '09-25',
+    summary_title: '可以继续',
+    happened: '正式盘前依赖齐备。',
+    affected: '可以继续正式盘前流程。',
+    repair_guidance: '无需修复。',
+    can_proceed: true,
+    can_proceed_in_degraded_mode: false,
+    checks: [],
+    traceability: {
+      trade_date: '2026-06-13',
+      strategy_version_id: 'strategy-version-1',
+      dataset_snapshot_id: 'dataset-snapshot-1',
+      market_snapshot_id: 'market-snapshot-1',
+      market_state_id: 'market-state-1',
+      rule_applicability_profile_ids: ['applicability-1'],
+      author_validated_profile_version_id: 'author-profile-1',
+      data_quality_state: 'ready',
+    },
+    repair_actions: [],
+    warnings: [],
+  } as never);
 });
 
 describe('daily strategy pages', () => {
@@ -253,81 +283,27 @@ describe('daily strategy pages', () => {
     expect(screen.queryByText('/market/')).not.toBeInTheDocument();
   });
 
-  it('submits the formal daily pre-market actions without exposing engineering navigation', async () => {
-    mockedListJobs.mockResolvedValueOnce({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 10,
-      items: [buildSnapshotJob()],
-    } as never);
-    mockedListJobs.mockResolvedValueOnce({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 10,
-      items: [buildRunPreMarketJob()],
-    } as never);
-    mockedCreateJob.mockResolvedValue({
-      created: true,
-      job: {
-        id: 'daily-pre-market-submit-1',
-        job_type: 'run-pre-market',
-        status: 'pending',
-      },
-      job_dir: '/tmp/daily-pre-market-submit-1',
-      log_path: '/tmp/daily-pre-market-submit-1/job.log',
-      params_path: '/tmp/daily-pre-market-submit-1/params.json',
-      result_path: '/tmp/daily-pre-market-submit-1/result.json',
-      artifacts_path: '/tmp/daily-pre-market-submit-1/artifacts',
-    } as never);
-
+  it('renders the formal daily pre-market readiness result without legacy execution actions', async () => {
     renderWithRouter([{ path: '/daily/pre-market', element: <TodayPreMarketPage /> }], ['/daily/pre-market']);
 
     expect(await screen.findByRole('heading', { name: '今日盘前' })).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByLabelText('目标画像')).toHaveValue('profile-daily-1');
-    });
     expect(screen.getByText('页面用途')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '整理今日盘前数据' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '开始盘前分析' })).toBeInTheDocument();
+    expect(await screen.findAllByText('可以继续')).not.toHaveLength(0);
+    expect(await screen.findAllByText('正式盘前依赖齐备。')).not.toHaveLength(0);
+    expect(await screen.findAllByText('可以继续正式盘前流程。')).not.toHaveLength(0);
+    expect(screen.getByText('09-25')).toBeInTheDocument();
+    expect(mockedGetPreMarketReadiness).toHaveBeenCalledWith('2026-06-21');
     expect(screen.queryByText('Job ID')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '整理今日盘前数据' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '开始盘前分析' })).not.toBeInTheDocument();
+    expect(screen.queryByText('run-pre-market')).not.toBeInTheDocument();
+    expect(screen.queryByText('snapshot-build')).not.toBeInTheDocument();
     expect(screen.queryByText('force')).not.toBeInTheDocument();
     expect(screen.queryByText('config_path')).not.toBeInTheDocument();
     expect(screen.queryByText('/jobs')).not.toBeInTheDocument();
     expect(screen.queryByText('/workflows')).not.toBeInTheDocument();
     expect(screen.queryByText('/artifacts')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '整理今日盘前数据' }));
-
-    await waitFor(() => {
-      expect(mockedCreateJob).toHaveBeenCalledWith(
-        expect.objectContaining({
-          job_type: 'snapshot-build',
-          params: expect.objectContaining({
-            profile_id: 'profile-daily-1',
-            snapshot_type: 'all',
-            slot: '17-30',
-            benchmark_symbol: '000300.SH',
-          }),
-        }),
-      );
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: '开始盘前分析' }));
-
-    await waitFor(() => {
-      expect(mockedCreateJob).toHaveBeenCalledWith(
-        expect.objectContaining({
-          job_type: 'run-pre-market',
-          params: expect.objectContaining({
-            profile_id: 'profile-daily-1',
-            as_of_date: '2026-06-13',
-            benchmark_symbol: '000300.SH',
-          }),
-        }),
-      );
-    });
+    expect(mockedCreateJob).not.toHaveBeenCalled();
   });
 
   it('renders the formal after-close page with result output and business navigation only', async () => {
@@ -376,7 +352,7 @@ describe('daily strategy pages', () => {
           job_type: 'run-after-close',
           params: expect.objectContaining({
             profile_id: 'profile-daily-1',
-            as_of_date: '2026-06-13',
+            as_of_date: '2026-06-21',
             force: false,
             export_html: false,
           }),

@@ -555,7 +555,7 @@ class PreMarketReadinessService:
                 if profile.rule_version_id == membership.rule_version_id
                 and str(market_snapshot.id) in [str(item) for item in (profile.market_snapshot_ids or [])]
             ]
-            matched.sort(key=lambda item: item.reviewed_at or datetime.min)
+            matched.sort(key=self._applicability_profile_sort_key)
             if matched:
                 selected.append(matched[-1])
             else:
@@ -691,3 +691,11 @@ class PreMarketReadinessService:
     def _is_ready_quality(self, value: Any) -> bool:
         normalized = value.value if hasattr(value, "value") else str(value)
         return normalized in READY_QUALITY_STATES
+
+    @staticmethod
+    def _applicability_profile_sort_key(item: Any) -> tuple[datetime, datetime, str]:
+        return (
+            item.reviewed_at or datetime.min,
+            item.created_at or datetime.min,
+            str(item.applicability_profile_id),
+        )

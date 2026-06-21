@@ -19,13 +19,13 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 9 每日盘前`
-- Stage 状态：`[-] 进行中`
+- Stage 状态：`[x] 已完成`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`
-- 当前未开始 Task：`无`
+- 当前未开始 Task：`Stage 10 Bootstrap`
 - 当前计划：[Stage 9 实施计划](refactor-implementation-plans/stage-9-implementation-plan.md)
 - 详细日志：[Stage 9](refactor-implementation-logs/stage-9.md)
-- 下一步：仅可在用户明确授权后开始 `Stage 9 Gate`；不得自动启动 Stage 10。
+- 下一步：仅可在用户明确授权后开始 `Stage 10 Bootstrap`；不得自动启动 Stage 10。
 
 ## 当前硬约束
 
@@ -53,8 +53,9 @@
 ## 当前残余风险
 
 - Stage 8 Gate 最终 `ACCEPTED`；`RT-S8-001/002/003` 已接受，策略中心 Stage 已完成。
-- Stage 9 Bootstrap 最终 `READY`；`RT-S9-001/002/003` 已接受；Stage 9 Gate 尚未开始。
+- Stage 9 Gate 最终 `ACCEPTED`；`RT-S9-001/002/003` 已接受。
 - `RT-S9-001` 已建立 formal pre-market readiness repository/service/API/client/page；`RT-S9-002` 已建立 formal daily rule selection repository/service/API/client/UI；`RT-S9-003` 已建立 formal daily strategy instance / trading plan repository/service/API/client/UI 与审核流。
+- Stage 9 Gate bounded repair 已修复 deterministic applicability selection、OHLCV snapshot filtering、`/daily/pre-market` 用户语言泄漏、状态中文映射和 plan review router 重复异常分支。
 - `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
 - `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
 - 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
@@ -63,6 +64,7 @@
 - `/strategies/candidates` 仍为 compatibility notice page，后续退役工作未完成。
 - Stage 8 未运行浏览器级 E2E；Gate 判定为非阻塞，当前依赖 focused API/frontend/OpenAPI/typecheck/migration verification。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
+- Stage 9 残余风险均判定为非阻塞：Daily traceability 位于 canonical JSON payload、`/daily` overview compatibility-only job summary cards、浏览器级 E2E 未运行、DailyRuleSelection 写入 guard 可后续 hardening。
 
 ## Task 状态索引
 
@@ -119,14 +121,14 @@
 | Stage 6 | `[x]` | Gate 最终 `ACCEPTED` | [stage-6.md](refactor-implementation-logs/stage-6.md) |
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
-| Stage 9 | `[-]` | `RT-S9-001/002/003 ACCEPTED`；Stage 9 Gate 未开始 | [stage-9.md](refactor-implementation-logs/stage-9.md) |
+| Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 
 ## 下一步建议
 
 建议下一次用户明确授权后开始：
 
 ```text
-Stage 9 Gate
+Stage 10 Bootstrap
 ```
 
 执行前应读取：
@@ -135,4 +137,4 @@ Stage 9 Gate
 - [Stage 9 日志](refactor-implementation-logs/stage-9.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `Stage 9 Gate`；必须等待用户明确授权，且不得启动 Stage 10。
+不得自动开始 `Stage 10 Bootstrap`；必须等待用户明确授权。

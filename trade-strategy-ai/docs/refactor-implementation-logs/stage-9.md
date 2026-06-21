@@ -3,11 +3,11 @@
 ## 当前摘要
 
 - Stage：`Stage 9 每日盘前`
-- 当前活动：`RT-S9-001 自动前置检查`
-- 当前状态：`RT-S9-001 ACCEPTED`
-- 当前 Task：`RT-S9-001 自动前置检查`
-- 下一可执行项：`RT-S9-002 每日规则选择`
-- 不得自动开始：不得生成 `DailyStrategyInstance`、`TradingDayPlan`；不得启动 `Stage 10 每日盘后`
+- 当前活动：`Stage 9 Gate`
+- 当前状态：`Stage 9 Gate ACCEPTED`
+- 当前 Task：`RT-S9-001 / RT-S9-002 / RT-S9-003 均 ACCEPTED`
+- 下一可执行项：等待用户明确授权后开始 `Stage 10 Bootstrap`
+- 不得自动开始：不得自动启动 `Stage 10 每日盘后`
 
 ## 2026-06-21 Stage 9 Bootstrap
 
@@ -625,3 +625,100 @@ selection backend/API 文件复核未发现以下正式输入：
 `RT-S9-003 ACCEPTED`。
 
 Stage 9 Gate 不得自动开始；需等待后续明确授权。
+
+## 2026-06-21 Stage 9 Gate
+
+### Gate Decision
+
+`ACCEPTED`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定委派 2 个 read-only `refactor_explorer_mini`：
+
+- Explorer A：后端 / repository / service / API traceability、determinism、mutation boundary、Stage 10 boundary。
+- Explorer B：前端 / UI language / API contract / route wiring / legacy isolation。
+
+Parent 保留最终 Gate 验收、风险分类、修复决策和正式文档更新。两个 subagent 均未修改文件；最终验收未委派。
+
+### Verified Task Status
+
+- `RT-S9-001 自动前置检查`：`ACCEPTED`。
+- `RT-S9-002 每日规则选择`：`ACCEPTED`。
+- `RT-S9-003 每日策略实例和盘前计划`：`ACCEPTED`。
+- `Stage 10`：未开始；本次未实现盘后归因、信号结果评估、post-market review、Rule / Author / Strategy proposal generation。
+
+### Gate Checklist Results
+
+- `/daily/pre-market` 已使用 formal Stage 9 readiness / rule-selection / plan API，不以 legacy pre-market job、`run-pre-market`、`snapshot-build`、ManagerAgent、file report、Job / Workflow / Pipeline / Artifact、`config_path`、live Provider 或 compatibility view 作为正式输入。
+- Readiness 覆盖 Kaipan 盘前数据、最新 OHLCV、当前市场状态、当前正式策略、规则适用性、作者验证画像和数据质量。
+- 缺失或降级数据保持 `blocked / unavailable / degraded / partial`，不会转换为 success、false、0 或 empty success。
+- `DailyRuleSelection` 是每日选择输出，不是 `StrategyVersion`；blocked readiness 不生成成功 selection。
+- `DailyStrategyInstance` 和 `TradingDayPlan` 是 runtime/user-facing daily output；blocked / unavailable selection 不生成成功 plan。
+- `TradingDayPlan` 展示今日市场判断、启用规则、暂停规则、候选标的、信号、入场条件、失效条件、止盈止损、建议仓位、风险提示、置信度和 approval / rejection state，并明确标注“不是正式策略”。
+- `StrategyVersion`、`Strategy.current_published_version_id`、`RuleVersion`、`RuleApplicabilityProfile`、`AuthorProfileVersion`、`StrategyRevisionProposal` / `OptimizationProposal` 状态未被 Stage 9 daily flow 修改。
+- Daily 输出 traceability 保留 `trade_date`、`strategy_version_id`、`daily_rule_selection_id`、`dataset_snapshot_id`、`market_snapshot_id`、`market_state_id`、规则适用性画像 ID、作者画像版本 ID、data quality、readiness、selected / reduced / suspended decisions、deterministic reasons、degraded / unresolved inputs。
+- UI 已改为业务中文展示，不再在 `/daily/pre-market` 普通用户文案中展示 `DatasetSnapshot`、`MarketSnapshot`、snake_case traceability keys、`Regime` 或英文 selected / reduced / suspended / BUY / SELL / HOLD。
+
+### Bounded Repairs
+
+- 修复 deterministic applicability selection：repository 查询增加稳定 `order_by`，service 按 `reviewed_at / created_at / applicability_profile_id` 选择同 rule/dataset 下的确定性最新画像。
+- 修复 latest OHLCV readiness：只选择 `market == "CN"` 且 `dataset_type in ("ohlcv_1d", "ohlcv_daily", "ohlcv_partial")` 的 dataset snapshot，避免误选非 OHLCV snapshot。
+- 修复 `/daily/pre-market` 用户语言泄漏：把 raw traceability keys 映射为业务中文；把 `canonical DatasetSnapshot / MarketSnapshot` 文案改为“已冻结的历史行情 / 盘前市场快照”。
+- 修复状态文案：`selected / reduced / suspended / BUY / SELL / HOLD / approved / rejected` 映射为中文状态。
+- 修复 selection / plan 错误区块：补充“影响”和“处理方式”。
+- 清理 `plan/review` router 重复 `ValueError` 分支。
+
+### Files Changed In Gate Repair
+
+- `api/routers/ui/daily_pre_market.py`
+- `src/db/repositories/pre_market_readiness_repo.py`
+- `src/db/repositories/daily_rule_selection_repo.py`
+- `src/services/pre_market_readiness_service.py`
+- `src/services/daily_rule_selection_service.py`
+- `tests/unit/services/test_pre_market_readiness_service.py`
+- `tests/unit/services/test_daily_rule_selection_service.py`
+- `web/src/components/kit/status-badge.tsx`
+- `web/src/pages/daily/index.tsx`
+- `web/src/pages/daily/pre-market.test.tsx`
+
+### Database Migration
+
+无。Stage 9 Gate repair 未新增或修改 schema。
+
+### Verification
+
+已运行：
+
+- `python -m pytest tests/unit/services/test_pre_market_readiness_service.py tests/unit/services/test_daily_rule_selection_service.py tests/unit/services/test_daily_trading_plan_service.py tests/api/routers/ui/test_daily_pre_market.py tests/api/routers/ui/test_daily_pre_market_rule_selection.py tests/api/routers/ui/test_daily_pre_market_plan.py tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py -q`
+- `python -m pytest tests/api/routers/ui/test_daily_pre_market.py tests/api/routers/ui/test_daily_pre_market_rule_selection.py tests/api/routers/ui/test_daily_pre_market_plan.py tests/api/test_ui_openapi_contract.py tests/api/test_api_app_factory.py -q`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/pages/daily/pre-market.test.tsx src/pages/daily/index.test.tsx src/lib/api/contract.test.ts'`
+- `/bin/zsh -lc 'PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck'`
+- `rg -n "run-pre-market|snapshot-build|config_path|ManagerAgent|legacy strategy service|legacy backtest service|Workflow|Pipeline|Artifact|Provider|Regime|DatasetSnapshot|MarketSnapshot|daily overview|job_type|listJobs|selected|reduced|suspended|BUY|SELL|HOLD|strategy_version_id|dataset_snapshot_id|market_snapshot_id" ...formal Stage 9 paths...`
+- `git diff --check`
+
+结果：
+
+- focused backend/API/service/OpenAPI tests：`18 passed`
+- focused API/router/OpenAPI tests after router repair：`9 passed`
+- focused frontend /daily/pre-market and contract tests：`12 passed`
+- `pnpm typecheck`：passed
+- `git diff --check`：passed
+- legacy isolation grep：formal Stage 9 service/repository/router/client path 未接入被禁 legacy input；命中项为内部模型/type/test 字段、后端允许的 `MarketRegimeRecord`/`DatasetSnapshot`/`MarketSnapshot` 代码引用、以及已知 `/daily` overview compatibility-only job summary cards。
+
+### Residual Risks And Classification
+
+- `DailyRuleSelection` / `TradingDayPlan` top-level traceability 存在 canonical JSON payload 中，而不是独立列：`non-blocking`。当前 frozen Stage 9 contract 允许 bounded JSON payload；Gate repair 增加了 determinism 和测试，不需要 schema hardening。
+- `/daily` overview 仍有 compatibility-only job summary cards：`non-blocking`。这些卡片未作为 `/daily/pre-market` formal source；Stage 9 Gate 只要求 formal pre-market path 隔离 legacy input。
+- Browser-level E2E 未运行：`non-blocking`。项目级 AGENTS 允许当前 Stage 以 focused API/frontend/typecheck 验证替代完整浏览器验收；本次已运行 focused page tests 和 typecheck。
+- `DailyRuleSelectionRepository.create_selection()` 未加与 daily plan repository 完全一致的 `canonical_write_scope` guard：`non-blocking`。当前写入对象是 Stage 9 canonical daily selection 表，不修改 formal strategy/profile/rule/proposal；可作为后续 hardening。
+
+### Stage 10 Boundary
+
+已确认本次 Stage 9 Gate repair 未新增 Stage 10 table/service/API/UI，未生成 signal result evaluation、post-market attribution、RuleRevisionProposal、AuthorRevisionProposal 或 StrategyRevisionProposal。
+
+### Conclusion
+
+`Stage 9 Gate ACCEPTED`。
+
+下一允许动作：用户明确授权后开始 `Stage 10 Bootstrap`。不得自动开始 Stage 10。

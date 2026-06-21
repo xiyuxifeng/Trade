@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from hashlib import sha256
 import json
@@ -211,7 +211,10 @@ class DailyRuleSelectionService:
                 rule_version_ids=[item.rule_version_id for item in memberships],
                 dataset_snapshot_id=UUID(traceability.dataset_snapshot_id),
             )
-            profile_by_rule = {str(item.rule_version_id): item for item in applicability_profiles if item.rule_version_id is not None}
+            profile_by_rule: dict[str, Any] = {}
+            for item in sorted(applicability_profiles, key=self._applicability_profile_sort_key):
+                if item.rule_version_id is not None:
+                    profile_by_rule[str(item.rule_version_id)] = item
 
             decisions = self._evaluate_decisions(
                 memberships=memberships,
@@ -545,3 +548,10 @@ class DailyRuleSelectionService:
     def _is_ready(value: str) -> bool:
         return value in READY_STATES
 
+    @staticmethod
+    def _applicability_profile_sort_key(item: Any) -> tuple[datetime, datetime, str]:
+        return (
+            item.reviewed_at or datetime.min,
+            item.created_at or datetime.min,
+            str(item.applicability_profile_id),
+        )

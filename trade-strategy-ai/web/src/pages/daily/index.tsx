@@ -238,8 +238,8 @@ export function TodayPreMarketPage({ availability }: { availability?: PageAvaila
       queryState={queryState}
       purpose="先确认今天是否具备正式盘前输入，再决定是否继续后续流程。"
       inputDescription="需要交易日，以及正式策略、历史行情、盘前市场快照、当前市场状态、规则适用性和作者验证画像。"
-      processingDescription="系统只读取 canonical DatasetSnapshot、MarketSnapshot、市场状态、正式策略和画像绑定，检查今天是否就绪。"
-      outputDescription="输出 ready / degraded / blocked 的盘前检查结果、影响说明和修复入口。"
+      processingDescription="系统只读取已冻结的历史行情、盘前市场快照、市场状态、正式策略和画像绑定，检查今天是否就绪。"
+      outputDescription="输出已就绪、可降级继续或已阻塞的盘前检查结果、影响说明和修复入口。"
       businessAction={{ label: '返回今日总览', to: '/daily/overview' }}
       currentStep="先完成正式盘前前置检查，再决定是否进入下一步。"
       stateTitle={queryState === 'error' ? '出现问题' : response?.summary_title}
@@ -305,6 +305,43 @@ function formatTraceabilityValue(value: unknown) {
   return String(value);
 }
 
+function formatTraceabilityLabel(key: string) {
+  const labels: Record<string, string> = {
+    trade_date: '交易日',
+    strategy_version_id: '正式策略版本',
+    dataset_snapshot_id: '历史行情快照',
+    market_snapshot_id: '盘前市场快照',
+    market_state_id: '市场状态记录',
+    current_market_state_label: '市场状态',
+    rule_applicability_profile_ids: '规则适用性记录',
+    author_method_profile_version_id: '作者方法画像版本',
+    author_rule_profile_version_id: '作者规则画像版本',
+    author_validated_profile_version_id: '作者验证画像版本',
+    data_quality_state: '数据质量状态',
+    readiness_status: '盘前检查状态',
+    selected_rules: '启用规则决策',
+    reduced_rules: '降权规则决策',
+    suspended_rules: '暂停规则决策',
+    degraded_inputs: '降级输入',
+    unresolved_inputs: '未解决输入',
+    applicability_profile_ids: '规则适用性记录',
+    missing_rule_version_ids: '缺少适用性证据的规则',
+    strategy_id: '正式策略',
+    current_strategy_count: '当前正式策略数量',
+    current_strategy_ids: '当前正式策略列表',
+    validation_state: '验证状态',
+    lifecycle_state: '生命周期状态',
+    dataset_trade_date: '历史行情覆盖日期',
+    content_fingerprint: '内容指纹',
+    snapshot_id: '市场快照编号',
+    slot: '盘前时段',
+    quality_status: '质量状态',
+    regime_id: '市场状态编号',
+    regime_version: '市场状态模型版本',
+  };
+  return labels[key] ?? key;
+}
+
 function PreMarketCheckCard({ item }: { item: PreMarketCheck }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -329,7 +366,7 @@ function PreMarketCheckCard({ item }: { item: PreMarketCheck }) {
       <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
         {Object.entries(item.traceability).map(([key, value]) => (
           <div key={key} className="grid gap-1 md:grid-cols-[9rem,1fr]">
-            <span className="font-medium text-slate-700">{key}</span>
+            <span className="font-medium text-slate-700">{formatTraceabilityLabel(key)}</span>
             <span className="break-all">{formatTraceabilityValue(value)}</span>
           </div>
         ))}
@@ -385,7 +422,7 @@ function PreMarketReadinessResult({ response }: { response: PreMarketReadinessRe
         <div className="mt-3 grid gap-2 text-xs text-slate-600">
           {Object.entries(response.traceability).map(([key, value]) => (
             <div key={key} className="grid gap-1 md:grid-cols-[12rem,1fr]">
-              <span className="font-medium text-slate-700">{key}</span>
+              <span className="font-medium text-slate-700">{formatTraceabilityLabel(key)}</span>
               <span className="break-all">{formatTraceabilityValue(value)}</span>
             </div>
           ))}
@@ -434,6 +471,10 @@ function DailyRuleSelectionPanel({
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-sm font-medium text-slate-950">今日规则选择</p>
         <p className="mt-3 text-sm text-slate-700">读取今日规则选择时发生错误。</p>
+        <div className="mt-3 grid gap-2 text-sm text-slate-700">
+          <div><span className="font-medium text-slate-900">影响：</span>当前不能确认今日启用、降权和暂停规则。</div>
+          <div><span className="font-medium text-slate-900">处理方式：</span>请先返回盘前检查，修复缺失输入后重新打开本页。</div>
+        </div>
       </div>
     );
   }
@@ -550,6 +591,10 @@ function TradingDayPlanPanel({
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-sm font-medium text-slate-950">每日运行计划</p>
         <p className="mt-3 text-sm text-slate-700">读取每日运行计划时发生错误。</p>
+        <div className="mt-3 grid gap-2 text-sm text-slate-700">
+          <div><span className="font-medium text-slate-900">影响：</span>当前不能确认今日市场判断、信号和风险提示。</div>
+          <div><span className="font-medium text-slate-900">处理方式：</span>请先确认每日规则选择已生成；若仍失败，补齐盘前依赖后重试。</div>
+        </div>
       </div>
     );
   }
@@ -763,7 +808,7 @@ function TradingPlanTraceabilitySection({ plan }: { plan: TradingDayPlanResponse
       <div className="mt-3 grid gap-2 text-xs text-slate-600">
         {Object.entries(plan.traceability).map(([key, value]) => (
           <div key={key} className="grid gap-1 md:grid-cols-[12rem,1fr]">
-            <span className="font-medium text-slate-700">{key}</span>
+            <span className="font-medium text-slate-700">{formatTraceabilityLabel(key)}</span>
             <span className="break-all">{formatTraceabilityValue(value)}</span>
           </div>
         ))}

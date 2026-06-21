@@ -224,6 +224,12 @@ describe('TodayPreMarketPage', () => {
     expect(screen.queryByText('Workflow')).not.toBeInTheDocument();
     expect(screen.queryByText('Pipeline')).not.toBeInTheDocument();
     expect(screen.queryByText('Artifact')).not.toBeInTheDocument();
+    expect(screen.queryByText('DatasetSnapshot')).not.toBeInTheDocument();
+    expect(screen.queryByText('MarketSnapshot')).not.toBeInTheDocument();
+    expect(screen.queryByText('dataset_snapshot_id')).not.toBeInTheDocument();
+    expect(screen.queryByText('market_snapshot_id')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('历史行情快照')).not.toHaveLength(0);
+    expect(await screen.findAllByText('盘前市场快照')).not.toHaveLength(0);
   });
 
   it('shows enabled reduced and suspended rules with Chinese reason tiers', async () => {
@@ -276,6 +282,14 @@ describe('TodayPreMarketPage', () => {
     expect(await screen.findByText('样本不足，今日降权处理。')).toBeInTheDocument();
     expect(await screen.findByText('缺少正式规则适用性，今日暂停。')).toBeInTheDocument();
     expect(screen.queryByText('Regime')).not.toBeInTheDocument();
+    expect(screen.queryByText('selected')).not.toBeInTheDocument();
+    expect(screen.queryByText('reduced')).not.toBeInTheDocument();
+    expect(screen.queryByText('suspended')).not.toBeInTheDocument();
+    expect(screen.queryByText('BUY')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('已启用')).not.toHaveLength(0);
+    expect(await screen.findAllByText('已降权')).not.toHaveLength(0);
+    expect(await screen.findAllByText('已暂停')).not.toHaveLength(0);
+    expect(await screen.findByText('买入')).toBeInTheDocument();
   });
 
   it('submits approval action for the daily plan', async () => {

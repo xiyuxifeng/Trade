@@ -325,6 +325,28 @@ async def test_pre_market_readiness_reports_ready_when_all_canonical_inputs_exis
     session_scope, session_factory, engine = await _build_session_factory(tmp_path)
     try:
         seeded = await _seed_ready_bundle(session_factory)
+        async with session_factory() as session:
+            session.add(
+                DatasetSnapshot(
+                    dataset_snapshot_id=uuid4(),
+                    content_fingerprint="dataset-fingerprint-non-ohlcv",
+                    trade_date=date(2026, 6, 21),
+                    market="CN",
+                    dataset_type="market_regimes",
+                    date_from=date(2026, 6, 21),
+                    date_to=date(2026, 6, 21),
+                    symbol_manifest={},
+                    ohlcv_manifest={},
+                    kaipan_manifest={},
+                    benchmark_symbol="000300.SH",
+                    market_state_definition_version="market-state-v2",
+                    available_at=datetime(2026, 6, 21, 8, 45, tzinfo=UTC),
+                    frozen_at=datetime(2026, 6, 21, 8, 45, tzinfo=UTC),
+                    lifecycle_state=DatasetLifecycleState.ready,
+                    storage_ref={"logical_dataset_id": "market-regime:CN:2026-06-21"},
+                )
+            )
+            await session.commit()
         service = PreMarketReadinessService(session_scope_factory=session_scope)
 
         result = await service.get_readiness(

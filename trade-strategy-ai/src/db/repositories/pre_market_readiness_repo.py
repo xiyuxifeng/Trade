@@ -13,6 +13,9 @@ from src.models.rule_applicability import RuleApplicabilityProfile
 from src.models.stage2_canonical import AuthorProfileVersion, DatasetSnapshot, Strategy, StrategyRuleMembership, StrategyVersion
 
 
+OHLCV_DATASET_TYPES = ("ohlcv_1d", "ohlcv_daily", "ohlcv_partial")
+
+
 class PreMarketReadinessRepository:
     async def list_current_strategies(self, session: AsyncSession) -> list[Strategy]:
         result = await session.scalars(
@@ -46,7 +49,12 @@ class PreMarketReadinessRepository:
     ) -> DatasetSnapshot | None:
         return await session.scalar(
             select(DatasetSnapshot)
-            .where(DatasetSnapshot.trade_date.is_not(None), DatasetSnapshot.trade_date <= trade_date)
+            .where(
+                DatasetSnapshot.trade_date.is_not(None),
+                DatasetSnapshot.trade_date <= trade_date,
+                DatasetSnapshot.market == "CN",
+                DatasetSnapshot.dataset_type.in_(OHLCV_DATASET_TYPES),
+            )
             .order_by(DatasetSnapshot.trade_date.desc(), DatasetSnapshot.available_at.desc(), DatasetSnapshot.created_at.desc())
             .limit(1)
         )
@@ -105,6 +113,11 @@ class PreMarketReadinessRepository:
                 RuleApplicabilityProfile.lifecycle_state == FormalLifecycleState.published,
                 RuleApplicabilityProfile.dataset_snapshot_id == dataset_snapshot_id,
                 RuleApplicabilityProfile.rule_version_id.in_(rule_version_ids),
+            ).order_by(
+                RuleApplicabilityProfile.rule_version_id.asc(),
+                RuleApplicabilityProfile.reviewed_at.asc(),
+                RuleApplicabilityProfile.created_at.asc(),
+                RuleApplicabilityProfile.applicability_profile_id.asc(),
             )
         )
         return list(result.all())

@@ -186,10 +186,3 @@ async def review_trading_day_plan(
             "当前审批请求无效，无法更新每日运行计划。",
             "修正审批操作或原因后重试。",
         ) from exc
-    except ValueError as exc:
-        raise _error(
-            status.HTTP_400_BAD_REQUEST,
-            str(exc),
-            "当前请求的交易日无效，无法读取每日规则选择。",
-            "改成有效的交易日后重试。",
-        ) from exc

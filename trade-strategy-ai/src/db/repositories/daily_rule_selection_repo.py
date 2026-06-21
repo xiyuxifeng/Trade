@@ -63,6 +63,11 @@ class DailyRuleSelectionRepository:
                 RuleApplicabilityProfile.lifecycle_state == FormalLifecycleState.published,
                 RuleApplicabilityProfile.dataset_snapshot_id == dataset_snapshot_id,
                 RuleApplicabilityProfile.rule_version_id.in_(rule_version_ids),
+            ).order_by(
+                RuleApplicabilityProfile.rule_version_id.asc(),
+                RuleApplicabilityProfile.reviewed_at.asc(),
+                RuleApplicabilityProfile.created_at.asc(),
+                RuleApplicabilityProfile.applicability_profile_id.asc(),
             )
         )
         return list(result.all())

@@ -512,6 +512,89 @@ async def test_daily_rule_selection_is_deterministic_and_never_selects_missing_a
 
 
 @pytest.mark.asyncio()
+async def test_daily_rule_selection_uses_deterministic_latest_applicability_profile(tmp_path: Path) -> None:
+    from src.services.daily_rule_selection_service import DailyRuleSelectionService
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    try:
+        seeded = await _seed_selection_bundle(session_factory)
+        duplicate_profile_id = uuid4()
+        now = datetime(2026, 6, 21, 8, 45, tzinfo=UTC)
+        async with session_factory() as session:
+            session.add(
+                RuleApplicabilityProfile(
+                    applicability_profile_id=duplicate_profile_id,
+                    rule_version_id=seeded["rule_version_ids"][0],
+                    rule_version_fingerprint="rule-fingerprint-1",
+                    rule_version_no=1,
+                    dataset_snapshot_id=seeded["dataset_snapshot_id"],
+                    dataset_fingerprint="dataset-fingerprint-1",
+                    lifecycle_state=FormalLifecycleState.published,
+                    result_status="invalid",
+                    rule_id="rule-1",
+                    profile_version="rule-applicability-v1",
+                    profile_version_no=2,
+                    source_backtest_id="backtest-run-duplicate",
+                    source_rule_version="v1",
+                    market_regime_version="market-state-v2",
+                    source_feature_version="features-v2",
+                    source_backtest_run_ids=["backtest-run-duplicate"],
+                    source_backtest_result_ids=["backtest-result-duplicate"],
+                    source_result_fingerprints=["backtest-fingerprint-duplicate"],
+                    market_snapshot_ids=[str(seeded["market_snapshot_id"])],
+                    market_snapshot_fingerprints=["market-fingerprint-1"],
+                    sample_count=50,
+                    eligible_sample_count=50,
+                    evaluated_sample_count=50,
+                    coverage=1.0,
+                    return_metric=0.12,
+                    win_rate=0.58,
+                    maximum_drawdown=0.08,
+                    recommendation_status="available",
+                    quality_status="verified",
+                    insufficient_sample_status="sufficient",
+                    review_status="published",
+                    reviewed_by="seed",
+                    reviewed_at=now,
+                    created_at=now,
+                    created_by="seed",
+                )
+            )
+            await session.commit()
+
+        readiness = _readiness_view(
+            trade_date="2026-06-21",
+            strategy_version_id=seeded["strategy_version_id"],
+            dataset_snapshot_id=seeded["dataset_snapshot_id"],
+            market_snapshot_id=seeded["market_snapshot_id"],
+            market_state_id=seeded["market_state_id"],
+            rule_applicability_profile_ids=[duplicate_profile_id, seeded["applicability_profile_ids"][1]],
+            author_method_profile_version_id=seeded["method_profile_id"],
+            author_rule_profile_version_id=seeded["rule_profile_id"],
+            author_validated_profile_version_id=seeded["validated_profile_id"],
+        )
+        service = DailyRuleSelectionService(
+            session_scope_factory=session_scope,
+            readiness_service=_FakeReadinessService(readiness),
+        )
+
+        result = await service.get_rule_selection("2026-06-21", actor_id="tester", actor_role="viewer")
+
+        suspended_rule_ids = [item.rule_version_id for item in result.suspended_rules]
+        assert str(seeded["rule_version_ids"][0]) in suspended_rule_ids
+        suspended = next(item for item in result.suspended_rules if item.rule_version_id == str(seeded["rule_version_ids"][0]))
+        assert suspended.controlling_priority_tier == "formal_rule_applicability"
+        assert str(duplicate_profile_id) in suspended.evidence_ids
+        assert result.enabled_rules == []
+        assert result.traceability.rule_applicability_profile_ids == [
+            str(duplicate_profile_id),
+            str(seeded["applicability_profile_ids"][1]),
+        ]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio()
 async def test_daily_rule_selection_reports_blocked_readiness_without_persisting_selection(tmp_path: Path) -> None:
     from src.services.daily_rule_selection_service import DailyRuleSelectionService
 

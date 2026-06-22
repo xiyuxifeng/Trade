@@ -1412,3 +1412,7 @@ Stage 0 现状审计
 10. 所有结果是否可追溯、可审核、可复现？
 
 任何一项为否，都不能视为本轮重构完成。
+
+RT-S10-002： LLM 归因。
+JSON source bindings-hardening
+Risk

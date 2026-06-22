@@ -16,17 +16,18 @@
 - [Stage 8 日志](refactor-implementation-logs/stage-8.md)
 - [Stage 9 日志](refactor-implementation-logs/stage-9.md)
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
+- [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 
 ## 当前状态
 
-- 当前 Stage：`Stage 10 每日盘后`
-- Stage 状态：`[x] 已完成`
+- 当前 Stage：`Stage 11 系统管理、自动化与告警`
+- Stage 状态：`[-] 进行中`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`
-- 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`
-- 当前阻塞 Task：无；`RT-S10-001`、`RT-S10-002`、`RT-S10-003`、`RT-S10-004` 已完成 Parent acceptance review 并接受；Stage 10 Gate 最终 `ACCEPTED`
-- 当前计划：[Stage 10 实施计划](refactor-implementation-plans/stage-10-implementation-plan.md)
-- 详细日志：[Stage 10](refactor-implementation-logs/stage-10.md)
-- 下一步：等待用户明确授权 Stage 11 Bootstrap / planning；不得自动启动 Stage 11 implementation、automation、alerting 或 scheduling。
+- 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`
+- 当前阻塞 Task：无；Stage 11 Bootstrap 已完成，`RT-S11-001` 至 `RT-S11-007` implementation 均未开始
+- 当前计划：[Stage 11 实施计划](refactor-implementation-plans/stage-11-implementation-plan.md)
+- 详细日志：[Stage 11](refactor-implementation-logs/stage-11.md)
+- 下一步：等待用户明确授权 `RT-S11-001 系统管理入口`，或按冻结规则执行 `RT-S11-001 + RT-S11-007`；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12。
 
 ## 当前硬约束
 
@@ -59,6 +60,14 @@
 - `RT-S10-003` 已冻结并接受：Stage 10 proposal lane 必须保持 `rule_optimization`、`author_profile_revision`、`strategy_revision` 分离；rule/profile 仅允许 review / continue observing / reject；strategy accept 仅允许 draft-only，且不得修改 `Strategy.current_published_version_id`。
 - 不得把 raw `OHLCVBar` mutable latest rows、legacy report payload、raw `trade_logs`、file JSON 或临时 source 当作 formal post-close actuals source。
 - Approved imported actuals 不得作为 unexecuted signal close/MFE/MAE/return 的唯一来源，除非另行扩展为覆盖所有 signaled symbols 的 immutable OHLCV actuals contract。
+- Stage 11 Bootstrap 已冻结：低频管理能力集中到 System Management，普通用户日常业务页面保持简单。
+- Stage 11 System Management groups：Profile 配置、数据源、数据与调度、任务运行、失败与告警、数据库与备份、权限与审计。
+- Stage 11 business pages stay outside System Management：`/research`、`/rules`、`/authors`、`/strategies`、`/daily`、`/daily/pre-market`、`/daily/after-close`。
+- Stage 11 不得把 legacy Job / Workflow / Pipeline / Artifact 记录变成 formal business input；`config_path` 不得作为 Web formal input 回归。
+- Stage 11 missing data must remain unavailable / partial / conflict / invalid / degraded，不得变成 success / false / 0。
+- Stage 11 automation 不得静默 publish、overwrite、approve 或 execute user-impacting decisions；用户影响动作必须 notify-only 或 admin approval，除非后续 Task 明确冻结更窄 contract。
+- Stage 11 不得通过系统管理绕过已接受的 rule/profile/strategy governance paths，不得直接修改 formal strategy/rule/profile/current pointers。
+- Stage 11 不得退役 legacy routes，除非后续 Task 被明确授权；Stage 12 不得从 Stage 11 session 自动开始。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
 
 ## 当前残余风险
@@ -82,6 +91,12 @@
 - `RT-S10-003` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：separated rule / author-profile / strategy proposal lanes、Stage 10 proposal API 与 focused verification 已完成；rule/profile 仍为 bounded review-only governance，strategy acceptance 仍为 draft-only。
 - `RT-S10-004` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`/daily/after-close` 已替换为 formal post-market page；新增正式盘后聚合读取接口、daily client/types、focused API/frontend verification 与 `pnpm typecheck`。
 - Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`：focused backend/API/frontend/OpenAPI/typecheck/py_compile/grep/diff-check verification passed；execution supplement missing 为 non-blocking，caller-supplied post-close market state 为 non-blocking hardening，Stage 11 未开始。
+- Stage 11 Bootstrap 已于 2026-06-22 `READY`：已冻结 contracts、task order、combination rules、acceptance criteria 和 residual risk classification；未实现 production code。
+- Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
+- Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
+- Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。
+- `/strategies/after-close` compatibility route remains：归类为 Stage 12 retirement follow-up；Stage 11 可提供 compatibility visibility，但不得退役。
+- browser E2E not run：归类为 final Stage 12 E2E，除非 Stage 11 focused UI task 修改相关 UI 并需要 targeted browser verification。
 
 ## Task 状态索引
 
@@ -129,6 +144,14 @@
 | RT-S10-002 | `[x]` | deterministic structured attribution、LLM gate metadata、focused verification 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-003 | `[x]` | 分离 proposal lane、正式 API、safe review actions 和 focused verification 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-004 | `[x]` | formal `/daily/after-close` 页面、盘后聚合读取接口、建议动作面板和 focused verification 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
+| Stage 11 Bootstrap | `[x]` | Stage 11 system management / automation / observability / time / cost / rollback / error contracts 和 task order 已冻结 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-001 | `[ ]` | 系统管理入口 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-002 | `[ ]` | 自动化和恢复 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-003 | `[ ]` | 可观测性和运行追踪 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-004 | `[ ]` | 成本与增量控制 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-005 | `[ ]` | 数据时间语义 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-006 | `[ ]` | 灰度迁移和回滚 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-007 | `[ ]` | 用户友好错误 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 
 ## Stage 状态索引
 
@@ -145,19 +168,21 @@
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
+| Stage 11 | `[-]` | Bootstrap `READY`；implementation 未开始 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-Stage 11 Bootstrap / planning：
-仅在用户明确授权后开始；不得自动启动 Stage 11 implementation、automation、alerting 或 scheduling
+RT-S11-001 系统管理入口：
+仅在用户明确授权后开始；可按冻结规则与 RT-S11-007 同 Session 执行；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
 ```
 
 执行前应读取：
 
-- [Stage 10 日志](refactor-implementation-logs/stage-10.md)
+- [Stage 11 计划](refactor-implementation-plans/stage-11-implementation-plan.md)
+- [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `Stage 11`；必须等待用户明确授权后才能推进下一步。
+不得自动开始 `RT-S11-001` implementation；必须等待用户明确授权后才能推进下一步。

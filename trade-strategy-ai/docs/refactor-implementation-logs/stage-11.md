@@ -9,6 +9,82 @@
 - 下一可执行项：等待用户明确授权后续 Stage 11 task
 - 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
 
+## 2026-06-22 RT-S11-001 + RT-S11-007 Task Card Review
+
+### Status
+
+`PASSED`
+
+### Scope
+
+按 original Task Card 对已完成的 `RT-S11-001 系统管理入口` 和 `RT-S11-007 用户友好错误` 做 bounded review / repair：
+
+- 只核对 `/system` 入口、七类系统管理分组、兼容映射和业务页边界是否真实存在；
+- 只核对用户可见错误是否统一满足 `发生了什么 / 影响什么 / 应该怎么处理`；
+- 不重新实现 RT-S11-001 或 RT-S11-007；
+- 不启动 `RT-S11-002/003/004/005/006`、scheduler/runtime、automation、alerting、recovery、cost-control、route retirement 或 Stage 12。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- working tree before review edits：dirty，包含已存在的 `RT-S11-003` 未提交改动；本次 review 在其基础上继续，未覆盖或回退既有修改
+
+### Review Findings
+
+- `RT-S11-001`：未发现 Task Card 缺口
+  - `/system` 是正式入口页，不是 redirect 或散落兼容链接集合
+  - 七类系统管理分组在 `SystemHubPage` 中已明确呈现
+  - `route-config` 已为 `/profiles`、`/market*`、`/jobs`、`/workflows`、`/artifacts`、`/alerts`、`/admin*`、`/settings`、`/system/restore` 提供清晰的系统管理归属或兼容映射
+  - 普通业务页仍位于 `/research`、`/rules`、`/authors`、`/strategies`、`/daily*`，未被吸入 System Management
+- `RT-S11-007`：未发现 Task Card 缺口
+  - `BusinessPageShell`、`ProductPageAdapter`、`ErrorState`、`SystemStatusPanel` 已统一提供 happened / affected / repair guidance 语义
+  - `permission_denied`、`unavailable`、`partial`、`degraded`、`invalid`、`conflict` 状态均有业务化说明
+  - raw diagnostics 仅在 operator/admin 诊断详情中暴露
+  - 普通用户界面没有仅显示 exception stack 或仅显示 `Job failed`
+
+### Bounded Repair
+
+本次未发现需要补齐的 Task Card 功能缺口。
+
+仅做了一个 review-side hygiene 修复，用于让相关系统页面通过定向 lint：
+
+- `web/src/pages/system/index.tsx`
+  - 删除未使用的 `getSystemDashboard` 与 `SystemDataReadinessResponse` 导入
+
+### Verification
+
+- focused frontend tests
+  - `pnpm vitest run src/pages/system/index.test.tsx src/pages/system/system-pages.test.tsx src/features/system-management/system-management-workspace.test.tsx src/components/state/ErrorState.test.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/features/system-status/system-status-panel.test.tsx src/lib/error-recovery.test.ts src/app/route-config.test.tsx src/app/router-auth.test.tsx`
+- typecheck
+  - `pnpm typecheck`
+- targeted lint
+  - `pnpm exec eslint src/pages/system/index.tsx src/pages/system/SystemHubPage.tsx src/pages/system/system-pages.test.tsx src/pages/system/index.test.tsx src/features/system-management/system-management-workspace.tsx src/features/system-management/system-management-workspace.test.tsx src/components/state/ErrorState.tsx src/components/state/ErrorState.test.tsx src/components/layout/business-page-shell.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.tsx src/components/layout/product-page-adapter.test.tsx src/features/system-status/system-status-panel.tsx src/features/system-status/system-status-panel.test.tsx src/lib/error-recovery.ts src/lib/error-recovery.test.ts src/app/route-config.tsx src/app/route-config.test.tsx src/app/router-auth.test.tsx`
+- terminology / safety
+  - `rg -n "Job failed|Job|Workflow|Pipeline|Artifact|Provider|Schema|config_path|prompt_run_id|run_id" web/src/pages/system web/src/components/state web/src/components/layout web/src/features/system-status web/src/features/system-management`
+  - `git diff --check`
+
+### Result
+
+- focused Vitest：passed (`10` files, `87` tests)
+- `pnpm typecheck`：passed
+- targeted eslint：passed
+- `git diff --check`：passed
+- grep：
+  - 命中仅出现在测试、内部导入、实现标识或 `/system/runs` 的管理员诊断分支
+  - 未发现把 `Job` / `Workflow` / `Pipeline` / `Artifact` / `Provider` / `Schema` / `config_path` / `prompt_run_id` / `run_id` 暴露为普通用户业务文案的新增问题
+
+补充说明：
+
+- `pnpm lint` 全仓仍因 `web/src/pages/articles/*`、`web/src/pages/daily/*` 等无关文件的既有未使用变量报错而失败；这些不属于本次 bounded review 范围，因此未在此 Task Card review 中扩展修复
+
+### Review Decision
+
+- `RT-S11-001 Task Card Review PASSED`
+- `RT-S11-007 Task Card Review PASSED`
+
 ## 2026-06-22 RT-S11-003 可观测性和运行追踪
 
 ### Status

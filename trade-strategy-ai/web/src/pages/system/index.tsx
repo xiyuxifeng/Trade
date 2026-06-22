@@ -7,7 +7,6 @@ import { listProfiles } from '@/lib/api/profiles';
 import {
   cancelSystemDataOperation,
   createSystemDataOperation,
-  getSystemDashboard,
   getSystemDataReadiness,
   getSystemDataSchedule,
   listSystemRunTraces,
@@ -21,7 +20,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import type { SystemDataOperation, SystemDataReadinessResponse, SystemDataReadinessStatus, SystemRunTraceItem } from '@/types/system';
+import type { SystemDataOperation, SystemDataReadinessStatus, SystemRunTraceItem } from '@/types/system';
 
 function describeValidationStatus(status: string) {
   if (status === 'validated') return '已校验';

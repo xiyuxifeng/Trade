@@ -29,7 +29,16 @@ from src.models.stage2_canonical import DatasetSnapshot, PostMarketReview
 POST_CLOSE_ACTUALS_SECTION_ID = "post_close_symbol_ohlcv_actuals"
 POST_CLOSE_ACTUALS_CONTRACT_VERSION = "post-close-symbol-ohlcv-actuals-v1"
 SIGNAL_OUTCOME_POLICY_VERSION = "stage10-signal-outcome-v1"
+STRUCTURED_ATTRIBUTION_POLICY_VERSION = "stage10-structured-attribution-v1"
 CoverageState = Literal["ready", "partial", "unavailable", "conflict", "invalid", "insufficient_coverage", "degraded"]
+AttributionCategory = Literal[
+    "data issue",
+    "market-state identification issue",
+    "rule issue",
+    "strategy-composition issue",
+    "execution issue",
+    "unattributable",
+]
 
 
 def _json_fingerprint(payload: Any) -> str:
@@ -149,6 +158,23 @@ class SignalOutcomeEvaluationResult(BaseModel):
     post_close_market_snapshot_id: str
     signal_results: list[dict[str, Any]]
     evidence: dict[str, Any]
+    happened: str
+    affected: str
+    repair_guidance: str
+
+
+class SignalAttributionEvaluationRequest(BaseModel):
+    trading_day_plan_id: str
+    post_close_market_snapshot_id: str
+
+
+class SignalAttributionEvaluationResult(BaseModel):
+    state: CoverageState
+    post_market_review_id: str
+    trading_day_plan_id: str
+    trade_date: date
+    post_close_market_snapshot_id: str
+    attribution: dict[str, Any]
     happened: str
     affected: str
     repair_guidance: str
@@ -501,12 +527,17 @@ class PostMarketReviewService:
                 pre_market_state_id=selection.market_state_id,
                 post_close_market_state_id=post_close_market_state_id,
             )
+            attribution = self._build_attribution_payload(
+                signal_results=signal_results,
+                evidence=evidence,
+            )
             review = await self._upsert_review(
                 session,
                 plan_id=plan.trading_day_plan_id,
                 post_close_market_snapshot_id=UUID(request.post_close_market_snapshot_id),
                 post_close_market_state_id=post_close_market_state_id,
                 signal_results=signal_results,
+                attribution=attribution,
                 evidence=evidence,
                 coverage_state=actuals.coverage_state,
                 actor_id=actor_id,
@@ -524,6 +555,52 @@ class PostMarketReviewService:
                 repair_guidance="补齐缺失的盘后标的行情快照或处理冲突后重新评估。" if actuals.coverage_state != "ready" else "可进入结构化归因任务，但本次未生成归因或优化建议。",
             )
 
+    async def evaluate_signal_attribution(
+        self,
+        request: SignalAttributionEvaluationRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> SignalAttributionEvaluationResult:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to evaluate structured attribution")
+        async with self._session_scope_factory() as session:
+            plan = await self.review_repository.get_plan(session, UUID(request.trading_day_plan_id))
+            if plan is None:
+                raise LookupError("trading day plan is missing")
+            reviews = await self.review_repository.list_reviews_for_plan(session, plan.trading_day_plan_id)
+            review = next(
+                (
+                    item
+                    for item in reviews
+                    if item.market_snapshot_id == UUID(request.post_close_market_snapshot_id)
+                    and (item.signal_results_json or {}).get("policy_version") == SIGNAL_OUTCOME_POLICY_VERSION
+                ),
+                None,
+            )
+            if review is None:
+                raise LookupError("post-market review is missing")
+            attribution = self._build_attribution_payload(
+                signal_results=list((review.signal_results_json or {}).get("signals") or []),
+                evidence=review.evidence_json or {},
+            )
+            review.attribution_json = attribution
+            review.prompt_run_id = None
+            review.updated_by = actor_id
+            with canonical_write_scope("post_market_review", self.service_name):
+                review = await self.review_repository.save_review(session, review)
+            return SignalAttributionEvaluationResult(
+                state=attribution["state"],
+                post_market_review_id=str(review.post_market_review_id),
+                trading_day_plan_id=str(plan.trading_day_plan_id),
+                trade_date=plan.trade_date,
+                post_close_market_snapshot_id=request.post_close_market_snapshot_id,
+                attribution=attribution,
+                happened="已基于 RT-S10-001 正式盘后结果生成结构化归因。",
+                affected="页面和后续 Stage 10 任务会读取结构化归因，而不是直接依赖自由文本说明。",
+                repair_guidance="如需进一步解释，可在低置信度、证据冲突或重要信号时进入受限 LLM 校验；本次未调用 LLM。",
+            )
+
     async def _upsert_review(
         self,
         session: AsyncSession,
@@ -532,6 +609,7 @@ class PostMarketReviewService:
         post_close_market_snapshot_id: UUID,
         post_close_market_state_id: UUID | None,
         signal_results: list[dict[str, Any]],
+        attribution: dict[str, Any],
         evidence: dict[str, Any],
         coverage_state: CoverageState,
         actor_id: str,
@@ -554,7 +632,7 @@ class PostMarketReviewService:
                 market_snapshot_id=post_close_market_snapshot_id,
                 market_state_id=post_close_market_state_id,
                 signal_results_json={"policy_version": SIGNAL_OUTCOME_POLICY_VERSION, "signals": signal_results},
-                attribution_json={"state": "unavailable", "reason": "RT-S10-002_not_started"},
+                attribution_json=attribution,
                 evidence_json=evidence,
                 lifecycle_state=PostMarketReviewState.draft,
                 quality_status=QualityStatus.complete if coverage_state == "ready" else QualityStatus.partial,
@@ -565,10 +643,11 @@ class PostMarketReviewService:
         else:
             review.market_state_id = post_close_market_state_id
             review.signal_results_json = {"policy_version": SIGNAL_OUTCOME_POLICY_VERSION, "signals": signal_results}
-            review.attribution_json = {"state": "unavailable", "reason": "RT-S10-002_not_started"}
+            review.attribution_json = attribution
             review.evidence_json = evidence
             review.quality_status = QualityStatus.complete if coverage_state == "ready" else QualityStatus.partial
             review.updated_by = actor_id
+            review.prompt_run_id = None
         with canonical_write_scope("post_market_review", self.service_name):
             return await self.review_repository.save_review(session, review)
 
@@ -724,3 +803,256 @@ class PostMarketReviewService:
         }
         payload["evidence_fingerprint"] = _json_fingerprint(payload)
         return payload
+
+    def _build_attribution_payload(
+        self,
+        *,
+        signal_results: list[dict[str, Any]],
+        evidence: dict[str, Any],
+    ) -> dict[str, Any]:
+        attributions = [self._classify_signal_attribution(signal_result) for signal_result in signal_results]
+        counts_by_category: dict[str, int] = {}
+        counts_by_state: dict[str, int] = {}
+        llm_eligible_signal_ids: list[str] = []
+        for item in attributions:
+            counts_by_category[item["category"]] = counts_by_category.get(item["category"], 0) + 1
+            counts_by_state[item["state"]] = counts_by_state.get(item["state"], 0) + 1
+            if item["llm_validation"]["eligible"]:
+                llm_eligible_signal_ids.append(item["signal_id"])
+        overall_state = self._aggregate_attribution_state([item["state"] for item in attributions])
+        primary_category = max(counts_by_category.items(), key=lambda pair: (pair[1], pair[0]))[0] if counts_by_category else "unattributable"
+        payload = {
+            "policy_version": STRUCTURED_ATTRIBUTION_POLICY_VERSION,
+            "source": "RT-S10-001_program_facts",
+            "state": overall_state,
+            "primary_category": primary_category,
+            "signals": attributions,
+            "summary": {
+                "signal_count": len(attributions),
+                "counts_by_category": counts_by_category,
+                "counts_by_state": counts_by_state,
+            },
+            "llm_validation": {
+                "state": "not_requested",
+                "eligible_signal_ids": llm_eligible_signal_ids,
+                "reason": "deterministic_program_fact_first",
+            },
+            "review_evidence_fingerprint": evidence.get("evidence_fingerprint"),
+            "proposal_state": "unavailable_RT-S10-003_not_started",
+        }
+        payload["attribution_fingerprint"] = _json_fingerprint(payload)
+        return payload
+
+    def _classify_signal_attribution(self, signal_result: dict[str, Any]) -> dict[str, Any]:
+        state = self._signal_attribution_state(signal_result)
+        triggered = signal_result.get("triggered") or {}
+        executed = signal_result.get("executed") or {}
+        matched_rule = signal_result.get("matched_rule") or {}
+        market_state_change = signal_result.get("market_state_change") or {}
+        actual_result = signal_result.get("actual_result") or {}
+        return_fact = signal_result.get("return") or {}
+        reasons = self._signal_attribution_reasons(signal_result)
+        category: AttributionCategory
+        candidates: list[AttributionCategory] = []
+        if state in {"partial", "unavailable", "conflict", "invalid", "insufficient_coverage", "degraded"}:
+            candidates.append("data issue")
+        elif self._is_execution_issue(triggered=triggered, executed=executed):
+            candidates.append("execution issue")
+        else:
+            unfavorable = self._is_unfavorable_signal(signal_result)
+            if unfavorable:
+                if self._is_market_state_issue(market_state_change):
+                    candidates.append("market-state identification issue")
+                if self._is_strategy_composition_issue(matched_rule):
+                    candidates.append("strategy-composition issue")
+                if self._is_rule_issue(matched_rule):
+                    candidates.append("rule issue")
+        category = candidates[0] if candidates else "unattributable"
+        llm_reasons = self._llm_gate_reasons(
+            signal_result=signal_result,
+            category_candidates=candidates,
+            state=state,
+        )
+        explanation = self._signal_explanation(
+            category=category,
+            state=state,
+            signal_result=signal_result,
+        )
+        return {
+            "signal_id": signal_result.get("signal_id"),
+            "symbol": signal_result.get("symbol"),
+            "state": state,
+            "category": category,
+            "confidence": "low" if "low_confidence_multiple_candidate_categories" in llm_reasons else "high",
+            "reasons": reasons,
+            "program_facts": {
+                "signal_result_state": signal_result.get("state"),
+                "triggered": {
+                    "state": triggered.get("state"),
+                    "value": triggered.get("value"),
+                },
+                "executed": {
+                    "state": executed.get("state"),
+                    "value": executed.get("value"),
+                    "reason": executed.get("reason"),
+                },
+                "actual_result": {
+                    "state": actual_result.get("state"),
+                    "value": actual_result.get("value"),
+                    "reason": actual_result.get("reason"),
+                },
+                "return": {
+                    "state": return_fact.get("state"),
+                    "value": return_fact.get("value"),
+                    "reason": return_fact.get("reason"),
+                },
+                "matched_rule": {
+                    "state": matched_rule.get("state"),
+                    "rule_version_ids": matched_rule.get("rule_version_ids") or [],
+                    "selection_decisions": matched_rule.get("selection_decisions") or {},
+                },
+                "market_state_change": {
+                    "state": market_state_change.get("state"),
+                    "value": market_state_change.get("value"),
+                    "reason": market_state_change.get("reason"),
+                },
+            },
+            "llm_validation": {
+                "eligible": bool(llm_reasons),
+                "requested": False,
+                "state": "not_requested",
+                "reasons": llm_reasons,
+            },
+            "user_explanation": explanation,
+        }
+
+    def _signal_attribution_state(self, signal_result: dict[str, Any]) -> CoverageState:
+        signal_state = str(signal_result.get("state") or "ready")
+        if signal_state in {"partial", "unavailable", "conflict", "invalid", "insufficient_coverage", "degraded"}:
+            return signal_state  # type: ignore[return-value]
+        for field_name in ("triggered", "actual_result", "mfe", "mae", "return"):
+            field_state = str((signal_result.get(field_name) or {}).get("state") or "ready")
+            if field_state in {"conflict", "invalid"}:
+                return field_state  # type: ignore[return-value]
+            if field_state in {"unavailable", "partial", "insufficient_coverage", "degraded"}:
+                return field_state  # type: ignore[return-value]
+        return "ready"
+
+    def _signal_attribution_reasons(self, signal_result: dict[str, Any]) -> list[str]:
+        reasons: list[str] = []
+        evidence = signal_result.get("evidence") or {}
+        if isinstance(evidence.get("reasons"), list):
+            reasons.extend(str(item) for item in evidence["reasons"])
+        for field_name in ("actual_result", "mfe", "mae", "return"):
+            reason = (signal_result.get(field_name) or {}).get("reason")
+            if reason:
+                reasons.append(str(reason))
+        market_state_reason = (signal_result.get("market_state_change") or {}).get("reason")
+        if market_state_reason:
+            reasons.append(str(market_state_reason))
+        return list(dict.fromkeys(reasons))
+
+    def _is_execution_issue(self, *, triggered: dict[str, Any], executed: dict[str, Any]) -> bool:
+        if executed.get("state") != "ready":
+            return False
+        if triggered.get("value") is not True:
+            return False
+        return executed.get("value") is False or bool(executed.get("reason"))
+
+    def _is_market_state_issue(self, market_state_change: dict[str, Any]) -> bool:
+        return market_state_change.get("state") == "ready" and market_state_change.get("value") == "changed"
+
+    def _is_strategy_composition_issue(self, matched_rule: dict[str, Any]) -> bool:
+        if matched_rule.get("state") != "ready":
+            return False
+        decisions = list((matched_rule.get("selection_decisions") or {}).values())
+        rule_ids = list(matched_rule.get("rule_version_ids") or [])
+        return any(decision not in {None, "selected"} for decision in decisions) or len(rule_ids) > 1
+
+    def _is_rule_issue(self, matched_rule: dict[str, Any]) -> bool:
+        if matched_rule.get("state") != "ready":
+            return False
+        decisions = list((matched_rule.get("selection_decisions") or {}).values())
+        if any(decision not in {None, "selected"} for decision in decisions):
+            return False
+        return bool(matched_rule.get("rule_version_ids"))
+
+    def _is_unfavorable_signal(self, signal_result: dict[str, Any]) -> bool:
+        side = str(signal_result.get("side") or "").upper()
+        return_fact = signal_result.get("return") or {}
+        if return_fact.get("state") == "ready":
+            value = return_fact.get("value")
+            try:
+                return float(value) < 0
+            except (TypeError, ValueError):
+                return False
+        actual_result = signal_result.get("actual_result") or {}
+        value = actual_result.get("value")
+        if actual_result.get("state") != "ready":
+            return False
+        if side == "BUY":
+            return value == "down"
+        if side == "SELL":
+            return value == "up"
+        if side == "HOLD":
+            return value == "moved"
+        return False
+
+    def _llm_gate_reasons(
+        self,
+        *,
+        signal_result: dict[str, Any],
+        category_candidates: list[AttributionCategory],
+        state: CoverageState,
+    ) -> list[str]:
+        reasons: list[str] = []
+        if len(category_candidates) > 1:
+            reasons.append("low_confidence_multiple_candidate_categories")
+        if state == "conflict":
+            reasons.append("evidence_conflict")
+        triggered = signal_result.get("triggered") or {}
+        return_fact = signal_result.get("return") or {}
+        if triggered.get("state") == "ready" and triggered.get("value") is True and return_fact.get("state") == "ready":
+            try:
+                if abs(float(return_fact.get("value"))) >= 0.05:
+                    reasons.append("important_signal")
+            except (TypeError, ValueError):
+                pass
+        return reasons
+
+    def _signal_explanation(
+        self,
+        *,
+        category: AttributionCategory,
+        state: CoverageState,
+        signal_result: dict[str, Any],
+    ) -> str:
+        symbol = signal_result.get("symbol") or "该信号"
+        if category == "data issue":
+            return f"{symbol} 的盘后证据存在缺失、冲突或降级，当前先归为数据问题。"
+        if category == "market-state identification issue":
+            return f"{symbol} 的盘前与盘后市场状态发生变化，且结果不利于原判断，当前更接近市场状态识别问题。"
+        if category == "strategy-composition issue":
+            return f"{symbol} 命中的规则存在混合决策或降权痕迹，当前更接近策略组合问题。"
+        if category == "rule issue":
+            return f"{symbol} 命中的正式规则已被选中，但盘后结果不支持该判断，当前更接近规则问题。"
+        if category == "execution issue":
+            return f"{symbol} 已存在明确执行证据，结果更接近执行层面的偏差。"
+        if state != "ready":
+            return f"{symbol} 当前证据不足以落入固定问题类别，先按暂不可归因处理。"
+        return f"{symbol} 当前结果没有落入固定五类问题，按规则归为暂不可归因。"
+
+    def _aggregate_attribution_state(self, states: list[str]) -> CoverageState:
+        if any(state == "conflict" for state in states):
+            return "conflict"
+        if any(state == "invalid" for state in states):
+            return "invalid"
+        if any(state == "insufficient_coverage" for state in states):
+            return "partial"
+        if any(state == "partial" for state in states):
+            return "partial"
+        if any(state == "unavailable" for state in states):
+            return "unavailable"
+        if any(state == "degraded" for state in states):
+            return "degraded"
+        return "ready"

@@ -21,12 +21,12 @@
 
 - 当前 Stage：`Stage 10 每日盘后`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`
-- 当前阻塞 Task：无；`RT-S10-001` 已完成 Parent acceptance review 并接受；Stage 10 Gate 尚未运行
+- 当前阻塞 Task：无；`RT-S10-001`、`RT-S10-002` 已完成 Parent acceptance review 并接受；Stage 10 Gate 尚未运行
 - 当前计划：[Stage 10 实施计划](refactor-implementation-plans/stage-10-implementation-plan.md)
 - 详细日志：[Stage 10](refactor-implementation-logs/stage-10.md)
-- 下一步：等待用户明确授权 `RT-S10-002 结构化归因` 或 Stage 10 后续 review；不得自动启动 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 Stage 11。
+- 下一步：等待用户明确授权 `RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面` 或 Stage 10 后续 review；不得自动启动 `RT-S10-003`、`RT-S10-004` 或 Stage 11。
 
 ## 当前硬约束
 
@@ -55,6 +55,7 @@
 - Stage 10 formal flow must not consume legacy Job / Workflow / Pipeline / Artifact / file JSON / `config_path` / live Provider / mutable latest records / legacy post-market reports / `/daily/overview` compatibility job cards.
 - `RT-S10-001` contract escalation 已冻结 `Decision 1`：formal canonical post-close actual snapshot source is required and sufficient for signal outcome metrics；approved imported actuals are optional supplement for execution-specific fields only。
 - `RT-S10-001` 恢复时优先采用 `post_close_symbol_ohlcv_actuals` canonical `MarketSnapshot` section/item contract，绑定 `DatasetSnapshot.dataset_snapshot_id`、`DatasetSnapshot.content_fingerprint`、row fingerprint、quality/availability state、`frozen_at` / `available_at` 和 per-signal actual rows。
+- `RT-S10-002` 已冻结并接受：`PostMarketReview.attribution_json` 必须从 RT-S10-001 已落库 program facts deterministic 生成；formal attribution state 与 six-category classification 分离；LLM gate 仅记录 eligibility，未调用 runtime 时不得写 `prompt_run_id`。
 - 不得把 raw `OHLCVBar` mutable latest rows、legacy report payload、raw `trade_logs`、file JSON 或临时 source 当作 formal post-close actuals source。
 - Approved imported actuals 不得作为 unexecuted signal close/MFE/MAE/return 的唯一来源，除非另行扩展为覆盖所有 signaled symbols 的 immutable OHLCV actuals contract。
 - `AI-Conversation-Project-Constraints.md` 单文件不存在；当前权威约束以 `AI-Conversation-Project-Constraints-1.md` 和 `AI-Conversation-Project-Constraints-2.md` 为准。
@@ -76,6 +77,7 @@
 - Stage 9 残余风险均判定为非阻塞：Daily traceability 位于 canonical JSON payload、`/daily` overview compatibility-only job summary cards、浏览器级 E2E 未运行、DailyRuleSelection 写入 guard 可后续 hardening。
 - Stage 10 Bootstrap 已完成 contract freezing；`RT-S10-001` 已建立 formal `post_close_symbol_ohlcv_actuals` actuals source、signal outcome service/API 和 `PostMarketReview` evidence writer。
 - `RT-S10-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：bounded repairs 已修复 schema drift、row/dataset binding、baseline policy 和 matched-rule evidence；execution supplement、formal `/daily/after-close` UI replacement 和 Stage 10 Gate 均为 non-blocking residual risks。
+- `RT-S10-002` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`PostMarketReview.attribution_json` 现已持久化 deterministic structured attribution；无 LLM runtime call、无 proposal generation、无 Stage 11 automation；execution supplement、formal `/daily/after-close` UI replacement 和 Stage 10 Gate 仍为 non-blocking residual risks。
 
 ## Task 状态索引
 
@@ -120,7 +122,7 @@
 | RT-S9-003 | `[x]` | 每日策略实例和盘前计划、正式计划审核流和 focused verification 已接受 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 | Stage 10 Bootstrap | `[x]` | Stage 10 post-market contracts 和 task order 已冻结 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-001 | `[x]` | Option A formal post-close actuals source、signal outcome service/API、bounded repair 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
-| RT-S10-002 | `[ ]` | 结构化归因未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
+| RT-S10-002 | `[x]` | deterministic structured attribution、LLM gate metadata、focused verification 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-003 | `[ ]` | 优化建议未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-004 | `[ ]` | 盘后用户页面未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 
@@ -145,8 +147,8 @@
 建议下一次先处理：
 
 ```text
-RT-S10-002 结构化归因：
-仅在用户明确授权后，基于已接受的 RT-S10-001 program-fact outcome evidence 继续；不得自动生成 proposals 或启动 Stage 11
+RT-S10-003 优化建议：
+仅在用户明确授权后，基于已接受的 RT-S10-001 outcome evidence 与 RT-S10-002 structured attribution 继续；不得自动启动 RT-S10-004 或 Stage 11
 ```
 
 执行前应读取：
@@ -155,4 +157,4 @@ RT-S10-002 结构化归因：
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 `Stage 11`；必须等待用户明确授权后才能推进下一 Task。
+不得自动开始 `RT-S10-003`、`RT-S10-004` 或 `Stage 11`；必须等待用户明确授权后才能推进下一 Task。

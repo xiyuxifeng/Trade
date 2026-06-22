@@ -675,3 +675,161 @@ Stage 10 仍为 `[-] 进行中`；本次只接受 `RT-S10-001`，未开始 `RT-S
 `RT-S10-001` is `ACCEPTED` under the frozen Stage 10 Decision 1 / Option A contract.
 
 Next allowed action：wait for explicit user authorization for `RT-S10-002 结构化归因` or a separate Stage 10 Gate/review action. Do not start `RT-S10-002`、`RT-S10-003`、`RT-S10-004` or Stage 11 automatically.
+
+## 2026-06-22 RT-S10-002 结构化归因
+
+### Status
+
+`[x] 已完成`
+
+Parent acceptance decision：`ACCEPTED`。
+
+Stage 10 仍为 `[-] 进行中`；本次只接受 `RT-S10-002`，未开始 `RT-S10-003`、`RT-S10-004` 或 Stage 11。
+
+### Delegation
+
+使用 `refactor-orchestrator`。
+
+- Parent：负责 frozen contract、deterministic attribution policy、production implementation、verification、review 和正式日志更新。
+- 1 个 `refactor_executor_mini`：仅负责 `tests/unit/services/test_daily_trading_plan_service.py` 的 RED 测试铺设，不修改 production code。
+- Parent 在接收 handoff 后修正了部分红测断言，使其与 frozen Stage 10 contract 对齐：
+  - `attribution_json.state` 保持事实覆盖状态，不把 category 写成 state；
+  - `degraded` 是 state，不是正式 attribution category；
+  - 缺失 post-close market-state evidence 不会被伪装成 market-state identification issue。
+
+### Scope
+
+本次仅实现 `RT-S10-002 结构化归因`：
+
+- 基于 `RT-S10-001` 已持久化的 `signal_results_json` / `evidence_json` 生成 deterministic structured attribution；
+- 把最终归因写入 `PostMarketReview.attribution_json`；
+- 新增受限 attribution recompute service method，仍以已落库 program facts 为正式输入；
+- focused unit verification；
+- 正式实施日志更新。
+
+明确未执行：
+
+- `RT-S10-003` proposal generation；
+- `RT-S10-004` `/daily/after-close` full UI replacement；
+- LLM prompt runtime integration；
+- live Provider calls；
+- strategy / rule / profile / proposal mutation；
+- Stage 11 automation / alerting。
+
+### Files Changed
+
+- `src/services/post_close_actuals_service.py`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+- `docs/refactor-implementation-logs/stage-10.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Implementation Summary
+
+- `evaluate_signal_outcomes(...)` 现在在写入 `PostMarketReview.signal_results_json` 后，同步生成 deterministic attribution payload 并写入 `PostMarketReview.attribution_json`。
+- 新增 `SignalAttributionEvaluationRequest` / `SignalAttributionEvaluationResult` 和 `evaluate_signal_attribution(...)`，用于基于现有 `PostMarketReview` program facts 重新生成归因，不重算 RT-S10-001 outcome facts。
+- 新增 `stage10-structured-attribution-v1` payload：
+  - `state`：formal attribution coverage state（`ready/partial/unavailable/conflict/invalid/insufficient_coverage/degraded`）
+  - `primary_category`
+  - `signals[]`
+  - `summary`
+  - `llm_validation`
+  - `review_evidence_fingerprint`
+  - `proposal_state`
+  - `attribution_fingerprint`
+- 每个 signal attribution 统一输出：
+  - `signal_id` / `symbol`
+  - `state`
+  - `category`
+  - `confidence`
+  - `reasons`
+  - `program_facts`
+  - `llm_validation`
+  - `user_explanation`
+
+### Deterministic Attribution Rules
+
+- `data issue`
+  - 当 `RT-S10-001` outcome evidence 已明确是 `partial/unavailable/conflict/invalid/insufficient_coverage/degraded` 时使用。
+- `market-state identification issue`
+  - 仅当盘后 program fact 已明确 `market_state_change = changed` 且 outcome 对信号不利时使用。
+- `rule issue`
+  - 仅当 matched rule evidence 为 ready、selection decision 未显示组合降权/混合、且 outcome 对信号不利时使用。
+- `strategy-composition issue`
+  - 仅当 matched rule evidence 为 ready、命中多个规则或存在 `reduced/blocked` 等混合 decision、且 outcome 对信号不利时使用。
+- `execution issue`
+  - 仅当 `executed.state = ready` 且存在 explicit execution evidence 时使用；缺失 execution supplement 继续保持 unavailable，不会默认归因为 execution issue。
+- `unattributable`
+  - 其余 truthfully 不能落入前五类的信号使用。
+
+### LLM Boundary / No-LLM Proof
+
+- 本次未接入 `llm_attribution_v1` 或 `llm_postmortem_notes_v1` runtime。
+- `PostMarketReview.prompt_run_id` 保持 `None`。
+- payload 仍记录 deterministic `llm_validation` gate：
+  - `low_confidence_multiple_candidate_categories`
+  - `evidence_conflict`
+  - `important_signal`
+- gate 只记录 eligibility，不触发 runtime call，也不会替换 program facts。
+
+### Contract Compliance
+
+- Attribution 只消费 `PostMarketReview.signal_results_json` / `evidence_json` 中的 RT-S10-001 program facts，不重新计算 `actual_result`、`MFE`、`MAE`、`return`、`triggered`、`executed`、`matched rule` 或 `market-state change`。
+- 每个 evaluated signal 都会得到一个正式 category（含 `unattributable`）和一个独立的 formal state。
+- `execution supplement` 缺失仍是 explicit unavailable，不会变成 execution issue。
+- 未生成 `RuleOptimizationProposal`、`AuthorProfileRevisionProposal` 或 `StrategyRevisionProposal`。
+- 未修改 `RuleVersion`、`RuleApplicabilityProfile`、`AuthorProfileVersion`、`StrategyVersion`、`Strategy.current_published_version_id`、`DailyRuleSelection`、`DailyStrategyInstance`、`TradingDayPlan` source traceability 或 signal outcome program facts。
+- 未新增 API / OpenAPI / frontend / migration surface。
+
+### Tests
+
+已运行：
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_daily_trading_plan_service.py -q`
+- `../.venv/bin/python -m py_compile src/services/post_close_actuals_service.py`
+- `rg -n "llm_attribution_v1|llm_postmortem_notes_v1|OptimizationProposal|Stage 11|alert|Provider|config_path|Job|Workflow|Pipeline|Artifact" src/services/post_close_actuals_service.py tests/unit/services/test_daily_trading_plan_service.py`
+- `git diff --check`
+
+结果：
+
+- unit tests：`25 passed`
+- `py_compile`：passed
+- boundary grep：only test fixture references to `OptimizationProposal` remained; no Stage 10 attribution implementation path introduced LLM runtime / proposal generation / Stage 11 / legacy formal input usage
+- `git diff --check`：passed
+
+Focused verification covered：
+
+- all six attribution categories（其中 execution issue 通过 explicit persisted execution evidence 的 recompute path 验证）
+- low-confidence / evidence-conflict / important-signal LLM gate eligibility
+- attribution_json persistence
+- unavailable / partial / conflict / invalid / degraded attribution states
+- execution supplement missing does not become execution issue by default
+- no LLM fact replacement
+- no proposal generation
+
+未运行：
+
+- API/router/OpenAPI tests：本次未修改 API contract
+- frontend tests / `pnpm typecheck`：本次未修改 frontend / TS types
+- migration tests：本次未新增 database migration
+- browser E2E：本次未触及 `/daily/after-close` full UI
+
+### Residual Risks
+
+- execution supplement 仍未实现；execution-specific positive/negative归因仍依赖后续 approved supplement contract。
+- post-close market-state ID 仍是 caller-supplied residual risk；本次只消费既有 RT-S10-001 program facts，不在 RT-S10-002 内扩展 canonical lookup。
+- `/daily/after-close` 仍未替换为 formal product page；完整用户侧展示仍属于 `RT-S10-004`。
+- Stage 10 Gate 尚未运行。
+
+### Acceptance Conclusion
+
+`RT-S10-002` is `ACCEPTED` under the frozen Stage 10 contract.
+
+Current conclusion：
+
+- deterministic structured attribution is persisted in `PostMarketReview.attribution_json`
+- no LLM runtime call was introduced
+- no proposal objects were generated
+- no formal strategy/rule/profile/current pointer mutation was introduced
+- `RT-S10-003` / `RT-S10-004` / Stage 11 remain unstarted
+
+Next allowed action：wait for explicit user authorization for `RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面` or a later Stage 10 review/Gate action. Do not start any of them automatically.

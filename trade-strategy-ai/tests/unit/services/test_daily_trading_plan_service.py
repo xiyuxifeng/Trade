@@ -18,6 +18,7 @@ from src.domain.enums import (
     DailyRuleSelectionState,
     FormalLifecycleState,
     QualityStatus,
+    SignalState,
     TradingDayPlanState,
 )
 from src.models.market_data_snapshot import MarketSnapshot
@@ -46,6 +47,7 @@ from src.services.post_close_actuals_service import (
     POST_CLOSE_ACTUALS_CONTRACT_VERSION,
     POST_CLOSE_ACTUALS_SECTION_ID,
     PostMarketReviewService,
+    SignalAttributionEvaluationRequest,
     SignalOutcomeEvaluationRequest,
 )
 
@@ -1024,7 +1026,9 @@ async def test_signal_outcome_evaluation_persists_review_without_attribution_or_
         assert len(reviews) == 1
         review = reviews[0]
         assert review.signal_results_json["policy_version"] == "stage10-signal-outcome-v1"
-        assert review.attribution_json == {"state": "unavailable", "reason": "RT-S10-002_not_started"}
+        assert review.attribution_json["policy_version"] == "stage10-structured-attribution-v1"
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] == "unattributable"
         assert review.evidence_json["actuals"]["row_fingerprints"]
         assert await session.scalar(select(func.count()).select_from(OptimizationProposal)) == 0
 
@@ -1185,5 +1189,424 @@ async def test_signal_outcome_hold_signal_is_not_triggered_and_execution_stays_u
     assert hold_result["triggered"]["value"] is False
     assert hold_result["executed"]["state"] == "unavailable"
     assert hold_result["executed"]["value"] is None
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_persists_data_issue_attribution_for_missing_actual_rows(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory, missing_symbols=["600000.SH"])
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.state == "partial"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "partial"
+        missing_signal = [item for item in review.attribution_json["signals"] if item["symbol"] == "600000.SH"][0]
+        assert missing_signal["category"] == "data issue"
+        assert review.prompt_run_id is None
+        assert await session.scalar(select(func.count()).select_from(OptimizationProposal)) == 0
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_persists_market_state_identification_issue_for_changed_market_state(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    changed_market_state_id = uuid4()
+    async with session_factory() as session:
+        item = await session.scalar(select(MarketSnapshotItem).where(MarketSnapshotItem.symbol == "000001.SZ"))
+        item.payload_json = {**item.payload_json, "close": "9.50", "low": "9.40", "high": "10.60"}
+        await session.commit()
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=str(changed_market_state_id),
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.signal_results[0]["market_state_change"]["state"] == "ready"
+    assert result.signal_results[0]["market_state_change"]["value"] == "changed"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] == "market-state identification issue"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_persists_rule_issue_attribution_for_negative_selected_rule_outcome(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    async with session_factory() as session:
+        item = await session.scalar(select(MarketSnapshotItem).where(MarketSnapshotItem.symbol == "000001.SZ"))
+        item.payload_json = {**item.payload_json, "close": "9.50", "low": "9.40", "high": "10.60"}
+        await session.commit()
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.signal_results[0]["matched_rule"]["state"] == "ready"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] == "rule issue"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_persists_strategy_composition_issue_for_conflicting_selection_items(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    async with session_factory() as session:
+        signal = await session.scalar(select(Signal).where(Signal.symbol == "000001.SZ"))
+        signal.rule_version_ids = [
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+        ]
+        await session.commit()
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    async with session_factory() as session:
+        item = await session.scalar(select(MarketSnapshotItem).where(MarketSnapshotItem.symbol == "000001.SZ"))
+        item.payload_json = {**item.payload_json, "close": "9.50", "low": "9.40", "high": "10.60"}
+        await session.commit()
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.signal_results[0]["matched_rule"]["state"] == "ready"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] == "strategy-composition issue"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_missing_execution_supplement_does_not_become_execution_issue(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    async with session_factory() as session:
+        signal = await session.scalar(select(Signal).where(Signal.symbol == "000001.SZ"))
+        signal.signal_state = SignalState.executed
+        await session.commit()
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.signal_results[0]["executed"]["state"] == "unavailable"
+    assert result.signal_results[0]["executed"]["reason"] == "approved_execution_supplement_missing"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] != "execution issue"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_persists_unattributable_state_for_clean_ready_signal(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.state == "ready"
+    assert result.signal_results[0]["return"]["state"] == "ready"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "ready"
+        assert review.attribution_json["signals"][0]["category"] == "unattributable"
+        assert review.signal_results_json["policy_version"] == "stage10-signal-outcome-v1"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_outcome_preserves_degraded_attribution_state_for_degraded_rows(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    async with session_factory() as session:
+        item = await session.scalar(
+            select(MarketSnapshotItem).where(
+                MarketSnapshotItem.section_id == POST_CLOSE_ACTUALS_SECTION_ID,
+                MarketSnapshotItem.symbol == "000001.SZ",
+            )
+        )
+        item.quality_status = "degraded"
+        item.payload_json = {**item.payload_json, "quality_state": "degraded"}
+        await session.commit()
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.state == "degraded"
+    assert result.signal_results[0]["state"] == "degraded"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        assert review is not None
+        assert review.attribution_json["state"] == "degraded"
+        assert review.attribution_json["signals"][0]["category"] == "data issue"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_attribution_supports_execution_issue_when_explicit_execution_evidence_exists(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        signal_results_json = dict(review.signal_results_json)
+        signals = list(signal_results_json["signals"])
+        signals[0] = {
+            **signals[0],
+            "executed": {
+                "state": "ready",
+                "value": False,
+                "reason": "approved_execution_record_shows_not_filled",
+            },
+        }
+        signal_results_json["signals"] = signals
+        review.signal_results_json = signal_results_json
+        await session.commit()
+
+    result = await service.evaluate_signal_attribution(
+        SignalAttributionEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert result.attribution["signals"][0]["category"] == "execution issue"
+    assert result.attribution["signals"][0]["llm_validation"]["requested"] is False
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_attribution_marks_low_confidence_gate_without_replacing_program_facts(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    changed_market_state_id = uuid4()
+    async with session_factory() as session:
+        signal = await session.scalar(select(Signal).where(Signal.symbol == "000001.SZ"))
+        signal.rule_version_ids = [
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+        ]
+        await session.commit()
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+    await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=str(changed_market_state_id),
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        signal_results_json = dict(review.signal_results_json)
+        signals = list(signal_results_json["signals"])
+        signals[0] = {
+            **signals[0],
+            "return": {"state": "ready", "value": -0.05, "baseline_policy": "previous_close_daily_market_signal", "baseline": 10.0},
+            "actual_result": {"state": "ready", "value": "down", "baseline_policy": "previous_close_daily_market_signal", "baseline": 10.0, "close": 9.5},
+            "market_state_change": {
+                "state": "ready",
+                "value": "changed",
+                "pre_market_state_id": ids["market_state_id"],
+                "post_close_market_state_id": str(changed_market_state_id),
+            },
+        }
+        signal_results_json["signals"] = signals
+        review.signal_results_json = signal_results_json
+        await session.commit()
+
+    result = await service.evaluate_signal_attribution(
+        SignalAttributionEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    first = result.attribution["signals"][0]
+    assert "low_confidence_multiple_candidate_categories" in first["llm_validation"]["reasons"]
+    assert "important_signal" in first["llm_validation"]["reasons"]
+    assert first["llm_validation"]["requested"] is False
+    assert first["program_facts"]["return"]["value"] == -0.05
+    assert first["program_facts"]["actual_result"]["value"] == "down"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_signal_attribution_marks_conflict_gate_without_llm_call(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory, conflict_symbols=["000001.SZ"])
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    result = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    conflict_signal = [item for item in result.signal_results if item["symbol"] == "000001.SZ"][0]
+    assert conflict_signal["state"] == "conflict"
+    async with session_factory() as session:
+        review = await session.scalar(select(PostMarketReview))
+        first = [item for item in review.attribution_json["signals"] if item["symbol"] == "000001.SZ"][0]
+        assert first["category"] == "data issue"
+        assert "evidence_conflict" in first["llm_validation"]["reasons"]
+        assert first["llm_validation"]["requested"] is False
+        assert review.prompt_run_id is None
 
     await engine.dispose()

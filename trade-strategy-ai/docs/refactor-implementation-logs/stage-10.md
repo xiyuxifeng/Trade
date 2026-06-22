@@ -1119,3 +1119,145 @@ Current conclusion：
 - Stage 10 仍为 `[-] 进行中`；Stage Gate 未运行
 
 Next allowed action：wait for explicit user authorization for Stage 10 Gate / review action. Do not start Stage 11 automatically.
+
+## 2026-06-22 Stage 10 Gate / Review
+
+### Status
+
+`ACCEPTED`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定委派 2 个 read-only `refactor_explorer_mini`，并由 Parent 保留最终 Gate 判定：
+
+- Explorer Beta：后端/API/测试契约审计，覆盖 `RT-S10-001 / RT-S10-002 / RT-S10-003`。
+- Explorer Gamma：前端/docs/legacy isolation 审计，覆盖 `RT-S10-004` 和 `/daily/after-close` 用户页面。
+
+未委派 Executor，因为 Gate 未发现 blocker/high finding；本次未做生产代码修复。
+
+### Entry Verification
+
+- `RT-S10-001`：已接受。
+- `RT-S10-002`：已接受。
+- `RT-S10-003`：已接受。
+- `RT-S10-004`：已接受。
+- Stage 11：未开始；未发现 Stage 11 automation、alerting 或 scheduling 新路径。
+- Gate 前 working tree：clean。
+- Gate 前完整 diff：empty。
+- 本次 Stage 10 review 基线：`c2df735c025ea952e065fabeb2a5e693f83cbc7d..HEAD`。
+
+### Reviewed Files
+
+- `src/services/post_close_actuals_service.py`
+- `src/db/repositories/post_market_review_repo.py`
+- `src/db/repositories/daily_trading_plan_repo.py`
+- `src/db/repositories/strategy_repo.py`
+- `api/routers/ui/daily_after_close.py`
+- `api/app.py`
+- `api/routers/ui/__init__.py`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+- `tests/api/routers/ui/test_daily_after_close.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `web/src/pages/daily/after-close-page.tsx`
+- `web/src/pages/daily/after-close-page.test.tsx`
+- `web/src/pages/daily/index.tsx`
+- `web/src/pages/daily/index.test.tsx`
+- `web/src/lib/api/daily.ts`
+- `web/src/types/daily.ts`
+- `docs/Trade-Refactor-TaskList.md`
+- `docs/refactor-implementation-plans/stage-10-implementation-plan.md`
+- `docs/refactor-implementation-logs/stage-10.md`
+- `docs/Refactor-Implementation-Log.md`
+- `docs/AI-Conversation-Templates.md`
+
+### Gate Checklist Results
+
+- `RT-S10-001` accepted：pass。
+- `RT-S10-002` accepted：pass。
+- `RT-S10-003` accepted：pass。
+- `RT-S10-004` accepted：pass。
+- `post_close_symbol_ohlcv_actuals` actuals contract bounded and validated：pass。
+- `actual_result` / `MFE` / `MAE` / `return` only derive from formal post-close actual rows：pass。
+- `PostMarketReview.signal_results_json` and `evidence_json` bind plan, signals, snapshot, dataset, fingerprints and metric policy：pass。
+- missing actuals remain explicit unavailable / partial / conflict / invalid / insufficient_coverage / degraded：pass。
+- missing values are not defaulted to false / zero / success：pass。
+- `Signal.evaluation_result_id` remains compatibility placeholder：pass。
+- no live Provider, legacy reports, mutable latest source, file JSON, `config_path`, Job / Workflow / Pipeline / Artifact formal input：pass。
+- deterministic structured attribution persisted in `PostMarketReview.attribution_json`：pass。
+- every evaluated signal has structured attribution category or explicit non-success state：pass。
+- fixed attribution categories preserved：pass。
+- LLM does not create or replace facts；no runtime introduced, `prompt_run_id` remains `None`：pass。
+- attribution does not mutate RT-S10-001 outcome facts：pass。
+- proposal lanes remain separated as `rule_optimization` / `author_profile_revision` / `strategy_revision`：pass。
+- no generic AI suggestion lane：pass。
+- proposal generation consumes finalized RT-S10-001 / RT-S10-002 evidence：pass。
+- rule/profile proposal actions remain review / continue observing / reject only：pass。
+- strategy proposal acceptance remains draft-only：pass。
+- `Strategy.current_published_version_id` is not modified by Stage 10 proposal generation or non-strategy review actions：pass。
+- `/daily/after-close` is formal user-facing page, not legacy `StrategyAfterCloseWorkspacePage` wrapper：pass。
+- page displays `盘前预测 / 实际结果 / 差异 / 成功原因 / 失败原因 / 建议操作`：pass。
+- page consumes canonical Stage 9/10 API and persisted evidence only：pass。
+- unavailable / partial / conflict / invalid / degraded states render truthfully：pass。
+- execution-specific display remains unavailable when execution supplement is missing：pass。
+- missing post-close market state displays unavailable, not unchanged：pass。
+- normal user copy avoids forbidden internal terminology：pass。
+- no unrelated changes included：pass。
+
+### Findings
+
+No BLOCKER or HIGH findings.
+
+LOW findings retained as non-blocking:
+
+- OpenAPI coverage for new after-close endpoints is path/request-body focused; response-schema locking is partial.
+- `/strategies/after-close` remains a compatibility route to legacy after-close surface until later retirement.
+- `/daily` overview still has internal job-summary plumbing, but rendered user copy is sanitized and `/daily/after-close` does not consume it as formal input.
+
+### Verification
+
+已运行：
+
+- `pytest tests/api/routers/ui/test_daily_after_close.py tests/api/test_ui_openapi_contract.py tests/unit/services/test_daily_trading_plan_service.py -q`
+- `pnpm vitest run "after-close-page" "daily/index.test.tsx"`（`web/`）
+- `pnpm typecheck`（`web/`）
+- `python -m py_compile src/services/post_close_actuals_service.py src/db/repositories/post_market_review_repo.py api/routers/ui/daily_after_close.py`
+- `git diff --check c2df735c025ea952e065fabeb2a5e693f83cbc7d..HEAD -- trade-strategy-ai`
+- `rg` legacy isolation / internal user-copy grep for `/daily/after-close`
+- `rg` Stage 11 / alerting / automation guard grep for Stage 10 changed paths
+- OpenAPI runtime path inspection for `/api/ui/v1/daily/after-close/*`
+
+结果：
+
+- backend/API pytest：`37 passed`
+- frontend vitest：`7 passed`
+- frontend typecheck：passed
+- backend `py_compile`：passed
+- `git diff --check`：passed
+- Stage 11 / alerting / automation grep：no matches in Stage 10 formal paths
+- legacy/internal-term grep：formal `/daily/after-close` normal page copy has no forbidden terms; remaining hits are TypeScript field names/API params or compatibility-only daily overview internals
+
+### Residual Risks And Classification
+
+- execution supplement is not implemented：non-blocking；execution-specific fields are displayed as unavailable and are not used as false/success.
+- `post_close_market_state_id` remains caller-supplied：non-blocking hardening；missing state remains unavailable, not unchanged.
+- Stage 10 Gate was not previously run：resolved by this Gate.
+- OpenAPI response-schema assertions for after-close endpoints are partial：hardening。
+- `/strategies/after-close` compatibility route remains：future-stage / retirement follow-up；not the formal `/daily/after-close` path.
+- browser E2E was not run：non-blocking residual under current project UI rules; focused API/frontend/typecheck verification passed.
+
+### Bounded Repairs
+
+None. No BLOCKER or required HIGH finding was found.
+
+### Gate Decision
+
+`Stage 10 Gate ACCEPTED`
+
+Stage 10 每日盘后满足当前 frozen acceptance criteria：
+
+- every signal has clear result and attribution, or truthful unavailable / partial / conflict / invalid / degraded state;
+- single-day results do not directly overwrite formal rules, author profiles, strategies, or current pointers;
+- user can accept, reject, or continue observing suggestions under proposal boundaries;
+- `/daily/after-close` is formal user-facing UI and does not expose internal developer terminology in normal copy.
+
+Next allowed action：only after explicit user authorization, start Stage 11 Bootstrap / planning. Do not start Stage 11 implementation, automation, alerting or scheduling from this Gate.

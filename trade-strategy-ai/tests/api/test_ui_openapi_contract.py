@@ -109,6 +109,8 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/daily/pre-market/rule-selection": {"get"},
         "/api/ui/v1/daily/pre-market/plan": {"get"},
         "/api/ui/v1/daily/pre-market/plan/review": {"post"},
+        "/api/ui/v1/daily/after-close/actuals": {"get"},
+        "/api/ui/v1/daily/after-close/signal-results": {"post"},
     }
 
     for path, methods in expected_methods.items():
@@ -152,6 +154,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         ("/api/ui/v1/ops/restore", "post"): "#/components/schemas/OpsRestoreRequest",
         ("/api/ui/v1/ops/recover-stale", "post"): "#/components/schemas/OpsRecoverStaleRequest",
         ("/api/ui/v1/daily/pre-market/plan/review", "post"): "#/components/schemas/TradingDayPlanReviewRequest",
+        ("/api/ui/v1/daily/after-close/signal-results", "post"): "#/components/schemas/SignalOutcomeEvaluationRequest",
     }
 
     for (path, method), schema_ref in expected_request_refs.items():

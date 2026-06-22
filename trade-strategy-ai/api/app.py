@@ -19,6 +19,7 @@ from api.routers.ui import artifacts_router as ui_artifacts_router
 from api.routers.ui import authors_router as ui_authors_router
 from api.routers.ui import auth_router as ui_auth_router
 from api.routers.ui import daily_pre_market_router as ui_daily_pre_market_router
+from api.routers.ui import daily_after_close_router as ui_daily_after_close_router
 from api.routers.ui import imports_router as ui_imports_router
 from api.routers.ui import job_audits_router as ui_job_audits_router
 from api.routers.ui import jobs_router as ui_jobs_router
@@ -197,6 +198,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_legacy_system_router)
     app.include_router(ui_auth_router)
     app.include_router(ui_daily_pre_market_router)
+    app.include_router(ui_daily_after_close_router)
     app.include_router(ui_imports_router)
     app.include_router(ui_workflows_router)
     app.include_router(ui_jobs_router)

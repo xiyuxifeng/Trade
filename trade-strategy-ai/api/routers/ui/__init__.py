@@ -4,6 +4,7 @@ from .artifacts import router as artifacts_router
 from .authors import router as authors_router
 from .auth import router as auth_router
 from .daily_pre_market import router as daily_pre_market_router
+from .daily_after_close import router as daily_after_close_router
 from .imports import router as imports_router
 from .kaipan import router as kaipan_router
 from .data_health import router as data_health_router
@@ -36,6 +37,7 @@ __all__ = [
     "authors_router",
     "auth_router",
     "daily_pre_market_router",
+    "daily_after_close_router",
     "imports_router",
     "job_audits_router",
     "jobs_router",

@@ -24,6 +24,14 @@ from src.models.stage2_canonical import (
 
 
 class DailyTradingPlanRepository:
+    async def get_plan_for_id(
+        self,
+        session: AsyncSession,
+        *,
+        trading_day_plan_id: UUID,
+    ) -> TradingDayPlan | None:
+        return await session.get(TradingDayPlan, trading_day_plan_id)
+
     async def get_strategy_version(self, session: AsyncSession, strategy_version_id: UUID) -> StrategyVersion | None:
         return await session.get(StrategyVersion, strategy_version_id)
 

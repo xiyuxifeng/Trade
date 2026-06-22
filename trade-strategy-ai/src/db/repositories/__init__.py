@@ -12,6 +12,7 @@ from src.db.repositories.market_snapshot_item_repository import MarketSnapshotIt
 from src.db.repositories.market_snapshot_repository import MarketSnapshotRepository
 from src.db.repositories.market_snapshot_section_repository import MarketSnapshotSectionRepository
 from src.db.repositories.workflow_run_repository import WorkflowRunRepository
+from src.db.repositories.post_market_review_repo import PostMarketReviewRepository
 
 __all__ = [
     "MarketSnapshotRepository",
@@ -29,4 +30,5 @@ __all__ = [
     "StrategyRegimeSelectionRepository",
     "RegimeRuleSelectionRepository",
     "WorkflowRunRepository",
+    "PostMarketReviewRepository",
 ]

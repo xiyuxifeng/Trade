@@ -21,12 +21,12 @@
 
 - 当前 Stage：`Stage 10 每日盘后`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`
-- 当前阻塞 Task：无；`RT-S10-001` source-of-truth escalation 已完成，但 implementation 尚未恢复、尚未接受
+- 当前阻塞 Task：无；`RT-S10-001` 已完成 Parent acceptance review 并接受；Stage 10 Gate 尚未运行
 - 当前计划：[Stage 10 实施计划](refactor-implementation-plans/stage-10-implementation-plan.md)
 - 详细日志：[Stage 10](refactor-implementation-logs/stage-10.md)
-- 下一步：等待用户明确授权后，按 frozen Decision 1 contract 恢复 `RT-S10-001` implementation；不得自动启动 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 Stage 11。
+- 下一步：等待用户明确授权 `RT-S10-002 结构化归因` 或 Stage 10 后续 review；不得自动启动 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 Stage 11。
 
 ## 当前硬约束
 
@@ -74,8 +74,8 @@
 - Stage 8 未运行浏览器级 E2E；Gate 判定为非阻塞，当前依赖 focused API/frontend/OpenAPI/typecheck/migration verification。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
 - Stage 9 残余风险均判定为非阻塞：Daily traceability 位于 canonical JSON payload、`/daily` overview compatibility-only job summary cards、浏览器级 E2E 未运行、DailyRuleSelection 写入 guard 可后续 hardening。
-- Stage 10 Bootstrap 已完成 contract freezing；`PostMarketReview` table 存在但尚无正式 service/API/page，`/daily/after-close` 仍为 legacy job/report wrapper，后续 RT-S10-001 必须从 canonical signals 和 snapshots 建立 formal outcome path。
-- `RT-S10-001` 已完成 2026-06-21 Contract Escalation Review：当前仓库已验证 canonical `TradingDayPlan` / `Signal` / pre-market snapshot traceability 存在，但没有 existing formal post-close actuals source。已选择 `Decision 1`，后续 implementation 必须先建立 formal `post_close_symbol_ohlcv_actuals` snapshot contract，然后才能计算 signal outcomes。
+- Stage 10 Bootstrap 已完成 contract freezing；`RT-S10-001` 已建立 formal `post_close_symbol_ohlcv_actuals` actuals source、signal outcome service/API 和 `PostMarketReview` evidence writer。
+- `RT-S10-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：bounded repairs 已修复 schema drift、row/dataset binding、baseline policy 和 matched-rule evidence；execution supplement、formal `/daily/after-close` UI replacement 和 Stage 10 Gate 均为 non-blocking residual risks。
 
 ## Task 状态索引
 
@@ -119,7 +119,7 @@
 | RT-S9-002 | `[x]` | formal daily rule selection、traceability、正式 API/UI 和 focused verification 已接受 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 | RT-S9-003 | `[x]` | 每日策略实例和盘前计划、正式计划审核流和 focused verification 已接受 | [Stage 9](refactor-implementation-logs/stage-9.md) |
 | Stage 10 Bootstrap | `[x]` | Stage 10 post-market contracts 和 task order 已冻结 | [Stage 10](refactor-implementation-logs/stage-10.md) |
-| RT-S10-001 | `[-]` | Contract escalation 已冻结 Decision 1；implementation 尚未恢复，需先建立 formal post-close actuals source | [Stage 10](refactor-implementation-logs/stage-10.md) |
+| RT-S10-001 | `[x]` | Option A formal post-close actuals source、signal outcome service/API、bounded repair 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-002 | `[ ]` | 结构化归因未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-003 | `[ ]` | 优化建议未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-004 | `[ ]` | 盘后用户页面未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
@@ -138,15 +138,15 @@
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
-| Stage 10 | `[-]` | Bootstrap READY；`RT-S10-001` actuals source contract 已冻结，implementation 尚未恢复 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
+| Stage 10 | `[-]` | Bootstrap READY；`RT-S10-001` 已接受；`RT-S10-002/003/004` 未开始，Stage Gate 未运行 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-RT-S10-001 信号结果评估：
-按 Decision 1 先实现 formal post-close actuals source，再计算 signal outcomes
+RT-S10-002 结构化归因：
+仅在用户明确授权后，基于已接受的 RT-S10-001 program-fact outcome evidence 继续；不得自动生成 proposals 或启动 Stage 11
 ```
 
 执行前应读取：
@@ -155,4 +155,4 @@ RT-S10-001 信号结果评估：
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 `Stage 11`；必须等待用户明确授权后才能恢复 `RT-S10-001` implementation。
+不得自动开始 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 `Stage 11`；必须等待用户明确授权后才能推进下一 Task。

@@ -432,3 +432,246 @@ Approved imported actuals 仅作为 execution supplement：
 
 - model/session：`gpt-5.4` Task Implementation
 - escalation back to `gpt-5.5` if Option A proves unsafe, migration/source-of-truth changes exceed this contract, or implementation needs attribution/proposals/Stage 11 behavior。
+
+## 2026-06-22 RT-S10-001 Signal Outcome Implementation
+
+### Status
+
+`[-] 进行中`
+
+`RT-S10-001` 已恢复 implementation，并完成 formal post-close actuals contract、formal read API、`PostMarketReview` writer/service/API 和 focused verification。当前尚未执行 Stage 10 Gate，因此本 Task 不能标记为 `[x]`。
+
+### Delegation
+
+使用 `refactor-orchestrator`。
+
+- Parent：负责 contract gate、implementation、review、verification 和正式日志更新。
+- 1 个 read-only `refactor_explorer_mini`：审计 `MarketSnapshot` / `DatasetSnapshot` / `PostMarketReview` / Stage 9 canonical surfaces 是否足以支撑 Option A。
+- 未委派 Executor：本次写入边界集中，且 source-of-truth / acceptance review 紧耦合于 Parent。
+
+### Scope
+
+本次仅实现 `RT-S10-001 信号结果评估`：
+
+- formal `post_close_symbol_ohlcv_actuals` MarketSnapshot section/item contract validator 和 read model；
+- `PostCloseActualsRepository.get_actuals_for_signals(...)` formal read API；
+- `PostMarketReviewService` signal outcome evaluation / writer；
+- formal after-close API endpoints；
+- focused unit/API/OpenAPI verification；
+- implementation log updates。
+
+明确未执行：
+
+- `RT-S10-002` 结构化归因；
+- `RT-S10-003` 优化建议；
+- `RT-S10-004` `/daily/after-close` full UI replacement；
+- Stage 11 automation / alerting；
+- live Provider calls；
+- strategy / rule / profile / proposal mutation。
+
+### Files Changed
+
+- `src/services/post_close_actuals_service.py`
+- `src/db/repositories/post_market_review_repo.py`
+- `src/db/repositories/daily_trading_plan_repo.py`
+- `src/db/repositories/__init__.py`
+- `api/routers/ui/daily_after_close.py`
+- `api/routers/ui/__init__.py`
+- `api/app.py`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+- `tests/api/routers/ui/test_daily_after_close.py`
+- `tests/api/test_ui_openapi_contract.py`
+- `docs/refactor-implementation-logs/stage-10.md`
+- `docs/Refactor-Implementation-Log.md`
+
+### Contract Compliance
+
+已实现并验证的 frozen Decision 1 contract：
+
+- formal section name：`post_close_symbol_ohlcv_actuals`；
+- `PostCloseActualRow` 显式校验 `symbol`、`trade_date`、`open/high/low/close`、optional `previous_close`、`volume`、`turnover`、instrument metadata、source timestamps、`available_at`、`frozen_at`、`dataset_snapshot_id`、`dataset_content_fingerprint`、`row_fingerprint`、`quality_state`、`availability_state`、`evidence_window`、`actuals_contract_version`；
+- section payload 显式绑定 `dataset_snapshot_id`、`dataset_content_fingerprint`、`row_count`、`missing_symbols`、`conflict_symbols`、`quality_summary`、`actuals_contract_version`；
+- read path 检查 `MarketSnapshot.content_fingerprint`、section `raw_payload_fingerprint`、row `row_fingerprint` 可追溯；
+- `daily_bar` approximation 仅在 `intraday_approximation = true` 时接受；
+- 每个 approved pre-market `Signal` 返回一条 actual row 或 explicit `insufficient_coverage` / `conflict` / `invalid` / `unavailable` state；
+- `PostMarketReview.signal_results_json` 和 `evidence_json` 记录 plan / signal / snapshot / dataset / row fingerprint / metric policy / unavailable reasons；
+- `PostMarketReview.attribution_json` 固定为 unavailable，占位 `RT-S10-002_not_started`；
+- `executed` 固定保持 unavailable，未引入 imported actuals supplement 冒充正式执行事实。
+
+### Actuals Source Contract Result
+
+Option A 在当前 schema 下可安全落地，理由如下：
+
+- `market_snapshot_sections` 已有 `(snapshot_id, section_id)` uniqueness；
+- `market_snapshot_items` 已有 `(snapshot_id, section_id, item_key)` uniqueness，且支持 `snapshot_id + section_id`、`snapshot_id + symbol`、`dataset_id` 查询；
+- `raw_payload_fingerprint`、`content_fingerprint`、`dataset_snapshot_id`、`dataset_content_fingerprint`、`row_fingerprint` 均已纳入 formal validator 和 read checks；
+- 未发现必须新增 actuals table 的强制证据；
+- 因此本次未新增 migration。
+
+### Outcome Semantics
+
+- `triggered`：依据 canonical `Signal.signal_state` + `side` 计算；`approved/executed + BUY/SELL` 视为 triggered；`HOLD` 视为 explicit not-triggered；其余不明状态返回 `invalid`；
+- `executed`：固定为 `unavailable`，reason=`approved_execution_supplement_missing`；未把缺失 execution evidence 当成 `false`；
+- `actual result` / `MFE` / `MAE` / `return`：仅来自 formal post-close actual row；
+- `return` baseline：Parent acceptance repair 后，valid `Signal.entry_price.value` / `price` 优先；只有 signal contract 显式声明 previous-close baseline 时才使用 row `previous_close`；缺失 baseline 返回 `unavailable`，绝不默认 `0`；
+- `matched rule`：来自 `Signal.rule_version_ids` / `triggered_rules` 和 `DailyRuleSelectionItem` 交集；
+- `market-state change`：比较 pre-market `DailyRuleSelection.market_state_id` 和 optional post-close market state；缺失 post-close market state 时返回 `unavailable`。
+
+### Tests
+
+已运行：
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_daily_trading_plan_service.py -q`
+- `../.venv/bin/python -m pytest tests/api/routers/ui/test_daily_after_close.py tests/api/test_ui_openapi_contract.py -q`
+- `../.venv/bin/python -m pytest tests/unit/db/repositories/test_market_data_repositories.py tests/unit/services/test_dataset_snapshot_service.py -q`
+- `../.venv/bin/python -m py_compile src/services/post_close_actuals_service.py src/db/repositories/post_market_review_repo.py api/routers/ui/daily_after_close.py`
+- `git diff --check`
+
+结果：
+
+- service tests：`9 passed`
+- API/OpenAPI tests：`3 passed`
+- adjacent repository/dataset tests：`5 passed`
+- `py_compile`：passed
+- `git diff --check`：passed
+
+Focused verification covered：
+
+- actual row lookup for every signal under approved `TradingDayPlan`
+- missing symbol / conflict symbol coverage states
+- triggered / hold-not-triggered cases
+- actual result / MFE / MAE / return calculations
+- missing `previous_close` keeps return unavailable
+- no attribution / proposal generation in Stage 10 files
+- formal API / OpenAPI wiring
+
+未运行：
+
+- frontend tests / `pnpm typecheck`：本次未修改前端 TypeScript client/page
+- migration tests：本次无 schema migration
+- browser E2E：本次未触及 formal `/daily/after-close` page replacement
+
+### Known Risks
+
+- 当前未消费 approved imported execution supplement；execution-specific actuals 仍为 unavailable，且不会被默认为 false/success。
+- 本次新增的是 formal after-close API，不是 `/daily/after-close` full product UI；用户侧完整盘后页仍待 `RT-S10-004`。
+- `PostMarketReview.quality_status` 当前按 coverage state 粗分 `complete/partial`；如后续 Gate 需要更细粒度映射，可在 frozen contract 内微调。
+- 尚未对 imported actuals supplement 建立 approval/read contract；这仍属于后续 bounded work，而非本次 blocker。
+
+### Acceptance Conclusion
+
+`RT-S10-001` production implementation 已恢复并通过 focused verification，但当前 Session 尚未执行 Parent acceptance review，因此 Task 状态保持 `[-] 进行中`。
+
+当前结论：
+
+- formal actuals source contract：`implemented under Option A`
+- no escalation required at implementation-review stage
+- no second formal outcome source introduced
+- no direct mutation of formal strategy/rule/profile/proposal objects
+- `RT-S10-002` / `RT-S10-003` / `RT-S10-004` / Stage 11 仍未开始
+
+下一步推荐：
+
+- 对当前 diff 执行 Parent acceptance review；
+- 如无新的 BLOCKER/HIGH findings，可将 `RT-S10-001` 标记为 accepted；
+- 之后再由用户单独授权 `RT-S10-002`。
+
+## 2026-06-22 RT-S10-001 Parent Acceptance Review
+
+### Status
+
+`[x] 已完成`
+
+Parent acceptance decision：`ACCEPTED`。
+
+Stage 10 仍为 `[-] 进行中`；本次只接受 `RT-S10-001`，未开始 `RT-S10-002`、`RT-S10-003`、`RT-S10-004` 或 Stage 11。
+
+### Delegation
+
+使用 `refactor-orchestrator` 规则；本环境未发现独立可调用的 `refactor-orchestrator` skill 文件，因此按已安装 refactor subagent roles 执行：
+
+- Parent：读取 mandatory docs、完整 diff、changed files、相关 models/services/tests，执行 acceptance decision 与 bounded repairs。
+- Explorer Beta：formal contract / outcome evidence review，发现 baseline policy 与 schema drift blockers。
+- Explorer Alpha：boundary / legacy isolation review，发现 matched-rule evidence blocker。
+- Explorer Gamma：test/API/frontend coverage review，确认无 frontend diff，提出 value-domain validation 与 post-close market-state lookup hardening 为 non-blocking。
+
+### Reviewed Files
+
+- `AGENTS.md`
+- `trade-strategy-ai/AGENTS.md`
+- `docs/Trade-Refactor-TaskList.md`
+- `docs/trade-strategy-ai-web-refactor-plan-market-state-v2.md`
+- `docs/PROMPT_REVIEW_AND_MIGRATION.md`
+- `docs/AUTHOR_PROFILE_PROMPT_FLOW.md`
+- `docs/refactor-implementation-plans/stage-10-implementation-plan.md`
+- `docs/refactor-implementation-logs/stage-10.md`
+- `docs/Refactor-Implementation-Log.md`
+- `src/services/post_close_actuals_service.py`
+- `src/db/repositories/post_market_review_repo.py`
+- `src/db/repositories/daily_trading_plan_repo.py`
+- `src/db/repositories/__init__.py`
+- `api/routers/ui/daily_after_close.py`
+- `api/routers/ui/__init__.py`
+- `api/app.py`
+- `src/models/stage2_canonical.py`
+- `src/models/signal.py`
+- `src/models/market_data_snapshot.py`
+- `src/models/market_data_snapshot_section.py`
+- `src/models/market_data_snapshot_item.py`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+- `tests/api/routers/ui/test_daily_after_close.py`
+- `tests/api/test_ui_openapi_contract.py`
+
+### Bounded Repairs During Review
+
+- Hardened `PostCloseActualRow` with `extra="forbid"` and bounded value domains for `frequency`、`adjustment_policy`、`quality_state`、`availability_state`、`evidence_window`。
+- Cross-checked actual rows against section-level `dataset_snapshot_id`、`dataset_content_fingerprint`、`row_fingerprints` and item `dataset_id`。
+- Fixed baseline policy：valid `Signal.entry_price.value` / `price` is primary baseline；`previous_close` is used only when `Signal.entry_price.baseline_policy` explicitly declares `previous_close_daily_market_signal` / `previous_close`；missing baseline remains `unavailable`。
+- Fixed matched-rule evidence：`Signal.rule_version_ids` and `Signal.triggered_rules` are unioned before intersecting `DailyRuleSelectionItem`，instead of ignoring `triggered_rules` when `rule_version_ids` is non-empty。
+- Added focused tests for extra-field drift、invalid value-domain drift、dataset binding mismatch、entry-price baseline precedence、missing baseline policy、matched-rule union evidence。
+
+### Contract Compliance
+
+- Option A is accepted：`post_close_symbol_ohlcv_actuals` is the formal bounded `MarketSnapshotSection` / `MarketSnapshotItem` contract for post-close actuals.
+- Every pre-market `Signal` returns either a validated actual row or explicit non-success state (`insufficient_coverage` / `conflict` / `invalid` / `unavailable`)。
+- Actual result、MFE、MAE、return are computed only from formal post-close actual rows; no live Provider, legacy report, file JSON, mutable latest row or raw `trade_logs` are formal inputs.
+- `PostMarketReview.signal_results_json` stores program-fact outcome evidence; `evidence_json` binds plan、signals、post-close market snapshot、dataset snapshot、row fingerprints、metric policy version and unavailable/conflict reasons.
+- `Signal.evaluation_result_id` remains compatibility placeholder and is not written as formal outcome source.
+- `PostMarketReview.attribution_json` remains unavailable with `RT-S10-002_not_started`; no attribution, proposals, LLM calls, Stage 11 automation or alerting were introduced.
+
+### Tests
+
+已运行：
+
+- `../.venv/bin/python -m pytest tests/unit/services/test_daily_trading_plan_service.py tests/api/routers/ui/test_daily_after_close.py tests/api/test_ui_openapi_contract.py`
+- `../.venv/bin/python -m pytest tests/unit/db/repositories/test_market_data_repositories.py tests/unit/services/test_dataset_snapshot_service.py`
+- `../.venv/bin/python -m py_compile src/services/post_close_actuals_service.py src/db/repositories/post_market_review_repo.py api/routers/ui/daily_after_close.py`
+- `git diff --check`
+- RT-S10-001 implementation-path grep for LLM / proposal / legacy / Provider / config / Stage 11 / alerting terms
+
+结果：
+
+- service/API/OpenAPI：`18 passed`
+- adjacent market snapshot / dataset tests：`5 passed`
+- `py_compile`：passed
+- `git diff --check`：passed
+- boundary grep：no matches in RT-S10-001 implementation path
+
+未运行：
+
+- frontend tests / `pnpm typecheck`：本次未修改 frontend source 或 TypeScript types。
+- migration tests：本次未新增 database migration。
+- browser E2E：本次未替换 `/daily/after-close` formal UI，仍留给 `RT-S10-004`。
+
+### Residual Risks And Classification
+
+- execution supplement not implemented：`non-blocking for RT-S10-001`。Execution-specific fields remain explicit `unavailable` and are not defaulted to false/success。
+- `/daily/after-close` formal user page not replaced：`non-blocking for RT-S10-001`。Full UI replacement is explicitly scoped to `RT-S10-004`。
+- Stage 10 Gate not run：`non-blocking for RT-S10-001 acceptance`。Stage 10 remains in progress and Gate must run after authorized Stage 10 tasks are complete。
+- post-close market-state ID is caller-supplied and not resolved to a canonical `MarketRegimeRecord` in this task：`non-blocking hardening`。Missing state remains `unavailable`; invalid supplied state lookup can be hardened before or during later Stage 10 review if required。
+
+### Acceptance Conclusion
+
+`RT-S10-001` is `ACCEPTED` under the frozen Stage 10 Decision 1 / Option A contract.
+
+Next allowed action：wait for explicit user authorization for `RT-S10-002 结构化归因` or a separate Stage 10 Gate/review action. Do not start `RT-S10-002`、`RT-S10-003`、`RT-S10-004` or Stage 11 automatically.

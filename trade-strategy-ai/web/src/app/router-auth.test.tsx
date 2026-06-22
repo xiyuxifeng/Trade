@@ -127,6 +127,7 @@ describe('router authentication and authorization', () => {
 
   for (const role of ['viewer', 'operator'] as const) {
     it.each([
+      ['/system', '/system'],
       ['/system/configuration', '/system/configuration'],
       ['/system/data', '/system/data'],
       ['/system/runs', '/system/runs'],

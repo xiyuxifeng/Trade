@@ -10,7 +10,7 @@ export function DatabaseMigrationPage() {
       <PageHeader
         kicker="系统管理"
         title="数据库迁移"
-        description="通过受控 Job 触发数据库迁移并进入 Job 详情页。"
+        description="通过受控迁移任务触发数据库迁移并进入详情页。"
         actionLabel="返回系统管理"
         onAction={() => navigate('/system')}
       />

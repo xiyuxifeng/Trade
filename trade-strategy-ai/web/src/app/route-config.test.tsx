@@ -47,14 +47,14 @@ const expectedLegacyMetadata = {
   '/artifacts/:artifactId': ['/system/runs', 'notice', 'Stage 12', true, 'compat'],
   '/market': ['/system/data', 'notice', 'Stage 5', true, 'compat'],
   '/market/snapshots': ['/system/data', 'notice', 'Stage 11', true, 'compat'],
-  '/market/datasets': ['/rules/backtests', 'notice', 'Stage 11', true, 'compat'],
+  '/market/datasets': ['/system/data', 'notice', 'Stage 11', true, 'compat'],
   '/market/kaipan': ['/system/data', 'notice', 'Stage 5', true, 'compat'],
   '/market/ohlcv': ['/system/data', 'notice', 'Stage 5', true, 'compat'],
   '/strategies': ['/strategies', 'notice', '长期保留', false, 'canonical'],
   '/persona': ['/authors', 'notice', 'Stage 7', true, 'compat'],
   '/strategies/pre-market': ['/daily/pre-market', 'notice', 'Stage 9', true, 'compat'],
   '/strategies/after-close': ['/daily/after-close', 'notice', 'Stage 10', true, 'compat'],
-  '/system': ['/system/status', 'redirect', '长期保留', false, 'canonical'],
+  '/system': ['/system/status', 'notice', '长期保留', false, 'canonical'],
   '/system/audit': ['/system/audit', 'notice', '长期保留', false, 'canonical'],
   '/system/users': ['/system/users', 'notice', '长期保留', false, 'canonical'],
   '/system/health': ['/system/health', 'notice', '长期保留', false, 'canonical'],
@@ -204,6 +204,7 @@ describe('route config', () => {
 
   it('uses concrete page components for every formal page in Session B', () => {
     const formalPagePaths = [
+      '/system',
       '/research/articles',
       '/research/add',
       '/research/results',

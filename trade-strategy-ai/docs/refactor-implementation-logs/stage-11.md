@@ -3,11 +3,112 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`Stage 11 Bootstrap / Planning`
-- 当前状态：`Bootstrap 已完成；implementation 未开始`
-- 当前 Task：无生产实现 Task 正在执行
-- 下一可执行项：等待用户明确授权 `RT-S11-001 系统管理入口`，或按冻结规则执行 `RT-S11-001 + RT-S11-007`
-- 不得自动开始：不得自动启动 `RT-S11-001` implementation、scheduler、automation、alerting、recovery runtime、cost-control runtime、UI production changes 或 Stage 12
+- 当前活动：`RT-S11-001 系统管理入口`
+- 当前状态：`RT-S11-001 已接受；Stage 11 仍在进行中`
+- 当前 Task：`RT-S11-001 系统管理入口` 已接受
+- 下一可执行项：等待用户明确授权 `RT-S11-007 用户友好错误`
+- 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-22 RT-S11-001 系统管理入口
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+将 `/system` 从跳转页调整为系统管理分组落地页，并保持普通业务页面留在系统管理之外。新的落地页按角色展示常用状态/修复入口与完整系统管理分类，覆盖：
+
+- `Profile 配置`
+- `数据源`
+- `数据与调度`
+- `任务运行`
+- `失败与告警`
+- `数据库与备份`
+- `权限与审计`
+
+同时更新相关页面文案与测试，确保普通用户只看到状态和修复入口，管理员/操作员可看到更完整的管理分类说明。
+
+本次未实现 `RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007`，未新增 scheduler、automation、alerting、recovery runtime、cost-control runtime，未退役 legacy routes，未修改 formal strategy/rule/profile/current pointers，未引入新的 canonical run source-of-truth。
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定委派 1 个 bounded frontend `refactor_executor_mini`：
+
+- `Executor Gamma`：限定在 `route-config`、`/system` hub、`system-management workspace` 和 focused frontend tests 范围内完成实现草稿。
+
+Parent 保留 contract review、compatibility mapping 判断、focused verification、bounded repair、文档更新和最终 acceptance decision。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`。
+- Stage 11 Bootstrap：`READY`。
+- `RT-S11-001`：是下一个允许执行的 Task。
+- Stage 12：未开始。
+- 本次实现前 working tree：clean。
+- 本次实现前完整 diff：empty。
+- 未发现需要新的 authorization policy、legacy route retirement、formal data input 变更、canonical run source-of-truth 变更或 Stage 12 work。
+
+### Implementation Notes
+
+- `web/src/app/route-config.tsx`：`/system` 改为渲染 `SystemPage`，不再立即跳转到 `/system/status`。
+- `web/src/pages/system/SystemHubPage.tsx`：重建系统管理落地页，加入常用入口、使用说明和按角色分层的分类卡片。
+- `web/src/pages/system/DatabaseMigrationPage.tsx`：移除面向普通用户的 `Job` 文案。
+- `web/src/features/system-management/system-management-workspace.tsx`：系统管理页面文案改为业务化表达，保持后台任务与运行审计的分区说明。
+- `web/src/pages/system/index.test.tsx`：新增管理员、操作员和普通用户可见性断言。
+- `web/src/app/route-config.test.tsx`：更新 `/system` 与 `/market/datasets` 的 legacy 元数据期望。
+- `web/src/app/router-auth.test.tsx`：验证 viewer/operator 可直接访问正式 `/system` 入口。
+
+### Contract Checklist
+
+- System Management 七类分组：pass。
+- profile / market / jobs / workflows / artifacts / alerts / existing system pages 均有明确系统管理 placement 或 compatibility mapping：pass。
+- business pages 仍保持在 System Management 之外：pass。
+- primary navigation 仍为 business-first 七项：pass。
+- ordinary-user / operator / admin visibility 有 focused tests：pass。
+- 未把 `config_path` 作为 Web formal input 暴露：pass。
+- 未把 Job / Workflow / Pipeline / Artifact 记录变成 formal business input：pass。
+- 未新增 scheduler / automation / alert runtime：pass。
+- 未退役 legacy routes：pass。
+- 未变更既有 role policy，仅在现有 `viewer/operator/admin` 权限上做入口可见性分层：pass。
+
+### Verification
+
+- `pnpm vitest run src/app/route-config.test.tsx src/app/router-auth.test.tsx src/components/layout/sidebar.test.tsx src/pages/system/index.test.tsx src/pages/system/system-pages.test.tsx src/features/system-management/system-management-workspace.test.tsx`
+- `pnpm typecheck`
+- `rg -n "Job|Workflow|Pipeline|Artifact|Provider|config_path|prompt_run_id|run_id" web/src/pages/system web/src/features/system-management web/src/app/route-config.tsx`
+- `git diff --check`
+
+### Result
+
+- Targeted Vitest: passed (`6` files, `49` tests).
+- Typecheck: passed.
+- diff --check: passed.
+- grep: still reports internal import symbols in `route-config.tsx` and `system-management` test/helper imports, but no new user-facing `/system` hub copy or button labels expose those terms.
+
+未运行：
+
+- backend/API tests：本次未修改 backend 或 API contract
+- browser E2E：本次未运行；当前为 focused frontend regrouping task
+
+### Residual Risks
+
+- 兼容页面如 `/jobs`、`/workflows`、`/artifacts`、`/market/*` 仍保留 legacy implementation 和部分技术标识；本次仅要求它们具备系统管理归属，不在 `RT-S11-001` 内退役。
+- `Profile 配置` 作为冻结分组标题保留中英混合写法；当前符合 bootstrap contract，但后续若要统一为纯中文，应在不改 contract 语义前提下单独评估。
+- `/system/runs` 目前仍承载运行、告警和附件兼容入口；更细粒度 observability/run-trace separation 仍属于 `RT-S11-003`。
+
+### Acceptance Conclusion
+
+`RT-S11-001` is `ACCEPTED` under the frozen Stage 11 contract.
+
+Current conclusion：
+
+- 低频管理能力现已通过正式 `/system` 入口聚合；
+- daily business pages 仍保持业务优先，不要求普通用户依赖系统管理完成日常工作；
+- 管理分组、兼容映射和可见性边界满足当前 Stage 11 frozen acceptance criteria；
+- Stage 11 仍为 `[-] 进行中`；仅 `RT-S11-001` 已接受。
+
+Next allowed action：wait for explicit user authorization for `RT-S11-007 用户友好错误`，或按冻结顺序执行 `RT-S11-003 可观测性和运行追踪`。Do not start `RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007` automatically, and do not start Stage 12.
 
 ## 2026-06-22 Stage 11 Bootstrap / Planning
 

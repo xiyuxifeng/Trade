@@ -11,10 +11,10 @@ import { OperationalDashboardCenter } from '@/features/data-health';
 import { useAuth } from '@/features/auth/auth-context';
 import { listRecoveryBackupTargets, listRecoveryBackups } from '@/lib/api/ops';
 import { createUser, deleteUser, listUsers, updateUser } from '@/lib/api/auth';
-import { listJobAudits } from '@/lib/api/job-audits';
+import { listJobAudits as listRunAudits } from '@/lib/api/job-audits';
 import { listPermissionDeniedLogs } from '@/lib/api/security-audits';
 import { listProfiles } from '@/lib/api/profiles';
-import { createJob } from '@/lib/api/jobs';
+import { createJob as createMaintenanceTask } from '@/lib/api/jobs';
 import { ApiError } from '@/lib/api/http';
 import type { RecoveryBackupItem, RecoveryBackupTarget } from '@/types/ops';
 import type { ProfileRecord } from '@/types/profile';
@@ -183,7 +183,7 @@ export function UserManagementSection() {
       <div className="space-y-1">
         <p className="text-xs uppercase tracking-[0.18em] text-slate-500">System Management</p>
         <h2 className="text-xl font-semibold tracking-tight text-slate-950">用户管理</h2>
-        <p className="text-sm leading-6 text-slate-600">添加、删除用户，修改角色、密码和启用状态，不创建 Job。</p>
+        <p className="text-sm leading-6 text-slate-600">添加、删除用户，修改角色、密码和启用状态，不创建后台任务。</p>
       </div>
       {statusMessage ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
@@ -210,7 +210,7 @@ export function UserManagementSection() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-medium text-slate-950">{editingUser ? '编辑用户' : '新增用户'}</p>
-            <p className="text-sm text-slate-600">保存后会直接写入用户表，不会创建 Job。</p>
+            <p className="text-sm text-slate-600">保存后会直接写入用户表，不会创建后台任务。</p>
           </div>
           {editingUser ? (
             <Button
@@ -377,7 +377,7 @@ export function UserManagementSection() {
 export function AuditSummarySection() {
   const jobAuditQuery = useQuery({
     queryKey: ['system-job-audits'],
-    queryFn: () => listJobAudits({ skip: 0, limit: 5 }),
+    queryFn: () => listRunAudits({ skip: 0, limit: 5 }),
     staleTime: 30_000,
   });
   const deniedQuery = useQuery({
@@ -413,7 +413,7 @@ export function AuditSummarySection() {
   return (
     <SectionCard
       title="权限与审计"
-      description="查看最近的 Job 审计和拒绝访问记录。完整明细仍可进入系统审计页。"
+      description="查看最近的运行审计和拒绝访问记录。完整明细仍可进入系统审计页。"
       action={
         <Link className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-950" to="/system/audit">
           打开完整审计页
@@ -422,7 +422,7 @@ export function AuditSummarySection() {
       }
     >
       <div className="grid gap-3 md:grid-cols-3">
-        <StatCard label="Job 审计" value={jobAuditQuery.data?.summary.total ?? 0} hint="最近的结构化审计事件" />
+        <StatCard label="运行审计" value={jobAuditQuery.data?.summary.total ?? 0} hint="最近的结构化审计事件" />
         <StatCard label="拒绝访问" value={deniedQuery.data?.summary.total ?? 0} hint="权限不足或访问被拒绝的记录" />
         <StatCard
           label="高风险操作"
@@ -433,7 +433,7 @@ export function AuditSummarySection() {
 
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
         <div className="space-y-3">
-          <p className="text-sm font-medium text-slate-900">最近 Job 审计</p>
+          <p className="text-sm font-medium text-slate-900">最近运行审计</p>
           {jobAudits.length ? (
             <div className="space-y-3">
               {jobAudits.map((item) => (
@@ -452,7 +452,7 @@ export function AuditSummarySection() {
               ))}
             </div>
           ) : (
-            <EmptyState title="暂无审计事件" description="当前筛选范围内没有 Job 审计记录。" />
+            <EmptyState title="暂无审计事件" description="当前筛选范围内没有运行审计记录。" />
           )}
         </div>
 
@@ -501,7 +501,7 @@ export function DatabaseMigrationSection() {
 
   const mutation = useMutation({
     mutationFn: async () =>
-      createJob({
+      createMaintenanceTask({
         job_type: 'db-migrate',
         params: {
           profile_id: profileId,
@@ -510,7 +510,7 @@ export function DatabaseMigrationSection() {
         confirmed: true,
       }),
     onSuccess: async (data) => {
-      setStatusMessage('数据库迁移 Job 已创建');
+      setStatusMessage('数据库迁移任务已创建');
       setErrorMessage(null);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       if (data.job?.id) {
@@ -544,7 +544,7 @@ export function DatabaseMigrationSection() {
   return (
     <SectionCard
       title="数据库迁移"
-      description="提交高风险 Job 并跳转 Job Detail。"
+      description="提交高风险迁移任务并跳转详情页。"
     >
       {statusMessage ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{statusMessage}</div>
@@ -565,7 +565,7 @@ export function DatabaseMigrationSection() {
         </label>
         <div className="flex items-end">
           <Button onClick={() => setConfirmOpen(true)} disabled={mutation.isPending || !profileId}>
-            {mutation.isPending ? '提交中' : '创建数据库迁移 Job'}
+            {mutation.isPending ? '提交中' : '创建数据库迁移任务'}
           </Button>
         </div>
       </div>
@@ -573,8 +573,8 @@ export function DatabaseMigrationSection() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="确认创建数据库迁移 Job"
-        description="数据库迁移属于高风险操作，提交后会进入 Job Center。"
+        title="确认创建数据库迁移任务"
+        description="数据库迁移属于高风险操作，提交后会进入任务中心。"
         confirmLabel="确认创建"
         onConfirm={async () => {
           await mutation.mutateAsync();
@@ -644,7 +644,7 @@ export function BackupManagementSection() {
         throw new Error('没有可用的备份白名单目录');
       }
       const backupDir = backupTarget.id === 'default' ? undefined : backupTarget.path;
-      return createJob({
+      return createMaintenanceTask({
         job_type: 'backup-data',
         params: {
           profile_id: backupForm.profile_id,
@@ -658,7 +658,7 @@ export function BackupManagementSection() {
       });
     },
     onSuccess: async (data) => {
-      setStatusMessage('备份 Job 已创建');
+      setStatusMessage('备份任务已创建');
       setErrorMessage(null);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       await queryClient.invalidateQueries({ queryKey: ['system-backups'] });
@@ -676,7 +676,7 @@ export function BackupManagementSection() {
       if (!restoreTarget) {
         throw new Error('请选择要恢复的备份');
       }
-      return createJob({
+      return createMaintenanceTask({
         job_type: 'restore-data',
         params: {
           profile_id: restoreForm.profile_id,
@@ -691,7 +691,7 @@ export function BackupManagementSection() {
       });
     },
     onSuccess: async (data) => {
-      setStatusMessage('恢复 Job 已创建');
+      setStatusMessage('恢复任务已创建');
       setErrorMessage(null);
       setRestoreTarget(null);
       setRestoreConfirmOpen(false);
@@ -731,7 +731,7 @@ export function BackupManagementSection() {
       <div className="space-y-1">
         <p className="text-xs uppercase tracking-[0.18em] text-slate-500">System Management</p>
         <h2 className="text-xl font-semibold tracking-tight text-slate-950">数据备份与恢复</h2>
-        <p className="text-sm leading-6 text-slate-600">先创建备份 Job，再从已有备份列表选择目标并发起恢复 Job。</p>
+        <p className="text-sm leading-6 text-slate-600">先创建备份任务，再从已有备份列表选择目标并发起恢复任务。</p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Button
@@ -762,7 +762,7 @@ export function BackupManagementSection() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="font-medium text-slate-950">创建备份 Job</p>
+          <p className="font-medium text-slate-950">创建备份任务</p>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-2 text-sm text-slate-600 md:col-span-2">
               <span>Profile</span>
@@ -802,7 +802,7 @@ export function BackupManagementSection() {
               onClick={() => setBackupConfirmOpen(true)}
               disabled={createMutation.isPending || !backupForm.profile_id || !backupTargets.length}
             >
-              {createMutation.isPending ? '提交中' : '创建备份 Job'}
+              {createMutation.isPending ? '提交中' : '创建备份任务'}
             </Button>
           </div>
         </div>
@@ -859,7 +859,7 @@ export function BackupManagementSection() {
               onClick={() => setRestoreConfirmOpen(true)}
               disabled={restoreMutation.isPending || !restoreTarget || !restoreForm.profile_id}
             >
-              {restoreMutation.isPending ? '提交中' : '创建恢复 Job'}
+              {restoreMutation.isPending ? '提交中' : '创建恢复任务'}
             </Button>
           </div>
         </div>
@@ -912,8 +912,8 @@ export function BackupManagementSection() {
       <ConfirmDialog
         open={backupConfirmOpen}
         onOpenChange={setBackupConfirmOpen}
-        title="确认创建备份 Job"
-        description="备份属于高风险操作，提交后会进入 Job Center。"
+        title="确认创建备份任务"
+        description="备份属于高风险操作，提交后会进入任务中心。"
         confirmLabel="确认创建"
         onConfirm={async () => {
           await createMutation.mutateAsync();
@@ -933,9 +933,9 @@ export function BackupManagementSection() {
             setRestoreConfirmOpen(false);
           }
         }}
-        title="恢复备份 Job"
+        title="恢复备份任务"
         description="恢复会覆盖当前项目状态，必须先确认。"
-        confirmLabel="确认创建恢复 Job"
+        confirmLabel="确认创建恢复任务"
         onConfirm={async () => {
           await restoreMutation.mutateAsync();
         }}

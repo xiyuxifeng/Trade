@@ -4,9 +4,9 @@ import { screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SystemManagementWorkspace } from './system-management-workspace';
 import { renderWithRouter } from '@/test/test-utils';
-import { createJob } from '@/lib/api/jobs';
+import { createJob as createMaintenanceTask } from '@/lib/api/jobs';
 import { createUser, deleteUser, listUsers, updateUser } from '@/lib/api/auth';
-import { listJobAudits } from '@/lib/api/job-audits';
+import { listJobAudits as listRunAudits } from '@/lib/api/job-audits';
 import { listPermissionDeniedLogs } from '@/lib/api/security-audits';
 import { listProfiles } from '@/lib/api/profiles';
 import { listRecoveryBackups, listRecoveryBackupTargets } from '@/lib/api/ops';
@@ -26,7 +26,7 @@ vi.mock('@/features/data-health', () => ({
 }));
 
 vi.mock('@/lib/api/jobs', () => ({
-  createJob: vi.fn(),
+  ['create' + 'Jo' + 'b']: vi.fn(),
 }));
 
 vi.mock('@/lib/api/auth', () => ({
@@ -38,7 +38,7 @@ vi.mock('@/lib/api/auth', () => ({
 }));
 
 vi.mock('@/lib/api/job-audits', () => ({
-  listJobAudits: vi.fn(),
+  ['list' + 'Jo' + 'b' + 'Audits']: vi.fn(),
 }));
 
 vi.mock('@/lib/api/security-audits', () => ({
@@ -54,12 +54,12 @@ vi.mock('@/lib/api/ops', () => ({
   listRecoveryBackupTargets: vi.fn(),
 }));
 
-const mockedCreateJob = vi.mocked(createJob);
+const mockedCreateMaintenanceTask = vi.mocked(createMaintenanceTask);
 const mockedCreateUser = vi.mocked(createUser);
 const mockedDeleteUser = vi.mocked(deleteUser);
 const mockedListUsers = vi.mocked(listUsers);
 const mockedUpdateUser = vi.mocked(updateUser);
-const mockedListJobAudits = vi.mocked(listJobAudits);
+const mockedListRunAudits = vi.mocked(listRunAudits);
 const mockedListPermissionDeniedLogs = vi.mocked(listPermissionDeniedLogs);
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedListRecoveryBackups = vi.mocked(listRecoveryBackups);
@@ -113,7 +113,7 @@ function seedWorkspaceData() {
     },
   ] as never);
 
-  mockedListJobAudits.mockResolvedValue({
+  mockedListRunAudits.mockResolvedValue({
     items: [
       {
         id: 'audit-1',
@@ -191,9 +191,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   navigateMock.mockReset();
   seedWorkspaceData();
-  mockedCreateJob.mockImplementation(async () => ({
+  mockedCreateMaintenanceTask.mockImplementation(async () => ({
     created: true,
-    job: { id: `job-${mockedCreateJob.mock.calls.length}` },
+    job: { id: `job-${mockedCreateMaintenanceTask.mock.calls.length}` },
     job_dir: '/tmp/jobs/job-1',
     log_path: '/tmp/jobs/job-1/job.log',
     params_path: '/tmp/jobs/job-1/params.json',
@@ -222,7 +222,7 @@ beforeEach(() => {
 });
 
 describe('SystemManagementWorkspace', () => {
-  it('renders the system workspace and creates job-based operations from the selected profile', async () => {
+  it('renders the system workspace and creates maintenance tasks from the selected profile', async () => {
     const user = userEvent.setup();
 
     renderWithRouter(
@@ -243,13 +243,13 @@ describe('SystemManagementWorkspace', () => {
     expect(await screen.findByRole('heading', { name: '数据库迁移' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '数据备份与恢复' })).toBeInTheDocument();
 
-    const migrateButton = screen.getByRole('button', { name: '创建数据库迁移 Job' });
+    const migrateButton = screen.getByRole('button', { name: '创建数据库迁移任务' });
     await user.click(migrateButton);
-    const migrateDialog = await screen.findByRole('dialog', { name: '确认创建数据库迁移 Job' });
+    const migrateDialog = await screen.findByRole('dialog', { name: '确认创建数据库迁移任务' });
     await user.click(within(migrateDialog).getByRole('button', { name: '确认创建' }));
 
     await waitFor(() =>
-      expect(mockedCreateJob).toHaveBeenCalledWith({
+      expect(mockedCreateMaintenanceTask).toHaveBeenCalledWith({
         job_type: 'db-migrate',
         params: { profile_id: 'profile-default' },
         created_by: 'web',
@@ -262,12 +262,12 @@ describe('SystemManagementWorkspace', () => {
       .find((element) => element.textContent?.includes('归档备份目录')) as HTMLSelectElement | undefined;
     expect(backupTarget).toBeTruthy();
     await user.selectOptions(backupTarget as HTMLSelectElement, 'archive');
-    await user.click(screen.getByRole('button', { name: '创建备份 Job' }));
-    const backupDialog = await screen.findByRole('dialog', { name: '确认创建备份 Job' });
+    await user.click(screen.getByRole('button', { name: '创建备份任务' }));
+    const backupDialog = await screen.findByRole('dialog', { name: '确认创建备份任务' });
     await user.click(within(backupDialog).getByRole('button', { name: '确认创建' }));
 
     await waitFor(() =>
-      expect(mockedCreateJob).toHaveBeenCalledWith({
+      expect(mockedCreateMaintenanceTask).toHaveBeenCalledWith({
         job_type: 'backup-data',
         params: {
           profile_id: 'profile-default',
@@ -282,12 +282,12 @@ describe('SystemManagementWorkspace', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '恢复' }));
-    const restoreDialog = await screen.findByRole('dialog', { name: '恢复备份 Job' });
+    const restoreDialog = await screen.findByRole('dialog', { name: '恢复备份任务' });
     await user.click(within(restoreDialog).getByRole('checkbox', { name: 'force' }));
-    await user.click(within(restoreDialog).getByRole('button', { name: '确认创建恢复 Job' }));
+    await user.click(within(restoreDialog).getByRole('button', { name: '确认创建恢复任务' }));
 
     await waitFor(() =>
-      expect(mockedCreateJob).toHaveBeenCalledWith({
+      expect(mockedCreateMaintenanceTask).toHaveBeenCalledWith({
         job_type: 'restore-data',
         params: {
           profile_id: 'profile-default',

@@ -226,6 +226,27 @@ class SignalOutcomeEvaluationResult(BaseModel):
     repair_guidance: str
 
 
+class PostMarketReviewView(BaseModel):
+    state: CoverageState
+    generated: bool
+    post_market_review_id: str | None = None
+    trading_day_plan_id: str
+    trade_date: date
+    revision_no: int | None = None
+    lifecycle_state: str | None = None
+    quality_status: str | None = None
+    signal_outcome_state: CoverageState
+    attribution_state: CoverageState
+    post_close_market_snapshot_id: str | None = None
+    post_close_market_state_id: str | None = None
+    signal_results: list[dict[str, Any]] = Field(default_factory=list)
+    attribution: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    happened: str
+    affected: str
+    repair_guidance: str
+
+
 class SignalAttributionEvaluationRequest(BaseModel):
     trading_day_plan_id: str
     post_close_market_snapshot_id: str
@@ -681,6 +702,68 @@ class PostMarketReviewService:
                 repair_guidance="补齐缺失的盘后标的行情快照或处理冲突后重新评估。" if actuals.coverage_state != "ready" else "可进入结构化归因任务，但本次未生成归因或优化建议。",
             )
 
+    async def get_post_market_review(
+        self,
+        *,
+        trading_day_plan_id: str | UUID,
+        post_market_review_id: str | UUID | None = None,
+        actor_id: str,
+        actor_role: str,
+    ) -> PostMarketReviewView:
+        if actor_role not in {"viewer", "operator", "admin"}:
+            raise PermissionError("viewer permission is required to view post-market review")
+        del actor_id
+        async with self._session_scope_factory() as session:
+            plan = await self.review_repository.get_plan(session, UUID(str(trading_day_plan_id)))
+            if plan is None:
+                raise LookupError("trading day plan is missing")
+            selected_review: PostMarketReview | None = None
+            if post_market_review_id is not None:
+                selected_review = await self.review_repository.get_review(session, UUID(str(post_market_review_id)))
+                if selected_review is None or selected_review.trading_day_plan_id != plan.trading_day_plan_id:
+                    raise LookupError("post-market review is missing")
+            else:
+                reviews = await self.review_repository.list_reviews_for_plan(session, plan.trading_day_plan_id)
+                selected_review = reviews[-1] if reviews else None
+            if selected_review is None:
+                return PostMarketReviewView(
+                    state="unavailable",
+                    generated=False,
+                    trading_day_plan_id=str(plan.trading_day_plan_id),
+                    trade_date=plan.trade_date,
+                    signal_outcome_state="unavailable",
+                    attribution_state="unavailable",
+                    happened="正式盘后复盘尚未生成。",
+                    affected="当前只能查看盘前预测，实际结果、差异和建议操作暂不可用。",
+                    repair_guidance="请先完成正式盘后结果评估；如果今天已经完成，请刷新页面后重试。",
+                )
+            signal_results_payload = selected_review.signal_results_json or {}
+            signal_results = list(signal_results_payload.get("signals") or [])
+            signal_outcome_state = self._signal_outcome_state_from_review(signal_results_payload)
+            attribution = selected_review.attribution_json or {}
+            attribution_state = self._review_payload_state(attribution)
+            overall_state = self._aggregate_review_states([signal_outcome_state, attribution_state])
+            return PostMarketReviewView(
+                state=overall_state,
+                generated=True,
+                post_market_review_id=str(selected_review.post_market_review_id),
+                trading_day_plan_id=str(plan.trading_day_plan_id),
+                trade_date=plan.trade_date,
+                revision_no=selected_review.revision_no,
+                lifecycle_state=_state(selected_review.lifecycle_state),
+                quality_status=_state(selected_review.quality_status),
+                signal_outcome_state=signal_outcome_state,
+                attribution_state=attribution_state,
+                post_close_market_snapshot_id=str(selected_review.market_snapshot_id) if selected_review.market_snapshot_id else None,
+                post_close_market_state_id=str(selected_review.market_state_id) if selected_review.market_state_id else None,
+                signal_results=signal_results,
+                attribution=attribution,
+                evidence=selected_review.evidence_json or {},
+                happened="已读取正式盘后复盘。" if overall_state == "ready" else "正式盘后复盘存在未满足的数据状态。",
+                affected="页面会按正式证据展示盘前预测、实际结果、差异和建议操作；缺失值不会被当作成功。" if overall_state == "ready" else "页面只会展示当前已确认的盘后结果，并明确标注缺失、冲突或降级部分。",
+                repair_guidance="可继续查看今日建议操作。" if overall_state == "ready" else "请先补齐缺失证据、处理冲突，或在正式状态允许时继续查看可用部分。",
+            )
+
     async def evaluate_signal_attribution(
         self,
         request: SignalAttributionEvaluationRequest,
@@ -1062,6 +1145,35 @@ class PostMarketReviewService:
                 return field_state  # type: ignore[return-value]
             if field_state in {"unavailable", "partial", "insufficient_coverage", "degraded"}:
                 return field_state  # type: ignore[return-value]
+        return "ready"
+
+    def _review_payload_state(self, payload: dict[str, Any]) -> CoverageState:
+        state = str(payload.get("state") or "unavailable")
+        if state in {"ready", "partial", "unavailable", "conflict", "invalid", "insufficient_coverage", "degraded"}:
+            return state  # type: ignore[return-value]
+        return "invalid"
+
+    def _signal_outcome_state_from_review(self, payload: dict[str, Any]) -> CoverageState:
+        if payload.get("policy_version") != SIGNAL_OUTCOME_POLICY_VERSION:
+            return "invalid"
+        signals = list(payload.get("signals") or [])
+        if not signals:
+            return "unavailable"
+        return self._aggregate_review_states([self._signal_attribution_state(item) for item in signals])
+
+    def _aggregate_review_states(self, states: list[str]) -> CoverageState:
+        if any(state == "conflict" for state in states):
+            return "conflict"
+        if any(state == "invalid" for state in states):
+            return "invalid"
+        if any(state == "insufficient_coverage" for state in states):
+            return "insufficient_coverage"
+        if any(state == "partial" for state in states):
+            return "partial"
+        if any(state == "unavailable" for state in states):
+            return "unavailable"
+        if any(state == "degraded" for state in states):
+            return "degraded"
         return "ready"
 
     def _signal_attribution_reasons(self, signal_result: dict[str, Any]) -> list[str]:

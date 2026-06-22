@@ -21,12 +21,12 @@
 
 - 当前 Stage：`Stage 10 每日盘后`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`
-- 当前阻塞 Task：无；`RT-S10-001`、`RT-S10-002`、`RT-S10-003` 已完成 Parent acceptance review 并接受；Stage 10 Gate 尚未运行
+- 当前阻塞 Task：无；`RT-S10-001`、`RT-S10-002`、`RT-S10-003`、`RT-S10-004` 已完成 Parent acceptance review 并接受；Stage 10 Gate 尚未运行
 - 当前计划：[Stage 10 实施计划](refactor-implementation-plans/stage-10-implementation-plan.md)
 - 详细日志：[Stage 10](refactor-implementation-logs/stage-10.md)
-- 下一步：等待用户明确授权 `RT-S10-004 盘后用户页面` 或 Stage 10 后续 review / Gate；不得自动启动 `RT-S10-004` 或 Stage 11。
+- 下一步：等待用户明确授权 Stage 10 后续 review / Gate；不得自动启动 Stage 10 Gate 或 Stage 11。
 
 ## 当前硬约束
 
@@ -79,7 +79,8 @@
 - Stage 10 Bootstrap 已完成 contract freezing；`RT-S10-001` 已建立 formal `post_close_symbol_ohlcv_actuals` actuals source、signal outcome service/API 和 `PostMarketReview` evidence writer。
 - `RT-S10-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：bounded repairs 已修复 schema drift、row/dataset binding、baseline policy 和 matched-rule evidence；execution supplement、formal `/daily/after-close` UI replacement 和 Stage 10 Gate 均为 non-blocking residual risks。
 - `RT-S10-002` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`PostMarketReview.attribution_json` 现已持久化 deterministic structured attribution；无 LLM runtime call、无 proposal generation、无 Stage 11 automation；execution supplement、formal `/daily/after-close` UI replacement 和 Stage 10 Gate 仍为 non-blocking residual risks。
-- `RT-S10-003` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：separated rule / author-profile / strategy proposal lanes、Stage 10 proposal API 与 focused verification 已完成；rule/profile 仍为 bounded review-only governance，strategy acceptance 仍为 draft-only；formal `/daily/after-close` UI replacement 和 Stage 10 Gate 仍为 non-blocking residual risks。
+- `RT-S10-003` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：separated rule / author-profile / strategy proposal lanes、Stage 10 proposal API 与 focused verification 已完成；rule/profile 仍为 bounded review-only governance，strategy acceptance 仍为 draft-only；Stage 10 Gate 仍为 non-blocking residual risk。
+- `RT-S10-004` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`/daily/after-close` 已替换为 formal post-market page；新增正式盘后聚合读取接口、daily client/types、focused API/frontend verification 与 `pnpm typecheck`；execution supplement 未实现和 Stage 10 Gate 未运行仍为 non-blocking residual risks。
 
 ## Task 状态索引
 
@@ -126,7 +127,7 @@
 | RT-S10-001 | `[x]` | Option A formal post-close actuals source、signal outcome service/API、bounded repair 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-002 | `[x]` | deterministic structured attribution、LLM gate metadata、focused verification 和 Parent acceptance review 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 | RT-S10-003 | `[x]` | 分离 proposal lane、正式 API、safe review actions 和 focused verification 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
-| RT-S10-004 | `[ ]` | 盘后用户页面未开始 | [Stage 10](refactor-implementation-logs/stage-10.md) |
+| RT-S10-004 | `[x]` | formal `/daily/after-close` 页面、盘后聚合读取接口、建议动作面板和 focused verification 已接受 | [Stage 10](refactor-implementation-logs/stage-10.md) |
 
 ## Stage 状态索引
 
@@ -142,15 +143,15 @@
 | Stage 7 | `[x]` | Gate 最终 `ACCEPTED` | [stage-7.md](refactor-implementation-logs/stage-7.md) |
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
-| Stage 10 | `[-]` | Bootstrap READY；`RT-S10-001/002/003` 已接受；`RT-S10-004` 未开始，Stage Gate 未运行 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
+| Stage 10 | `[-]` | Bootstrap READY；`RT-S10-001/002/003/004` 已接受；Stage Gate 未运行 | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-RT-S10-004 盘后用户页面：
-仅在用户明确授权后，基于已接受的 RT-S10-001 / 002 / 003 formal evidence 与 proposal lanes 继续；不得自动启动 Stage 11
+Stage 10 Gate / review：
+仅在用户明确授权后，基于已接受的 RT-S10-001 / 002 / 003 / 004 继续；不得自动启动 Stage 11
 ```
 
 执行前应读取：
@@ -159,4 +160,4 @@ RT-S10-004 盘后用户页面：
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S10-004` 或 `Stage 11`；必须等待用户明确授权后才能推进下一 Task。
+不得自动开始 `Stage 10 Gate` 或 `Stage 11`；必须等待用户明确授权后才能推进下一步。

@@ -3,11 +3,11 @@
 ## Stage Summary
 
 - Stage：`Stage 10 每日盘后`
-- 当前活动：`Stage 10 Bootstrap`
-- 当前状态：`Stage 10 Bootstrap READY`
-- 当前 Task：`RT-S10-001 / RT-S10-002 / RT-S10-003 / RT-S10-004 未开始`
-- 下一可执行项：`RT-S10-001 信号结果评估`
-- 不得自动开始：不得自动启动 `RT-S10-001` implementation 或 `Stage 11`
+- 当前活动：`RT-S10-004 已接受，等待 Stage 10 Gate / review`
+- 当前状态：`Stage 10 进行中`
+- 当前 Task：`RT-S10-001 / RT-S10-002 / RT-S10-003 / RT-S10-004 已接受`
+- 下一可执行项：`Stage 10 Gate 或后续 review（需用户明确授权）`
+- 不得自动开始：不得自动启动 `Stage 10 Gate` 或 `Stage 11`
 
 ## 2026-06-21 Stage 10 Bootstrap
 
@@ -969,3 +969,153 @@ Current conclusion：
 - `RT-S10-004` 与 Stage 11 remain unstarted
 
 Next allowed action：wait for explicit user authorization for `RT-S10-004 盘后用户页面` or a later Stage 10 Gate / review action. Do not start Stage 11 automatically.
+
+## 2026-06-22 RT-S10-004 盘后用户页面
+
+### Status
+
+`[x] 已完成`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定本次只委派 1 个 read-only `refactor_explorer_mini` 做有界盘点，生产实现与验收由 Parent 单控制完成：
+
+- Explorer：核对 `/daily/after-close` 当前 route/page/client、Stage 10 formal API/service contracts、`RT-S10-001/002/003` 已改文件与测试、`/daily/pre-market` 现有正式页面约定。
+- Parent：冻结读取边界、确认无需 contract escalation、实现 `/daily/after-close` formal replacement、执行 focused verification、更新正式日志。
+
+未委派 Executor：
+
+- 本 Task 的写入路径集中在单个 formal page、daily client/types 和 bounded after-close API response-shaping；
+- 共享写集高度耦合，额外委派的协调成本高于收益。
+
+### Scope
+
+本次只实现 `RT-S10-004 盘后用户页面`：
+
+- 用 formal user-facing page 替换 `/daily/after-close` 对 legacy `StrategyAfterCloseWorkspacePage` 的正常产品面；
+- 新增只读 formal post-market review 聚合接口，供页面读取既有 Stage 10 canonical evidence；
+- 新增 daily after-close frontend client/types；
+- 新增 focused frontend/API/OpenAPI verification；
+- 更新 Stage 10 日志与主实施日志。
+
+明确未执行：
+
+- RT-S10-001 outcome calculation changes
+- RT-S10-002 attribution logic changes
+- RT-S10-003 proposal governance changes
+- Stage 11 automation / alerting
+- live Provider calls
+- legacy job/report workspace 作为 formal input
+- execution supplement implementation
+
+### Contract Compliance
+
+- `/daily/after-close` 已不再导入或渲染 `StrategyAfterCloseWorkspacePage` 作为 formal page。
+- formal page 只消费 canonical Stage 9 / Stage 10 inputs：
+  - `TradingDayPlan`
+  - `PostMarketReview.signal_results_json`
+  - `PostMarketReview.attribution_json`
+  - `OptimizationProposal` separated lanes
+  - 已接受的 daily after-close API contracts
+- 新增只读 `GET /api/ui/v1/daily/after-close/review`：
+  - 只聚合既有 `PostMarketReview`、`TradingDayPlan` 和 persisted evidence；
+  - 不生成 outcome / attribution / proposal facts；
+  - 不改动 RT-S10-001/002/003 source-of-truth。
+- proposal actions仍遵守 RT-S10-003 frozen boundary：
+  - rule / author-profile：只允许 `start_review / continue_observing / reject`
+  - strategy：仅允许 `accept_to_draft`
+  - 不发布
+  - 不修改 `Strategy.current_published_version_id`
+- execution supplement 缺失继续显示 unavailable，不会默认成功。
+- missing `post_close_market_state_id` 继续显示 unavailable，不会显示 unchanged。
+- 普通用户文案保持业务中文；未在 normal copy 暴露 `Job`、`Workflow`、`Pipeline`、`Artifact`、`Provider`、`config_path`、`DatasetSnapshot`、`MarketSnapshot`、snake_case traceability keys 或 `Regime`。
+
+### Implementation Summary
+
+- `src/services/post_close_actuals_service.py`
+  - 新增 `PostMarketReviewView`。
+  - 新增 `get_post_market_review(...)` 只读聚合方法。
+  - 新增 review payload state normalization / aggregation，保留 `ready / partial / unavailable / conflict / invalid / insufficient_coverage / degraded` truthfully。
+- `api/routers/ui/daily_after_close.py`
+  - 新增 `GET /api/ui/v1/daily/after-close/review`。
+- `tests/api/routers/ui/test_daily_after_close.py`
+  - 新增 formal review route test。
+- `tests/api/test_ui_openapi_contract.py`
+  - 新增 `/api/ui/v1/daily/after-close/review` contract coverage。
+- `web/src/types/daily.ts`
+  - 新增 after-close review / signal result / proposal typed contracts。
+- `web/src/lib/api/daily.ts`
+  - 新增 after-close review / proposal generate / list / review / accept client methods。
+- `web/src/pages/daily/after-close-page.tsx`
+  - 新增 formal post-market page。
+  - 按正式页面结构展示：
+    - `盘前预测`
+    - `实际结果`
+    - `差异`
+    - `成功原因`
+    - `失败原因`
+    - `建议操作`
+  - 新增 truthfully unavailable / partial / conflict / invalid / degraded guidance。
+  - 新增 separated proposal action panel。
+  - 技术 traceability 仅保留在 admin collapsed details。
+- `web/src/pages/daily/index.tsx`
+  - `/daily/after-close` 改为引用 formal `TodayAfterClosePage`，移除 legacy workspace wrapper。
+- `web/src/pages/daily/index.test.tsx`
+  - 删除 legacy after-close workspace assertions，保留 overview / pre-market focused tests。
+- `web/src/pages/daily/after-close-page.test.tsx`
+  - 新增 formal page states / sections / proposal action boundary tests。
+
+### Verification
+
+已运行：
+
+- `pytest tests/api/routers/ui/test_daily_after_close.py tests/api/test_ui_openapi_contract.py`
+- `pnpm vitest run src/pages/daily/index.test.tsx src/pages/daily/pre-market.test.tsx src/pages/daily/after-close-page.test.tsx`（`web/`）
+- `pnpm typecheck`（`web/`）
+- `git diff --check`
+- `rg -n "StrategyAfterCloseWorkspacePage|StrategyAfterClosePage" web/src/pages/daily web/src/lib/api/daily.ts api/routers/ui/daily_after_close.py -g '!**/*.test.*'`
+
+结果：
+
+- API/OpenAPI：`7 passed`
+- frontend vitest：`12 passed`
+- `pnpm typecheck`：passed
+- `git diff --check`：passed
+- legacy workspace grep：formal `/daily/after-close` page path no longer imports or renders legacy workspace
+
+Focused verification covered：
+
+- `/daily/after-close` 不再使用 legacy workspace 作为 normal product surface
+- page displays `盘前预测 / 实际结果 / 差异 / 成功原因 / 失败原因 / 建议操作`
+- unavailable / partial / conflict render truthfully
+- missing execution supplement displays unavailable, not success
+- missing post-close market state displays unavailable, not unchanged
+- proposal actions obey RT-S10-003 boundaries
+- strategy accept-to-draft remains draft-only client path
+- no internal developer terminology in normal user copy
+
+未运行：
+
+- browser E2E：本次未执行
+- backend unit pytest for `PostMarketReviewService`：本次只做 bounded response-shaping 与 router coverage，未新增 service-level unit case
+
+### Residual Risks
+
+- execution supplement 仍未实现；成交相关字段继续 explicit unavailable。
+- `post_close_market_state_id` 仍是 caller-supplied residual risk；缺失时 formal page 继续显示 unavailable。
+- Stage 10 Gate 尚未运行。
+
+### Acceptance Conclusion
+
+`RT-S10-004` is `ACCEPTED` under the frozen Stage 10 contract.
+
+Current conclusion：
+
+- `/daily/after-close` 已替换为 formal user-facing post-market page
+- page consumes canonical Stage 9 / Stage 10 APIs and persisted evidence only
+- page does not create or alter outcome / attribution / proposal facts except existing explicit proposal review actions
+- rule/profile proposal handling remains bounded to review / observe / reject
+- strategy proposal acceptance remains draft-only and does not mutate current pointer
+- Stage 10 仍为 `[-] 进行中`；Stage Gate 未运行
+
+Next allowed action：wait for explicit user authorization for Stage 10 Gate / review action. Do not start Stage 11 automatically.

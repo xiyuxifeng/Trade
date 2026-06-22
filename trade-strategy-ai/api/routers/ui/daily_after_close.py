@@ -72,6 +72,30 @@ async def get_post_close_actuals(
         raise _error(status.HTTP_400_BAD_REQUEST, str(exc), "当前请求无效，无法读取盘后信号实际结果。", "修正请求后重试。") from exc
 
 
+@router.get("/review")
+async def get_post_market_review(
+    trading_day_plan_id: str = Query(..., description="每日运行计划 ID"),
+    post_market_review_id: str | None = Query(default=None, description="盘后复盘 ID"),
+    principal: CurrentPrincipal = Depends(require_role("viewer")),
+    service: PostMarketReviewService = Depends(get_post_market_review_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result = await service.get_post_market_review(
+            trading_day_plan_id=trading_day_plan_id,
+            post_market_review_id=post_market_review_id,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+        )
+        return result.model_dump(mode="json")
+    except PermissionError as exc:
+        raise _error(status.HTTP_403_FORBIDDEN, str(exc), "当前账号不能查看正式盘后复盘。", "切换到有查看权限的账号。") from exc
+    except LookupError as exc:
+        raise _error(status.HTTP_404_NOT_FOUND, "未找到正式盘后复盘", "当前页面不能显示该每日计划的盘后复盘。", "确认每日计划和盘后复盘后重试。") from exc
+    except ValueError as exc:
+        raise _error(status.HTTP_400_BAD_REQUEST, str(exc), "当前请求无效，无法读取正式盘后复盘。", "修正请求后重试。") from exc
+
+
 @router.post("/signal-results")
 async def evaluate_signal_results(
     request: SignalOutcomeEvaluationRequest,

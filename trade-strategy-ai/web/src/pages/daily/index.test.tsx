@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 
 import { renderWithRouter } from '@/test/test-utils';
 import { createJob, listJobs } from '@/lib/api/jobs';
-import { getPreMarketReadiness } from '@/lib/api/daily';
+import { getAfterCloseReview, getPreMarketReadiness, getTradingDayPlan, listAfterCloseProposals } from '@/lib/api/daily';
 import { listBenchmarkOptions } from '@/lib/api/market';
 import { listProfiles } from '@/lib/api/profiles';
 import { TodayAfterClosePage, TodayOverviewPage, TodayPreMarketPage } from './index';
@@ -14,6 +14,9 @@ vi.mock('@/lib/api/jobs', () => ({
 }));
 vi.mock('@/lib/api/daily', () => ({
   getPreMarketReadiness: vi.fn(),
+  getTradingDayPlan: vi.fn(),
+  getAfterCloseReview: vi.fn(),
+  listAfterCloseProposals: vi.fn(),
 }));
 vi.mock('@/lib/api/market', () => ({
   listBenchmarkOptions: vi.fn(),
@@ -25,6 +28,9 @@ vi.mock('@/lib/api/profiles', () => ({
 const mockedListJobs = vi.mocked(listJobs);
 const mockedCreateJob = vi.mocked(createJob);
 const mockedGetPreMarketReadiness = vi.mocked(getPreMarketReadiness);
+const mockedGetTradingDayPlan = vi.mocked(getTradingDayPlan);
+const mockedGetAfterCloseReview = vi.mocked(getAfterCloseReview);
+const mockedListAfterCloseProposals = vi.mocked(listAfterCloseProposals);
 const mockedListBenchmarkOptions = vi.mocked(listBenchmarkOptions);
 const mockedListProfiles = vi.mocked(listProfiles);
 
@@ -221,6 +227,58 @@ beforeEach(() => {
     repair_actions: [],
     warnings: [],
   } as never);
+  mockedGetTradingDayPlan.mockResolvedValue({
+    state: 'ready',
+    plan_status: 'ready',
+    generated: true,
+    trade_date: '2026-06-21',
+    happened: '已生成每日运行计划。',
+    affected: '可以继续查看今天的正式盘后结果。',
+    repair_guidance: '无需修复。',
+    trading_day_plan_id: 'plan-1',
+    daily_strategy_instance_id: 'instance-1',
+    daily_rule_selection_id: 'selection-1',
+    revision_no: 1,
+    strategy_version_id: 'strategy-version-1',
+    instance_lifecycle_state: 'generated',
+    plan_lifecycle_state: 'approved',
+    approval_state: 'approved',
+    market_judgment: { state: 'ready', summary: '强势上行', details: [] },
+    enabled_rules: [],
+    reduced_rules: [],
+    suspended_rules: [],
+    candidate_symbols: [],
+    candidate_symbols_state: { state: 'ready', summary: '已完成', details: [] },
+    signals: [],
+    entry_conditions: { state: 'ready', summary: '已完成', details: [] },
+    invalidation_conditions: { state: 'ready', summary: '已完成', details: [] },
+    stop_loss_take_profit: { state: 'ready', summary: '已完成', details: [] },
+    suggested_position: { state: 'ready', summary: '已完成', details: [] },
+    risk_warnings: { state: 'ready', summary: '已完成', details: [] },
+    confidence: { state: 'ready', summary: '已完成', details: [] },
+  } as never);
+  mockedGetAfterCloseReview.mockResolvedValue({
+    state: 'unavailable',
+    generated: false,
+    trading_day_plan_id: 'plan-1',
+    trade_date: '2026-06-21',
+    signal_outcome_state: 'unavailable',
+    attribution_state: 'unavailable',
+    signal_results: [],
+    attribution: { state: 'unavailable', signals: [] },
+    evidence: {},
+    happened: '正式盘后复盘尚未生成。',
+    affected: '当前只能查看盘前预测，实际结果、差异和建议操作暂不可用。',
+    repair_guidance: '请先完成正式盘后结果评估；如果今天已经完成，请刷新页面后重试。',
+  } as never);
+  mockedListAfterCloseProposals.mockResolvedValue({
+    state: 'empty',
+    count: 0,
+    items: [],
+    happened: '暂无建议。',
+    affected: '当前不会显示建议动作。',
+    repair_guidance: '稍后再试。',
+  } as never);
 });
 
 describe('daily strategy pages', () => {
@@ -292,7 +350,7 @@ describe('daily strategy pages', () => {
     expect(await screen.findAllByText('正式盘前依赖齐备。')).not.toHaveLength(0);
     expect(await screen.findAllByText('可以继续正式盘前流程。')).not.toHaveLength(0);
     expect(screen.getByText('09-25')).toBeInTheDocument();
-    expect(mockedGetPreMarketReadiness).toHaveBeenCalledWith('2026-06-21');
+    expect(mockedGetPreMarketReadiness).toHaveBeenCalledWith('2026-06-22');
     expect(screen.queryByText('Job ID')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '整理今日盘前数据' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始盘前分析' })).not.toBeInTheDocument();
@@ -304,126 +362,5 @@ describe('daily strategy pages', () => {
     expect(screen.queryByText('/workflows')).not.toBeInTheDocument();
     expect(screen.queryByText('/artifacts')).not.toBeInTheDocument();
     expect(mockedCreateJob).not.toHaveBeenCalled();
-  });
-
-  it('renders the formal after-close page with result output and business navigation only', async () => {
-    mockedListJobs.mockResolvedValueOnce({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 20,
-      items: [buildAfterCloseJob()],
-    } as never);
-    mockedCreateJob.mockResolvedValue({
-      created: true,
-      job: {
-        id: 'daily-after-close-submit-1',
-        job_type: 'run-after-close',
-        status: 'pending',
-      },
-      job_dir: '/tmp/daily-after-close-submit-1',
-      log_path: '/tmp/daily-after-close-submit-1/job.log',
-      params_path: '/tmp/daily-after-close-submit-1/params.json',
-      result_path: '/tmp/daily-after-close-submit-1/result.json',
-      artifacts_path: '/tmp/daily-after-close-submit-1/artifacts',
-    } as never);
-
-    renderWithRouter([{ path: '/daily/after-close', element: <TodayAfterClosePage /> }], ['/daily/after-close']);
-
-    expect(await screen.findByRole('heading', { name: '今日盘后' })).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByLabelText('目标画像')).toHaveValue('profile-daily-1');
-    });
-    expect(screen.getByText('页面用途')).toBeInTheDocument();
-    expect(await screen.findByText('1 条复盘记录')).toBeInTheDocument();
-    expect(screen.getAllByText('收盘后复盘已完成').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: '生成盘后复盘' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回今日总览' })).toHaveAttribute('href', '/daily');
-    expect(screen.queryByText('Job ID')).not.toBeInTheDocument();
-    expect(screen.queryByText('Artifact')).not.toBeInTheDocument();
-    expect(screen.queryByText('/jobs')).not.toBeInTheDocument();
-    expect(screen.queryByText('/artifacts')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '生成盘后复盘' }));
-
-    await waitFor(() => {
-      expect(mockedCreateJob).toHaveBeenCalledWith(
-        expect.objectContaining({
-          job_type: 'run-after-close',
-          params: expect.objectContaining({
-            profile_id: 'profile-daily-1',
-            as_of_date: '2026-06-21',
-            force: false,
-            export_html: false,
-          }),
-        }),
-      );
-    });
-  });
-
-  it('keeps missing after-close evaluation data unavailable instead of showing zero', async () => {
-    mockedListJobs.mockResolvedValueOnce({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 20,
-      items: [
-        {
-          ...buildAfterCloseJob(),
-          result: {
-            as_of_date: '2026-06-13',
-            result: {
-              result_id: 'after-close-missing-evaluations',
-              as_of_date: '2026-06-13',
-              summary: ['复盘摘要已保存，但评估明细未返回'],
-            },
-          },
-        },
-      ],
-    } as never);
-
-    renderWithRouter([{ path: '/daily/after-close', element: <TodayAfterClosePage /> }], ['/daily/after-close']);
-
-    expect(await screen.findByRole('heading', { name: '今日盘后' })).toBeInTheDocument();
-    expect((await screen.findAllByText('未记录')).length).toBeGreaterThan(0);
-    expect(screen.queryByText('总评估数0')).not.toBeInTheDocument();
-  });
-
-  it('maps after-close internal status and fallback fields to business Chinese', async () => {
-    mockedListJobs.mockResolvedValueOnce({
-      count: 1,
-      total: 1,
-      skip: 0,
-      limit: 20,
-      items: [
-        {
-          ...buildAfterCloseJob(),
-          result: {
-            as_of_date: '2026-06-13',
-            evaluations_count: 1,
-            result: {
-              result_id: 'after-close-partial',
-              as_of_date: '2026-06-13',
-              evaluations: [
-                {
-                  symbol: '000001.SZ',
-                  status: 'insufficient_sample',
-                  partial_data: true,
-                  fallback_reason: 'provider_unavailable',
-                  return_pct: null,
-                },
-              ],
-            },
-          },
-        },
-      ],
-    } as never);
-
-    renderWithRouter([{ path: '/daily/after-close', element: <TodayAfterClosePage /> }], ['/daily/after-close']);
-
-    expect(await screen.findByText(/样本不足/)).toBeInTheDocument();
-    expect(screen.getByText(/部分数据/)).toBeInTheDocument();
-    expect(screen.getByText(/数据来源暂不可用/)).toBeInTheDocument();
-    expect(screen.queryByText(/insufficient_sample|provider_unavailable|partial/)).not.toBeInTheDocument();
   });
 });

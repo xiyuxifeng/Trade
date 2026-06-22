@@ -183,3 +183,158 @@ export type TradingDayPlanReviewRequest = {
   action: 'approve' | 'reject';
   reason?: string | null;
 };
+
+export type AfterCloseCoverageState =
+  | 'ready'
+  | 'partial'
+  | 'unavailable'
+  | 'conflict'
+  | 'invalid'
+  | 'insufficient_coverage'
+  | 'degraded';
+
+export type AfterCloseMetricValue = {
+  state: AfterCloseCoverageState;
+  value: string | number | boolean | null;
+  reason?: string | null;
+  baseline_policy?: string | null;
+  baseline?: number | null;
+  close?: number | null;
+  evidence_window?: string | null;
+  intraday_approximation?: boolean | null;
+};
+
+export type AfterCloseMatchedRule = {
+  state: AfterCloseCoverageState;
+  rule_version_ids: string[];
+  signal_rule_version_ids?: string[];
+  triggered_rules?: string[];
+  selection_decisions?: Record<string, string | null>;
+  reason?: string | null;
+};
+
+export type AfterCloseMarketStateChange = {
+  state: AfterCloseCoverageState;
+  value: 'changed' | 'unchanged' | null;
+  reason?: string | null;
+  pre_market_state_id?: string | null;
+  post_close_market_state_id?: string | null;
+};
+
+export type AfterCloseSignalResult = {
+  signal_id: string;
+  symbol: string;
+  side: 'BUY' | 'SELL' | 'HOLD';
+  state: AfterCloseCoverageState;
+  triggered: AfterCloseMetricValue;
+  executed: AfterCloseMetricValue;
+  matched_rule: AfterCloseMatchedRule;
+  market_state_change: AfterCloseMarketStateChange;
+  actual_result: AfterCloseMetricValue;
+  mfe: AfterCloseMetricValue;
+  mae: AfterCloseMetricValue;
+  return: AfterCloseMetricValue;
+  evidence: {
+    row_fingerprint?: string | null;
+    reasons?: string[];
+    metric_policy_version?: string | null;
+    evidence_window?: string | null;
+    intraday_approximation?: boolean | null;
+  };
+};
+
+export type AfterCloseAttributionSignal = {
+  signal_id: string;
+  symbol: string;
+  state: AfterCloseCoverageState;
+  category: string;
+  confidence?: string | null;
+  reasons?: string[];
+  user_explanation: string;
+};
+
+export type AfterCloseAttribution = {
+  state: AfterCloseCoverageState;
+  primary_category?: string | null;
+  signals: AfterCloseAttributionSignal[];
+  summary?: {
+    signal_count?: number;
+    counts_by_category?: Record<string, number>;
+    counts_by_state?: Record<string, number>;
+  };
+};
+
+export type AfterCloseReviewResponse = {
+  state: AfterCloseCoverageState;
+  generated: boolean;
+  post_market_review_id?: string | null;
+  trading_day_plan_id: string;
+  trade_date: string;
+  revision_no?: number | null;
+  lifecycle_state?: string | null;
+  quality_status?: string | null;
+  signal_outcome_state: AfterCloseCoverageState;
+  attribution_state: AfterCloseCoverageState;
+  post_close_market_snapshot_id?: string | null;
+  post_close_market_state_id?: string | null;
+  signal_results: AfterCloseSignalResult[];
+  attribution: AfterCloseAttribution;
+  evidence: Record<string, unknown>;
+  happened: string;
+  affected: string;
+  repair_guidance: string;
+};
+
+export type AfterCloseProposalTarget = {
+  asset_type: string;
+  asset_id: string;
+  label: string;
+  strategy_membership_ids: string[];
+  rule_version_ids: string[];
+  author_profile_version_ids: string[];
+};
+
+export type AfterCloseProposal = {
+  proposal_id: string;
+  proposal_type: string;
+  proposal_type_label: string;
+  lifecycle_state: string;
+  lifecycle_label: string;
+  revision_no: number;
+  confidence?: number | null;
+  evidence_state: string;
+  evidence_label: string;
+  recommendation_state: string;
+  recommendation_label: string;
+  rationale: string;
+  target: AfterCloseProposalTarget;
+  review_binding: Record<string, unknown>;
+  base_version_id?: string | null;
+  accepted_draft_version_id?: string | null;
+  proposed_changes: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  available_actions: string[];
+  partial_reasons: string[];
+  limitations: string[];
+};
+
+export type AfterCloseProposalCollectionResponse = {
+  state: 'ready' | 'partial' | 'empty';
+  count: number;
+  items: AfterCloseProposal[];
+  happened: string;
+  affected: string;
+  repair_guidance: string;
+};
+
+export type AfterCloseProposalReviewRequest = {
+  action: 'start_review' | 'continue_observing' | 'reject';
+  reason?: string | null;
+};
+
+export type AfterCloseProposalAcceptRequest = {
+  reason?: string | null;
+  linked_draft_version_id?: string | null;
+};

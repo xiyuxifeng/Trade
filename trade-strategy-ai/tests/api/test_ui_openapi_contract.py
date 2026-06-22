@@ -110,6 +110,7 @@ def test_ui_openapi_exposes_critical_contract_paths() -> None:
         "/api/ui/v1/daily/pre-market/plan": {"get"},
         "/api/ui/v1/daily/pre-market/plan/review": {"post"},
         "/api/ui/v1/daily/after-close/actuals": {"get"},
+        "/api/ui/v1/daily/after-close/review": {"get"},
         "/api/ui/v1/daily/after-close/signal-results": {"post"},
     }
 

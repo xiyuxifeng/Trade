@@ -24,6 +24,7 @@ class _FakeResult:
 class _FakePostMarketReviewService:
     def __init__(self) -> None:
         self.actual_calls: list[dict[str, Any]] = []
+        self.get_review_calls: list[dict[str, Any]] = []
         self.evaluate_calls: list[dict[str, Any]] = []
         self.generate_calls: list[dict[str, Any]] = []
         self.list_calls: list[dict[str, Any]] = []
@@ -62,6 +63,65 @@ class _FakePostMarketReviewService:
                 ],
                 "missing_symbols": ["600000.SH"],
                 "conflict_symbols": [],
+            }
+        )
+
+    async def get_post_market_review(self, *, trading_day_plan_id: str, post_market_review_id: str | None = None, actor_id: str, actor_role: str):
+        self.get_review_calls.append(
+            {
+                "trading_day_plan_id": trading_day_plan_id,
+                "post_market_review_id": post_market_review_id,
+                "actor_id": actor_id,
+                "actor_role": actor_role,
+            }
+        )
+        return _FakeResult(
+            {
+                "state": "partial",
+                "generated": True,
+                "post_market_review_id": "review-1",
+                "trading_day_plan_id": trading_day_plan_id,
+                "trade_date": "2026-06-21",
+                "revision_no": 2,
+                "lifecycle_state": "draft",
+                "quality_status": "partial",
+                "signal_outcome_state": "partial",
+                "attribution_state": "ready",
+                "post_close_market_snapshot_id": "snapshot-1",
+                "post_close_market_state_id": None,
+                "signal_results": [
+                    {
+                        "signal_id": "signal-1",
+                        "symbol": "000001.SZ",
+                        "side": "BUY",
+                        "state": "ready",
+                        "triggered": {"state": "ready", "value": True},
+                        "executed": {"state": "unavailable", "value": None, "reason": "approved_execution_supplement_missing"},
+                        "matched_rule": {"state": "ready", "rule_version_ids": ["rule-1"], "selection_decisions": {"rule-1": "selected"}},
+                        "market_state_change": {"state": "unavailable", "value": None, "reason": "post_close_market_state_missing"},
+                        "actual_result": {"state": "ready", "value": "up"},
+                        "mfe": {"state": "ready", "value": 0.06},
+                        "mae": {"state": "ready", "value": -0.01},
+                        "return": {"state": "ready", "value": 0.03},
+                        "evidence": {"row_fingerprint": "row-1", "reasons": [], "metric_policy_version": "stage10-signal-outcome-v1"},
+                    }
+                ],
+                "attribution": {
+                    "state": "ready",
+                    "signals": [
+                        {
+                            "signal_id": "signal-1",
+                            "symbol": "000001.SZ",
+                            "state": "ready",
+                            "category": "unattributable",
+                            "user_explanation": "000001.SZ 当前结果没有落入固定五类问题，按规则归为暂不可归因。",
+                        }
+                    ],
+                },
+                "evidence": {"actuals": {"coverage_state": "partial"}},
+                "happened": "正式盘后复盘存在未满足的数据状态。",
+                "affected": "页面只会展示当前已确认的盘后结果，并明确标注缺失、冲突或降级部分。",
+                "repair_guidance": "请先补齐缺失证据、处理冲突，或在正式状态允许时继续查看可用部分。",
             }
         )
 
@@ -268,6 +328,37 @@ async def test_after_close_actuals_route_returns_explicit_partial_state(client: 
         {
             "trading_day_plan_id": "plan-1",
             "post_close_market_snapshot_id": "snapshot-1",
+            "actor_id": "tester",
+            "actor_role": "operator",
+        }
+    ]
+
+
+@pytest.mark.asyncio()
+async def test_after_close_review_route_returns_formal_review_state(client: AsyncClient) -> None:
+    from api.routers.ui.daily_after_close import get_post_market_review_service
+
+    service = _FakePostMarketReviewService()
+    app.dependency_overrides[get_post_market_review_service] = lambda: service
+    try:
+        response = await client.get(
+            "/api/ui/v1/daily/after-close/review",
+            params={
+                "trading_day_plan_id": "plan-1",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_post_market_review_service, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "partial"
+    assert payload["signal_results"][0]["executed"]["state"] == "unavailable"
+    assert payload["signal_results"][0]["market_state_change"]["state"] == "unavailable"
+    assert service.get_review_calls == [
+        {
+            "trading_day_plan_id": "plan-1",
+            "post_market_review_id": None,
             "actor_id": "tester",
             "actor_role": "operator",
         }

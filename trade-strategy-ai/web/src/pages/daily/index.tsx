@@ -21,7 +21,7 @@ import type {
   TradingPlanSignal,
 } from '@/types/daily';
 import { describeStrategyWorkspaceJobType, formatWorkspaceTimestamp, isWorkspacePermissionDenied } from '@/features/strategy-workspace/strategy-workspace-utils';
-import { StrategyAfterClosePage as StrategyAfterCloseWorkspacePage } from '@/features/strategy-workspace';
+import { TodayAfterClosePage } from './after-close-page';
 
 function TodaySummaryCard({
   title,
@@ -274,26 +274,10 @@ export function TodayPreMarketPage({ availability }: { availability?: PageAvaila
   );
 }
 
-export function TodayAfterClosePage({ availability }: { availability?: PageAvailability } = {}) {
-  if (availability) {
-    return (
-      <ProductPageAdapter
-        title="今日盘后"
-        queryState={availability}
-        purpose="复盘今日执行结果。"
-        inputDescription="需要画像和复盘日期。"
-        processingDescription="系统读取真实盘后处理状态。"
-        outputDescription="输出当前可确认的盘后结果。"
-        businessAction={{ label: '返回今日总览', to: '/daily/overview' }}
-      />
-    );
-  }
-  return <StrategyAfterCloseWorkspacePage productMode navigationTarget="/daily" />;
-}
-
 export const DailyOverviewPage = TodayOverviewPage;
 export const DailyPreMarketPage = TodayPreMarketPage;
 export const DailyAfterClosePage = TodayAfterClosePage;
+export { TodayAfterClosePage };
 
 function formatTraceabilityValue(value: unknown) {
   if (value === null || value === undefined || value === '') {

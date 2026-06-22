@@ -175,4 +175,62 @@ describe('SystemPage', () => {
     expect(await screen.findByText('数据源兼容入口')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '回测数据版本详情' })).toHaveAttribute('href', '/market/datasets');
   });
+
+  it.each([
+    ['invalid', '状态无效', '正式数据存在无效状态，不能继续依赖。', '先修复无效状态，再重新进入当前页面。'],
+    ['conflict', '数据冲突', '正式数据之间存在冲突，需要先修复再继续。', '先确认冲突来源并完成修复，再继续后续操作。'],
+    ['insufficient_coverage', '覆盖不足', '覆盖范围不足，不能把结果当成正式就绪。', '先查看受限原因，再补齐缺失依赖或联系管理员处理。'],
+    ['failed', '执行失败', '最近一次正式操作失败，需要人工处理。', '查看失败原因后重新处理。'],
+  ] as const)('maps readiness status %s to truthful product-page error copy', async (status, title, impact, repair) => {
+    mockedGetSystemDataReadiness.mockResolvedValue({
+      status,
+      target_trade_date: '2026-06-22',
+      phase: 'post_close',
+      latest_successful_update_at: '2026-06-22T10:00:00Z',
+      summary: '测试摘要。',
+      repair_available: false,
+      facts: {
+        latest_ohlcv_trade_date: '2026-06-22',
+        latest_indicator_trade_date: '2026-06-22',
+        dataset_snapshot_status: 'ready',
+        pre_market_snapshot_status: 'ready',
+        post_close_snapshot_status: 'ready',
+        market_state_status: 'ready',
+        unavailable_reasons: [],
+        missing_coverages: [],
+      },
+      repair_plan: {
+        steps: [],
+      },
+    } as never);
+    mockedGetSystemDataSchedule.mockResolvedValue({
+      timezone: 'Asia/Shanghai',
+      entries: [],
+    } as never);
+    mockedListSystemDataOperations.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    } as never);
+
+    renderWithRouter(
+      [{ path: '/system/data', element: <SystemDataPage /> }],
+      ['/system/data'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findAllByText(title)).not.toHaveLength(0);
+    expect(screen.getByText('发生了什么')).toBeInTheDocument();
+    expect(screen.getAllByText('测试摘要。').length).toBeGreaterThan(0);
+    expect(screen.getByText(impact)).toBeInTheDocument();
+    expect(screen.getByText(repair)).toBeInTheDocument();
+  });
 });

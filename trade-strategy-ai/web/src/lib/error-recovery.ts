@@ -38,6 +38,9 @@ export type ErrorRecoveryState = {
   title: string;
   description: string;
   suggestion: string;
+  happened: string;
+  affected: string;
+  repairGuidance: string;
   detail: string;
   retryable: boolean;
   actions: ErrorRecoveryAction[];
@@ -294,6 +297,29 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
   }
 }
 
+function getAffectedText(category: ErrorRecoveryCategory) {
+  switch (category) {
+    case 'validation error':
+      return '当前提交不会生效，相关结果也不会更新。';
+    case 'permission denied':
+      return '当前账号暂时不能查看或处理这部分内容。';
+    case 'config missing':
+      return '依赖配置未准备好，当前结果不能当成正式依据。';
+    case 'provider unavailable':
+      return '本页需要的上游服务暂时没有返回完整结果。';
+    case 'data empty':
+      return '当前页面不会显示正式结果，需要等待记录生成或调整筛选条件。';
+    case 'artifact missing':
+      return '相关结果材料暂时无法查看，后续判断会受限。';
+    case 'job failed':
+      return '本次处理结果可能缺失或不完整，相关业务步骤暂时不能继续。';
+    case 'network error':
+      return '前端没有拿到完整响应，当前显示不能作为正式结果。';
+    default:
+      return '当前页面结果暂时不可直接使用。';
+  }
+}
+
 function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage): ErrorRecoveryAction[] {
   const pageRoute = getPageRoute(page);
   const homeRoute = getPageHomeRoute(page);
@@ -455,6 +481,9 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
     title,
     description,
     suggestion,
+    happened: description,
+    affected: getAffectedText(category),
+    repairGuidance: suggestion,
     detail,
     retryable,
     actions: isApi404 && category !== 'artifact missing' ? buildActions('data empty', page) : buildActions(category, page),

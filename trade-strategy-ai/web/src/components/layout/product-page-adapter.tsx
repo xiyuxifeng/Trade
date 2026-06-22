@@ -48,7 +48,7 @@ export function ProductPageAdapter({
   recoveryAction,
 }: ProductPageAdapterProps) {
   const { canAccess } = useAuth();
-  const canViewAdvancedAdminDetails = advancedAdminDetails && canAccess('admin');
+  const canViewAdvancedAdminDetails = advancedAdminDetails && canAccess('operator');
 
   return (
     <BusinessPageShell
@@ -72,7 +72,7 @@ export function ProductPageAdapter({
     >
       {canViewAdvancedAdminDetails ? (
         <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-medium text-slate-800">管理员查看技术细节</summary>
+          <summary className="cursor-pointer text-sm font-medium text-slate-800">查看运维诊断详情</summary>
           <div className="mt-3 text-sm text-slate-600">{advancedAdminDetails}</div>
         </details>
       ) : null}

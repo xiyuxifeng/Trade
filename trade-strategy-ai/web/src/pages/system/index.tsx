@@ -67,7 +67,10 @@ function formatTime(value: string | null) {
 function mapReadinessAvailability(status: SystemDataReadinessStatus): PageAvailability {
   if (status === 'ready') return 'ready';
   if (status === 'running') return 'partial';
-  if (status === 'unavailable' || status === 'invalid' || status === 'conflict') return 'unavailable';
+  if (status === 'missing' || status === 'unavailable') return 'unavailable';
+  if (status === 'invalid') return 'invalid';
+  if (status === 'conflict') return 'conflict';
+  if (status === 'insufficient_coverage') return 'degraded';
   if (status === 'failed') return 'error';
   return 'partial';
 }

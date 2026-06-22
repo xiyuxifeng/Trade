@@ -7,6 +7,9 @@ describe('buildErrorRecoveryState', () => {
     const state = buildErrorRecoveryState(new ApiError(403, 'permission denied'), 'strategy');
 
     expect(state.category).toBe('permission denied');
+    expect(state.happened).toBe('当前身份无法查看或操作该内容。');
+    expect(state.affected).toBe('当前账号暂时不能查看或处理这部分内容。');
+    expect(state.repairGuidance).toBe('请切换到有权限的账号，或联系管理员调整权限。');
     expect(state.retryable).toBe(false);
     expect(state.actions.some((action) => action.to === '/profiles')).toBe(true);
     expect(state.actions.some((action) => action.to === '/')).toBe(true);
@@ -16,6 +19,7 @@ describe('buildErrorRecoveryState', () => {
     const state = buildErrorRecoveryState(new ApiError(404, 'artifact missing'), 'job-detail');
 
     expect(state.category).toBe('artifact missing');
+    expect(state.affected).toContain('相关结果材料暂时无法查看');
     expect(state.retryable).toBe(true);
     expect(state.actions[0].label).toBe('打开产物中心');
     expect(state.actions.some((action) => action.to === '/artifacts')).toBe(true);
@@ -26,6 +30,7 @@ describe('buildErrorRecoveryState', () => {
     const state = buildErrorRecoveryState(new ApiError(404, 'no market data'), 'market');
 
     expect(state.category).toBe('data empty');
+    expect(state.repairGuidance).toContain('返回列表重新筛选');
     expect(state.actions).toEqual([]);
   });
 });

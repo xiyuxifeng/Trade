@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/state/ErrorState';
 import { ApiError } from '@/lib/api/http';
 import { ProfileBootstrapWarning, isBootstrapDefaultProfile } from '@/components/profiles/profile-bootstrap-warning';
 import { useSystemStatus } from './use-system-status';
@@ -39,6 +40,13 @@ function getErrorMessage(error: unknown) {
   return '无法获取系统状态';
 }
 
+function getErrorCategory(error: unknown) {
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+    return 'permission denied' as const;
+  }
+  return 'provider unavailable' as const;
+}
+
 export function SystemStatusPanel({ productMode = false }: { productMode?: boolean } = {}) {
   const { data, error, isLoading, refetch, isFetching } = useSystemStatus();
 
@@ -60,6 +68,21 @@ export function SystemStatusPanel({ productMode = false }: { productMode?: boole
 
   if (error) {
     const message = getErrorMessage(error as unknown);
+    if (productMode) {
+      return (
+        <ErrorState
+          category={getErrorCategory(error)}
+          title="系统状态暂不可用"
+          description="系统状态接口请求失败。"
+          affected="当前无法确认服务、配置和关键依赖是否支持后续业务操作。"
+          suggestion="请先刷新系统状态；如果多次失败，请联系管理员检查系统服务。"
+          detail={error instanceof ApiError ? JSON.stringify({ status: error.status, message: error.message, detail: error.detail ?? null, requestId: error.requestId ?? null, payload: error.payload ?? null }, null, 2) : message}
+          onRetry={() => refetch()}
+          retryLabel={isFetching ? '重试中' : '刷新系统状态'}
+        />
+      );
+    }
+
     return (
       <Card>
         <CardHeader>
@@ -67,12 +90,16 @@ export function SystemStatusPanel({ productMode = false }: { productMode?: boole
           <CardDescription>当前状态接口请求失败。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
-            {message}
-          </div>
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? '重试中' : '重试'}
-          </Button>
+          <ErrorState
+            category={getErrorCategory(error)}
+            title="系统状态暂不可用"
+            description="系统状态接口请求失败。"
+            affected="当前无法确认服务、配置和关键依赖是否支持后续业务操作。"
+            suggestion="请先刷新系统状态；如果多次失败，请联系管理员检查系统服务。"
+            detail={error instanceof ApiError ? JSON.stringify({ status: error.status, message: error.message, detail: error.detail ?? null, requestId: error.requestId ?? null, payload: error.payload ?? null }, null, 2) : message}
+            onRetry={() => refetch()}
+            retryLabel={isFetching ? '重试中' : '刷新系统状态'}
+          />
         </CardContent>
       </Card>
     );

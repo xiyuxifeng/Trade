@@ -12,6 +12,9 @@ export type PageAvailability =
   | 'empty'
   | 'error'
   | 'partial'
+  | 'degraded'
+  | 'invalid'
+  | 'conflict'
   | 'permission_denied'
   | 'unavailable';
 
@@ -86,6 +89,24 @@ const STATE_COPY: Record<Exclude<PageAvailability, 'ready'>, StateCopy> = {
     description: '已返回一部分内容，仍有项目未处理完。',
     impact: '你看到的是当前可用的部分结果。',
     recoveryAction: '补齐缺失部分后继续处理。',
+  },
+  degraded: {
+    title: '已降级',
+    description: '系统以受限方式返回结果，部分正式能力暂时不可用。',
+    impact: '当前结果只能作为受限参考，不能当成完整正式结果。',
+    recoveryAction: '先查看受限原因，再补齐缺失依赖或联系管理员处理。',
+  },
+  invalid: {
+    title: '状态无效',
+    description: '当前正式数据或页面状态未通过有效性检查。',
+    impact: '继续操作可能导致错误判断，当前流程不能直接继续。',
+    recoveryAction: '先修复无效状态，再重新进入当前页面。',
+  },
+  conflict: {
+    title: '数据冲突',
+    description: '页面依赖的正式数据之间出现冲突。',
+    impact: '当前结果无法作为唯一依据，相关业务步骤需要暂停。',
+    recoveryAction: '先确认冲突来源并完成修复，再继续后续操作。',
   },
   permission_denied: {
     title: '无权限',
@@ -182,7 +203,7 @@ export function BusinessPageShell({
   const resolvedStateDescription = stateDescription ?? stateCopy?.description;
   const resolvedImpact = impact ?? stateCopy?.impact;
   const resolvedRecoveryText = stateCopy?.recoveryAction;
-  const shouldShowNextAction = nextAction && (availability === 'ready' || availability === 'partial');
+  const shouldShowNextAction = nextAction && (availability === 'ready' || availability === 'partial' || availability === 'degraded');
 
   return (
     <main className={cn('page-stack', className)}>
@@ -209,7 +230,17 @@ export function BusinessPageShell({
                       <p className="m-0 text-sm font-medium text-slate-900">{item.label}</p>
                       {item.detail ? <p className="mt-1 text-sm text-slate-600">{item.detail}</p> : null}
                     </div>
-                    <Badge variant={item.status === 'ready' ? 'success' : item.status === 'error' ? 'destructive' : item.status === 'partial' ? 'warning' : 'default'}>
+                    <Badge
+                      variant={
+                        item.status === 'ready'
+                          ? 'success'
+                          : item.status === 'error' || item.status === 'invalid' || item.status === 'conflict'
+                            ? 'destructive'
+                            : item.status === 'partial' || item.status === 'degraded'
+                              ? 'warning'
+                              : 'default'
+                      }
+                    >
                       {availabilityLabel(item.status)}
                     </Badge>
                   </div>
@@ -237,23 +268,34 @@ export function BusinessPageShell({
           ) : (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  {resolvedStateTitle ? <p className="m-0 text-sm font-medium text-amber-950">{resolvedStateTitle}</p> : null}
-                  {resolvedStateDescription ? <p className="mt-1 text-sm text-amber-900">{resolvedStateDescription}</p> : null}
+                <div className="min-w-0 space-y-2">
+                  <div>
+                    <p className="m-0 text-xs font-medium uppercase tracking-[0.16em] text-amber-900">发生了什么</p>
+                    {resolvedStateTitle ? <p className="mt-1 text-sm font-medium text-amber-950">{resolvedStateTitle}</p> : null}
+                    {resolvedStateDescription ? <p className="mt-1 text-sm text-amber-900">{resolvedStateDescription}</p> : null}
+                  </div>
                 </div>
-                <Badge variant={availability === 'error' ? 'destructive' : availability === 'partial' ? 'warning' : 'default'}>
+                <Badge
+                  variant={
+                    availability === 'error' || availability === 'invalid' || availability === 'conflict'
+                      ? 'destructive'
+                      : availability === 'partial' || availability === 'degraded'
+                        ? 'warning'
+                        : 'default'
+                  }
+                >
                   {resolvedStateTitle ?? '处理中'}
                 </Badge>
               </div>
               {resolvedImpact ? (
                 <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">影响：</span>
+                  <span className="font-medium text-slate-900">影响什么：</span>
                   {resolvedImpact}
                 </div>
               ) : null}
               {resolvedRecoveryText ? (
                 <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">处理方式：</span>
+                  <span className="font-medium text-slate-900">应该怎么处理：</span>
                   <span className="ml-1">{resolvedRecoveryText}</span>
                 </div>
               ) : null}

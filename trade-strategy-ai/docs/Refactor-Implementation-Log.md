@@ -22,12 +22,12 @@
 
 - 当前 Stage：`Stage 11 系统管理、自动化与告警`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`
-- 当前阻塞 Task：无；`RT-S11-001` 已接受，`RT-S11-002` 至 `RT-S11-007` implementation 尚未开始
+- 当前阻塞 Task：无；`RT-S11-001`、`RT-S11-007` 已接受，`RT-S11-002` 至 `RT-S11-006` implementation 尚未开始
 - 当前计划：[Stage 11 实施计划](refactor-implementation-plans/stage-11-implementation-plan.md)
 - 详细日志：[Stage 11](refactor-implementation-logs/stage-11.md)
-- 下一步：等待用户明确授权 `RT-S11-007 用户友好错误`，或后续按冻结顺序执行 `RT-S11-003 可观测性和运行追踪`；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12。
+- 下一步：等待用户明确授权后续 Stage 11 task，优先建议 `RT-S11-003 可观测性和运行追踪`；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12。
 
 ## 当前硬约束
 
@@ -94,6 +94,7 @@
 - Stage 11 Bootstrap 已于 2026-06-22 `READY`：已冻结 contracts、task order、combination rules、acceptance criteria 和 residual risk classification；未实现 production code。
 - `RT-S11-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：正式 `/system` 入口已聚合七类低频管理能力；business-first 主导航保持不变；普通用户仅见状态/修复入口，操作员/管理员可见更完整分类；未新增 authorization policy、scheduler/automation runtime 或 route retirement。
 - `RT-S11-001` continuation final repair / acceptance verification 已于 2026-06-22 完成：latest committed code already mapped `/market/datasets` to `/system/data` in route metadata, but `/system/data` page initially lacked a visible compatibility mapping; bounded repair added `数据源兼容入口` with `回测数据版本详情 -> /market/datasets`, and focused frontend tests plus `pnpm typecheck` passed.
+- `RT-S11-007` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：shared error contract 现统一要求 `发生了什么 / 影响什么 / 应该怎么处理`；普通用户不再看到 raw technical detail；operator/admin 才能展开运维诊断详情；`invalid` / `conflict` / `insufficient_coverage` / failed operation 在系统页中被真实表达。
 - Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
 - Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
 - Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。
@@ -153,7 +154,7 @@
 | RT-S11-004 | `[ ]` | 成本与增量控制 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-005 | `[ ]` | 数据时间语义 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-006 | `[ ]` | 灰度迁移和回滚 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
-| RT-S11-007 | `[ ]` | 用户友好错误 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 
 ## Stage 状态索引
 

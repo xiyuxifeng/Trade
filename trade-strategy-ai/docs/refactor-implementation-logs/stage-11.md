@@ -3,11 +3,118 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-001 系统管理入口`
-- 当前状态：`RT-S11-001 已接受；Stage 11 仍在进行中`
-- 当前 Task：`RT-S11-001 系统管理入口` 已接受
-- 下一可执行项：等待用户明确授权 `RT-S11-007 用户友好错误`
+- 当前活动：`RT-S11-007 用户友好错误`
+- 当前状态：`RT-S11-001 已接受；RT-S11-007 已接受；Stage 11 仍在进行中`
+- 当前 Task：`RT-S11-007 用户友好错误` 已接受
+- 下一可执行项：等待用户明确授权后续 Stage 11 task
 - 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-22 RT-S11-007 用户友好错误
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+在不重做全局 API error envelope、authorization policy 或 canonical run source-of-truth 的前提下，为 Stage 11 相关共享错误组件和系统管理页面补齐统一的用户友好错误契约：
+
+- 每个用户可见错误状态明确展示：
+  - `发生了什么`
+  - `影响什么`
+  - `应该怎么处理`
+- 普通用户仅看到业务化说明与下一步动作；
+- operator/admin 才能展开运维诊断详情；
+- `invalid` / `conflict` / `degraded` 状态不再被统一压成 generic unavailable；
+- `Job failed` 不再作为普通用户唯一可见错误文案。
+
+本次未修改 backend/API response shape，未新增 scheduler、automation、alerting、recovery runtime、cost-control runtime，未修改 Stage 11 route grouping，未启动 Stage 12。
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确派发了 1 个 bounded `refactor_executor_mini` 作为辅助实现通道，但该子代理只完成 scoped read-through 与 surface mapping，未交付最终 patch 或验证结果。
+
+Parent 收回关键路径，直接完成实现、verification、diff review、文档更新与最终 acceptance decision。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- Stage 12：未开始
+- 本次实现前 working tree：仅包含 RT-S11-007 当前改动
+- 未触发需要 `ESCALATION_REQUIRED` 的全局 envelope / auth / run_id redesign 条件
+
+### Implementation Notes
+
+- `web/src/components/layout/business-page-shell.tsx`
+  - 扩展共享页面状态为 `degraded` / `invalid` / `conflict`
+  - 在错误/受限状态卡片中显式展示“发生了什么 / 影响什么 / 应该怎么处理”
+  - `degraded` 状态允许继续显示下一步业务动作
+- `web/src/components/layout/product-page-adapter.tsx`
+  - 运维诊断详情从 admin-only 放宽到 operator/admin，与 Stage 11 frozen visibility contract 对齐
+- `web/src/components/state/ErrorState.tsx`
+  - 新增 happened / affected / repairGuidance 共享契约字段
+  - 普通用户隐藏 raw diagnostic detail；operator/admin 才能展开“查看运维诊断详情”
+  - category badge 改为业务中文标签
+- `web/src/lib/error-recovery.ts`
+  - shared recovery builder 统一返回 happened / affected / repairGuidance
+- `web/src/pages/system/index.tsx`
+  - `invalid` / `conflict` / `insufficient_coverage` 分别映射到 `invalid` / `conflict` / `degraded`
+- `web/src/features/system-status/system-status-panel.tsx`
+  - product-mode 错误改为共享业务错误组件，raw payload 仅进入 operator/admin 诊断详情
+- `web/src/features/market-datasets/market-dataset-viewer-state.ts`
+  - 补齐新 `ErrorRecoveryState` 契约字段，保证 shared typecheck 通过
+
+### Contract Checklist
+
+- errors include `happened` / `affected` / `repair_guidance`: pass
+- normal UI has no raw stack-only error: pass
+- normal UI has no `Job failed`-only message: pass
+- permission denied / unavailable / partial / degraded / invalid / conflict / failed operation states have focused frontend tests: pass
+- admin diagnostic detail separated from normal business copy: pass
+- `config_path` not exposed as ordinary Web input: pass
+- Job / Workflow / Pipeline / Artifact not exposed as ordinary business inputs by this task: pass
+- System Management grouping from `RT-S11-001` remains intact: pass
+- backend/API error envelope unchanged: pass
+
+### Verification
+
+- `pnpm vitest run src/components/state/ErrorState.test.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/system/index.test.tsx src/pages/system/system-pages.test.tsx src/features/system-status/system-status-panel.test.tsx src/lib/error-recovery.test.ts`
+- `pnpm typecheck`
+- `rg -n "Job failed|Job|Workflow|Pipeline|Artifact|config_path|run_id|prompt_run_id" web/src/components/state web/src/components/layout web/src/pages/system web/src/features/system-status web/src/features/system-management web/src/features/market-datasets`
+- `git diff --check`
+
+### Result
+
+- Targeted Vitest: passed (`7` files, `46` tests)
+- Typecheck: passed
+- `git diff --check`: passed
+- grep:
+  - no new ordinary-user copy exposure in changed shared components/system pages
+  - remaining matches are limited to compatibility dataset deep-links, internal imports, and tests; no new Stage 11 formal user input was introduced
+
+未运行：
+
+- backend/API tests：未修改 backend/API contract
+- browser E2E：本次为 focused shared frontend error contract task，未运行
+
+### Residual Risks
+
+- compatibility dataset viewer 仍保留 `/jobs` / `/artifacts` deep-link，属于 legacy compatibility surface；本次仅补齐共享 error contract，不改变其 route policy
+- 其他非 Stage 11 shared pages 继续通过同一个 `ErrorState` 受益于新契约，但未逐页做人工 copy 审核；Stage 12 最终交付前仍需统一做全站用户术语复核
+- operator 现可查看运维诊断详情，符合 frozen contract；如果后续要细分 operator/admin 诊断粒度，应在单独 Task 中冻结更细权限语义
+
+### Acceptance Conclusion
+
+`RT-S11-007` is `ACCEPTED` under the frozen Stage 11 contract.
+
+Current conclusion:
+
+- 普通用户现在能看到业务化错误解释、影响范围和明确修复动作；
+- operator/admin 才能进入诊断详情，技术细节与普通错误说明已分层；
+- `invalid` / `conflict` / `insufficient_coverage` / failed operation 状态在系统管理正式页中被真实表达，而不是 generic success/unavailable；
+- Stage 11 仍为 `[-] 进行中`，不得自动开始 `RT-S11-002` / `RT-S11-003` / `RT-S11-004` / `RT-S11-005` / `RT-S11-006` 或 Stage 12。
 
 ## 2026-06-22 RT-S11-001 系统管理入口
 

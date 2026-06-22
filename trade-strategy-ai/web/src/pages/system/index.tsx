@@ -19,6 +19,7 @@ import { ApiError } from '@/lib/api/http';
 import { useAuth } from '@/features/auth/auth-context';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 import type { SystemDataOperation, SystemDataReadinessResponse, SystemDataReadinessStatus } from '@/types/system';
 
 function describeValidationStatus(status: string) {
@@ -132,6 +133,14 @@ function latestOperationMessage(operation: SystemDataOperation | undefined) {
   if (!operation) return null;
   return `${operation.label} · ${statusLabel(operation.status)} · 最后更新时间 ${formatTime(operation.updated_at)}`;
 }
+
+const systemDataCompatibilityLinks = [
+  { label: '市场数据总览', href: '/market' },
+  { label: '市场快照详情', href: '/market/snapshots' },
+  { label: '回测数据版本详情', href: '/market/datasets' },
+  { label: '盘前盘后数据维护', href: '/market/kaipan' },
+  { label: '历史行情维护', href: '/market/ohlcv' },
+] as const;
 
 function SystemDataSummary() {
   const { canAccess, principal } = useAuth();
@@ -267,6 +276,24 @@ function SystemDataSummary() {
         {readiness.facts.missing_coverages.length ? (
           <p className="mt-2 text-sm text-amber-700">缺失范围：{readiness.facts.missing_coverages.join('；')}</p>
         ) : null}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <p className="font-medium text-slate-950">数据源兼容入口</p>
+        <p className="mt-2 text-sm text-slate-600">
+          系统管理中的数据源统一归到本页查看；旧数据页保留为兼容入口，便于继续打开已有深链。
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {systemDataCompatibilityLinks.map((entry) => (
+            <Link
+              key={entry.href}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+              to={entry.href}
+            >
+              {entry.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">

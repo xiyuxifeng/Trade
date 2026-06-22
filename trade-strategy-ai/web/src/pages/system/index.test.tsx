@@ -1,7 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { SystemDataPage, SystemPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
+
+vi.mock('@/lib/api/profiles', () => ({
+  listProfiles: vi.fn(),
+}));
+
+vi.mock('@/lib/api/system', () => ({
+  cancelSystemDataOperation: vi.fn(),
+  createSystemDataOperation: vi.fn(),
+  getSystemDashboard: vi.fn(),
+  getSystemDataReadiness: vi.fn(),
+  getSystemDataSchedule: vi.fn(),
+  listSystemDataOperations: vi.fn(),
+  resumeSystemDataOperation: vi.fn(),
+  retrySystemDataOperation: vi.fn(),
+}));
+
+import { getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations } from '@/lib/api/system';
+
+const mockedGetSystemDataReadiness = vi.mocked(getSystemDataReadiness);
+const mockedGetSystemDataSchedule = vi.mocked(getSystemDataSchedule);
+const mockedListSystemDataOperations = vi.mocked(listSystemDataOperations);
+
+beforeEach(() => {
+  mockedGetSystemDataReadiness.mockReset();
+  mockedGetSystemDataSchedule.mockReset();
+  mockedListSystemDataOperations.mockReset();
+});
 
 describe('SystemPage', () => {
   it('renders the grouped system management hub for admin principals', async () => {
@@ -97,5 +124,55 @@ describe('SystemPage', () => {
 
     expect(await screen.findByRole('heading', { name: '数据与调度' })).toBeInTheDocument();
     expect(container.textContent).not.toContain('readiness');
+  });
+
+  it('shows /market/datasets under the system data compatibility mapping', async () => {
+    mockedGetSystemDataReadiness.mockResolvedValue({
+      status: 'ready',
+      target_trade_date: '2026-06-22',
+      phase: 'post_close',
+      latest_successful_update_at: '2026-06-22T10:00:00Z',
+      summary: '正式数据已就绪。',
+      repair_available: false,
+      facts: {
+        latest_ohlcv_trade_date: '2026-06-22',
+        latest_indicator_trade_date: '2026-06-22',
+        dataset_snapshot_status: 'ready',
+        pre_market_snapshot_status: 'ready',
+        post_close_snapshot_status: 'ready',
+        market_state_status: 'ready',
+        unavailable_reasons: [],
+        missing_coverages: [],
+      },
+      repair_plan: {
+        steps: [],
+      },
+    } as never);
+    mockedGetSystemDataSchedule.mockResolvedValue({
+      timezone: 'Asia/Shanghai',
+      entries: [],
+    } as never);
+    mockedListSystemDataOperations.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    } as never);
+
+    renderWithRouter(
+      [{ path: '/system/data', element: <SystemDataPage /> }],
+      ['/system/data'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByText('数据源兼容入口')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '回测数据版本详情' })).toHaveAttribute('href', '/market/datasets');
   });
 });

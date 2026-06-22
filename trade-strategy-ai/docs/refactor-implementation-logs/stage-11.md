@@ -15,6 +15,14 @@
 
 `ACCEPTED`
 
+### Continuation (final repair / acceptance verification)
+
+- continuation inspected latest committed RT-S11-001 at `1ad91688ce1932368a055543c0bcbe54e4f055ef`.
+- verified committed code already mapped `/market/datasets` to `/system/data` in `web/src/app/route-config.tsx` legacy metadata.
+- verification also found the committed `/system` UX only implied this mapping through generic “回测数据集” copy inside the `数据源` group; `/system/data` itself did not yet expose a visible compatibility link for `/market/datasets`.
+- bounded repair added a visible `数据源兼容入口` section to `/system/data`, including `回测数据版本详情 -> /market/datasets`, while keeping `/market/datasets` as a compatibility route and without introducing any new business input.
+- no other Stage 11 task, authorization policy, scheduler, automation, alerting, recovery runtime, cost-control runtime, legacy route retirement, or Stage 12 behavior was added.
+
 ### Scope
 
 将 `/system` 从跳转页调整为系统管理分组落地页，并保持普通业务页面留在系统管理之外。新的落地页按角色展示常用状态/修复入口与完整系统管理分类，覆盖：
@@ -58,6 +66,9 @@ Parent 保留 contract review、compatibility mapping 判断、focused verificat
 - `web/src/pages/system/index.test.tsx`：新增管理员、操作员和普通用户可见性断言。
 - `web/src/app/route-config.test.tsx`：更新 `/system` 与 `/market/datasets` 的 legacy 元数据期望。
 - `web/src/app/router-auth.test.tsx`：验证 viewer/operator 可直接访问正式 `/system` 入口。
+- continuation bounded repair：
+  - `web/src/pages/system/index.tsx`：在 `/system/data` 正式页增加“数据源兼容入口”，显式展示市场数据、市场快照、回测数据版本详情、盘前盘后数据和历史行情等 legacy deep-link。
+  - `web/src/pages/system/index.test.tsx`：新增 focused assertion，验证 `/system/data` 内可见 `回测数据版本详情` 且链接到 `/market/datasets`。
 
 ### Contract Checklist
 
@@ -85,6 +96,12 @@ Parent 保留 contract review、compatibility mapping 判断、focused verificat
 - Typecheck: passed.
 - diff --check: passed.
 - grep: still reports internal import symbols in `route-config.tsx` and `system-management` test/helper imports, but no new user-facing `/system` hub copy or button labels expose those terms.
+- continuation re-verification:
+  - Targeted Vitest: passed (`6` files, `50` tests).
+  - Typecheck: passed.
+  - focused mapping result: `/market/datasets` is now evidenced in two places:
+    - route compatibility metadata maps it to `/system/data`;
+    - `/system/data` visibly exposes `回测数据版本详情` linking to `/market/datasets`.
 
 未运行：
 
@@ -106,6 +123,7 @@ Current conclusion：
 - 低频管理能力现已通过正式 `/system` 入口聚合；
 - daily business pages 仍保持业务优先，不要求普通用户依赖系统管理完成日常工作；
 - 管理分组、兼容映射和可见性边界满足当前 Stage 11 frozen acceptance criteria；
+- `/market/datasets` 已明确映射在 `/system/data` 下，且该映射现在对系统管理页面读者可见；
 - Stage 11 仍为 `[-] 进行中`；仅 `RT-S11-001` 已接受。
 
 Next allowed action：wait for explicit user authorization for `RT-S11-007 用户友好错误`，或按冻结顺序执行 `RT-S11-003 可观测性和运行追踪`。Do not start `RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007` automatically, and do not start Stage 12.

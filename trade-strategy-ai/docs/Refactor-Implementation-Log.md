@@ -93,6 +93,7 @@
 - Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`：focused backend/API/frontend/OpenAPI/typecheck/py_compile/grep/diff-check verification passed；execution supplement missing 为 non-blocking，caller-supplied post-close market state 为 non-blocking hardening，Stage 11 未开始。
 - Stage 11 Bootstrap 已于 2026-06-22 `READY`：已冻结 contracts、task order、combination rules、acceptance criteria 和 residual risk classification；未实现 production code。
 - `RT-S11-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：正式 `/system` 入口已聚合七类低频管理能力；business-first 主导航保持不变；普通用户仅见状态/修复入口，操作员/管理员可见更完整分类；未新增 authorization policy、scheduler/automation runtime 或 route retirement。
+- `RT-S11-001` continuation final repair / acceptance verification 已于 2026-06-22 完成：latest committed code already mapped `/market/datasets` to `/system/data` in route metadata, but `/system/data` page initially lacked a visible compatibility mapping; bounded repair added `数据源兼容入口` with `回测数据版本详情 -> /market/datasets`, and focused frontend tests plus `pnpm typecheck` passed.
 - Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
 - Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
 - Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。

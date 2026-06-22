@@ -226,3 +226,114 @@ export type SystemDataOperationMutationResponse = {
   operation?: SystemDataOperation;
   [key: string]: unknown;
 };
+
+export type SystemRunTraceStep = {
+  step_id: string;
+  business_label: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  error: string | null;
+  retry_count: number | null;
+  input_references: Array<{ type: string; id: string; label: string }>;
+  output_references: Array<{ type: string; id: string; label: string }>;
+  repair_guidance: string;
+};
+
+export type SystemPromptCallTrace = {
+  run_id: string;
+  provider: string | null;
+  model: string;
+  prompt_version: string;
+  schema_version: string;
+  input_hash: string;
+  validation_state: string;
+  retry_count: number;
+  tokens: Record<string, number | string>;
+  cost: {
+    amount: number | null;
+    currency: string | null;
+  };
+  started_at: string | null;
+  completed_at: string | null;
+  linked_business_object: {
+    object_type: string;
+    object_id: string | null;
+    version_id: string | null;
+  };
+};
+
+export type SystemDataFetchTrace = {
+  source: string;
+  provider: string | null;
+  date_range: {
+    date_from: string | null;
+    date_to: string | null;
+  };
+  trade_date: string | null;
+  slot: string | null;
+  coverage: unknown;
+  captured_at: string | null;
+  available_at: string | null;
+  effective_at: string | null;
+  quality_status: string;
+  missing_ranges: unknown[];
+  repair_guidance: string;
+};
+
+export type SystemBacktestTrace = {
+  dataset_snapshot_id: string;
+  data_fingerprints: {
+    dataset: string;
+    market_snapshots: string[];
+  };
+  rule_version: {
+    rule_version_id: string | null;
+    rule_version_no: number | null;
+    rule_version_fingerprint: string | null;
+  };
+  market_state_model_version: string | null;
+  code_version: string;
+  decision_time_policy: string;
+  reproducibility_fingerprint: string;
+  coverage: unknown;
+  limitations: string[];
+};
+
+export type SystemRunTraceItem = {
+  run_id: string;
+  business_label: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  happened: string;
+  affected: string;
+  repair_guidance: string;
+  next_action: {
+    label: string;
+    target_path: string;
+  };
+  attempt: {
+    attempt_id: string;
+    retry_count: number | null;
+    state: string;
+  };
+  steps: SystemRunTraceStep[];
+  prompt_calls: SystemPromptCallTrace[];
+  data_fetches: SystemDataFetchTrace[];
+  backtests: SystemBacktestTrace[];
+  linked_records: Array<{ type: string; id: string; label: string }>;
+  admin_diagnostics: {
+    technical_status: string;
+    linked_ids?: Record<string, string[]>;
+    payload_fingerprints?: Record<string, string | boolean>;
+    raw_metadata?: Record<string, unknown>;
+  } | null;
+};
+
+export type SystemRunTraceListResponse = {
+  count: number;
+  items: SystemRunTraceItem[];
+};

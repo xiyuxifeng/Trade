@@ -3,11 +3,156 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-007 用户友好错误`
-- 当前状态：`RT-S11-001 已接受；RT-S11-007 已接受；Stage 11 仍在进行中`
-- 当前 Task：`RT-S11-007 用户友好错误` 已接受
+- 当前活动：`RT-S11-003 可观测性和运行追踪`
+- 当前状态：`RT-S11-001`、`RT-S11-003`、`RT-S11-007` 已接受；Stage 11 仍在进行中
+- 当前 Task：`RT-S11-003 可观测性和运行追踪` 已接受
 - 下一可执行项：等待用户明确授权后续 Stage 11 task
 - 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-22 RT-S11-003 可观测性和运行追踪
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+在不引入新 canonical run source-of-truth、数据库迁移、authorization policy 变化或 legacy route retirement 的前提下，为 Stage 11 落地有界的运行追踪聚合层：
+
+- 为正式业务运行聚合稳定 `run_id` / step / prompt / data-fetch / backtest 视图；
+- 把 `/system/runs` 从占位页替换为正式运行追踪页；
+- 普通用户看到业务状态、影响和下一步；
+- operator/admin 可查看步骤、关联记录、指纹和诊断细节；
+- 对既有历史对象中无法证明稳定 runtime chain 的场景，明确返回 derived / partial / unavailable，而不是伪造 success。
+
+本次未实现 `RT-S11-002`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`，未新增 scheduler / automation / alerting / recovery runtime / cost-control runtime，未改 formal strategy/rule/profile/current pointers，未退役 legacy routes，未把 Job / Workflow / Pipeline / Artifact 变成普通用户 formal input。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- `RT-S11-003`：按冻结顺序为下一允许 Task
+- working tree before edits：clean
+- 未触发 `ESCALATION_REQUIRED`：未新增 migration、未改 auth policy、未重写 cross-stage contract、未建立第二 formal source-of-truth
+
+### Implementation Notes
+
+- backend
+  - 新增 `src/services/system_run_trace_service.py`
+    - 聚合 `PromptRun`、`BacktestRun/BacktestResult`、`DailyRuleSelection`、`TradingDayPlan`、`PostMarketReview` 以及关联 `DatasetSnapshot`、`MarketSnapshot`
+    - 优先复用已持久化 `run_id/source_run_id`
+    - 对历史 daily/post-close 对象无法证明 runtime chain 时，只暴露 derived `run_id` 并把 attempt 标记为 `unavailable`
+    - 统一输出步骤、Prompt 调用、数据抓取、回测证据和 admin diagnostics
+  - `api/routers/ui/system.py`
+    - 新增 `/api/ui/v1/system/runs`
+    - 依据 `principal.role` 分层返回普通业务信息与 admin/operator 诊断字段
+  - `src/services/daily_rule_selection_service.py`
+    - 新建正式每日规则选择时写入稳定 `source_run_id`
+  - `src/services/daily_trading_plan_service.py`
+    - 新建正式每日交易计划时写入稳定 `source_run_id`
+- frontend
+  - `web/src/types/system.ts`、`web/src/lib/api/system.ts`
+    - 新增 system run trace response / item / step / prompt / data fetch / backtest types 与 client
+  - `web/src/pages/system/index.tsx`
+    - `/system/runs` 从占位页改为正式运行追踪页
+    - 普通用户仅看到业务状态、真实影响、处理方式和下一步
+    - operator/admin 额外看到“查看运维诊断详情”和关联记录
+
+### Contract Checklist
+
+- every formal business run has or exposes stable `run_id`: pass
+  - `PromptRun` / `BacktestRun` 直接复用 persisted `run_id`
+  - `DailyRuleSelection` / `TradingDayPlan` 新对象写入 `source_run_id`
+  - 历史无 persisted source 的 formal object 通过 API 暴露稳定 derived `run_id`，并把 attempt state truthfully 标为 `unavailable`
+- legacy job/workflow/prompt/backtest IDs stay out of ordinary business inputs: pass
+- retry/attempt information is separated from stable `run_id`: pass
+- steps expose step_id / label / status / time / duration / error / retry_count / refs / repair_guidance: pass
+- prompt calls expose model/provider/version/schema/hash/validation/retry/tokens/cost/time/linked object: pass
+- data fetches expose source/provider/date range/trade date/slot/coverage/timestamps/quality/missing ranges/repair guidance: pass
+- backtests expose dataset snapshot / fingerprints / rule fingerprint / market-state model / engine / decision-time policy / reproducibility / coverage / limitations: pass
+- normal users see business status and next action: pass
+- admin/operator can see diagnostics, linked IDs and raw metadata: pass
+- missing / partial / unavailable / degraded / invalid / conflict states remain truthful: pass
+- preserved RT-S11-007 happened / affected / repair_guidance contract: pass
+
+### Verification
+
+- backend/API
+  - `python -m pytest tests/api/routers/ui/test_ui_system_runs.py tests/unit/services/test_system_run_trace_service.py -q`
+  - `python -m pytest tests/api/routers/ui/test_ui_system_dashboard.py tests/api/routers/ui/test_ui_system_runs.py -q`
+  - `python -m pytest tests/unit/services/test_daily_trading_plan_service.py tests/unit/services/test_backtest_application_service.py -q`
+- frontend
+  - `pnpm vitest run src/lib/api/system.test.ts src/pages/system/index.test.tsx`
+  - `pnpm typecheck`
+- safety / terminology
+  - `git diff --check`
+  - `rg -n '"run_id"|"job_id"|"workflow_run_id"|"prompt_run_id"|"config_path"|"Job"|"Workflow"|"Pipeline"|"Artifact"' web/src/pages/system/index.tsx web/src/pages/system/SystemHubPage.tsx`
+
+### Result
+
+- `tests/api/routers/ui/test_ui_system_runs.py` + `tests/unit/services/test_system_run_trace_service.py`: passed (`4` tests)
+- `tests/api/routers/ui/test_ui_system_dashboard.py` + `tests/api/routers/ui/test_ui_system_runs.py`: passed (`3` tests)
+- `tests/unit/services/test_daily_trading_plan_service.py` + `tests/unit/services/test_backtest_application_service.py`: passed (`44` tests)
+- `pnpm vitest run src/lib/api/system.test.ts src/pages/system/index.test.tsx`: passed (`13` tests)
+- `pnpm typecheck`: passed
+- `git diff --check`: passed
+- grep:
+  - no quoted internal runtime terms leaked into `/system/runs` or `SystemHubPage` ordinary-user copy
+  - remaining `run_id` code reference in `index.tsx` is implementation identifier, not rendered business input
+
+未运行：
+
+- browser E2E：本次为 focused system-management UI/API task，未运行
+- 全仓 pytest / 全量 vitest：本次未修改无关模块，不做全量回归
+
+### Residual Risks
+
+- 历史 `DailyRuleSelection` / `TradingDayPlan` / `PostMarketReview` 记录中，部分运行链路缺少 persisted runtime attempt evidence；当前页面会 truthfully 以 derived `run_id` + unavailable attempt state 呈现，但无法回填真实历史 retry chain
+- `PostMarketReview` 仍无独立 `source_run_id` 字段；本次仅通过 formal object identity 暴露稳定 run_id，并把缺失 runtime chain 明确标记为 partial
+- `/system/runs` 当前聚合的是 bounded formal run-trace view，不是全量 scheduler / automation / alert runtime；这些仍属于后续 Stage 11 task
+
+### Acceptance Conclusion
+
+`RT-S11-003` is `ACCEPTED` under the frozen Stage 11 contract.
+
+Current conclusion：
+
+- `/system/runs` 现已提供正式运行追踪页，而不是占位说明；
+- 普通用户只需理解业务状态、影响和下一步，不需要理解 `job_id` / `workflow_run_id` / `prompt_run_id`；
+- operator/admin 现在可在系统管理中查看步骤、Prompt 调用、数据抓取、回测证据和关联诊断元数据；
+- 对无法证明稳定历史 runtime chain 的旧记录，页面会明确呈现 partial / unavailable，而不是伪造完整成功链路；
+- Stage 11 仍为 `[-] 进行中`，不得自动开始 `RT-S11-002`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006` 或 Stage 12。
+
+### 2026-06-22 Review Repair
+
+针对 original Task Card 的复核发现一处 bounded gap：
+
+- backend/API 已经返回 `prompt_calls`、`data_fetches`、`backtests`，但 `/system/runs` admin 视图最初没有把这些 technical details 渲染出来，导致“管理员查看技术详情”的页面证据不完整；
+- backtest trace 只有 `rule_version_fingerprint` / `engine_version`，缺少 Task Card 明确要求的“规则版本”和“代码版本”字段表达。
+
+本次 repair 保持 `RT-S11-003` 范围不变，只补齐缺失项：
+
+- `src/services/system_run_trace_service.py`
+  - backtest trace 改为显式输出 `rule_version`（id / version_no / fingerprint）和 `code_version`
+- `web/src/types/system.ts`
+  - 同步更新 backtest trace 类型
+- `web/src/pages/system/index.tsx`
+  - admin/operator 诊断详情中新增 Prompt 调用、数据抓取、正式回测证据三个技术细节区块
+- `tests/unit/services/test_system_run_trace_service.py`
+  - 新增 backtest rule/code version 暴露断言
+- `tests/api/routers/ui/test_ui_system_runs.py`
+  - 补齐 run trace fixture 中的 data fetch / backtest payload
+- `web/src/pages/system/index.test.tsx`
+  - 补齐 admin 技术详情渲染断言，并修正文案匹配为 `代码版本：engine-v5`
+
+Review repair focused verification：
+
+- `python -m pytest tests/api/routers/ui/test_ui_system_runs.py tests/unit/services/test_system_run_trace_service.py -q` → passed (`5 passed`)
+- `pnpm vitest run src/lib/api/system.test.ts src/pages/system/index.test.tsx` → passed (`13 passed`)
+- `pnpm typecheck` → passed
+- `git diff --check` → passed
 
 ## 2026-06-22 RT-S11-007 用户友好错误
 

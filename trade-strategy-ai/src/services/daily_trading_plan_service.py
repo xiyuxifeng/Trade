@@ -17,6 +17,7 @@ from src.domain.enums import DailyStrategyInstanceState, SignalState, TradingDay
 from src.models.signal import Signal
 from src.models.stage2_canonical import DailyStrategyInstance, TradingDayPlan
 from src.services.daily_rule_selection_service import DailyRuleDecisionView, DailyRuleSelectionService
+from src.services.system_run_trace_service import build_stable_business_run_id
 
 
 class TradingPlanFieldView(BaseModel):
@@ -252,7 +253,10 @@ class DailyTradingPlanService:
                 approved_by=None,
                 approved_at=None,
                 rejection_reason=None,
-                source_run_id=None,
+                source_run_id=build_stable_business_run_id(
+                    object_type="trading-day-plan",
+                    object_id=f"{strategy_version.strategy_version_id}:{normalized_trade_date.isoformat()}:{revision_no}",
+                ),
                 created_by=actor_id,
                 updated_by=actor_id,
             )

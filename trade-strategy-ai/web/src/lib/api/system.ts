@@ -5,6 +5,7 @@ import type {
   SystemDataOperationRequest,
   SystemDataReadinessResponse,
   SystemDataScheduleResponse,
+  SystemRunTraceListResponse,
   SystemStatusResponse,
 } from '@/types/system';
 import { fetchJson } from './http';
@@ -15,6 +16,10 @@ export function getSystemStatus() {
 
 export function getSystemDashboard() {
   return fetchJson<SystemDashboardResponse>('/system/dashboard');
+}
+
+export function listSystemRunTraces(limit = 20) {
+  return fetchJson<SystemRunTraceListResponse>(`/system/runs?limit=${limit}`);
 }
 
 export function getSystemDataReadiness() {

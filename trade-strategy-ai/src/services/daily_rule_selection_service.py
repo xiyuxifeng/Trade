@@ -15,6 +15,7 @@ from src.db.session import get_session_factory
 from src.domain.enums import DailyRuleSelectionState, FormalLifecycleState, QualityStatus
 from src.models.stage2_canonical import DailyRuleSelection, DailyRuleSelectionItem
 from src.services.pre_market_readiness_service import PreMarketReadinessService
+from src.services.system_run_trace_service import build_stable_business_run_id
 
 
 PRIORITY_LABELS = {
@@ -260,7 +261,10 @@ class DailyRuleSelectionService:
                 blocked_rules_json=self._decision_bucket_payload("suspended", decisions["suspended"], selection_context),
                 quality_status=quality_status,
                 lifecycle_state=DailyRuleSelectionState.generated,
-                source_run_id=None,
+                source_run_id=build_stable_business_run_id(
+                    object_type="daily-rule-selection",
+                    object_id=f"{strategy_version.strategy_version_id}:{normalized_trade_date.isoformat()}:{revision_no}",
+                ),
                 created_by=actor_id,
                 updated_by=actor_id,
             )

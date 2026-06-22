@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getSystemDashboard } from './system';
+import { getSystemDashboard, listSystemRunTraces } from './system';
 import { fetchJson } from './http';
 
 vi.mock('./http', () => ({
@@ -22,5 +22,18 @@ describe('getSystemDashboard', () => {
     await getSystemDashboard();
 
     expect(fetchJson).toHaveBeenCalledWith('/system/dashboard');
+  });
+});
+
+describe('listSystemRunTraces', () => {
+  it('calls the system runs endpoint with limit', async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({
+      count: 0,
+      items: [],
+    });
+
+    await listSystemRunTraces(5);
+
+    expect(fetchJson).toHaveBeenCalledWith('/system/runs?limit=5');
   });
 });

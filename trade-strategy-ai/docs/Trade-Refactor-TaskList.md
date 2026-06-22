@@ -1416,3 +1416,4 @@ Stage 0 现状审计
 RT-S10-002： LLM 归因。
 JSON source bindings-hardening
 Risk
+Gate task card Review

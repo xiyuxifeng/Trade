@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { SystemDataPage, SystemPage } from './index';
+import { SystemDataPage, SystemPage, SystemRunsPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -13,21 +13,24 @@ vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn(),
   getSystemDataReadiness: vi.fn(),
   getSystemDataSchedule: vi.fn(),
+  listSystemRunTraces: vi.fn(),
   listSystemDataOperations: vi.fn(),
   resumeSystemDataOperation: vi.fn(),
   retrySystemDataOperation: vi.fn(),
 }));
 
-import { getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations } from '@/lib/api/system';
+import { getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations, listSystemRunTraces } from '@/lib/api/system';
 
 const mockedGetSystemDataReadiness = vi.mocked(getSystemDataReadiness);
 const mockedGetSystemDataSchedule = vi.mocked(getSystemDataSchedule);
 const mockedListSystemDataOperations = vi.mocked(listSystemDataOperations);
+const mockedListSystemRunTraces = vi.mocked(listSystemRunTraces);
 
 beforeEach(() => {
   mockedGetSystemDataReadiness.mockReset();
   mockedGetSystemDataSchedule.mockReset();
   mockedListSystemDataOperations.mockReset();
+  mockedListSystemRunTraces.mockReset();
 });
 
 describe('SystemPage', () => {
@@ -232,5 +235,188 @@ describe('SystemPage', () => {
     expect(screen.getAllByText('测试摘要。').length).toBeGreaterThan(0);
     expect(screen.getByText(impact)).toBeInTheDocument();
     expect(screen.getByText(repair)).toBeInTheDocument();
+  });
+
+  it('renders formal run traces on /system/runs for viewers without exposing diagnostics', async () => {
+    mockedListSystemRunTraces.mockResolvedValue({
+      count: 1,
+      items: [
+        {
+          run_id: 'daily-plan:2026-06-22',
+          business_label: '生成今日交易计划',
+          status: 'partial',
+          started_at: '2026-06-22T08:55:00Z',
+          finished_at: '2026-06-22T08:58:00Z',
+          duration_seconds: 180,
+          happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+          affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+          repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
+          next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+          attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+          steps: [],
+          prompt_calls: [],
+          data_fetches: [
+            {
+              source: 'dataset_snapshot',
+              provider: 'wind',
+              date_range: { date_from: '2026-06-01', date_to: '2026-06-22' },
+              trade_date: '2026-06-22',
+              slot: 'pre_market',
+              coverage: { symbols: 120 },
+              captured_at: '2026-06-22T08:30:00Z',
+              available_at: '2026-06-22T08:35:00Z',
+              effective_at: '2026-06-22T08:35:00Z',
+              quality_status: 'ready',
+              missing_ranges: [],
+              repair_guidance: '如缺失，请补齐今日盘前数据。',
+            },
+          ],
+          backtests: [
+            {
+              dataset_snapshot_id: 'dataset-1',
+              data_fingerprints: { dataset: 'dataset-fp', market_snapshots: ['market-fp'] },
+              rule_version: {
+                rule_version_id: 'rule-version-1',
+                rule_version_no: 3,
+                rule_version_fingerprint: 'rule-fp',
+              },
+              market_state_model_version: 'market-state-v2',
+              code_version: 'engine-v5',
+              decision_time_policy: 't+0-close',
+              reproducibility_fingerprint: 'repro-fp',
+              coverage: { coverage_state: 'ready' },
+              limitations: ['coverage-limited'],
+            },
+          ],
+          linked_records: [],
+          admin_diagnostics: null,
+        },
+      ],
+    } as never);
+
+    const { container } = renderWithRouter(
+      [{ path: '/system/runs', element: <SystemRunsPage /> }],
+      ['/system/runs'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByRole('heading', { name: '运行与告警' })).toBeInTheDocument();
+    expect(await screen.findByText('生成今日交易计划')).toBeInTheDocument();
+    expect(screen.getByText('今日交易计划已生成，但仍有部分输入处于降级状态。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看今日计划' })).toHaveAttribute('href', '/daily/pre-market');
+    expect(container.textContent).not.toContain('run_id');
+    expect(container.textContent).not.toContain('job_id');
+    expect(container.textContent).not.toContain('workflow_run_id');
+  });
+
+  it('shows admin diagnostics on /system/runs only for admins', async () => {
+    mockedListSystemRunTraces.mockResolvedValue({
+      count: 1,
+      items: [
+        {
+          run_id: 'daily-plan:2026-06-22',
+          business_label: '生成今日交易计划',
+          status: 'partial',
+          started_at: '2026-06-22T08:55:00Z',
+          finished_at: '2026-06-22T08:58:00Z',
+          duration_seconds: 180,
+          happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+          affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+          repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
+          next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+          attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+          steps: [],
+          prompt_calls: [
+            {
+              run_id: 'prompt-run-1',
+              provider: 'openai',
+              model: 'gpt-5.4',
+              prompt_version: 'article_analysis_v1',
+              schema_version: 'article_analysis_schema_v1',
+              input_hash: 'hash-1',
+              validation_state: 'valid',
+              retry_count: 0,
+              tokens: { total_tokens: 200 },
+              cost: { amount: 0.42, currency: 'USD' },
+              started_at: '2026-06-22T08:40:00Z',
+              completed_at: '2026-06-22T08:41:00Z',
+              linked_business_object: {
+                object_type: 'article_revision',
+                object_id: 'article-1',
+                version_id: 'revision-2',
+              },
+            },
+          ],
+          data_fetches: [
+            {
+              source: 'dataset_snapshot',
+              provider: 'wind',
+              date_range: { date_from: '2026-06-01', date_to: '2026-06-22' },
+              trade_date: '2026-06-22',
+              slot: 'pre_market',
+              coverage: { symbols: 120 },
+              captured_at: '2026-06-22T08:30:00Z',
+              available_at: '2026-06-22T08:35:00Z',
+              effective_at: '2026-06-22T08:35:00Z',
+              quality_status: 'ready',
+              missing_ranges: [],
+              repair_guidance: '如缺失，请补齐今日盘前数据。',
+            },
+          ],
+          backtests: [
+            {
+              dataset_snapshot_id: 'dataset-1',
+              data_fingerprints: { dataset: 'dataset-fp', market_snapshots: ['market-fp'] },
+              rule_version: {
+                rule_version_id: 'rule-version-1',
+                rule_version_no: 3,
+                rule_version_fingerprint: 'rule-fp',
+              },
+              market_state_model_version: 'market-state-v2',
+              code_version: 'engine-v5',
+              decision_time_policy: 't+0-close',
+              reproducibility_fingerprint: 'repro-fp',
+              coverage: { coverage_state: 'ready' },
+              limitations: ['coverage-limited'],
+            },
+          ],
+          linked_records: [],
+          admin_diagnostics: {
+            technical_status: 'partial',
+            linked_ids: { job_ids: ['job-1'], workflow_run_ids: ['workflow-1'] },
+          },
+        },
+      ],
+    } as never);
+
+    renderWithRouter(
+      [{ path: '/system/runs', element: <SystemRunsPage /> }],
+      ['/system/runs'],
+      {
+        initialPrincipal: {
+          role: 'admin',
+          api_key_label: 'Admin',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByText('查看运维诊断详情')).toBeInTheDocument();
+    expect(screen.getByText('job-1')).toBeInTheDocument();
+    expect(screen.getByText('workflow-1')).toBeInTheDocument();
+    expect(screen.getByText('Prompt 调用')).toBeInTheDocument();
+    expect(screen.getByText('openai / gpt-5.4')).toBeInTheDocument();
+    expect(screen.getByText('数据抓取')).toBeInTheDocument();
+    expect(screen.getByText('来源提供方：wind')).toBeInTheDocument();
+    expect(screen.getByText('正式回测证据')).toBeInTheDocument();
+    expect(screen.getByText('代码版本：engine-v5')).toBeInTheDocument();
   });
 });

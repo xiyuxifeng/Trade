@@ -5,8 +5,10 @@ import os
 from fastapi import APIRouter, Depends
 
 from api.dependencies import verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal
 from src.common.config import ConfigError
 from src.services.config_profile_service import ConfigProfileService
+from src.services.system_run_trace_service import SystemRunTraceService
 from src.services.system_service import SystemService
 
 router = APIRouter(prefix="/api/ui/v1/system", tags=["ui-system"])
@@ -16,6 +18,11 @@ legacy_router = APIRouter(prefix="/api/ui/system", tags=["ui-system-legacy"])
 def get_system_service() -> SystemService:
     """构建系统服务。"""
     return SystemService()
+
+
+def get_system_run_trace_service() -> SystemRunTraceService:
+    """构建系统运行追踪服务。"""
+    return SystemRunTraceService()
 
 
 async def _resolve_profile_id() -> str | None:
@@ -56,6 +63,18 @@ async def get_system_dashboard(
     """返回运维 Dashboard 摘要。"""
     runtime_profile_id = await _resolve_profile_id()
     result = await service.build_dashboard_summary(profile_id=runtime_profile_id)
+    return result.payload
+
+
+@router.get("/runs")
+async def list_system_runs(
+    limit: int = 20,
+    service: SystemRunTraceService = Depends(get_system_run_trace_service),
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    _: str = Depends(verify_api_key),
+) -> dict[str, object]:
+    """返回系统管理运行追踪视图。"""
+    result = await service.list_run_traces(actor_role=principal.role, limit=limit)
     return result.payload
 
 

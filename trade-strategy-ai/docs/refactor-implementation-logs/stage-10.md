@@ -833,3 +833,139 @@ Current conclusion：
 - `RT-S10-003` / `RT-S10-004` / Stage 11 remain unstarted
 
 Next allowed action：wait for explicit user authorization for `RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面` or a later Stage 10 review/Gate action. Do not start any of them automatically.
+
+## 2026-06-22 RT-S10-003 优化建议
+
+### Status
+
+`[x] 已完成`
+
+### Delegation
+
+使用 `refactor-orchestrator`。Parent 明确决定本次不委派 subagent，按 single-controller fallback 执行：
+
+- runtime probe 已验证 custom subagent config files 存在；
+- 但当前 Session 中 native spawning availability / effective permission boundary / exact child runtime 均未被独立证明；
+- 本 Task 的 contract、写入路径与验证集都集中在同一组 service/repo/router/tests，继续强行委派的收益低于协调成本。
+
+### Scope
+
+本次只实现 `RT-S10-003 优化建议`：
+
+- 基于已接受的 `RT-S10-001` outcome evidence 与 `RT-S10-002` deterministic structured attribution 生成分离的正式建议记录；
+- 新增 Stage 10 proposal generation/list/detail/review/accept API；
+- 新增 focused backend/router tests；
+- 更新 Stage 10 日志与主实施日志。
+
+明确未执行：
+
+- `/daily/after-close` formal page replacement
+- Stage 11 automation / alerting
+- live Provider calls
+- legacy post-market reports / Job / Workflow / Pipeline / Artifact formal input
+- LLM fact generation
+
+### Contract Compliance
+
+- 保持三条 proposal lane 独立：
+  - `rule_optimization`
+  - `author_profile_revision`
+  - `strategy_revision`
+- 仍复用 canonical `OptimizationProposal`，但 `proposal_type`、`target`、`evidence`、`review_binding`、`available_actions`、中文标签与 acceptance behavior 保持 type-specific。
+- `PostMarketReview.signal_results_json` 与 `PostMarketReview.attribution_json` 只作为输入证据读取；本 Task 不回写 outcome facts 或 attribution facts。
+- 每条建议绑定：
+  - `post_market_review_id`
+  - `trading_day_plan_id`
+  - `daily_strategy_instance_id`
+  - `strategy_version_id`
+  - `signal_ids`
+  - `attribution_categories`
+  - `outcome_metrics`
+  - `relevant_rule_version_ids`
+  - `relevant_author_profile_version_ids`
+  - `relevant_strategy_membership_ids`
+  - `source_quality_states`
+  - `deterministic_reason_list`
+  - `stage10-optimization-proposal-v1`
+- `rule_optimization` 与 `author_profile_revision` 只提供 `start_review / continue_observing / reject` 有界动作，不生成 formal draft，不直接变更 `RuleVersion`、`RuleApplicabilityProfile` 或 `AuthorProfileVersion`。
+- `strategy_revision` 允许 `accept_to_draft`，但仍复用 Stage 8 已接受的 strategy proposal governance：
+  - 只允许落到 draft；
+  - 不发布；
+  - 不修改 `Strategy.current_published_version_id`。
+- 缺失 execution supplement 仍不会默认创建 execution-specific proposal。
+- `post_close_market_state_id` 缺失仍保持 unavailable，不会变成 unchanged。
+
+### Implementation Summary
+
+- `src/services/post_close_actuals_service.py`
+  - 新增 `OptimizationProposalGenerationRequest` / `OptimizationProposalReviewRequest` / `OptimizationProposalAcceptRequest`。
+  - 新增 Stage 10 proposal generation/list/detail/review/accept service methods。
+  - 新增 deterministic proposal evidence builder、type-specific target view、review binding、available actions 与 idempotent generation fingerprint。
+  - 仅策略建议允许委托到现有 Stage 8 `StrategyCenterService.accept_proposal_to_draft(...)`。
+- `src/db/repositories/strategy_repo.py`
+  - 新增 generic proposal list helpers。
+  - 新增 `get_rule_version(...)`、`get_author_profile_version(...)`。
+- `api/routers/ui/daily_after_close.py`
+  - 新增：
+    - `POST /api/ui/v1/daily/after-close/proposals/generate`
+    - `GET /api/ui/v1/daily/after-close/proposals`
+    - `GET /api/ui/v1/daily/after-close/proposals/{proposal_id}`
+    - `POST /api/ui/v1/daily/after-close/proposals/{proposal_id}/review`
+    - `POST /api/ui/v1/daily/after-close/proposals/{proposal_id}/accept-to-draft`
+- `tests/unit/services/test_daily_trading_plan_service.py`
+  - 新增 RT-S10-003 focused service tests。
+- `tests/api/routers/ui/test_daily_after_close.py`
+  - 新增 proposal router tests。
+
+### Verification
+
+已运行：
+
+- `rtk proxy pytest tests/unit/services/test_daily_trading_plan_service.py -q`
+- `rtk proxy pytest tests/api/routers/ui/test_daily_after_close.py tests/api/test_ui_openapi_contract.py -q`
+- `rtk git diff --check`
+- `rtk rg -n "Job|Workflow|Pipeline|Artifact|config_path|live Provider|mutable latest|LLM" src/services/post_close_actuals_service.py api/routers/ui/daily_after_close.py tests/unit/services/test_daily_trading_plan_service.py tests/api/routers/ui/test_daily_after_close.py`
+
+结果：
+
+- `tests/unit/services/test_daily_trading_plan_service.py`：`30 passed`
+- `tests/api/routers/ui/test_daily_after_close.py` + `tests/api/test_ui_openapi_contract.py`：`6 passed`
+- `git diff --check`：passed
+- legacy isolation grep：未发现本次 RT-S10-003 formal path 引入 legacy formal input；唯一命中为既有 RT-S10-002 LLM gate 文案，仍明确 `未调用 LLM`
+
+Focused verification covered：
+
+- three proposal lanes remain separated
+- proposal_type / target / evidence binding
+- no generic AI suggestion lane
+- rule proposal review actions do not mutate `RuleVersion` or `RuleApplicabilityProfile`
+- author proposal review actions do not mutate `AuthorProfileVersion`
+- strategy proposal acceptance stays draft-only and keeps current strategy pointer unchanged
+- `accept / reject / continue_observing` lifecycle coverage
+- missing evidence keeps `partial/unavailable/continue_observing`
+- missing execution supplement does not become execution proposal
+- router/OpenAPI coverage for new endpoints
+- no frontend/type changes
+
+### Residual Risks
+
+- execution supplement 仍未实现；execution-specific proposal reasons 继续 unavailable，除非后续有 explicit execution evidence。
+- `post_close_market_state_id` 仍是 caller-supplied residual risk；缺失时 proposal evidence 继续记录 unavailable。
+- `/daily/after-close` 正式用户页面仍未替换，完整页面仍属于 `RT-S10-004`。
+- Stage 10 Gate 尚未运行。
+
+### Acceptance Conclusion
+
+`RT-S10-003` is `ACCEPTED` under the frozen Stage 10 contract.
+
+Current conclusion：
+
+- separate rule / author-profile / strategy proposal lanes now exist
+- proposal generation consumes only finalized RT-S10-001 / RT-S10-002 evidence
+- no LLM runtime call was introduced
+- rule/profile proposal handling remains bounded to review/observe/reject
+- strategy proposal acceptance remains draft-only and does not mutate current pointer
+- no formal rule/profile/strategy/current pointer mutation occurs from generation or non-strategy review actions
+- `RT-S10-004` 与 Stage 11 remain unstarted
+
+Next allowed action：wait for explicit user authorization for `RT-S10-004 盘后用户页面` or a later Stage 10 Gate / review action. Do not start Stage 11 automatically.

@@ -49,6 +49,16 @@ class StrategyRepository:
             version_id = UUID(str(version_id))
         return await session.get(StrategyVersion, version_id)
 
+    async def get_rule_version(self, session: AsyncSession, rule_version_id: str | UUID) -> RuleVersion | None:
+        if not isinstance(rule_version_id, UUID):
+            rule_version_id = UUID(str(rule_version_id))
+        return await session.get(RuleVersion, rule_version_id)
+
+    async def get_author_profile_version(self, session: AsyncSession, version_id: str | UUID) -> AuthorProfileVersion | None:
+        if not isinstance(version_id, UUID):
+            version_id = UUID(str(version_id))
+        return await session.get(AuthorProfileVersion, version_id)
+
     async def list_versions(self, session: AsyncSession, *, limit: int = 50) -> list[StrategyVersion]:
         result = await session.scalars(
             select(StrategyVersion).order_by(StrategyVersion.updated_at.desc(), StrategyVersion.version_no.desc()).limit(limit)
@@ -252,6 +262,42 @@ class StrategyRepository:
         if not isinstance(proposal_id, UUID):
             proposal_id = UUID(str(proposal_id))
         return await session.get(OptimizationProposal, proposal_id)
+
+    async def list_proposals_for_review(
+        self,
+        session: AsyncSession,
+        *,
+        post_market_review_id: UUID,
+        proposal_type: ProposalType | None = None,
+        limit: int = 200,
+    ) -> list[OptimizationProposal]:
+        stmt = (
+            select(OptimizationProposal)
+            .where(OptimizationProposal.post_market_review_id == post_market_review_id)
+            .order_by(OptimizationProposal.updated_at.desc(), OptimizationProposal.revision_no.desc())
+            .limit(limit)
+        )
+        if proposal_type is not None:
+            stmt = stmt.where(OptimizationProposal.proposal_type == proposal_type)
+        result = await session.scalars(stmt)
+        return list(result.all())
+
+    async def list_proposals(
+        self,
+        session: AsyncSession,
+        *,
+        proposal_type: ProposalType | None = None,
+        limit: int = 50,
+    ) -> list[OptimizationProposal]:
+        stmt = (
+            select(OptimizationProposal)
+            .order_by(OptimizationProposal.updated_at.desc(), OptimizationProposal.revision_no.desc())
+            .limit(limit)
+        )
+        if proposal_type is not None:
+            stmt = stmt.where(OptimizationProposal.proposal_type == proposal_type)
+        result = await session.scalars(stmt)
+        return list(result.all())
 
     async def list_strategy_revision_proposals(self, session: AsyncSession, *, limit: int = 50) -> list[OptimizationProposal]:
         result = await session.scalars(

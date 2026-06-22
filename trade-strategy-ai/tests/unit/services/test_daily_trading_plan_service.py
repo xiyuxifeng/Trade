@@ -34,11 +34,13 @@ from src.models.stage2_canonical import (
     DailyStrategyInstance,
     DatasetLifecycleState,
     DatasetSnapshot,
+    LifecycleEvent,
     OptimizationProposal,
     PostMarketReview,
     Rule,
     RuleVersion,
     Strategy,
+    StrategyRuleMembership,
     StrategyVersion,
     TradingDayPlan,
 )
@@ -46,6 +48,9 @@ from src.services.daily_trading_plan_service import DailyTradingPlanService, Tra
 from src.services.post_close_actuals_service import (
     POST_CLOSE_ACTUALS_CONTRACT_VERSION,
     POST_CLOSE_ACTUALS_SECTION_ID,
+    OptimizationProposalAcceptRequest,
+    OptimizationProposalGenerationRequest,
+    OptimizationProposalReviewRequest,
     PostMarketReviewService,
     SignalAttributionEvaluationRequest,
     SignalOutcomeEvaluationRequest,
@@ -77,6 +82,7 @@ async def _build_session_factory(tmp_path: Path):
         await conn.run_sync(AuthorProfileVersion.__table__.create)
         await conn.run_sync(Strategy.__table__.create)
         await conn.run_sync(StrategyVersion.__table__.create)
+        await conn.run_sync(StrategyRuleMembership.__table__.create)
         await conn.run_sync(DailyRuleSelection.__table__.create)
         await conn.run_sync(DailyRuleSelectionItem.__table__.create)
         await conn.run_sync(DailyStrategyInstance.__table__.create)
@@ -84,6 +90,7 @@ async def _build_session_factory(tmp_path: Path):
         await conn.run_sync(Signal.__table__.create)
         await conn.run_sync(PostMarketReview.__table__.create)
         await conn.run_sync(OptimizationProposal.__table__.create)
+        await conn.run_sync(LifecycleEvent.__table__.create)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     @asynccontextmanager
@@ -449,11 +456,60 @@ async def _seed_runtime_bundle(session_factory: async_sessionmaker[AsyncSession]
                 author_method_profile_version_id=method_profile_id,
                 author_rule_profile_version_id=rule_profile_id,
                 author_validated_profile_version_id=validated_profile_id,
-                evidence_json={"validation_summary": {"state": "passed"}},
+                evidence_json={
+                    "validation_summary": {
+                        "state": "passed",
+                        "label": "验证通过",
+                        "reviewer_decision": "approved",
+                        "reviewer_decision_label": "已批准",
+                        "dataset_binding": {"state": "ready", "dataset_snapshot_id": str(dataset_snapshot_id), "market_state_definition_version": "market-state-v2"},
+                        "market_snapshot_binding": {"state": "ready", "market_snapshot_ids": [str(market_snapshot_id)]},
+                        "backtest": {
+                            "state": "unavailable",
+                            "out_of_sample_state": "unavailable",
+                            "backtest_run_ids": [],
+                            "backtest_result_ids": [],
+                            "requested_level": None,
+                            "effective_level": None,
+                            "annual_return": None,
+                            "max_drawdown": None,
+                            "win_rate": None,
+                        },
+                        "rule_applicability": {
+                            "state": "unavailable",
+                            "covered_rule_count": 0,
+                            "total_rule_count": 0,
+                            "coverage_ratio": 0.0,
+                            "uncovered_rule_version_ids": [],
+                        },
+                        "sample_coverage": {"state": "unknown", "sample_count": None, "insufficient_sample": False},
+                        "data_quality": {"state": "verified", "warnings": [], "limitations": []},
+                    }
+                },
                 quality_status=QualityStatus.verified,
                 review_status="approved",
                 created_by="seed",
                 updated_by="seed",
+            )
+        )
+        session.add(
+            StrategyRuleMembership(
+                membership_id=UUID("aaaaaaaa-1111-1111-1111-111111111111"),
+                strategy_version_id=strategy_version_id,
+                rule_version_id=UUID("11111111-1111-1111-1111-111111111111"),
+                base_weight=0.6,
+                status="active",
+                configuration_json={"source": "seed"},
+            )
+        )
+        session.add(
+            StrategyRuleMembership(
+                membership_id=UUID("bbbbbbbb-2222-2222-2222-222222222222"),
+                strategy_version_id=strategy_version_id,
+                rule_version_id=UUID("22222222-2222-2222-2222-222222222222"),
+                base_weight=0.4,
+                status="active",
+                configuration_json={"source": "seed"},
             )
         )
         session.add(
@@ -1608,5 +1664,331 @@ async def test_signal_attribution_marks_conflict_gate_without_llm_call(tmp_path:
         assert "evidence_conflict" in first["llm_validation"]["reasons"]
         assert first["llm_validation"]["requested"] is False
         assert review.prompt_run_id is None
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_optimization_proposals_generate_three_separated_lanes_with_evidence_binding(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+
+    evaluation = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    generated = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert generated.count >= 3
+    proposal_types = {item.proposal_type for item in generated.items}
+    assert "rule_optimization" in proposal_types
+    assert {"author_profile_revision", "strategy_revision"}.issubset(proposal_types)
+    strategy_proposal = [item for item in generated.items if item.proposal_type == "strategy_revision"][0]
+    assert strategy_proposal.review_binding["post_market_review_id"] == evaluation.post_market_review_id
+    assert strategy_proposal.review_binding["trading_day_plan_id"] == plan_id
+    assert strategy_proposal.evidence["policy_version"] == "stage10-optimization-proposal-v1"
+    assert strategy_proposal.accepted_draft_version_id is None
+
+    async with session_factory() as session:
+        proposals = list((await session.scalars(select(OptimizationProposal))).all())
+        assert len(proposals) == generated.count
+        assert "rule_optimization" in {item.proposal_type.value for item in proposals}
+        assert all(item.evidence_json["post_market_review_id"] == evaluation.post_market_review_id for item in proposals)
+        review = await session.get(PostMarketReview, UUID(evaluation.post_market_review_id))
+        assert review is not None
+        assert review.signal_results_json["policy_version"] == "stage10-signal-outcome-v1"
+        assert review.attribution_json["policy_version"] == "stage10-structured-attribution-v1"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_optimization_proposals_generation_is_idempotent_and_does_not_duplicate_rows(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+    evaluation = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    first = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    second = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert first.count >= 3
+    assert second.count == first.count
+    assert {item.proposal_id for item in first.items} == {item.proposal_id for item in second.items}
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(OptimizationProposal)) == first.count
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_optimization_proposal_review_actions_do_not_mutate_formal_objects(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+    evaluation = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    generated = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    rule_proposal = [item for item in generated.items if item.proposal_type == "rule_optimization"][0]
+    author_proposal = [item for item in generated.items if item.proposal_type == "author_profile_revision"][0]
+
+    in_review = await service.review_optimization_proposal(
+        rule_proposal.proposal_id,
+        OptimizationProposalReviewRequest(action="start_review", reason="进入复核"),
+        actor_id="reviewer",
+        actor_role="operator",
+    )
+    assert in_review.lifecycle_state == "in_review"
+    observing = await service.review_optimization_proposal(
+        rule_proposal.proposal_id,
+        OptimizationProposalReviewRequest(action="continue_observing", reason="单日证据先继续观察"),
+        actor_id="reviewer",
+        actor_role="operator",
+    )
+    rejected = await service.review_optimization_proposal(
+        author_proposal.proposal_id,
+        OptimizationProposalReviewRequest(action="reject", reason="不进入画像变更"),
+        actor_id="reviewer",
+        actor_role="operator",
+    )
+
+    assert observing.lifecycle_state == "draft"
+    assert rejected.lifecycle_state == "rejected"
+    async with session_factory() as session:
+        strategy = await session.get(Strategy, UUID(ids["strategy_id"]))
+        assert strategy is not None
+        assert str(strategy.current_published_version_id) == ids["strategy_version_id"]
+        rule_version = await session.get(RuleVersion, UUID("11111111-1111-1111-1111-111111111111"))
+        author_profile = await session.get(AuthorProfileVersion, UUID("88888888-8888-8888-8888-888888888888"))
+        assert rule_version is not None and rule_version.lifecycle_state == FormalLifecycleState.published
+        assert author_profile is not None and author_profile.lifecycle_state == FormalLifecycleState.published
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_strategy_optimization_accept_to_draft_keeps_current_pointer_unchanged(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory)
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+    evaluation = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    async with session_factory() as session:
+        review = await session.get(PostMarketReview, UUID(evaluation.post_market_review_id))
+        signal_results_json = dict(review.signal_results_json)
+        signals = list(signal_results_json["signals"])
+        for index, signal in enumerate(signals):
+            signal["return"] = {"state": "ready", "value": -0.08 if index == 0 else -0.06}
+            signal["actual_result"] = {"state": "ready", "value": "down"}
+            signal["matched_rule"] = {
+                "state": "ready",
+                "rule_version_ids": ["11111111-1111-1111-1111-111111111111"],
+                "selection_decisions": {"11111111-1111-1111-1111-111111111111": "selected"},
+            }
+        review.signal_results_json = signal_results_json
+        review.attribution_json = {
+            **review.attribution_json,
+            "signals": [
+                {
+                    **item,
+                    "state": "ready",
+                    "category": "strategy-composition issue",
+                }
+                for item in review.attribution_json["signals"]
+            ],
+            "state": "ready",
+        }
+        await session.commit()
+
+    generated = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+    strategy_proposal = [item for item in generated.items if item.proposal_type == "strategy_revision"][0]
+    reviewed = await service.review_optimization_proposal(
+        strategy_proposal.proposal_id,
+        OptimizationProposalReviewRequest(action="start_review", reason="开始策略复核"),
+        actor_id="reviewer",
+        actor_role="operator",
+    )
+    assert reviewed.lifecycle_state == "in_review"
+    linked_draft_version_id = uuid4()
+    async with session_factory() as session:
+        session.add(
+            StrategyVersion(
+                strategy_version_id=linked_draft_version_id,
+                strategy_id=UUID(ids["strategy_id"]),
+                version_no=2,
+                schema_version="strategy-v1",
+                lifecycle_state=FormalLifecycleState.draft,
+                title="正式策略草稿",
+                summary="供建议挂接的既有草稿",
+                risk_policy_json={"stop_loss_pct": "5%", "take_profit_pct": "12%", "position_limit": 0.5},
+                selection_policy_json={},
+                universe_json={},
+                    author_method_profile_version_id=UUID("66666666-6666-6666-6666-666666666666"),
+                    author_rule_profile_version_id=UUID("77777777-7777-7777-7777-777777777777"),
+                    author_validated_profile_version_id=UUID("88888888-8888-8888-8888-888888888888"),
+                    evidence_json={
+                        "validation_summary": {
+                            "state": "passed",
+                            "label": "验证通过",
+                            "reviewer_decision": "approved",
+                            "reviewer_decision_label": "已批准",
+                            "dataset_binding": {"state": "ready", "dataset_snapshot_id": ids["dataset_snapshot_id"], "market_state_definition_version": "market-state-v2"},
+                            "market_snapshot_binding": {"state": "ready", "market_snapshot_ids": [ids["market_snapshot_id"]]},
+                            "backtest": {
+                                "state": "unavailable",
+                                "out_of_sample_state": "unavailable",
+                                "backtest_run_ids": [],
+                                "backtest_result_ids": [],
+                                "requested_level": None,
+                                "effective_level": None,
+                                "annual_return": None,
+                                "max_drawdown": None,
+                                "win_rate": None,
+                            },
+                            "rule_applicability": {
+                                "state": "unavailable",
+                                "covered_rule_count": 0,
+                                "total_rule_count": 0,
+                                "coverage_ratio": 0.0,
+                                "uncovered_rule_version_ids": [],
+                            },
+                            "sample_coverage": {"state": "unknown", "sample_count": None, "insufficient_sample": False},
+                            "data_quality": {"state": "verified", "warnings": [], "limitations": []},
+                        }
+                    },
+                quality_status=QualityStatus.verified,
+                review_status="draft",
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        await session.commit()
+    accepted = await service.accept_optimization_proposal_to_draft(
+        strategy_proposal.proposal_id,
+        OptimizationProposalAcceptRequest(
+            reason="生成策略草稿",
+            linked_draft_version_id=linked_draft_version_id,
+        ),
+        actor_id="reviewer",
+        actor_role="operator",
+    )
+
+    assert accepted.lifecycle_state == "accepted"
+    assert accepted.accepted_draft_version_id is not None
+    async with session_factory() as session:
+        strategy = await session.get(Strategy, UUID(ids["strategy_id"]))
+        assert strategy is not None
+        assert str(strategy.current_published_version_id) == ids["strategy_version_id"]
+        proposal = await session.get(OptimizationProposal, UUID(strategy_proposal.proposal_id))
+        assert proposal is not None
+        assert proposal.accepted_draft_version_id is not None
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_partial_review_evidence_generates_continue_observing_without_execution_default(tmp_path: Path) -> None:
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    ids = await _seed_runtime_bundle(session_factory)
+    plan_id = await _approve_plan(session_scope, ids)
+    await _set_signal_baseline(
+        session_factory,
+        entry_price={"type": "market", "baseline_policy": "previous_close_daily_market_signal"},
+    )
+    post_close_snapshot_id = await _seed_post_close_actuals(session_factory, missing_symbols=["600000.SH"])
+    service = PostMarketReviewService(session_scope_factory=session_scope)
+    evaluation = await service.evaluate_signal_outcomes(
+        SignalOutcomeEvaluationRequest(
+            trading_day_plan_id=plan_id,
+            post_close_market_snapshot_id=post_close_snapshot_id,
+            post_close_market_state_id=ids["market_state_id"],
+        ),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    generated = await service.generate_optimization_proposals(
+        OptimizationProposalGenerationRequest(post_market_review_id=evaluation.post_market_review_id),
+        actor_id="operator",
+        actor_role="operator",
+    )
+
+    assert generated.state == "partial"
+    assert all(item.recommendation_state == "continue_observing" for item in generated.items)
+    assert all(item.evidence_state in {"partial", "insufficient_coverage", "unavailable"} for item in generated.items)
+    strategy_proposal = [item for item in generated.items if item.proposal_type == "strategy_revision"][0]
+    assert "approved_execution_supplement_missing" not in strategy_proposal.evidence["deterministic_reason_list"]
 
     await engine.dispose()

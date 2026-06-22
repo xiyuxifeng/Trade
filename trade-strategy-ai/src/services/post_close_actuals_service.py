@@ -17,19 +17,40 @@ from src.db.repositories.daily_trading_plan_repo import DailyTradingPlanReposito
 from src.db.repositories.market_snapshot_item_repository import MarketSnapshotItemRepository
 from src.db.repositories.market_snapshot_section_repository import MarketSnapshotSectionRepository
 from src.db.repositories.post_market_review_repo import PostMarketReviewRepository
+from src.db.repositories.strategy_repo import StrategyRepository
 from src.db.session import get_session_factory
-from src.domain.enums import PostMarketReviewState, QualityStatus, SignalState, TradingDayPlanState
+from src.domain.enums import (
+    AuthorProfileKind,
+    PostMarketReviewState,
+    ProposalLifecycleState,
+    ProposalType,
+    QualityStatus,
+    SignalState,
+    TradingDayPlanState,
+)
+from src.domain.lifecycle import DomainLifecycleTransitionError, LifecycleTransitionValidator
 from src.models.market_data_snapshot import MarketSnapshot
 from src.models.market_data_snapshot_item import MarketSnapshotItem
 from src.models.market_data_snapshot_section import MarketSnapshotSection
 from src.models.signal import Signal
-from src.models.stage2_canonical import DatasetSnapshot, PostMarketReview
+from src.models.stage2_canonical import (
+    AuthorProfileVersion,
+    DatasetSnapshot,
+    OptimizationProposal,
+    PostMarketReview,
+    RuleVersion,
+    Strategy,
+    StrategyRuleMembership,
+    StrategyVersion,
+)
+from src.services.strategy_center_service import StrategyCenterService, StrategyProposalAcceptRequest
 
 
 POST_CLOSE_ACTUALS_SECTION_ID = "post_close_symbol_ohlcv_actuals"
 POST_CLOSE_ACTUALS_CONTRACT_VERSION = "post-close-symbol-ohlcv-actuals-v1"
 SIGNAL_OUTCOME_POLICY_VERSION = "stage10-signal-outcome-v1"
 STRUCTURED_ATTRIBUTION_POLICY_VERSION = "stage10-structured-attribution-v1"
+OPTIMIZATION_PROPOSAL_POLICY_VERSION = "stage10-optimization-proposal-v1"
 CoverageState = Literal["ready", "partial", "unavailable", "conflict", "invalid", "insufficient_coverage", "degraded"]
 AttributionCategory = Literal[
     "data issue",
@@ -39,6 +60,44 @@ AttributionCategory = Literal[
     "execution issue",
     "unattributable",
 ]
+ProposalRecommendationState = Literal[
+    "continue_observing",
+    "create_draft_review_suggestion",
+    "review_author_profile",
+]
+
+PROPOSAL_TYPE_LABELS = {
+    ProposalType.rule_optimization: "规则优化建议",
+    ProposalType.author_profile_revision: "作者画像修订建议",
+    ProposalType.strategy_revision: "策略修订建议",
+}
+PROPOSAL_LIFECYCLE_LABELS = {
+    ProposalLifecycleState.draft: "待处理",
+    ProposalLifecycleState.in_review: "复核中",
+    ProposalLifecycleState.accepted: "已生成草稿",
+    ProposalLifecycleState.rejected: "已拒绝",
+    ProposalLifecycleState.archived: "已归档",
+    ProposalLifecycleState.superseded: "已被替代",
+}
+PROPOSAL_EVIDENCE_LABELS = {
+    "ready": "证据完整",
+    "partial": "证据不完整",
+    "unavailable": "证据暂不可用",
+    "conflict": "证据冲突",
+    "invalid": "证据无效",
+    "insufficient_coverage": "覆盖不足",
+    "degraded": "证据降级",
+}
+PROPOSAL_RECOMMENDATION_LABELS = {
+    "continue_observing": "继续观察",
+    "create_draft_review_suggestion": "生成草稿复核建议",
+    "review_author_profile": "进入画像复核",
+}
+AUTHOR_PROFILE_KIND_LABELS = {
+    AuthorProfileKind.method: "作者方法画像",
+    AuthorProfileKind.rule: "作者规则画像",
+    AuthorProfileKind.validated: "作者验证画像",
+}
 
 
 def _json_fingerprint(payload: Any) -> str:
@@ -58,6 +117,10 @@ def _ratio(numerator: Decimal, denominator: Decimal) -> float | None:
     if denominator == 0:
         return None
     return float(numerator / denominator)
+
+
+def _state(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
 
 
 def _entry_price_baseline(signal: Signal) -> tuple[Decimal | None, str | None, str | None]:
@@ -175,6 +238,66 @@ class SignalAttributionEvaluationResult(BaseModel):
     trade_date: date
     post_close_market_snapshot_id: str
     attribution: dict[str, Any]
+    happened: str
+    affected: str
+    repair_guidance: str
+
+
+class OptimizationProposalGenerationRequest(BaseModel):
+    post_market_review_id: str
+
+
+class OptimizationProposalReviewRequest(BaseModel):
+    action: Literal["start_review", "continue_observing", "reject"]
+    reason: str | None = None
+    source_surface: str = "/daily/after-close"
+
+
+class OptimizationProposalAcceptRequest(BaseModel):
+    reason: str | None = None
+    linked_draft_version_id: UUID | None = None
+    source_surface: str = "/daily/after-close"
+
+
+class OptimizationProposalTargetView(BaseModel):
+    asset_type: str
+    asset_id: str
+    label: str
+    strategy_membership_ids: list[str] = Field(default_factory=list)
+    rule_version_ids: list[str] = Field(default_factory=list)
+    author_profile_version_ids: list[str] = Field(default_factory=list)
+
+
+class OptimizationProposalView(BaseModel):
+    proposal_id: str
+    proposal_type: str
+    proposal_type_label: str
+    lifecycle_state: str
+    lifecycle_label: str
+    revision_no: int
+    confidence: float | None = None
+    evidence_state: str
+    evidence_label: str
+    recommendation_state: str
+    recommendation_label: str
+    rationale: str
+    target: OptimizationProposalTargetView
+    review_binding: dict[str, Any] = Field(default_factory=dict)
+    base_version_id: str | None = None
+    accepted_draft_version_id: str | None = None
+    proposed_changes: dict[str, Any] = Field(default_factory=dict)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+    updated_at: str | None = None
+    available_actions: list[str] = Field(default_factory=list)
+    partial_reasons: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class OptimizationProposalCollectionResult(BaseModel):
+    state: Literal["ready", "partial", "empty"]
+    count: int
+    items: list[OptimizationProposalView]
     happened: str
     affected: str
     repair_guidance: str
@@ -452,10 +575,13 @@ class PostMarketReviewService:
         session_scope_factory: Callable[[], Any] | None = None,
         actuals_repository: PostCloseActualsRepository | None = None,
         review_repository: PostMarketReviewRepository | None = None,
+        strategy_repository: StrategyRepository | None = None,
     ) -> None:
         self._session_scope_factory = session_scope_factory or self._default_session_scope_factory
         self.actuals_repository = actuals_repository or PostCloseActualsRepository()
         self.review_repository = review_repository or PostMarketReviewRepository()
+        self.strategy_repository = strategy_repository or StrategyRepository()
+        self._lifecycle_validator = LifecycleTransitionValidator()
 
     @staticmethod
     @asynccontextmanager
@@ -1055,4 +1181,870 @@ class PostMarketReviewService:
             return "unavailable"
         if any(state == "degraded" for state in states):
             return "degraded"
+        return "ready"
+
+    async def generate_optimization_proposals(
+        self,
+        request: OptimizationProposalGenerationRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> OptimizationProposalCollectionResult:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to generate optimization proposals")
+        async with self._session_scope_factory() as session:
+            review, plan, instance, strategy_version, strategy, memberships = await self._load_proposal_context(
+                session,
+                post_market_review_id=UUID(request.post_market_review_id),
+            )
+            existing = await self.strategy_repository.list_proposals_for_review(
+                session,
+                post_market_review_id=review.post_market_review_id,
+            )
+            proposals = await self._generate_or_reuse_proposals(
+                session,
+                review=review,
+                plan=plan,
+                instance=instance,
+                strategy_version=strategy_version,
+                strategy=strategy,
+                memberships=memberships,
+                existing=existing,
+                actor_id=actor_id,
+            )
+            items = [await self._to_optimization_proposal_view(session, proposal) for proposal in proposals]
+            state = self._collection_state(items)
+            return OptimizationProposalCollectionResult(
+                state=state,
+                count=len(items),
+                items=items,
+                happened="已基于正式盘后结果与结构化归因生成分离的规则、画像和策略建议。",
+                affected="建议只会进入建议生命周期，不会直接改写正式规则、画像、策略或当前策略指针。",
+                repair_guidance="如需继续处理，请先进入复核；只有策略修订建议允许在现有正式治理内生成草稿。",
+            )
+
+    async def list_optimization_proposals(
+        self,
+        *,
+        actor_id: str,
+        actor_role: str,
+        post_market_review_id: str | None = None,
+        proposal_type: str | None = None,
+        limit: int = 50,
+    ) -> OptimizationProposalCollectionResult:
+        del actor_id
+        if actor_role not in {"viewer", "operator", "admin"}:
+            raise PermissionError("viewer permission is required to view optimization proposals")
+        proposal_type_enum = self._parse_proposal_type(proposal_type) if proposal_type else None
+        async with self._session_scope_factory() as session:
+            if post_market_review_id is not None:
+                proposals = await self.strategy_repository.list_proposals_for_review(
+                    session,
+                    post_market_review_id=UUID(post_market_review_id),
+                    proposal_type=proposal_type_enum,
+                    limit=limit,
+                )
+            else:
+                proposals = await self.strategy_repository.list_proposals(
+                    session,
+                    proposal_type=proposal_type_enum,
+                    limit=limit,
+                )
+            items = [await self._to_optimization_proposal_view(session, proposal) for proposal in proposals]
+            state = self._collection_state(items)
+            return OptimizationProposalCollectionResult(
+                state=state,
+                count=len(items),
+                items=items,
+                happened="已读取正式盘后优化建议列表。",
+                affected="页面会按规则、画像、策略三条独立建议展示当前状态和可执行动作。",
+                repair_guidance="如建议为空，请先完成盘后结果评估、结构化归因，并生成本次优化建议。",
+            )
+
+    async def get_optimization_proposal(
+        self,
+        proposal_id: str | UUID,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> OptimizationProposalView:
+        del actor_id
+        if actor_role not in {"viewer", "operator", "admin"}:
+            raise PermissionError("viewer permission is required to view optimization proposals")
+        async with self._session_scope_factory() as session:
+            proposal = await self.strategy_repository.get_proposal(session, proposal_id)
+            if proposal is None:
+                raise LookupError("optimization proposal not found")
+            return await self._to_optimization_proposal_view(session, proposal)
+
+    async def review_optimization_proposal(
+        self,
+        proposal_id: str | UUID,
+        request: OptimizationProposalReviewRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> OptimizationProposalView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to review optimization proposals")
+        async with self._session_scope_factory() as session:
+            proposal = await self.strategy_repository.get_proposal(session, proposal_id)
+            if proposal is None:
+                raise LookupError("optimization proposal not found")
+            before = self._proposal_audit_state(proposal)
+            from_state = proposal.lifecycle_state
+            to_state = from_state
+            if request.action == "start_review":
+                to_state = ProposalLifecycleState.in_review
+                self._lifecycle_validator.validate(from_state, to_state)
+            elif request.action == "continue_observing":
+                if from_state is not ProposalLifecycleState.in_review:
+                    raise ValueError("只有进入复核后的建议才能回到继续观察。")
+                to_state = ProposalLifecycleState.draft
+            elif request.action == "reject":
+                to_state = ProposalLifecycleState.rejected
+                self._lifecycle_validator.validate(from_state, to_state)
+            proposal.lifecycle_state = to_state
+            proposal.updated_at = datetime.now(UTC)
+            proposal.updated_by = actor_id
+            proposal.evidence_json = {
+                **(proposal.evidence_json or {}),
+                "last_review_action": request.action,
+                "last_review_reason": request.reason,
+            }
+            with canonical_write_scope("strategy", "PostMarketReviewService.review_optimization_proposal"):
+                await self.strategy_repository.record_lifecycle_event(
+                    session,
+                    object_id=proposal.optimization_proposal_id,
+                    from_state=from_state.value,
+                    to_state=to_state.value,
+                    actor_id=actor_id,
+                    actor_role=actor_role,
+                    reason=request.reason,
+                    before_state=before,
+                    after_state=self._proposal_audit_state(proposal),
+                    correlation_id=str(proposal.post_market_review_id),
+                )
+            return await self._to_optimization_proposal_view(session, proposal)
+
+    async def accept_optimization_proposal_to_draft(
+        self,
+        proposal_id: str | UUID,
+        request: OptimizationProposalAcceptRequest,
+        *,
+        actor_id: str,
+        actor_role: str,
+    ) -> OptimizationProposalView:
+        if actor_role not in {"operator", "admin"}:
+            raise PermissionError("operator permission is required to accept optimization proposals")
+        async with self._session_scope_factory() as session:
+            proposal = await self.strategy_repository.get_proposal(session, proposal_id)
+            if proposal is None:
+                raise LookupError("optimization proposal not found")
+            if proposal.proposal_type is not ProposalType.strategy_revision:
+                raise ValueError("当前建议类型没有安全的正式草稿通道，只能继续观察或拒绝。")
+        strategy_service = StrategyCenterService(session_scope_factory=self._session_scope_factory)
+        await strategy_service.accept_proposal_to_draft(
+            proposal_id,
+            StrategyProposalAcceptRequest(
+                reason=request.reason,
+                linked_draft_version_id=request.linked_draft_version_id,
+            ),
+            actor_id=actor_id,
+            actor_role=actor_role,
+        )
+        async with self._session_scope_factory() as session:
+            proposal = await self.strategy_repository.get_proposal(session, proposal_id)
+            assert proposal is not None
+            return await self._to_optimization_proposal_view(session, proposal)
+
+    async def _load_proposal_context(
+        self,
+        session: AsyncSession,
+        *,
+        post_market_review_id: UUID,
+    ) -> tuple[PostMarketReview, Any, Any, StrategyVersion, Strategy, list[StrategyRuleMembership]]:
+        review = await self.review_repository.get_review(session, post_market_review_id)
+        if review is None:
+            raise LookupError("post-market review is missing")
+        if (review.signal_results_json or {}).get("policy_version") != SIGNAL_OUTCOME_POLICY_VERSION:
+            raise ValueError("post-market review is missing finalized RT-S10-001 evidence")
+        if (review.attribution_json or {}).get("policy_version") != STRUCTURED_ATTRIBUTION_POLICY_VERSION:
+            raise ValueError("post-market review is missing finalized RT-S10-002 evidence")
+        plan = await self.review_repository.get_plan(session, review.trading_day_plan_id)
+        if plan is None:
+            raise LookupError("trading day plan is missing")
+        instance = await self.review_repository.get_daily_strategy_instance(session, plan.daily_strategy_instance_id)
+        if instance is None:
+            raise LookupError("daily strategy instance is missing")
+        strategy_version = await self.strategy_repository.get_version(session, instance.strategy_version_id)
+        if strategy_version is None:
+            raise LookupError("strategy version is missing")
+        strategy = await self.strategy_repository.get_strategy(session, strategy_version.strategy_id)
+        if strategy is None:
+            raise LookupError("strategy is missing")
+        memberships = await self.strategy_repository.list_rule_memberships(
+            session,
+            strategy_version_id=strategy_version.strategy_version_id,
+        )
+        return review, plan, instance, strategy_version, strategy, memberships
+
+    async def _generate_or_reuse_proposals(
+        self,
+        session: AsyncSession,
+        *,
+        review: PostMarketReview,
+        plan: Any,
+        instance: Any,
+        strategy_version: StrategyVersion,
+        strategy: Strategy,
+        memberships: list[StrategyRuleMembership],
+        existing: list[OptimizationProposal],
+        actor_id: str,
+    ) -> list[OptimizationProposal]:
+        signal_results = list((review.signal_results_json or {}).get("signals") or [])
+        attributions = list((review.attribution_json or {}).get("signals") or [])
+        attribution_by_signal_id = {str(item.get("signal_id")): item for item in attributions if item.get("signal_id")}
+        membership_by_rule_id = {str(item.rule_version_id): item for item in memberships}
+        all_rule_ids = sorted(
+            {
+                rule_id
+                for signal in signal_results
+                for rule_id in ((signal.get("matched_rule") or {}).get("rule_version_ids") or [])
+                if rule_id
+            }
+        )
+        rule_versions = {
+            str(item.rule_version_id): item
+            for item in await self.strategy_repository.list_rule_versions_by_ids(
+                session,
+                rule_version_ids=[UUID(rule_id) for rule_id in all_rule_ids],
+            )
+        }
+        proposals: list[OptimizationProposal] = []
+        for rule_id in all_rule_ids:
+            candidate = self._build_rule_candidate(
+                review=review,
+                plan=plan,
+                instance=instance,
+                strategy_version=strategy_version,
+                strategy=strategy,
+                rule_version=rule_versions.get(rule_id),
+                membership=membership_by_rule_id.get(rule_id),
+                signal_results=signal_results,
+                attribution_by_signal_id=attribution_by_signal_id,
+            )
+            proposals.append(
+                await self._persist_or_reuse_candidate(
+                    session,
+                    candidate=candidate,
+                    existing=existing,
+                    actor_id=actor_id,
+                )
+            )
+        author_candidate = await self._build_author_candidate(
+            session,
+            review=review,
+            plan=plan,
+            instance=instance,
+            strategy_version=strategy_version,
+            strategy=strategy,
+            signal_results=signal_results,
+            attribution_by_signal_id=attribution_by_signal_id,
+        )
+        proposals.append(
+            await self._persist_or_reuse_candidate(
+                session,
+                candidate=author_candidate,
+                existing=existing,
+                actor_id=actor_id,
+            )
+        )
+        strategy_candidate = self._build_strategy_candidate(
+            review=review,
+            plan=plan,
+            instance=instance,
+            strategy_version=strategy_version,
+            strategy=strategy,
+            memberships=memberships,
+            signal_results=signal_results,
+            attribution_by_signal_id=attribution_by_signal_id,
+        )
+        proposals.append(
+            await self._persist_or_reuse_candidate(
+                session,
+                candidate=strategy_candidate,
+                existing=existing,
+                actor_id=actor_id,
+            )
+        )
+        return proposals
+
+    def _build_rule_candidate(
+        self,
+        *,
+        review: PostMarketReview,
+        plan: Any,
+        instance: Any,
+        strategy_version: StrategyVersion,
+        strategy: Strategy,
+        rule_version: RuleVersion | None,
+        membership: StrategyRuleMembership | None,
+        signal_results: list[dict[str, Any]],
+        attribution_by_signal_id: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        rule_id = str(rule_version.rule_version_id if rule_version is not None else membership.rule_version_id)
+        matched_signals = [
+            signal
+            for signal in signal_results
+            if rule_id in ((signal.get("matched_rule") or {}).get("rule_version_ids") or [])
+        ]
+        attribution_items = [
+            attribution_by_signal_id[str(signal.get("signal_id"))]
+            for signal in matched_signals
+            if str(signal.get("signal_id")) in attribution_by_signal_id
+        ]
+        evidence_state = self._proposal_evidence_state(review=review, signal_results=matched_signals, attributions=attribution_items)
+        negative_ready_count = sum(1 for signal in matched_signals if self._is_negative_ready_signal(signal))
+        categories = sorted({item.get("category") for item in attribution_items if item.get("category")})
+        recommendation_state: ProposalRecommendationState = "continue_observing"
+        if evidence_state == "ready" and "rule issue" in categories and negative_ready_count >= 2:
+            recommendation_state = "create_draft_review_suggestion"
+        reasons = [
+            f"matched_signal_count={len(matched_signals)}",
+            f"negative_ready_signal_count={negative_ready_count}",
+            f"attribution_categories={','.join(categories) if categories else 'none'}",
+        ]
+        if membership is not None:
+            reasons.append(f"strategy_membership_id={membership.membership_id}")
+        rationale = (
+            f"{rule_version.title if rule_version is not None and rule_version.title else rule_id} "
+            f"当前仅基于单日盘后证据生成规则层建议，正式规则不会被直接改写。"
+        )
+        evidence = self._proposal_evidence_payload(
+            proposal_type=ProposalType.rule_optimization,
+            review=review,
+            plan=plan,
+            instance=instance,
+            strategy_version=strategy_version,
+            strategy=strategy,
+            signal_results=matched_signals,
+            attributions=attribution_items,
+            recommendation_state=recommendation_state,
+            deterministic_reason_list=reasons,
+            target_asset_type="RuleVersion",
+            target_asset_id=rule_id,
+            relevant_rule_version_ids=[rule_id],
+            relevant_author_profile_version_ids=self._strategy_author_profile_ids(strategy_version),
+            relevant_strategy_membership_ids=[str(membership.membership_id)] if membership is not None else [],
+        )
+        return {
+            "proposal_type": ProposalType.rule_optimization,
+            "target_asset_type": "RuleVersion",
+            "target_asset_id": UUID(rule_id),
+            "base_version_id": UUID(rule_id),
+            "proposed_changes": {
+                "recommended_action": recommendation_state,
+                "action_label": PROPOSAL_RECOMMENDATION_LABELS[recommendation_state],
+                "rule_title": rule_version.title if rule_version is not None else None,
+            },
+            "evidence": {
+                **evidence,
+                "rationale": rationale,
+                "evidence_state": evidence_state,
+                "target": {
+                    "asset_type": "RuleVersion",
+                    "asset_id": rule_id,
+                    "label": rule_version.title if rule_version is not None and rule_version.title else rule_id,
+                    "strategy_membership_ids": [str(membership.membership_id)] if membership is not None else [],
+                    "rule_version_ids": [rule_id],
+                    "author_profile_version_ids": [],
+                },
+            },
+            "confidence": self._confidence_value(evidence_state=evidence_state, negative_ready_count=negative_ready_count, bonus=0.05 if "rule issue" in categories else 0.0),
+        }
+
+    async def _build_author_candidate(
+        self,
+        session: AsyncSession,
+        *,
+        review: PostMarketReview,
+        plan: Any,
+        instance: Any,
+        strategy_version: StrategyVersion,
+        strategy: Strategy,
+        signal_results: list[dict[str, Any]],
+        attribution_by_signal_id: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        profile_id = (
+            strategy_version.author_validated_profile_version_id
+            or strategy_version.author_rule_profile_version_id
+            or strategy_version.author_method_profile_version_id
+        )
+        if profile_id is None:
+            raise ValueError("author profile target is missing for post-market optimization proposal")
+        profile = await self.strategy_repository.get_author_profile_version(session, profile_id)
+        if profile is None:
+            raise LookupError("author profile version is missing")
+        attributions = [
+            attribution_by_signal_id[str(signal.get("signal_id"))]
+            for signal in signal_results
+            if str(signal.get("signal_id")) in attribution_by_signal_id
+        ]
+        evidence_state = self._proposal_evidence_state(review=review, signal_results=signal_results, attributions=attributions)
+        negative_ready_count = sum(1 for signal in signal_results if self._is_negative_ready_signal(signal))
+        categories = sorted({item.get("category") for item in attributions if item.get("category")})
+        recommendation_state: ProposalRecommendationState = "continue_observing"
+        if evidence_state == "ready" and negative_ready_count >= 2 and any(
+            category in {"unattributable", "market-state identification issue"} for category in categories
+        ):
+            recommendation_state = "review_author_profile"
+        reasons = [
+            f"signal_count={len(signal_results)}",
+            f"negative_ready_signal_count={negative_ready_count}",
+            f"attribution_categories={','.join(categories) if categories else 'none'}",
+            f"author_profile_kind={profile.profile_kind.value}",
+        ]
+        rationale = f"{AUTHOR_PROFILE_KIND_LABELS[profile.profile_kind]} 当前只接收单日证据形成复核建议，不会直接覆盖已发布画像。"
+        evidence = self._proposal_evidence_payload(
+            proposal_type=ProposalType.author_profile_revision,
+            review=review,
+            plan=plan,
+            instance=instance,
+            strategy_version=strategy_version,
+            strategy=strategy,
+            signal_results=signal_results,
+            attributions=attributions,
+            recommendation_state=recommendation_state,
+            deterministic_reason_list=reasons,
+            target_asset_type="AuthorProfileVersion",
+            target_asset_id=str(profile.author_profile_version_id),
+            relevant_rule_version_ids=sorted(
+                {
+                    rule_id
+                    for signal in signal_results
+                    for rule_id in ((signal.get("matched_rule") or {}).get("rule_version_ids") or [])
+                    if rule_id
+                }
+            ),
+            relevant_author_profile_version_ids=[str(profile.author_profile_version_id)],
+            relevant_strategy_membership_ids=[],
+        )
+        return {
+            "proposal_type": ProposalType.author_profile_revision,
+            "target_asset_type": "AuthorProfileVersion",
+            "target_asset_id": profile.author_profile_version_id,
+            "base_version_id": profile.author_profile_version_id,
+            "proposed_changes": {
+                "recommended_action": recommendation_state,
+                "action_label": PROPOSAL_RECOMMENDATION_LABELS[recommendation_state],
+                "profile_kind": profile.profile_kind.value,
+            },
+            "evidence": {
+                **evidence,
+                "rationale": rationale,
+                "evidence_state": evidence_state,
+                "target": {
+                    "asset_type": "AuthorProfileVersion",
+                    "asset_id": str(profile.author_profile_version_id),
+                    "label": f"{AUTHOR_PROFILE_KIND_LABELS[profile.profile_kind]} v{profile.version_no}",
+                    "strategy_membership_ids": [],
+                    "rule_version_ids": evidence["relevant_rule_version_ids"],
+                    "author_profile_version_ids": [str(profile.author_profile_version_id)],
+                },
+            },
+            "confidence": self._confidence_value(evidence_state=evidence_state, negative_ready_count=negative_ready_count, bonus=0.02),
+        }
+
+    def _build_strategy_candidate(
+        self,
+        *,
+        review: PostMarketReview,
+        plan: Any,
+        instance: Any,
+        strategy_version: StrategyVersion,
+        strategy: Strategy,
+        memberships: list[StrategyRuleMembership],
+        signal_results: list[dict[str, Any]],
+        attribution_by_signal_id: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        attributions = [
+            attribution_by_signal_id[str(signal.get("signal_id"))]
+            for signal in signal_results
+            if str(signal.get("signal_id")) in attribution_by_signal_id
+        ]
+        evidence_state = self._proposal_evidence_state(review=review, signal_results=signal_results, attributions=attributions)
+        negative_ready_count = sum(1 for signal in signal_results if self._is_negative_ready_signal(signal))
+        categories = sorted({item.get("category") for item in attributions if item.get("category")})
+        affected_rule_ids = sorted(
+            {
+                rule_id
+                for signal in signal_results
+                for rule_id in ((signal.get("matched_rule") or {}).get("rule_version_ids") or [])
+                if rule_id
+            }
+        )
+        strategy_issue_count = sum(
+            1
+            for item in attributions
+            if item.get("category") in {"strategy-composition issue", "market-state identification issue"}
+        )
+        recommendation_state: ProposalRecommendationState = "continue_observing"
+        proposed_weight_changes: list[dict[str, Any]] = []
+        if evidence_state == "ready" and strategy_issue_count >= 1 and negative_ready_count >= 1:
+            recommendation_state = "create_draft_review_suggestion"
+            for membership in memberships:
+                rule_id = str(membership.rule_version_id)
+                if rule_id not in affected_rule_ids or membership.base_weight is None:
+                    continue
+                current_weight = float(membership.base_weight)
+                proposed_weight_changes.append(
+                    {
+                        "rule_version_id": rule_id,
+                        "base_weight": round(current_weight * 0.8, 6),
+                    }
+                )
+        reasons = [
+            f"signal_count={len(signal_results)}",
+            f"negative_ready_signal_count={negative_ready_count}",
+            f"strategy_issue_signal_count={strategy_issue_count}",
+            f"attribution_categories={','.join(categories) if categories else 'none'}",
+        ]
+        rationale = "本次策略建议仅依据正式盘后单日证据生成，如被接受也只能生成草稿，不会发布或切换当前正式策略。"
+        evidence = self._proposal_evidence_payload(
+            proposal_type=ProposalType.strategy_revision,
+            review=review,
+            plan=plan,
+            instance=instance,
+            strategy_version=strategy_version,
+            strategy=strategy,
+            signal_results=signal_results,
+            attributions=attributions,
+            recommendation_state=recommendation_state,
+            deterministic_reason_list=reasons,
+            target_asset_type="StrategyVersion",
+            target_asset_id=str(strategy_version.strategy_version_id),
+            relevant_rule_version_ids=affected_rule_ids,
+            relevant_author_profile_version_ids=self._strategy_author_profile_ids(strategy_version),
+            relevant_strategy_membership_ids=[
+                str(item.membership_id)
+                for item in memberships
+                if str(item.rule_version_id) in affected_rule_ids
+            ],
+        )
+        proposed_changes: dict[str, Any] = {
+            "recommended_action": recommendation_state,
+            "action_label": PROPOSAL_RECOMMENDATION_LABELS[recommendation_state],
+        }
+        if proposed_weight_changes:
+            proposed_changes["proposed_weight_changes"] = proposed_weight_changes
+            proposed_changes["summary"] = "降低本次异常命中规则的基础权重，先生成草稿再进入正式复核。"
+        return {
+            "proposal_type": ProposalType.strategy_revision,
+            "target_asset_type": "StrategyVersion",
+            "target_asset_id": strategy_version.strategy_version_id,
+            "base_version_id": strategy_version.strategy_version_id,
+            "proposed_changes": proposed_changes,
+            "evidence": {
+                **evidence,
+                "rationale": rationale,
+                "evidence_state": evidence_state,
+                "target": {
+                    "asset_type": "StrategyVersion",
+                    "asset_id": str(strategy_version.strategy_version_id),
+                    "label": f"{strategy_version.title or strategy.business_key} v{strategy_version.version_no}",
+                    "strategy_membership_ids": evidence["relevant_strategy_membership_ids"],
+                    "rule_version_ids": affected_rule_ids,
+                    "author_profile_version_ids": evidence["relevant_author_profile_version_ids"],
+                },
+            },
+            "confidence": self._confidence_value(evidence_state=evidence_state, negative_ready_count=negative_ready_count, bonus=0.08 if proposed_weight_changes else 0.0),
+        }
+
+    async def _persist_or_reuse_candidate(
+        self,
+        session: AsyncSession,
+        *,
+        candidate: dict[str, Any],
+        existing: list[OptimizationProposal],
+        actor_id: str,
+    ) -> OptimizationProposal:
+        fingerprint = candidate["evidence"]["proposal_generation_fingerprint"]
+        for proposal in existing:
+            if (
+                proposal.proposal_type == candidate["proposal_type"]
+                and proposal.target_asset_id == candidate["target_asset_id"]
+                and (proposal.evidence_json or {}).get("proposal_generation_fingerprint") == fingerprint
+            ):
+                return proposal
+        proposal = OptimizationProposal(
+            optimization_proposal_id=uuid4(),
+            post_market_review_id=UUID(candidate["evidence"]["post_market_review_id"]),
+            proposal_type=candidate["proposal_type"],
+            target_asset_type=candidate["target_asset_type"],
+            target_asset_id=candidate["target_asset_id"],
+            revision_no=await self.strategy_repository.next_proposal_revision_no(
+                session,
+                post_market_review_id=UUID(candidate["evidence"]["post_market_review_id"]),
+                target_asset_id=candidate["target_asset_id"],
+                proposal_type=candidate["proposal_type"],
+            ),
+            base_version_id=candidate["base_version_id"],
+            proposed_changes=candidate["proposed_changes"],
+            evidence_json=candidate["evidence"],
+            confidence=candidate["confidence"],
+            lifecycle_state=ProposalLifecycleState.draft,
+            accepted_draft_version_id=None,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+        with canonical_write_scope("strategy", "PostMarketReviewService.generate_optimization_proposals"):
+            await self.strategy_repository.add_proposal(session, proposal)
+            await self.strategy_repository.record_lifecycle_event(
+                session,
+                object_id=proposal.optimization_proposal_id,
+                from_state=None,
+                to_state=ProposalLifecycleState.draft.value,
+                actor_id=actor_id,
+                actor_role="operator",
+                reason=candidate["evidence"].get("rationale"),
+                before_state=None,
+                after_state=self._proposal_audit_state(proposal),
+                correlation_id=str(proposal.post_market_review_id),
+            )
+        return proposal
+
+    def _proposal_evidence_payload(
+        self,
+        *,
+        proposal_type: ProposalType,
+        review: PostMarketReview,
+        plan: Any,
+        instance: Any,
+        strategy_version: StrategyVersion,
+        strategy: Strategy,
+        signal_results: list[dict[str, Any]],
+        attributions: list[dict[str, Any]],
+        recommendation_state: ProposalRecommendationState,
+        deterministic_reason_list: list[str],
+        target_asset_type: str,
+        target_asset_id: str,
+        relevant_rule_version_ids: list[str],
+        relevant_author_profile_version_ids: list[str],
+        relevant_strategy_membership_ids: list[str],
+    ) -> dict[str, Any]:
+        signal_ids = [str(item.get("signal_id")) for item in signal_results if item.get("signal_id")]
+        attribution_categories = [str(item.get("category")) for item in attributions if item.get("category")]
+        source_quality_states = {
+            "review_quality_status": _state(review.quality_status),
+            "signal_result_state": self._aggregate_signal_states(signal_results),
+            "attribution_state": self._aggregate_attribution_state([str(item.get("state") or "ready") for item in attributions]) if attributions else "unavailable",
+        }
+        payload = {
+            "policy_version": OPTIMIZATION_PROPOSAL_POLICY_VERSION,
+            "proposal_type": proposal_type.value,
+            "post_market_review_id": str(review.post_market_review_id),
+            "trading_day_plan_id": str(plan.trading_day_plan_id),
+            "daily_strategy_instance_id": str(instance.daily_strategy_instance_id),
+            "strategy_id": str(strategy.strategy_id),
+            "strategy_version_id": str(strategy_version.strategy_version_id),
+            "signal_ids": signal_ids,
+            "attribution_categories": attribution_categories,
+            "outcome_metrics": [
+                {
+                    "signal_id": str(item.get("signal_id")),
+                    "symbol": item.get("symbol"),
+                    "state": item.get("state"),
+                    "return_state": (item.get("return") or {}).get("state"),
+                    "return_value": (item.get("return") or {}).get("value"),
+                    "actual_result_state": (item.get("actual_result") or {}).get("state"),
+                    "actual_result_value": (item.get("actual_result") or {}).get("value"),
+                }
+                for item in signal_results
+            ],
+            "relevant_rule_version_ids": relevant_rule_version_ids,
+            "relevant_author_profile_version_ids": relevant_author_profile_version_ids,
+            "relevant_strategy_membership_ids": relevant_strategy_membership_ids,
+            "source_quality_states": source_quality_states,
+            "deterministic_reason_list": deterministic_reason_list,
+            "recommendation_state": recommendation_state,
+            "target_asset_type": target_asset_type,
+            "target_asset_id": target_asset_id,
+            "current_strategy_version_id": str(strategy.current_published_version_id) if strategy.current_published_version_id else None,
+        }
+        payload["proposal_generation_fingerprint"] = _json_fingerprint(payload)
+        return payload
+
+    async def _to_optimization_proposal_view(
+        self,
+        session: AsyncSession,
+        proposal: OptimizationProposal,
+    ) -> OptimizationProposalView:
+        evidence = proposal.evidence_json or {}
+        target = await self._proposal_target_view(session, proposal, evidence)
+        recommendation_state = str((proposal.proposed_changes or {}).get("recommended_action") or evidence.get("recommendation_state") or "continue_observing")
+        evidence_state = str(evidence.get("evidence_state") or "unavailable")
+        return OptimizationProposalView(
+            proposal_id=str(proposal.optimization_proposal_id),
+            proposal_type=proposal.proposal_type.value,
+            proposal_type_label=PROPOSAL_TYPE_LABELS[proposal.proposal_type],
+            lifecycle_state=proposal.lifecycle_state.value,
+            lifecycle_label=PROPOSAL_LIFECYCLE_LABELS[proposal.lifecycle_state],
+            revision_no=proposal.revision_no,
+            confidence=float(proposal.confidence) if proposal.confidence is not None else None,
+            evidence_state=evidence_state,
+            evidence_label=PROPOSAL_EVIDENCE_LABELS.get(evidence_state, "证据暂不可用"),
+            recommendation_state=recommendation_state,
+            recommendation_label=PROPOSAL_RECOMMENDATION_LABELS.get(recommendation_state, "继续观察"),
+            rationale=str(evidence.get("rationale") or "未提供"),
+            target=target,
+            review_binding={
+                "post_market_review_id": evidence.get("post_market_review_id"),
+                "trading_day_plan_id": evidence.get("trading_day_plan_id"),
+                "daily_strategy_instance_id": evidence.get("daily_strategy_instance_id"),
+                "strategy_version_id": evidence.get("strategy_version_id"),
+            },
+            base_version_id=str(proposal.base_version_id) if proposal.base_version_id else None,
+            accepted_draft_version_id=str(proposal.accepted_draft_version_id) if proposal.accepted_draft_version_id else None,
+            proposed_changes=proposal.proposed_changes or {},
+            evidence=evidence,
+            created_at=proposal.created_at.isoformat() if proposal.created_at else None,
+            updated_at=proposal.updated_at.isoformat() if proposal.updated_at else None,
+            available_actions=self._proposal_available_actions(proposal.proposal_type, proposal.lifecycle_state),
+            partial_reasons=list(evidence.get("deterministic_reason_list") or []),
+            limitations=list(evidence.get("limitations") or []),
+        )
+
+    async def _proposal_target_view(
+        self,
+        session: AsyncSession,
+        proposal: OptimizationProposal,
+        evidence: dict[str, Any],
+    ) -> OptimizationProposalTargetView:
+        target = evidence.get("target") or {}
+        label = str(target.get("label") or proposal.target_asset_id)
+        if proposal.proposal_type is ProposalType.rule_optimization:
+            row = await self.strategy_repository.get_rule_version(session, proposal.target_asset_id)
+            if row is not None and row.title:
+                label = row.title
+        elif proposal.proposal_type is ProposalType.author_profile_revision:
+            row = await self.strategy_repository.get_author_profile_version(session, proposal.target_asset_id)
+            if row is not None:
+                label = f"{AUTHOR_PROFILE_KIND_LABELS[row.profile_kind]} v{row.version_no}"
+        elif proposal.proposal_type is ProposalType.strategy_revision:
+            row = await self.strategy_repository.get_version(session, proposal.target_asset_id)
+            if row is not None:
+                label = f"{row.title or '正式策略'} v{row.version_no}"
+        return OptimizationProposalTargetView(
+            asset_type=proposal.target_asset_type,
+            asset_id=str(proposal.target_asset_id),
+            label=label,
+            strategy_membership_ids=list(target.get("strategy_membership_ids") or []),
+            rule_version_ids=list(target.get("rule_version_ids") or []),
+            author_profile_version_ids=list(target.get("author_profile_version_ids") or []),
+        )
+
+    def _proposal_available_actions(
+        self,
+        proposal_type: ProposalType,
+        lifecycle_state: ProposalLifecycleState,
+    ) -> list[str]:
+        actions = {
+            ProposalLifecycleState.draft: ["start_review", "reject"],
+            ProposalLifecycleState.in_review: ["continue_observing", "reject"],
+            ProposalLifecycleState.accepted: ["archive"],
+            ProposalLifecycleState.rejected: ["archive"],
+            ProposalLifecycleState.archived: [],
+            ProposalLifecycleState.superseded: ["archive"],
+        }
+        allowed = list(actions[lifecycle_state])
+        if proposal_type is ProposalType.strategy_revision and lifecycle_state is ProposalLifecycleState.in_review:
+            allowed.insert(1, "accept_to_draft")
+        return allowed
+
+    def _proposal_audit_state(self, proposal: OptimizationProposal) -> dict[str, Any]:
+        return {
+            "proposal_id": str(proposal.optimization_proposal_id),
+            "proposal_type": proposal.proposal_type.value,
+            "target_asset_type": proposal.target_asset_type,
+            "target_asset_id": str(proposal.target_asset_id),
+            "base_version_id": str(proposal.base_version_id) if proposal.base_version_id else None,
+            "accepted_draft_version_id": str(proposal.accepted_draft_version_id) if proposal.accepted_draft_version_id else None,
+            "lifecycle_state": proposal.lifecycle_state.value,
+            "revision_no": proposal.revision_no,
+        }
+
+    def _proposal_evidence_state(
+        self,
+        *,
+        review: PostMarketReview,
+        signal_results: list[dict[str, Any]],
+        attributions: list[dict[str, Any]],
+    ) -> CoverageState:
+        states = [self._aggregate_signal_states(signal_results)]
+        if attributions:
+            states.append(self._aggregate_attribution_state([str(item.get("state") or "ready") for item in attributions]))
+        if _state(review.quality_status) != QualityStatus.complete.value:
+            states.append("partial")
+        return self._aggregate_signal_states_from_values(states)
+
+    def _aggregate_signal_states(self, signal_results: list[dict[str, Any]]) -> CoverageState:
+        return self._aggregate_signal_states_from_values([str(item.get("state") or "ready") for item in signal_results])
+
+    def _aggregate_signal_states_from_values(self, states: list[str]) -> CoverageState:
+        if any(state == "conflict" for state in states):
+            return "conflict"
+        if any(state == "invalid" for state in states):
+            return "invalid"
+        if any(state == "unavailable" for state in states):
+            return "unavailable"
+        if any(state == "insufficient_coverage" for state in states):
+            return "insufficient_coverage"
+        if any(state == "degraded" for state in states):
+            return "degraded"
+        if any(state == "partial" for state in states):
+            return "partial"
+        return "ready"
+
+    def _is_negative_ready_signal(self, signal_result: dict[str, Any]) -> bool:
+        return_fact = signal_result.get("return") or {}
+        if return_fact.get("state") != "ready":
+            return False
+        try:
+            return float(return_fact.get("value")) < 0
+        except (TypeError, ValueError):
+            return False
+
+    def _strategy_author_profile_ids(self, strategy_version: StrategyVersion) -> list[str]:
+        return [
+            str(item)
+            for item in [
+                strategy_version.author_method_profile_version_id,
+                strategy_version.author_rule_profile_version_id,
+                strategy_version.author_validated_profile_version_id,
+            ]
+            if item is not None
+        ]
+
+    def _confidence_value(
+        self,
+        *,
+        evidence_state: CoverageState,
+        negative_ready_count: int,
+        bonus: float = 0.0,
+    ) -> float:
+        base = 0.35 if evidence_state != "ready" else 0.5
+        return min(0.95, round(base + min(negative_ready_count, 3) * 0.08 + bonus, 2))
+
+    def _parse_proposal_type(self, value: str) -> ProposalType:
+        try:
+            return ProposalType(value)
+        except ValueError as exc:
+            raise ValueError("proposal_type 无效。") from exc
+
+    def _collection_state(self, items: list[OptimizationProposalView]) -> Literal["ready", "partial", "empty"]:
+        if not items:
+            return "empty"
+        if any(item.evidence_state != "ready" for item in items):
+            return "partial"
         return "ready"

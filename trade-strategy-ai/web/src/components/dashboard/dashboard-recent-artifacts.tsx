@@ -24,7 +24,7 @@ export function DashboardRecentArtifactsPanel() {
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-slate-900">最近产物</CardTitle>
+            <CardTitle className="text-slate-900">最近运行产出</CardTitle>
             <CardDescription>快速检查最近生成的输出是否可预览。</CardDescription>
           </div>
           <button
@@ -48,7 +48,7 @@ export function DashboardRecentArtifactsPanel() {
             {error.message}
           </div>
         ) : !data?.items.length ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">暂无最近产物。</div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">暂无最近运行产出。</div>
         ) : (
           data.items.map((artifact) => (
             <article
@@ -67,8 +67,8 @@ export function DashboardRecentArtifactsPanel() {
                 <div>大小：{formatBytes(artifact.size_bytes)}</div>
                 <div>修改时间：{formatTimestamp(artifact.modified_at)}</div>
                 <div className="md:text-right">
-                  <Link className="font-medium text-sky-700 hover:underline" to="/artifacts">
-                    查看产物中心
+                  <Link className="font-medium text-sky-700 hover:underline" to="/system/runs">
+                    查看运行产出
                   </Link>
                 </div>
               </div>

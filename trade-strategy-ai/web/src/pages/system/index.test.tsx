@@ -598,7 +598,7 @@ describe('SystemPage', () => {
     expect(screen.getByText('文章批处理：最多重试 1 次')).toBeInTheDocument();
     expect(screen.getByText('article_analysis_v1 · stale')).toBeInTheDocument();
     expect(screen.getByText('schema_version_changed')).toBeInTheDocument();
-    expect(screen.getByText('backtest-run-1 · reused')).toBeInTheDocument();
+    expect(screen.getByText('运行编号：backtest-run-1 · reused')).toBeInTheDocument();
     expect(screen.getByText('changed_article_revision_group')).toBeInTheDocument();
     expect(screen.getByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('workflow-1')).toBeInTheDocument();

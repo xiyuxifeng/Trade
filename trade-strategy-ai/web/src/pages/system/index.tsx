@@ -544,7 +544,7 @@ function SystemRunsSummary() {
               <p className="font-medium text-slate-900">回测复用样例</p>
               {costControlQuery.data.backtest_reuse_samples.map((item) => (
                 <div key={item.run_id} className="mt-2 text-sm text-slate-700">
-                  <p>{item.run_id} · {item.reuse_status}</p>
+                  <p>运行编号：{item.run_id} · {item.reuse_status}</p>
                   <p className="text-slate-600">指标缓存：{item.metric_cache_status}</p>
                 </div>
               ))}
@@ -757,7 +757,7 @@ function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; sho
               <div key={`${call.run_id}-${call.prompt_version}`} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
                 <p className="font-medium text-slate-900">{call.provider ?? '未记录'} / {call.model}</p>
                 <p className="mt-1">Prompt 版本：{call.prompt_version}</p>
-                <p className="mt-1">Schema 版本：{call.schema_version}</p>
+                <p className="mt-1">结构版本：{call.schema_version}</p>
                 <p className="mt-1">校验状态：{call.validation_state}</p>
                 <p className="mt-1">Token：{renderSimpleValue(call.tokens.total_tokens)}</p>
                 <p className="mt-1">成本：{call.cost.amount ?? '未记录'} {call.cost.currency ?? ''}</p>

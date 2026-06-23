@@ -35,7 +35,7 @@ export function RecentJobsPanel() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>最近任务</CardTitle>
-            <CardDescription>展示最新的 Job 执行状态和触发入口。</CardDescription>
+            <CardDescription>展示最新的运行状态和触发入口。</CardDescription>
           </div>
           <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? '刷新中' : '刷新'}
@@ -75,10 +75,10 @@ export function RecentJobsPanel() {
 
               <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
                 <div>
-                  <span className="text-slate-500">Created by:</span> {job.created_by}
+                  <span className="text-slate-500">创建者：</span> {job.created_by}
                 </div>
                 <div>
-                  <span className="text-slate-500">Created:</span> {formatTimestamp(job.created_at)}
+                  <span className="text-slate-500">创建时间：</span> {formatTimestamp(job.created_at)}
                 </div>
               </div>
             </article>

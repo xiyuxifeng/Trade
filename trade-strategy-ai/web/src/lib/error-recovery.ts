@@ -139,25 +139,25 @@ function classifyCategory(error: unknown): ErrorRecoveryCategory {
 function getPageRoute(page: ErrorRecoveryPage) {
   switch (page) {
     case 'jobs':
-      return '/jobs';
     case 'job-detail':
-      return '/jobs';
+      return '/system/runs';
     case 'backtest':
+      return '/rules/backtests';
     case 'backtest-results':
+      return '/rules/results';
     case 'backtest-detail':
     case 'backtest-report':
     case 'backtest-validation':
-      return '/backtest';
+      return '/rules/backtests';
     case 'profiles':
-      return '/profiles';
     case 'profile-detail':
-      return '/profiles';
+      return '/authors';
     case 'market':
-      return '/market';
+      return '/system/data';
     case 'artifacts':
     case 'artifact-detail':
     case 'artifact-filter-options':
-      return '/artifacts';
+      return '/system/runs';
     case 'strategy':
       return '/strategies';
     case 'admin-audit':
@@ -171,25 +171,23 @@ function getPageRoute(page: ErrorRecoveryPage) {
 function getPageHomeRoute(page: ErrorRecoveryPage) {
   switch (page) {
     case 'jobs':
-      return '/';
     case 'job-detail':
-      return '/jobs';
+      return '/system/runs';
     case 'backtest':
     case 'backtest-results':
     case 'backtest-detail':
     case 'backtest-report':
     case 'backtest-validation':
-      return '/';
+      return '/rules';
     case 'profiles':
-      return '/';
     case 'profile-detail':
-      return '/profiles';
+      return '/authors';
     case 'market':
-      return '/';
+      return '/system/data';
     case 'artifacts':
     case 'artifact-detail':
     case 'artifact-filter-options':
-      return '/';
+      return '/system/runs';
     case 'strategy':
       return '/';
     case 'admin-audit':
@@ -202,25 +200,25 @@ function getPageHomeRoute(page: ErrorRecoveryPage) {
 
 function getConfigRoute(page: ErrorRecoveryPage) {
   if (page === 'profiles' || page === 'profile-detail') {
-    return '/profiles';
+    return '/system/configuration';
   }
-  return '/profiles';
+  return '/system/configuration';
 }
 
 function getArtifactsRoute() {
-  return '/artifacts';
+  return '/system/runs';
 }
 
 function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecoveryPage) {
   const pageTitles: Record<ErrorRecoveryPage, string> = {
-    jobs: '任务',
-    'job-detail': '任务详情',
+    jobs: '运行记录',
+    'job-detail': '运行记录详情',
     profiles: '配置列表',
     'profile-detail': '配置详情',
     market: '市场上下文',
-    artifacts: '产物中心',
-    'artifact-detail': '产物详情',
-    'artifact-filter-options': '产物筛选',
+    artifacts: '运行产出',
+    'artifact-detail': '运行产出详情',
+    'artifact-filter-options': '运行产出筛选',
     strategy: '规则与市场分析',
     backtest: '回测中心',
     'backtest-results': '回测结果',
@@ -255,13 +253,13 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
       if (page === 'market') {
         return {
           title: '市场上下文暂不可用',
-          description: '后端服务或 provider 当前无法响应。',
+          description: '后端服务或上游数据服务当前无法响应。',
           suggestion: '请稍后重试，或先确认上游服务状态。',
         };
       }
       return {
         title: '上游服务不可用',
-        description: '后端服务或 provider 当前无法响应。',
+        description: '后端服务或上游数据服务当前无法响应。',
         suggestion: '稍后重试，或先确认上游服务状态。',
       };
     case 'data empty':
@@ -272,15 +270,15 @@ function getTitleAndSuggestion(category: ErrorRecoveryCategory, page: ErrorRecov
       };
     case 'artifact missing':
       return {
-        title: '产物不可用',
-        description: '相关 artifact 尚未生成、已过期或无法访问。',
-        suggestion: '先查看来源 Job，再判断是否需要重新运行。',
+        title: '运行产出不可用',
+        description: '相关结果记录尚未生成、已过期或无法访问。',
+        suggestion: '先查看来源运行记录，再判断是否需要重新处理。',
       };
     case 'job failed':
       return {
         title: '任务执行失败',
         description: '当前任务已经失败，建议先查看失败原因和日志。',
-        suggestion: '先打开 Job 详情确认错误，再决定是否重试。',
+        suggestion: '先打开运行记录确认错误，再决定是否重试。',
       };
     case 'network error':
       return {
@@ -323,7 +321,7 @@ function getAffectedText(category: ErrorRecoveryCategory) {
 function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage): ErrorRecoveryAction[] {
   const pageRoute = getPageRoute(page);
   const homeRoute = getPageHomeRoute(page);
-  const profilesRoute = '/profiles';
+  const profilesRoute = '/system/configuration';
 
   switch (category) {
     case 'permission denied':
@@ -345,12 +343,12 @@ function buildActions(category: ErrorRecoveryCategory, page: ErrorRecoveryPage):
       return [];
     case 'artifact missing':
       return [
-        { label: '打开产物中心', to: getArtifactsRoute() },
-        { label: '查看任务列表', to: '/jobs' },
+        { label: '打开运行产出记录', to: getArtifactsRoute() },
+        { label: '查看运行记录', to: '/system/runs' },
       ];
     case 'job failed':
       return [
-        { label: '查看任务列表', to: '/jobs' },
+        { label: '查看运行记录', to: '/system/runs' },
         { label: '返回工作台', to: homeRoute },
       ];
     case 'validation error':
@@ -378,9 +376,9 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
     isApi404 && category === 'data empty'
       ? {
         'job-detail': {
-          title: '任务不存在',
-          description: '系统没有找到该 Job 记录。',
-          suggestion: '请检查任务 ID 是否正确，或返回任务列表查看最近任务。',
+          title: '运行记录不存在',
+          description: '系统没有找到该运行记录。',
+          suggestion: '请检查运行编号是否正确，或返回运行记录查看最近处理状态。',
         },
         'profile-detail': {
           title: '配置不存在',
@@ -388,8 +386,8 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
           suggestion: '请检查配置 ID 是否正确，或返回配置列表查看可用配置。',
         },
         jobs: {
-          title: '任务列表暂不可用',
-          description: '当前任务列表没有返回可展示的记录。',
+          title: '运行记录暂不可用',
+          description: '当前运行记录没有返回可展示的数据。',
           suggestion: '请稍后刷新页面，或返回工作台查看其他入口。',
         },
         profiles: {
@@ -400,22 +398,22 @@ export function buildErrorRecoveryState(error: unknown, page: ErrorRecoveryPage)
         market: {
           title: '市场上下文快照不存在',
           description: '系统没有找到该市场上下文快照。',
-          suggestion: '请检查 snapshot_id 是否正确，或返回列表重新筛选。',
+          suggestion: '请检查快照编号是否正确，或返回列表重新筛选。',
         },
         artifacts: {
-          title: '产物列表暂不可用',
-          description: '当前产物中心没有返回可展示的数据。',
+          title: '运行产出暂不可用',
+          description: '当前运行产出记录没有返回可展示的数据。',
           suggestion: '请稍后重试，或调整筛选条件后再看一次。',
         },
         'artifact-detail': {
-          title: '产物详情暂不可用',
-          description: '当前产物详情没有返回可展示的数据。',
-          suggestion: '请检查 artifact_id 是否正确，或返回产物列表重新选择。',
+          title: '运行产出详情暂不可用',
+          description: '当前运行产出详情没有返回可展示的数据。',
+          suggestion: '请检查产出编号是否正确，或返回运行记录重新选择。',
         },
         strategy: {
           title: '规则与市场分析暂不可用',
           description: '当前规则与市场分析页面没有返回可展示的数据。',
-          suggestion: '请稍后重试，或切换到盘前分析、盘后复盘与任务中心继续排查。',
+          suggestion: '请稍后重试，或切换到盘前分析、盘后复盘与运行记录继续排查。',
         },
         'backtest': {
           title: '回测中心暂不可用',

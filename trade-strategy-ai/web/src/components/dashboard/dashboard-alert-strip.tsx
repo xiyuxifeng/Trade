@@ -74,7 +74,7 @@ export function DashboardAlertStrip() {
         category="network error"
         title="重点告警加载失败"
         description="当前告警摘要接口请求失败。"
-        suggestion="重试后查看告警中心和任务中心，确认是否已有新的失败任务或告警记录。"
+        suggestion="重试后查看系统运行记录，确认是否已有新的失败运行或告警记录。"
         detail={message}
         retryLabel={isFetching ? '重试中' : '重试'}
         onRetry={() => {

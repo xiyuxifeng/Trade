@@ -41,7 +41,7 @@ describe('SectionNav', () => {
     expect(screen.getByRole('link', { name: '系统状态' })).toHaveAttribute('href', '/system/status');
     expect(screen.getByRole('link', { name: '系统状态' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: '配置管理' })).toBeInTheDocument();
-    expect(screen.getByText('数据管理')).toBeInTheDocument();
+    expect(screen.getByText('数据与调度')).toBeInTheDocument();
     expect(screen.queryByText('用户管理')).not.toBeInTheDocument();
     expect(screen.queryByText('权限与审计')).not.toBeInTheDocument();
   });

@@ -63,8 +63,8 @@ export function DashboardRecentJobsPanel() {
                 <div>开始时间：{formatTimestamp(job.started_at)}</div>
                 <div>结束时间：{formatTimestamp(job.finished_at)}</div>
                 <div className="md:text-right">
-                  <Link className="font-medium text-sky-700 hover:underline" to={`/jobs/${encodeURIComponent(job.id)}`}>
-                    查看任务详情
+                  <Link className="font-medium text-sky-700 hover:underline" to="/system/runs">
+                    查看运行记录
                   </Link>
                 </div>
               </div>

@@ -160,7 +160,7 @@ describe('router authentication and authorization', () => {
     },
   );
 
-  it('keeps a dynamic notice deep link on its original pathname', async () => {
+  it('redirects a dynamic legacy run deep link to System Management', async () => {
     const router = createAuthenticatedRouter('/jobs/job-123');
 
     renderRouter(
@@ -168,7 +168,7 @@ describe('router authentication and authorization', () => {
       authenticatedPrincipal('admin'),
     );
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs/job-123'));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/system/runs'));
   });
 
   it('matches unknown paths with the Chinese 404 route', async () => {

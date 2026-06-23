@@ -22,13 +22,13 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] Bootstrap READY；Implementation 未开始`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；等待后续 Stage 12 授权`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无；Stage 12 Bootstrap 已完成并冻结 contract；`RT-S12-001`、`RT-S12-002`、`RT-S12-003` 均未开始
+- 当前阻塞 Task：无；`RT-S12-001` 已接受。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：等待用户明确授权 `RT-S12-001 旧入口退役`；不得自动退役 legacy routes，不得自动启动 `RT-S12-002`、`RT-S12-003`、E2E、用户文档生成或生产代码修改。
+- 下一步：等待用户明确授权后再进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
 
 ## 当前硬约束
 
@@ -109,6 +109,9 @@
 - `RT-S11-006` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：新增 `SystemRolloutService`、`/api/ui/v1/system/rollout` 和 `/system/runs` 灰度迁移与回滚卡片；Stage 2 migration report 存在时可 truthfully 展示 pre/post counts、rejected/conflicted rows、recovery export 和 `no_silent_data_loss`，缺失时返回 `partial` 而不伪造证据；Stage 3 Prompt rollback 现可显示 current/previous prompt-schema contract 和 raw output retention；Stage 3 batch checkpoint 现显式保留 `input_hash`、`prompt_run_id`、`validation_state`、`prompt_retry_count`、`processed_items`、`resume_point` 和 `rejected_or_conflicted_items`。legacy routes 仍为 compatibility-only / read-only visible，未进入 Stage 12 retirement。
 - Stage 11 Gate 已于 2026-06-23 最终 `ACCEPTED`：focused backend/API/service suite `63 passed`；focused frontend suite `94 passed`；`pnpm typecheck`、targeted eslint、Python `py_compile`、`git diff --check` 均通过。Gate review 未发现需要 bounded repair 的缺口；legacy internal-term matches remain hidden compatibility/admin-diagnostic surfaces and are Stage 12 retirement/final cleanup scope.
 - Stage 12 Bootstrap 已于 2026-06-23 `READY`：已冻结 old-entry retirement scope、allowed legacy compatibility/read-only states、deletion vs hiding criteria、rollback/recovery expectations、E2E acceptance path、required user documentation deliverables、task order、per-task acceptance criteria、Stage 11 residual-risk classification and verification strategy；未实现 production code、未退役 legacy routes、未修改 runtime behavior。
+- `RT-S12-001` 5.4 implementation 已于 2026-06-23 完成：legacy main entries now redirect to formal product/System Management routes where replacement parity is proven; evidence-sensitive detail routes remain hidden compatibility/read-only and are registered in Stage 12 log with owner / formal target / remaining retirement condition / rollback reason. Focused route/navigation tests、`pnpm typecheck`、targeted eslint 和 `git diff --check` 已通过；未作最终 ACCEPTED 决策，等待独立 5.5 Review Session。
+- `RT-S12-001` 5.5 Review 已于 2026-06-23 `BLOCKED`：bounded repair 已将所有 retirement-candidate legacy routes 改为 redirect-only，并补充 dynamic redirect test；focused route/navigation tests `70 passed`、`pnpm typecheck`、targeted eslint、`git diff --check` 均通过。阻塞项：required internal terminology scan still finds active ordinary-user-adjacent frontend source with visible `Job` / `/jobs` / `Artifact` / `run_id` wording/links outside route registry；需继续清理或由 5.5 明确定界为 admin diagnostics / unmounted legacy before acceptance。
+- `RT-S12-001` blocker repair 已于 2026-06-23 `ACCEPTED`：shared error recovery、dashboard/status panels 和 System Management display labels 已完成 ordinary-user terminology cleanup；retired `/jobs`、`/artifacts` user-adjacent links改为 `/system/runs`、`/system/data`、`/system/configuration` 或 formal `/rules` / `/daily` targets。required terminology scan `5044` hits 已分类为 fixed ordinary-user issue、admin diagnostic allowed、internal implementation only、unmounted legacy source、test fixture 或 historical documentation note；无 remaining blocker。Focused frontend suite `89 passed`，`pnpm typecheck`、targeted eslint、`git diff --check` 均通过；未启动 `RT-S12-002/003`、E2E、用户文档或 Gate。
 - Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
 - Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
 - Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。
@@ -170,7 +173,7 @@
 | RT-S11-006 | `[x]` | rollout state、rollback/recovery evidence、batch recovery metadata 和 system UI/API 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
-| RT-S12-001 | `[ ]` | 旧入口退役未开始；必须单独执行 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-002 | `[ ]` | 端到端验收未开始；需等待 RT-S12-001 接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
@@ -190,15 +193,15 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | Bootstrap `READY`；implementation 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-RT-S12-001 旧入口退役:
-Stage 12 Bootstrap 已冻结；仅在用户明确授权后才能单独执行 `RT-S12-001`。不得将 `RT-S12-001` 与 `RT-S12-002`、`RT-S12-003`、E2E 或用户文档生成合并。
+Stage 12 next authorized task:
+`RT-S12-001` 已接受。等待用户明确授权后才能进入 `RT-S12-002`、`RT-S12-003`、E2E、用户文档或 Stage 12 Gate。
 ```
 
 执行前应读取：
@@ -207,4 +210,4 @@ Stage 12 Bootstrap 已冻结；仅在用户明确授权后才能单独执行 `RT
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始任何 legacy retirement；必须等待用户明确授权后才能推进 `RT-S12-001`。
+不得自动开始任何后续 Stage 12 工作；必须等待用户明确授权后再进入 `RT-S12-002` 或 `RT-S12-003`。

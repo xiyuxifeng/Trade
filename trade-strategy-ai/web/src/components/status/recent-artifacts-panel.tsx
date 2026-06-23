@@ -47,7 +47,7 @@ export function RecentArtifactsPanel() {
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>最近产物</CardTitle>
+            <CardTitle>最近运行产出</CardTitle>
             <CardDescription>展示可预览和可下载的最新输出。</CardDescription>
           </div>
           <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
@@ -68,7 +68,7 @@ export function RecentArtifactsPanel() {
           </div>
         ) : !data?.items.length ? (
           <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            暂无最近产物。
+            暂无最近运行产出。
           </div>
         ) : (
           data.items.map((artifact) => (
@@ -90,16 +90,16 @@ export function RecentArtifactsPanel() {
 
               <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
                 <div>
-                  <span className="text-slate-500">Source:</span> {artifact.source}
+                  <span className="text-slate-500">来源：</span> {artifact.source}
                 </div>
                 <div>
-                  <span className="text-slate-500">Size:</span> {formatBytes(artifact.size_bytes)}
+                  <span className="text-slate-500">大小：</span> {formatBytes(artifact.size_bytes)}
                 </div>
                 <div>
-                  <span className="text-slate-500">Modified:</span> {formatTimestamp(artifact.modified_at)}
+                  <span className="text-slate-500">修改时间：</span> {formatTimestamp(artifact.modified_at)}
                 </div>
                 <div>
-                  <span className="text-slate-500">Job:</span> {artifact.job_id || 'none'}
+                  <span className="text-slate-500">关联运行：</span> {artifact.job_id || '未记录'}
                 </div>
               </div>
             </article>

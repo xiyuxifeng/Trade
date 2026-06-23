@@ -86,10 +86,10 @@ export function DashboardStatusSummary() {
           category="network error"
           title="部分总览数据加载失败"
           description={error instanceof ApiError ? error.message : '系统总览存在部分数据异常。'}
-          suggestion="重新加载总览数据，或先前往任务中心和产物中心确认相关结果是否已经生成。"
+          suggestion="重新加载总览数据，或先前往系统运行记录确认相关结果是否已经生成。"
           actions={[
-            { label: '任务中心', to: '/jobs' },
-            { label: '产物中心', to: '/artifacts' },
+            { label: '运行记录', to: '/system/runs' },
+            { label: '数据管理', to: '/system/data' },
           ]}
           onRetry={() => {
             void reloadAll();
@@ -117,8 +117,8 @@ export function DashboardStatusSummary() {
           note={system?.database.latency_ms != null ? `延迟 ${system.database.latency_ms} ms` : '数据库健康状态'}
           tone={databaseStatus === 'ok' ? 'text-emerald-600' : databaseStatus === 'warning' ? 'text-amber-600' : 'text-rose-600'}
         />
-        <MetricCard label="失败任务" value={failedJobs} note={`成功任务 ${acknowledgedJobs}`} tone={failedJobs ? 'text-rose-600' : 'text-slate-900'} />
-        <MetricCard label="产物数量" value={artifacts.length} note={artifacts[0]?.kind ? `最新类型 · ${artifacts[0].kind}` : '暂无最新产物'} tone="text-sky-600" />
+        <MetricCard label="失败运行" value={failedJobs} note={`成功运行 ${acknowledgedJobs}`} tone={failedJobs ? 'text-rose-600' : 'text-slate-900'} />
+        <MetricCard label="运行产出" value={artifacts.length} note={artifacts[0]?.kind ? `最新类型 · ${artifacts[0].kind}` : '暂无最新运行产出'} tone="text-sky-600" />
         <MetricCard
           label="重点告警"
           value={alerts.length}
@@ -140,9 +140,9 @@ export function DashboardStatusSummary() {
           tone="text-indigo-600"
         />
         <MetricCard
-          label="最近任务"
+          label="最近运行"
           value={jobs[0]?.job_type ?? '暂无'}
-          note={jobs[0]?.id ? `最近任务 ${jobs[0].id}` : '暂无最近任务'}
+          note={jobs[0]?.id ? `运行编号 ${jobs[0].id}` : '暂无最近运行'}
           tone="text-violet-600"
         />
       </div>
@@ -154,35 +154,35 @@ export function DashboardQuickLinks() {
   const primaryLinks = [
     {
       label: '文章与规则',
-      path: '/articles',
+      path: '/research/add',
       description: '导入文章，提取规则，查看规则结果。',
     },
     {
       label: '回测与画像',
-      path: '/backtest',
+      path: '/rules/backtests',
       description: '验证规则可信度，沉淀交易员画像。',
     },
     {
       label: '盘前分析',
-      path: '/strategies/pre-market',
+      path: '/daily/pre-market',
       description: '结合当天市场上下文输出盘前建议。',
     },
     {
       label: '盘后复盘',
-      path: '/strategies/after-close',
+      path: '/daily/after-close',
       description: '对照盘前判断复盘当天结果。',
     },
     {
       label: '市场上下文',
-      path: '/market',
+      path: '/system/data',
       description: '查看统一市场上下文、快照和数据资产。',
     },
   ];
 
   const secondaryLinks = [
-    { label: '任务中心', path: '/jobs' },
-    { label: '产物中心', path: '/artifacts' },
-    { label: '配置与管理', path: '/profiles' },
+    { label: '运行记录', path: '/system/runs' },
+    { label: '运行产出', path: '/system/runs' },
+    { label: '系统配置', path: '/system/configuration' },
     { label: '系统管理', path: '/system' },
   ];
 

@@ -3,43 +3,16 @@ import { Navigate, matchPath } from 'react-router-dom';
 import type { PrincipalRole } from '@/types/auth';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
-import {
-  ArticleListPage,
-  ArticleQualityPage,
-  ArticleResultsPage,
-  ArticleRunPage,
-} from '@/pages/articles';
-import { AlertsPage } from '@/pages/alerts';
-import { ArtifactDetailPage, ArtifactsPage } from '@/pages/artifacts';
 import { AuthorsPage } from '@/pages/authors';
-import { BacktestPage } from '@/pages/backtest';
-import { CandidatesPage as BacktestCandidatesPage } from '@/pages/backtest/CandidatesPage';
-import { RegimeBacktestReportPage } from '@/pages/backtest/RegimeBacktestReportPage';
 import { DashboardPage } from '@/pages/dashboard';
 import { DailyAfterClosePage, DailyOverviewPage, DailyPreMarketPage } from '@/pages/daily';
-import { JobsPage } from '@/pages/jobs';
-import { JobDetailPage } from '@/pages/jobs/JobDetailPage';
 import { LoginPage } from '@/pages/login';
-import { MarketPage } from '@/pages/market';
-import { MarketDatasetPage } from '@/pages/market/datasets';
-import { MarketKaipanPage } from '@/pages/market/kaipan';
-import { MarketOhlcvPage } from '@/pages/market/ohlcv';
-import { MarketSnapshotsPage } from '@/pages/market/snapshots';
-import { PersonaPage } from '@/pages/persona';
-import { ProfileDetailPage } from '@/pages/profiles/ProfileDetailPage';
-import { ProfileEditPage } from '@/pages/profiles/ProfileEditPage';
-import { ProfileImportPage } from '@/pages/profiles/ProfileImportPage';
-import { ProfileListPage } from '@/pages/profiles/ProfileListPage';
-import { ProfileSnapshotPage } from '@/pages/profiles/ProfileSnapshotPage';
 import {
   ResearchAddPage,
   ResearchArticlesPage,
   ResearchResultsPage,
 } from '@/pages/research';
-import { RulePoolDetailPage, RulePoolPage } from '@/pages/rule-pool';
 import {
-  AfterClosePage,
-  PreMarketPage,
   StrategyCandidatesPage,
   StrategyOverviewPage,
 } from '@/pages/strategies';
@@ -61,7 +34,6 @@ import { BackupPage } from '@/pages/system/BackupPage';
 import { DatabaseMigrationPage } from '@/pages/system/DatabaseMigrationPage';
 import { HealthPage } from '@/pages/system/HealthPage';
 import { UsersPage } from '@/pages/system/UsersPage';
-import { WorkflowsPage } from '@/pages/workflows';
 
 export type LegacyRouteMode = 'redirect' | 'notice';
 
@@ -445,9 +417,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/jobs',
     label: '运行记录',
     description: '查看现有运行记录。',
-    element: <JobsPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 12', RETIREMENT.runtime),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
   },
   {
     id: 'job-detail',
@@ -455,9 +428,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/jobs/:jobId',
     label: '运行详情',
     description: '查看本次运行的状态、日志和结果。',
-    element: <JobDetailPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/jobs/:jobId', 'notice', '长期保留', RETIREMENT.runtime, false),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
   },
   {
     id: 'profiles',
@@ -465,9 +439,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles',
     label: '配置列表',
     description: '查看现有配置。',
-    element: <ProfileListPage />,
+    element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'notice', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration', 'redirect', 'Stage 11', RETIREMENT.profiles),
   },
   {
     id: 'profiles-import',
@@ -475,9 +450,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/import',
     label: '导入配置',
     description: '导入现有配置。',
-    element: <ProfileImportPage />,
+    element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'notice', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration', 'redirect', 'Stage 11', RETIREMENT.profiles),
   },
   {
     id: 'profile-detail',
@@ -485,9 +461,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId',
     label: '配置详情',
     description: '查看现有配置详情。',
-    element: <ProfileDetailPage />,
+    element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'notice', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'profile-edit',
@@ -495,9 +472,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId/edit',
     label: '编辑配置',
     description: '编辑现有配置。',
-    element: <ProfileEditPage />,
+    element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'notice', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'profile-snapshot',
@@ -505,9 +483,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId/snapshots/:snapshotId',
     label: '配置版本',
     description: '查看现有配置版本。',
-    element: <ProfileSnapshotPage />,
+    element: redirect('/system/configuration'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'notice', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'workflows',
@@ -515,9 +494,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/workflows',
     label: '历史流程入口',
     description: '继续访问现有流程记录。',
-    element: <WorkflowsPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 11', RETIREMENT.runtime),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 11', RETIREMENT.runtime),
   },
   {
     id: 'workflow-pre-market',
@@ -569,9 +549,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/workflows/:workflowId/run',
     label: '历史流程运行',
     description: '继续访问现有流程运行入口。',
-    element: <WorkflowsPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 11', RETIREMENT.runtime),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
   },
   {
     id: 'articles',
@@ -590,9 +571,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/articles/run',
     label: '文章处理旧入口',
     description: '继续使用现有文章导入和处理能力。',
-    element: <ArticleRunPage />,
+    element: redirect('/research/add'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/research/add', 'notice', 'Stage 3', RETIREMENT.research),
+    legacy: legacy('/research/add', 'redirect', 'Stage 3', RETIREMENT.research),
   },
   {
     id: 'articles-list',
@@ -600,9 +582,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/articles/list',
     label: '文章列表旧入口',
     description: '继续访问现有文章列表。',
-    element: <ArticleListPage />,
+    element: redirect('/research/articles'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/research/articles', 'notice', 'Stage 3', RETIREMENT.research),
+    legacy: legacy('/research/articles', 'redirect', 'Stage 3', RETIREMENT.research),
   },
   {
     id: 'articles-quality',
@@ -610,9 +593,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/articles/quality',
     label: '文章质量旧入口',
     description: '继续查看现有文章质量结果。',
-    element: <ArticleQualityPage />,
+    element: redirect('/research/results'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/research/results', 'notice', 'Stage 3', RETIREMENT.research),
+    legacy: legacy('/research/results', 'redirect', 'Stage 3', RETIREMENT.research),
   },
   {
     id: 'articles-results',
@@ -620,9 +604,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/articles/results',
     label: '提取结果旧入口',
     description: '继续查看现有文章处理结果。',
-    element: <ArticleResultsPage />,
+    element: redirect('/research/results'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/research/results', 'notice', 'Stage 4', RETIREMENT.research),
+    legacy: legacy('/research/results', 'redirect', 'Stage 4', RETIREMENT.research),
   },
   {
     id: 'alerts',
@@ -630,9 +615,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/alerts',
     label: '告警旧入口',
     description: '继续查看现有告警记录。',
-    element: <AlertsPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 11', RETIREMENT.alerts),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 11', RETIREMENT.alerts),
   },
   {
     id: 'backtest',
@@ -640,9 +626,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/backtest',
     label: '回测旧入口',
     description: '继续使用现有回测能力。',
-    element: <BacktestPage />,
+    element: redirect('/rules/backtests'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/rules/backtests', 'notice', 'Stage 6', RETIREMENT.rules),
+    legacy: legacy('/rules/backtests', 'redirect', 'Stage 6', RETIREMENT.rules),
   },
   {
     id: 'backtest-regime',
@@ -650,9 +637,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/backtest/regime',
     label: '分市场状态回测旧入口',
     description: '继续查看现有分市场状态回测结果。',
-    element: <RegimeBacktestReportPage />,
+    element: redirect('/rules/results'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/rules/results', 'notice', 'Stage 6', RETIREMENT.rules),
+    legacy: legacy('/rules/results', 'redirect', 'Stage 12', RETIREMENT.rules),
   },
   {
     id: 'backtest-candidates',
@@ -660,9 +648,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/backtest/candidates',
     label: '策略候选旧入口',
     description: '继续查看现有策略候选版本。',
-    element: <BacktestCandidatesPage />,
+    element: redirect('/strategies/candidates'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/strategies/candidates', 'notice', 'Stage 8', RETIREMENT.strategy),
+    legacy: legacy('/strategies/candidates', 'redirect', 'Stage 8', RETIREMENT.strategy),
   },
   {
     id: 'rule-pool',
@@ -670,9 +659,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/rule-pool',
     label: '规则列表旧入口',
     description: '继续使用现有规则审核能力。',
-    element: <RulePoolPage />,
+    element: redirect('/rules/review'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/rules/review', 'notice', 'Stage 4', RETIREMENT.rules),
+    legacy: legacy('/rules/review', 'redirect', 'Stage 4', RETIREMENT.rules),
   },
   {
     id: 'rule-pool-detail',
@@ -680,9 +670,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/rule-pool/:ruleId',
     label: '规则详情旧入口',
     description: '继续查看现有规则详情。',
-    element: <RulePoolDetailPage />,
+    element: redirect('/rules/library'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/rules/library', 'notice', 'Stage 4', RETIREMENT.rules),
+    legacy: legacy('/rules/library', 'redirect', 'Stage 12', RETIREMENT.rules),
   },
   {
     id: 'artifacts',
@@ -690,9 +681,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/artifacts',
     label: '结果附件旧入口',
     description: '继续查看现有运行输出。',
-    element: <ArtifactsPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 12', RETIREMENT.runtime),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
   },
   {
     id: 'artifact-detail',
@@ -700,9 +692,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/artifacts/:artifactId',
     label: '结果附件详情',
     description: '继续查看现有运行输出详情。',
-    element: <ArtifactDetailPage />,
+    element: redirect('/system/runs'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'notice', 'Stage 12', RETIREMENT.runtime),
+    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
   },
   {
     id: 'market',
@@ -710,9 +703,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/market',
     label: '市场数据旧入口',
     description: '继续使用现有市场数据维护能力。',
-    element: <MarketPage />,
+    element: redirect('/system/data'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/data', 'notice', 'Stage 5', RETIREMENT.market),
+    legacy: legacy('/system/data', 'redirect', 'Stage 5', RETIREMENT.market),
   },
   {
     id: 'market-snapshots',
@@ -720,9 +714,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/market/snapshots',
     label: '市场快照详情',
     description: '继续查看现有市场快照。',
-    element: <MarketSnapshotsPage />,
+    element: redirect('/system/data'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/data', 'notice', 'Stage 11', RETIREMENT.market),
+    legacy: legacy('/system/data', 'redirect', 'Stage 12', RETIREMENT.market),
   },
   {
     id: 'market-datasets',
@@ -730,9 +725,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/market/datasets',
     label: '回测数据版本详情',
     description: '继续查看现有市场数据集。',
-    element: <MarketDatasetPage />,
+    element: redirect('/system/data'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/data', 'notice', 'Stage 11', RETIREMENT.market),
+    legacy: legacy('/system/data', 'redirect', 'Stage 12', RETIREMENT.market),
   },
   {
     id: 'market-kaipan',
@@ -740,9 +736,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/market/kaipan',
     label: '盘前盘后数据旧入口',
     description: '继续使用现有盘前盘后数据维护能力。',
-    element: <MarketKaipanPage />,
+    element: redirect('/system/data'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/data', 'notice', 'Stage 5', RETIREMENT.market),
+    legacy: legacy('/system/data', 'redirect', 'Stage 5', RETIREMENT.market),
   },
   {
     id: 'market-ohlcv',
@@ -750,9 +747,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/market/ohlcv',
     label: '历史行情旧入口',
     description: '继续使用现有历史行情维护能力。',
-    element: <MarketOhlcvPage />,
+    element: redirect('/system/data'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/data', 'notice', 'Stage 5', RETIREMENT.market),
+    legacy: legacy('/system/data', 'redirect', 'Stage 5', RETIREMENT.market),
   },
   {
     id: 'persona',
@@ -760,9 +758,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/persona',
     label: '画像旧入口',
     description: '继续查看现有画像证据。',
-    element: <PersonaPage />,
+    element: redirect('/authors'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/authors', 'notice', 'Stage 7', RETIREMENT.persona),
+    legacy: legacy('/authors', 'redirect', 'Stage 7', RETIREMENT.persona),
   },
   {
     id: 'strategies-pre-market',
@@ -770,9 +769,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/strategies/pre-market',
     label: '盘前分析旧入口',
     description: '继续使用现有盘前分析能力。',
-    element: <PreMarketPage />,
+    element: redirect('/daily/pre-market'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/daily/pre-market', 'notice', 'Stage 9', RETIREMENT.strategy),
+    legacy: legacy('/daily/pre-market', 'redirect', 'Stage 9', RETIREMENT.strategy),
   },
   {
     id: 'strategies-after-close',
@@ -780,9 +780,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/strategies/after-close',
     label: '盘后复盘旧入口',
     description: '继续使用现有盘后复盘能力。',
-    element: <AfterClosePage />,
+    element: redirect('/daily/after-close'),
+    renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/daily/after-close', 'notice', 'Stage 10', RETIREMENT.strategy),
+    legacy: legacy('/daily/after-close', 'redirect', 'Stage 10', RETIREMENT.strategy),
   },
   {
     id: 'system-audit',

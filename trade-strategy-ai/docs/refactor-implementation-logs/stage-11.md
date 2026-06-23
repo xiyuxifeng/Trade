@@ -3,11 +3,95 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-003 可观测性和运行追踪`
-- 当前状态：`RT-S11-001`、`RT-S11-003`、`RT-S11-007` 已接受；Stage 11 仍在进行中
-- 当前 Task：`RT-S11-003 可观测性和运行追踪` 已接受
+- 当前活动：`RT-S11-002 自动化和恢复`
+- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-007` 已接受；Stage 11 仍在进行中
+- 当前 Task：`RT-S11-002 自动化和恢复` 已接受
 - 下一可执行项：等待用户明确授权后续 Stage 11 task
 - 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-23 RT-S11-002 自动化和恢复
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只实现 `RT-S11-002` 冻结范围内的 bounded automation / recovery hardening；
+- 复用 `job_service`、`data_scheduling_service`、`stage3_batch_service` 和 `SystemRunTraceService`；
+- 不引入新的 durable scheduler contract、authorization policy change、source-of-truth rewrite、route retirement 或 Stage 12 行为。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- `RT-S11-003`：`ACCEPTED`
+- `RT-S11-002`：下一允许 Task
+- working tree before edits：clean
+
+### Implementation
+
+- `src/services/job_service.py`
+  - `fail_job()` 把失败证据写入 `runtime_state.last_failure_evidence`，并 append 到 `runtime_state.attempt_history`。
+  - `retry_job()` 保留既有失败证据和 attempt history，不因重试清空可追溯信息。
+- `src/services/data_scheduling_service.py`
+  - `backfill` Web path 改为 `admin_approval_required` gate，当前只返回审批要求与 repair guidance，不直接创建正式执行任务。
+  - `system-data-operation` 创建时显式写入 bounded retry policy：`max_retries=2`、`retry_backoff_seconds=300`、`action_level`。
+  - `retry_operation()` 在达到 max retry 后停止直接重试，改为返回管理员审批要求。
+  - `execute_operation()` 读取 checkpoint，基于“最近安全完成步骤 + 当前 canonical facts”决定 resume 起点，不跳过上游可用性复验。
+  - `list_operations()` / `_job_to_operation()` 为 operator/admin 提供 retry policy、幂等键、attempt history、failure evidence、last safe checkpoint。
+- `src/services/system_run_trace_service.py`
+  - `/system/runs` 新增 `system-data-operation` trace 和 `stage3-article-batch` trace。
+  - admin diagnostics 暴露 idempotency key、retry policy、checkpoint、failure evidence、prompt/schema/model recovery metadata。
+- `src/services/stage3_batch_service.py`
+  - batch job params 显式记录 `prompt_version` 与 `schema_version`，供 LLM 批处理恢复诊断复用与展示。
+- `api/routers/ui/system_data.py`
+  - list operations 现在按 principal role 控制 admin diagnostics 输出。
+- `web/src/pages/system/index.tsx`
+  - `/system/data` 增加 automation level、impact、repair guidance、admin diagnostics。
+  - 历史回灌按钮改为只读提示，明确需要管理员批准。
+  - `/system/runs` admin diagnostics 增加 payload fingerprint 与 raw metadata 展示。
+
+### Verification
+
+- `rtk pytest trade-strategy-ai/tests/unit/services/test_job_service.py trade-strategy-ai/tests/unit/services/test_data_scheduling_service.py trade-strategy-ai/tests/unit/services/test_system_run_trace_service.py trade-strategy-ai/tests/api/routers/test_system_data_api.py -q`
+  - `41 passed`
+- `corepack pnpm vitest run src/pages/system/index.test.tsx src/lib/api/system.test.ts`
+  - `14 passed`
+- `corepack pnpm typecheck`
+  - pass
+- `corepack pnpm eslint src/pages/system/index.tsx src/pages/system/index.test.tsx src/types/system.ts src/lib/api/system.ts`
+  - pass
+- `git -C /Users/wanghui/Documents/Claude/trade-strategy-ai diff --check`
+  - pass
+- `rtk rg -n "Job|Workflow|Pipeline|Artifact|config_path|run_id|job_id|workflow_run_id" trade-strategy-ai/web/src/pages/system trade-strategy-ai/web/src/features/system-status -g '!**/*.test.tsx'`
+  - 仅命中管理员诊断代码路径与 React key usage；普通用户 copy 未新增内部术语
+
+### Acceptance Review
+
+- Scheduled tasks / retry / resume / backfill / LLM batch recovery / night jobs / health checks have bounded behavior：pass
+- Retry / resume / backfill is idempotent and bounded：pass
+- Notify-only / automatic retry / admin approval boundaries are explicit：pass
+- Retry preserves prior failed evidence and appends new attempt evidence：pass
+- Retry upper bounds and backoff policy are visible to admins：pass
+- Resume starts from last safely completed step and revalidates upstream data availability：pass
+- Backfill immutable time semantics：bounded pass
+  - 当前 Web path 不直接执行 backfill，避免在未冻结更强 contract 前改写历史时间语义。
+- LLM batch recovery metadata visibility：bounded pass
+  - trace 已暴露 prompt/schema/model/retry/cache metadata；bulk execution 仍要求管理员批准。
+- Automation does not silently mutate user-impacting decisions：pass
+
+### Residual Risks
+
+- 本次没有落地新的 scheduler enable/disable runtime；若后续要引入 durable scheduler contract，仍需单独升级审查。
+- bulk LLM recovery 目前只到 diagnostics / traceability 层，不直接提供执行入口。
+- `system-data-operation` 的 partial state 仍通过 Job status + result payload 双层表达；当前 `/system/data` 与 `/system/runs` 已 truthfully 渲染，兼容 Job Center 视图尚未同步收敛。
+
+### Acceptance
+
+`RT-S11-002` is `ACCEPTED` under the frozen Stage 11 contract.
 
 ## 2026-06-22 RT-S11-001 + RT-S11-007 Task Card Review
 

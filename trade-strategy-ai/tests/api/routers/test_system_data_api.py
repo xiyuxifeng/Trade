@@ -188,3 +188,36 @@ async def test_system_data_operation_mutations_call_formal_facade(client: AsyncC
     resumed = await client.post("/api/ui/v1/system/data/operations/op-1/resume")
     assert resumed.status_code == 200
     assert resumed.json()["status"] == "running"
+
+
+async def test_system_data_backfill_returns_approval_required_payload(client: AsyncClient) -> None:
+    fake_service = client._fake_system_data_service  # type: ignore[attr-defined]
+
+    async def _submit_operation(**kwargs: Any) -> Any:
+        fake_service.submit_calls.append(kwargs)
+        return _result(
+            {
+                "created": False,
+                "requires_admin_approval": True,
+                "operation": {
+                    "operation_id": "approval-required",
+                    "label": "回灌历史数据",
+                    "action": "backfill",
+                    "status": "pending_approval",
+                    "action_level": "admin_approval_required",
+                },
+            },
+            status="partial",
+            message="admin approval required for backfill",
+        )
+
+    fake_service.submit_operation = _submit_operation  # type: ignore[method-assign]
+    response = await client.post(
+        "/api/ui/v1/system/data/operations",
+        json={"action": "backfill", "start_date": "2026-06-01", "end_date": "2026-06-03"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["created"] is False
+    assert response.json()["requires_admin_approval"] is True
+    assert response.json()["operation"]["action_level"] == "admin_approval_required"

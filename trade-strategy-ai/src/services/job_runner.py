@@ -927,6 +927,7 @@ class JobRunner(BaseService):
         )
 
         params = dict(job_payload.get("params") or {})
+        params["__job_id__"] = str(job_id)
         params["__job_runtime_state__"] = job_payload.get("runtime_state")
         progress_reporter: Callable[[dict[str, Any]], None] | None = None
         progress_finish: Callable[[], Awaitable[None]] | None = None

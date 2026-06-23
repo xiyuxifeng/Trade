@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from api.dependencies import CurrentPrincipal, require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, get_current_principal, require_role, verify_api_key
 from src.services.data_scheduling_service import DataSchedulingService
 
 
@@ -67,9 +67,10 @@ async def list_system_data_operations(
     limit: int = 20,
     offset: int = 0,
     service: DataSchedulingService = Depends(get_data_scheduling_service),
+    principal: CurrentPrincipal = Depends(get_current_principal),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
-    return _payload(await service.list_operations(limit=limit, offset=offset))
+    return _payload(await service.list_operations(limit=limit, offset=offset, actor_role=principal.role))
 
 
 @router.post("/operations")

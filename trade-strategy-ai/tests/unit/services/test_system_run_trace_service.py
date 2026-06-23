@@ -74,3 +74,46 @@ def test_build_backtest_view_exposes_rule_and_code_versions() -> None:
     assert view["rule_version"]["rule_version_id"] == "rule-version-1"
     assert view["rule_version"]["rule_version_no"] == 3
     assert view["code_version"] == "engine-v5"
+
+
+def test_build_system_data_operation_trace_exposes_retry_policy_and_idempotency_to_admins() -> None:
+    service = SystemRunTraceService(session_scope_factory=lambda: None)
+    job = SimpleNamespace(
+        id="job-1",
+        status="failed",
+        params={
+            "action": "repair",
+            "target_trade_date": "2026-06-22",
+            "steps": [
+                {
+                    "action": "refresh_pre_market_kaipan",
+                    "label": "补齐盘前市场数据",
+                    "reason": "盘前数据缺失。",
+                    "target_trade_date": "2026-06-22",
+                }
+            ],
+        },
+        error={"message": "provider timeout"},
+        result={"status": "partial"},
+        runtime_state={
+            "attempt_history": [{"status": "failed", "error": {"message": "provider timeout"}}],
+            "checkpoint": {"completed_steps": []},
+            "last_failure_evidence": {"error": {"message": "provider timeout"}},
+        },
+        idempotency_key="system-data-operation:abc",
+        retry_count=2,
+        max_retries=3,
+        retry_backoff_seconds=300,
+        created_at=None,
+        updated_at=None,
+        started_at=None,
+        finished_at=None,
+    )
+
+    trace = service._build_system_job_trace(job, actor_role="admin")
+
+    assert trace["business_label"] == "补齐缺失数据"
+    assert trace["steps"][0]["business_label"] == "补齐盘前市场数据"
+    assert trace["admin_diagnostics"]["payload_fingerprints"]["idempotency_key"] == "system-data-operation:abc"
+    assert trace["admin_diagnostics"]["raw_metadata"]["retry_policy"]["max_retries"] == 3
+    assert trace["admin_diagnostics"]["raw_metadata"]["failure_evidence"]["error"]["message"] == "provider timeout"

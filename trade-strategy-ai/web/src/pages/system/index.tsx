@@ -137,6 +137,12 @@ function latestOperationMessage(operation: SystemDataOperation | undefined) {
   return `${operation.label} · ${statusLabel(operation.status)} · 最后更新时间 ${formatTime(operation.updated_at)}`;
 }
 
+function actionLevelLabel(level: SystemDataOperation['action_level']) {
+  if (level === 'automatic_retry') return '自动重试';
+  if (level === 'admin_approval_required') return '需管理员批准';
+  return '仅通知';
+}
+
 const systemDataCompatibilityLinks = [
   { label: '市场数据总览', href: '/market' },
   { label: '市场快照详情', href: '/market/snapshots' },
@@ -392,11 +398,11 @@ function SystemDataSummary() {
           <div className="mt-3">
             <Button
               variant="outline"
-              disabled={mutationPending || !startDate || !endDate}
-              onClick={() => submitMutation.mutate({ action: 'backfill', start_date: startDate, end_date: endDate })}
+              disabled
             >
               回灌历史数据
             </Button>
+            <p className="mt-2 text-sm text-amber-700">历史回灌会影响后续正式输出，必须先由管理员审批；当前页面只展示申请条件和影响范围。</p>
           </div>
         </div>
       ) : null}
@@ -417,7 +423,23 @@ function SystemDataSummary() {
                     <p className="mt-1 text-sm text-slate-600">
                       状态：{statusLabel(item.status)} · 目标交易日：{item.target_trade_date ?? '未指定'}
                     </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      自动化级别：{actionLevelLabel(item.action_level)}
+                    </p>
+                    {item.impact ? <p className="mt-1 text-sm text-slate-600">影响：{item.impact}</p> : null}
+                    {item.repair_guidance ? <p className="mt-1 text-sm text-slate-600">处理方式：{item.repair_guidance}</p> : null}
                     <p className="mt-1 text-xs text-slate-500">更新时间：{formatTime(item.updated_at)}</p>
+                    {isOperator && item.admin_details ? (
+                      <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        <p className="font-medium text-slate-900">管理员诊断</p>
+                        <p className="mt-1">关联运行：{item.admin_details.run_id}</p>
+                        <p className="mt-1">幂等键：{item.admin_details.idempotency_key ?? '未记录'}</p>
+                        <p className="mt-1">重试策略：{item.admin_details.retry_policy.retry_count} / {item.admin_details.retry_policy.max_retries}，退避 {item.admin_details.retry_policy.backoff_seconds} 秒</p>
+                        {item.admin_details.failure_evidence ? (
+                          <p className="mt-1">最近失败证据：{renderSimpleValue(item.admin_details.failure_evidence)}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   {isOperator ? (
                     <div className="flex flex-wrap gap-2">
@@ -565,6 +587,19 @@ function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; sho
                 </div>
               ))}
             </div>
+          ) : null}
+          {item.admin_diagnostics.payload_fingerprints ? (
+            <div className="mt-2 space-y-1 text-sm text-slate-700">
+              {Object.entries(item.admin_diagnostics.payload_fingerprints).map(([key, value]) => (
+                <div key={key}>
+                  <span className="font-medium text-slate-900">{key}：</span>
+                  {String(value)}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {item.admin_diagnostics.raw_metadata ? (
+            <p className="mt-2 text-sm text-slate-700">补充诊断：{renderSimpleValue(item.admin_diagnostics.raw_metadata)}</p>
           ) : null}
         </div>
       ) : null}

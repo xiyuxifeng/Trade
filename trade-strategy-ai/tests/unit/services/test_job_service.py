@@ -405,6 +405,34 @@ def test_job_pause_resume_and_retry_flow(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_retry_preserves_failed_evidence_and_attempt_history(tmp_path: Path) -> None:
+    """重试前必须保留失败证据，并把新尝试追加到运行态历史。"""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="pipeline-run", params={"scope": "system-data"}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+
+    failed = asyncio.run(
+        service.fail_job(
+            job_id=job_id,
+            error={"type": "external_dependency", "message": "provider timeout", "retryable": True},
+        )
+    )
+    retried = asyncio.run(service.retry_job(job_id=job_id, actor="web"))
+
+    failure_evidence = retried.payload["job"]["runtime_state"]["last_failure_evidence"]
+    attempt_history = retried.payload["job"]["runtime_state"]["attempt_history"]
+
+    assert failed.payload["job"]["status"] == "failed"
+    assert failure_evidence["error"]["message"] == "provider timeout"
+    assert failure_evidence["retry_count"] == 1
+    assert attempt_history[-1]["status"] == "failed"
+    assert attempt_history[-1]["error"]["message"] == "provider timeout"
+    assert retried.payload["job"]["runtime_state"]["retried_at"] is not None
+
+    asyncio.run(engine.dispose())
+
+
 def test_complete_backtest_job_persists_summary_run(tmp_path: Path) -> None:
     """完成回测 Job 时应同步落库 backtest_result_runs。"""
     from src.db.repositories import BacktestResultRunRepository

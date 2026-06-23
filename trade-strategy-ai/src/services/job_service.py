@@ -497,6 +497,32 @@ class JobService(BaseService):
         job.updated_at = datetime.now(UTC)
         await session.flush()
 
+    def _record_attempt_history(
+        self,
+        *,
+        job: Job,
+        status: str,
+        error: dict[str, Any] | None = None,
+        result: dict[str, Any] | None = None,
+        scheduled_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        runtime_state = JobControlState.from_runtime_state(job.runtime_state).to_runtime_state()
+        attempt_history = list(runtime_state.get("attempt_history") or [])
+        evidence = {
+            "attempt_id": f"{job.id}:attempt-{max(int(job.retry_count or 0), 0)}",
+            "status": status,
+            "retry_count": int(job.retry_count or 0),
+            "error": _to_plain(error),
+            "result": _to_plain(result),
+            "scheduled_at": _to_plain(scheduled_at),
+            "finished_at": _to_plain(finished_at),
+        }
+        attempt_history.append(evidence)
+        runtime_state["attempt_history"] = attempt_history
+        runtime_state["last_failure_evidence"] = evidence
+        job.runtime_state = runtime_state
+
     async def create_job(
         self,
         *,
@@ -1031,6 +1057,14 @@ class JobService(BaseService):
                 job.scheduled_at = now + timedelta(seconds=backoff_seconds)
             else:
                 job.scheduled_at = None
+            self._record_attempt_history(
+                job=job,
+                status=JobStatus.failed.value,
+                error=job.error if isinstance(job.error, dict) else {"message": str(job.error)},
+                result=job.result if isinstance(job.result, dict) else None,
+                scheduled_at=job.scheduled_at,
+                finished_at=job.finished_at,
+            )
             await self._persist(session, job)
             await self._record_job_audit(
                 session=session,
@@ -1232,6 +1266,7 @@ class JobService(BaseService):
         *,
         job_id: str | UUID,
         actor: str,
+        allow_cancelled: bool = False,
         audit_source: dict[str, Any] | None = None,
     ) -> ServiceResult:
         """把 failed Job 重新放回待领取状态。"""
@@ -1241,7 +1276,10 @@ class JobService(BaseService):
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
-            if job.status != JobStatus.failed.value:
+            allowed_statuses = {JobStatus.failed.value}
+            if allow_cancelled:
+                allowed_statuses.add(JobStatus.cancelled.value)
+            if job.status not in allowed_statuses:
                 return ServiceResult(
                     status="error",
                     message=f"job cannot retry from status {job.status}",

@@ -205,6 +205,23 @@ export type SystemDataOperation = {
   created_at: string | null;
   updated_at: string | null;
   cancel_requested: boolean;
+  action_level?: 'notify_only' | 'automatic_retry' | 'admin_approval_required';
+  impact?: string;
+  repair_guidance?: string;
+  admin_details?: {
+    run_id: string;
+    idempotency_key: string | null;
+    operation_fingerprint: string | null;
+    retry_policy: {
+      retry_count: number;
+      max_retries: number;
+      backoff_seconds: number;
+      retry_after_max_requires_admin: boolean;
+    };
+    attempt_history: Array<Record<string, unknown>>;
+    failure_evidence?: Record<string, unknown> | null;
+    last_safe_checkpoint?: Record<string, unknown> | null;
+  };
 };
 
 export type SystemDataOperationListResponse = {

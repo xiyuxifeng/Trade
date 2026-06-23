@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from src.db.session import get_session_factory
 from src.models.market_data_snapshot import MarketSnapshot
+from src.models.job import Job
 from src.models.stage2_canonical import (
     BacktestResult,
     BacktestRun,
@@ -89,6 +90,18 @@ class SystemRunTraceService(BaseService):
                 .scalars()
                 .all()
             )
+            system_jobs = list(
+                (
+                    await session.execute(
+                        select(Job)
+                        .where(Job.job_type.in_(["system-data-operation", "stage3-article-batch"]))
+                        .order_by(Job.created_at.desc())
+                        .limit(limit)
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
             dataset_ids: set[UUID] = set()
             market_ids: set[UUID] = set()
@@ -163,6 +176,10 @@ class SystemRunTraceService(BaseService):
                 prompt_run=prompt_by_id.get(str(review.prompt_run_id)) if review.prompt_run_id is not None else None,
             )
             for review in post_market_reviews
+        )
+        traces.extend(
+            self._build_system_job_trace(job, actor_role=actor_role)
+            for job in system_jobs
         )
         traces.sort(key=lambda item: item.get("started_at") or item.get("finished_at") or "", reverse=True)
         return ServiceResult(
@@ -415,6 +432,122 @@ class SystemRunTraceService(BaseService):
             object_type="post-market-review",
             object_id=str(review.post_market_review_id),
         )
+
+    def _build_system_job_trace(self, job: Any, *, actor_role: str) -> dict[str, Any]:
+        params = job.params if isinstance(job.params, dict) else {}
+        runtime_state = job.runtime_state if isinstance(job.runtime_state, dict) else {}
+        checkpoint = runtime_state.get("checkpoint") if isinstance(runtime_state.get("checkpoint"), dict) else {}
+        completed_steps = checkpoint.get("completed_steps") if isinstance(checkpoint.get("completed_steps"), list) else []
+        planned_steps = params.get("steps") if isinstance(params.get("steps"), list) else checkpoint.get("planned_steps") if isinstance(checkpoint.get("planned_steps"), list) else []
+        if str(getattr(job, "job_type", "system-data-operation")) == "stage3-article-batch":
+            return self._build_stage3_batch_trace(job, actor_role=actor_role)
+        action = str(params.get("action") or "")
+        business_label = self._system_data_business_label(action)
+        status = self._map_status((job.result or {}).get("status") if isinstance(job.result, dict) and (job.result or {}).get("status") else job.status)
+        steps = []
+        for index, step in enumerate(planned_steps, start=1):
+            completed = any(
+                item.get("action") == step.get("action") and item.get("target_trade_date") == step.get("target_trade_date")
+                for item in completed_steps
+            )
+            steps.append(
+                {
+                    "step_id": f"system-data-step-{index}",
+                    "business_label": str(step.get("label") or step.get("action") or f"步骤 {index}"),
+                    "status": "ready" if completed else status,
+                    "started_at": self._iso(job.started_at),
+                    "finished_at": self._iso(job.finished_at) if completed else None,
+                    "duration_seconds": self._duration_seconds(job.started_at, job.finished_at) if completed else None,
+                    "error": (job.error or {}).get("message") if isinstance(job.error, dict) and not completed else None,
+                    "retry_count": job.retry_count,
+                    "input_references": [],
+                    "output_references": [],
+                    "repair_guidance": str(step.get("reason") or "请先检查上游数据是否真实可用。"),
+                }
+            )
+        return self._assemble_trace(
+            run_id=f"system-data-operation:{job.id}",
+            business_label=business_label,
+            status=status,
+            started_at=job.started_at or job.created_at,
+            finished_at=job.finished_at or job.updated_at,
+            happened=f"{business_label}已记录正式处理状态。",
+            affected="普通用户可以看到当前处理是否阻断业务；管理员可继续查看重试策略、失败证据和检查点。",
+            repair_guidance=self._system_data_repair_guidance(action=action, status=status),
+            next_action={"label": "查看数据与调度", "target_path": "/system/data"},
+            attempt=self._build_attempt_view(
+                run_id=f"system-data-operation:{job.id}",
+                retry_count=job.retry_count,
+                attempt_id=f"{job.id}:attempt-{job.retry_count}",
+            ),
+            steps=steps,
+            prompt_calls=[],
+            data_fetches=[],
+            backtests=[],
+            linked_records=[{"type": "job", "id": str(job.id), "label": business_label}],
+            admin_diagnostics={
+                "technical_status": status,
+                "linked_ids": {"job_ids": [str(job.id)]},
+                "payload_fingerprints": {"idempotency_key": job.idempotency_key},
+                "raw_metadata": {
+                    "retry_policy": {
+                        "retry_count": int(job.retry_count or 0),
+                        "max_retries": int(job.max_retries or 0),
+                        "backoff_seconds": int(job.retry_backoff_seconds or 0),
+                        "retry_after_max_requires_admin": True,
+                    },
+                    "failure_evidence": runtime_state.get("last_failure_evidence") or job.error,
+                    "action_level": params.get("action_level") or ("admin_approval_required" if action == "backfill" else "notify_only"),
+                    "checkpoint": checkpoint,
+                },
+            } if actor_role in {"operator", "admin"} else None,
+        )
+
+    def _build_stage3_batch_trace(self, job: Any, *, actor_role: str) -> dict[str, Any]:
+        params = job.params if isinstance(job.params, dict) else {}
+        progress = job.progress if isinstance(job.progress, dict) else {}
+        quality_stats = progress.get("quality_stats") if isinstance(progress.get("quality_stats"), dict) else {}
+        prompt_version = params.get("prompt_version") or "article_analysis_v1"
+        schema_version = params.get("schema_version") or "article_analysis_v1"
+        status = self._map_status(job.status)
+        return self._assemble_trace(
+            run_id=f"stage3-batch:{job.id}",
+            business_label="LLM 批处理恢复",
+            status=status,
+            started_at=job.started_at or job.created_at,
+            finished_at=job.finished_at or job.updated_at,
+            happened="批处理运行状态已记录，可用于恢复结构化文章与规则提取任务。",
+            affected="普通用户不会看到技术缓存细节；管理员可查看模型、版本、缓存和重试状态。",
+            repair_guidance="如需批量恢复，请先确认 prompt/schema/model 与输入哈希保持一致，再由管理员继续处理。",
+            next_action={"label": "查看运行与告警", "target_path": "/system/runs"},
+            attempt=self._build_attempt_view(
+                run_id=f"stage3-batch:{job.id}",
+                retry_count=job.retry_count,
+                attempt_id=f"{job.id}:attempt-{job.retry_count}",
+            ),
+            steps=[],
+            prompt_calls=[],
+            data_fetches=[],
+            backtests=[],
+            linked_records=[{"type": "job", "id": str(job.id), "label": "stage3-batch"}],
+            admin_diagnostics={
+                "technical_status": status,
+                "linked_ids": {"job_ids": [str(job.id)]},
+                "payload_fingerprints": {"idempotency_key": job.idempotency_key},
+                "raw_metadata": {
+                    "prompt_version": prompt_version,
+                    "schema_version": schema_version,
+                    "model": params.get("model"),
+                    "retry_count": int(job.retry_count or 0),
+                    "cache_state": {
+                        "cached_count": progress.get("cached_count"),
+                        "quality_stats": quality_stats,
+                        "stale_cache_visible": status != "ready",
+                    },
+                    "action_level": "admin_approval_required",
+                },
+            } if actor_role in {"operator", "admin"} else None,
+        )
         prompt_calls = [self._build_prompt_call_view(prompt_run)] if prompt_run is not None else []
         status = "partial" if prompt_run is None else "ready"
         return self._assemble_trace(
@@ -628,6 +761,24 @@ class SystemRunTraceService(BaseService):
             "author_profile_version": "生成作者画像草稿",
         }
         return mapping.get(run.input_object_type, "执行正式 Prompt 调用")
+
+    def _system_data_business_label(self, action: str) -> str:
+        mapping = {
+            "repair": "补齐缺失数据",
+            "update_now": "立即更新数据",
+            "backfill": "回灌历史数据",
+            "recompute_indicators": "重算指标",
+            "recompute_market_state": "重算市场状态",
+            "run_schedule_window": "执行定时窗口",
+        }
+        return mapping.get(action, "数据与调度操作")
+
+    def _system_data_repair_guidance(self, *, action: str, status: str) -> str:
+        if action == "backfill":
+            return "历史回灌必须先经管理员批准，且不得重写历史 available_at / captured_at。"
+        if status in {"error", "unavailable"}:
+            return "请先检查失败证据、幂等键和最近尝试记录，再决定重试或继续执行。"
+        return "如需继续处理，请先确认上游数据已经真实可用。"
 
     def _prompt_status(self, validation_state: Any) -> str:
         normalized = str(validation_state)

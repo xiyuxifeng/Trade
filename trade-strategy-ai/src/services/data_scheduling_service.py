@@ -224,13 +224,14 @@ class DataSchedulingService:
         *,
         limit: int = 20,
         offset: int = 0,
+        actor_role: str = "viewer",
     ) -> dict[str, Any]:
         job_service = self._get_job_service()
         result = await job_service.list_jobs(job_type=self.FORMAL_JOB_TYPE, skip=offset, limit=limit)
         items = result.payload.get("items", []) if result.status == "ok" and isinstance(result.payload, dict) else []
         return {
             "count": len(items),
-            "items": [self._job_to_operation(item) for item in items],
+            "items": [self._job_to_operation(item, actor_role=actor_role) for item in items],
         }
 
     async def submit_operation(
@@ -279,6 +280,42 @@ class DataSchedulingService:
                 },
             )
 
+        if action == "backfill":
+            from src.services.base import ServiceResult
+
+            preview = self._operation_preview(
+                action=action,
+                target_trade_date=resolved_end_date or resolved_start_date,
+                actor_role=getattr(principal, "role", "viewer"),
+                idempotency_key=self.build_operation_key(
+                    action=action,
+                    target_trade_date=resolved_end_date or resolved_start_date,
+                    steps=[],
+                    trigger_source=trigger_source,
+                    start_date=resolved_start_date,
+                    end_date=resolved_end_date,
+                    schedule_key=schedule_key,
+                ),
+                retry_count=0,
+                max_retries=0,
+                retry_backoff_seconds=0,
+                runtime_state={},
+                error={"message": "回灌历史数据可能影响后续正式输出。"},
+                created_at=None,
+                updated_at=None,
+                status="pending_approval",
+            )
+            return ServiceResult(
+                status="partial",
+                message="admin approval required for backfill",
+                payload={
+                    "created": False,
+                    "requires_admin_approval": True,
+                    "operation": preview,
+                    "repair_guidance": "请由管理员审核时间范围、影响和数据证据后再执行历史回灌。",
+                },
+            )
+
         idempotency_key = self.build_operation_key(
             action=action,
             target_trade_date=effective_target_date,
@@ -309,22 +346,58 @@ class DataSchedulingService:
                     }
                     for step in planned_steps
                 ],
+                "action_level": self._action_level_for(action),
             },
             created_by=created_by,
             idempotency_key=idempotency_key,
+            max_retries=2,
+            retry_backoff_seconds=300,
             audit_source=audit_source,
         )
         if result.status != "ok":
             return result
-        return self._wrap_job_result_as_operation(result)
+        return self._wrap_job_result_as_operation(result, actor_role=getattr(principal, "role", "viewer"))
 
     async def cancel_operation(self, *, operation_id: str, reason: str | None = None, audit_source: dict[str, Any] | None = None) -> Any:
         return await self._get_job_service().cancel_job(job_id=operation_id, reason=reason, audit_source=audit_source)
 
     async def retry_operation(self, *, operation_id: str, actor: str, audit_source: dict[str, Any] | None = None) -> Any:
+        from src.services.base import ServiceResult
+
+        job_result = await self._get_job_service().get_job(operation_id)
+        if job_result.status != "ok":
+            return job_result
+        job = job_result.payload.get("job", {})
+        retry_count = int(job.get("retry_count") or 0)
+        max_retries = int(job.get("max_retries") or 0)
+        if retry_count >= max_retries:
+            operation = self._job_to_operation(job, actor_role="operator")
+            operation["action_level"] = "admin_approval_required"
+            return ServiceResult(
+                status="partial",
+                message="admin approval required after max retries",
+                payload={
+                    "requires_admin_approval": True,
+                    "operation": operation,
+                    "repair_guidance": "已达到自动重试上限。请由管理员确认影响范围、失败证据和幂等键后再继续。",
+                },
+            )
         return await self._get_job_service().retry_job(job_id=operation_id, actor=actor, audit_source=audit_source)
 
     async def resume_operation(self, *, operation_id: str, actor: str, audit_source: dict[str, Any] | None = None) -> Any:
+        job_result = await self._get_job_service().get_job(operation_id)
+        if job_result.status != "ok":
+            return job_result
+        job = job_result.payload.get("job", {})
+        runtime_state = job.get("runtime_state") if isinstance(job.get("runtime_state"), dict) else {}
+        checkpoint = runtime_state.get("checkpoint") if isinstance(runtime_state.get("checkpoint"), dict) else {}
+        if checkpoint.get("completed_steps"):
+            return await self._get_job_service().retry_job(
+                job_id=operation_id,
+                actor=actor,
+                allow_cancelled=True,
+                audit_source=audit_source,
+            )
         return await self._get_job_service().resume_job(job_id=operation_id, actor=actor, audit_source=audit_source)
 
     async def execute_operation(
@@ -336,6 +409,8 @@ class DataSchedulingService:
         from src.services.base import ServiceResult
 
         action = str(params.get("action") or "").strip()
+        job_id = params.get("__job_id") or params.get("__job_id__")
+        runtime_state_payload = params.get("__job_runtime_state__") if isinstance(params.get("__job_runtime_state__"), dict) else {}
         now = datetime.now(SHANGHAI)
         facts = await self._collect_facts()
         readiness = self.evaluate_readiness(facts=facts, now_shanghai=now, operations=[])
@@ -363,11 +438,26 @@ class DataSchedulingService:
                 payload={"action": action, "executed_steps": [], "status": "ready"},
             )
 
+        completed_steps = self._completed_step_count(runtime_state_payload=runtime_state_payload, planned_steps=planned_steps, facts=facts)
+        if job_id:
+            await self._update_operation_runtime_state(
+                job_id=job_id,
+                runtime_state={
+                    "stage": "running",
+                    "last_safe_point": planned_steps[completed_steps - 1].action if completed_steps > 0 else None,
+                    "checkpoint": {
+                        "planned_steps": [self._step_payload(step) for step in planned_steps],
+                        "completed_steps": [self._step_payload(step) for step in planned_steps[:completed_steps]],
+                        "next_step_index": completed_steps,
+                    },
+                },
+            )
+
         executed_steps: list[dict[str, Any]] = []
         overall_status = "ok"
         step_context: dict[str, Any] = {}
         total = len(planned_steps)
-        for index, step in enumerate(planned_steps, start=1):
+        for index, step in enumerate(planned_steps[completed_steps:], start=completed_steps + 1):
             if progress_callback is not None:
                 progress_callback(
                     {
@@ -388,6 +478,20 @@ class DataSchedulingService:
                 step_context=step_context,
             )
             executed_steps.append(step_result)
+            if job_id and step_result.get("status") in {"ok", "ready"}:
+                completed = planned_steps[:index]
+                await self._update_operation_runtime_state(
+                    job_id=job_id,
+                    runtime_state={
+                        "stage": "running",
+                        "last_safe_point": step.action,
+                        "checkpoint": {
+                            "planned_steps": [self._step_payload(item) for item in planned_steps],
+                            "completed_steps": [self._step_payload(item) for item in completed],
+                            "next_step_index": index,
+                        },
+                    },
+                )
             if step_result.get("status") not in {"ok", "ready"}:
                 overall_status = "partial" if step_result.get("status") == "partial" else "error"
                 break
@@ -755,20 +859,110 @@ class DataSchedulingService:
         }
         return labels.get(action, "数据与调度操作")
 
-    def _job_to_operation(self, item: dict[str, Any]) -> dict[str, Any]:
+    def _job_to_operation(self, item: dict[str, Any], *, actor_role: str = "viewer") -> dict[str, Any]:
         params = item.get("params") if isinstance(item.get("params"), dict) else {}
-        return {
+        runtime_state = item.get("runtime_state") if isinstance(item.get("runtime_state"), dict) else {}
+        error = item.get("error") if isinstance(item.get("error"), dict) else None
+        operation = {
             "operation_id": str(item.get("id")),
             "label": self._label_for_operation(params),
             "action": params.get("action"),
-            "status": item.get("status"),
+            "status": self._operation_status(item),
             "target_trade_date": params.get("target_trade_date"),
             "created_at": item.get("created_at"),
             "updated_at": item.get("updated_at"),
             "cancel_requested": bool(item.get("cancel_requested")),
+            "action_level": self._action_level_for(str(params.get("action") or "")),
+            "impact": self._impact_for_action(str(params.get("action") or "")),
+            "repair_guidance": self._repair_guidance_for_action(str(params.get("action") or ""), status=self._operation_status(item)),
         }
+        if actor_role in {"operator", "admin"}:
+            operation["admin_details"] = {
+                "run_id": f"system-data-operation:{item.get('id')}",
+                "idempotency_key": item.get("idempotency_key"),
+                "operation_fingerprint": item.get("idempotency_key"),
+                "retry_policy": {
+                    "retry_count": int(item.get("retry_count") or 0),
+                    "max_retries": int(item.get("max_retries") or 0),
+                    "backoff_seconds": int(item.get("retry_backoff_seconds") or 0),
+                    "retry_after_max_requires_admin": True,
+                },
+                "attempt_history": list(runtime_state.get("attempt_history") or []),
+                "failure_evidence": runtime_state.get("last_failure_evidence") or error,
+                "last_safe_checkpoint": ((runtime_state.get("checkpoint") or {}).get("completed_steps") or [])[-1] if isinstance(runtime_state.get("checkpoint"), dict) and (runtime_state.get("checkpoint") or {}).get("completed_steps") else None,
+            }
+        return operation
 
-    def _wrap_job_result_as_operation(self, result: Any) -> Any:
+    def _operation_status(self, item: dict[str, Any]) -> str:
+        result = item.get("result") if isinstance(item.get("result"), dict) else {}
+        payload_status = result.get("status")
+        if payload_status in {"partial", "ready"}:
+            return str(payload_status)
+        return str(item.get("status") or "pending")
+
+    def _action_level_for(self, action: str) -> str:
+        if action == "backfill":
+            return "admin_approval_required"
+        if action in {"repair", "update_now", "run_schedule_window", "recompute_indicators", "recompute_market_state"}:
+            return "notify_only"
+        return "automatic_retry"
+
+    def _impact_for_action(self, action: str) -> str:
+        mapping = {
+            "repair": "用于补齐缺失数据，不会直接发布业务决策。",
+            "update_now": "会刷新当前窗口所需正式数据，影响后续就绪判断。",
+            "run_schedule_window": "会执行对应时间窗口的正式数据处理链路。",
+            "recompute_indicators": "会重算依赖指标，但不直接发布正式业务对象。",
+            "recompute_market_state": "会更新市场状态结果，影响后续选择和回测判断。",
+            "backfill": "会补抓历史数据并影响未来分析，因此必须先审批。",
+        }
+        return mapping.get(action, "当前操作会影响系统管理中的后续处理链路。")
+
+    def _repair_guidance_for_action(self, action: str, *, status: str) -> str:
+        if action == "backfill":
+            return "请先由管理员审核时间范围、影响和数据证据，再执行历史回灌。"
+        if status == "failed":
+            return "请先查看失败证据、幂等键和最近尝试记录，再决定重试或继续执行。"
+        return "如需继续处理，请优先检查上游数据是否已真实可用。"
+
+    def _operation_preview(
+        self,
+        *,
+        action: str,
+        target_trade_date: date | None,
+        actor_role: str,
+        idempotency_key: str,
+        retry_count: int,
+        max_retries: int,
+        retry_backoff_seconds: int,
+        runtime_state: dict[str, Any],
+        error: dict[str, Any] | None,
+        created_at: str | None,
+        updated_at: str | None,
+        status: str,
+    ) -> dict[str, Any]:
+        return self._job_to_operation(
+            {
+                "id": "approval-required",
+                "params": {
+                    "action": action,
+                    "target_trade_date": target_trade_date.isoformat() if isinstance(target_trade_date, date) else target_trade_date,
+                },
+                "status": status,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "cancel_requested": False,
+                "idempotency_key": idempotency_key,
+                "retry_count": retry_count,
+                "max_retries": max_retries,
+                "retry_backoff_seconds": retry_backoff_seconds,
+                "runtime_state": runtime_state,
+                "error": error,
+            },
+            actor_role=actor_role,
+        )
+
+    def _wrap_job_result_as_operation(self, result: Any, *, actor_role: str = "viewer") -> Any:
         payload = result.payload if isinstance(result.payload, dict) else {}
         job = payload.get("job") if isinstance(payload.get("job"), dict) else {}
         from src.services.base import ServiceResult
@@ -778,7 +972,60 @@ class DataSchedulingService:
             message=result.message,
             payload={
                 "created": bool(payload.get("created", True)),
-                "operation": self._job_to_operation(job),
+                "operation": self._job_to_operation(job or payload, actor_role=actor_role),
+            },
+        )
+
+    def _step_payload(self, step: DataSchedulingRepairStep) -> dict[str, Any]:
+        return {
+            "action": step.action,
+            "label": step.label,
+            "reason": step.reason,
+            "target_trade_date": step.target_trade_date.isoformat(),
+        }
+
+    def _completed_step_count(
+        self,
+        *,
+        runtime_state_payload: dict[str, Any],
+        planned_steps: list[DataSchedulingRepairStep],
+        facts: DataSchedulingFacts,
+    ) -> int:
+        checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
+        completed_steps = checkpoint.get("completed_steps") if isinstance(checkpoint.get("completed_steps"), list) else []
+        completed_count = 0
+        for step in planned_steps:
+            matched = next(
+                (
+                    item
+                    for item in completed_steps
+                    if item.get("action") == step.action and item.get("target_trade_date") == step.target_trade_date.isoformat()
+                ),
+                None,
+            )
+            if matched is None or not self._step_is_still_satisfied(step=step, facts=facts):
+                break
+            completed_count += 1
+        return completed_count
+
+    def _step_is_still_satisfied(self, *, step: DataSchedulingRepairStep, facts: DataSchedulingFacts) -> bool:
+        if step.action == "refresh_pre_market_kaipan":
+            return facts.latest_pre_market_snapshot.trade_date == step.target_trade_date and facts.latest_pre_market_snapshot.status == "ready"
+        if step.action == "refresh_post_close_kaipan":
+            return facts.latest_post_close_snapshot.trade_date == step.target_trade_date and facts.latest_post_close_snapshot.status == "ready"
+        if step.action == "refresh_ohlcv_close":
+            return facts.latest_ohlcv_trade_date == step.target_trade_date
+        if step.action == "recompute_indicators":
+            return facts.latest_indicator_trade_date == step.target_trade_date
+        if step.action == "recompute_market_state":
+            return facts.latest_market_state_snapshot.trade_date == step.target_trade_date and facts.latest_market_state_snapshot.status == "ready"
+        return False
+
+    async def _update_operation_runtime_state(self, *, job_id: Any, runtime_state: dict[str, Any]) -> None:
+        await self._get_job_service().update_job_progress(
+            job_id=job_id,
+            progress={
+                "runtime_state": runtime_state,
             },
         )
 

@@ -391,6 +391,8 @@ describe('SystemPage', () => {
           admin_diagnostics: {
             technical_status: 'partial',
             linked_ids: { job_ids: ['job-1'], workflow_run_ids: ['workflow-1'] },
+            payload_fingerprints: { idempotency_key: 'system-data-operation:abc' },
+            raw_metadata: { retry_policy: { max_retries: 3, backoff_seconds: 300 } },
           },
         },
       ],
@@ -418,5 +420,85 @@ describe('SystemPage', () => {
     expect(screen.getByText('来源提供方：wind')).toBeInTheDocument();
     expect(screen.getByText('正式回测证据')).toBeInTheDocument();
     expect(screen.getByText('代码版本：engine-v5')).toBeInTheDocument();
+    expect(screen.getByText('idempotency_key：')).toBeInTheDocument();
+    expect(screen.getByText(/max_retries/)).toBeInTheDocument();
+  });
+
+  it('shows operator automation diagnostics on recent system data operations', async () => {
+    mockedGetSystemDataReadiness.mockResolvedValue({
+      status: 'partial',
+      target_trade_date: '2026-06-22',
+      phase: 'post_close',
+      latest_successful_update_at: '2026-06-22T10:00:00Z',
+      summary: '正式数据仍需继续处理。',
+      repair_available: false,
+      facts: {
+        latest_ohlcv_trade_date: '2026-06-22',
+        latest_indicator_trade_date: '2026-06-22',
+        dataset_snapshot_status: 'ready',
+        pre_market_snapshot_status: 'ready',
+        post_close_snapshot_status: 'partial',
+        market_state_status: 'partial',
+        unavailable_reasons: [],
+        missing_coverages: [],
+      },
+      repair_plan: { steps: [] },
+    } as never);
+    mockedGetSystemDataSchedule.mockResolvedValue({
+      timezone: 'Asia/Shanghai',
+      entries: [],
+    } as never);
+    mockedListSystemDataOperations.mockResolvedValue({
+      items: [
+        {
+          operation_id: 'op-1',
+          label: '补齐缺失数据',
+          action: 'repair',
+          status: 'failed',
+          target_trade_date: '2026-06-22',
+          created_at: '2026-06-22T09:00:00Z',
+          updated_at: '2026-06-22T09:10:00Z',
+          cancel_requested: false,
+          action_level: 'notify_only',
+          impact: '用于补齐缺失数据，不会直接发布业务决策。',
+          repair_guidance: '请先查看失败证据、幂等键和最近尝试记录，再决定重试或继续执行。',
+          admin_details: {
+            run_id: 'system-data-operation:op-1',
+            idempotency_key: 'system-data-operation:abc',
+            operation_fingerprint: 'system-data-operation:abc',
+            retry_policy: {
+              retry_count: 1,
+              max_retries: 2,
+              backoff_seconds: 300,
+              retry_after_max_requires_admin: true,
+            },
+            attempt_history: [{ status: 'failed' }],
+            failure_evidence: { error: { message: 'provider timeout' } },
+            last_safe_checkpoint: null,
+          },
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    } as never);
+
+    renderWithRouter(
+      [{ path: '/system/data', element: <SystemDataPage /> }],
+      ['/system/data'],
+      {
+        initialPrincipal: {
+          role: 'operator',
+          api_key_label: 'Operator',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByText('管理员诊断')).toBeInTheDocument();
+    expect(screen.getByText('幂等键：system-data-operation:abc')).toBeInTheDocument();
+    expect(screen.getByText('重试策略：1 / 2，退避 300 秒')).toBeInTheDocument();
+    expect(screen.getByText(/provider timeout/)).toBeInTheDocument();
   });
 });

@@ -173,6 +173,8 @@ class Stage3BatchService:
                     "limit": limit,
                     "gate_version": STAGE3_FIXED_SET_GATE_VERSION,
                     "model": self._model,
+                    "prompt_version": "article_analysis_v1",
+                    "schema_version": "article_analysis_v1",
                     "concurrency_limit": self._concurrency_limit,
                 },
                 result=None,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -246,3 +247,76 @@ def test_operation_identity_deduplicates_manual_and_scheduled_same_scope() -> No
     )
 
     assert manual_key == scheduled_key
+
+
+@pytest.mark.asyncio
+async def test_backfill_submission_requires_admin_approval() -> None:
+    class _FakeJobService:
+        def __init__(self) -> None:
+            self.create_calls: list[dict[str, object]] = []
+
+        async def create_job(self, **kwargs):  # pragma: no cover - should not be called
+            self.create_calls.append(kwargs)
+            return SimpleNamespace(status="ok", payload={"created": True})
+
+    fake_job_service = _FakeJobService()
+    service = DataSchedulingService(job_service=fake_job_service)
+    service._collect_facts = lambda: _async_value(_facts())  # type: ignore[method-assign]
+    service._list_operation_records = lambda **_: _async_value([])  # type: ignore[method-assign]
+
+    result = await service.submit_operation(
+        action="backfill",
+        principal=SimpleNamespace(role="operator", api_key_label="Operator"),
+        start_date="2026-06-01",
+        end_date="2026-06-03",
+    )
+
+    assert result.payload["created"] is False
+    assert result.payload["requires_admin_approval"] is True
+    assert result.payload["operation"]["action_level"] == "admin_approval_required"
+    assert fake_job_service.create_calls == []
+
+
+@pytest.mark.asyncio
+async def test_retry_after_max_retries_requires_admin_approval() -> None:
+    class _FakeJobService:
+        def __init__(self) -> None:
+            self.retry_calls: list[dict[str, object]] = []
+
+        async def get_job(self, _job_id: str):
+            return SimpleNamespace(
+                status="ok",
+                payload={
+                    "job": {
+                        "id": "op-1",
+                        "job_type": "system-data-operation",
+                        "status": "failed",
+                        "params": {"action": "repair", "target_trade_date": "2026-06-17"},
+                        "error": {"message": "provider timeout"},
+                        "idempotency_key": "system-data-operation:abc",
+                        "retry_count": 3,
+                        "max_retries": 3,
+                        "retry_backoff_seconds": 300,
+                        "runtime_state": {"attempt_history": [{"status": "failed"}]},
+                        "created_at": "2026-06-17T09:20:00+00:00",
+                        "updated_at": "2026-06-17T09:25:00+00:00",
+                        "cancel_requested": False,
+                    }
+                },
+            )
+
+        async def retry_job(self, **kwargs):  # pragma: no cover - should not be called
+            self.retry_calls.append(kwargs)
+            return SimpleNamespace(status="ok", payload={})
+
+    service = DataSchedulingService(job_service=_FakeJobService())
+
+    result = await service.retry_operation(operation_id="op-1", actor="Operator")
+
+    assert result.payload["requires_admin_approval"] is True
+    assert result.payload["operation"]["action_level"] == "admin_approval_required"
+    assert service._job_service.retry_calls == []  # type: ignore[attr-defined]
+
+
+async def _async_value(value):
+    return value

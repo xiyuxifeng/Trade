@@ -5,6 +5,7 @@ import type {
   SystemDataOperationMutationResponse,
   SystemDataOperationRequest,
   SystemDataReadinessResponse,
+  SystemRolloutSummaryResponse,
   SystemDataScheduleResponse,
   SystemRunTraceListResponse,
   SystemStatusResponse,
@@ -25,6 +26,10 @@ export function listSystemRunTraces(limit = 20) {
 
 export function getSystemCostControlSummary() {
   return fetchJson<SystemCostControlSummaryResponse>('/system/cost-control');
+}
+
+export function getSystemRolloutSummary() {
+  return fetchJson<SystemRolloutSummaryResponse>('/system/rollout');
 }
 
 export function getSystemDataReadiness() {

@@ -323,6 +323,14 @@ async def test_batch_service_resume_incremental_concurrency_and_retry(session_fa
     async with session_factory() as session:
         jobs = (await session.execute(select(Job).order_by(Job.created_at.asc()))).scalars().all()
         assert len(jobs) == 1
+        checkpoint = jobs[0].runtime_state["checkpoint"]
+        assert checkpoint["processed_count"] == 3
+        assert checkpoint["processed_items"]
+        assert checkpoint["processed_items"][0]["input_hash"]
+        assert checkpoint["processed_items"][0]["prompt_run_id"]
+        assert checkpoint["processed_items"][0]["validation_state"] in {"valid", "repaired", "PromptValidationState.valid", "PromptValidationState.repaired"}
+        assert jobs[0].progress["resume_point"]
+        assert jobs[0].result["rejected_or_conflicted_items"] == []
 
     changed_revision = ArticleRevision(
         article_revision_id=uuid4(),

@@ -409,3 +409,72 @@ export type SystemCostControlSummaryResponse = {
     invalidation_reasons: string[];
   }>;
 };
+
+export type SystemRolloutState = {
+  state: 'legacy_new_comparison' | 'new_read_only' | 'limited_enablement' | 'new_default' | 'legacy_read_only' | 'retired';
+  label: string;
+  description: string;
+};
+
+export type SystemRolloutSummaryResponse = {
+  generated_at: string;
+  supported_rollout_states: SystemRolloutState[];
+  items: Array<{
+    migration_id: string;
+    label: string;
+    domain: 'database' | 'prompt' | 'batch' | 'routes';
+    current_state: SystemRolloutState['state'];
+    state_label: string;
+    formal_source: string;
+    legacy_mode: string;
+    duplicate_formal_source_detected: boolean;
+    happened: string;
+    affected: string;
+    repair_guidance: string;
+    comparison?: {
+      status: 'ready' | 'partial' | 'unavailable';
+      pre_counts?: Record<string, number> | null;
+      post_counts?: Record<string, number> | null;
+      rejected_rows?: number | null;
+      conflicted_rows?: number | null;
+      legacy_prompt_count?: number;
+      raw_output_count?: number;
+      current_contract?: {
+        prompt_name: string;
+        prompt_version: string;
+        schema_version: string;
+      } | null;
+      job_status?: string | null;
+      processed_count?: number | null;
+      quality_stats?: Record<string, unknown> | null;
+      legacy_routes_retired?: boolean;
+      legacy_write_enabled?: boolean;
+    };
+    rollback_or_recovery?: {
+      status: 'ready' | 'partial' | 'unavailable';
+      mode: string;
+      evidence_file_names?: string[];
+      no_silent_data_loss?: boolean | null;
+      rejected_rows?: number | null;
+      conflicted_rows?: number | null;
+      current_contract?: {
+        prompt_name: string;
+        prompt_version: string;
+        schema_version: string;
+      } | null;
+      selected_previous_contract?: {
+        prompt_name: string;
+        prompt_version: string;
+        schema_version: string;
+      } | null;
+      raw_output_preserved?: boolean;
+      legacy_runtime_dispositions?: string[];
+      idempotency_key?: string | null;
+      resume_point?: string | null;
+      processed_items?: Array<Record<string, unknown>>;
+      rejected_or_conflicted_items?: string[] | null;
+      legacy_routes_retired?: boolean;
+      stage12_required_for_retirement?: boolean;
+    };
+  }>;
+};

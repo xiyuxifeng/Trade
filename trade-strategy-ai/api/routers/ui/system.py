@@ -9,6 +9,7 @@ from api.dependencies import CurrentPrincipal, get_current_principal
 from src.common.config import ConfigError
 from src.services.config_profile_service import ConfigProfileService
 from src.services.system_cost_control_service import SystemCostControlService
+from src.services.system_rollout_service import SystemRolloutService
 from src.services.system_run_trace_service import SystemRunTraceService
 from src.services.system_service import SystemService
 
@@ -29,6 +30,11 @@ def get_system_run_trace_service() -> SystemRunTraceService:
 def get_system_cost_control_service() -> SystemCostControlService:
     """构建系统成本与增量控制服务。"""
     return SystemCostControlService()
+
+
+def get_system_rollout_service() -> SystemRolloutService:
+    """构建灰度迁移和回滚汇总服务。"""
+    return SystemRolloutService()
 
 
 async def _resolve_profile_id() -> str | None:
@@ -91,6 +97,17 @@ async def get_system_cost_control(
     _: str = Depends(verify_api_key),
 ) -> dict[str, object]:
     """返回成本、缓存、并发、重试和增量控制汇总。"""
+    result = await service.get_summary(actor_role=principal.role)
+    return result.payload
+
+
+@router.get("/rollout")
+async def get_system_rollout(
+    service: SystemRolloutService = Depends(get_system_rollout_service),
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    _: str = Depends(verify_api_key),
+) -> dict[str, object]:
+    """返回灰度迁移、对照证据和回滚/恢复状态。"""
     result = await service.get_summary(actor_role=principal.role)
     return result.payload
 

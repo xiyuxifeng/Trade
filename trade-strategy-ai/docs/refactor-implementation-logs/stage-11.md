@@ -3,11 +3,142 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-004 成本与增量控制`
-- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-007` 已接受；Stage 11 仍在进行中
-- 当前 Task：`RT-S11-004 成本与增量控制` 已接受
-- 下一可执行项：等待用户明确授权后续 Stage 11 task
-- 不得自动开始：不得自动启动 `RT-S11-006` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+- 当前活动：`RT-S11-006 灰度迁移和回滚`
+- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007` 已接受；Stage 11 仍在进行中
+- 当前 Task：`RT-S11-006 灰度迁移和回滚` 已接受
+- 下一可执行项：等待用户明确授权 Stage 11 Gate 或后续单独范围工作
+- 不得自动开始：不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-23 RT-S11-006 灰度迁移和回滚
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只实现 `RT-S11-006` 冻结范围内的 rollout-state / rollback-evidence service、API、System Management 管理视图和 Stage 3 batch recovery evidence hardening；
+- 不启动 Stage 12，不退役 legacy route，不修改 formal strategy/rule/profile/current pointer/governance state，不引入第二正式事实源；
+- 复用 Stage 2 migration report contract、Stage 3 PromptRun / batch job evidence、Stage 11 `/system/runs` 管理页和既有 error semantics。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- `RT-S11-003`：`ACCEPTED`
+- `RT-S11-002`：`ACCEPTED`
+- `RT-S11-005`：`ACCEPTED`
+- `RT-S11-004`：`ACCEPTED`
+- `RT-S11-006`：Stage 11 最后允许 Task
+- working tree before edits：clean
+
+### Implementation
+
+- `src/services/system_rollout_service.py`
+  - 新增 Stage 11 灰度迁移与回滚汇总服务，统一暴露六类 rollout state 枚举：
+    - `legacy_new_comparison`
+    - `new_read_only`
+    - `limited_enablement`
+    - `new_default`
+    - `legacy_read_only`
+    - `retired`
+  - 对四类适用迁移/兼容路径给出 current state、formal source、legacy mode、comparison、rollback/recovery、duplicate-formal-source 检查：
+    - Stage 2 canonical database
+    - Stage 3 prompt contract migration
+    - Stage 3 batch article processing recovery
+    - legacy routes compatibility-only/read-only state
+  - Stage 2 migration report 存在时读取 `preflight_inventory.json`、`apply_report.json`、`verify_report.json`、`recovery_export.json`，truthfully 暴露：
+    - pre/post counts
+    - rejected/conflicted rows
+    - recovery evidence file names
+    - `no_silent_data_loss`
+  - 报告缺失时不伪造计数，返回 `partial` 并提供 repair guidance。
+- `api/routers/ui/system.py`
+  - 新增 `/api/ui/v1/system/rollout` 管理 API。
+- `src/services/stage3_prompt_runtime_service.py`
+  - `ArticlePromptRuntimeResult` 现在额外保留：
+    - `input_hash`
+    - `validation_state`
+    - `prompt_retry_count`
+  - 供 batch recovery evidence 和 rollout summary 直接复用。
+- `src/services/stage3_batch_service.py`
+  - batch checkpoint / progress / result 现在显式保留每个已处理 item 的恢复证据：
+    - `article_revision_id`
+    - `input_hash`
+    - `prompt_run_id`
+    - `validation_state`
+    - `prompt_retry_count`
+    - `automatic_review_statuses`
+    - `rejected_or_conflicted`
+    - `resume_point`
+  - job 级别额外持久化：
+    - `processed_items`
+    - `resume_point`
+    - `rejected_or_conflicted_items`
+  - 恢复时继续复用既有 idempotency key / checkpoint，而不是重新制造第二条正式链路。
+- `web/src/lib/api/system.ts`
+  - 新增 `getSystemRolloutSummary()` client。
+- `web/src/types/system.ts`
+  - 新增 rollout summary / item / state 类型。
+- `web/src/pages/system/index.tsx`
+  - 管理员 `/system/runs` 新增“灰度迁移与回滚”卡片：
+    - 显示 rollout state 图例
+    - 显示每类迁移当前状态、formal source、comparison evidence、rollback/recovery guidance
+    - 明确旧入口仍为 compatibility-only / Stage 12 required for retirement
+    - 明确 duplicate formal source 未发现时的可见状态
+- `tests/unit/services/test_system_rollout_service.py`
+  - 覆盖 database migration evidence、prompt rollback evidence、batch recovery evidence、legacy route read-only state。
+- `tests/api/routers/ui/test_ui_system_rollout.py`
+  - 覆盖 `/api/ui/v1/system/rollout` 响应契约。
+- `tests/unit/stage3/test_regression_and_batch_services.py`
+  - 覆盖 batch checkpoint 新增恢复证据字段。
+- `web/src/pages/system/index.test.tsx`
+  - 覆盖 `/system/runs` 管理员 rollout/rollback UI。
+
+### Verification
+
+- backend / API / service
+  - `pytest tests/unit/services/test_system_rollout_service.py tests/api/routers/ui/test_ui_system_rollout.py tests/unit/stage3/test_regression_and_batch_services.py tests/unit/stage3/test_prompt_runtime_service.py -q`
+  - 结果：`12 passed`
+- frontend
+  - `corepack pnpm vitest run src/pages/system/index.test.tsx`
+  - 结果：`12 passed`
+- typecheck
+  - `corepack pnpm typecheck`
+  - 结果：pass
+- targeted lint / syntax
+  - `python -m py_compile api/routers/ui/system.py src/services/system_rollout_service.py src/services/stage3_batch_service.py src/services/stage3_prompt_runtime_service.py tests/api/routers/ui/test_ui_system_rollout.py tests/unit/services/test_system_rollout_service.py`
+  - 结果：pass
+- safety / diff
+  - `git diff --check`
+  - 结果：pass
+- terminology grep
+  - `rg -n "Job|Workflow|Pipeline|Artifact|config_path" web/src/pages/system/index.tsx -g '!**/*.test.tsx'`
+  - 结果：未命中；本次未把这些内部术语新增为普通用户业务输入
+
+### Acceptance Review
+
+- Rollout states are represented and visible for applicable migrations：pass
+- Database migration safety exposes upgrade evidence / recovery path / pre-post counts / rejected-conflicted rows / no silent data loss when evidence exists, and truthfully returns partial when evidence is missing：pass
+- Prompt rollback safety preserves prompt versions / schema versions / raw outputs / selected previous contract without deleting new evidence：pass
+- Batch article processing recovery preserves idempotent item state / input hash / prompt run / validation state / retry count / rejected-conflicted items / resume point：pass
+- Legacy routes remain compatibility-only / read-only visible and are not retired：pass
+- No duplicate formal source-of-truth introduced：pass
+- Missing / partial / unavailable states remain truthful and visible：pass
+- RT-S11-007 happened / affected / repair_guidance semantics preserved：pass
+- Relevant rollout / rollback evidence reuses RT-S11-003 traceability and RT-S11-002 recovery metadata where applicable：pass
+
+### Residual Risks
+
+- Stage 2 migration report files are not guaranteed to exist in every environment；无报告时系统页会 truthfully 显示 `partial`，不会伪造 pre/post counts 或 recovery proof。
+- Prompt rollback 的“selected previous contract”依赖历史 `PromptRun` 行；若环境里只有当前版本记录，系统页会显示 `partial` 并提示先保留历史 run evidence。
+- legacy routes 本次仍仅做 compatibility-only / read-only visibility；最终 retirement 仍必须等 Stage 12 或单独授权任务。
+
+### Acceptance
+
+`RT-S11-006` is `ACCEPTED` under the frozen Stage 11 contract.
 
 ## 2026-06-23 RT-S11-004 成本与增量控制
 

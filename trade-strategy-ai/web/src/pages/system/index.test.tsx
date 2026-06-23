@@ -14,17 +14,19 @@ vi.mock('@/lib/api/system', () => ({
   getSystemDashboard: vi.fn(),
   getSystemDataReadiness: vi.fn(),
   getSystemDataSchedule: vi.fn(),
+  getSystemRolloutSummary: vi.fn(),
   listSystemRunTraces: vi.fn(),
   listSystemDataOperations: vi.fn(),
   resumeSystemDataOperation: vi.fn(),
   retrySystemDataOperation: vi.fn(),
 }));
 
-import { getSystemCostControlSummary, getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations, listSystemRunTraces } from '@/lib/api/system';
+import { getSystemCostControlSummary, getSystemDataReadiness, getSystemDataSchedule, getSystemRolloutSummary, listSystemDataOperations, listSystemRunTraces } from '@/lib/api/system';
 
 const mockedGetSystemCostControlSummary = vi.mocked(getSystemCostControlSummary);
 const mockedGetSystemDataReadiness = vi.mocked(getSystemDataReadiness);
 const mockedGetSystemDataSchedule = vi.mocked(getSystemDataSchedule);
+const mockedGetSystemRolloutSummary = vi.mocked(getSystemRolloutSummary);
 const mockedListSystemDataOperations = vi.mocked(listSystemDataOperations);
 const mockedListSystemRunTraces = vi.mocked(listSystemRunTraces);
 
@@ -32,6 +34,7 @@ beforeEach(() => {
   mockedGetSystemCostControlSummary.mockReset();
   mockedGetSystemDataReadiness.mockReset();
   mockedGetSystemDataSchedule.mockReset();
+  mockedGetSystemRolloutSummary.mockReset();
   mockedListSystemDataOperations.mockReset();
   mockedListSystemRunTraces.mockReset();
 });
@@ -320,6 +323,119 @@ describe('SystemPage', () => {
   });
 
   it('shows admin diagnostics on /system/runs only for admins', async () => {
+    mockedGetSystemRolloutSummary.mockResolvedValue({
+      generated_at: '2026-06-23T10:00:00Z',
+      supported_rollout_states: [
+        { state: 'legacy_new_comparison', label: '新旧链路对照', description: '对照' },
+        { state: 'new_read_only', label: '新链路只读展示', description: '只读' },
+        { state: 'limited_enablement', label: '小范围启用', description: '受控' },
+        { state: 'new_default', label: '新链路成为默认', description: '默认' },
+        { state: 'legacy_read_only', label: '旧入口只读', description: '旧入口只读' },
+        { state: 'retired', label: '最终退役', description: '退役' },
+      ],
+      items: [
+        {
+          migration_id: 'stage2_canonical_database',
+          label: '正式数据库迁移',
+          domain: 'database',
+          current_state: 'new_default',
+          state_label: '新链路成为默认',
+          formal_source: 'Stage 2 canonical 数据库结构',
+          legacy_mode: 'compatibility_only',
+          duplicate_formal_source_detected: false,
+          happened: '正式数据库已切到 canonical 结构。',
+          affected: '可核对迁移前后计数。',
+          repair_guidance: '补齐 migration report。',
+          comparison: {
+            status: 'ready',
+            pre_counts: { raw_articles: 2 },
+            post_counts: { raw_articles: 2 },
+            rejected_rows: 0,
+            conflicted_rows: 1,
+          },
+          rollback_or_recovery: {
+            status: 'ready',
+            mode: 'recovery',
+            no_silent_data_loss: true,
+          },
+        },
+        {
+          migration_id: 'stage3_prompt_contracts',
+          label: 'Prompt 合同迁移',
+          domain: 'prompt',
+          current_state: 'new_default',
+          state_label: '新链路成为默认',
+          formal_source: 'PromptRun + v1 Prompt 注册表',
+          legacy_mode: 'compatibility_only',
+          duplicate_formal_source_detected: false,
+          happened: '新 Prompt 合同已经是正式默认写入路径。',
+          affected: '可核对当前与上一版 Prompt 合同。',
+          repair_guidance: '回滚前先选择上一版 prompt/schema 合同。',
+          comparison: {
+            status: 'ready',
+            current_contract: {
+              prompt_name: 'article_analysis_v1',
+              prompt_version: 'article_analysis_v2',
+              schema_version: 'article_analysis_schema_v2',
+            },
+          },
+          rollback_or_recovery: {
+            status: 'ready',
+            mode: 'rollback',
+            selected_previous_contract: {
+              prompt_name: 'article_analysis_v1',
+              prompt_version: 'article_analysis_v1',
+              schema_version: 'article_analysis_schema_v1',
+            },
+          },
+        },
+        {
+          migration_id: 'stage3_batch_processing',
+          label: '批量文章处理恢复',
+          domain: 'batch',
+          current_state: 'limited_enablement',
+          state_label: '小范围启用',
+          formal_source: 'Stage 3 批处理 Job + PromptRun 证据',
+          legacy_mode: 'compatibility_only',
+          duplicate_formal_source_detected: false,
+          happened: '批量文章处理仍按固定样本门禁和受控并发执行。',
+          affected: '恢复时必须保留幂等键和继续点。',
+          repair_guidance: '使用最近安全检查点继续执行。',
+          comparison: {
+            status: 'ready',
+            processed_count: 1,
+          },
+          rollback_or_recovery: {
+            status: 'ready',
+            mode: 'recovery',
+            idempotency_key: 'stage3-article-batch:test',
+            resume_point: 'revision-1',
+          },
+        },
+        {
+          migration_id: 'legacy_routes',
+          label: '旧入口兼容与只读',
+          domain: 'routes',
+          current_state: 'legacy_read_only',
+          state_label: '旧入口只读',
+          formal_source: '/system 及正式业务页',
+          legacy_mode: 'compatibility_only',
+          duplicate_formal_source_detected: false,
+          happened: '旧路由继续保留兼容深链。',
+          affected: 'Stage 11 不会删除旧入口。',
+          repair_guidance: '最终退役必须等 Stage 12。',
+          comparison: {
+            status: 'ready',
+            legacy_routes_retired: false,
+          },
+          rollback_or_recovery: {
+            status: 'ready',
+            mode: 'compatibility',
+            stage12_required_for_retirement: true,
+          },
+        },
+      ],
+    } as never);
     mockedGetSystemCostControlSummary.mockResolvedValue({
       generated_at: '2026-06-23T09:00:00Z',
       llm_cost_summary: {
@@ -469,6 +585,12 @@ describe('SystemPage', () => {
     );
 
     expect(await screen.findByText('查看运维诊断详情')).toBeInTheDocument();
+    expect(screen.getByText('灰度迁移与回滚')).toBeInTheDocument();
+    expect(screen.getByText('正式数据库迁移')).toBeInTheDocument();
+    expect(screen.getByText('静默数据丢失：未发现')).toBeInTheDocument();
+    expect(screen.getByText('上一版 Prompt 合同：article_analysis_v1 / article_analysis_schema_v1')).toBeInTheDocument();
+    expect(screen.getByText('幂等键：stage3-article-batch:test')).toBeInTheDocument();
+    expect(screen.getByText('旧入口退役需 Stage 12 或单独授权。')).toBeInTheDocument();
     expect(screen.getByText('成本与增量控制')).toBeInTheDocument();
     expect(screen.getByText('最近 7 天的 LLM 成本已接近预算上限。')).toBeInTheDocument();
     expect(screen.getByText('通知提示，不会自动阻断已接受流程。')).toBeInTheDocument();

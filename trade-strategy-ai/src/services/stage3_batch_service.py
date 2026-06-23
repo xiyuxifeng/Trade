@@ -34,6 +34,7 @@ class BatchRunResult:
     retry_count: int = 0
     quality_stats: dict[str, Any] = field(default_factory=dict)
     failure_reasons: list[str] = field(default_factory=list)
+    rejected_or_conflicted_items: list[str] = field(default_factory=list)
 
 
 class Stage3BatchService:
@@ -74,8 +75,18 @@ class Stage3BatchService:
         job = await self._get_or_create_job(dry_run=dry_run, limit=limit)
         checkpoint = ((job.runtime_state or {}).get("checkpoint") or {})
         processed_revision_ids = set(checkpoint.get("processed_revision_ids", []))
+        processed_items = checkpoint.get("processed_items", [])
+        processed_item_map = {
+            str(item.get("article_revision_id")): item
+            for item in processed_items
+            if isinstance(item, dict) and item.get("article_revision_id")
+        }
+        existing_result = job.result if isinstance(job.result, dict) else {}
+        rejected_or_conflicted_items = existing_result.get("rejected_or_conflicted_items", [])
 
         result = BatchRunResult(status="completed", gate_result=gate_result, run_id=str(job.id))
+        if isinstance(rejected_or_conflicted_items, list):
+            result.rejected_or_conflicted_items = [str(item) for item in rejected_or_conflicted_items]
         auto_review_stats: dict[str, int] = {}
         for fixture in manifest:
             revision_key = str(fixture.article_revision_id)
@@ -110,12 +121,30 @@ class Stage3BatchService:
                 article_revision_id=fixture.article_revision_id,
             )
             processed_revision_ids.add(revision_key)
+            item_states = list(journey.automatic_reviews.values())
+            rejected_or_conflicted = [
+                state.status
+                for state in item_states
+                if state.status in {"rejected", "conflict"}
+            ]
+            processed_item_map[revision_key] = {
+                "article_revision_id": revision_key,
+                "input_hash": runtime_result.input_hash,
+                "prompt_run_id": str(runtime_result.prompt_run_id),
+                "validation_state": runtime_result.validation_state,
+                "prompt_retry_count": runtime_result.prompt_retry_count,
+                "automatic_review_statuses": [state.status for state in item_states],
+                "rejected_or_conflicted": bool(rejected_or_conflicted),
+                "resume_point": revision_key,
+            }
             result.processed_count += 1
             result.success_count += 1
             result.cached_count += int(runtime_result.cache_hit)
             result.repaired_count += runtime_result.repair_count
             human_attention = any(item.status == "needs_human_review" for item in journey.automatic_reviews.values())
             result.human_attention_count += int(human_attention)
+            if rejected_or_conflicted:
+                result.rejected_or_conflicted_items.append(revision_key)
             for review in journey.automatic_reviews.values():
                 auto_review_stats[review.status] = auto_review_stats.get(review.status, 0) + 1
 
@@ -125,8 +154,10 @@ class Stage3BatchService:
                 limit=limit,
                 gate_result=gate_result,
                 processed_revision_ids=sorted(processed_revision_ids),
+                processed_items=[processed_item_map[key] for key in sorted(processed_item_map)],
                 status=JobStatus.running.value,
                 quality_stats={"automatic_review_status_counts": auto_review_stats},
+                rejected_or_conflicted_items=sorted(result.rejected_or_conflicted_items),
             )
 
             if fail_after_items is not None and result.processed_count >= fail_after_items:
@@ -139,9 +170,11 @@ class Stage3BatchService:
                     limit=limit,
                     gate_result=gate_result,
                     processed_revision_ids=sorted(processed_revision_ids),
+                    processed_items=[processed_item_map[key] for key in sorted(processed_item_map)],
                     status=JobStatus.failed.value,
                     quality_stats={"automatic_review_status_counts": auto_review_stats},
                     error={"message": "injected failure for checkpoint resume test"},
+                    rejected_or_conflicted_items=sorted(result.rejected_or_conflicted_items),
                 )
                 result.quality_stats = {"automatic_review_status_counts": auto_review_stats}
                 return result
@@ -152,8 +185,10 @@ class Stage3BatchService:
             limit=limit,
             gate_result=gate_result,
             processed_revision_ids=sorted(processed_revision_ids),
+            processed_items=[processed_item_map[key] for key in sorted(processed_item_map)],
             status=JobStatus.success.value,
             quality_stats={"automatic_review_status_counts": auto_review_stats},
+            rejected_or_conflicted_items=sorted(result.rejected_or_conflicted_items),
         )
         result.quality_stats = {"automatic_review_status_counts": auto_review_stats, "concurrency_limit": self._concurrency_limit}
         return result
@@ -219,8 +254,10 @@ class Stage3BatchService:
         limit: int,
         gate_result: RegressionRunResult,
         processed_revision_ids: list[str],
+        processed_items: list[dict[str, Any]],
         status: str,
         quality_stats: dict[str, Any],
+        rejected_or_conflicted_items: list[str],
         error: dict[str, Any] | None = None,
     ) -> None:
         async with self._session_scope_factory() as session:
@@ -230,6 +267,7 @@ class Stage3BatchService:
             checkpoint = {
                 "processed_revision_ids": processed_revision_ids,
                 "processed_count": len(processed_revision_ids),
+                "processed_items": processed_items,
             }
             job.status = status
             job.runtime_state = {
@@ -245,6 +283,8 @@ class Stage3BatchService:
                 "gate_version": gate_result.gate_version,
                 "gate_status": gate_result.status,
                 "processed_revision_ids": processed_revision_ids,
+                "processed_items": processed_items,
+                "resume_point": processed_revision_ids[-1] if processed_revision_ids else None,
                 "quality_stats": quality_stats,
                 "updated_at": now.isoformat(),
             }
@@ -253,6 +293,7 @@ class Stage3BatchService:
                 "gate_status": gate_result.status,
                 "quality_stats": quality_stats,
                 "processed_revision_ids": processed_revision_ids,
+                "rejected_or_conflicted_items": rejected_or_conflicted_items,
                 "limit": limit,
                 "dry_run": dry_run,
             }

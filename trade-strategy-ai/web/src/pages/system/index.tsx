@@ -10,6 +10,7 @@ import {
   getSystemCostControlSummary,
   getSystemDataReadiness,
   getSystemDataSchedule,
+  getSystemRolloutSummary,
   listSystemRunTraces,
   listSystemDataOperations,
   resumeSystemDataOperation,
@@ -21,7 +22,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import type { SystemDataOperation, SystemDataReadinessStatus, SystemRunTraceItem } from '@/types/system';
+import type { SystemDataOperation, SystemDataReadinessStatus, SystemRolloutSummaryResponse, SystemRunTraceItem } from '@/types/system';
 
 function describeValidationStatus(status: string) {
   if (status === 'validated') return '已校验';
@@ -477,6 +478,12 @@ function SystemDataSummary() {
 function SystemRunsSummary() {
   const { canAccess } = useAuth();
   const showDiagnostics = canAccess('operator');
+  const rolloutQuery = useQuery({
+    queryKey: ['formal-system', 'rollout'],
+    queryFn: getSystemRolloutSummary,
+    staleTime: 30_000,
+    enabled: showDiagnostics,
+  });
   const costControlQuery = useQuery({
     queryKey: ['formal-system', 'cost-control'],
     queryFn: getSystemCostControlSummary,
@@ -497,6 +504,7 @@ function SystemRunsSummary() {
   }
   return (
     <div className="space-y-4">
+      {showDiagnostics && rolloutQuery.data ? <SystemRolloutCard summary={rolloutQuery.data} /> : null}
       {showDiagnostics && costControlQuery.data ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="font-medium text-slate-950">成本与增量控制</p>
@@ -580,6 +588,81 @@ function SystemRunsSummary() {
       ) : (
         <EmptyState title="暂无正式运行记录" description="当前还没有可展示的正式运行追踪。" />
       )}
+    </div>
+  );
+}
+
+function SystemRolloutCard({ summary }: { summary: SystemRolloutSummaryResponse }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="font-medium text-slate-950">灰度迁移与回滚</p>
+      <p className="mt-2 text-sm text-slate-600">
+        当前用于核对新旧链路状态、对照证据和回滚/恢复路径。旧入口仍保留兼容，不会在 Stage 11 被静默退役。
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {summary.supported_rollout_states.map((item) => (
+          <span key={item.state} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700">
+            {item.label}
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {summary.items.map((item) => (
+          <div key={item.migration_id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-medium text-slate-900">{item.label}</p>
+                <p className="mt-1 text-sm text-slate-600">{item.state_label}</p>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">{item.domain}</span>
+            </div>
+            <p className="mt-3 text-sm text-slate-700">正式事实源：{item.formal_source}</p>
+            <p className="mt-1 text-sm text-slate-700">发生了什么：{item.happened}</p>
+            <p className="mt-1 text-sm text-slate-700">影响：{item.affected}</p>
+            <p className="mt-1 text-sm text-slate-700">处理方式：{item.repair_guidance}</p>
+            <p className="mt-1 text-sm text-slate-700">旧入口模式：{item.legacy_mode}</p>
+            <p className="mt-1 text-sm text-slate-700">
+              重复正式事实源：{item.duplicate_formal_source_detected ? '发现风险' : '未发现'}
+            </p>
+            {item.comparison ? (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">对照证据</p>
+                <p className="mt-1">状态：{item.comparison.status}</p>
+                {typeof item.comparison.rejected_rows === 'number' ? <p className="mt-1">拒绝行数：{item.comparison.rejected_rows}</p> : null}
+                {typeof item.comparison.conflicted_rows === 'number' ? <p className="mt-1">冲突行数：{item.comparison.conflicted_rows}</p> : null}
+                {item.comparison.current_contract ? (
+                  <p className="mt-1">
+                    当前 Prompt 合同：{item.comparison.current_contract.prompt_version} / {item.comparison.current_contract.schema_version}
+                  </p>
+                ) : null}
+                {typeof item.comparison.processed_count === 'number' ? <p className="mt-1">已处理文章：{item.comparison.processed_count}</p> : null}
+                {typeof item.comparison.legacy_routes_retired === 'boolean' ? <p className="mt-1">旧入口已退役：{item.comparison.legacy_routes_retired ? '是' : '否'}</p> : null}
+              </div>
+            ) : null}
+            {item.rollback_or_recovery ? (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">回滚 / 恢复</p>
+                <p className="mt-1">状态：{item.rollback_or_recovery.status}</p>
+                <p className="mt-1">方式：{item.rollback_or_recovery.mode}</p>
+                {typeof item.rollback_or_recovery.no_silent_data_loss === 'boolean' ? (
+                  <p className="mt-1">静默数据丢失：{item.rollback_or_recovery.no_silent_data_loss ? '未发现' : '需要复核'}</p>
+                ) : null}
+                {item.rollback_or_recovery.selected_previous_contract ? (
+                  <p className="mt-1">
+                    上一版 Prompt 合同：
+                    {item.rollback_or_recovery.selected_previous_contract.prompt_version}
+                    {' / '}
+                    {item.rollback_or_recovery.selected_previous_contract.schema_version}
+                  </p>
+                ) : null}
+                {item.rollback_or_recovery.idempotency_key ? <p className="mt-1">幂等键：{item.rollback_or_recovery.idempotency_key}</p> : null}
+                {item.rollback_or_recovery.resume_point ? <p className="mt-1">继续点：{item.rollback_or_recovery.resume_point}</p> : null}
+                {item.rollback_or_recovery.stage12_required_for_retirement ? <p className="mt-1">旧入口退役需 Stage 12 或单独授权。</p> : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

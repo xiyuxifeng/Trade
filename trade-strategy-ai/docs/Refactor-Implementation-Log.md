@@ -22,12 +22,12 @@
 
 - 当前 Stage：`Stage 11 系统管理、自动化与告警`
 - Stage 状态：`[-] 进行中`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-007 用户友好错误`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`
-- 当前阻塞 Task：无；`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-007` 已接受，`RT-S11-006` implementation 尚未开始
+- 当前阻塞 Task：无；`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007` 已接受；Stage 11 Gate 尚未开始
 - 当前计划：[Stage 11 实施计划](refactor-implementation-plans/stage-11-implementation-plan.md)
 - 详细日志：[Stage 11](refactor-implementation-logs/stage-11.md)
-- 下一步：等待用户明确授权后续 Stage 11 task，按冻结顺序优先建议 `RT-S11-006 灰度迁移和回滚`；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12。
+- 下一步：等待用户明确授权 Stage 11 Gate 或单独后续范围工作；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12。
 
 ## 当前硬约束
 
@@ -100,6 +100,7 @@
 - `RT-S11-002` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：`system-data-operation` 现已补齐 bounded retry / resume / checkpoint-resume / approval gates；失败证据会保留到 `job.runtime_state.last_failure_evidence` 并 append 到 `attempt_history`；`/system/data` admin 视图显示 retry policy、幂等键、失败证据和最近安全检查点；`/system/runs` 现可追踪 system-data automation 与 Stage 3 LLM batch recovery metadata。backfill 与 retry-after-max 现为 explicit `admin_approval_required`，不会在 Web 中静默执行高风险恢复动作。
 - `RT-S11-005` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：盘前 readiness 现按 `09-25` cutoff 限制 OHLCV / 盘前快照 / 市场状态；盘后 actuals/review 现按 `17-30` cutoff 限制盘后快照与 caller-supplied 市场状态；迟到数据不会再被当作决策时点前已可用数据。`/system/runs` 管理员诊断现展示 `trade_date`、`slot`、`captured_at`、`available_at`、`effective_at`、coverage、missing ranges、snapshot id 和 content fingerprint；`DatasetSnapshot` 无法证明的 `captured_at` 继续 truthfully 保持 `null`，未引入迁移。
 - `RT-S11-004` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：Stage 3 prompt runtime 现显式写入 canonical content-hash evidence；Stage 6 formal backtest 现按 full reuse contract 复用既有结果并记录 metric-cache / reuse audit；Stage 7 method profile draft source_versions 现显式标记 `incremental_update_scope`；Stage 11 新增 `/api/ui/v1/system/cost-control` 与 `/system/runs` 管理员成本控制卡片，展示 LLM 成本汇总、budget warning、cache status、失效原因、并发上限、retry cap、backtest reuse 和 draft-only 增量画像样例。budget warning 保持 notify-only，不会静默阻断已接受治理流。
+- `RT-S11-006` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：新增 `SystemRolloutService`、`/api/ui/v1/system/rollout` 和 `/system/runs` 灰度迁移与回滚卡片；Stage 2 migration report 存在时可 truthfully 展示 pre/post counts、rejected/conflicted rows、recovery export 和 `no_silent_data_loss`，缺失时返回 `partial` 而不伪造证据；Stage 3 Prompt rollback 现可显示 current/previous prompt-schema contract 和 raw output retention；Stage 3 batch checkpoint 现显式保留 `input_hash`、`prompt_run_id`、`validation_state`、`prompt_retry_count`、`processed_items`、`resume_point` 和 `rejected_or_conflicted_items`。legacy routes 仍为 compatibility-only / read-only visible，未进入 Stage 12 retirement。
 - Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
 - Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
 - Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。
@@ -158,7 +159,7 @@
 | RT-S11-003 | `[x]` | bounded run-trace service/API/UI、daily source_run_id persistence 和 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-004 | `[x]` | 成本与增量控制 contracts、管理员 API/UI 和 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-005 | `[x]` | 盘前/盘后 cutoff enforcement、truthful late-data handling 和系统管理时间字段可见性已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
-| RT-S11-006 | `[ ]` | 灰度迁移和回滚 implementation 未开始 | [Stage 11](refactor-implementation-logs/stage-11.md) |
+| RT-S11-006 | `[x]` | rollout state、rollback/recovery evidence、batch recovery metadata 和 system UI/API 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 
 ## Stage 状态索引
@@ -176,15 +177,15 @@
 | Stage 8 | `[x]` | Gate 最终 `ACCEPTED` | [stage-8.md](refactor-implementation-logs/stage-8.md) |
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
-| Stage 11 | `[-]` | Bootstrap `READY`；RT-S11-001 / 002 / 003 / 004 / 005 / 007 已接受，`RT-S11-006` 未开始 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
+| Stage 11 | `[-]` | Bootstrap `READY`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受，等待 Stage Gate | [stage-11.md](refactor-implementation-logs/stage-11.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-RT-S11-006 灰度迁移和回滚：
-RT-S11-001 / RT-S11-002 / RT-S11-003 / RT-S11-004 / RT-S11-005 / RT-S11-007 已接受，后续任务仅在用户明确授权后开始；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+Stage 11 Gate / follow-up:
+RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受；仅在用户明确授权后才能继续 Stage Gate、后续 bounded repair 或 Stage 12 之前的单独范围工作；不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
 ```
 
 执行前应读取：
@@ -193,4 +194,4 @@ RT-S11-001 / RT-S11-002 / RT-S11-003 / RT-S11-004 / RT-S11-005 / RT-S11-007 已�
 - [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始 `RT-S11-006` 及后续 Stage 11 task；必须等待用户明确授权后才能推进下一步。
+不得自动开始 Stage 11 Gate、Stage 12 或任何 legacy retirement；必须等待用户明确授权后才能推进下一步。

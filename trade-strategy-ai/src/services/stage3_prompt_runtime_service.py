@@ -55,6 +55,9 @@ class ArticlePromptRuntimeResult:
     prompt_run_id: UUID
     article_structure_id: UUID
     rule_candidate_ids: list[UUID]
+    input_hash: str
+    validation_state: str
+    prompt_retry_count: int
 
 
 def _default_identity_hasher(article_input: ArticlePromptInput, spec, model: str) -> str:
@@ -195,6 +198,9 @@ class Stage3PromptRuntimeService:
                         prompt_run_id=prompt_run.prompt_run_id,
                         article_structure_id=structure.article_structure_id,
                         rule_candidate_ids=[candidate.rule_candidate_id for candidate in candidates],
+                        input_hash=identity,
+                        validation_state=str(prompt_run.validation_state),
+                        prompt_retry_count=int(prompt_run.retry_count or 0),
                     )
 
                 return await self._run_article_analysis(session, article_input=article_input, identity=identity)
@@ -343,6 +349,9 @@ class Stage3PromptRuntimeService:
             prompt_run_id=saved_run.prompt_run_id,
             article_structure_id=saved_structure.article_structure_id,
             rule_candidate_ids=[candidate.rule_candidate_id for candidate in saved_candidates],
+            input_hash=identity,
+            validation_state=str(saved_run.validation_state),
+            prompt_retry_count=int(saved_run.retry_count or 0),
         )
 
     async def _repair_once(

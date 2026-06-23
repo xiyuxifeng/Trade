@@ -16,7 +16,6 @@ import {
 import { ApiError } from '@/lib/api/http';
 import { formatLocalDateInputOffset } from '@/lib/date';
 import type {
-  AfterCloseAttributionSignal,
   AfterCloseCoverageState,
   AfterCloseProposal,
   AfterCloseProposalCollectionResponse,
@@ -87,6 +86,9 @@ function formatMetricReason(reason: string | null | undefined) {
     actual_row_unavailable: '缺少正式盘后行情，当前不能确认结果。',
     post_close_actual_row_missing: '缺少正式盘后行情，当前不能确认结果。',
     actual_row_not_available: '盘后行情尚未冻结完成，当前不能确认结果。',
+    post_close_snapshot_available_late: '正式盘后快照在复盘时点之后才可用，当前不能把它当作当时已知结果。',
+    post_close_snapshot_available_at_missing: '正式盘后快照缺少可用时间，当前不能证明它在复盘时点前已可用。',
+    post_close_snapshot_slot_mismatch: '当前快照不是正式盘后时段，不能用于盘后复盘。',
   };
   if (!reason) {
     return '当前未记录额外说明。';

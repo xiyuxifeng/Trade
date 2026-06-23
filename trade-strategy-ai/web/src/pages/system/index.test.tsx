@@ -418,6 +418,11 @@ describe('SystemPage', () => {
     expect(screen.getByText('openai / gpt-5.4')).toBeInTheDocument();
     expect(screen.getByText('数据抓取')).toBeInTheDocument();
     expect(screen.getByText('来源提供方：wind')).toBeInTheDocument();
+    expect(screen.getByText('交易日期：2026-06-22')).toBeInTheDocument();
+    expect(screen.getByText('时段：pre_market')).toBeInTheDocument();
+    expect(screen.getByText('采集时间：2026-06-22 08:30:00 UTC')).toBeInTheDocument();
+    expect(screen.getByText('可用时间：2026-06-22 08:35:00 UTC')).toBeInTheDocument();
+    expect(screen.getByText('生效时间：2026-06-22 08:35:00 UTC')).toBeInTheDocument();
     expect(screen.getByText('正式回测证据')).toBeInTheDocument();
     expect(screen.getByText('代码版本：engine-v5')).toBeInTheDocument();
     expect(screen.getByText('idempotency_key：')).toBeInTheDocument();

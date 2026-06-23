@@ -11,9 +11,10 @@ from src.db.repositories.pre_market_readiness_repo import PreMarketReadinessRepo
 from src.db.session import get_session_factory
 from src.domain.enums import FormalLifecycleState, QualityStatus
 from src.models.stage2_canonical import DatasetLifecycleState
+from src.services.data_time_semantics import PRE_MARKET_DECISION_SLOT, slot_cutoff_at
 
 
-PRE_MARKET_SLOT = "09-25"
+PRE_MARKET_SLOT = PRE_MARKET_DECISION_SLOT
 READY_QUALITY_STATES = {"ready", "ok", "verified", "complete", QualityStatus.verified.value, QualityStatus.complete.value}
 DEGRADED_QUALITY_STATES = {"partial", "ambiguous", "unresolved", "insufficient_sample", "insufficient_coverage"}
 
@@ -97,6 +98,7 @@ class PreMarketReadinessService:
             raise PermissionError("viewer permission is required to view daily pre-market readiness")
 
         normalized_trade_date = trade_date if isinstance(trade_date, date) else date.fromisoformat(str(trade_date))
+        decision_cutoff_at = slot_cutoff_at(normalized_trade_date, PRE_MARKET_SLOT)
         traceability = PreMarketTraceabilityView(trade_date=normalized_trade_date.isoformat())
         checks: list[PreMarketCheckView] = []
         warnings: list[str] = []
@@ -106,22 +108,62 @@ class PreMarketReadinessService:
             strategy_check, strategy_version = await self._build_strategy_check(session, current_strategies, traceability)
             checks.append(strategy_check)
 
-            dataset_snapshot = await self.repository.get_latest_dataset_snapshot(session, trade_date=normalized_trade_date)
-            ohlcv_check = self._build_ohlcv_check(dataset_snapshot, normalized_trade_date, traceability)
+            dataset_snapshot = await self.repository.get_latest_dataset_snapshot(
+                session,
+                trade_date=normalized_trade_date,
+                available_at_before=decision_cutoff_at,
+            )
+            latest_dataset_snapshot = dataset_snapshot or await self.repository.get_latest_dataset_snapshot(
+                session,
+                trade_date=normalized_trade_date,
+            )
+            ohlcv_check = self._build_ohlcv_check(
+                dataset_snapshot,
+                latest_dataset_snapshot=latest_dataset_snapshot,
+                trade_date=normalized_trade_date,
+                decision_cutoff_at=decision_cutoff_at,
+                traceability=traceability,
+            )
             checks.append(ohlcv_check)
 
             market_snapshot = await self.repository.get_market_snapshot_for_trade_date_and_slot(
                 session,
                 trade_date=normalized_trade_date,
                 slot=PRE_MARKET_SLOT,
+                available_at_before=decision_cutoff_at,
             )
-            kaipan_check = self._build_kaipan_check(market_snapshot, traceability)
+            latest_market_snapshot = market_snapshot or await self.repository.get_market_snapshot_for_trade_date_and_slot(
+                session,
+                trade_date=normalized_trade_date,
+                slot=PRE_MARKET_SLOT,
+            )
+            kaipan_check = self._build_kaipan_check(
+                market_snapshot,
+                latest_market_snapshot=latest_market_snapshot,
+                decision_cutoff_at=decision_cutoff_at,
+                traceability=traceability,
+            )
             checks.append(kaipan_check)
 
             market_state = None
             if market_snapshot is not None:
-                market_state = await self.repository.get_market_state_for_snapshot(session, market_snapshot_id=market_snapshot.id)
-            market_state_check = self._build_market_state_check(market_state, traceability)
+                market_state = await self.repository.get_market_state_for_snapshot(
+                    session,
+                    market_snapshot_id=market_snapshot.id,
+                    available_at_before=decision_cutoff_at,
+                )
+            latest_market_state = None
+            if market_snapshot is not None and market_state is None:
+                latest_market_state = await self.repository.get_market_state_for_snapshot(
+                    session,
+                    market_snapshot_id=market_snapshot.id,
+                )
+            market_state_check = self._build_market_state_check(
+                market_state,
+                latest_market_state=latest_market_state,
+                decision_cutoff_at=decision_cutoff_at,
+                traceability=traceability,
+            )
             checks.append(market_state_check)
 
             author_profiles: dict[UUID, Any] = {}
@@ -342,10 +384,13 @@ class PreMarketReadinessService:
     def _build_ohlcv_check(
         self,
         dataset_snapshot: Any,
+        *,
+        latest_dataset_snapshot: Any,
         trade_date: date,
+        decision_cutoff_at: datetime | None,
         traceability: PreMarketTraceabilityView,
     ) -> PreMarketCheckView:
-        if dataset_snapshot is None:
+        if dataset_snapshot is None and latest_dataset_snapshot is None:
             return PreMarketCheckView(
                 code="latest_ohlcv",
                 label="最新 OHLCV",
@@ -354,7 +399,30 @@ class PreMarketReadinessService:
                 affected="系统无法确认今天能使用的最新历史行情范围。",
                 repair_guidance="先到数据管理补齐 OHLCV 历史行情。",
                 can_proceed_in_degraded_mode=False,
-                traceability={"trade_date": trade_date.isoformat()},
+                traceability={
+                    "trade_date": trade_date.isoformat(),
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                },
+            )
+
+        if dataset_snapshot is None and latest_dataset_snapshot is not None:
+            return PreMarketCheckView(
+                code="latest_ohlcv",
+                label="最新 OHLCV",
+                status="blocked",
+                happened="已找到较新的历史行情快照，但它在正式盘前决策时点之前并不可用。",
+                affected="系统不能把盘前之后才补齐的数据当作今天盘前可用输入。",
+                repair_guidance="请先冻结在盘前决策时点前可用的正式历史行情快照，或改期重试。",
+                can_proceed_in_degraded_mode=False,
+                traceability={
+                    "dataset_snapshot_id": str(latest_dataset_snapshot.dataset_snapshot_id),
+                    "dataset_trade_date": latest_dataset_snapshot.trade_date.isoformat() if latest_dataset_snapshot.trade_date else None,
+                    "available_at": latest_dataset_snapshot.available_at.isoformat() if latest_dataset_snapshot.available_at else None,
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                    "source": (latest_dataset_snapshot.storage_ref or {}).get("source") or latest_dataset_snapshot.dataset_type,
+                    "slot": (latest_dataset_snapshot.storage_ref or {}).get("slot"),
+                    "effective_at": latest_dataset_snapshot.frozen_at.isoformat() if latest_dataset_snapshot.frozen_at else None,
+                },
             )
 
         traceability.dataset_snapshot_id = str(dataset_snapshot.dataset_snapshot_id)
@@ -371,6 +439,8 @@ class PreMarketReadinessService:
                     "dataset_snapshot_id": str(dataset_snapshot.dataset_snapshot_id),
                     "dataset_trade_date": dataset_snapshot.trade_date.isoformat() if dataset_snapshot.trade_date else None,
                     "lifecycle_state": dataset_snapshot.lifecycle_state.value,
+                    "available_at": dataset_snapshot.available_at.isoformat() if dataset_snapshot.available_at else None,
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
                 },
             )
 
@@ -386,11 +456,23 @@ class PreMarketReadinessService:
                 "dataset_snapshot_id": str(dataset_snapshot.dataset_snapshot_id),
                 "dataset_trade_date": dataset_snapshot.trade_date.isoformat() if dataset_snapshot.trade_date else None,
                 "content_fingerprint": dataset_snapshot.content_fingerprint,
+                "available_at": dataset_snapshot.available_at.isoformat() if dataset_snapshot.available_at else None,
+                "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                "source": (dataset_snapshot.storage_ref or {}).get("source") or dataset_snapshot.dataset_type,
+                "slot": (dataset_snapshot.storage_ref or {}).get("slot"),
+                "effective_at": dataset_snapshot.frozen_at.isoformat() if dataset_snapshot.frozen_at else None,
             },
         )
 
-    def _build_kaipan_check(self, market_snapshot: Any, traceability: PreMarketTraceabilityView) -> PreMarketCheckView:
-        if market_snapshot is None:
+    def _build_kaipan_check(
+        self,
+        market_snapshot: Any,
+        *,
+        latest_market_snapshot: Any,
+        decision_cutoff_at: datetime | None,
+        traceability: PreMarketTraceabilityView,
+    ) -> PreMarketCheckView:
+        if market_snapshot is None and latest_market_snapshot is None:
             return PreMarketCheckView(
                 code="kaipan_pre_market",
                 label="Kaipan 盘前数据",
@@ -399,7 +481,32 @@ class PreMarketReadinessService:
                 affected="系统无法确认盘前 Kaipan 数据，也不能继续正式盘前流程。",
                 repair_guidance="先到数据管理补齐今日盘前市场数据。",
                 can_proceed_in_degraded_mode=False,
-                traceability={"slot": PRE_MARKET_SLOT, "market_snapshot_id": None},
+                traceability={
+                    "slot": PRE_MARKET_SLOT,
+                    "market_snapshot_id": None,
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                },
+            )
+
+        if market_snapshot is None and latest_market_snapshot is not None:
+            return PreMarketCheckView(
+                code="kaipan_pre_market",
+                label="Kaipan 盘前数据",
+                status="blocked",
+                happened="今日盘前市场快照存在，但在正式盘前决策时点之前并不可用。",
+                affected="系统不能把盘前之后才补齐的市场快照误当作正式盘前输入。",
+                repair_guidance="请先补齐在 09-25 决策时点前可用的盘前市场快照。",
+                can_proceed_in_degraded_mode=False,
+                traceability={
+                    "market_snapshot_id": str(latest_market_snapshot.id),
+                    "snapshot_id": latest_market_snapshot.snapshot_id,
+                    "slot": latest_market_snapshot.slot,
+                    "available_at": latest_market_snapshot.available_at.isoformat() if latest_market_snapshot.available_at else None,
+                    "captured_at": latest_market_snapshot.captured_at.isoformat() if latest_market_snapshot.captured_at else None,
+                    "effective_at": latest_market_snapshot.effective_at.isoformat() if latest_market_snapshot.effective_at else None,
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                    "source": list(latest_market_snapshot.provider_sources or []),
+                },
             )
 
         if market_snapshot.slot != PRE_MARKET_SLOT:
@@ -432,11 +539,23 @@ class PreMarketReadinessService:
                 "snapshot_id": market_snapshot.snapshot_id,
                 "slot": market_snapshot.slot,
                 "quality_status": market_snapshot.quality_status,
+                "available_at": market_snapshot.available_at.isoformat() if market_snapshot.available_at else None,
+                "captured_at": market_snapshot.captured_at.isoformat() if market_snapshot.captured_at else None,
+                "effective_at": market_snapshot.effective_at.isoformat() if market_snapshot.effective_at else None,
+                "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                "source": list(market_snapshot.provider_sources or []),
             },
         )
 
-    def _build_market_state_check(self, market_state: Any, traceability: PreMarketTraceabilityView) -> PreMarketCheckView:
-        if market_state is None:
+    def _build_market_state_check(
+        self,
+        market_state: Any,
+        *,
+        latest_market_state: Any,
+        decision_cutoff_at: datetime | None,
+        traceability: PreMarketTraceabilityView,
+    ) -> PreMarketCheckView:
+        if market_state is None and latest_market_state is None:
             return PreMarketCheckView(
                 code="current_market_state",
                 label="当前市场状态",
@@ -445,7 +564,25 @@ class PreMarketReadinessService:
                 affected="系统无法确认今天应该按哪一种市场状态解释正式规则。",
                 repair_guidance="先补齐盘前市场快照，并重新生成今天的市场状态。",
                 can_proceed_in_degraded_mode=False,
-                traceability={"market_state_id": None},
+                traceability={"market_state_id": None, "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None},
+            )
+
+        if market_state is None and latest_market_state is not None:
+            return PreMarketCheckView(
+                code="current_market_state",
+                label="当前市场状态",
+                status="blocked",
+                happened="今日盘前市场状态已生成，但在正式盘前决策时点之前并不可用。",
+                affected="系统不能把盘前之后才补齐的市场状态当作今天的正式规则解释输入。",
+                repair_guidance="请先补齐在盘前决策时点前可用的市场状态后再继续。",
+                can_proceed_in_degraded_mode=False,
+                traceability={
+                    "market_state_id": str(latest_market_state.market_state_id),
+                    "regime_id": latest_market_state.regime_id,
+                    "regime_version": latest_market_state.regime_version,
+                    "available_at": latest_market_state.available_at.isoformat() if latest_market_state.available_at else None,
+                    "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
+                },
             )
 
         traceability.market_state_id = str(market_state.market_state_id)
@@ -466,6 +603,8 @@ class PreMarketReadinessService:
                 "regime_id": market_state.regime_id,
                 "regime_version": market_state.regime_version,
                 "quality_status": market_state.quality_status,
+                "available_at": market_state.available_at.isoformat() if market_state.available_at else None,
+                "decision_cutoff_at": decision_cutoff_at.isoformat() if decision_cutoff_at else None,
             },
         )
 

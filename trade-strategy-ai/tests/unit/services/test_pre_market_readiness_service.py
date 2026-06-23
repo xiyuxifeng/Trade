@@ -78,7 +78,7 @@ async def _seed_ready_bundle(session_factory: async_sessionmaker[AsyncSession]) 
     strategy_id = uuid4()
     strategy_version_id = uuid4()
     membership_id = uuid4()
-    now = datetime(2026, 6, 21, 8, 30, tzinfo=UTC)
+    now = datetime(2026, 6, 21, 0, 30, tzinfo=UTC)
 
     async with session_factory() as session:
         session.add(Authors(author_id=author_id, source="seed", source_author_key="author-1", display_name="测试作者"))
@@ -448,5 +448,48 @@ async def test_pre_market_readiness_blocks_when_pre_market_snapshot_or_market_st
         assert market_state_check.status == "blocked"
         assert result.traceability.market_snapshot_id is None
         assert result.traceability.market_state_id is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_pre_market_readiness_blocks_when_required_inputs_were_not_available_before_cutoff(tmp_path: Path) -> None:
+    from src.services.pre_market_readiness_service import PreMarketReadinessService
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    try:
+        seeded = await _seed_ready_bundle(session_factory)
+        async with session_factory() as session:
+            dataset = await session.get(DatasetSnapshot, seeded["dataset_snapshot_id"])
+            snapshot = await session.get(MarketSnapshot, seeded["market_snapshot_id"])
+            regime = await session.get(MarketRegimeRecord, seeded["market_state_id"])
+            assert dataset is not None
+            assert snapshot is not None
+            assert regime is not None
+
+            dataset.available_at = datetime(2026, 6, 21, 2, 5, tzinfo=UTC)
+            snapshot.available_at = datetime(2026, 6, 21, 2, 10, tzinfo=UTC)
+            regime.available_at = datetime(2026, 6, 21, 2, 15, tzinfo=UTC)
+            await session.commit()
+
+        service = PreMarketReadinessService(session_scope_factory=session_scope)
+        result = await service.get_readiness(
+            trade_date="2026-06-21",
+            actor_id="tester",
+            actor_role="viewer",
+        )
+
+        assert result.readiness_status == "blocked"
+        assert result.state == "unavailable"
+        latest_ohlcv = next(item for item in result.checks if item.code == "latest_ohlcv")
+        kaipan_check = next(item for item in result.checks if item.code == "kaipan_pre_market")
+        market_state_check = next(item for item in result.checks if item.code == "current_market_state")
+        assert latest_ohlcv.status == "blocked"
+        assert kaipan_check.status == "blocked"
+        assert market_state_check.status == "blocked"
+        assert "available_at" in latest_ohlcv.traceability
+        assert "decision_cutoff_at" in latest_ohlcv.traceability
+        assert "盘前决策时点" in latest_ohlcv.happened
+        assert "不能把盘前之后才补齐的数据当作今天盘前可用输入" in latest_ohlcv.affected
     finally:
         await engine.dispose()

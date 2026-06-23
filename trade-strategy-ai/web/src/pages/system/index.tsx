@@ -628,9 +628,16 @@ function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; sho
               <div key={`${fetch.source}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
                 <p className="font-medium text-slate-900">{fetch.source}</p>
                 <p className="mt-1">来源提供方：{fetch.provider ?? '未记录'}</p>
+                <p className="mt-1">交易日期：{fetch.trade_date ?? '未记录'}</p>
+                <p className="mt-1">时段：{fetch.slot ?? '未记录'}</p>
                 <p className="mt-1">日期范围：{fetch.date_range.date_from ?? '未记录'} - {fetch.date_range.date_to ?? '未记录'}</p>
+                <p className="mt-1">采集时间：{formatTime(fetch.captured_at)}</p>
                 <p className="mt-1">可用时间：{formatTime(fetch.available_at)}</p>
+                <p className="mt-1">生效时间：{formatTime(fetch.effective_at)}</p>
                 <p className="mt-1">覆盖率：{renderSimpleValue(fetch.coverage)}</p>
+                <p className="mt-1">缺失范围：{renderSimpleValue(fetch.missing_ranges)}</p>
+                <p className="mt-1">关联快照：{fetch.snapshot_id ?? '未记录'}</p>
+                <p className="mt-1">内容指纹：{fetch.content_fingerprint ?? '未记录'}</p>
               </div>
             ))}
           </div>
@@ -647,6 +654,9 @@ function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; sho
                 <p className="mt-1">规则指纹：{backtest.rule_version.rule_version_fingerprint ?? '未记录'}</p>
                 <p className="mt-1">市场状态模型版本：{backtest.market_state_model_version ?? '未记录'}</p>
                 <p className="mt-1">代码版本：{backtest.code_version}</p>
+                <p className="mt-1">决策时间策略：{backtest.decision_time_policy}</p>
+                <p className="mt-1">数据指纹：{renderSimpleValue(backtest.data_fingerprints)}</p>
+                <p className="mt-1">结果覆盖：{renderSimpleValue(backtest.coverage)}</p>
               </div>
             ))}
           </div>

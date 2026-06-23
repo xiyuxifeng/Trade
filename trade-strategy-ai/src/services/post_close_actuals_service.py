@@ -33,6 +33,7 @@ from src.models.market_data_snapshot import MarketSnapshot
 from src.models.market_data_snapshot_item import MarketSnapshotItem
 from src.models.market_data_snapshot_section import MarketSnapshotSection
 from src.models.signal import Signal
+from src.models.market_regime_record import MarketRegimeRecord
 from src.models.stage2_canonical import (
     AuthorProfileVersion,
     DatasetSnapshot,
@@ -44,6 +45,7 @@ from src.models.stage2_canonical import (
     StrategyVersion,
 )
 from src.services.strategy_center_service import StrategyCenterService, StrategyProposalAcceptRequest
+from src.services.data_time_semantics import POST_MARKET_REVIEW_SLOT, slot_cutoff_at
 
 
 POST_CLOSE_ACTUALS_SECTION_ID = "post_close_symbol_ohlcv_actuals"
@@ -362,6 +364,35 @@ class PostCloseActualsRepository:
                 coverage_state="invalid",
                 reasons=["post_close_snapshot_trade_date_mismatch"],
             )
+        if getattr(snapshot, "slot", None) not in {None, POST_MARKET_REVIEW_SLOT}:
+            return self._snapshot_level_result(
+                plan=plan,
+                plan_state=plan_state,
+                signals=signals,
+                snapshot=snapshot,
+                coverage_state="invalid",
+                reasons=["post_close_snapshot_slot_mismatch"],
+            )
+        review_cutoff_at = slot_cutoff_at(plan.trade_date, POST_MARKET_REVIEW_SLOT)
+        snapshot_available_at = getattr(snapshot, "available_at", None)
+        if snapshot_available_at is None:
+            return self._snapshot_level_result(
+                plan=plan,
+                plan_state=plan_state,
+                signals=signals,
+                snapshot=snapshot,
+                coverage_state="unavailable",
+                reasons=["post_close_snapshot_available_at_missing"],
+            )
+        if review_cutoff_at is not None and snapshot_available_at > review_cutoff_at:
+            return self._snapshot_level_result(
+                plan=plan,
+                plan_state=plan_state,
+                signals=signals,
+                snapshot=snapshot,
+                coverage_state="unavailable",
+                reasons=["post_close_snapshot_available_late"],
+            )
         if plan_state != TradingDayPlanState.approved.value:
             return self._snapshot_level_result(
                 plan=plan,
@@ -663,7 +694,12 @@ class PostMarketReviewService:
             if selection is None:
                 raise LookupError("daily rule selection is missing")
             selection_items = await self.review_repository.list_selection_items(session, selection.daily_rule_selection_id)
-            post_close_market_state_id = UUID(request.post_close_market_state_id) if request.post_close_market_state_id else None
+            post_close_market_state_id = await self._resolve_post_close_market_state_id(
+                session,
+                trade_date=plan.trade_date,
+                market_snapshot_id=UUID(request.post_close_market_snapshot_id),
+                requested_market_state_id=UUID(request.post_close_market_state_id) if request.post_close_market_state_id else None,
+            )
             signal_results = [
                 self._evaluate_one_signal(signal=signal, actual=actual, selection_items=selection_items, pre_market_state_id=selection.market_state_id, post_close_market_state_id=post_close_market_state_id)
                 for signal, actual in zip(signals, actuals.signals, strict=False)
@@ -809,6 +845,26 @@ class PostMarketReviewService:
                 affected="页面和后续 Stage 10 任务会读取结构化归因，而不是直接依赖自由文本说明。",
                 repair_guidance="如需进一步解释，可在低置信度、证据冲突或重要信号时进入受限 LLM 校验；本次未调用 LLM。",
             )
+
+    async def _resolve_post_close_market_state_id(
+        self,
+        session: AsyncSession,
+        *,
+        trade_date: date,
+        market_snapshot_id: UUID,
+        requested_market_state_id: UUID | None,
+    ) -> UUID | None:
+        if requested_market_state_id is None:
+            return None
+        state = await session.get(MarketRegimeRecord, requested_market_state_id)
+        if state is None:
+            return None
+        if state.trade_date != trade_date or state.market_snapshot_id != market_snapshot_id:
+            return None
+        review_cutoff_at = slot_cutoff_at(trade_date, POST_MARKET_REVIEW_SLOT)
+        if state.available_at is None or (review_cutoff_at is not None and state.available_at > review_cutoff_at):
+            return None
+        return requested_market_state_id
 
     async def _upsert_review(
         self,

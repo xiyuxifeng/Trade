@@ -668,6 +668,8 @@ class SystemRunTraceService(BaseService):
         return {
             "source": (dataset.storage_ref or {}).get("source") or dataset.dataset_type or "dataset_snapshot",
             "provider": (dataset.storage_ref or {}).get("provider"),
+            "snapshot_id": (dataset.storage_ref or {}).get("snapshot_id"),
+            "content_fingerprint": dataset.content_fingerprint,
             "date_range": {
                 "date_from": dataset.date_from.isoformat() if isinstance(dataset.date_from, date) else dataset.date_from,
                 "date_to": dataset.date_to.isoformat() if isinstance(dataset.date_to, date) else dataset.date_to,
@@ -689,6 +691,8 @@ class SystemRunTraceService(BaseService):
         return {
             "source": snapshot.snapshot_id,
             "provider": ",".join(snapshot.provider_sources or []) or None,
+            "snapshot_id": snapshot.snapshot_id,
+            "content_fingerprint": snapshot.content_fingerprint,
             "date_range": {
                 "date_from": snapshot.trade_date.isoformat(),
                 "date_to": snapshot.trade_date.isoformat(),

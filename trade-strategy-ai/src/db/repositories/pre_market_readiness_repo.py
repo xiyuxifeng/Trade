@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -46,18 +46,21 @@ class PreMarketReadinessRepository:
         session: AsyncSession,
         *,
         trade_date: date,
+        available_at_before: datetime | None = None,
     ) -> DatasetSnapshot | None:
-        return await session.scalar(
-            select(DatasetSnapshot)
-            .where(
-                DatasetSnapshot.trade_date.is_not(None),
-                DatasetSnapshot.trade_date <= trade_date,
-                DatasetSnapshot.market == "CN",
-                DatasetSnapshot.dataset_type.in_(OHLCV_DATASET_TYPES),
-            )
-            .order_by(DatasetSnapshot.trade_date.desc(), DatasetSnapshot.available_at.desc(), DatasetSnapshot.created_at.desc())
-            .limit(1)
+        stmt = select(DatasetSnapshot).where(
+            DatasetSnapshot.trade_date.is_not(None),
+            DatasetSnapshot.trade_date <= trade_date,
+            DatasetSnapshot.market == "CN",
+            DatasetSnapshot.dataset_type.in_(OHLCV_DATASET_TYPES),
         )
+        if available_at_before is not None:
+            stmt = stmt.where(
+                DatasetSnapshot.available_at.is_not(None),
+                DatasetSnapshot.available_at <= available_at_before,
+            )
+        stmt = stmt.order_by(DatasetSnapshot.trade_date.desc(), DatasetSnapshot.available_at.desc(), DatasetSnapshot.created_at.desc()).limit(1)
+        return await session.scalar(stmt)
 
     async def get_market_snapshot_for_trade_date_and_slot(
         self,
@@ -65,26 +68,32 @@ class PreMarketReadinessRepository:
         *,
         trade_date: date,
         slot: str,
+        available_at_before: datetime | None = None,
     ) -> MarketSnapshot | None:
-        return await session.scalar(
-            select(MarketSnapshot)
-            .where(MarketSnapshot.trade_date == trade_date, MarketSnapshot.slot == slot)
-            .order_by(MarketSnapshot.available_at.desc(), MarketSnapshot.created_at.desc())
-            .limit(1)
-        )
+        stmt = select(MarketSnapshot).where(MarketSnapshot.trade_date == trade_date, MarketSnapshot.slot == slot)
+        if available_at_before is not None:
+            stmt = stmt.where(
+                MarketSnapshot.available_at.is_not(None),
+                MarketSnapshot.available_at <= available_at_before,
+            )
+        stmt = stmt.order_by(MarketSnapshot.available_at.desc(), MarketSnapshot.created_at.desc()).limit(1)
+        return await session.scalar(stmt)
 
     async def get_market_state_for_snapshot(
         self,
         session: AsyncSession,
         *,
         market_snapshot_id: UUID,
+        available_at_before: datetime | None = None,
     ) -> MarketRegimeRecord | None:
-        return await session.scalar(
-            select(MarketRegimeRecord)
-            .where(MarketRegimeRecord.market_snapshot_id == market_snapshot_id)
-            .order_by(MarketRegimeRecord.available_at.desc(), MarketRegimeRecord.created_at.desc())
-            .limit(1)
-        )
+        stmt = select(MarketRegimeRecord).where(MarketRegimeRecord.market_snapshot_id == market_snapshot_id)
+        if available_at_before is not None:
+            stmt = stmt.where(
+                MarketRegimeRecord.available_at.is_not(None),
+                MarketRegimeRecord.available_at <= available_at_before,
+            )
+        stmt = stmt.order_by(MarketRegimeRecord.available_at.desc(), MarketRegimeRecord.created_at.desc()).limit(1)
+        return await session.scalar(stmt)
 
     async def list_author_profile_versions(
         self,

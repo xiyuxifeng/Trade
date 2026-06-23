@@ -284,6 +284,8 @@ export type SystemPromptCallTrace = {
 export type SystemDataFetchTrace = {
   source: string;
   provider: string | null;
+  snapshot_id?: string | null;
+  content_fingerprint?: string | null;
   date_range: {
     date_from: string | null;
     date_to: string | null;

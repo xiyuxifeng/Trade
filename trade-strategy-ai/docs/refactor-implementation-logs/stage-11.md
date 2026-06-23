@@ -3,11 +3,132 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-002 自动化和恢复`
-- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-007` 已接受；Stage 11 仍在进行中
-- 当前 Task：`RT-S11-002 自动化和恢复` 已接受
+- 当前活动：`RT-S11-005 数据时间语义`
+- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-005`、`RT-S11-007` 已接受；Stage 11 仍在进行中
+- 当前 Task：`RT-S11-005 数据时间语义` 已接受
 - 下一可执行项：等待用户明确授权后续 Stage 11 task
-- 不得自动开始：不得自动启动 `RT-S11-002` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+- 不得自动开始：不得自动启动 `RT-S11-004`、`RT-S11-006` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-23 RT-S11-005 数据时间语义
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只实现 `RT-S11-005` 冻结范围内的数据时间语义 hardening；
+- 不新增数据库迁移，不重写 formal data contract，不修改 authorization policy、formal strategy/rule/profile governance、cost-control runtime、legacy route retirement 或 Stage 12；
+- 复用 Stage 6 snapshot-bound backtest contract、Stage 9 盘前 readiness flow、Stage 10 盘后 actuals/review flow、Stage 11 `/system/runs` 运行追踪页。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- `RT-S11-003`：`ACCEPTED`
+- `RT-S11-002`：`ACCEPTED`
+- `RT-S11-005`：按 Stage 11 冻结顺序为下一允许 Task
+- working tree before edits：clean
+- user 本次已明确授权 `RT-S11-005`；虽然主实施日志上一条建议仍停留在 `RT-S11-004`，但 Stage 11 plan / stage log 的冻结顺序均显示 `RT-S11-005` 是在 `RT-S11-002` 之后允许启动的下一项
+
+### Implementation
+
+- `src/services/data_time_semantics.py`
+  - 新增统一时点 helper，按中国市场时区计算：
+    - 盘前决策 cutoff：`09-25`
+    - 盘后复盘 cutoff：`17-30`
+  - 统一判断 `available_at` 是否在对应决策时点前可用。
+- `src/db/repositories/pre_market_readiness_repo.py`
+  - 盘前 dataset / market snapshot / market state 查询新增 `available_at_before` 过滤能力。
+  - 支持 “先查决策时点前可用快照，再查最新快照用于解释迟到数据” 的双阶段读取。
+- `src/services/pre_market_readiness_service.py`
+  - 盘前正式输入现在必须在 `09-25` 决策时点前 `available_at <= cutoff` 才能视为可用。
+  - 对迟到数据不再误判为 ready；会 truthfully 返回 `blocked / unavailable`，并明确说明：
+    - 发生了什么
+    - 影响什么
+    - 应如何修复
+  - 盘前 traceability 新增 `available_at`、`decision_cutoff_at`，并对 dataset / market snapshot 暴露 `source`、`slot`、`effective_at` 映射。
+- `src/services/post_close_actuals_service.py`
+  - 盘后正式实际结果读取现在要求：
+    - 快照 `trade_date` 匹配
+    - 快照 `slot` 必须是正式盘后时段
+    - 快照 `available_at` 不能缺失
+    - 快照 `available_at` 必须在 `17-30` 复盘 cutoff 之前
+  - 迟到或缺失可用时间的盘后快照现在会返回 `unavailable`，并保留真实 `market_snapshot_available_at` / `frozen_at`，不会把补录数据当作收盘后当时已知事实。
+  - `post_close_market_state_id` 现在会校验 trade_date、snapshot 绑定和 `available_at <= 17-30 cutoff`；不满足时不再参与盘后市场状态变化判断。
+- `src/services/system_run_trace_service.py`
+  - `/system/runs` 数据抓取 trace 追加 `snapshot_id` 与 `content_fingerprint`。
+  - DatasetSnapshot 继续 truthfully 以显式映射方式暴露：
+    - `source`
+    - `slot`
+    - `available_at`
+    - `effective_at=frozen_at`
+    - `captured_at=null`（现有历史数据无法证明时不伪造）
+- `web/src/pages/system/index.tsx`
+  - 管理员 `/system/runs` 诊断区现在展示：
+    - `trade_date`
+    - `slot`
+    - `captured_at`
+    - `available_at`
+    - `effective_at`
+    - `coverage`
+    - `missing_ranges`
+    - `snapshot_id`
+    - `content_fingerprint`
+    - backtest `decision_time_policy`
+    - backtest data fingerprints / coverage
+- `web/src/types/system.ts`
+  - System data fetch trace 类型同步补齐 `snapshot_id` / `content_fingerprint`。
+- `web/src/pages/daily/after-close-page.tsx`
+  - 为 `post_close_snapshot_available_late` / `post_close_snapshot_available_at_missing` / `post_close_snapshot_slot_mismatch` 提供业务中文解释，避免把内部 reason code 直接显示给普通用户。
+
+### Verification
+
+- backend / API / service
+  - `python -m pytest tests/unit/services/test_pre_market_readiness_service.py tests/unit/services/test_post_close_actuals_service.py tests/unit/services/test_system_run_trace_service.py tests/unit/services/test_backtest_application_service.py tests/api/routers/test_system_data_api.py tests/api/routers/ui/test_daily_pre_market.py tests/api/routers/ui/test_daily_after_close.py -q`
+  - 结果：`35 passed`
+- frontend
+  - `corepack pnpm vitest run web/src/pages/system/index.test.tsx web/src/pages/daily/after-close-page.test.tsx`
+  - 结果：`16 passed`
+- typecheck
+  - `corepack pnpm typecheck`
+  - 结果：pass
+- targeted lint
+  - `corepack pnpm exec eslint web/src/pages/system/index.tsx web/src/pages/system/index.test.tsx web/src/pages/daily/after-close-page.tsx`
+  - 结果：pass
+- safety / terminology
+  - `git diff --check`
+  - 结果：pass
+  - `rg -n "Job|Workflow|Pipeline|Artifact|config_path|prompt_run_id|run_id" web/src/pages/system web/src/pages/daily/after-close-page.tsx -g '!**/*.test.tsx'`
+  - 结果：仅命中管理员诊断字段或实现标识；未把这些内部术语新增为普通用户业务输入
+
+### Acceptance Review
+
+- Relevant core data objects have or explicitly map `trade_date / available_at / captured_at / effective_at / source / slot`：pass
+  - `MarketSnapshot` / section 原生具备；
+  - `DatasetSnapshot` 通过 traceability / run trace 明确映射 `source`、`slot`、`available_at`、`effective_at=frozen_at`，`captured_at` 无法证明时保持 `null`。
+- Pre-market uses only data available by the pre-market cutoff：pass
+- Post-market uses only data available by the post-market cutoff：pass
+- Backtest remains snapshot-bound and point-in-time constrained：pass
+  - Stage 6 existing dependency / run logic已持续按 immutable snapshot + per-trade-date `available_at` policy 校验；本次 focused verification 复核未回归。
+- Later-filled data keeps true timestamps and is not treated as earlier available：pass
+- Missing / late data surfaces unavailable / partial / degraded with impact and repair guidance：pass
+- Business users can understand whether data was available for the decision and what is affected：pass
+- Admins can see source / slot / timestamps / coverage / missing ranges / snapshot / fingerprint details：pass
+- Preserved `happened / affected / repair_guidance` style：pass
+- Time-semantics visibility is observable through Stage 11 run trace and system management diagnostics：pass
+
+### Residual Risks
+
+- `DatasetSnapshot` 现阶段仍未持久化独立 `captured_at` / `slot` 列；本次根据冻结约束采用 truthful 映射与 `null` 暴露，而不是伪造历史时间或触发迁移。
+- `/system/data` readiness summary 仍以高层状态为主；更细粒度的 current snapshot time/fingerprint matrix 若后续需要独立展示，可在不改 formal contract 的前提下继续 hardening。
+- 本次没有改变 Stage 6 backtest canonical model，仅复核并依赖既有 point-in-time enforcement；若后续要扩展到更多 snapshot 类型，需要在对应 task 中继续细化。
+
+### Acceptance
+
+`RT-S11-005` is `ACCEPTED` under the frozen Stage 11 contract.
 
 ## 2026-06-23 RT-S11-002 自动化和恢复
 

@@ -3,11 +3,123 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-006 灰度迁移和回滚`
-- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-006`、`RT-S11-007` 已接受；Stage 11 仍在进行中
-- 当前 Task：`RT-S11-006 灰度迁移和回滚` 已接受
-- 下一可执行项：等待用户明确授权 Stage 11 Gate 或后续单独范围工作
+- 当前活动：`Stage 11 Gate`
+- 当前状态：Stage 11 Gate 最终 `ACCEPTED`
+- 当前 Task：Stage 11 Gate 已接受
+- 下一可执行项：等待用户明确授权 Stage 12 Bootstrap 或后续单独范围工作
 - 不得自动开始：不得自动启动 scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-23 Stage 11 Gate / Review
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只执行 Stage 11 final review / acceptance gate；
+- 不启动 Stage 12；
+- 不退役 legacy routes；
+- 不新增 scheduler / automation / alerting / recovery / cost-control durable runtime；
+- 不修改 formal strategy/rule/profile/current pointer/governance state；
+- 不引入第二套 formal source-of-truth。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001 系统管理入口`：`ACCEPTED`
+- `RT-S11-002 自动化和恢复`：`ACCEPTED`
+- `RT-S11-003 可观测性和运行追踪`：`ACCEPTED`
+- `RT-S11-004 成本与增量控制`：`ACCEPTED`
+- `RT-S11-005 数据时间语义`：`ACCEPTED`
+- `RT-S11-006 灰度迁移和回滚`：`ACCEPTED`
+- `RT-S11-007 用户友好错误`：`ACCEPTED`
+- working tree before Gate review：clean
+
+### Gate Checklist
+
+- System Management groups all required categories：pass
+  - `Profile 配置`、`数据源`、`数据与调度`、`任务运行`、`失败与告警`、`数据库与备份`、`权限与审计` 均在正式 `/system` 入口和相关系统页可见。
+- Business pages remain outside System Management and ordinary users do not need System Management for daily work：pass
+  - primary navigation remains business-first；`/research`、`/rules`、`/authors`、`/strategies`、`/daily`、`/daily/pre-market`、`/daily/after-close` 仍为业务入口。
+- User-facing errors include happened / affected / repair_guidance：pass
+  - shared `ErrorState`、`BusinessPageShell`、`ProductPageAdapter` 与系统页错误状态均保留三段式解释。
+- Run tracing exposes stable run_id, steps, prompt calls, data fetches, backtests, and admin diagnostics：pass
+  - `/system/runs` 普通用户显示业务状态和下一步，operator/admin 显示 Prompt 调用、数据抓取、正式回测证据、linked IDs 和 raw diagnostics。
+- Automation/recovery is bounded, idempotent, approval-aware, and traceable：pass
+  - `system-data-operation` 保留 retry cap、backoff、idempotency key、failure evidence、attempt history 和 checkpoint；backfill / retry-after-max 需要管理员审批。
+- Data time semantics enforce point-in-time availability for pre-market, post-market, and backtest：pass
+  - 盘前按 `09:25` cutoff，盘后按 `17:30` cutoff；迟到数据保持 unavailable / invalid，不当作当时可见事实；backtest 继续绑定 immutable snapshot 与 decision-time policy。
+- Cost/cache/incremental controls are explicit, admin-visible, and do not silently mutate governance flows：pass
+  - LLM cost、budget warning、retry cap、concurrency limit、prompt cache、backtest reuse、metric cache 和增量画像样例在 `/system/runs` 管理诊断中可见；budget warning 为 notify-only。
+- Rollout/rollback states are visible, legacy routes remain compatibility-only/read-only where applicable, and no unauthorized retirement occurs：pass
+  - `/system/runs` 显示 rollout state / recovery evidence；legacy route retirement 被明确标为 Stage 12 或单独授权所需。
+- Missing, partial, unavailable, degraded, invalid, and conflict states remain truthful：pass
+  - 缺失 migration report、历史 prompt rollback evidence、迟到/缺失 snapshot 与历史 runtime chain 均以 partial / unavailable / invalid 显示，不伪造成 success。
+- `config_path` is not exposed as a Web formal input：pass
+  - grep 命中保留在 backend / legacy compatibility internals；正式 Web 业务入口与系统管理正式输入未重新暴露 `config_path`。
+- Job / Workflow / Pipeline / Artifact are not ordinary user-facing business inputs：pass
+  - grep 命中主要在 hidden `compat` routes、admin diagnostics、内部 imports/types 和旧兼容页面；primary business routes 不把这些作为正式业务输入。
+- No duplicate formal source-of-truth was introduced：pass
+  - Stage 11 聚合读取既有 canonical objects / run evidence，不建立第二套 writer 或 formal source。
+- No formal strategy/rule/profile/current pointer/governance state was mutated outside accepted governance paths：pass
+  - Gate review grep 未发现 Stage 11 system services 写入 formal governance pointer；cost/profile samples are read-only / draft-only diagnostics。
+- Stage 12 has not started：pass
+  - logs、route metadata and rollout UI all keep Stage 12 as future required retirement/final-delivery work only。
+
+### Verification
+
+- entry / status
+  - `rtk git -C trade-strategy-ai status --short`
+  - 结果：clean
+  - `rtk git -C trade-strategy-ai branch --show-current`
+  - 结果：`main`
+- backend / API / service
+  - `rtk ../.venv/bin/python -m pytest tests/unit/services/test_system_run_trace_service.py tests/unit/services/test_data_scheduling_service.py tests/unit/services/test_system_rollout_service.py tests/unit/services/test_pre_market_readiness_service.py tests/unit/services/test_post_close_actuals_service.py tests/unit/services/test_backtest_application_service.py tests/unit/services/test_author_method_profile_service.py tests/unit/stage3/test_prompt_runtime_service.py tests/unit/stage3/test_regression_and_batch_services.py tests/api/routers/ui/test_ui_system_runs.py tests/api/routers/ui/test_ui_system_cost_control.py tests/api/routers/ui/test_ui_system_rollout.py tests/api/routers/test_system_data_api.py tests/api/routers/ui/test_daily_pre_market.py tests/api/routers/ui/test_daily_after_close.py -q`
+  - 结果：`63 passed`
+- frontend
+  - `rtk corepack pnpm vitest run src/pages/system/index.test.tsx src/pages/system/system-pages.test.tsx src/features/system-management/system-management-workspace.test.tsx src/components/state/ErrorState.test.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/features/system-status/system-status-panel.test.tsx src/lib/error-recovery.test.ts src/app/route-config.test.tsx src/app/router-auth.test.tsx src/lib/api/system.test.ts src/pages/daily/after-close-page.test.tsx`
+  - 结果：`12` files / `94` tests passed
+- typecheck
+  - `rtk corepack pnpm typecheck`
+  - 结果：pass
+- targeted lint
+  - `rtk corepack pnpm exec eslint src/pages/system/index.tsx src/pages/system/SystemHubPage.tsx src/pages/system/system-pages.test.tsx src/pages/system/index.test.tsx src/features/system-management/system-management-workspace.tsx src/features/system-management/system-management-workspace.test.tsx src/components/state/ErrorState.tsx src/components/state/ErrorState.test.tsx src/components/layout/business-page-shell.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.tsx src/components/layout/product-page-adapter.test.tsx src/features/system-status/system-status-panel.tsx src/features/system-status/system-status-panel.test.tsx src/lib/error-recovery.ts src/lib/error-recovery.test.ts src/app/route-config.tsx src/app/route-config.test.tsx src/app/router-auth.test.tsx src/lib/api/system.ts src/types/system.ts src/pages/daily/after-close-page.tsx src/pages/daily/after-close-page.test.tsx`
+  - 结果：pass
+- syntax
+  - `rtk ../.venv/bin/python -m py_compile api/routers/ui/system.py api/routers/ui/system_data.py src/services/system_run_trace_service.py src/services/data_scheduling_service.py src/services/system_rollout_service.py src/services/stage3_batch_service.py src/services/stage3_prompt_runtime_service.py src/services/data_time_semantics.py src/services/pre_market_readiness_service.py src/services/post_close_actuals_service.py src/services/backtest_application_service.py src/services/author_method_profile_service.py`
+  - 结果：pass
+- safety
+  - `rtk git diff --check`
+  - 结果：pass
+- terminology / scope grep
+  - `rtk rg -n "Job failed|Unknown error|config_path|prompt_run_id|run_id|Job|Workflow|Pipeline|Artifact|Provider|Schema" web/src/pages/system web/src/components/state web/src/components/layout web/src/features/system-status web/src/features/system-management web/src/app/route-config.tsx -g '!**/*.test.*'`
+  - 结果：命中限于 route-config imports/compat route elements、system-management internal aliases、operator/admin diagnostics 中的 `run_id` / `Schema`，未发现普通用户业务输入泄漏。
+  - `rtk rg -n "Job|Workflow|Pipeline|Artifact|Provider|Schema|config_path|prompt_run_id|run_id" web/src/pages/research web/src/pages/rules web/src/pages/authors web/src/pages/strategies web/src/pages/daily -g '!**/*.test.*'`
+  - 结果：命中为 internal code identifiers 或已记录的 compatibility status usage；未发现 primary route label / formal input 将 internal terms 作为普通用户业务输入。
+- governance / runtime scope grep
+  - `rtk rg -n "current_published_version_id|published_profile|publish|approve|approved|RuleVersion|AuthorProfileVersion|StrategyVersion|DailyRuleSelection|DailyStrategyInstance|TradingDayPlan" src/services/system_*.py src/services/data_scheduling_service.py src/services/stage3_batch_service.py api/routers/ui/system.py api/routers/ui/system_data.py`
+  - 结果：Stage 11 system services read/diagnose canonical records only；未发现越过治理路径修改 formal pointer。
+  - `rtk rg -n "Scheduler|scheduler|APScheduler|cron|schedule\\(|setInterval|setTimeout|alerting|cost-control runtime|cost control runtime" src/services api/routers web/src -g '!**/*.test.*'`
+  - 结果：命中为 existing compatibility scheduler/alerting code and UI references；Gate review 未发现 Stage 11 新增 durable scheduler/alerting/cost-control runtime。
+
+### Bounded Repairs
+
+无。
+
+### Residual Risks
+
+- Legacy compatibility pages still contain internal terms and legacy implementation details；non-blocking because they are hidden compatibility routes / admin-diagnostic surfaces and Stage 12 is the authorized retirement/final cleanup stage.
+- Stage 2 migration report files and historical PromptRun evidence may be absent in some environments；non-blocking because Stage 11 displays `partial` with repair guidance instead of fabricating recovery proof.
+- `DatasetSnapshot` still lacks independent persisted `captured_at` / `slot` columns；non-blocking because Stage 11 explicitly maps available fields and exposes unknown `captured_at` as `null` rather than forging history.
+- Browser E2E and full all-repo lint were not run；non-blocking for Stage 11 Gate because focused backend/API/frontend/typecheck/lint evidence passed and full final E2E remains Stage 12 scope.
+
+### Gate Decision
+
+`Stage 11 Gate ACCEPTED`
+
+Stage 12 has not started. Legacy route retirement remains unauthorized until Stage 12 Bootstrap or a separate explicit task.
 
 ## 2026-06-23 RT-S11-006 灰度迁移和回滚
 

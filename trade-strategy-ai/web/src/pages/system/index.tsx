@@ -7,6 +7,7 @@ import { listProfiles } from '@/lib/api/profiles';
 import {
   cancelSystemDataOperation,
   createSystemDataOperation,
+  getSystemCostControlSummary,
   getSystemDataReadiness,
   getSystemDataSchedule,
   listSystemRunTraces,
@@ -476,6 +477,12 @@ function SystemDataSummary() {
 function SystemRunsSummary() {
   const { canAccess } = useAuth();
   const showDiagnostics = canAccess('operator');
+  const costControlQuery = useQuery({
+    queryKey: ['formal-system', 'cost-control'],
+    queryFn: getSystemCostControlSummary,
+    staleTime: 30_000,
+    enabled: showDiagnostics,
+  });
   const query = useQuery({
     queryKey: ['formal-system', 'run-traces'],
     queryFn: () => listSystemRunTraces(10),
@@ -490,6 +497,62 @@ function SystemRunsSummary() {
   }
   return (
     <div className="space-y-4">
+      {showDiagnostics && costControlQuery.data ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="font-medium text-slate-950">成本与增量控制</p>
+          <p className="mt-2 text-sm text-slate-600">
+            最近记录的 LLM 成本：{costControlQuery.data.llm_cost_summary.total_cost} {costControlQuery.data.llm_cost_summary.currency}
+            ，共 {costControlQuery.data.llm_cost_summary.prompt_run_count} 次调用，{costControlQuery.data.llm_cost_summary.total_tokens} tokens。
+          </p>
+          <p className="mt-2 text-sm text-amber-700">{costControlQuery.data.budget_warning.message}</p>
+          <p className="mt-1 text-sm text-slate-600">通知提示，不会自动阻断已接受流程。</p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="font-medium text-slate-900">并发上限</p>
+              {costControlQuery.data.concurrency_limits.map((item) => (
+                <p key={item.task_type} className="mt-1 text-sm text-slate-700">{item.label}：{item.limit}</p>
+              ))}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="font-medium text-slate-900">重试上限</p>
+              {costControlQuery.data.retry_caps.map((item) => (
+                <p key={item.task_type} className="mt-1 text-sm text-slate-700">{item.label}：最多重试 {item.max_retries} 次</p>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="font-medium text-slate-900">Prompt 缓存样例</p>
+              {costControlQuery.data.prompt_cache_samples.map((item) => (
+                <div key={`${item.prompt_name}-${item.input_hash}-${item.retry_count}`} className="mt-2 text-sm text-slate-700">
+                  <p>{item.prompt_name} · {item.cache_status}</p>
+                  {item.invalidation_reasons.map((reason) => (
+                    <p key={reason} className="text-slate-600">{reason}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="font-medium text-slate-900">回测复用样例</p>
+              {costControlQuery.data.backtest_reuse_samples.map((item) => (
+                <div key={item.run_id} className="mt-2 text-sm text-slate-700">
+                  <p>{item.run_id} · {item.reuse_status}</p>
+                  <p className="text-slate-600">指标缓存：{item.metric_cache_status}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="font-medium text-slate-900">画像增量样例</p>
+              {costControlQuery.data.incremental_profile_samples.map((item) => (
+                <div key={`${item.profile_kind}-${item.author_id}`} className="mt-2 text-sm text-slate-700">
+                  <p>{item.profile_kind} · {item.status}</p>
+                  <p className="text-slate-600">{item.update_scope}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <p className="text-sm text-slate-600">最近正式运行</p>

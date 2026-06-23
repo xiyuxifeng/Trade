@@ -17,6 +17,7 @@ class Stage3PromptRunRepository:
         schema_version: str,
         model: str,
         input_hash: str,
+        retry_count: int,
     ) -> tuple[PromptRun, ArticleStructure, list[RuleCandidate]] | None:
         stmt = (
             select(PromptRun)

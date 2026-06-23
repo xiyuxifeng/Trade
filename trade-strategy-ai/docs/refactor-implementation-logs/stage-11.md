@@ -3,11 +3,134 @@
 ## Current Snapshot
 
 - Stage：`Stage 11 系统管理、自动化与告警`
-- 当前活动：`RT-S11-005 数据时间语义`
-- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-005`、`RT-S11-007` 已接受；Stage 11 仍在进行中
-- 当前 Task：`RT-S11-005 数据时间语义` 已接受
+- 当前活动：`RT-S11-004 成本与增量控制`
+- 当前状态：`RT-S11-001`、`RT-S11-002`、`RT-S11-003`、`RT-S11-004`、`RT-S11-005`、`RT-S11-007` 已接受；Stage 11 仍在进行中
+- 当前 Task：`RT-S11-004 成本与增量控制` 已接受
 - 下一可执行项：等待用户明确授权后续 Stage 11 task
-- 不得自动开始：不得自动启动 `RT-S11-004`、`RT-S11-006` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+- 不得自动开始：不得自动启动 `RT-S11-006` 及后续 Stage 11 task、scheduler、automation、alerting、recovery runtime、cost-control runtime、route retirement 或 Stage 12
+
+## 2026-06-23 RT-S11-004 成本与增量控制
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只实现 `RT-S11-004` 冻结范围内的成本、缓存、复用和增量控制 hardening；
+- 复用 Stage 3 `ArticleRevision.content_hash` / `PromptRun`、Stage 6 backtest fingerprints、Stage 7 author profile draft lifecycle、Stage 11 `/system/runs` 管理页；
+- 不新增数据库迁移，不改 formal strategy/rule/profile governance，不改 authorization policy，不启动 scheduler/runtime，不退役 legacy route，不进入 Stage 12。
+
+### Entry Verification
+
+- Stage 10 Gate：`ACCEPTED`
+- Stage 11 Bootstrap：`READY`
+- `RT-S11-001`：`ACCEPTED`
+- `RT-S11-007`：`ACCEPTED`
+- `RT-S11-003`：`ACCEPTED`
+- `RT-S11-002`：`ACCEPTED`
+- `RT-S11-005`：`ACCEPTED`
+- `RT-S11-004`：当前下一允许 Task
+- working tree before edits：clean
+
+### Implementation
+
+- `src/services/stage3_prompt_runtime_service.py`
+  - `ArticlePromptInput` 新增 `article_content_hash`，prompt request payload 也会写入 `content_hash`。
+  - prompt identity 现在显式包含 `prompt_name` 与 canonical content-hash evidence；当调用方能证明 `ArticleRevision.content_hash` 时，不再只依赖正文全文字符串。
+- `src/db/repositories/stage3_prompt_runtime_repository.py`
+  - prompt cache contract 现显式接收 `retry_count` 参数。
+  - 读取缓存时保留“同一正式输入可复用历史有效结果”的行为，不会因为历史 provider retry 次数不同而静默错过既有有效结果。
+- `src/services/stage3_batch_service.py`
+  - 批处理入口显式传入 `revision.content_hash`。
+  - job params 写入 `concurrency_limit` 与 `retry_cap`，供系统管理诊断与成本控制汇总使用。
+- `src/services/stage3_regression_service.py`
+  - fixed-set regression runtime 现显式传入 `revision.content_hash`，保持 prompt cache / dedupe 与 canonical revision 对齐。
+- `src/services/stage3_single_article_service.py`
+  - 单篇文章正式结构化入口现显式传入 `revision.content_hash`。
+- `src/services/backtest_application_service.py`
+  - 新增 `FORMAL_METRIC_CALCULATION_VERSION=stage6-market-state-metric-v1`。
+  - `execute_run()` 现在先按复用契约检查已有 backtest result：
+    - `request_fingerprint`
+    - `rule_family_fingerprint`
+    - `rule_version_fingerprint`
+    - `dataset_fingerprint`
+    - `market_state_model_version`
+    - `engine_version`
+    - `decision_time_policy`
+  - 命中时不重复计算，而是为当前 run 持久化一条可追溯的 reused result，保留 `source_result_fingerprints`、`reuse_contract` 和 `metric_cache` 审计信息。
+  - 未复用时，fresh result 的 `audit_json` 同样显式记录 `reuse_contract` 与 `metric_cache`，不会把不可证明的复用静默当成成功。
+- `src/db/repositories/backtest_run_repository.py`
+  - 新增 `find_reusable_backtest_result()`，只在所有必要指纹/版本条件同时匹配时返回复用候选。
+- `src/services/author_method_profile_service.py`
+  - `source_versions` 现显式写入 `incremental_update_scope=changed_article_revision_group`。
+  - 增量更新继续只创建 draft，不会直接覆盖已发布画像。
+- `src/services/system_cost_control_service.py`
+  - 新增 Stage 11 cost-control 聚合服务。
+  - 聚合 persisted `PromptRun` 成本与 token 使用，输出 budget warning、concurrency limits、retry caps、prompt cache samples、backtest reuse samples、incremental profile samples。
+  - budget warning 固定为 `notify_only`，只做管理员提示，不会静默阻断已接受治理流。
+- `api/routers/ui/system.py`
+  - 新增 `/api/ui/v1/system/cost-control` 正式管理 API。
+- `web/src/types/system.ts`
+  - 新增 `SystemCostControlSummaryResponse`。
+- `web/src/lib/api/system.ts`
+  - 新增 `getSystemCostControlSummary()` client。
+- `web/src/pages/system/index.tsx`
+  - `/system/runs` 管理员视图新增“成本与增量控制”卡片。
+  - 展示内容包括：
+    - LLM 成本汇总
+    - budget warning
+    - concurrency limits
+    - retry caps
+    - prompt cache status / invalidation reasons
+    - backtest reuse / metric cache status
+    - incremental profile draft-only sample
+- `web/src/pages/system/index.test.tsx`
+  - 补充 `/system/runs` 管理员成本控制 UI 断言。
+
+### Verification
+
+- backend / API / service
+  - `python -m pytest tests/unit/stage3/test_prompt_runtime_service.py tests/unit/stage3/test_regression_and_batch_services.py tests/unit/services/test_backtest_application_service.py tests/unit/services/test_author_method_profile_service.py tests/unit/services/test_system_run_trace_service.py tests/api/routers/ui/test_ui_system_runs.py tests/api/routers/ui/test_ui_system_cost_control.py -q`
+  - 结果：`34 passed`
+- focused frontend
+  - `corepack pnpm vitest run src/pages/system/index.test.tsx`
+  - 结果：`12 passed`
+- typecheck
+  - `corepack pnpm typecheck`
+  - 结果：pass
+- targeted lint
+  - `corepack pnpm exec eslint src/pages/system/index.tsx src/pages/system/index.test.tsx src/lib/api/system.ts src/types/system.ts`
+  - 结果：pass
+- safety / diff
+  - `git diff --check`
+  - 结果：pass
+- terminology grep
+  - `rg -n "Job|Workflow|Pipeline|Artifact|config_path" web/src/pages/system web/src/components/layout -g '!**/*.test.tsx'`
+  - 结果：无新增普通用户可见术语泄漏；未命中视为 pass
+
+### Acceptance Review
+
+- Content hash / dedupe uses canonical content hash + version evidence：pass
+- Prompt cache contract includes prompt name / prompt version / schema version / model / input hash / retry count：pass
+- Batch concurrency limits are explicit and admin-visible：pass
+- Retry upper bounds are enforced and displayed：pass
+- Incremental profile updates only create drafts and do not overwrite published profile versions：pass
+- Rule-family backtest reuse requires all required fingerprints / versions / decision-time policy：pass
+- Metric cache exposes input fingerprint / result fingerprint / calculation version / state：pass
+- LLM cost statistics aggregate from persisted `PromptRun` rows：pass
+- Budget warnings are admin-visible and notify-only：pass
+- Cache invalidation / unavailable states remain truthful and are not shown as silent success：pass
+
+### Residual Risks
+
+- 当前 prompt cache contract 仍采用“相同正式输入可复用既有有效结果”策略；`retry_count` 已纳入显式 contract metadata，但不把历史 provider retry 次数差异当作必须重算的理由。
+- Stage 11 成本预警阈值当前是服务内固定 notify-only 配置；若后续要引入可配置预算或强 enforcement policy，需要单独冻结合同后再扩展。
+- 本次把 backtest reuse 和 metric cache 落在 result-level reuse / audit metadata；若后续要扩展为独立缓存索引或跨页面更细粒度修复入口，应在后续 task 中继续 hardening。
+
+### Acceptance
+
+`RT-S11-004` is `ACCEPTED` under the frozen Stage 11 contract.
 
 ## 2026-06-23 RT-S11-005 数据时间语义
 

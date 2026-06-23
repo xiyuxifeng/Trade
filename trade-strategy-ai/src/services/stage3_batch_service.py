@@ -100,6 +100,7 @@ class Stage3BatchService:
                     article_revision_id=fixture.article_revision_id,
                     article_title=article.title,
                     article_content=revision.content_text,
+                    article_content_hash=revision.content_hash,
                     source_url=article.source_url,
                     published_at=article.published_at,
                 )
@@ -176,6 +177,7 @@ class Stage3BatchService:
                     "prompt_version": "article_analysis_v1",
                     "schema_version": "article_analysis_v1",
                     "concurrency_limit": self._concurrency_limit,
+                    "retry_cap": 1,
                 },
                 result=None,
                 error=None,

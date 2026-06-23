@@ -156,3 +156,35 @@ class BacktestRunRepository:
 
     async def get_backtest_result_by_run(self, session: AsyncSession, run_id: UUID) -> BacktestResult | None:
         return await session.scalar(select(BacktestResult).where(BacktestResult.run_id == run_id))
+
+    async def find_reusable_backtest_result(
+        self,
+        session: AsyncSession,
+        *,
+        input_fingerprint: str,
+        rule_family_fingerprint: str | None,
+        rule_version_fingerprint: str | None,
+        dataset_fingerprint: str,
+        market_state_model_version: str | None,
+        engine_version: str,
+        decision_time_policy: str,
+    ) -> BacktestResult | None:
+        stmt = (
+            select(BacktestResult)
+            .join(BacktestRun, BacktestRun.run_id == BacktestResult.run_id)
+            .where(BacktestResult.input_fingerprint == input_fingerprint)
+            .where(BacktestRun.dataset_fingerprint == dataset_fingerprint)
+            .where(BacktestRun.engine_version == engine_version)
+            .where(BacktestRun.decision_time_policy == decision_time_policy)
+            .order_by(BacktestResult.created_at.desc())
+            .limit(1)
+        )
+        if rule_family_fingerprint:
+            stmt = stmt.where(BacktestRun.rule_family_fingerprint == rule_family_fingerprint)
+        if rule_version_fingerprint:
+            stmt = stmt.where(BacktestRun.rule_version_fingerprint == rule_version_fingerprint)
+        if market_state_model_version is None:
+            stmt = stmt.where(BacktestRun.market_state_model_version.is_(None))
+        else:
+            stmt = stmt.where(BacktestRun.market_state_model_version == market_state_model_version)
+        return await session.scalar(stmt)

@@ -1,4 +1,5 @@
 import type {
+  SystemCostControlSummaryResponse,
   SystemDashboardResponse,
   SystemDataOperationListResponse,
   SystemDataOperationMutationResponse,
@@ -20,6 +21,10 @@ export function getSystemDashboard() {
 
 export function listSystemRunTraces(limit = 20) {
   return fetchJson<SystemRunTraceListResponse>(`/system/runs?limit=${limit}`);
+}
+
+export function getSystemCostControlSummary() {
+  return fetchJson<SystemCostControlSummaryResponse>('/system/cost-control');
 }
 
 export function getSystemDataReadiness() {

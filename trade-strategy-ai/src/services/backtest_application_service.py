@@ -38,6 +38,7 @@ FORMAL_DECISION_TIME_POLICY = "cn-a-share-close-plus-availability-v1"
 FORMAL_MARKET_STATE_RESULT_VERSION = "stage6-market-state-result-v1"
 FORMAL_LEVEL_POLICY_VERSION = "stage6-level-policy-v1"
 FORMAL_LEVEL3_KAIPAN_SLOT = "09-25"
+FORMAL_METRIC_CALCULATION_VERSION = "stage6-market-state-metric-v1"
 CN_TZ = ZoneInfo("Asia/Shanghai")
 SAMPLE_STATES = (
     "eligible",
@@ -722,6 +723,26 @@ class BacktestApplicationService:
             run = await _repo_call(self.repository, "get_backtest_run", session, run_id=UUID(run_id))
             if run is None:
                 raise LookupError("backtest run not found")
+            reusable = await _repo_call(
+                self.repository,
+                "find_reusable_backtest_result",
+                session,
+                input_fingerprint=str(_get(run, "request_fingerprint")),
+                rule_family_fingerprint=_get(run, "rule_family_fingerprint"),
+                rule_version_fingerprint=_get(run, "rule_version_fingerprint"),
+                dataset_fingerprint=str(_get(run, "dataset_fingerprint")),
+                market_state_model_version=_get(run, "market_state_model_version"),
+                engine_version=str(_get(run, "engine_version")),
+                decision_time_policy=str(_get(run, "decision_time_policy")),
+            )
+            if reusable is not None:
+                created = await _repo_call(
+                    self.repository,
+                    "create_backtest_result",
+                    session,
+                    payload=self._build_reused_result_payload(run, reusable, actor_id=actor_id, actor_role=actor_role),
+                )
+                return self._result_view(created)
             payload = await self._execute_run_payload(session, run, actor_id=actor_id, actor_role=actor_role)
             created = await _repo_call(self.repository, "create_backtest_result", session, payload=payload)
             return self._result_view(created)
@@ -943,6 +964,17 @@ class BacktestApplicationService:
             "run_id": _id(_get(run, "run_id")),
             "before_state": _value(_get(run, "status")),
             "after_state": status,
+            "reuse_contract": {
+                "status": "fresh",
+                "source_result_fingerprint": None,
+                "invalidation_reasons": [],
+            },
+            "metric_cache": {
+                "status": "ready" if _get(run, "request_fingerprint") and result_fingerprint else "unavailable",
+                "calculation_version": FORMAL_METRIC_CALCULATION_VERSION,
+                "input_fingerprint": str(_get(run, "request_fingerprint")),
+                "result_fingerprint": result_fingerprint,
+            },
         }
         return {
             "result_id": uuid4(),
@@ -967,6 +999,73 @@ class BacktestApplicationService:
             "limitations": limitations,
             "provenance_json": identity,
             "audit_json": audit,
+        }
+
+    def _build_reused_result_payload(self, run: Any, reused: Any, *, actor_id: str, actor_role: str) -> dict[str, Any]:
+        reused_audit = _get(reused, "audit_json", {}) or {}
+        reused_provenance = _get(reused, "provenance_json", {}) or {}
+        current_run_id = _id(_get(run, "run_id"))
+        source_result_fingerprint = str(_get(reused, "result_fingerprint"))
+        reuse_identity = {
+            "run_id": current_run_id,
+            "source_result_fingerprint": source_result_fingerprint,
+            "request_fingerprint": _get(run, "request_fingerprint"),
+            "decision_time_policy": _get(run, "decision_time_policy"),
+            "metric_calculation_version": FORMAL_METRIC_CALCULATION_VERSION,
+        }
+        result_fingerprint = _fingerprint(reuse_identity)
+        audit = {
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "time": datetime.now(UTC).isoformat(),
+            "source_surface": "/rules/backtests",
+            "run_id": current_run_id,
+            "before_state": _value(_get(run, "status")),
+            "after_state": _get(reused, "status"),
+            "reuse_contract": {
+                "status": "reused",
+                "source_result_fingerprint": source_result_fingerprint,
+                "invalidation_reasons": [],
+            },
+            "metric_cache": {
+                "status": "ready",
+                "calculation_version": FORMAL_METRIC_CALCULATION_VERSION,
+                "input_fingerprint": str(_get(run, "request_fingerprint")),
+                "result_fingerprint": result_fingerprint,
+            },
+        }
+        source_fingerprints = list(reused_provenance.get("source_result_fingerprints", []) or [])
+        if source_result_fingerprint not in source_fingerprints:
+            source_fingerprints.append(source_result_fingerprint)
+        provenance = {
+            **reused_provenance,
+            "source_result_fingerprints": source_fingerprints,
+            "reuse_contract": audit["reuse_contract"],
+            "metric_cache": audit["metric_cache"],
+        }
+        return {
+            "result_id": uuid4(),
+            "run_id": _get(run, "run_id"),
+            "input_fingerprint": str(_get(run, "request_fingerprint")),
+            "result_fingerprint": result_fingerprint,
+            "reproducibility_fingerprint": f"reused:{source_result_fingerprint}:{result_fingerprint}",
+            "status": _get(reused, "status"),
+            "requested_level": str(_get(reused, "requested_level")),
+            "effective_level": str(_get(reused, "effective_level")),
+            "market_state_model_version": _get(reused, "market_state_model_version"),
+            "market_state_source_version": _get(reused, "market_state_source_version"),
+            "market_state_result_version": _get(reused, "market_state_result_version"),
+            "level_policy_version": str(_get(reused, "level_policy_version", FORMAL_LEVEL_POLICY_VERSION)),
+            "decision_time_policy": str(_get(reused, "decision_time_policy")),
+            "overall_metrics": _get(reused, "overall_metrics", {}) or {},
+            "per_market_state_metrics": _get(reused, "per_market_state_metrics", []) or [],
+            "per_rule_metrics": _get(reused, "per_rule_metrics", []) or [],
+            "sample_state_counts": _get(reused, "sample_state_counts", {}) or {},
+            "coverage_json": _get(reused, "coverage_json", {}) or {},
+            "warnings": _get(reused, "warnings", []) or [],
+            "limitations": _get(reused, "limitations", []) or [],
+            "provenance_json": provenance,
+            "audit_json": {**reused_audit, **audit},
         }
 
     def _build_market_metric(self, bucket: dict[str, Any]) -> dict[str, Any]:

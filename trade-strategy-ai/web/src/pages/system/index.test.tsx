@@ -10,6 +10,7 @@ vi.mock('@/lib/api/profiles', () => ({
 vi.mock('@/lib/api/system', () => ({
   cancelSystemDataOperation: vi.fn(),
   createSystemDataOperation: vi.fn(),
+  getSystemCostControlSummary: vi.fn(),
   getSystemDashboard: vi.fn(),
   getSystemDataReadiness: vi.fn(),
   getSystemDataSchedule: vi.fn(),
@@ -19,14 +20,16 @@ vi.mock('@/lib/api/system', () => ({
   retrySystemDataOperation: vi.fn(),
 }));
 
-import { getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations, listSystemRunTraces } from '@/lib/api/system';
+import { getSystemCostControlSummary, getSystemDataReadiness, getSystemDataSchedule, listSystemDataOperations, listSystemRunTraces } from '@/lib/api/system';
 
+const mockedGetSystemCostControlSummary = vi.mocked(getSystemCostControlSummary);
 const mockedGetSystemDataReadiness = vi.mocked(getSystemDataReadiness);
 const mockedGetSystemDataSchedule = vi.mocked(getSystemDataSchedule);
 const mockedListSystemDataOperations = vi.mocked(listSystemDataOperations);
 const mockedListSystemRunTraces = vi.mocked(listSystemRunTraces);
 
 beforeEach(() => {
+  mockedGetSystemCostControlSummary.mockReset();
   mockedGetSystemDataReadiness.mockReset();
   mockedGetSystemDataSchedule.mockReset();
   mockedListSystemDataOperations.mockReset();
@@ -317,6 +320,60 @@ describe('SystemPage', () => {
   });
 
   it('shows admin diagnostics on /system/runs only for admins', async () => {
+    mockedGetSystemCostControlSummary.mockResolvedValue({
+      generated_at: '2026-06-23T09:00:00Z',
+      llm_cost_summary: {
+        currency: 'USD',
+        total_cost: 12.48,
+        prompt_run_count: 3,
+        total_tokens: 1200,
+      },
+      budget_warning: {
+        status: 'warning',
+        message: '最近 7 天的 LLM 成本已接近预算上限。',
+        enforcement: 'notify_only',
+        affected_flows: ['文章结构化', '作者方法画像'],
+      },
+      concurrency_limits: [
+        { task_type: 'stage3_article_batch', label: '文章批处理', limit: 2 },
+      ],
+      retry_caps: [
+        { task_type: 'stage3_article_batch', label: '文章批处理', max_retries: 1 },
+      ],
+      prompt_cache_samples: [
+        {
+          prompt_name: 'article_analysis_v1',
+          prompt_version: 'article_analysis_v1',
+          schema_version: 'article_analysis_v1',
+          model: 'gpt-5.4',
+          input_hash: 'hash-1',
+          retry_count: 0,
+          cache_status: 'stale',
+          invalidation_reasons: ['schema_version_changed'],
+          content_hash_status: 'ready',
+          article_revision_id: 'revision-2',
+          content_hash: 'content-hash-1',
+        },
+      ],
+      backtest_reuse_samples: [
+        {
+          run_id: 'backtest-run-1',
+          reuse_status: 'reused',
+          invalidation_reasons: [],
+          metric_cache_status: 'ready',
+          calculation_version: 'stage6-market-state-metric-v1',
+        },
+      ],
+      incremental_profile_samples: [
+        {
+          profile_kind: 'method',
+          author_id: 'author-1',
+          update_scope: 'changed_article_revision_group',
+          status: 'draft_only',
+          invalidation_reasons: [],
+        },
+      ],
+    } as never);
     mockedListSystemRunTraces.mockResolvedValue({
       count: 1,
       items: [
@@ -412,6 +469,15 @@ describe('SystemPage', () => {
     );
 
     expect(await screen.findByText('查看运维诊断详情')).toBeInTheDocument();
+    expect(screen.getByText('成本与增量控制')).toBeInTheDocument();
+    expect(screen.getByText('最近 7 天的 LLM 成本已接近预算上限。')).toBeInTheDocument();
+    expect(screen.getByText('通知提示，不会自动阻断已接受流程。')).toBeInTheDocument();
+    expect(screen.getByText('文章批处理：2')).toBeInTheDocument();
+    expect(screen.getByText('文章批处理：最多重试 1 次')).toBeInTheDocument();
+    expect(screen.getByText('article_analysis_v1 · stale')).toBeInTheDocument();
+    expect(screen.getByText('schema_version_changed')).toBeInTheDocument();
+    expect(screen.getByText('backtest-run-1 · reused')).toBeInTheDocument();
+    expect(screen.getByText('changed_article_revision_group')).toBeInTheDocument();
     expect(screen.getByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('workflow-1')).toBeInTheDocument();
     expect(screen.getByText('Prompt 调用')).toBeInTheDocument();

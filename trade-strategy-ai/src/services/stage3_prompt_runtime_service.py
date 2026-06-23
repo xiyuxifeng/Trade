@@ -45,6 +45,7 @@ class ArticlePromptInput:
     article_content: str
     source_url: str
     published_at: datetime | None
+    article_content_hash: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,10 +58,12 @@ class ArticlePromptRuntimeResult:
 
 
 def _default_identity_hasher(article_input: ArticlePromptInput, spec, model: str) -> str:
+    content_material = article_input.article_content_hash or article_input.article_content
     material = json.dumps(
         {
             "article_revision_id": str(article_input.article_revision_id),
-            "article_content": article_input.article_content,
+            "article_content_hash": content_material,
+            "prompt_name": spec.prompt_name,
             "prompt_version": spec.prompt_version,
             "schema_version": spec.schema_version,
             "model": model,
@@ -209,6 +212,7 @@ class Stage3PromptRuntimeService:
             schema_version="article_analysis_v1",
             model=self._model,
             input_hash=identity,
+            retry_count=0,
         )
 
     async def _run_article_analysis(
@@ -225,6 +229,7 @@ class Stage3PromptRuntimeService:
             "article_revision_id": str(article_input.article_revision_id),
             "title": article_input.article_title,
             "content": article_input.article_content,
+            "content_hash": article_input.article_content_hash,
             "source_url": article_input.source_url,
             "published_at": article_input.published_at.isoformat() if article_input.published_at else None,
         }
@@ -355,6 +360,7 @@ class Stage3PromptRuntimeService:
                 "article_revision_id": str(article_input.article_revision_id),
                 "title": article_input.article_title,
                 "content": article_input.article_content,
+                "content_hash": article_input.article_content_hash,
                 "source_url": article_input.source_url,
                 "published_at": article_input.published_at.isoformat() if article_input.published_at else None,
             },

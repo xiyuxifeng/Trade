@@ -398,6 +398,7 @@ class AuthorMethodProfileService:
             "article_revision_content_hashes": {
                 str(bundle.revision.article_revision_id): bundle.revision.content_hash for bundle in bundles
             },
+            "incremental_update_scope": "changed_article_revision_group",
             "method_profile_prompt_version": prompt_run.prompt_version,
             "method_profile_prompt_schema_version": prompt_run.schema_version,
             "prompt_run_id": str(prompt_run.prompt_run_id),
@@ -491,6 +492,7 @@ class AuthorMethodProfileService:
             },
             source_versions={
                 "alignment_status": "insufficient_evidence",
+                "incremental_update_scope": "changed_article_revision_group",
                 "issues": issues,
             },
             evidence_from=request.evidence_from,

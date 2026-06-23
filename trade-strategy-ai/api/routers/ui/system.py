@@ -8,6 +8,7 @@ from api.dependencies import verify_api_key
 from api.dependencies import CurrentPrincipal, get_current_principal
 from src.common.config import ConfigError
 from src.services.config_profile_service import ConfigProfileService
+from src.services.system_cost_control_service import SystemCostControlService
 from src.services.system_run_trace_service import SystemRunTraceService
 from src.services.system_service import SystemService
 
@@ -23,6 +24,11 @@ def get_system_service() -> SystemService:
 def get_system_run_trace_service() -> SystemRunTraceService:
     """构建系统运行追踪服务。"""
     return SystemRunTraceService()
+
+
+def get_system_cost_control_service() -> SystemCostControlService:
+    """构建系统成本与增量控制服务。"""
+    return SystemCostControlService()
 
 
 async def _resolve_profile_id() -> str | None:
@@ -75,6 +81,17 @@ async def list_system_runs(
 ) -> dict[str, object]:
     """返回系统管理运行追踪视图。"""
     result = await service.list_run_traces(actor_role=principal.role, limit=limit)
+    return result.payload
+
+
+@router.get("/cost-control")
+async def get_system_cost_control(
+    service: SystemCostControlService = Depends(get_system_cost_control_service),
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    _: str = Depends(verify_api_key),
+) -> dict[str, object]:
+    """返回成本、缓存、并发、重试和增量控制汇总。"""
+    result = await service.get_summary(actor_role=principal.role)
     return result.payload
 
 

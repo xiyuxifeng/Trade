@@ -171,6 +171,7 @@ class Stage3RegressionService:
                 article_revision_id=fixture.article_revision_id,
                 article_title=article.title,
                 article_content=revision.content_text,
+                article_content_hash=revision.content_hash,
                 source_url=article.source_url,
                 published_at=article.published_at,
             )

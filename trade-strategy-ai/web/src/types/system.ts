@@ -356,3 +356,56 @@ export type SystemRunTraceListResponse = {
   count: number;
   items: SystemRunTraceItem[];
 };
+
+export type SystemCostControlSummaryResponse = {
+  generated_at: string;
+  llm_cost_summary: {
+    currency: string;
+    total_cost: number;
+    prompt_run_count: number;
+    total_tokens: number;
+  };
+  budget_warning: {
+    status: 'ok' | 'warning';
+    message: string;
+    enforcement: 'notify_only';
+    affected_flows: string[];
+  };
+  concurrency_limits: Array<{
+    task_type: string;
+    label: string;
+    limit: number;
+  }>;
+  retry_caps: Array<{
+    task_type: string;
+    label: string;
+    max_retries: number;
+  }>;
+  prompt_cache_samples: Array<{
+    prompt_name: string;
+    prompt_version: string;
+    schema_version: string;
+    model: string;
+    input_hash: string;
+    retry_count: number;
+    cache_status: string;
+    invalidation_reasons: string[];
+    content_hash_status: string;
+    article_revision_id: string | null;
+    content_hash: string | null;
+  }>;
+  backtest_reuse_samples: Array<{
+    run_id: string;
+    reuse_status: string;
+    invalidation_reasons: string[];
+    metric_cache_status: string;
+    calculation_version: string;
+  }>;
+  incremental_profile_samples: Array<{
+    profile_kind: string;
+    author_id: string;
+    update_scope: string;
+    status: string;
+    invalidation_reasons: string[];
+  }>;
+};

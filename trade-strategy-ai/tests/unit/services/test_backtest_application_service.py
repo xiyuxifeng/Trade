@@ -123,6 +123,7 @@ class _FakeRepository:
         self.backtest_run = backtest_run
         self.created_runs: list[dict] = []
         self.created_results: list[dict] = []
+        self.reused_result = None
 
     async def get_rule_version(self, rule_version_id: UUID):
         if self.rule_version and self.rule_version.rule_version_id == rule_version_id:
@@ -165,6 +166,28 @@ class _FakeRepository:
             if payload["run_id"] == run_id:
                 return payload
         return None
+
+    async def find_reusable_backtest_result(
+        self,
+        *,
+        input_fingerprint: str,
+        rule_family_fingerprint: str | None,
+        rule_version_fingerprint: str | None,
+        dataset_fingerprint: str,
+        market_state_model_version: str | None,
+        engine_version: str,
+        decision_time_policy: str,
+    ):
+        del (
+            input_fingerprint,
+            rule_family_fingerprint,
+            rule_version_fingerprint,
+            dataset_fingerprint,
+            market_state_model_version,
+            engine_version,
+            decision_time_policy,
+        )
+        return self.reused_result
 
 
 def _selection(
@@ -445,6 +468,77 @@ async def test_execute_run_persists_market_state_metrics_and_fingerprints() -> N
     assert metric.win_rate == 1.0
     assert metric.unavailable_sample_count == 0
     assert result.sample_state_counts["condition_unavailable"] == 1
+
+
+@pytest.mark.asyncio()
+async def test_execute_run_reuses_matching_rule_family_result_without_recomputing_samples() -> None:
+    run_id = uuid4()
+    repository = _FakeRepository(
+        backtest_run={
+            "run_id": run_id,
+            "requested_level": "level_2",
+            "effective_level": "level_2",
+            "date_from": date(2026, 4, 1),
+            "date_to": date(2026, 4, 2),
+            "dataset_snapshot_id": uuid4(),
+            "dataset_fingerprint": "ds-fp",
+            "market_snapshot_ids": ["snapshot-1"],
+            "market_snapshot_fingerprints": ["ms-fp"],
+            "rule_family_id": uuid4(),
+            "rule_family_fingerprint": "family-fp",
+            "rule_version_id": uuid4(),
+            "rule_version_fingerprint": "rule-fp",
+            "market_state_model_version": "market-state-v1",
+            "indicator_version": "dataset-bound-v1",
+            "engine_version": "stage6-foundation-v1",
+            "execution_policy_version": "stage6-snapshot-only-v1",
+            "decision_time_policy": "cn-a-share-close-plus-availability-v1",
+            "request_fingerprint": "request-fp",
+            "reproducibility_fingerprint": "run-rp-fp",
+            "snapshot_only": True,
+            "status": "dependency_checked",
+            "coverage_state": "runnable",
+            "quality_state": "not_executed",
+            "unavailable_reasons": [],
+            "limitations": [],
+            "level_policy_version": "stage6-level-policy-v1",
+        },
+        samples=[],
+    )
+    repository.reused_result = {
+        "result_id": uuid4(),
+        "run_id": uuid4(),
+        "input_fingerprint": "request-fp",
+        "result_fingerprint": "result-fp-existing",
+        "reproducibility_fingerprint": "repro-fp-existing",
+        "status": "completed_valid",
+        "requested_level": "level_2",
+        "effective_level": "level_2",
+        "market_state_model_version": "market-state-v1",
+        "market_state_source_version": "features-v1",
+        "market_state_result_version": "stage6-market-state-result-v1",
+        "level_policy_version": "stage6-level-policy-v1",
+        "decision_time_policy": "cn-a-share-close-plus-availability-v1",
+        "overall_metrics": {"eligible_sample_count": 2, "evaluated_sample_count": 2, "hit_trade_count": 1, "avg_return": 0.05, "total_return": 0.05},
+        "per_market_state_metrics": [],
+        "per_rule_metrics": [],
+        "sample_state_counts": {"eligible": 2},
+        "coverage_json": {"coverage_state": "ready"},
+        "warnings": [],
+        "limitations": [],
+        "provenance_json": {"source_result_fingerprints": ["result-fp-existing"]},
+        "audit_json": {"after_state": "completed_valid"},
+    }
+    service = BacktestApplicationService(repository=repository)
+
+    result = await service.execute_run(run_id=str(run_id), actor_id="operator", actor_role="operator")
+
+    assert result.status == "completed_valid"
+    assert repository.created_results[0]["run_id"] == run_id
+    assert repository.created_results[0]["input_fingerprint"] == "request-fp"
+    assert repository.created_results[0]["provenance_json"]["source_result_fingerprints"] == ["result-fp-existing"]
+    assert repository.created_results[0]["audit_json"]["reuse_contract"]["status"] == "reused"
+    assert repository.created_results[0]["audit_json"]["reuse_contract"]["source_result_fingerprint"] == "result-fp-existing"
 
 
 @pytest.mark.asyncio()

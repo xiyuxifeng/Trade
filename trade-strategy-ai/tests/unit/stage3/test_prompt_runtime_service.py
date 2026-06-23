@@ -36,12 +36,28 @@ class _FakeRuleCandidate:
 
 class _FakePromptRunRepository:
     def __init__(self) -> None:
-        self.by_identity: dict[tuple[str, str, str, str, str], tuple[_FakePromptRun, _FakeArticleStructure, list[dict]]] = {}
+        self.by_identity: dict[tuple[str, str, str, str, str, int], tuple[_FakePromptRun, _FakeArticleStructure, list[dict]]] = {}
         self.saved_runs: list[_FakePromptRun] = []
 
-    async def get_cached_result(self, session, *, prompt_name: str, prompt_version: str, schema_version: str, model: str, input_hash: str):
+    async def get_cached_result(
+        self,
+        session,
+        *,
+        prompt_name: str,
+        prompt_version: str,
+        schema_version: str,
+        model: str,
+        input_hash: str,
+        retry_count: int,
+    ):
         del session
-        return self.by_identity.get((prompt_name, prompt_version, schema_version, model, input_hash))
+        exact = self.by_identity.get((prompt_name, prompt_version, schema_version, model, input_hash, retry_count))
+        if exact is not None:
+            return exact
+        for key, value in self.by_identity.items():
+            if key[:5] == (prompt_name, prompt_version, schema_version, model, input_hash):
+                return value
+        return None
 
     async def save_run(self, session, run):
         del session
@@ -76,6 +92,7 @@ class _FakeArticleRepository:
                 "article_analysis_v1",
                 "test-model",
                 self.identity,
+                latest_run.retry_count,
             )] = (latest_run, structure, candidates)
         return structure, candidates
 
@@ -287,6 +304,7 @@ async def test_runtime_cache_hit_suppresses_duplicate_provider_call() -> None:
         "article_analysis_v1",
         "test-model",
         "cached-hash",
+        0,
     )] = (
         _FakePromptRun(prompt_run_id=UUID("44444444-4444-4444-4444-444444444444"), prompt_name="article_analysis_v1", retry_count=0, validation_state="valid"),
         _FakeArticleStructure(schema_version="article_analysis_v1", article_structure_id=UUID("33333333-3333-3333-3333-333333333333"), payload=cached_payload["article_structure"]),
@@ -306,6 +324,40 @@ async def test_runtime_cache_hit_suppresses_duplicate_provider_call() -> None:
 
     assert result.cache_hit is True
     assert gateway.calls == []
+
+
+@pytest.mark.asyncio
+async def test_runtime_cache_reuses_valid_result_even_when_previous_attempt_needed_retry() -> None:
+    cached_payload = _valid_article_analysis_payload()
+    prompt_runs = _FakePromptRunRepository()
+    prompt_runs.by_identity[(
+        "article_analysis_v1",
+        "article_analysis_v1",
+        "article_analysis_v1",
+        "test-model",
+        "cached-hash",
+        1,
+    )] = (
+        _FakePromptRun(prompt_run_id=UUID("66666666-6666-6666-6666-666666666666"), prompt_name="article_analysis_v1", retry_count=1, validation_state="valid"),
+        _FakeArticleStructure(schema_version="article_analysis_v1", article_structure_id=UUID("77777777-7777-7777-7777-777777777777"), payload=cached_payload["article_structure"]),
+        [_FakeRuleCandidate(rule_candidate_id=UUID("88888888-8888-8888-8888-888888888888"))],
+    )
+    gateway = _FakeGateway([cached_payload])
+    article_repo = _FakeArticleRepository()
+    service = Stage3PromptRuntimeService(
+        session_scope_factory=lambda: _FakeSessionScope(),
+        gateway=gateway,
+        prompt_run_repository=prompt_runs,
+        article_analysis_repository=article_repo,
+        model="test-model",
+        identity_hasher=lambda article_input, spec, model: "cached-hash",
+    )
+
+    result = await service.analyze_article(_article_input())
+
+    assert result.cache_hit is True
+    assert gateway.calls == []
+    assert article_repo.saved == []
 
 
 @pytest.mark.asyncio

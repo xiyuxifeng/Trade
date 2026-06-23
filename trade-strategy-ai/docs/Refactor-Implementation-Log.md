@@ -30,6 +30,20 @@
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
 - 下一步：等待用户明确授权后再进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
 
+## 最近实施记录
+
+- Task ID: `N/A`，当前会话 lint cleanup
+- 状态: `已完成`
+- 修改范围: 清理 `web/src/pages/articles/index.test.tsx` 与 `web/src/pages/daily/index.test.tsx` 中未使用的 mock、helper 和相关类型/import
+- 关键设计决定: 只删除测试文件中的死代码，不改动测试断言或业务覆盖
+- 数据库迁移: 无
+- 兼容处理: 无
+- 已运行测试: `pnpm exec eslint src/pages/articles/index.test.tsx src/pages/daily/index.test.tsx`
+- 测试结果: 通过
+- 未完成项: 无
+- 已知风险: 无新增风险
+- 验收结论: 该次清理仅消除 lint 报错，不改变测试行为
+
 ## 当前硬约束
 
 - 后续 Task 不得自动开始；每个 Stage / Task / Gate 都需要用户明确授权。

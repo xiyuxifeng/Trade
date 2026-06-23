@@ -84,43 +84,6 @@ function buildSnapshotJob() {
   };
 }
 
-function buildRunPreMarketJob() {
-  return {
-    id: 'run-pre-market-daily-1',
-    job_type: 'run-pre-market',
-    status: 'success',
-    params: {
-      profile_id: 'profile-daily-1',
-      as_of_date: '2026-06-13',
-      benchmark_symbol: '000300.SH',
-    },
-    result: {
-      as_of_date: '2026-06-13',
-      summary: ['盘前信号已整理', '今日关注清单已生成'],
-    },
-    error: null,
-    artifacts: [],
-    created_by: 'web',
-    idempotency_key: null,
-    retry_count: 0,
-    max_retries: 0,
-    retry_backoff_seconds: 0,
-    timeout_seconds: null,
-    cancel_requested: false,
-    cancel_requested_at: null,
-    worker_id: null,
-    lock_token: null,
-    lock_acquired_at: null,
-    heartbeat_at: null,
-    scheduled_at: null,
-    started_at: '2026-06-13T02:00:00Z',
-    finished_at: '2026-06-13T02:15:00Z',
-    audit_events: [],
-    created_at: '2026-06-13T02:00:00Z',
-    updated_at: '2026-06-13T02:15:00Z',
-  };
-}
-
 function buildAfterCloseJob() {
   return {
     id: 'run-after-close-daily-1',

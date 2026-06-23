@@ -3,8 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleListPage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis } from '@/lib/api/article-analysis';
-import { getArticleMetadataSummary, listArticleMetadataArticles, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
+import { getArticleAnalysis, reviewArticleCandidate } from '@/lib/api/article-analysis';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -15,7 +14,6 @@ import {
   stopArticlePipelineSchedule,
 } from '@/lib/api/pipelines';
 import { toast } from '@/components/ui/toast';
-import type { ArticleMetadataListResponse } from '@/types/article-metadata';
 import type { PipelineDetailResponse } from '@/types/pipeline';
 
 vi.mock('@/lib/api/articles', () => ({
@@ -24,16 +22,9 @@ vi.mock('@/lib/api/articles', () => ({
   listArticles: vi.fn(),
 }));
 
-vi.mock('@/lib/api/article-metadata', () => ({
-  getArticleMetadataSummary: vi.fn(),
-  listArticleMetadataArticles: vi.fn(),
-  selectArticleMetadataVersion: vi.fn(),
-}));
-
 vi.mock('@/lib/api/article-analysis', () => ({
   getArticleAnalysis: vi.fn(),
   reviewArticleCandidate: vi.fn(),
-  runArticleAnalysis: vi.fn(),
 }));
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -53,12 +44,8 @@ vi.mock('@/components/ui/toast', () => ({
 }));
 
 const mockedListProfiles = vi.mocked(listProfiles);
-const mockedGetArticleMetadataSummary = vi.mocked(getArticleMetadataSummary);
-const mockedListArticleMetadataArticles = vi.mocked(listArticleMetadataArticles);
-const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
 const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
 const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
-const mockedRunArticleAnalysis = vi.mocked(runArticleAnalysis);
 const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
@@ -314,141 +301,6 @@ function buildArticleFilterOptions() {
     author_ids: ['author-1', 'author-2'],
     sources: ['tgb', 'xhs'],
     trader_ids: ['trader_a', 'trader_b'],
-  };
-}
-
-function buildArticleMetadataList(): ArticleMetadataListResponse {
-  return {
-    items: [
-      {
-        article_id: 'article-2',
-        title: 'Article Two',
-        author_name: 'Bob',
-        author_id: 'author-2',
-        source: 'xhs',
-        source_url: 'https://example.com/article-2',
-        published_at: '2026-05-11T08:00:00Z',
-        crawled_at: '2026-05-11T09:00:00Z',
-        summary: 'summary two',
-        tags: ['momentum'],
-        selection_status: 'unselected',
-        selected_schema_version: 'v1',
-        selected_by: 'system',
-        selected_at: '2026-05-11T10:00:00Z',
-        selection_mode: 'auto',
-        selection_reason: '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
-        recommended_schema_version: 'v1',
-        effective_schema_version: 'v1',
-      },
-      {
-        article_id: 'article-1',
-        title: 'Article One',
-        author_name: 'Alice',
-        author_id: 'author-1',
-        source: 'tgb',
-        source_url: 'https://example.com/article-1',
-        published_at: '2026-05-10T08:00:00Z',
-        crawled_at: '2026-05-10T09:00:00Z',
-        summary: 'summary one',
-        tags: ['trend', 'alpha'],
-        selection_status: 'selected',
-        selected_schema_version: 'v1',
-        selected_by: 'web',
-        selected_at: '2026-05-10T10:00:00Z',
-        selection_mode: 'manual',
-        selection_reason: '用户手动确认',
-        recommended_schema_version: 'v1',
-        effective_schema_version: 'v1',
-      },
-    ],
-    total: 2,
-    page: 1,
-    page_size: 8,
-    pages: 1,
-  };
-}
-
-function buildArticleMetadataListForStatus(
-  selectionStatus: 'all' | 'selected' | 'unselected' | undefined,
-): ArticleMetadataListResponse {
-  if (selectionStatus === 'selected') {
-    return {
-      items: [buildArticleMetadataList().items[1]],
-      total: 1,
-      page: 1,
-      page_size: 8,
-      pages: 1,
-    };
-  }
-
-  if (selectionStatus === 'unselected') {
-    return {
-      items: [buildArticleMetadataList().items[0]],
-      total: 1,
-      page: 1,
-      page_size: 8,
-      pages: 1,
-    };
-  }
-
-  return buildArticleMetadataList();
-}
-
-function buildArticleMetadataDetail(articleId: string) {
-  const selectedSchemaVersion = articleId === 'article-1' ? 'v2' : 'v1';
-  return {
-    article_id: articleId,
-    selected_schema_version: selectedSchemaVersion,
-    selected_by: articleId === 'article-1' ? 'web' : 'system',
-    selected_at: '2026-05-10T10:00:00Z',
-    selection_mode: articleId === 'article-1' ? 'manual' : 'auto',
-    selection_score: articleId === 'article-1' ? 4.1 : 4.5,
-    selection_reason: articleId === 'article-1' ? '用户手动确认' : '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
-    recommended_schema_version: 'v1',
-    recommended_score: 4.5,
-    recommended_reason: '自动推荐：当前候选即最优候选',
-    effective_schema_version: selectedSchemaVersion,
-    effective_score: articleId === 'article-1' ? 4.1 : 4.5,
-    effective_reason: articleId === 'article-1' ? '用户手动确认' : '自动推荐：字段完整度、规则覆盖和置信度综合得分最高',
-    warning: null,
-    candidates: [
-      {
-        schema_version: 'v1',
-        score: 4.5,
-        score_reasons: ['已完成处理', 'provider=openai', 'model=gpt-5'],
-        processed_at: '2026-05-10T10:00:00Z',
-        provider: 'openai',
-        model: 'gpt-5',
-        article_type: 'rule',
-        extraction_version: 'v1',
-        sentiment_score: 0.8,
-        confidence_score: 0.9,
-        extracted_concepts_count: 3,
-        trading_symbols_count: 2,
-        strategy_rules_count: 1,
-        preconditions_count: 1,
-        comment_insights_count: 1,
-        raw_llm_output_keys: 4,
-      },
-      {
-        schema_version: 'v2',
-        score: 4.1,
-        score_reasons: ['已完成处理', 'provider=claude', 'model=sonnet'],
-        processed_at: '2026-05-10T10:20:00Z',
-        provider: 'claude',
-        model: 'sonnet',
-        article_type: 'rule',
-        extraction_version: 'v2',
-        sentiment_score: 0.7,
-        confidence_score: 0.85,
-        extracted_concepts_count: 2,
-        trading_symbols_count: 1,
-        strategy_rules_count: 1,
-        preconditions_count: 1,
-        comment_insights_count: 1,
-        raw_llm_output_keys: 3,
-      },
-    ],
   };
 }
 

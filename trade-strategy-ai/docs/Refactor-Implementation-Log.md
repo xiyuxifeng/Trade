@@ -32,6 +32,18 @@
 
 ## 最近实施记录
 
+- Task ID: `N/A`，formal page layout cleanup with sticky next action
+- 状态: `已完成`
+- 修改范围: `web/src/components/layout/business-page-shell.tsx`、`web/src/layouts/dashboard-layout.tsx`、相关布局和路由测试
+- 关键设计决定: 移除顶部正式业务 hero，保留 sr-only 的 `h1`，将“下一步”改为固定底部的紧凑动作条，并在有帮助信息时支持“更多信息”展开
+- 数据库迁移: 无
+- 兼容处理: `ProductPageAdapter` 保持现有调用方式不变；仅共享 shell 的呈现方式发生变化
+- 已运行测试: `pnpm test -- --run src/pages/product-page-state-matrix.test.tsx`、`pnpm test -- --run src/pages/product-entry-pages.test.tsx`、`pnpm test -- --run src/app/route-config.test.tsx`、`pnpm exec eslint ...`、`npm run typecheck`
+- 测试结果: 通过
+- 未完成项: 无
+- 已知风险: 固定底部动作条依赖页面共享布局提供的侧边栏宽度变量；当前桌面/移动断点下验证通过
+- 验收结论: formal product pages 现在不再渲染重复的顶部 hero，“页面用途”是唯一可见说明区，“下一步”以紧凑 sticky 底栏呈现
+
 - Task ID: `N/A`，当前会话 lint cleanup
 - 状态: `已完成`
 - 修改范围: 清理 `web/src/pages/articles/index.test.tsx` 与 `web/src/pages/daily/index.test.tsx` 中未使用的 mock、helper 和相关类型/import

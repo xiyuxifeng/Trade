@@ -52,6 +52,7 @@ export function DashboardLayout() {
       style={
         {
           '--sidebar-collapse-left': sidebarCollapsed ? '16px' : '276px',
+          '--dashboard-sidebar-width': sidebarCollapsed ? '0px' : '290px',
         } as CSSProperties
       }
     >

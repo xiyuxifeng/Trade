@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -23,11 +24,12 @@ describe('BusinessPageShell', () => {
     );
 
     expect(screen.getByRole('heading', { name: '研究中心' })).toBeInTheDocument();
+    expect(screen.queryByText('正式业务页面')).not.toBeInTheDocument();
     expect(screen.getByText('页面用途')).toBeInTheDocument();
     expect(screen.getByText('输入')).toBeInTheDocument();
     expect(screen.getByText('处理状态')).toBeInTheDocument();
     expect(screen.getByText('输出')).toBeInTheDocument();
-    expect(screen.getByText('下一步')).toBeInTheDocument();
+    expect(screen.queryByText('下一步')).not.toBeInTheDocument();
     expect(screen.queryByText('暂无内容')).not.toBeInTheDocument();
     expect(screen.queryByText('空状态')).not.toBeInTheDocument();
     expect(screen.getByText('已完成导入')).toBeInTheDocument();
@@ -72,8 +74,37 @@ describe('BusinessPageShell', () => {
     expect(container.querySelector('[data-testid="section-content-页面用途"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="section-content-输入"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="section-content-输出"]')).not.toBeInTheDocument();
-    expect(container.querySelector('[data-testid="section-content-下一步"]')).toBeInTheDocument();
-    expect(screen.getByText('当前没有可执行的下一步操作。')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="section-content-下一步"]')).not.toBeInTheDocument();
+    expect(screen.queryByText('下一步')).not.toBeInTheDocument();
+  });
+
+  it('renders a compact sticky next-action bar with expandable details when actionable', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <BusinessPageShell
+          title="研究中心"
+          purpose="导入文章并整理规则提取结果。"
+          inputDescription="需要一篇文章或一组文章。"
+          processingDescription="系统会提取规则、整理证据并等待审核。"
+          outputDescription="输出可审核的规则候选和处理说明。"
+          nextAction={{ label: '开始回测', to: '/rules/backtests' }}
+          help="导入完成后，下一步通常是查看提取结果并确认当前版本。"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('下一步')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '开始回测' })).toHaveAttribute('href', '/rules/backtests');
+    expect(screen.getByRole('button', { name: '展开更多信息' })).toBeInTheDocument();
+    expect(screen.queryByTestId('section-content-下一步')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开更多信息' }));
+
+    expect(screen.getByRole('button', { name: '收起更多信息' })).toBeInTheDocument();
+    expect(screen.getByLabelText('下一步详情')).toBeInTheDocument();
+    expect(screen.getAllByText('导入完成后，下一步通常是查看提取结果并确认当前版本。').length).toBeGreaterThan(0);
   });
 
   it('renders a recovery action for error states', () => {

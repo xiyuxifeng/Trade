@@ -134,6 +134,10 @@ vi.mock('@/lib/api/strategies', () => ({
 }));
 
 vi.mock('@/lib/api/system', () => ({
+  getSystemStatus: vi.fn().mockResolvedValue({
+    status: 'warning',
+    generated_at: '2026-06-13T00:00:00Z',
+  }),
   getSystemDashboard: vi.fn().mockResolvedValue({
     status: 'partial',
     generated_at: '2026-06-13T00:00:00Z',
@@ -220,6 +224,28 @@ vi.mock('@/lib/api/system', () => ({
       cancel_requested: false,
     }],
   }),
+  listSystemRunTraces: vi.fn().mockResolvedValue({
+    count: 0,
+    items: [],
+  }),
+  getSystemCostControlSummary: vi.fn().mockResolvedValue({
+    state: 'empty',
+    generated_at: '2026-06-13T00:00:00Z',
+    items: [],
+    count: 0,
+    happened: '暂无成本控制摘要。',
+    affected: '当前不会显示成本控制建议。',
+    repair_guidance: '稍后再试。',
+  }),
+  getSystemRolloutSummary: vi.fn().mockResolvedValue({
+    state: 'empty',
+    generated_at: '2026-06-13T00:00:00Z',
+    items: [],
+    count: 0,
+    happened: '暂无灰度迁移与回滚摘要。',
+    affected: '当前不会显示灰度相关建议。',
+    repair_guidance: '稍后再试。',
+  }),
   createSystemDataOperation: vi.fn().mockResolvedValue({
     created: true,
     operation: {
@@ -298,6 +324,7 @@ describe('formal product entry pages', () => {
   ])('mounts the existing real capability', async (page, testId) => {
     renderPage(page);
     expect(await screen.findByTestId(testId)).toBeInTheDocument();
+    expect(screen.queryByText('正式业务页面')).not.toBeInTheDocument();
   });
 
   it('keeps strategies candidates as a compatibility notice page', async () => {
@@ -317,9 +344,10 @@ describe('formal product entry pages', () => {
     cleanup();
 
     renderPage(<SystemRunsPage />);
-    expect(await screen.findByText('失败处理')).toBeInTheDocument();
-    expect(screen.getByText('严重告警')).toBeInTheDocument();
-    expect(screen.getByText('一般提醒')).toBeInTheDocument();
+    expect(await screen.findByText('暂无正式运行记录')).toBeInTheDocument();
+    expect(screen.getByText('最近正式运行')).toBeInTheDocument();
+    expect(screen.getByText('仍需处理')).toBeInTheDocument();
+    expect(screen.getByText('可直接继续')).toBeInTheDocument();
   });
 
   it('does not invent author profile or strategy version counts', async () => {

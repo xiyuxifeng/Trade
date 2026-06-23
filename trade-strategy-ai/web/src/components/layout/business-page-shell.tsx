@@ -1,9 +1,9 @@
-import { Children, type ReactNode } from 'react';
+import { Children, useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export type PageAvailability =
@@ -123,7 +123,7 @@ const STATE_COPY: Record<Exclude<PageAvailability, 'ready'>, StateCopy> = {
 };
 
 const actionClassName =
-  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50';
+  'inline-flex h-8 whitespace-nowrap items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-900 px-3 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50';
 
 function availabilityLabel(availability: PageAvailability) {
   return availability === 'ready' ? '已就绪' : STATE_COPY[availability].title;
@@ -143,7 +143,7 @@ function renderPageAction(action: PageAction) {
   }
 
   return (
-    <Button onClick={action.onClick} variant="default">
+    <Button onClick={action.onClick} type="button" variant="default" size="sm">
       {action.label}
     </Button>
   );
@@ -163,17 +163,17 @@ function SectionCard({
   const hasContent = hasRenderableContent(children);
 
   return (
-    <Card className={cn('border-slate-200/90 bg-white/95', className)}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
+    <section className={cn('rounded-2xl border border-slate-200/90 bg-white/95 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur', className)}>
+      <div className="flex flex-col gap-1.5 p-6">
+        <h2 className="text-lg font-semibold leading-none tracking-tight">{title}</h2>
+        <p className="text-sm text-slate-600">{description}</p>
+      </div>
       {hasContent ? (
-        <CardContent className="grid gap-3" data-testid={`section-content-${title}`}>
+        <div className="grid gap-3 px-6 pb-6 pt-0" data-testid={`section-content-${title}`}>
           {children}
-        </CardContent>
+        </div>
       ) : null}
-    </Card>
+    </section>
   );
 }
 
@@ -198,20 +198,19 @@ export function BusinessPageShell({
   children,
   className,
 }: BusinessPageShellProps) {
+  const nextActionPanelId = useId();
+  const [isNextActionExpanded, setIsNextActionExpanded] = useState(false);
   const stateCopy = availability === 'ready' ? null : STATE_COPY[availability];
   const resolvedStateTitle = stateTitle ?? stateCopy?.title;
   const resolvedStateDescription = stateDescription ?? stateCopy?.description;
   const resolvedImpact = impact ?? stateCopy?.impact;
   const resolvedRecoveryText = stateCopy?.recoveryAction;
   const shouldShowNextAction = nextAction && (availability === 'ready' || availability === 'partial' || availability === 'degraded');
+  const hasNextActionDetails = hasRenderableContent(help);
 
   return (
-    <main className={cn('page-stack', className)}>
-      <section className="page-card">
-        <p className="page-kicker">正式业务页面</p>
-        <h1>{title}</h1>
-        <p className="hero-copy">{purpose}</p>
-      </section>
+    <main className={cn('page-stack', shouldShowNextAction && 'pb-36 md:pb-32', className)}>
+      <h1 className="sr-only">{title}</h1>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="页面用途" description={purpose} className="lg:col-span-2">
@@ -305,22 +304,55 @@ export function BusinessPageShell({
           {progress ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{progress}</div> : null}
         </SectionCard>
 
-        <SectionCard title="输出" description={outputDescription}>
+        <SectionCard title="输出" description={outputDescription} className="lg:col-span-2">
           {output ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{output}</div> : null}
-        </SectionCard>
-
-        <SectionCard title="下一步" description="请选择下一项业务动作。">
-          {shouldShowNextAction ? (
-            <div>{renderPageAction(nextAction)}</div>
-          ) : null}
-          {help ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{help}</div> : null}
-          {!shouldShowNextAction && !help ? (
-            <p className="m-0 text-sm text-slate-600">当前没有可执行的下一步操作。</p>
-          ) : null}
         </SectionCard>
 
         {children ? <div className="lg:col-span-2">{children}</div> : null}
       </div>
+
+      {shouldShowNextAction ? (
+        <div className="pointer-events-none fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-4 right-4 z-30 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] md:left-[calc(var(--dashboard-sidebar-width,0px)+24px)] md:right-6">
+          <div className="pointer-events-auto overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+            <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 md:min-h-[56px]">
+              <div className="min-w-0 flex-1">
+                <p className="m-0 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">下一步</p>
+                {hasNextActionDetails ? (
+                  <div className="mt-1 hidden max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm text-slate-600 md:block">
+                    {help}
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {renderPageAction(nextAction)}
+                {hasNextActionDetails ? (
+                  <Button
+                    aria-controls={nextActionPanelId}
+                    aria-expanded={isNextActionExpanded}
+                    aria-label={isNextActionExpanded ? '收起更多信息' : '展开更多信息'}
+                    onClick={() => setIsNextActionExpanded((current) => !current)}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                  >
+                    {isNextActionExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <span>{isNextActionExpanded ? '收起' : '更多信息'}</span>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {isNextActionExpanded && hasNextActionDetails ? (
+              <div
+                aria-label="下一步详情"
+                className="max-h-[50vh] overflow-y-auto border-t border-slate-200/80 px-4 py-3 text-sm text-slate-700 md:max-h-[40vh]"
+                id={nextActionPanelId}
+              >
+                {help}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -236,9 +236,11 @@ describe('route config', () => {
     );
 
     expect(screen.getByRole('heading', { name: '文章库' })).toBeInTheDocument();
-    for (const heading of ['页面用途', '输入', '处理状态', '输出', '下一步']) {
+    expect(screen.queryByText('正式业务页面')).not.toBeInTheDocument();
+    for (const heading of ['页面用途', '输入', '处理状态', '输出']) {
       expect(screen.getByText(heading)).toBeInTheDocument();
     }
+    expect(screen.queryByText('下一步')).not.toBeInTheDocument();
   });
 
   it('uses concrete page components for every formal page in Session B', () => {

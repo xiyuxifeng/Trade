@@ -717,3 +717,86 @@ Combination rules:
 Next allowed action：wait for explicit user authorization for
 `RT-S12-001 旧入口退役` only. Do not start `RT-S12-002`、`RT-S12-003` or final
 E2E/documentation work automatically.
+
+## RT-S12-002 Minimal Canonical Evidence Repair 5.5
+
+Date: 2026-06-24
+
+Status: `[!] 阻塞`
+
+Readiness decision: `STILL_BLOCKED`
+
+Entry verification:
+
+- Stage 11 Gate: `ACCEPTED`
+- Stage 12 Bootstrap: `READY`
+- RT-S12-001: `ACCEPTED`
+- RT-S12-002 implementation: not started
+- RT-S12-003: not started
+- Stage 12 Gate: not started
+- latest readiness repair review: `READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
+- previous preflight status: `PARTIAL_READY`
+
+Repair scope:
+
+- reused the selected five existing DB articles; no article corpus recrawl
+- no final RT-S12-002 browser E2E
+- no RT-S12-003 user documentation
+- no Stage 12 Gate
+- no LLM generation
+- no Kaipan refresh
+- bounded AkShare/OHLCV refresh only for `002104.SZ` and `603280.SH`
+
+Records repaired:
+
+- OHLCV:
+  - `002104.SZ`: 20 daily rows, `2024-05-06` to `2024-05-31`
+  - `603280.SH`: 20 daily rows, `2024-05-06` to `2024-05-31`
+- DatasetSnapshot:
+  - `680a9e4a-8cb4-4131-8ef0-785031cb670b`, ready, fingerprint `9f56b30c66ca0ca11f53fe0452dd4e31e31ef4826cece9cd071561c2839f7538`
+  - `b534d59d-851a-4a78-a32d-af6e71a4e71f`, ready, fingerprint `62bc2a46401cb6ffdf0f734443618079d0fc211c3bafded9e8393de19171d64c`
+- MarketSnapshot / MarketRegime:
+  - pre-market MarketSnapshot `88aa0f65-0fb8-41fb-aee8-cb8bbdb33a6f`, snapshot id `rt-s12-002:2024-05-31:09-25:selected-symbols`, quality `partial`
+  - pre-market MarketRegime `a8c2d82f-8db9-41ad-aec7-4c79f42c701f`, regime id `rt-s12-002:2024-05-31:09-25:selected_symbol_resilient`, quality `partial`
+  - post-close MarketSnapshot `9646ace9-a755-485d-89f4-4900602bde30`, snapshot id `rt-s12-002:2024-05-31:17-30:selected-symbols`, quality `partial`
+  - post-close MarketRegime `f9084b48-020a-4493-84a0-f2994e7dbccf`, regime id `rt-s12-002:2024-05-31:17-30:selected_symbol_resilient`, quality `partial`
+- RuleVersion:
+  - `8d15ae78-4abb-40ef-9a6e-184bb7289d0c`
+  - source candidate `af289b09-d9f1-44e1-8ce3-dfd87c84322d`
+  - lifecycle `in_review`
+  - not published
+
+Blocker:
+
+- `BacktestRun` insert fails because PostgreSQL type `backtest_run_status` is absent.
+- Alembic reports current/head `2026_06_20_0001`, but the committed migration creates `backtest_runs.status` as `String` while the current ORM maps it to enum `backtest_run_status`.
+- Creating that type manually would be a schema change without an applicable committed migration, so the repair stopped instead of fabricating or bypassing canonical evidence.
+
+Not generated:
+
+- `BacktestRun`
+- `BacktestResult`
+- `RuleApplicabilityProfile`
+- `AuthorProfileVersion`
+- `StrategyVersion` / published `Strategy`
+- `DailyRuleSelection`
+- `DailyStrategyInstance`
+- `TradingDayPlan`
+- `PostMarketReview`
+- `OptimizationProposal`
+
+Verification:
+
+- `python -m scripts.web_local env-check`: pass
+- `python -m cli.main db-check --config config/app.template.yaml`: pass
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
+- `python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`: pass, `22 passed`
+- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm typecheck`: pass
+- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
+- `git diff --check`: pass
+
+Next required repair:
+
+- add and apply a committed migration or adjust ORM/schema contract so `BacktestRun.status` can be inserted truthfully.
+- after that, rerun the bounded canonical chain from BacktestRun through OptimizationProposal.
+- do not start final browser E2E, RT-S12-003, or Stage 12 Gate until this evidence blocker is resolved.

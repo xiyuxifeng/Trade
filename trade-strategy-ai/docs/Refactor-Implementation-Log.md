@@ -236,7 +236,7 @@
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
-| RT-S12-002 | `[ ]` | 端到端验收未开始；需等待 RT-S12-001 接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| RT-S12-002 | `[!]` | 端到端验收未开始；5.5 最小 canonical evidence repair 修复了 OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime/RuleVersion 下层证据，但 BacktestRun 因 DB enum/schema contract mismatch 仍阻塞 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
@@ -255,15 +255,15 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始且当前因 BacktestRun enum/schema contract mismatch 阻塞；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-Stage 12 next authorized task:
-`RT-S12-001` 已接受。等待用户明确授权后才能进入 `RT-S12-002`、`RT-S12-003`、E2E、用户文档或 Stage 12 Gate。
+Stage 12 next required repair:
+`RT-S12-002` 仍阻塞在 canonical BacktestRun schema contract mismatch：Alembic current/head 为 `2026_06_20_0001`，但 PostgreSQL type `backtest_run_status` 缺失，而 ORM 当前要求该 enum。先修复并应用正式迁移或对齐 ORM/schema contract，再继续 bounded canonical evidence chain。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
 ```
 
 执行前应读取：

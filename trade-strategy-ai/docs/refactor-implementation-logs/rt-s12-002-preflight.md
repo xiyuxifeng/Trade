@@ -514,3 +514,158 @@ pnpm e2e:install  # run with Node 18 PATH
 - config baseline used: `config/app.template.yaml`
 - database-first decision: reuse existing DB articles; do not recrawl or bulk-regenerate
 - next allowed action: repair tooling and minimum canonical evidence set before RT-S12-002 implementation
+
+## 15. Minimal canonical evidence repair 5.5
+
+Date: 2026-06-24
+
+Status: `STILL_BLOCKED`
+
+Scope:
+
+- selected subset kept at the five existing DB articles:
+  - `be0d68bd-8fc3-445c-8510-8b01a43185d6`
+  - `fb673d83-bfb7-4a88-a804-c60ad2f8d8a2`
+  - `8856f8f8-2441-492a-9292-981f0b3e1672`
+  - `84558067-1ba1-4248-9700-fd4225be8593`
+  - `fc461ca7-ff28-4c81-ba58-e4bc69ec8461`
+- selected symbols:
+  - `002104.SZ` from selected article title `恒宝股份` and existing `stock_info`
+  - `603280.SH` from selected article title `南方路机` and existing `stock_info`
+- no corpus recrawl
+- no all-article regeneration
+- no final browser E2E
+- no RT-S12-003 documentation
+- no Stage 12 Gate
+
+Entry verification:
+
+- Stage 11 Gate: `ACCEPTED`
+- Stage 12 Bootstrap: `READY`
+- RT-S12-001: `ACCEPTED`
+- RT-S12-002 implementation: not started
+- RT-S12-003: not started
+- Stage 12 Gate: not started
+- latest readiness repair review: `READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
+- current preflight status before repair: `PARTIAL_READY`
+- git status before repair: clean
+- baseline HEAD before repair: `e67d39841a29c0ab5ac81796db53bf7e30b62b56`
+
+Article evidence recheck:
+
+- all five selected articles have existing `article_analysis_v1` prompt runs and candidates
+- selected executable OHLCV-backed candidate used for formal rule repair:
+  - article `84558067-1ba1-4248-9700-fd4225be8593`
+  - revision `b64a3c51-bf32-562c-8a86-849eac28ad72`
+  - prompt run `b5289dd7-8a5e-4d89-9c83-7555f8cc45a5`
+  - candidate `af289b09-d9f1-44e1-8ce3-dfd87c84322d`
+  - candidate fingerprint `32db69f061d899626664245410ce67879746788effbe3a0bd83bfa4e72d704b8`
+  - title `强势股临盘承接后跟随`
+  - dependency `ohlcv_1d`
+
+Live provider / LLM actions:
+
+- LLM: not called
+- article recrawl: not called
+- Kaipan: not called
+- AkShare/OHLCV: bounded selected-symbol refresh only
+  - symbols: `002104.SZ`, `603280.SH`
+  - date window: `2024-05-06` to `2024-05-31`
+  - result: 20 daily rows per symbol
+  - secret values were not printed
+
+Repaired canonical evidence:
+
+- OHLCV:
+  - `002104.SZ`: 20 rows, `2024-05-06` to `2024-05-31`
+  - `603280.SH`: 20 rows, `2024-05-06` to `2024-05-31`
+- DatasetSnapshot:
+  - pre-market snapshot `680a9e4a-8cb4-4131-8ef0-785031cb670b`
+    - trade date `2024-05-30`
+    - lifecycle `ready`
+    - selected rows `38`
+    - fingerprint `9f56b30c66ca0ca11f53fe0452dd4e31e31ef4826cece9cd071561c2839f7538`
+  - post-close snapshot `b534d59d-851a-4a78-a32d-af6e71a4e71f`
+    - trade date `2024-05-31`
+    - lifecycle `ready`
+    - selected rows `40`
+    - fingerprint `62bc2a46401cb6ffdf0f734443618079d0fc211c3bafded9e8393de19171d64c`
+- MarketSnapshot / MarketRegime:
+  - pre-market MarketSnapshot `88aa0f65-0fb8-41fb-aee8-cb8bbdb33a6f`
+    - snapshot id `rt-s12-002:2024-05-31:09-25:selected-symbols`
+    - quality `partial`
+    - fingerprint `f59b3f131f253f120f8bae0cc25127b1b4aec5cc82932631d65eecb14ab3b5dc`
+  - pre-market MarketRegime `a8c2d82f-8db9-41ad-aec7-4c79f42c701f`
+    - regime id `rt-s12-002:2024-05-31:09-25:selected_symbol_resilient`
+    - quality `partial`
+  - post-close MarketSnapshot `9646ace9-a755-485d-89f4-4900602bde30`
+    - snapshot id `rt-s12-002:2024-05-31:17-30:selected-symbols`
+    - quality `partial`
+    - fingerprint `611772f990a6eb57b70ae633045dbd851a411c4cf8f4acbd8934eb8d44d60c3c`
+  - post-close MarketRegime `f9084b48-020a-4493-84a0-f2994e7dbccf`
+    - regime id `rt-s12-002:2024-05-31:17-30:selected_symbol_resilient`
+    - quality `partial`
+- RuleVersion:
+  - `8d15ae78-4abb-40ef-9a6e-184bb7289d0c`
+  - source candidate `af289b09-d9f1-44e1-8ce3-dfd87c84322d`
+  - lifecycle `in_review`
+  - fixed-set gate passed before mutation
+  - not published, because downstream backtest evidence could not be created
+
+Remaining blocker:
+
+- canonical `BacktestRun` cannot be inserted in the current DB:
+  - Alembic reports current/head `2026_06_20_0001`
+  - PostgreSQL type `backtest_run_status` is absent
+  - ORM maps `BacktestRun.status` to enum type `backtest_run_status`
+  - committed migration `2026_06_18_0010_stage6_backtest_run_foundation.py` creates `backtest_runs.status` as `String`, while current ORM expects the enum
+  - creating the enum manually would be an unapproved schema change, not an existing committed migration application
+- because `BacktestRun` is blocked, the following were not generated:
+  - `BacktestResult`
+  - `RuleApplicabilityProfile`
+  - `AuthorProfileVersion`
+  - `StrategyVersion` / published `Strategy`
+  - `DailyRuleSelection`
+  - `DailyStrategyInstance`
+  - `TradingDayPlan`
+  - `PostMarketReview`
+  - `OptimizationProposal`
+
+Readiness recheck matrix:
+
+| Evidence | Status | Notes |
+| --- | --- | --- |
+| selected article subset | READY | 5 existing current `article_analysis_v1` articles retained |
+| selected symbols | READY | `002104.SZ`, `603280.SH` derived from selected article titles and `stock_info` |
+| current reviewed RuleVersion | PARTIAL | RuleVersion exists and is `in_review`; not published because backtest evidence is blocked |
+| OHLCV 10-30 day coverage | READY | 20 rows per selected symbol |
+| DatasetSnapshot | READY | two ready snapshots with selected-symbol manifests and fingerprints |
+| pre/post MarketSnapshot | PARTIAL | exists with explicit selected-symbol-only partial provenance |
+| MarketRegime | PARTIAL | exists with selected-symbol-only partial provenance |
+| BacktestRun | BLOCKED | missing DB enum type `backtest_run_status` |
+| BacktestResult | BLOCKED | depends on BacktestRun |
+| RuleApplicabilityProfile | BLOCKED | depends on BacktestResult |
+| AuthorProfileVersion | BLOCKED | depends on applicability/backtest evidence |
+| StrategyVersion / published Strategy | BLOCKED | depends on published rule/profile/applicability/backtest evidence |
+| Daily pre-market chain | BLOCKED | depends on published strategy |
+| Post-close / proposal chain | BLOCKED | depends on daily plan and post-close review |
+
+Verification:
+
+- `python -m scripts.web_local env-check`: pass, redacted output only
+- `python -m cli.main db-check --config config/app.template.yaml`: pass, `DB OK: 1`
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
+- targeted backend tests:
+  - `python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`
+  - pass, `22 passed`
+- web typecheck:
+  - `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm typecheck`
+  - pass
+- web route test:
+  - `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm test -- src/app/route-config.test.tsx`
+  - pass, `12 passed`
+- `git diff --check`: pass
+
+Readiness decision:
+
+`STILL_BLOCKED`

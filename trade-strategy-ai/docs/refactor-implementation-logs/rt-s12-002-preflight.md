@@ -1,0 +1,490 @@
+# RT-S12-002 Preflight — Tooling, Config, Data, and E2E Readiness
+
+## 1. Entry verification
+
+- Preflight date: `2026-06-24`
+- Scope: `RT-S12-002` preflight only
+- Parent model requested by user: `5.4`
+- Stage 11 Gate: `ACCEPTED`
+- Stage 12 Bootstrap: `READY`
+- `RT-S12-001`: `ACCEPTED`
+- `RT-S12-002`: not started
+- `RT-S12-003`: not started
+- Stage 12 Gate: not started
+- Working tree before checks: clean
+- Production code: not modified
+- Browser E2E: not started
+- Live crawl / live backfill / live LLM / live browser E2E: not executed
+
+## 2. Config template readiness
+
+Config baseline used: `config/app.template.yaml`
+
+### 2.1 Contract summary
+
+- Required env vars in template baseline:
+  - `DATABASE_URL`
+  - `ADMIN_API_KEY`
+- Optional env vars present in template:
+  - `TGB_COOKIE`
+  - `DASHSCOPE_API_KEY`
+  - `KAIPAN_TOKEN`
+  - `KAIPAN_USER_ID`
+- Database URL placeholder:
+  - `database.url: "${DATABASE_URL}"`
+- API auth expectation:
+  - `api.auth.enabled: true`
+  - `api.auth.api_keys: ["${ADMIN_API_KEY}"]`
+- LLM expectation:
+  - `llm.provider: "qwen"`
+  - `llm.model: ["qwen-flash"]`
+  - `llm.url: "https://dashscope.aliyuncs.com/compatible-mode/v1"`
+  - `llm.api_key: "${DASHSCOPE_API_KEY}"`
+- Kaipan expectation:
+  - `kaipan.token: "${KAIPAN_TOKEN}"`
+  - `kaipan.user_id: "${KAIPAN_USER_ID}"`
+- Crawl cookie expectation:
+  - `crawl.auth.tgb.cn.cookie: "${TGB_COOKIE}"`
+- Trader expectation:
+  - template includes at least one enabled trader entry
+  - sample trader id: `trader_a`
+- Schedule / timezone expectation:
+  - `timezone: Asia/Shanghai`
+  - `schedule.pre_market_time: "09:25"`
+  - `schedule.after_close_time: "18:00"`
+- Output / storage expectation:
+  - `storage.output_dir: data/processed/phase0`
+  - `data.market_universe_snapshot_dir: data/market_universe/snapshots`
+  - `kaipan.data_dir: data/kaipan`
+
+### 2.2 Redacted local env status
+
+| Key | Status | Classification | Safe source note |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | set | set | `.env` parsed directly |
+| `ADMIN_API_KEY` | set | set | `.env` parsed directly |
+| `DASHSCOPE_API_KEY` | set | set | `.env` parsed directly |
+| `TGB_COOKIE` | set | set | `.env` parsed directly |
+| `KAIPAN_TOKEN` | set | set | `.env` parsed directly |
+| `KAIPAN_USER_ID` | set | set | `.env` parsed directly |
+
+### 2.3 Contract mismatches
+
+- Existing local tooling still hard-codes `config/app.yaml` in multiple places:
+  - `scripts/web_local.py`
+  - many `cli.main` command defaults
+  - several services and compatibility helpers
+- This does not change the formal Web input contract, but it does mean local execution is not yet aligned to `config/app.template.yaml` by default.
+- `.env` is not shell-source-safe in its current form because the cookie value contains raw semicolons; `source .env` splits the cookie into multiple shell commands.
+
+### 2.4 Safest local command pattern
+
+- Keep `config/app.template.yaml` as the baseline contract.
+- For local execution, prefer one of:
+  - export required env vars from a shell/direnv/IDE without `source .env`
+  - create an uncommitted `config/app.local.yaml` copied from `config/app.template.yaml`
+- Do not commit any local config file containing secrets.
+
+## 3. Tooling readiness
+
+### 3.1 Observed tooling state
+
+| Item | Result | Notes |
+| --- | --- | --- |
+| Python version | pass | `Python 3.13.10`, satisfies `>=3.11` |
+| Backend imports | pass | `fastapi`, `sqlalchemy`, `asyncpg`, `alembic`, `pytest` import |
+| `pytest` available | pass | import succeeded |
+| Node default | fail | default `node` is `v14.4.0` |
+| `pnpm` default | fail | requires Node `>=18.12` |
+| Node 18 path available | pass | `/Users/wanghui/.nvm/versions/node/v18.20.8/bin` exists |
+| Web dependencies installed | pass | `web/node_modules` exists |
+| `pnpm typecheck` under Node 18 | pass | completed successfully |
+| `pnpm test` under Node 18 | partial | command runs, suite currently contains failures |
+| `@playwright/test` in `web/package.json` | fail | not present |
+| Playwright Chromium readiness | fail | not checked further because Playwright web dependency is missing |
+| Backend/web start commands | partial | commands exist, but local launcher defaults to `config/app.yaml` |
+
+### 3.2 Exact command results
+
+- `python --version`
+  - result: `Python 3.13.10`
+- `python -m cli.main db-check --config config/app.template.yaml`
+  - not runnable by plain shell `source .env` because current `.env` formatting breaks shell loading
+  - database connectivity was verified separately by direct read-only DB connection
+- `python -m cli.main db-migrate --config config/app.template.yaml`
+  - not executed in preflight
+  - version table and migration head were checked read-only instead
+- `cd web && pnpm install`
+  - not executed; `node_modules` already exists
+- `cd web && pnpm typecheck`
+  - pass when executed with Node 18 in `PATH`
+- `cd web && pnpm test`
+  - command runs under Node 18, but suite currently has failures in legacy/non-formal test areas and date-sensitive tests
+- `cd web && pnpm exec playwright --version`
+  - not runnable because `@playwright/test` is not installed in `web/package.json`
+
+### 3.3 Tooling blockers for RT-S12-002
+
+- Browser E2E tooling is missing from the web workspace.
+- Default shell Node version is too old for `pnpm`.
+- Current `.env` cannot be safely shell-sourced for template-based CLI commands.
+
+## 4. Secret readiness, redacted
+
+| Capability | Ready? | Classification | Reason |
+| --- | --- | --- | --- |
+| Database access | yes | ready | `DATABASE_URL` set; read-only DB connection succeeded |
+| Admin/operator API access | yes | ready | `ADMIN_API_KEY` set; one admin user exists in DB |
+| Fresh LLM extraction | yes | available but not yet exercised | `DASHSCOPE_API_KEY` set |
+| Live article crawl | yes | optional | `TGB_COOKIE` set, but existing DB articles already available |
+| Live Kaipan fetch | yes | optional | `KAIPAN_TOKEN` and `KAIPAN_USER_ID` set |
+| Live market data fetch | yes | optional | template uses `akshare`; no secret required |
+
+### Live dependency classification
+
+- `TGB_COOKIE`
+  - optional for this preflight
+  - existing DB articles mean live crawl is not required to start evidence repair
+- `DASHSCOPE_API_KEY`
+  - effectively blocking for final canonical extraction evidence
+  - current DB has only 12 `article_analysis_v1` prompt runs and no downstream canonical rule/backtest/profile/strategy chain
+- `KAIPAN_TOKEN` / `KAIPAN_USER_ID`
+  - optional as credentials
+  - current formal `MarketSnapshot` evidence is missing, so RT-S12-002 will still need either deterministic snapshot seed/refresh or explicitly authorized live refresh later
+
+## 5. Database connectivity and migration readiness
+
+### 5.1 Connectivity
+
+- Read-only local PostgreSQL connection: succeeded
+- Database appears to be a local/dev database, not a protected production endpoint:
+  - local host in `DATABASE_URL`
+  - repo-local usage pattern
+  - simple dev credentials
+
+### 5.2 Migration readiness
+
+- `alembic_version.version_num`: `2026_06_20_0001`
+- Alembic script head discovered from migration directory: `2026_06_20_0001`
+- Conclusion: database schema appears to be at head
+
+### 5.3 Alembic execution caveat
+
+- Direct `alembic current` in the current Python 3.13 environment is flaky because importing the migration environment triggers heavier scientific/runtime imports.
+- This did not block the read-only version check because DB version table and migration head matched.
+
+### 5.4 Admin/operator readiness
+
+- `users` count: `1`
+- latest user role: `admin`
+- Conclusion: admin/operator access exists; no seed action is required for preflight
+
+## 6. Database-first canonical data readiness
+
+| Object | Current evidence | Classification |
+| --- | --- | --- |
+| users / admin user | `1`, admin present | sufficient for preflight |
+| articles | `131` | sufficient for preflight input pool |
+| article revisions | `131` | sufficient for preflight input pool |
+| article structures | `274`, all draft/partial | present but insufficient |
+| prompt runs | `274`, only `12` current `article_analysis_v1` | present but insufficient |
+| rule candidates | `495`, all extracted | present but insufficient |
+| rule versions | `14`, all `legacy_unknown`, none published | present but insufficient |
+| rule review states | only candidate `extracted`; no accepted formal review chain | present but insufficient |
+| backtest runs | `0` | missing |
+| backtest results | `0` | missing |
+| legacy backtest result runs | `14`, all `legacy_import` / unresolved | historical only |
+| applicability profiles | `0` | missing |
+| author profile versions | `0` | missing |
+| strategies | `0` | missing |
+| strategy versions | `0` | missing |
+| published strategy | `0` | missing |
+| daily rule selections | `0` | missing |
+| daily strategy instances | `0` | missing |
+| trading day plans | `0` | missing |
+| post-market reviews | `0` | missing |
+| optimization proposals | `0` | missing |
+| ohlcv bars | `84` rows, one trade date only | present but insufficient |
+| dataset snapshots | `1`, lifecycle `partial` | present but insufficient |
+| market snapshots | `0` | missing |
+| market snapshot sections | `0` | missing |
+| market snapshot items | `0` | missing |
+| market state / market regime | `0` | missing |
+| system runs / jobs | `8` job rows | sufficient for preflight diagnostics |
+
+## 7. LLM-derived artifact provenance review
+
+### 7.1 Current canonical evidence
+
+- `prompt_runs`
+  - total: `274`
+  - current canonical-looking runs:
+    - `prompt_name = article_analysis_v1`
+    - `prompt_version = article_analysis_v1`
+    - `schema_version = article_analysis_v1`
+    - `validation_state = valid`
+    - count: `12`
+- `article_structures`
+  - total: `274`
+  - revision binding present: `274`
+  - prompt run binding present: `274`
+  - all are still `lifecycle_state = draft`
+  - all are `quality_status = partial`
+
+### 7.2 Historical / pre-refactor evidence
+
+- `prompt_runs`
+  - `legacy_article_analysis` dominates:
+    - `legacy_unknown / v2 / valid`: `125`
+    - `legacy_unknown / v1 / valid`: `125`
+    - older variant rows: `12`
+- `rule_versions`
+  - total: `14`
+  - `schema_version = legacy_unknown`: `14`
+  - none published
+  - quality only `legacy_only` or `unresolved`
+- `backtest_result_runs`
+  - total: `14`
+  - latest rows classified `status = legacy_import`
+  - `dataset_snapshot_id = NULL`
+  - `strategy_version_id = NULL`
+
+### 7.3 Missing evidence
+
+Missing canonical downstream evidence for the frozen RT-S12-002 path:
+
+- formal reviewed `RuleVersion` chain based on current canonical prompt output
+- formal `BacktestRun`
+- formal `BacktestResult`
+- formal `RuleApplicabilityProfile`
+- formal `AuthorProfileVersion`
+- formal `Strategy` / `StrategyVersion`
+- formal `DailyRuleSelection`
+- formal `DailyStrategyInstance`
+- formal `TradingDayPlan`
+- formal `PostMarketReview`
+- formal `OptimizationProposal`
+
+### 7.4 Provenance conclusion
+
+- Current DB contains reusable canonical article input and a small amount of current prompt evidence.
+- Current DB does **not** contain a complete current-provenance chain for RT-S12-002 final pass evidence.
+- Legacy rows are usable as historical context only and must not be counted as final acceptance evidence.
+
+## 8. Existing article subset recommendation
+
+Fresh LLM evidence is required.
+
+Recommended initial subset: use a small representative set from existing `article_analysis_v1` articles, not the whole corpus.
+
+Suggested 5-article pool:
+
+1. `量化风格下的轮动行情该如何实战思考，上周总结以及下周应对思路看这里！`
+2. `教你短线模式之一字首开！淘县九年义务教育！`
+3. `教你恒宝股份短线逻辑全拆解！`
+4. `手把手教你如何看竞价~淘县九年义务教育~`
+5. `5.21号复盘！市场下跌早有征兆！退潮行情接下来如何应对！`
+
+Reason:
+
+- all are already in DB
+- all have current `article_analysis_v1` prompt runs with `validation_state = valid`
+- they cover:
+  - pattern/mode articles
+  - single-stock logic article
+  - auction/opening process article
+  - market-state / post-close style article
+
+Constraint:
+
+- final subset lock should happen only after confirming the selected symbols can be backed by deterministic OHLCV coverage and refreshed snapshot evidence
+
+## 9. OHLCV / DatasetSnapshot / MarketSnapshot readiness
+
+### 9.1 OHLCV
+
+- total `ohlcv_bars`: `84`
+- observed identity fields present in DB rows:
+  - `symbol`
+  - `source_symbol`
+  - `exchange`
+  - `asset_type`
+  - `frequency`
+  - `adjustment_policy`
+  - `source`
+  - `trade_date`
+  - `captured_at`
+  - `available_at`
+- coverage problem:
+  - only one trade date: `2026-04-20`
+  - each inspected symbol has `1` row
+- conclusion:
+  - insufficient for even a minimal `10–30` trading day backtest window
+
+### 9.2 DatasetSnapshot
+
+- total snapshots: `1`
+- latest snapshot:
+  - `dataset_type: ohlcv_partial`
+  - `lifecycle_state: partial`
+  - `trade_date/date_from/date_to: 2026-04-20`
+  - `symbol_manifest.count: 84`
+  - `ohlcv_manifest.row_count: 84`
+  - `ohlcv_manifest.trade_dates: ["2026-04-20"]`
+  - `content_fingerprint`: present
+  - `frozen_at`: present
+- conclusion:
+  - traceable but insufficient
+
+### 9.3 MarketSnapshot / MarketState
+
+- `market_snapshots`: `0`
+- `market_snapshot_sections`: `0`
+- `market_snapshot_items`: `0`
+- `market_regimes`: `0`
+- conclusion:
+  - missing for both pre-market and post-close frozen path steps
+
+### 9.4 Data conclusion
+
+- Current DB data is not sufficient for snapshot-bound RT-S12-002 execution.
+- Do not fetch or backfill during preflight.
+- Minimal repair should prefer deterministic/local canonical snapshot preparation over broad live backfill.
+
+## 10. Formal route readiness
+
+### 10.1 Verified formal route entries
+
+`web/src/app/route-config.tsx` contains the required formal routes:
+
+- `/research/add`
+- `/research/articles`
+- `/research/results`
+- `/rules/review`
+- `/rules/library`
+- `/rules/backtests`
+- `/rules/results`
+- `/authors`
+- `/strategies`
+- `/strategies/candidates`
+- `/daily/pre-market`
+- `/daily/after-close`
+- `/system/runs`
+- `/system/data`
+
+Additional evidence:
+
+- product journey tests encode the formal chain:
+  - `/research/articles -> /rules/review -> /rules/backtests -> /authors -> /strategies -> /daily/pre-market -> /daily/after-close`
+
+### 10.2 Retired route status
+
+- retired routes remain registered only as compatibility redirects in route config
+- broad reference scan still finds retired paths in:
+  - legacy page source files
+  - compatibility/admin surfaces
+  - tests
+- preflight conclusion:
+  - no frozen RT-S12-002 step requires a retired route as the ordinary-user formal entry
+  - retired-route references remain cleanup/hardening residue, not the formal E2E entry path
+
+## 11. RT-S12-002 step-by-step readiness matrix
+
+| Step | Formal UI/API entry | Required DB object | Current DB evidence | Provenance class | Required token | Required snapshot / version evidence | Status | Missing item | Minimal repair action |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1. 文章导入 | `/research/add`, `/research/articles` | `blog_articles`, `article_revisions` | `131` articles, `131` revisions | current input pool | no | article revision binding exists | PARTIAL | formal import run evidence for chosen subset | reuse existing DB articles; no new crawl required |
+| 2. 提取规则 | `/research/results` | `prompt_runs`, `article_structures`, `rule_candidates` | `12` current `article_analysis_v1`, `274` structures, `495` candidates | partial current + mostly historical | yes if regenerating subset | prompt run id/version/schema/model/input hash/validation | PARTIAL | downstream-ready current subset evidence | regenerate only `3–5` existing articles through current runtime if needed |
+| 3. 审核规则 | `/rules/review`, `/rules/library` | `rule_versions` | `14` rule versions, all `legacy_unknown`, none published | historical / legacy only | no | source candidate linkage, canonical schema/version | BLOCKED | current formal reviewed rule versions | create reviewed canonical rule evidence from subset |
+| 4. 回测 | `/rules/backtests`, `/rules/results` | `backtest_runs`, `backtest_results`, `dataset_snapshots` | `0` / `0`; only one partial dataset snapshot | missing | no | immutable dataset snapshot + fingerprint | BLOCKED | backtest runs/results and enough OHLCV | seed/import minimal deterministic OHLCV window and create canonical snapshot |
+| 5. 生成规则适用性 | `/rules/results` | `rule_applicability_profiles` | `0` | missing | no | bound backtest + dataset + market-state evidence | BLOCKED | applicability profiles | generate after canonical backtest exists |
+| 6. 生成作者画像 | `/authors` | `author_profile_versions` | `0` | missing | yes | prompt run + rule/applicability/backtest bindings | BLOCKED | author profile versions | create method/rule/validated profile drafts from repaired subset |
+| 7. 发布策略 | `/strategies`, `/strategies/candidates` | `strategies`, `strategy_versions` | `0` / `0` | missing | no | strategy version evidence + review/publish trace | BLOCKED | strategy publication evidence | create draft then publish canonical strategy |
+| 8. 生成盘前计划 | `/daily/pre-market` | `daily_rule_selections`, `daily_strategy_instances`, `trading_day_plans`, `market_snapshots`, `market_regimes` | all `0` | missing | no | pre-market snapshot + market state + current strategy | BLOCKED | pre-market snapshot/state and daily objects | create/refresh market snapshot + market regime + daily plan chain |
+| 9. 完成盘后复盘 | `/daily/after-close` | `post_market_reviews`, post-close `market_snapshots`, `market_regimes` | `0` | missing | conditional | post-close snapshot + actuals + traceability | BLOCKED | post-close review evidence | create post-close snapshot/state and review |
+| 10. 生成优化建议 | `/daily/after-close` | `optimization_proposals` | `0` | missing | conditional | linked post-market review + proposal evidence | BLOCKED | proposal evidence | generate proposal lane after post-close review |
+
+## 12. Missing items and minimal repair actions
+
+1. Stabilize local execution baseline
+   - use Node 18 when running `pnpm`
+   - do not `source .env` directly in shell
+   - keep `config/app.template.yaml` as contract baseline
+   - prefer uncommitted `config/app.local.yaml` or explicit env injection
+2. Add browser E2E tooling during RT-S12-002 implementation
+   - install `@playwright/test`
+   - install Chromium
+3. Reuse existing DB articles; do not crawl the corpus again
+4. Select a `3–5` article subset from existing current `article_analysis_v1` runs
+5. Regenerate only the missing current formal evidence for that subset
+   - current prompt/runtime provenance if needed
+   - current rule review evidence
+6. Prepare minimal deterministic OHLCV coverage
+   - enough for selected symbols and `10–30` trading days
+   - no broad backfill
+7. Create or refresh canonical `DatasetSnapshot`
+8. Create or refresh canonical pre-market and post-close `MarketSnapshot`
+9. Create or refresh canonical `MarketRegime` rows
+10. Generate canonical:
+   - `BacktestRun`
+   - `BacktestResult`
+   - `RuleApplicabilityProfile`
+   - `AuthorProfileVersion`
+   - `StrategyVersion` / published `Strategy`
+   - `DailyRuleSelection`
+   - `DailyStrategyInstance`
+   - `TradingDayPlan`
+   - `PostMarketReview`
+   - `OptimizationProposal`
+
+## 13. Can RT-S12-002 start?
+
+`BLOCKED`
+
+Reason:
+
+- browser E2E tooling is not ready in the web workspace
+- current DB has no canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence
+- OHLCV coverage is only one trade date
+- canonical `MarketSnapshot` / `MarketRegime` evidence is completely missing
+- existing legacy rule/backtest rows cannot be counted as final RT-S12-002 pass evidence
+
+## 14. Exact next actions before RT-S12-002 implementation
+
+1. Fix local runtime commands
+
+```bash
+cd trade-strategy-ai/web
+PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck
+PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test
+```
+
+2. Use explicit env injection or a local uncommitted config file instead of `source .env`
+
+```bash
+cd trade-strategy-ai
+../.venv/bin/python -m cli.main db-check --config config/app.template.yaml
+```
+
+This command should be run only after env vars are injected safely or a local uncommitted config copy is prepared.
+
+3. During RT-S12-002 implementation, add missing browser tooling
+
+```bash
+cd trade-strategy-ai/web
+PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm add -D @playwright/test
+PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm exec playwright install chromium
+```
+
+4. Repair only the minimum required data/evidence set
+
+- choose `3–5` existing current `article_analysis_v1` articles
+- generate current formal rule review evidence
+- prepare minimal deterministic OHLCV window and canonical snapshot/state evidence
+- then generate the canonical downstream chain through proposal generation
+
+## Record summary
+
+- preflight status: `BLOCKED`
+- config baseline used: `config/app.template.yaml`
+- database-first decision: reuse existing DB articles; do not recrawl or bulk-regenerate
+- next allowed action: repair tooling and minimum canonical evidence set before RT-S12-002 implementation

@@ -3,12 +3,67 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`RT-S12-001 旧入口退役`
-- 当前状态：`RT-S12-001 ACCEPTED`
-- 当前 Task：`RT-S12-001` route-level retirement and ordinary-user terminology blocker repair accepted；ordinary users no longer see legacy developer-tool main entries as normal workflow entries
-- 下一可执行项：等待用户明确授权后再进入后续 Stage 12 Task；不得自动启动
-  `RT-S12-002`、`RT-S12-003`、Stage 12 Gate、E2E 或用户文档生成
+- 当前活动：`RT-S12-002 preflight`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight BLOCKED`
+- 当前 Task：`RT-S12-002` 端到端验收实现仍未开始；preflight only，ordinary-user formal route path remains frozen and no production code or business state was changed
+- 下一可执行项：先修复 preflight blocker，再等待用户明确授权后进入 `RT-S12-002` 实现；不得自动启动
+  `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
+
+## 2026-06-24 RT-S12-002 Preflight — Tooling / Config / Data / Formal Route Readiness
+
+### Status
+
+`BLOCKED`
+
+### Scope
+
+- Preflight only; no RT-S12-002 implementation started.
+- No production code changes.
+- No browser E2E.
+- No live crawl, live backfill, live LLM run, or formal business-state mutation.
+
+### Result summary
+
+- Config baseline used: `config/app.template.yaml`
+- Database-first decision: reuse existing `blog_articles` / `article_revisions`; do not recrawl or bulk-regenerate corpus
+- Tooling readiness:
+  - backend imports available
+  - local DB reachable
+  - default shell Node is too old for `pnpm`
+  - `pnpm typecheck` passes with Node 18 path
+  - `pnpm test` runs with Node 18 path but current suite has failures
+  - `@playwright/test` is missing from `web/package.json`
+- Redacted secret readiness:
+  - `DATABASE_URL` / `ADMIN_API_KEY` / `DASHSCOPE_API_KEY` / `TGB_COOKIE` /
+    `KAIPAN_TOKEN` / `KAIPAN_USER_ID`: set
+  - `.env` cannot be safely shell-sourced because the cookie value contains raw
+    semicolons
+- Canonical data readiness:
+  - articles/revisions present
+  - only `12` current `article_analysis_v1` prompt runs
+  - `rule_versions` are legacy-only / unresolved
+  - no canonical backtest/applicability/profile/strategy/daily/post-close/proposal chain
+  - OHLCV only has `84` rows for one trade date
+  - one `dataset_snapshot` exists but lifecycle is `partial`
+  - `market_snapshots` / `market_regimes`: `0`
+- Formal route readiness:
+  - required formal routes exist in `web/src/app/route-config.tsx`
+  - frozen ordinary-user path does not require retired routes
+- Missing items:
+  - browser E2E tooling
+  - minimal canonical rule/backtest/profile/strategy/daily evidence chain
+  - deterministic OHLCV window and snapshot/state evidence
+
+### Detailed record
+
+- Detailed report: `docs/refactor-implementation-logs/rt-s12-002-preflight.md`
+
+### Next allowed action
+
+- Fix preflight blockers first.
+- Do not start RT-S12-002 implementation until the blocker list is addressed and
+  the user authorizes implementation.
 
 ## 2026-06-23 RT-S12-001 Blocker Repair — Ordinary-user terminology cleanup
 

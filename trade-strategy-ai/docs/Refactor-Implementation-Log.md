@@ -22,15 +22,27 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；等待后续 Stage 12 授权`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight BLOCKED；实现仍未开始`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无；`RT-S12-001` 已接受。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：`RT-S12-002 preflight`；阻塞原因为 browser E2E tooling 缺失、default Node 版本不满足 `pnpm`、`.env` 不能安全 shell source、canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 缺失、OHLCV 与 MarketSnapshot/MarketRegime 数据不足。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：等待用户明确授权后再进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
+- 下一步：先处理 `RT-S12-002` preflight blocker，再等待用户明确授权后进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-002 Preflight`
+- 状态: `阻塞`
+- 修改范围: `docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 以 `config/app.template.yaml` 为唯一 config baseline；database-first 复用现有文章；legacy LLM/backtest 结果只计为 historical evidence，不计为最终 E2E pass evidence
+- 数据库迁移: 无
+- 兼容处理: 无生产代码改动；仅记录 `config/app.yaml` hard-coded local tooling mismatch
+- 已运行测试: `python --version`、backend import check、Node/Pnpm version check、`pnpm typecheck`、`pnpm test`、read-only DB connectivity / counts / provenance / route scans
+- 测试结果: `pnpm typecheck` 通过；`pnpm test` 可运行但存在失败；DB 可连且 `alembic_version` 与 migration head 一致；preflight 结论为 `BLOCKED`
+- 未完成项: browser E2E tooling、minimal canonical rule/backtest/profile/strategy/daily/post-close/proposal chain、sufficient OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime evidence
+- 已知风险: `.env` 当前不能安全 shell source；default Node 版本过低；当前 DB 几乎没有 Stage 6–10 canonical evidence
+- 验收结论: `RT-S12-002` 实现前置条件未满足，详见 `docs/refactor-implementation-logs/rt-s12-002-preflight.md`
 
 - Task ID: `N/A`，formal page layout cleanup with sticky next action
 - 状态: `已完成`

@@ -145,7 +145,9 @@ def test_env_check_reads_dotenv_without_exposing_secret_values(
     project_root = tmp_path / "trade-strategy-ai"
     project_root.mkdir()
     (project_root / ".env").write_text(
-        "TGB_COOKIE=foo=1;bar=2\nDATABASE_URL=postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai\nKAIPAN_USER_ID=3807176\n",
+        "TGB_COOKIE=fake_cookie_a=1;fake_cookie_b=2\n"
+        "DATABASE_URL=postgresql+asyncpg://example:example@example.invalid:5432/example\n"
+        "KAIPAN_USER_ID=fake-user-id\n",
         encoding="utf-8",
     )
 
@@ -156,7 +158,7 @@ def test_env_check_reads_dotenv_without_exposing_secret_values(
     output = capsys.readouterr().out
 
     assert "TGB_COOKIE: 已设置(已脱敏)" in output
-    assert "foo=1;bar=2" not in output
+    assert "fake_cookie_a=1;fake_cookie_b=2" not in output
     assert "KAIPAN_USER_ID: 已设置(已脱敏)" in output
-    assert "3807176" not in output
+    assert "fake-user-id" not in output
     assert "NODE18_BIN" in output

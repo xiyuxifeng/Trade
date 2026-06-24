@@ -437,9 +437,9 @@ Additional evidence:
    - do not `source .env` directly in shell
    - keep `config/app.template.yaml` as contract baseline
    - prefer uncommitted `config/app.local.yaml` or explicit env injection
-2. Add browser E2E tooling during RT-S12-002 implementation
-   - install `@playwright/test`
-   - install Chromium
+2. Prepare browser runtime only when the later browser E2E task is explicitly authorized
+   - `@playwright/test` and package scripts are present
+   - Chromium install remains deferred; run `pnpm e2e:install` only before the authorized browser E2E task
 3. Reuse existing DB articles; do not crawl the corpus again
 4. Select a `3–5` article subset from existing current `article_analysis_v1` runs
 5. Regenerate only the missing current formal evidence for that subset

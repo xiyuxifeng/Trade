@@ -10,6 +10,65 @@
   `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
 
+## 2026-06-24 RT-S12-002 Readiness Repair — 5.5 Review / Bounded Repair
+
+### Status
+
+`READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
+
+### Scope
+
+- Review only; no RT-S12-002 browser E2E acceptance started.
+- No RT-S12-003 user documentation started.
+- No Stage 12 Gate started.
+- No data/evidence repair, live crawl, live market backfill, live LLM extraction, or formal business-state mutation executed.
+
+### Entry verification
+
+- Stage 11 Gate: `ACCEPTED`.
+- Stage 12 Bootstrap: `READY`.
+- `RT-S12-001`: `ACCEPTED`.
+- `RT-S12-002`: implementation not started; readiness/preflight only.
+- `RT-S12-003`: not started.
+- Stage 12 Gate: not started.
+- Prior RT-S12-002 Preflight: `BLOCKED`.
+- Readiness Repair claim: `PARTIAL_READY`.
+- Review-start HEAD: `e2625af RT-S12-002 Readiness Repair`; repair commit is present.
+- Review-start working tree: clean.
+
+### Findings and bounded repairs
+
+- Found one tooling/documentation consistency defect: `web/package.json` contained `@playwright/test` but lacked the documented `e2e`, `e2e:headed`, and `e2e:install` scripts.
+- Bounded repair:
+  - added the three Playwright package scripts to `web/package.json`
+  - corrected `docs/refactor-implementation-logs/rt-s12-002-preflight.md` so remaining browser work is Chromium install only when the later browser E2E task is explicitly authorized
+  - replaced new env-check test fixture values with clearly fake/example values to keep changed-files secret scan classification clean
+- No unrelated files were modified.
+
+### Verification
+
+- `python -m pytest tests/unit/scripts/test_web_local.py -q`: `4 passed`.
+- `python -m scripts.web_local env-check`: pass; printed only set/unset/source with sensitive values redacted.
+- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck`: pass.
+- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/app/route-config.test.tsx`: `12 passed`.
+- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm exec playwright --version`: `Version 1.61.1`.
+- `git diff --check`: pass.
+- Changed-files secret scan:
+  - hits are variable names, redacted labels, dependency names/integrities, fake/example test fixtures, or pre-existing local helper parameter names
+  - no committed local config file and no real secret value found
+
+### Residual blockers
+
+- Canonical downstream evidence chain remains missing.
+- OHLCV still covers only one trade date.
+- `DatasetSnapshot` remains `partial`.
+- `MarketSnapshot` and `MarketRegime` evidence remain missing.
+- Legacy rule/backtest rows must still not be counted as final RT-S12-002 evidence.
+
+### Decision
+
+`READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
+
 ## 2026-06-24 RT-S12-002 Readiness Repair — Tooling / Runtime Baseline / Data Recheck
 
 ### Status

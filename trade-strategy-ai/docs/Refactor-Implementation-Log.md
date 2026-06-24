@@ -32,6 +32,18 @@
 
 ## 最近实施记录
 
+- Task ID: `RT-S12-002 Readiness Repair 5.5 Review`
+- 状态: `进行中`
+- 修改范围: `web/package.json`、`tests/unit/scripts/test_web_local.py`、`docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 仅审查并修复 5.4 readiness repair 范围内缺口；不启动 RT-S12-002 browser E2E、RT-S12-003、Stage 12 Gate 或数据/evidence repair
+- 数据库迁移: 无
+- 兼容处理: 补齐已记录但实际缺失的 Playwright package scripts；Chromium 安装仍 deferred 到后续显式授权的 browser E2E task
+- 已运行测试: `python -m pytest tests/unit/scripts/test_web_local.py -q`、`python -m scripts.web_local env-check`、`pnpm typecheck`（Node 18 PATH）、`pnpm test -- src/app/route-config.test.tsx`（Node 18 PATH）、`pnpm exec playwright --version`（Node 18 PATH）、`git diff --check`、changed-files secret scan
+- 测试结果: helper 单测 `4 passed`；env-check 仅输出脱敏 set/source；frontend typecheck 通过；route-config test `12 passed`；Playwright version `1.61.1`；`git diff --check` 通过；secret scan 未发现真实 secret
+- 未完成项: minimal canonical rule/backtest/applicability/profile/strategy/daily/post-close/proposal chain；sufficient OHLCV / DatasetSnapshot / MarketSnapshot / MarketRegime evidence
+- 已知风险: `RT-S12-002` final acceptance 仍需单独 Minimal Canonical Evidence Repair；legacy rows 不能计入最终证据
+- 验收结论: `READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
+
 - Task ID: `RT-S12-002 Readiness Repair`
 - 状态: `进行中`
 - 修改范围: `scripts/web_local.py`、`tests/unit/scripts/test_web_local.py`、`web/package.json`、`web/pnpm-lock.yaml`、`web/playwright.config.ts`、`docs/refactor-implementation-logs/stage-12.md`、`docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/Refactor-Implementation-Log.md`

@@ -1,5 +1,29 @@
 # RT-S12-002 Preflight — Tooling, Config, Data, and E2E Readiness
 
+## 0. 2026-06-24 readiness repair result
+
+- Updated preflight status: `PARTIAL_READY`
+- Scope remained bounded to readiness repair only; `RT-S12-002` implementation still did not start
+- Fixed blockers:
+  - browser E2E tooling is now present in `web`
+  - local helper now forces Node 18 PATH when available
+  - local helper now provides `python -m scripts.web_local env-check` so `.env` no longer needs to be shell-sourced
+- Remaining blockers:
+  - no current formal reviewed canonical downstream evidence chain for the selected article subset
+  - OHLCV still covers only one trade date; current `DatasetSnapshot` remains `partial`
+  - `MarketSnapshot` / `MarketRegime` evidence remains missing
+  - no truthful offline local seed payloads were available to repair those data blockers without live provider / LLM execution
+
+Selected article subset for future RT-S12-002 implementation:
+
+| Article ID | Revision ID | PromptRun ID | Title | Current candidate count |
+| --- | --- | --- | --- | --- |
+| `be0d68bd-8fc3-445c-8510-8b01a43185d6` | `7fde0824-b12c-56b5-be39-b4d45c91c49b` | `0e71cd75-8f45-4084-a7e7-beddedebefeb` | `量化风格下的轮动行情该如何实战思考，上周总结以及下周应对思路看这里！` | `1` |
+| `fb673d83-bfb7-4a88-a804-c60ad2f8d8a2` | `b351d6e2-c780-5a26-b607-026182a60db4` | `684cc061-7d23-49cf-b83c-b1b8e4fb3cea` | `教你短线模式之一字首开！淘县九年义务教育！` | `1` |
+| `8856f8f8-2441-492a-9292-981f0b3e1672` | `2f2589a2-2689-5b66-a6f1-cb687e0abcc1` | `cf2757bd-4a08-4435-8b6d-0f476e776159` | `教你恒宝股份短线逻辑全拆解！` | `1` |
+| `84558067-1ba1-4248-9700-fd4225be8593` | `b64a3c51-bf32-562c-8a86-849eac28ad72` | `b5289dd7-8a5e-4d89-9c83-7555f8cc45a5` | `南方路机，短线逻辑全拆解！` | `1` |
+| `fc461ca7-ff28-4c81-ba58-e4bc69ec8461` | `9dd9e1cd-62ab-5708-8d9d-ca9bad93c739` | `651a7bc9-86b8-4f30-b7a5-e1e82bb793cc` | `教你什么是短线跨年龙模式~淘县九年义务教育！` | `1` |
+
 ## 1. Entry verification
 
 - Preflight date: `2026-06-24`
@@ -12,7 +36,7 @@
 - `RT-S12-003`: not started
 - Stage 12 Gate: not started
 - Working tree before checks: clean
-- Production code: not modified
+- Production code: modified only for bounded readiness repair tooling/runtime helpers
 - Browser E2E: not started
 - Live crawl / live backfill / live LLM / live browser E2E: not executed
 
@@ -71,11 +95,10 @@ Config baseline used: `config/app.template.yaml`
 ### 2.3 Contract mismatches
 
 - Existing local tooling still hard-codes `config/app.yaml` in multiple places:
-  - `scripts/web_local.py`
   - many `cli.main` command defaults
   - several services and compatibility helpers
-- This does not change the formal Web input contract, but it does mean local execution is not yet aligned to `config/app.template.yaml` by default.
-- `.env` is not shell-source-safe in its current form because the cookie value contains raw semicolons; `source .env` splits the cookie into multiple shell commands.
+- `scripts/web_local.py` is now aligned to `config/app.template.yaml` for local migrate/worker helpers, but broader CLI/service defaults still point to `config/app.yaml`.
+- `.env` is still not shell-source-safe in raw shell form because the cookie value contains raw semicolons, but `python -m scripts.web_local env-check` now parses it safely without `source .env`.
 
 ### 2.4 Safest local command pattern
 
@@ -95,22 +118,24 @@ Config baseline used: `config/app.template.yaml`
 | Backend imports | pass | `fastapi`, `sqlalchemy`, `asyncpg`, `alembic`, `pytest` import |
 | `pytest` available | pass | import succeeded |
 | Node default | fail | default `node` is `v14.4.0` |
-| `pnpm` default | fail | requires Node `>=18.12` |
-| Node 18 path available | pass | `/Users/wanghui/.nvm/versions/node/v18.20.8/bin` exists |
+| `pnpm` default | fail | still requires Node `>=18.12` when shell PATH is untouched |
+| Node 18 path available | pass | local Node 18 bin directory exists |
 | Web dependencies installed | pass | `web/node_modules` exists |
 | `pnpm typecheck` under Node 18 | pass | completed successfully |
-| `pnpm test` under Node 18 | partial | command runs, suite currently contains failures |
-| `@playwright/test` in `web/package.json` | fail | not present |
-| Playwright Chromium readiness | fail | not checked further because Playwright web dependency is missing |
-| Backend/web start commands | partial | commands exist, but local launcher defaults to `config/app.yaml` |
+| frontend relevant test under Node 18 | pass | `src/app/route-config.test.tsx` passed |
+| `pnpm test` under Node 18 | partial | broader suite still has unrelated failures outside this readiness repair scope |
+| `@playwright/test` in `web/package.json` | pass | added as devDependency |
+| `pnpm exec playwright --version` | pass | `Version 1.61.1` |
+| Playwright Chromium readiness | partial | install command documented as `pnpm e2e:install`; browser binary not installed in this task |
+| Backend/web start commands | pass | local launcher now prefers Node 18 and uses `config/app.template.yaml` for migrate/worker helpers |
 
 ### 3.2 Exact command results
 
 - `python --version`
   - result: `Python 3.13.10`
-- `python -m cli.main db-check --config config/app.template.yaml`
-  - not runnable by plain shell `source .env` because current `.env` formatting breaks shell loading
-  - database connectivity was verified separately by direct read-only DB connection
+- `python -m scripts.web_local env-check`
+  - pass
+  - `.env` parsed safely without shell-sourcing; all sensitive values remained redacted
 - `python -m cli.main db-migrate --config config/app.template.yaml`
   - not executed in preflight
   - version table and migration head were checked read-only instead
@@ -121,13 +146,15 @@ Config baseline used: `config/app.template.yaml`
 - `cd web && pnpm test`
   - command runs under Node 18, but suite currently has failures in legacy/non-formal test areas and date-sensitive tests
 - `cd web && pnpm exec playwright --version`
-  - not runnable because `@playwright/test` is not installed in `web/package.json`
+  - pass
+  - result: `Version 1.61.1`
 
 ### 3.3 Tooling blockers for RT-S12-002
 
-- Browser E2E tooling is missing from the web workspace.
-- Default shell Node version is too old for `pnpm`.
-- Current `.env` cannot be safely shell-sourced for template-based CLI commands.
+- No tooling blocker remains for future RT-S12-002 implementation, provided local runs use:
+  - `python -m scripts.web_local env-check` for redacted env validation
+  - Node 18 PATH or the updated `scripts.web_local.py` helper for frontend commands
+  - `pnpm e2e:install` before the later browser E2E task if Chromium is not yet installed
 
 ## 4. Secret readiness, redacted
 
@@ -442,7 +469,7 @@ Additional evidence:
 
 Reason:
 
-- browser E2E tooling is not ready in the web workspace
+- browser E2E tooling is ready in the web workspace, but Chromium install is still deferred to the later browser task
 - current DB has no canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence
 - OHLCV coverage is only one trade date
 - canonical `MarketSnapshot` / `MarketRegime` evidence is completely missing
@@ -454,8 +481,8 @@ Reason:
 
 ```bash
 cd trade-strategy-ai/web
-PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck
-PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test
+pnpm typecheck  # run with Node 18 PATH
+pnpm test       # run with Node 18 PATH
 ```
 
 2. Use explicit env injection or a local uncommitted config file instead of `source .env`
@@ -467,12 +494,11 @@ cd trade-strategy-ai
 
 This command should be run only after env vars are injected safely or a local uncommitted config copy is prepared.
 
-3. During RT-S12-002 implementation, add missing browser tooling
+3. Before the later browser E2E task, install Chromium if the local browser binary is absent
 
 ```bash
 cd trade-strategy-ai/web
-PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm add -D @playwright/test
-PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm exec playwright install chromium
+pnpm e2e:install  # run with Node 18 PATH
 ```
 
 4. Repair only the minimum required data/evidence set

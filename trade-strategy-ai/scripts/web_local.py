@@ -12,6 +12,8 @@ import typer
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEB_DIST = PROJECT_ROOT / "web" / "dist"
+DEFAULT_CONFIG_PATH = "config/app.template.yaml"
+DEFAULT_NODE18_BIN = Path("/Users/wanghui/.nvm/versions/node/v18.20.8/bin")
 
 _CONFIG_SUMMARY_KEYS = (
     "DATABASE_URL",
@@ -67,15 +69,37 @@ def _local_env(*, web_dist: Path | None = None, emit_summary: bool = False) -> d
     if web_dist is not None:
         env["WEB_STATIC_DIR"] = str(web_dist)
         sources["WEB_STATIC_DIR"] = "脚本生成"
+    env, node18_source = _with_preferred_node18_path(env)
+    if node18_source is not None:
+        sources["NODE18_BIN"] = node18_source
     if emit_summary:
         _print_config_summary(env=env, sources=sources)
     return env
 
 
+def _node18_bin_dir() -> Path | None:
+    """返回可用的 Node 18 目录。"""
+    if DEFAULT_NODE18_BIN.exists():
+        return DEFAULT_NODE18_BIN
+    return None
+
+
+def _with_preferred_node18_path(env: dict[str, str]) -> tuple[dict[str, str], str | None]:
+    """把 Node 18 目录前置到 PATH，避免 shell 默认 Node 过旧。"""
+    node18_dir = _node18_bin_dir()
+    if node18_dir is None:
+        return env, None
+    current_entries = [entry for entry in env.get("PATH", "").split(os.pathsep) if entry]
+    node18_entry = str(node18_dir)
+    normalized_entries = [entry for entry in current_entries if entry != node18_entry]
+    env["PATH"] = os.pathsep.join([node18_entry, *normalized_entries]) if normalized_entries else node18_entry
+    return env, node18_entry
+
+
 def _is_sensitive_config_key(key: str) -> bool:
     """判断某个配置项是否属于敏感信息。"""
     upper_key = key.upper()
-    return any(token in upper_key for token in ("KEY", "TOKEN", "SECRET", "COOKIE", "PASSWORD", "WEBHOOK", "URL"))
+    return any(token in upper_key for token in ("KEY", "TOKEN", "SECRET", "COOKIE", "PASSWORD", "WEBHOOK", "URL", "USER_ID"))
 
 
 def _format_config_value(key: str, value: str | None) -> str:
@@ -97,6 +121,8 @@ def _print_config_summary(*, env: dict[str, str], sources: dict[str, str]) -> No
         value = env.get(key)
         source = sources.get(key, "未设置")
         typer.echo(f"  - {key}: {_format_config_value(key, value)}（来源: {source}）")
+    if "NODE18_BIN" in sources:
+        typer.echo(f"  - NODE18_BIN: {sources['NODE18_BIN']}（来源: 预置 Node 18 PATH）")
     if "WEB_STATIC_DIR" in env:
         typer.echo(f"  - WEB_STATIC_DIR: {env['WEB_STATIC_DIR']}（来源: {sources.get('WEB_STATIC_DIR', '脚本生成')}）")
 
@@ -132,7 +158,7 @@ def _api_command() -> tuple[str, ...]:
 
 def _worker_command() -> tuple[str, ...]:
     """返回 Worker 启动命令。"""
-    return (sys.executable, "-m", "cli.main", "job-worker-start", "--config", "config/app.yaml")
+    return (sys.executable, "-m", "cli.main", "job-worker-start", "--config", DEFAULT_CONFIG_PATH)
 
 
 def _get_pid_dir() -> Path:
@@ -224,7 +250,13 @@ def build() -> None:
 @app.command("migrate")
 def migrate() -> None:
     """执行数据库迁移。"""
-    _run_command((sys.executable, "-m", "cli.main", "db-migrate", "--config", "config/app.yaml"), cwd=PROJECT_ROOT, env=_local_env(emit_summary=True))
+    _run_command((sys.executable, "-m", "cli.main", "db-migrate", "--config", DEFAULT_CONFIG_PATH), cwd=PROJECT_ROOT, env=_local_env(emit_summary=True))
+
+
+@app.command("env-check")
+def env_check() -> None:
+    """输出脱敏的本机环境摘要，避免手工 `source .env`。"""
+    _local_env(emit_summary=True)
 
 
 @app.command("seed-admin")

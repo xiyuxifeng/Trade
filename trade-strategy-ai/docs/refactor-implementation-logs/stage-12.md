@@ -4,11 +4,74 @@
 
 - Stage：`Stage 12 旧入口退役与最终交付`
 - 当前活动：`RT-S12-002 preflight`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight BLOCKED`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight PARTIAL_READY`
 - 当前 Task：`RT-S12-002` 端到端验收实现仍未开始；preflight only，ordinary-user formal route path remains frozen and no production code or business state was changed
 - 下一可执行项：先修复 preflight blocker，再等待用户明确授权后进入 `RT-S12-002` 实现；不得自动启动
   `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
+
+## 2026-06-24 RT-S12-002 Readiness Repair — Tooling / Runtime Baseline / Data Recheck
+
+### Status
+
+`PARTIAL_READY`
+
+### Scope
+
+- Bounded readiness repair only; no RT-S12-002 browser E2E acceptance started.
+- No RT-S12-003 user documentation started.
+- No Stage 12 Gate started.
+- No formal business-state mutation, live crawl, live LLM generation, or broad market-data backfill executed.
+
+### Repairs completed
+
+- Tooling / browser baseline:
+  - added `@playwright/test` to `web/package.json`
+  - added `web/playwright.config.ts`
+  - added `pnpm e2e` / `pnpm e2e:headed` / `pnpm e2e:install`
+  - verified `pnpm exec playwright --version` -> `1.61.1`
+- Local runtime baseline:
+  - `scripts/web_local.py` now prefers the configured local Node 18 bin directory when available
+  - `scripts/web_local.py` now uses `config/app.template.yaml` for local migrate/worker helpers
+  - added `python -m scripts.web_local env-check` to parse `.env` safely without shell-sourcing and to print only redacted values
+- Working-tree classification:
+  - only bounded readiness-repair files changed in this session
+  - no unrelated repo files were modified
+
+### Selected future E2E article subset
+
+- `be0d68bd-8fc3-445c-8510-8b01a43185d6` — `量化风格下的轮动行情该如何实战思考，上周总结以及下周应对思路看这里！`
+- `fb673d83-bfb7-4a88-a804-c60ad2f8d8a2` — `教你短线模式之一字首开！淘县九年义务教育！`
+- `8856f8f8-2441-492a-9292-981f0b3e1672` — `教你恒宝股份短线逻辑全拆解！`
+- `84558067-1ba1-4248-9700-fd4225be8593` — `南方路机，短线逻辑全拆解！`
+- `fc461ca7-ff28-4c81-ba58-e4bc69ec8461` — `教你什么是短线跨年龙模式~淘县九年义务教育！`
+
+All five already have one current `article_analysis_v1` prompt run and one candidate each; none yet has current formal reviewed downstream evidence.
+
+### Remaining blockers after repair
+
+- Canonical downstream evidence remains missing:
+  - `rule_versions` are still legacy-only / unresolved
+  - `backtest_runs` / `backtest_results` / `rule_applicability_profiles` / `author_profile_versions` / `strategy_versions` / `daily_rule_selections` / `post_market_reviews` / `optimization_proposals` are still `0`
+- Deterministic market data remains insufficient:
+  - `ohlcv_bars` still cover only one trade date (`2026-04-20`)
+  - the only `dataset_snapshot` is still `partial`
+  - `market_snapshots` / `market_regimes` are still `0`
+- No truthful local seed files were available to repair those blockers offline:
+  - `data/kaipan/raw` and `data/market_universe/snapshots` contain directory scaffolding but no usable local snapshot payloads
+- Because this bounded task did not run live provider fetches or fresh LLM generation, the formal data/evidence blockers could not be truthfully cleared
+
+### Decision
+
+`PARTIAL_READY`
+
+- Fixed blockers:
+  - browser E2E tooling missing from web workspace
+  - default shell Node too old for `pnpm`
+  - current `.env` cannot be safely shell-sourced
+- Remaining blockers:
+  - minimal canonical rule/backtest/applicability/profile/strategy/daily/post-close/proposal evidence chain still absent
+  - OHLCV / DatasetSnapshot / MarketSnapshot / MarketRegime readiness still insufficient for truthful snapshot-bound RT-S12-002 evidence
 
 ## 2026-06-24 RT-S12-002 Preflight — Tooling / Config / Data / Formal Route Readiness
 

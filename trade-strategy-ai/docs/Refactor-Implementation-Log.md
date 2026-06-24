@@ -22,15 +22,27 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight BLOCKED；实现仍未开始`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；实现仍未开始`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：`RT-S12-002 preflight`；阻塞原因为 browser E2E tooling 缺失、default Node 版本不满足 `pnpm`、`.env` 不能安全 shell source、canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 缺失、OHLCV 与 MarketSnapshot/MarketRegime 数据不足。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：`RT-S12-002 preflight`；tooling/runtime blocker 已收敛，但 canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 仍缺失，OHLCV 仍只有单个 trade date，`DatasetSnapshot` 仍为 `partial`，`MarketSnapshot` / `MarketRegime` 仍缺失。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
 - 下一步：先处理 `RT-S12-002` preflight blocker，再等待用户明确授权后进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-002 Readiness Repair`
+- 状态: `进行中`
+- 修改范围: `scripts/web_local.py`、`tests/unit/scripts/test_web_local.py`、`web/package.json`、`web/pnpm-lock.yaml`、`web/playwright.config.ts`、`docs/refactor-implementation-logs/stage-12.md`、`docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 仅修复 preflight tooling/runtime blocker；不伪造 canonical downstream evidence；把 5 篇已有 current `article_analysis_v1` 文章冻结为未来 RT-S12-002 子集
+- 数据库迁移: 无
+- 兼容处理: `scripts/web_local.py` 优先注入本机 Node 18 PATH，改用 `config/app.template.yaml` 作为本地 migrate/worker helper 默认 config，并新增 `env-check` 安全读取 `.env`
+- 已运行测试: `python -m pytest tests/unit/scripts/test_web_local.py -q`、`python -m scripts.web_local env-check`、`pnpm typecheck`（Node 18 PATH） 、`pnpm test -- src/app/route-config.test.tsx`（Node 18 PATH）、`pnpm exec playwright --version`（Node 18 PATH）、read-only DB checks、`git diff --check`
+- 测试结果: helper 单测 `4 passed`；frontend typecheck 通过；frontend relevant test `12 passed`；Playwright version `1.61.1`；`git diff --check` 通过；preflight 状态提升为 `PARTIAL_READY`
+- 未完成项: minimal canonical rule/backtest/applicability/profile/strategy/daily/post-close/proposal chain；sufficient OHLCV / DatasetSnapshot / MarketSnapshot / MarketRegime evidence
+- 已知风险: 本地没有可用离线 Kaipan / market-universe seed payload；若不执行最小 live provider / fresh LLM repair，则正式数据 blocker 仍然存在
+- 验收结论: bounded readiness repair 已修复 tooling/runtime blocker，但 RT-S12-002 实现前仍需补足真实 canonical data/evidence；详见 `docs/refactor-implementation-logs/rt-s12-002-preflight.md`
 
 - Task ID: `RT-S12-002 Preflight`
 - 状态: `阻塞`

@@ -18,19 +18,43 @@
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
+- [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；BacktestRun schema compatibility repair accepted with no-data residuals；实现仍未开始`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；Minimal Canonical Evidence Repair Resume STILL_BLOCKED；实现仍未开始`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：`RT-S12-002 preflight`；tooling/runtime blocker 已收敛，BacktestRun status ORM/schema compatibility 已修复，但 canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 仍缺失，OHLCV 仍只有单个 trade date，`DatasetSnapshot` 仍为 `partial`，`MarketSnapshot` / `MarketRegime` 仍缺失。`RT-S12-002` browser E2E、`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：`RT-S12-002 preflight / reference-chain completion`；tooling/runtime blocker 已收敛，BacktestRun status ORM/schema compatibility 已修复，原始数据设备上已生成 reference BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft；当前真实 blocker 是 `StrategyCenterService.validate_version` 返回 `insufficient_coverage`（`backtest.out_of_sample_state=unavailable`、`sample_coverage.state=unknown`），因此 reference Strategy publish、daily/post-close/proposal reference chain 仍未完成。`RT-S12-002` browser E2E、`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
+- 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：先处理 `RT-S12-002` preflight blocker，再等待用户明确授权后进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
+- 下一步：先执行 `RT-S12-002 Reference Chain Completion Repair`，修复 Strategy validation coverage evidence 并完成 reference Strategy publish → DailyRuleSelection → DailyStrategyInstance → TradingDayPlan → PostMarketReview → OptimizationProposal；不得自动启动 Browser E2E、`RT-S12-003`、用户文档生成或 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-002 Reference Chain Boundary Documentation Repair`
+- 状态: `已完成（BOUNDARY_DOCUMENTED）`
+- 修改范围: `docs/refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md`、`docs/refactor-implementation-logs/README.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 采用 Strategy B：Repair 生成 reference chain；Browser E2E 必须通过正式入口生成或 transition separate final E2E chain。
+- 数据库迁移: 无
+- 兼容处理: 无 production code 或 business evidence 变更；仅补齐后续 Prompt / Review 应读取的边界入口。
+- 未完成项: Reference Chain Completion Repair 仍需修复 Strategy validation `insufficient_coverage`，并完成 reference Strategy / Daily / PostClose / Proposal 链路。
+- 已知风险: 若后续 Browser E2E 误用 reference-chain records 作为 final pass evidence，将无法证明用户链路真实走通；后续 Prompt 必须读取 boundary 文档并记录 E2E 新对象 ID / 新 lifecycle transition。
+- 验收结论: `BOUNDARY_DOCUMENTED`
+
+- Task ID: `RT-S12-002 Minimal Canonical Evidence Repair Resume`
+- 状态: `阻塞（STILL_BLOCKED）`
+- 修改范围: `docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`、bounded service/repository compatibility fixes
+- 关键设计决定: 原始数据设备上复用 selected article/OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime baseline，从 BacktestRun 继续推进 reference evidence；未启动 Browser E2E、RT-S12-003 或 Stage Gate。
+- 数据库迁移: 无
+- 兼容处理: 修复 audit writer explicit timestamps、RuleApplicability publish transition 和 session serialization 问题。
+- 已运行测试: `python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、targeted backend tests `4 passed`、web `pnpm typecheck`、route-config test `12 passed`、`git diff --check`、changed-files secret scan
+- 测试结果: 通过；Alembic current/head `2026_06_20_0001`
+- 已完成项: reference BacktestRun、BacktestResult、RuleApplicabilityProfile、published RuleVersion、partial AuthorProfileVersion、Strategy draft。
+- 未完成项: Strategy validation `insufficient_coverage` 阻塞 reference Strategy publish；daily/post-close/proposal reference chain 未生成。
+- 验收结论: `STILL_BLOCKED`
 
 - Task ID: `RT-S12-002 BacktestRun Schema Compatibility Repair`
 - 状态: `已完成（BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS）`
@@ -45,7 +69,7 @@
 - 验收结论: ORM no longer requires missing PostgreSQL enum type `backtest_run_status`; no articles/OHLCV/snapshots/business evidence were recreated
 
 - Task ID: `RT-S12-002 Readiness Repair 5.5 Review`
-- 状态: `进行中`
+- 状态: `已完成（READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS）`
 - 修改范围: `web/package.json`、`tests/unit/scripts/test_web_local.py`、`docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
 - 关键设计决定: 仅审查并修复 5.4 readiness repair 范围内缺口；不启动 RT-S12-002 browser E2E、RT-S12-003、Stage 12 Gate 或数据/evidence repair
 - 数据库迁移: 无
@@ -57,7 +81,7 @@
 - 验收结论: `READINESS_REPAIR_ACCEPTED_WITH_RESIDUAL_BLOCKERS`
 
 - Task ID: `RT-S12-002 Readiness Repair`
-- 状态: `进行中`
+- 状态: `已完成（PARTIAL_READY）`
 - 修改范围: `scripts/web_local.py`、`tests/unit/scripts/test_web_local.py`、`web/package.json`、`web/pnpm-lock.yaml`、`web/playwright.config.ts`、`docs/refactor-implementation-logs/stage-12.md`、`docs/refactor-implementation-logs/rt-s12-002-preflight.md`、`docs/Refactor-Implementation-Log.md`
 - 关键设计决定: 仅修复 preflight tooling/runtime blocker；不伪造 canonical downstream evidence；把 5 篇已有 current `article_analysis_v1` 文章冻结为未来 RT-S12-002 子集
 - 数据库迁移: 无
@@ -76,33 +100,9 @@
 - 兼容处理: 无生产代码改动；仅记录 `config/app.yaml` hard-coded local tooling mismatch
 - 已运行测试: `python --version`、backend import check、Node/Pnpm version check、`pnpm typecheck`、`pnpm test`、read-only DB connectivity / counts / provenance / route scans
 - 测试结果: `pnpm typecheck` 通过；`pnpm test` 可运行但存在失败；DB 可连且 `alembic_version` 与 migration head 一致；preflight 结论为 `BLOCKED`
-- 未完成项: browser E2E tooling、minimal canonical rule/backtest/profile/strategy/daily/post-close/proposal chain、sufficient OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime evidence
+- 未完成项: browser E2E tooling、minimal canonical rule/backtest/profile/strategy/daily evidence chain、sufficient OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime evidence
 - 已知风险: `.env` 当前不能安全 shell source；default Node 版本过低；当前 DB 几乎没有 Stage 6–10 canonical evidence
 - 验收结论: `RT-S12-002` 实现前置条件未满足，详见 `docs/refactor-implementation-logs/rt-s12-002-preflight.md`
-
-- Task ID: `N/A`，formal page layout cleanup with sticky next action
-- 状态: `已完成`
-- 修改范围: `web/src/components/layout/business-page-shell.tsx`、`web/src/layouts/dashboard-layout.tsx`、相关布局和路由测试
-- 关键设计决定: 移除顶部正式业务 hero，保留 sr-only 的 `h1`，将“下一步”改为固定底部的紧凑动作条，并在有帮助信息时支持“更多信息”展开
-- 数据库迁移: 无
-- 兼容处理: `ProductPageAdapter` 保持现有调用方式不变；仅共享 shell 的呈现方式发生变化
-- 已运行测试: `pnpm test -- --run src/pages/product-page-state-matrix.test.tsx`、`pnpm test -- --run src/pages/product-entry-pages.test.tsx`、`pnpm test -- --run src/app/route-config.test.tsx`、`pnpm exec eslint ...`、`npm run typecheck`
-- 测试结果: 通过
-- 未完成项: 无
-- 已知风险: 固定底部动作条依赖页面共享布局提供的侧边栏宽度变量；当前桌面/移动断点下验证通过
-- 验收结论: formal product pages 现在不再渲染重复的顶部 hero，“页面用途”是唯一可见说明区，“下一步”以紧凑 sticky 底栏呈现
-
-- Task ID: `N/A`，当前会话 lint cleanup
-- 状态: `已完成`
-- 修改范围: 清理 `web/src/pages/articles/index.test.tsx` 与 `web/src/pages/daily/index.test.tsx` 中未使用的 mock、helper 和相关类型/import
-- 关键设计决定: 只删除测试文件中的死代码，不改动测试断言或业务覆盖
-- 数据库迁移: 无
-- 兼容处理: 无
-- 已运行测试: `pnpm exec eslint src/pages/articles/index.test.tsx src/pages/daily/index.test.tsx`
-- 测试结果: 通过
-- 未完成项: 无
-- 已知风险: 无新增风险
-- 验收结论: 该次清理仅消除 lint 报错，不改变测试行为
 
 ## 当前硬约束
 
@@ -148,49 +148,19 @@
 - Stage 12 legacy route retirement 必须先验证对应 new formal entry；普通用户不得看到 developer-tool main entries。
 - Stage 12 deletion vs hiding：只有 formal replacement、历史证据访问、引用扫描、测试和 rollback/recovery 条件全部满足时才删除；否则只能隐藏、redirect 或保留 read-only compatibility，并在 Stage 12 log 记录剩余退役条件。
 - Stage 12 E2E 必须走通正式路径：文章导入 → 提取规则 → 审核规则 → 回测 → 生成规则适用性 → 生成作者画像 → 发布策略 → 生成盘前计划 → 完成盘后复盘 → 生成优化建议。
+- Stage 12 RT-S12-002 采用 reference-chain / final-E2E-chain 分离边界：repair/reference chain 不得直接计为 Browser E2E final pass evidence；Browser E2E 必须通过正式入口生成或 lifecycle-transition separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - Stage 12 用户文档必须面向普通用户，不要求理解 Job / Workflow / Pipeline / Artifact / Provider / Schema / config_path / prompt_run_id / run_id。
 
 ## 当前残余风险
 
 - Stage 8 Gate 最终 `ACCEPTED`；`RT-S8-001/002/003` 已接受，策略中心 Stage 已完成。
 - Stage 9 Gate 最终 `ACCEPTED`；`RT-S9-001/002/003` 已接受。
-- `RT-S9-001` 已建立 formal pre-market readiness repository/service/API/client/page；`RT-S9-002` 已建立 formal daily rule selection repository/service/API/client/UI；`RT-S9-003` 已建立 formal daily strategy instance / trading plan repository/service/API/client/UI 与审核流。
-- Stage 9 Gate bounded repair 已修复 deterministic applicability selection、OHLCV snapshot filtering、`/daily/pre-market` 用户语言泄漏、状态中文映射和 plan review router 重复异常分支。
-- `RT-S7-004/001/002/003` 的来源版本绑定仍为 JSON 字段并由服务层约束，不是 FK 明细表；Stage 7 Gate 判定为当前 frozen contract 下可接受，后续可作为 hardening 评估。
-- `RT-S7-001` 的结构化文章来源绑定仍为 JSON source bindings 加 `prompt_run_id`，不是独立明细表；这是在 frozen Stage 7 contract 下避免第二 formal source 的折中。
-- 当前最小正式生命周期为 `draft/pending_review/published/archived`，支持 diff 和 supersession metadata；`rejected/invalidated/superseded` 显式操作与更强前端审核工作流记录为后续 hardening，不阻塞 Stage 8。
-- legacy `/backtest*`、`/backtest_results`、legacy `BacktestService`、`SnapshotLoader`、raw jobs、pipeline specs 和 legacy profile UI 仍为 compatibility-only；formal `/rules/*` 与 Stage 7 formal author profiles 不得使用它们作为正式事实源。
-- `RT-S8-001/002/003` 已建立 canonical strategy repository/service/API/UI、验证摘要、当前版对比、版本 diff、审计回滚、proposal-only strategy revision surface 和当前指针安全切换；Gate 修复后发布/current 必须先通过正式验证。
-- `/strategies/candidates` 仍为 compatibility notice page，后续退役工作未完成。
-- Stage 8 未运行浏览器级 E2E；Gate 判定为非阻塞，当前依赖 focused API/frontend/OpenAPI/typecheck/migration verification。
+- Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`；Stage 11 Gate 已于 2026-06-23 最终 `ACCEPTED`。
+- Stage 12 Bootstrap 已于 2026-06-23 `READY`；`RT-S12-001` 已于 2026-06-23 `ACCEPTED`。
+- RT-S12-002 reference chain 当前仍因 Strategy validation `insufficient_coverage` 阻塞；需要先完成 Reference Chain Completion Repair，再进入 Browser E2E Acceptance。
+- Browser E2E not run：归类为 final Stage 12 E2E；Browser E2E 必须生成 separate final E2E chain，不能只读取 reference-chain records。
+- legacy compatibility source / admin diagnostics / historical docs 仍包含 internal terms；普通用户正式入口不得暴露 legacy main entries。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
-- Stage 9 残余风险均判定为非阻塞：Daily traceability 位于 canonical JSON payload、`/daily` overview compatibility-only job summary cards、浏览器级 E2E 未运行、DailyRuleSelection 写入 guard 可后续 hardening。
-- Stage 10 Bootstrap 已完成 contract freezing；`RT-S10-001` 已建立 formal `post_close_symbol_ohlcv_actuals` actuals source、signal outcome service/API 和 `PostMarketReview` evidence writer。
-- `RT-S10-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：bounded repairs 已修复 schema drift、row/dataset binding、baseline policy 和 matched-rule evidence；execution supplement 为 non-blocking residual risk。
-- `RT-S10-002` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`PostMarketReview.attribution_json` 现已持久化 deterministic structured attribution；无 LLM runtime call、无 proposal generation、无 Stage 11 automation；execution supplement 为 non-blocking residual risk。
-- `RT-S10-003` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：separated rule / author-profile / strategy proposal lanes、Stage 10 proposal API 与 focused verification 已完成；rule/profile 仍为 bounded review-only governance，strategy acceptance 仍为 draft-only。
-- `RT-S10-004` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：`/daily/after-close` 已替换为 formal post-market page；新增正式盘后聚合读取接口、daily client/types、focused API/frontend verification 与 `pnpm typecheck`。
-- Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`：focused backend/API/frontend/OpenAPI/typecheck/py_compile/grep/diff-check verification passed；execution supplement missing 为 non-blocking，caller-supplied post-close market state 为 non-blocking hardening，Stage 11 未开始。
-- Stage 11 Bootstrap 已于 2026-06-22 `READY`：已冻结 contracts、task order、combination rules、acceptance criteria 和 residual risk classification；未实现 production code。
-- `RT-S11-001` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：正式 `/system` 入口已聚合七类低频管理能力；business-first 主导航保持不变；普通用户仅见状态/修复入口，操作员/管理员可见更完整分类；未新增 authorization policy、scheduler/automation runtime 或 route retirement。
-- `RT-S11-001` continuation final repair / acceptance verification 已于 2026-06-22 完成：latest committed code already mapped `/market/datasets` to `/system/data` in route metadata, but `/system/data` page initially lacked a visible compatibility mapping; bounded repair added `数据源兼容入口` with `回测数据版本详情 -> /market/datasets`, and focused frontend tests plus `pnpm typecheck` passed.
-- `RT-S11-007` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：shared error contract 现统一要求 `发生了什么 / 影响什么 / 应该怎么处理`；普通用户不再看到 raw technical detail；operator/admin 才能展开运维诊断详情；`invalid` / `conflict` / `insufficient_coverage` / failed operation 在系统页中被真实表达。
-- `RT-S11-001` + `RT-S11-007` original Task Card review 已于 2026-06-22 `PASSED`：复核确认 `/system` 仍是清晰系统管理入口，七类分组、compatibility mapping、业务页边界和普通用户/管理员分层均成立；用户友好错误契约仍满足 happened / affected / repair guidance，普通用户无 raw stack / `Job failed` only UI。review 期间仅对 `web/src/pages/system/index.tsx` 做未使用导入清理；focused Vitest、typecheck、targeted eslint、grep 和 `git diff --check` 均通过。全仓 `pnpm lint` 仍有无关文件的既有错误，未在本次 bounded review 中扩展修复。
-- `RT-S11-003` Parent acceptance review 已于 2026-06-22 `ACCEPTED`：新增 bounded `SystemRunTraceService`、`/api/ui/v1/system/runs` 和正式 `/system/runs` 页面；普通用户看到业务状态/影响/下一步，operator/admin 可查看步骤、Prompt/data/backtest evidence 和关联诊断；历史缺失 runtime chain 的记录以 derived `run_id` + truthful partial/unavailable 呈现，不伪造完整成功链路。original Task Card review repair 已完成：admin `/system/runs` 现显式渲染 Prompt 调用、数据抓取、正式回测证据，backtest trace 现显式暴露规则版本与代码版本；focused pytest/vitest/typecheck/diff-check 均通过。
-- `RT-S11-002` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：`system-data-operation` 现已补齐 bounded retry / resume / checkpoint-resume / approval gates；失败证据会保留到 `job.runtime_state.last_failure_evidence` 并 append 到 `attempt_history`；`/system/data` admin 视图显示 retry policy、幂等键、失败证据和最近安全检查点；`/system/runs` 现可追踪 system-data automation 与 Stage 3 LLM batch recovery metadata。backfill 与 retry-after-max 现为 explicit `admin_approval_required`，不会在 Web 中静默执行高风险恢复动作。
-- `RT-S11-005` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：盘前 readiness 现按 `09-25` cutoff 限制 OHLCV / 盘前快照 / 市场状态；盘后 actuals/review 现按 `17-30` cutoff 限制盘后快照与 caller-supplied 市场状态；迟到数据不会再被当作决策时点前已可用数据。`/system/runs` 管理员诊断现展示 `trade_date`、`slot`、`captured_at`、`available_at`、`effective_at`、coverage、missing ranges、snapshot id 和 content fingerprint；`DatasetSnapshot` 无法证明的 `captured_at` 继续 truthfully 保持 `null`，未引入迁移。
-- `RT-S11-004` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：Stage 3 prompt runtime 现显式写入 canonical content-hash evidence；Stage 6 formal backtest 现按 full reuse contract 复用既有结果并记录 metric-cache / reuse audit；Stage 7 method profile draft source_versions 现显式标记 `incremental_update_scope`；Stage 11 新增 `/api/ui/v1/system/cost-control` 与 `/system/runs` 管理员成本控制卡片，展示 LLM 成本汇总、budget warning、cache status、失效原因、并发上限、retry cap、backtest reuse 和 draft-only 增量画像样例。budget warning 保持 notify-only，不会静默阻断已接受治理流。
-- `RT-S11-006` Parent acceptance review 已于 2026-06-23 `ACCEPTED`：新增 `SystemRolloutService`、`/api/ui/v1/system/rollout` 和 `/system/runs` 灰度迁移与回滚卡片；Stage 2 migration report 存在时可 truthfully 展示 pre/post counts、rejected/conflicted rows、recovery export 和 `no_silent_data_loss`，缺失时返回 `partial` 而不伪造证据；Stage 3 Prompt rollback 现可显示 current/previous prompt-schema contract 和 raw output retention；Stage 3 batch checkpoint 现显式保留 `input_hash`、`prompt_run_id`、`validation_state`、`prompt_retry_count`、`processed_items`、`resume_point` 和 `rejected_or_conflicted_items`。legacy routes 仍为 compatibility-only / read-only visible，未进入 Stage 12 retirement。
-- Stage 11 Gate 已于 2026-06-23 最终 `ACCEPTED`：focused backend/API/service suite `63 passed`；focused frontend suite `94 passed`；`pnpm typecheck`、targeted eslint、Python `py_compile`、`git diff --check` 均通过。Gate review 未发现需要 bounded repair 的缺口；legacy internal-term matches remain hidden compatibility/admin-diagnostic surfaces and are Stage 12 retirement/final cleanup scope.
-- Stage 12 Bootstrap 已于 2026-06-23 `READY`：已冻结 old-entry retirement scope、allowed legacy compatibility/read-only states、deletion vs hiding criteria、rollback/recovery expectations、E2E acceptance path、required user documentation deliverables、task order、per-task acceptance criteria、Stage 11 residual-risk classification and verification strategy；未实现 production code、未退役 legacy routes、未修改 runtime behavior。
-- `RT-S12-001` 5.4 implementation 已于 2026-06-23 完成：legacy main entries now redirect to formal product/System Management routes where replacement parity is proven; evidence-sensitive detail routes remain hidden compatibility/read-only and are registered in Stage 12 log with owner / formal target / remaining retirement condition / rollback reason. Focused route/navigation tests、`pnpm typecheck`、targeted eslint 和 `git diff --check` 已通过；未作最终 ACCEPTED 决策，等待独立 5.5 Review Session。
-- `RT-S12-001` 5.5 Review 已于 2026-06-23 `BLOCKED`：bounded repair 已将所有 retirement-candidate legacy routes 改为 redirect-only，并补充 dynamic redirect test；focused route/navigation tests `70 passed`、`pnpm typecheck`、targeted eslint、`git diff --check` 均通过。阻塞项：required internal terminology scan still finds active ordinary-user-adjacent frontend source with visible `Job` / `/jobs` / `Artifact` / `run_id` wording/links outside route registry；需继续清理或由 5.5 明确定界为 admin diagnostics / unmounted legacy before acceptance。
-- `RT-S12-001` blocker repair 已于 2026-06-23 `ACCEPTED`：shared error recovery、dashboard/status panels 和 System Management display labels 已完成 ordinary-user terminology cleanup；retired `/jobs`、`/artifacts` user-adjacent links改为 `/system/runs`、`/system/data`、`/system/configuration` 或 formal `/rules` / `/daily` targets。required terminology scan `5044` hits 已分类为 fixed ordinary-user issue、admin diagnostic allowed、internal implementation only、unmounted legacy source、test fixture 或 historical documentation note；无 remaining blocker。Focused frontend suite `89 passed`，`pnpm typecheck`、targeted eslint、`git diff --check` 均通过；未启动 `RT-S12-002/003`、E2E、用户文档或 Gate。
-- Stage 10 execution supplement missing：归类为 future execution supplement task；Stage 11 automation/recovery 可观察和修复 evidence，但不得把 execution-specific fields 从 unavailable 默认为 false/success。
-- Stage 10 caller-supplied `post_close_market_state_id`：归类为 Stage 11 observability/time-semantics hardening，应验证或解析 canonical market-state identity，并保留 unavailable/invalid 状态。
-- Stage 10 OpenAPI response-schema assertions partial：归类为 Stage 11 hardening 和 Stage 12 Gate full contract review。
-- `/strategies/after-close` compatibility route remains：归类为 Stage 12 retirement follow-up；Stage 11 可提供 compatibility visibility，但不得退役。
-- browser E2E not run：归类为 final Stage 12 E2E，除非 Stage 11 focused UI task 修改相关 UI 并需要 targeted browser verification。
 
 ## Task 状态索引
 
@@ -248,7 +218,7 @@
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
-| RT-S12-002 | `[!]` | 端到端验收未开始；原始数据设备最小 canonical evidence repair 已推进到 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、RuleVersion publish 和 Strategy draft，但 Strategy validation 返回 `insufficient_coverage`，因此 published Strategy、daily/post-close/proposal 链路仍阻塞 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| RT-S12-002 | `[!]` | 端到端验收未开始；reference chain 已推进到 Strategy draft，但 Strategy validation `insufficient_coverage` 阻塞；Browser E2E 必须生成 separate final E2E chain，不能复用 reference chain 作为通过证据 | [Stage 12](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 | RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
@@ -267,7 +237,7 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始且当前因 Strategy validation `insufficient_coverage` 阻塞；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始；reference chain 因 Strategy validation `insufficient_coverage` 阻塞；Browser E2E boundary 已记录；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 
 ## 下一步建议
 
@@ -275,13 +245,14 @@
 
 ```text
 Stage 12 next required repair:
-`RT-S12-002` 仍阻塞在 Strategy validation `insufficient_coverage`：已存在 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft，但策略验证缺少 out-of-sample/sample coverage evidence，不能发布 Strategy。先修复该 bounded coverage evidence，再继续 Strategy publish -> DailyRuleSelection -> DailyStrategyInstance -> TradingDayPlan -> PostMarketReview -> OptimizationProposal。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
+`RT-S12-002 Reference Chain Completion Repair`：修复 Strategy validation `insufficient_coverage`（已存在 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft，但策略验证缺少 out-of-sample/sample coverage evidence），完成 reference Strategy publish -> DailyRuleSelection -> DailyStrategyInstance -> TradingDayPlan -> PostMarketReview -> OptimizationProposal。所有 repair 产物只能作为 reference-chain evidence；不得计为 Browser E2E final pass evidence。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
 ```
 
 执行前应读取：
 
 - [Stage 12 计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
+- [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
 不得自动开始任何后续 Stage 12 工作；必须等待用户明确授权后再进入 `RT-S12-002` 或 `RT-S12-003`。

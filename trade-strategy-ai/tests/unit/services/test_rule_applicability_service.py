@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.backtest.schemas import BacktestResult, RegimeBacktestMetric
+from src.common.stage2_writer_routing import canonical_write_scope
 from src.models.rule_applicability import RuleApplicabilityProfile
 
 
@@ -307,6 +308,47 @@ class _FormalProfileRepository:
         return None
 
 
+class _AuditCaptureSession:
+    def __init__(self) -> None:
+        self.added = None
+        self.flushed = False
+
+    def add(self, value):
+        self.added = value
+
+    async def flush(self):
+        self.flushed = True
+
+
+@pytest.mark.asyncio
+async def test_rule_applicability_audit_writer_sets_explicit_timestamps() -> None:
+    from src.db.repositories.rule_applicability_repository import RuleApplicabilityRepository
+
+    profile = RuleApplicabilityProfile(
+        rule_id="rule-1",
+        profile_version="rule-applicability-v1",
+        source_backtest_id="run-1",
+    )
+    session = _AuditCaptureSession()
+
+    with canonical_write_scope("rule_applicability", "RuleApplicabilityRepository.record_audit_event"):
+        await RuleApplicabilityRepository().record_audit_event(
+            session,  # type: ignore[arg-type]
+            profile=profile,
+            event={
+                "transition": "draft_created",
+                "actor_id": "operator-1",
+                "actor_role": "operator",
+                "source_surface": "/rules/results",
+            },
+        )
+
+    assert session.flushed is True
+    assert session.added is not None
+    assert session.added.created_at is not None
+    assert session.added.updated_at is not None
+
+
 def _formal_facts(*, sample_count: int = 12, coverage: float = 0.92, result_status: str = "completed_valid"):
     run_id = uuid4()
     rule_version_id = uuid4()
@@ -453,6 +495,39 @@ async def test_generate_formal_draft_does_not_overwrite_reviewed_profile(tmp_pat
     assert second.payload["profile"]["supersedes_profile_id"] == first.payload["profile"]["profile_id"]
     assert repo.profiles[0].review_status == "approved"
     assert repo.audit_events[-1]["transition"] == "draft_created"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_publish_formal_profile_marks_published_for_downstream_consumers(tmp_path: Path) -> None:
+    from src.domain.enums import FormalLifecycleState
+    from src.services.rule_applicability_service import RuleApplicabilityService
+
+    session_scope, engine = await _build_session_factory(tmp_path)
+    run, result = _formal_facts()
+    repo = _FormalProfileRepository(run=run, result=result)
+    service = RuleApplicabilityService(session_scope_factory=session_scope, repo_factory=lambda: repo, artifact_root=tmp_path / "artifacts")
+
+    created = await service.generate_formal_draft(run_id=str(run.run_id), result_id=str(result.result_id), actor_id="operator-1", actor_role="operator", reason="first")
+    reviewed = await service.review_formal_profile(
+        profile_id=created.payload["profile"]["profile_id"],
+        review_status="approved",
+        actor_id="operator-1",
+        actor_role="operator",
+        reason="审核通过",
+    )
+    published = await service.publish_formal_profile(
+        profile_id=reviewed.payload["profile"]["profile_id"],
+        actor_id="operator-1",
+        actor_role="operator",
+        reason="发布给策略和每日盘前使用",
+    )
+
+    assert published.status == "ok"
+    assert published.payload["profile"]["review_status"] == "published"
+    assert repo.profiles[0].lifecycle_state == FormalLifecycleState.published
+    assert repo.audit_events[-1]["transition"] == "published"
 
     await engine.dispose()
 

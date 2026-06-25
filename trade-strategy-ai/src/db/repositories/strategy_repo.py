@@ -135,6 +135,7 @@ class StrategyRepository:
         after_state: dict | None,
     ) -> None:
         require_canonical_write("strategy", "StrategyRepository.record_audit")
+        now = datetime.now(UTC)
         session.add(
             StrategyVersionAudit(
                 audit_id=uuid4(),
@@ -146,6 +147,8 @@ class StrategyRepository:
                 source_surface=source_surface,
                 before_state_json=before_state,
                 after_state_json=after_state,
+                created_at=now,
+                updated_at=now,
             )
         )
         await session.flush()

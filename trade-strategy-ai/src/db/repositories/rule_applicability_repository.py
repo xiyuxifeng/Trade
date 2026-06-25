@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
@@ -201,6 +203,7 @@ class RuleApplicabilityRepository:
             "rule_applicability",
             "RuleApplicabilityRepository.record_audit_event",
         )
+        now = datetime.now(UTC)
         session.add(
             RuleApplicabilityProfileAudit(
                 profile_id=profile.profile_id,
@@ -211,6 +214,8 @@ class RuleApplicabilityRepository:
                 source_surface=str(event.get("source_surface") or "/rules/backtests"),
                 before_state_json=event.get("before_state"),
                 after_state_json=event.get("after_state"),
+                created_at=now,
+                updated_at=now,
             )
         )
         await session.flush()

@@ -248,7 +248,7 @@
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
-| RT-S12-002 | `[!]` | 端到端验收未开始；5.5 最小 canonical evidence repair 修复了 OHLCV/DatasetSnapshot/MarketSnapshot/MarketRegime/RuleVersion 下层证据，但 BacktestRun 因 DB enum/schema contract mismatch 仍阻塞 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| RT-S12-002 | `[!]` | 端到端验收未开始；原始数据设备最小 canonical evidence repair 已推进到 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、RuleVersion publish 和 Strategy draft，但 Strategy validation 返回 `insufficient_coverage`，因此 published Strategy、daily/post-close/proposal 链路仍阻塞 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
@@ -267,7 +267,7 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始且当前因 BacktestRun enum/schema contract mismatch 阻塞；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始且当前因 Strategy validation `insufficient_coverage` 阻塞；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) |
 
 ## 下一步建议
 
@@ -275,7 +275,7 @@
 
 ```text
 Stage 12 next required repair:
-`RT-S12-002` 仍阻塞在 canonical BacktestRun schema contract mismatch：Alembic current/head 为 `2026_06_20_0001`，但 PostgreSQL type `backtest_run_status` 缺失，而 ORM 当前要求该 enum。先修复并应用正式迁移或对齐 ORM/schema contract，再继续 bounded canonical evidence chain。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
+`RT-S12-002` 仍阻塞在 Strategy validation `insufficient_coverage`：已存在 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft，但策略验证缺少 out-of-sample/sample coverage evidence，不能发布 Strategy。先修复该 bounded coverage evidence，再继续 Strategy publish -> DailyRuleSelection -> DailyStrategyInstance -> TradingDayPlan -> PostMarketReview -> OptimizationProposal。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
 ```
 
 执行前应读取：

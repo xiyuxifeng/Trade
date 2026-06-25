@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -98,6 +98,7 @@ class AuthorProfileRepository:
         after_state: dict | None,
     ) -> None:
         require_canonical_write("author_profile", "AuthorProfileRepository.record_audit")
+        now = datetime.now(UTC)
         session.add(
             AuthorProfileVersionAudit(
                 author_profile_version_id=version.author_profile_version_id,
@@ -108,6 +109,8 @@ class AuthorProfileRepository:
                 source_surface=source_surface,
                 before_state_json=before_state,
                 after_state_json=after_state,
+                created_at=now,
+                updated_at=now,
             )
         )
         await session.flush()

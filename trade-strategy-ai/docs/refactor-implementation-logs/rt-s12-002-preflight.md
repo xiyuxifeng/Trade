@@ -23,6 +23,118 @@
 - Residual: canonical downstream evidence and data-readiness blockers recorded
   in this preflight remain separate from this schema compatibility repair.
 
+## 0B. 2026-06-25 Minimal canonical evidence repair resume on original data device
+
+- Status: `STILL_BLOCKED`
+- Latest pulled schema repair commit: `85ea013 fix(backtest): align run status schema`
+- Entry decision accepted: `BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
+- Scope remained bounded to resuming canonical evidence repair from `BacktestRun`; final RT-S12-002 browser E2E, RT-S12-003 user documentation, and Stage 12 Gate were not started.
+- Original data-device confirmation: the prior repaired selected articles, executable candidate, OHLCV rows, DatasetSnapshots, MarketSnapshots, MarketRegimes, and in-review RuleVersion were present before continuing.
+- LLM actions: no LLM call was made. Deterministic minimal author profile generation was sufficient because the selected structured article/candidate, formal rule, backtest result, and applicability evidence already existed; generated profile records explicitly store `llm_called=false` where applicable.
+- Live provider actions: no article recrawl, broad OHLCV backfill, Kaipan refresh, or market-state live refresh was run.
+
+Reused baseline evidence:
+
+- Articles: selected subset count `5`.
+- Executable article/candidate:
+  - article `84558067-1ba1-4248-9700-fd4225be8593`
+  - revision `b64a3c51-bf32-562c-8a86-849eac28ad72`
+  - prompt run `b5289dd7-8a5e-4d89-9c83-7555f8cc45a5`
+  - candidate `af289b09-d9f1-44e1-8ce3-dfd87c84322d`
+  - fingerprint `32db69f061d899626664245410ce67879746788effbe3a0bd83bfa4e72d704b8`
+- OHLCV:
+  - `002104.SZ`: 20 rows, `2024-05-06` to `2024-05-31`
+  - `603280.SH`: 20 rows, `2024-05-06` to `2024-05-31`
+- DatasetSnapshots:
+  - `680a9e4a-8cb4-4131-8ef0-785031cb670b`, ready, fingerprint `9f56b30c66ca0ca11f53fe0452dd4e31e31ef4826cece9cd071561c2839f7538`
+  - `b534d59d-851a-4a78-a32d-af6e71a4e71f`, ready, fingerprint `62bc2a46401cb6ffdf0f734443618079d0fc211c3bafded9e8393de19171d64c`
+- MarketSnapshots:
+  - pre-market `88aa0f65-0fb8-41fb-aee8-cb8bbdb33a6f`, quality `partial`, fingerprint `f59b3f131f253f120f8bae0cc25127b1b4aec5cc82932631d65eecb14ab3b5dc`
+  - post-close `9646ace9-a755-485d-89f4-4900602bde30`, quality `partial`, fingerprint `611772f990a6eb57b70ae633045dbd851a411c4cf8f4acbd8934eb8d44d60c3c`
+- MarketRegimes:
+  - pre-market `a8c2d82f-8db9-41ad-aec7-4c79f42c701f`, label `selected_symbol_resilient`, confidence `0.35`, quality `partial`
+  - post-close `f9084b48-020a-4493-84a0-f2994e7dbccf`, label `selected_symbol_resilient`, confidence `0.35`, quality `partial`
+
+Records created or advanced:
+
+- `BacktestRun` reused/created through `BacktestApplicationService`:
+  - id `ec58660b-7a34-46e3-8744-b2cec0436655`
+  - dataset `b534d59d-851a-4a78-a32d-af6e71a4e71f`
+  - requested/effective level `level_1`
+  - request fingerprint `5ec4d56e9a98e453743679adda8ae87686f74f3c367e9320109bc9978ccbeeae`
+  - reproducibility fingerprint `58eb40747331614450dd7fd6163b3564914b5cadfde9f5412f827510d48660fe`
+- `BacktestResult`:
+  - id `46f17a5c-5895-427f-8b6b-19d309aeafac`
+  - status `completed_valid`
+  - result fingerprint `899d0793eb34dd6815ffd2b287811e875f8fdb17de01cca060400e88de0664e1`
+  - reproducibility fingerprint `market-state-unbound:unavailable:899d0793eb34dd6815ffd2b287811e875f8fdb17de01cca060400e88de0664e1`
+  - sample count `40`, coverage `ready`, total return `-0.028026`, win rate `0.475`, max drawdown `-0.12141497958111092`
+- `RuleApplicabilityProfile`:
+  - profile id `012a2a09-ea6a-4e3c-97e6-41a164e01eab`
+  - stable applicability id `33a32c99-31df-4e97-9995-7eb31866812d`
+  - review/lifecycle `published`
+  - quality `partial`, recommendation `limited`
+- Canonical author:
+  - `4166623f-1689-42c2-bd90-c32dc7804391`
+  - source `tgb`, source author key `10461311`, display name `javxsp`
+- `RuleVersion`:
+  - `8d15ae78-4abb-40ef-9a6e-184bb7289d0c`
+  - transitioned through formal lifecycle service to `published` / display state `可用`
+- `AuthorProfileVersion`:
+  - method `03167004-d590-463d-837b-07b6ef22e19f`, published, quality `partial`
+  - rule `b685bc3d-8ef7-4639-8aa7-32e03fb7c0eb`, published, quality `partial`
+  - validated `5eda537a-e772-4df3-8986-4d646ebf3e23`, published, quality `unresolved`, source status `insufficient_evidence`
+- `StrategyVersion`:
+  - strategy `15416124-5087-4cbc-998b-ca107423c74b`
+  - version `6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+  - lifecycle `draft`, not published
+  - validation state `insufficient_coverage`
+
+Readiness matrix:
+
+| Evidence step | Status | Notes |
+| --- | --- | --- |
+| BacktestRun | READY | Formal service path, snapshot-only, no live provider |
+| BacktestResult | READY | Completed with limited level-1 evidence |
+| RuleApplicabilityProfile | READY | Published, but quality remains `partial` |
+| AuthorProfileVersion | PARTIAL | Published method/rule profiles; validated profile is `unresolved` / `insufficient_evidence` |
+| RuleVersion lifecycle | READY | Published through lifecycle service after fixed-set gate |
+| Strategy / StrategyVersion | BLOCKED | Draft exists, but validation is `insufficient_coverage` |
+| Published Strategy | BLOCKED | Not published; current published pointer is null |
+| DailyRuleSelection | BLOCKED | Not generated because no published StrategyVersion |
+| DailyStrategyInstance | BLOCKED | Not generated because no published StrategyVersion |
+| TradingDayPlan | BLOCKED | Not generated because no DailyStrategyInstance |
+| PostMarketReview | BLOCKED | Not generated because no TradingDayPlan |
+| OptimizationProposal | BLOCKED | Not generated because no PostMarketReview |
+
+Blocker:
+
+- `StrategyCenterService.validate_version` truthfully returned `insufficient_coverage`.
+- The validation summary shows dataset and market snapshots ready, backtest and applicability ready, but `backtest.out_of_sample_state=unavailable` and `sample_coverage.state=unknown`.
+- Publishing the strategy, generating daily pre-market chain, and generating post-close/proposal evidence would require bypassing the formal validation contract, so the repair stopped.
+
+Code/schema compatibility repairs made during the resume:
+
+- `RuleApplicabilityRepository.record_audit`, `AuthorProfileRepository.record_audit`, and `StrategyRepository.record_audit` now set explicit `created_at` / `updated_at` values for audit rows because the current local DB columns are NOT NULL without usable server defaults.
+- `RuleApplicabilityService.review_formal_profile` serializes the profile before session close and refreshes only persistent ORM rows.
+- `RuleApplicabilityService.publish_formal_profile` adds an audited publish transition required by downstream strategy/daily consumers.
+
+Verification:
+
+- `python -m scripts.web_local env-check`: pass
+- `python -m cli.main db-check --config config/app.template.yaml`: pass
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
+- `python -m pytest tests/unit/services/test_strategy_center_service.py::test_strategy_audit_writer_sets_explicit_timestamps tests/unit/services/test_author_profile_service.py::test_author_profile_audit_writer_sets_explicit_timestamps tests/unit/services/test_rule_applicability_service.py::test_rule_applicability_audit_writer_sets_explicit_timestamps tests/unit/services/test_rule_applicability_service.py::test_publish_formal_profile_marks_published_for_downstream_consumers -q`: pass, `4 passed`
+- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck`: pass
+- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
+- `git diff --check`: pass
+- changed-files secret scan: pass, no matches
+
+Next allowed action:
+
+- Repair the strategy validation evidence contract for this bounded RT-S12-002 chain, specifically the missing out-of-sample/sample coverage fields required by `StrategyCenterService` for publish.
+- Do not start final RT-S12-002 browser E2E, RT-S12-003 user documentation, or Stage 12 Gate until the strategy can publish and the daily/post-close/proposal chain exists.
+
 ## 0. 2026-06-24 readiness repair result
 
 - Updated preflight status: `PARTIAL_READY`

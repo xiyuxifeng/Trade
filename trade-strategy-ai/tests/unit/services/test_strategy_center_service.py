@@ -414,6 +414,66 @@ async def _seed_dependencies(session_factory: async_sessionmaker[AsyncSession]) 
     }
 
 
+@pytest.mark.asyncio()
+async def test_strategy_audit_writer_sets_explicit_timestamps(tmp_path: Path) -> None:
+    from src.common.stage2_writer_routing import canonical_write_scope
+    from src.db.repositories.strategy_repo import StrategyRepository
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    now = datetime.now(UTC)
+    strategy_id = uuid4()
+    strategy_version_id = uuid4()
+
+    async with session_scope() as session:
+        session.add(
+            Strategy(
+                strategy_id=strategy_id,
+                business_key="audit-test-strategy",
+                created_at=now,
+                updated_at=now,
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        session.add(
+            StrategyVersion(
+                strategy_version_id=strategy_version_id,
+                strategy_id=strategy_id,
+                version_no=1,
+                schema_version="strategy-v1",
+                lifecycle_state=FormalLifecycleState.draft,
+                risk_policy_json={},
+                selection_policy_json={},
+                universe_json={},
+                evidence_json={},
+                quality_status=QualityStatus.partial,
+                created_by="seed",
+                updated_by="seed",
+            )
+        )
+        await session.flush()
+        version = await session.get(StrategyVersion, strategy_version_id)
+        assert version is not None
+        with canonical_write_scope("strategy", "StrategyRepository.record_audit"):
+            await StrategyRepository().record_audit(
+                session,
+                version=version,
+                transition="created_draft",
+                actor_id="operator-a",
+                actor_role="operator",
+                reason="test",
+                source_surface="/strategies",
+                before_state=None,
+                after_state={"strategy_version_id": str(version.strategy_version_id)},
+            )
+        audit = (await session.execute(StrategyVersionAudit.__table__.select())).mappings().one()
+
+    assert audit["created_at"] is not None
+    assert audit["updated_at"] is not None
+
+    await engine.dispose()
+
+
 def _draft_request(deps: dict[str, UUID], *, business_key: str = "cn-swing-core", strategy_id: UUID | None = None):
     from src.services.strategy_center_service import StrategyDraftRequest
 

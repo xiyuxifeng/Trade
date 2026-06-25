@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import UUID, uuid4
 
+from sqlalchemy import inspect
+
 from src.backtest.schemas import BacktestResult, RegimeBacktestMetric
 from src.common.paths import resolve_project_path
 from src.db.repositories import RuleApplicabilityRepository
@@ -805,8 +807,69 @@ class RuleApplicabilityService(BaseService):
                     },
                 )
                 await session.flush()
+            if inspect(row).persistent:
+                await session.refresh(row)
+            profile_payload = row.to_dict()
             await session.commit()
-        return ServiceResult(status="ok", message="formal rule applicability profile reviewed", payload={"profile": row.to_dict()})
+        return ServiceResult(status="ok", message="formal rule applicability profile reviewed", payload={"profile": profile_payload})
+
+    async def publish_formal_profile(
+        self,
+        *,
+        profile_id: str,
+        actor_id: str,
+        actor_role: str,
+        reason: str | None = None,
+        source_surface: str = "/rules/results",
+    ) -> ServiceResult:
+        """Publish an approved formal applicability profile for strategy/daily consumers."""
+        if actor_role not in {"operator", "admin"}:
+            return self._formal_error(error_type="permission_denied", message="发布适用性画像需要 operator 权限。")
+        try:
+            parsed_profile_id = UUID(str(profile_id))
+        except ValueError:
+            return self._formal_error(error_type="invalid_profile_id", message="画像编号无效。", metadata={"profile_id": profile_id})
+
+        session_scope = self._ensure_session_factory()
+        async with session_scope() as session:
+            repo = self._repo_factory()
+            row = await repo.get_by_id(session, parsed_profile_id)
+            if row is None:
+                return self._formal_error(error_type="profile_not_found", message="未找到适用性画像。", metadata={"profile_id": profile_id})
+            if row.lifecycle_state == FormalLifecycleState.published and row.review_status == "published":
+                return ServiceResult(status="ok", message="formal rule applicability profile already published", payload={"profile": row.to_dict()})
+            if row.lifecycle_state not in {FormalLifecycleState.approved, FormalLifecycleState.in_review, FormalLifecycleState.pending_review}:
+                return self._formal_error(
+                    error_type="invalid_lifecycle_state",
+                    message="只有已审核的适用性画像可以发布。",
+                    metadata={"profile_id": profile_id, "lifecycle_state": str(row.lifecycle_state)},
+                )
+            before = {"review_status": row.review_status, "lifecycle_state": str(row.lifecycle_state), "reviewed_by": row.reviewed_by}
+            row.review_status = "published"
+            row.lifecycle_state = FormalLifecycleState.published
+            row.reviewed_by = actor_id
+            row.reviewed_at = datetime.now(UTC)
+            row.review_reason = reason
+            with canonical_write_scope("rule_applicability", self.service_name):
+                await repo.record_audit_event(
+                    session,
+                    profile=row,
+                    event={
+                        "transition": "published",
+                        "actor_id": actor_id,
+                        "actor_role": actor_role,
+                        "reason": reason,
+                        "source_surface": source_surface,
+                        "before_state": before,
+                        "after_state": {"review_status": row.review_status, "lifecycle_state": row.lifecycle_state.value, "reviewed_by": actor_id},
+                    },
+                )
+                await session.flush()
+            if inspect(row).persistent:
+                await session.refresh(row)
+            profile_payload = row.to_dict()
+            await session.commit()
+        return ServiceResult(status="ok", message="formal rule applicability profile published", payload={"profile": profile_payload})
 
     async def list_profiles(
         self,

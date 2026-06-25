@@ -41,6 +41,52 @@ async def _seed_author(session_factory: async_sessionmaker[AsyncSession]) -> UUI
     return author_id
 
 
+@pytest.mark.asyncio()
+async def test_author_profile_audit_writer_sets_explicit_timestamps(tmp_path: Path) -> None:
+    from src.common.stage2_writer_routing import canonical_write_scope
+    from src.db.repositories.author_profile_repository import AuthorProfileRepository
+    from src.domain.enums import FormalLifecycleState, QualityStatus
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    author_id = await _seed_author(session_factory)
+    version = AuthorProfileVersion(
+        author_profile_version_id=uuid4(),
+        author_profile_id=uuid4(),
+        author_id=author_id,
+        profile_kind=AuthorProfileKind.method,
+        version_no=1,
+        schema_version="author-profile-v1",
+        lifecycle_state=FormalLifecycleState.draft,
+        payload={},
+        evidence_json={},
+        quality_status=QualityStatus.partial,
+        created_by="operator-a",
+        updated_by="operator-a",
+    )
+
+    async with session_scope() as session:
+        session.add(version)
+        await session.flush()
+        with canonical_write_scope("author_profile", "AuthorProfileRepository.record_audit"):
+            await AuthorProfileRepository().record_audit(
+                session,
+                version=version,
+                transition="created_draft",
+                actor_id="operator-a",
+                actor_role="operator",
+                reason="test",
+                source_surface="/authors",
+                before_state=None,
+                after_state={"version_id": str(version.author_profile_version_id)},
+            )
+        audit = (await session.execute(AuthorProfileVersionAudit.__table__.select())).mappings().one()
+
+    assert audit["created_at"] is not None
+    assert audit["updated_at"] is not None
+
+    await engine.dispose()
+
+
 def _draft_payload(author_id: UUID, *, profile_id: UUID | None = None, conclusion: str = "偏好趋势交易"):
     from src.services.author_profile_service import AuthorProfileDraftRequest
 

@@ -871,3 +871,83 @@ Next required repair:
 - add and apply a committed migration or adjust ORM/schema contract so `BacktestRun.status` can be inserted truthfully.
 - after that, rerun the bounded canonical chain from BacktestRun through OptimizationProposal.
 - do not start final browser E2E, RT-S12-003, or Stage 12 Gate until this evidence blocker is resolved.
+
+## 2026-06-25 — RT-S12-002 minimal canonical evidence repair resume
+
+Status: `[!] 阻塞`
+
+Readiness decision: `STILL_BLOCKED`
+
+Entry verification:
+
+- `git pull`: already up to date; latest HEAD `85ea013 fix(backtest): align run status schema`
+- BacktestRun schema repair decision: `BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
+- Stage 11 Gate: `ACCEPTED`
+- Stage 12 Bootstrap: `READY`
+- RT-S12-001: `ACCEPTED`
+- RT-S12-002 final browser E2E: not started
+- RT-S12-003: not started
+- Stage 12 Gate: not started
+
+Baseline evidence reused:
+
+- selected article subset count `5`
+- executable article `84558067-1ba1-4248-9700-fd4225be8593`
+- executable candidate `af289b09-d9f1-44e1-8ce3-dfd87c84322d`
+- candidate fingerprint `32db69f061d899626664245410ce67879746788effbe3a0bd83bfa4e72d704b8`
+- OHLCV `002104.SZ` and `603280.SH`: 20 rows each, `2024-05-06` to `2024-05-31`
+- DatasetSnapshots `680a9e4a-8cb4-4131-8ef0-785031cb670b` and `b534d59d-851a-4a78-a32d-af6e71a4e71f`: ready
+- pre/post MarketSnapshots and MarketRegimes present with quality `partial`
+
+Generated or advanced evidence:
+
+- BacktestRun `ec58660b-7a34-46e3-8744-b2cec0436655`
+- BacktestResult `46f17a5c-5895-427f-8b6b-19d309aeafac`
+- RuleApplicabilityProfile `012a2a09-ea6a-4e3c-97e6-41a164e01eab` / stable id `33a32c99-31df-4e97-9995-7eb31866812d`, published
+- canonical author `4166623f-1689-42c2-bd90-c32dc7804391`
+- RuleVersion `8d15ae78-4abb-40ef-9a6e-184bb7289d0c`, published / display state `可用`
+- AuthorProfileVersions:
+  - method `03167004-d590-463d-837b-07b6ef22e19f`, published, partial
+  - rule `b685bc3d-8ef7-4639-8aa7-32e03fb7c0eb`, published, partial
+  - validated `5eda537a-e772-4df3-8986-4d646ebf3e23`, published, unresolved / insufficient evidence
+- Strategy draft:
+  - strategy `15416124-5087-4cbc-998b-ca107423c74b`
+  - version `6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+  - validation `insufficient_coverage`
+
+Blocker:
+
+- `StrategyCenterService.validate_version` returned `insufficient_coverage`.
+- Dataset, market snapshots, backtest, and applicability were bound, but `out_of_sample_state` is `unavailable` and sample coverage is `unknown`.
+- Because the strategy did not pass validation, it was not submitted or published.
+- DailyRuleSelection, DailyStrategyInstance, TradingDayPlan, PostMarketReview, and OptimizationProposal were not generated.
+
+LLM / provider actions:
+
+- No LLM call.
+- No article recrawl.
+- No Kaipan refresh.
+- No broad OHLCV backfill.
+- No final browser E2E.
+
+Code compatibility repairs:
+
+- explicit audit timestamps for rule applicability, author profile, and strategy audit repositories
+- `RuleApplicabilityService` serialization fix for review/publish
+- audited `publish_formal_profile` transition for downstream consumers
+
+Verification:
+
+- `python -m scripts.web_local env-check`: pass
+- `python -m cli.main db-check --config config/app.template.yaml`: pass
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
+- focused backend tests: pass, `4 passed`
+- `web` typecheck with Node 18: pass
+- `web` route-config test: pass, `12 passed`
+- `git diff --check`: pass
+- changed-files secret scan: pass
+
+Next allowed action:
+
+- Repair the bounded strategy validation coverage evidence so the strategy can truthfully publish, then resume from Strategy publish through daily/post-close/proposal.
+- Do not start final browser E2E, RT-S12-003, or Stage 12 Gate before that chain exists.

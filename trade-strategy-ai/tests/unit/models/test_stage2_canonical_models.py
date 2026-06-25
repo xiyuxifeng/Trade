@@ -80,6 +80,20 @@ def test_stage2_canonical_tables_expose_frozen_identity_columns() -> None:
     assert "author_profile_version_audits" in Base.metadata.tables
 
 
+def test_backtest_run_status_matches_migration_backed_string_schema() -> None:
+    from sqlalchemy import Enum as SAEnum
+    from sqlalchemy import String
+
+    from src.models.stage2_canonical import BacktestRun
+
+    status_type = BacktestRun.__table__.c.status.type
+
+    assert isinstance(status_type, String)
+    assert not isinstance(status_type, SAEnum)
+    assert status_type.length == 32
+    assert getattr(status_type, "name", None) != "backtest_run_status"
+
+
 def test_reused_stage2_tables_expose_frozen_canonical_columns_and_foreign_keys() -> None:
     from src.models.base import Base
     import src.models as models  # noqa: F401

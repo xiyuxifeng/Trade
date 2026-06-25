@@ -612,7 +612,7 @@ class BacktestRun(TimestampMixin, Base):
     request_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
     reproducibility_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
     snapshot_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    status: Mapped[BacktestRunStatus] = mapped_column(_enum(BacktestRunStatus, "backtest_run_status"), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
     coverage_state: Mapped[str] = mapped_column(String(32), nullable=False)
     quality_state: Mapped[str] = mapped_column(String(32), nullable=False)
     downgrade_reason: Mapped[str | None] = mapped_column(Text)

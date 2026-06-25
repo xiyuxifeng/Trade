@@ -22,15 +22,27 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；实现仍未开始`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；BacktestRun schema compatibility repair accepted with no-data residuals；实现仍未开始`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：`RT-S12-002 preflight`；tooling/runtime blocker 已收敛，但 canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 仍缺失，OHLCV 仍只有单个 trade date，`DatasetSnapshot` 仍为 `partial`，`MarketSnapshot` / `MarketRegime` 仍缺失。`RT-S12-002`、`RT-S12-003`、E2E、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：`RT-S12-002 preflight`；tooling/runtime blocker 已收敛，BacktestRun status ORM/schema compatibility 已修复，但 canonical backtest/applicability/profile/strategy/daily/post-close/proposal evidence 仍缺失，OHLCV 仍只有单个 trade date，`DatasetSnapshot` 仍为 `partial`，`MarketSnapshot` / `MarketRegime` 仍缺失。`RT-S12-002` browser E2E、`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
 - 下一步：先处理 `RT-S12-002` preflight blocker，再等待用户明确授权后进入 `RT-S12-002`、`RT-S12-003` 或其他 Stage 12 工作；不得自动启动 E2E、用户文档生成或 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-002 BacktestRun Schema Compatibility Repair`
+- 状态: `已完成（BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS）`
+- 修改范围: `src/models/stage2_canonical.py`、`tests/unit/models/test_stage2_canonical_models.py`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 以已提交 migration-backed schema 为事实源，将 `BacktestRun.status` ORM mapping 从 PostgreSQL enum 改为 `String(32)`；保留 `BacktestRunStatus` 作为 Python/service-layer allowed-value constant
+- 数据库迁移: 无；未创建 PostgreSQL enum `backtest_run_status`；未新增 migration
+- 兼容处理: 服务层继续写入字符串状态值；读取侧已有 enum-or-string normalizer，不要求 ORM 返回 enum object
+- 已运行测试: `pytest tests/unit/models/test_stage2_canonical_models.py::test_backtest_run_status_matches_migration_backed_string_schema tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`、`pytest tests/unit/models/test_stage2_canonical_models.py -q`、`git diff --check`、changed-files secret scan
+- 测试结果: focused metadata + requested service tests `23 passed`；model metadata tests `5 passed`；`git diff --check` passed；secret scan no matches
+- 未完成项: DB-dependent checks skipped on no-data device；schema repair did not run or alter Minimal Canonical Evidence Repair business evidence
+- 已知风险: `RT-S12-002` final acceptance still requires separate canonical evidence repair and browser E2E; legacy rows cannot be counted as final evidence
+- 验收结论: ORM no longer requires missing PostgreSQL enum type `backtest_run_status`; no articles/OHLCV/snapshots/business evidence were recreated
 
 - Task ID: `RT-S12-002 Readiness Repair 5.5 Review`
 - 状态: `进行中`

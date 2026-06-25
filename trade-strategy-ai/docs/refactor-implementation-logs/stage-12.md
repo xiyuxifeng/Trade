@@ -4,8 +4,8 @@
 
 - Stage：`Stage 12 旧入口退役与最终交付`
 - 当前活动：`RT-S12-002 preflight`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight PARTIAL_READY`
-- 当前 Task：`RT-S12-002` 端到端验收实现仍未开始；preflight only，ordinary-user formal route path remains frozen and no production code or business state was changed
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight PARTIAL_READY`；BacktestRun schema compatibility repair accepted with no-data residuals
+- 当前 Task：`RT-S12-002` 端到端验收实现仍未开始；preflight/readiness/schema compatibility only，ordinary-user formal route path remains frozen and no business evidence was recreated in the schema repair
 - 下一可执行项：先修复 preflight blocker，再等待用户明确授权后进入 `RT-S12-002` 实现；不得自动启动
   `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
@@ -186,6 +186,77 @@ All five already have one current `article_analysis_v1` prompt run and one candi
 - Fix preflight blockers first.
 - Do not start RT-S12-002 implementation until the blocker list is addressed and
   the user authorizes implementation.
+
+## 2026-06-25 RT-S12-002 BacktestRun Schema Compatibility Repair — No-Data Device
+
+### Status
+
+`BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
+
+### Entry Verification
+
+- Stage 11 Gate：`ACCEPTED`，from Stage 11 and main implementation logs.
+- Stage 12 Bootstrap：`READY`，from `docs/refactor-implementation-plans/stage-12-implementation-plan.md` and this Stage 12 log.
+- `RT-S12-001`：`ACCEPTED`.
+- `RT-S12-002` browser E2E：not started in this repair.
+- `RT-S12-003` user documentation：not started.
+- Stage 12 Gate：not started.
+- Working tree before repair：clean at `f5c038b` before pulling later upstream preflight/readiness commits.
+- This repair was rebased over upstream `RT-S12-002 Minimal Canonical Evidence Repair`; the current preflight record is `docs/refactor-implementation-logs/rt-s12-002-preflight.md`.
+
+### Scope
+
+- This was a narrow code/schema compatibility repair only.
+- No articles, OHLCV, DatasetSnapshot, MarketSnapshot, MarketRegime, RuleVersion, BacktestRun, BacktestResult, RuleApplicabilityProfile, author profile, strategy, daily plan, or optimization-proposal business evidence was imported, seeded, recreated, or counted as current RT-S12-002 evidence.
+- Minimal Canonical Evidence Repair Resume was not run.
+- Browser E2E, live provider refresh, LLM, live crawl, market backfill, RT-S12-003 docs, and Stage 12 Gate were not started.
+
+### Root Cause
+
+- ORM mapped `BacktestRun.status` through `SAEnum(BacktestRunStatus, name="backtest_run_status")`.
+- Committed migration `2026_06_18_0010_stage6_backtest_run_foundation.py` creates `backtest_runs.status` as `sa.String(length=32)`.
+- On a database that follows the committed migration-backed schema, the ORM enum mapping can require missing PostgreSQL enum type `backtest_run_status`.
+- Creating that enum manually would be an unapproved schema change, so the migration-backed `String(32)` column remains the source of truth.
+
+### Implementation
+
+- Updated `src/models/stage2_canonical.py` so `BacktestRun.status` is mapped as `String(32)`.
+- Kept `BacktestRunStatus` as a Python `StrEnum` / service-layer allowed-value constant.
+- Confirmed existing service code writes literal allowed status strings such as `dependency_checked`, `completed_valid`, and `completed_invalid`; no lifecycle behavior was broadened.
+- Added a focused SQLAlchemy metadata test proving `BacktestRun.status` is `String(32)`, is not `SAEnum`, and no longer carries the `backtest_run_status` enum type name.
+
+### Verification
+
+- Red test before fix:
+  - `../.venv/bin/python -m pytest tests/unit/models/test_stage2_canonical_models.py::test_backtest_run_status_matches_migration_backed_string_schema -q`
+  - result: failed because `BacktestRun.status` was `Enum(..., name='backtest_run_status')`.
+- Focused metadata test after fix:
+  - `../.venv/bin/python -m pytest tests/unit/models/test_stage2_canonical_models.py::test_backtest_run_status_matches_migration_backed_string_schema -q`
+  - result: `1 passed`.
+- Requested service tests:
+  - `../.venv/bin/python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`
+  - result: `22 passed`.
+- Broader touched model metadata tests:
+  - `../.venv/bin/python -m pytest tests/unit/models/test_stage2_canonical_models.py -q`
+  - result: `5 passed`.
+- Optional local env check:
+  - `../.venv/bin/python -m scripts.web_local env-check`
+  - result: skipped/unavailable because this checkout's `scripts.web_local` has no `env-check` command.
+- DB-dependent checks:
+  - `../.venv/bin/python -m cli.main db-check --config config/app.template.yaml`: skipped because `DATABASE_URL` / local DB environment was not available on this no-data device.
+  - `../.venv/bin/python -m alembic -c src/db/migrations/alembic.ini current`: skipped because `DATABASE_URL` / local DB environment was not available on this no-data device.
+- `git diff --check`: pass.
+- Changed-files secret scan on `src/models/stage2_canonical.py` and `tests/unit/models/test_stage2_canonical_models.py`: no matches.
+
+### Residuals / Next Task
+
+- Local DB/evidence checks were not run on this no-data device.
+- Minimal Canonical Evidence Repair remains represented by the upstream Stage 12 records; this schema repair did not add, modify, or count business evidence.
+- `RT-S12-002` browser E2E remains not started.
+
+### Final Decision
+
+`BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
 
 ## 2026-06-23 RT-S12-001 Blocker Repair — Ordinary-user terminology cleanup
 

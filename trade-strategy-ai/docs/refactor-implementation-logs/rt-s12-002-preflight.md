@@ -1,5 +1,28 @@
 # RT-S12-002 Preflight — Tooling, Config, Data, and E2E Readiness
 
+## 0A. 2026-06-25 BacktestRun schema compatibility repair
+
+- Status: `BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
+- Scope remained code/schema compatibility only; `RT-S12-002` browser E2E,
+  `RT-S12-003`, Stage 12 Gate, live provider refresh, live crawl, LLM execution,
+  market backfill, and business evidence repair were not started by this repair.
+- No articles, OHLCV, DatasetSnapshot, MarketSnapshot, MarketRegime,
+  RuleVersion, BacktestRun, BacktestResult, RuleApplicabilityProfile, author
+  profile, strategy, daily plan, or optimization-proposal evidence was imported,
+  seeded, recreated, supplemented, or counted as current RT-S12-002 evidence.
+- Root cause: ORM mapped `BacktestRun.status` through
+  `SAEnum(BacktestRunStatus, name="backtest_run_status")`, while committed
+  migration `2026_06_18_0010_stage6_backtest_run_foundation.py` creates
+  `backtest_runs.status` as `String(32)`.
+- Repair: `BacktestRun.status` now maps to `String(32)` in
+  `src/models/stage2_canonical.py`; `BacktestRunStatus` remains a Python
+  `StrEnum` / service-layer allowed-value constant.
+- Verification: focused metadata plus requested service tests passed
+  (`23 passed`); broader touched model metadata tests passed (`5 passed`);
+  `git diff --check` passed; changed-files secret scan had no matches.
+- Residual: canonical downstream evidence and data-readiness blockers recorded
+  in this preflight remain separate from this schema compatibility repair.
+
 ## 0. 2026-06-24 readiness repair result
 
 - Updated preflight status: `PARTIAL_READY`

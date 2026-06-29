@@ -266,6 +266,7 @@ class RuleApplicabilityProfile(TimestampMixin, Base):
             "market_state_source_version": self.market_state_source_version,
             "source_feature_version": self.source_feature_version,
             "review_status": self.review_status,
+            "lifecycle_state": self.lifecycle_state.value if hasattr(self.lifecycle_state, "value") else str(self.lifecycle_state),
             "quality_status": self.quality_status,
             "insufficient_sample_status": self.insufficient_sample_status,
             "min_sample_count": self.min_sample_count,

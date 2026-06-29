@@ -159,6 +159,23 @@ class RuleApplicabilityRepository:
         stmt = stmt.order_by(RuleApplicabilityProfile.profile_version_no.desc(), RuleApplicabilityProfile.created_at.desc())
         return await session.scalar(stmt.limit(1))
 
+    async def find_formal_profile_for_evidence(
+        self,
+        session: AsyncSession,
+        *,
+        run_id: UUID,
+        result_id: UUID,
+    ) -> RuleApplicabilityProfile | None:
+        del result_id
+        stmt = (
+            select(RuleApplicabilityProfile)
+            .where(
+                RuleApplicabilityProfile.source_backtest_id == str(run_id),
+            )
+            .order_by(RuleApplicabilityProfile.created_at.desc(), RuleApplicabilityProfile.profile_id.desc())
+        )
+        return await session.scalar(stmt.limit(1))
+
     async def create_formal_profile(self, session: AsyncSession, profile: RuleApplicabilityProfile) -> RuleApplicabilityProfile:
         require_canonical_write(
             "rule_applicability",

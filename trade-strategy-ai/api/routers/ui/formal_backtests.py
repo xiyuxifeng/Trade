@@ -38,6 +38,10 @@ class FormalApplicabilityReviewRequest(BaseModel):
     reason: str | None = None
 
 
+class FormalApplicabilityPublishRequest(BaseModel):
+    reason: str | None = None
+
+
 def get_backtest_application_service() -> BacktestApplicationService:
     session_factory = async_session_factory()
 
@@ -206,6 +210,30 @@ async def review_formal_applicability_profile(
         result = await service.review_applicability_profile(
             profile_id,
             request.review_status,
+            actor_id=_actor_id(principal),
+            actor_role=principal.role,
+            reason=request.reason,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到适用性画像") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
+    return _serialize(result)
+
+
+@router.post("/applicability-profiles/{profile_id}/publish")
+async def publish_formal_applicability_profile(
+    profile_id: str,
+    request: FormalApplicabilityPublishRequest,
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    service: BacktestApplicationService = Depends(get_backtest_application_service),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        result = await service.publish_applicability_profile(
+            profile_id,
             actor_id=_actor_id(principal),
             actor_role=principal.role,
             reason=request.reason,

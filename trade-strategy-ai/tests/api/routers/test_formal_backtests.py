@@ -194,6 +194,11 @@ class _FakeBacktestApplicationService:
         assert review_status == "approved"
         return _FakeProfile(review_status="approved")
 
+    async def publish_applicability_profile(self, profile_id: str, *, actor_id: str, actor_role: str, reason: str | None):
+        assert profile_id == "profile-1"
+        assert actor_role == "operator"
+        return _FakeProfile(review_status="published")
+
 
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
@@ -476,3 +481,53 @@ async def test_operator_can_review_formal_applicability_profile() -> None:
 
     assert response.status_code == 200
     assert response.json()["review_status"] == "approved"
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_publish_formal_applicability_profile() -> None:
+    fake_service = _FakeBacktestApplicationService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rules/backtests/applicability-profiles/profile-1/publish",
+                json={"reason": "发布到策略验证"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["review_status"] == "published"
+
+
+@pytest.mark.asyncio()
+async def test_viewer_cannot_publish_formal_applicability_profile() -> None:
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_backtest_application_service] = lambda: _FakeBacktestApplicationService()
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="viewer",
+            api_key_label="viewer",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/ui/v1/rules/backtests/applicability-profiles/profile-1/publish",
+                json={"reason": "发布到策略验证"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403

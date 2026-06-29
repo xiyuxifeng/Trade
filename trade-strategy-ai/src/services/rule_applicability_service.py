@@ -654,8 +654,20 @@ class RuleApplicabilityService(BaseService):
                     metadata={"run_id": str(parsed_run_id), "result_id": str(_get(result, "result_id"))},
                 )
 
+            existing = await repo.find_formal_profile_for_evidence(
+                session,
+                run_id=parsed_run_id,
+                result_id=_get(result, "result_id"),
+            )
+            if existing is not None:
+                return ServiceResult(
+                    status="ok",
+                    message="formal rule applicability draft already exists for evidence",
+                    payload={"profile": existing.to_dict()},
+                )
+
             current = await repo.find_current_formal_profile(session, run=run)
-            applicability_profile_id = _get(current, "applicability_profile_id", None) or uuid4()
+            applicability_profile_id = uuid4()
             version_no = await repo.next_formal_version_no(session, applicability_profile_id=applicability_profile_id)
             metrics = self._formal_profile_metrics(result)
             profile = RuleApplicabilityProfile(

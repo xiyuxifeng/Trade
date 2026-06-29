@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.stage2_writer_routing import require_canonical_write
@@ -116,6 +116,11 @@ class StrategyRepository:
         updated_at: datetime,
     ) -> None:
         require_canonical_write("strategy", "StrategyRepository.set_current_published_version")
+        await session.execute(
+            update(Strategy)
+            .where(Strategy.strategy_id != strategy.strategy_id, Strategy.current_published_version_id.is_not(None))
+            .values(current_published_version_id=None, updated_by=actor_id, updated_at=updated_at)
+        )
         strategy.current_published_version_id = version_id
         strategy.updated_by = actor_id
         strategy.updated_at = updated_at

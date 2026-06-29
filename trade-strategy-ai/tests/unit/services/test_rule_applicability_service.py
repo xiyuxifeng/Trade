@@ -288,6 +288,12 @@ class _FormalProfileRepository:
                 return profile
         return None
 
+    async def find_formal_profile_for_evidence(self, _session, *, run_id: UUID, result_id: UUID):
+        for profile in reversed(self.profiles):
+            if profile.source_backtest_id == str(run_id) and str(result_id) in (profile.source_backtest_result_ids or []):
+                return profile
+        return None
+
     async def create_formal_profile(self, _session, profile: RuleApplicabilityProfile):
         self.profiles.append(profile)
         return profile
@@ -471,7 +477,7 @@ async def test_generate_formal_draft_keeps_insufficient_sample_separate_from_neg
 
 
 @pytest.mark.asyncio()
-async def test_generate_formal_draft_does_not_overwrite_reviewed_profile(tmp_path: Path) -> None:
+async def test_generate_formal_draft_reuses_existing_profile_for_same_formal_evidence(tmp_path: Path) -> None:
     from src.services.rule_applicability_service import RuleApplicabilityService
 
     session_scope, engine = await _build_session_factory(tmp_path)
@@ -490,11 +496,10 @@ async def test_generate_formal_draft_does_not_overwrite_reviewed_profile(tmp_pat
     second = await service.generate_formal_draft(run_id=str(run.run_id), result_id=str(result.result_id), actor_id="operator-1", actor_role="operator", reason="new evidence")
 
     assert reviewed.status == "ok"
-    assert first.payload["profile"]["profile_id"] != second.payload["profile"]["profile_id"]
-    assert second.payload["profile"]["profile_version_no"] == 2
-    assert second.payload["profile"]["supersedes_profile_id"] == first.payload["profile"]["profile_id"]
+    assert first.payload["profile"]["profile_id"] == second.payload["profile"]["profile_id"]
+    assert second.payload["profile"]["profile_version_no"] == 1
+    assert len(repo.profiles) == 1
     assert repo.profiles[0].review_status == "approved"
-    assert repo.audit_events[-1]["transition"] == "draft_created"
 
     await engine.dispose()
 

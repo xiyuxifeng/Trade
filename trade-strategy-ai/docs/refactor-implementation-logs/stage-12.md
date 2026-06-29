@@ -3,12 +3,76 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`RT-S12-002 Reference Chain Completion Repair`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 reference chain READY_FOR_RT_S12_002_IMPLEMENTATION`；Browser E2E Acceptance 未开始
-- 当前 Task：`RT-S12-002` final browser E2E 验收实现仍未开始；reference-chain repair 已完成 pre-E2E smoke/contract evidence，不得计为 Browser E2E final pass evidence
-- 下一可执行项：等待用户明确授权后进入 `RT-S12-002 Browser E2E Acceptance`；不得自动启动
-  `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
+- 当前活动：`RT-S12-002 Browser E2E Acceptance`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`
+- 当前 Task：`RT-S12-002` final browser E2E 验收已通过；reference-chain records 未计为 final pass evidence
+- 下一可执行项：等待用户明确授权后进入 `RT-S12-003 用户文档`；不得自动启动
+  `RT-S12-003`、Stage 12 Gate 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
+
+## 2026-06-29 RT-S12-002 Browser E2E Acceptance
+
+### Status
+
+`RT_S12_002_BROWSER_E2E_ACCEPTED`
+
+### Scope
+
+- Browser E2E used formal UI routes and formal UI/API endpoints.
+- Reference-chain records remained setup/comparison evidence only and were not counted as final pass evidence.
+- No `RT-S12-003`, user documentation generation, Stage 12 Gate, broad live provider refresh, article recrawl, broad market backfill, or LLM execution was started.
+- Detailed evidence log: [RT-S12-002 Browser E2E Acceptance](rt-s12-002-browser-e2e.md).
+
+### Final E2E evidence
+
+- Run id: `rt-s12-002-e2e-1782743876308`
+- ArticleRevision: `b64a3c51-bf32-562c-8a86-849eac28ad72`
+- Prompt/schema version: `article_analysis_v1` / `article_analysis_v1`
+- RuleVersion: `8d15ae78-4abb-40ef-9a6e-184bb7289d0c`
+- BacktestRun: `f6a90723-3d8c-472b-b057-cc58238974b8`
+- BacktestResult: `3fd98591-c9b4-4959-b1e5-598f9db979d7`
+- DatasetSnapshot: `b534d59d-851a-4a78-a32d-af6e71a4e71f`
+- MarketSnapshots: `88aa0f65-0fb8-41fb-aee8-cb8bbdb33a6f`, `9646ace9-a755-485d-89f4-4900602bde30`
+- MarketStates: `a8c2d82f-8db9-41ad-aec7-4c79f42c701f`, `f9084b48-020a-4493-84a0-f2994e7dbccf`
+- RuleApplicabilityProfile stable id: `d4e78900-7326-42a1-b28e-1f83583ee358`
+- RuleApplicabilityProfile row id: `54f553dd-9f79-4fdd-9067-128e3fa67671`
+- AuthorProfileVersion IDs: method `878294da-85b8-46b1-ada7-a66287468526`, rule `99b44c67-77f5-40b4-99c9-5fa17b88dad8`, validated `04327d22-1c64-4604-9477-8ef9786b9162`
+- StrategyVersion: `b0ef4ad1-3753-4115-966a-4e816a591f42`
+- Strategy validation state: `passed`
+- Current published strategy pointer: `b0ef4ad1-3753-4115-966a-4e816a591f42`
+- DailyRuleSelection: `65e08166-a346-4b3e-bed7-96cfe156c078`
+- DailyStrategyInstance: `539023df-cfba-484f-9fe7-be7a8723e5ef`
+- TradingDayPlan: `66b87fa8-f3a8-454f-8e06-c1dbd6b71ee2`
+- PostMarketReview: `afc638fa-fb22-4d11-96df-38ebe5949aac`
+- OptimizationProposal IDs: `2b675c91-3014-471b-97e5-24609e0d0b38`, `a005dd39-78fe-4dac-bec2-947b2c3ad19c`, `1420a163-7625-4066-977f-14c2998cdd0a`
+
+### Bounded fixes completed
+
+- Added a formal Playwright E2E test for the Stage 12 product journey.
+- Exposed formal RuleApplicability publish API through `/api/ui/v1/rules/backtests/applicability-profiles/{profile_id}/publish`.
+- Made formal RuleApplicability draft generation idempotent for the same run/result evidence and compatible with the existing unique stable-id contract.
+- Exposed RuleApplicability lifecycle state in API evidence.
+- Corrected E2E strategy evidence binding to stable `applicability_profile_id` and formal plural backtest evidence fields.
+- Enforced a single current formal strategy pointer during strategy publish so pre-market readiness reads one source of truth.
+- Installed Playwright Chromium runtime for this authorized Browser E2E task; runtime cache files were not committed.
+
+### Verification
+
+- `python -m scripts.web_local env-check`: pass.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`.
+- Focused backend/API/service tests: pass during the review/fix loop.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`: pass.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm e2e`: pass, `1 passed`.
+- `git diff --check`: pass.
+- Changed-files secret scan: pass.
+
+### Decision
+
+`RT_S12_002_BROWSER_E2E_ACCEPTED`
+
+Next allowed item is `RT-S12-003 用户文档`, only after explicit user authorization. Stage 12 Gate remains not started.
 
 ## 2026-06-29 RT-S12-002 Reference Chain Completion Repair
 
@@ -135,9 +199,9 @@
 
 - `python -m pytest tests/unit/scripts/test_web_local.py -q`: `4 passed`.
 - `python -m scripts.web_local env-check`: pass; printed only set/unset/source with sensitive values redacted.
-- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck`: pass.
-- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/app/route-config.test.tsx`: `12 passed`.
-- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm exec playwright --version`: `Version 1.61.1`.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`: pass.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx`: `12 passed`.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm exec playwright --version`: `Version 1.61.1`.
 - `git diff --check`: pass.
 - Changed-files secret scan:
   - hits are variable names, redacted labels, dependency names/integrities, fake/example test fixtures, or pre-existing local helper parameter names
@@ -399,12 +463,12 @@ No remaining hit is classified as `remaining blocker`.
 
 ### Verification
 
-- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm vitest run src/app/route-config.test.tsx src/app/router-auth.test.tsx src/app/navigation.test.ts src/components/layout/sidebar.test.tsx src/components/layout/section-nav.test.tsx src/lib/error-recovery.test.ts src/components/dashboard/dashboard-recent-jobs.test.tsx src/components/dashboard/dashboard-status-summary.test.tsx src/pages/system/index.test.tsx`
+- `PATH="${NODE18_BIN}:$PATH" pnpm vitest run src/app/route-config.test.tsx src/app/router-auth.test.tsx src/app/navigation.test.ts src/components/layout/sidebar.test.tsx src/components/layout/section-nav.test.tsx src/lib/error-recovery.test.ts src/components/dashboard/dashboard-recent-jobs.test.tsx src/components/dashboard/dashboard-status-summary.test.tsx src/pages/system/index.test.tsx`
   - result: `9` files passed, `89` tests passed.
 - Broader exploratory frontend run additionally included daily/strategy pages; it had one unrelated date-sensitive failure in `src/pages/daily/index.test.tsx` expecting `2026-06-22` while the session date is `2026-06-23`, plus stale expectations repaired in this blocker scope. The accepted verification set above excludes that unrelated date assertion.
-- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm typecheck`
+- `PATH="${NODE18_BIN}:$PATH" pnpm typecheck`
   - result: pass.
-- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm eslint src/lib/error-recovery.ts src/lib/error-recovery.test.ts src/components/dashboard/dashboard-recent-jobs.tsx src/components/dashboard/dashboard-recent-artifacts.tsx src/components/dashboard/dashboard-status-summary.tsx src/components/dashboard/dashboard-alert-strip.tsx src/components/status/recent-jobs-panel.tsx src/components/status/recent-artifacts-panel.tsx src/pages/system/index.tsx src/pages/system/index.test.tsx`
+- `PATH="${NODE18_BIN}:$PATH" pnpm eslint src/lib/error-recovery.ts src/lib/error-recovery.test.ts src/components/dashboard/dashboard-recent-jobs.tsx src/components/dashboard/dashboard-recent-artifacts.tsx src/components/dashboard/dashboard-status-summary.tsx src/components/dashboard/dashboard-alert-strip.tsx src/components/status/recent-jobs-panel.tsx src/components/status/recent-artifacts-panel.tsx src/pages/system/index.tsx src/pages/system/index.test.tsx`
   - result: pass.
 - `git diff --check`
   - result: pass.
@@ -948,8 +1012,8 @@ Verification:
 - `python -m cli.main db-check --config config/app.template.yaml`: pass
 - `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
 - `python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`: pass, `22 passed`
-- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm typecheck`: pass
-- `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
+- `PATH="${NODE18_BIN}:$PATH" pnpm typecheck`: pass
+- `PATH="${NODE18_BIN}:$PATH" pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
 - `git diff --check`: pass
 
 Next required repair:

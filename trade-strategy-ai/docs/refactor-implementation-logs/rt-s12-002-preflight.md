@@ -1,5 +1,22 @@
 # RT-S12-002 Preflight — Tooling, Config, Data, and E2E Readiness
 
+## 0D. 2026-06-29 Browser E2E Acceptance
+
+- Status: `RT_S12_002_BROWSER_E2E_ACCEPTED`
+- Browser E2E Acceptance was explicitly authorized and completed after the
+  reference-chain completion repair.
+- Final evidence is recorded separately in
+  [RT-S12-002 Browser E2E Acceptance](rt-s12-002-browser-e2e.md).
+- Reference-chain records from section `0C` remain setup/comparison evidence
+  only and were not counted as final pass evidence.
+- Final Browser E2E run id: `rt-s12-002-e2e-1782743876308`.
+- Final Browser E2E generated new object IDs for BacktestRun, BacktestResult,
+  RuleApplicabilityProfile, AuthorProfileVersions, StrategyVersion,
+  DailyRuleSelection, DailyStrategyInstance, TradingDayPlan, PostMarketReview,
+  and OptimizationProposal records.
+- Next allowed task is `RT-S12-003 用户文档`, only after explicit user
+  authorization. Stage 12 Gate remains not started.
+
 ## 0C. 2026-06-29 Reference chain completion repair
 
 - Status: `READY_FOR_RT_S12_002_IMPLEMENTATION`
@@ -209,8 +226,8 @@ Verification:
 - `python -m cli.main db-check --config config/app.template.yaml`: pass
 - `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`
 - `python -m pytest tests/unit/services/test_strategy_center_service.py::test_strategy_audit_writer_sets_explicit_timestamps tests/unit/services/test_author_profile_service.py::test_author_profile_audit_writer_sets_explicit_timestamps tests/unit/services/test_rule_applicability_service.py::test_rule_applicability_audit_writer_sets_explicit_timestamps tests/unit/services/test_rule_applicability_service.py::test_publish_formal_profile_marks_published_for_downstream_consumers -q`: pass, `4 passed`
-- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm typecheck`: pass
-- `cd web && PATH=/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`: pass
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`
 - `git diff --check`: pass
 - changed-files secret scan: pass, no matches
 
@@ -904,10 +921,10 @@ Verification:
   - `python -m pytest tests/unit/services/test_backtest_application_service.py tests/unit/services/test_rule_applicability_service.py -q`
   - pass, `22 passed`
 - web typecheck:
-  - `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm typecheck`
+  - `PATH="${NODE18_BIN}:$PATH" pnpm typecheck`
   - pass
 - web route test:
-  - `PATH="/Users/wanghui/.nvm/versions/node/v18.20.8/bin:$PATH" pnpm test -- src/app/route-config.test.tsx`
+  - `PATH="${NODE18_BIN}:$PATH" pnpm test -- src/app/route-config.test.tsx`
   - pass, `12 passed`
 - `git diff --check`: pass
 

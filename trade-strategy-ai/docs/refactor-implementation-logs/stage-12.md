@@ -3,12 +3,98 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`RT-S12-002 preflight`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 preflight PARTIAL_READY`；BacktestRun schema compatibility repair accepted with no-data residuals
-- 当前 Task：`RT-S12-002` 端到端验收实现仍未开始；preflight/readiness/schema compatibility only，ordinary-user formal route path remains frozen and no business evidence was recreated in the schema repair
-- 下一可执行项：先修复 preflight blocker，再等待用户明确授权后进入 `RT-S12-002` 实现；不得自动启动
+- 当前活动：`RT-S12-002 Reference Chain Completion Repair`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 reference chain READY_FOR_RT_S12_002_IMPLEMENTATION`；Browser E2E Acceptance 未开始
+- 当前 Task：`RT-S12-002` final browser E2E 验收实现仍未开始；reference-chain repair 已完成 pre-E2E smoke/contract evidence，不得计为 Browser E2E final pass evidence
+- 下一可执行项：等待用户明确授权后进入 `RT-S12-002 Browser E2E Acceptance`；不得自动启动
   `RT-S12-003`、Stage 12 Gate、browser E2E 或用户文档生成
 - 不得自动开始：不得自动开始后续 Stage 12 Task
+
+## 2026-06-29 RT-S12-002 Reference Chain Completion Repair
+
+### Status
+
+`READY_FOR_RT_S12_002_IMPLEMENTATION`
+
+### Scope
+
+- Bounded reference-chain repair only.
+- No final `RT-S12-002` Browser E2E Acceptance was started.
+- No `RT-S12-003` user documentation, Stage 12 Gate, broad live provider refresh, article recrawl, LLM run, or broad market backfill was started.
+- Reference-chain records are pre-E2E smoke/contract evidence only. Browser E2E must still generate or lifecycle-transition a separate final E2E chain and record new object IDs or new audit/lifecycle transitions.
+
+### Repairs completed
+
+- `StrategyCenterService` validation now reads real `BacktestResult.coverage_json` nested sample coverage and result execution state instead of requiring flat fields that current formal backtest results do not write.
+- Level-1 validation reports `out_of_sample_state=not_required` when market-state coverage is explicitly not required, instead of treating it as unavailable.
+- `BacktestRunRepository.find_dataset_snapshot` now rejects future dataset snapshots for a requested backtest end date, preventing point-in-time leakage.
+- Pre-market readiness now accepts global level-1 applicability profiles without market snapshot bindings while still requiring snapshot matches for snapshot-bound profiles.
+- Post-close actual availability checks now normalize naive database timestamps as Asia/Shanghai timestamps before comparing with cutoff times.
+
+### Strategy validation and publish evidence
+
+- Strategy: `15416124-5087-4cbc-998b-ca107423c74b`
+- StrategyVersion: `6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+- `current_published_version_id`: `6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+- Validation state: `passed`
+- `out_of_sample_state`: `not_required`
+- `sample_coverage.state`: `sufficient`
+- `sample_count`: `40`
+- Evidence source:
+  - BacktestRun `ec58660b-7a34-46e3-8744-b2cec0436655`
+  - BacktestResult `46f17a5c-5895-427f-8b6b-19d309aeafac`
+  - result nested coverage sample count `40`, sample state `ready`, level-1 market-state coverage `not_required`
+- Audit/lifecycle evidence:
+  - existing `created_draft`
+  - prior `validated`
+  - new `submitted_for_review`
+  - new `validated`
+  - new `published`
+
+### Reference chain evidence
+
+- New pre-market dataset-bound repair evidence:
+  - BacktestRun `cd19b7bc-ff03-47ae-8183-79bd36258a51`
+  - BacktestResult `8571385f-1a3a-40d5-82fb-3cd7c205aa55`
+  - RuleApplicabilityProfile stable id `e49756c0-21c1-4558-a57f-aabd7c91f94d`
+  - profile row id `ea020370-e641-41ea-9791-69688a72a38e`
+  - DatasetSnapshot `680a9e4a-8cb4-4131-8ef0-785031cb670b`
+- DailyRuleSelection: `8db45d9a-d944-4686-a1ab-d2564552ba85`
+- DailyStrategyInstance: `9a8858ec-70c1-4348-bc41-b969dd131d40`
+- TradingDayPlan: `ce6dd260-c916-4151-bb33-4361837b19fa`
+- PostMarketReview: `4249b5b2-6e9a-4c93-88c8-d76c4fa47429`
+- OptimizationProposal records:
+  - RuleOptimizationProposal `0d82c843-0130-435d-af0e-9b507c228de8`
+  - AuthorProfileRevisionProposal `f328e549-8be8-4ab1-b07b-fb287872a806`
+  - StrategyRevisionProposal `0cad8dc4-a2b6-4961-9e8e-2d356df67fca`
+
+### Review loop
+
+- Loop 1 found the validation contract mismatch between nested formal `BacktestResult.coverage_json` and strategy validation's flat-field reader; fixed the contract and added focused unit coverage.
+- Loop 2 found dataset snapshot selection could choose a future snapshot; fixed the repository lookup and added a point-in-time regression test.
+- Loop 3 found daily readiness rejected valid level-1 global applicability profiles; fixed the readiness matcher and added a regression test.
+- Loop 4 found broader daily/post-close tests exposed naive/aware datetime mismatches; fixed timestamp normalization and reran the affected suite.
+
+### Verification
+
+- `python -m scripts.web_local env-check`: pass, redacted output only.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, current/head `2026_06_20_0001`.
+- Focused backend aggregate: `73 passed`.
+- `web` typecheck with Node 18: pass.
+- `web` route-config test: `12 passed`.
+- `git diff --check`: pass.
+- Changed-files secret scan: pass, no matches.
+
+### Residuals
+
+- Browser E2E Acceptance remains not started and must not reuse these records as final pass evidence.
+- PostMarketReview and optimization proposals were generated truthfully from partial/invalid post-close evidence; evidence states were not faked to ready.
+- An earlier attempted dataset-bound repair created a non-final backtest/applicability set against a future-selected dataset before the point-in-time repository fix. It is not counted as daily readiness evidence.
+
+### Decision
+
+`READY_FOR_RT_S12_002_IMPLEMENTATION`
 
 ## 2026-06-24 RT-S12-002 Readiness Repair — 5.5 Review / Bounded Repair
 

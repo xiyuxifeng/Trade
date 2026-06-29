@@ -692,7 +692,7 @@ class PreMarketReadinessService:
                 profile
                 for profile in applicability_profiles
                 if profile.rule_version_id == membership.rule_version_id
-                and str(market_snapshot.id) in [str(item) for item in (profile.market_snapshot_ids or [])]
+                and self._profile_matches_market_snapshot(profile, market_snapshot)
             ]
             matched.sort(key=self._applicability_profile_sort_key)
             if matched:
@@ -742,6 +742,13 @@ class PreMarketReadinessService:
             can_proceed_in_degraded_mode=False,
             traceability={"applicability_profile_ids": [str(item.applicability_profile_id) for item in selected]},
         )
+
+    @staticmethod
+    def _profile_matches_market_snapshot(profile: Any, market_snapshot: Any) -> bool:
+        snapshot_ids = [str(item) for item in (profile.market_snapshot_ids or [])]
+        if snapshot_ids:
+            return str(market_snapshot.id) in snapshot_ids
+        return str(getattr(profile, "effective_level", "") or "") == "level_1"
 
     def _build_data_quality_check(
         self,

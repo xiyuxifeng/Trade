@@ -729,6 +729,54 @@ async def test_strategy_center_validates_compares_diffs_and_rolls_back_with_audi
 
 
 @pytest.mark.asyncio()
+async def test_strategy_validation_reads_nested_backtest_result_coverage_without_mutating_run(tmp_path: Path) -> None:
+    from src.services.strategy_center_service import StrategyCenterService, StrategyValidationRequest
+
+    session_scope, session_factory, engine = await _build_session_factory(tmp_path)
+    deps = await _seed_dependencies(session_factory)
+    async with session_factory() as session:
+        run = await session.get(BacktestRun, deps["backtest_run_id"])
+        result = await session.get(BacktestResult, deps["backtest_result_id"])
+        assert run is not None
+        assert result is not None
+        run.status = "dependency_checked"
+        run.quality_state = "not_executed"
+        run.audit_json = {"after_state": "dependency_checked"}
+        result.status = "completed_valid"
+        result.effective_level = "level_1"
+        result.sample_state_counts = {
+            "eligible": 40,
+            "evaluated_true": 40,
+            "evaluated_false": 0,
+            "insufficient_sample": 0,
+            "market_state_unavailable": 0,
+            "kaipan_unavailable": 0,
+        }
+        result.coverage_json = {
+            "samples": {"state": "ready", "count": 40},
+            "market_state": {"state": "not_required", "available": None},
+        }
+        await session.commit()
+
+    service = StrategyCenterService(session_scope_factory=session_scope)
+    draft = await service.create_draft(_draft_request(deps), actor_id="operator-a", actor_role="operator")
+
+    validated = await service.validate_version(
+        draft.strategy_version_id,
+        StrategyValidationRequest(reason="校验嵌套回测覆盖契约"),
+        actor_id="reviewer-a",
+        actor_role="operator",
+    )
+
+    assert validated.validation.state == "passed"
+    assert validated.validation.backtest.out_of_sample_state == "not_required"
+    assert validated.validation.sample_coverage.state == "sufficient"
+    assert validated.validation.sample_coverage.sample_count == 40
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio()
 async def test_strategy_center_proposal_lifecycle_accepts_to_new_draft_without_publishing(tmp_path: Path) -> None:
     from src.services.strategy_center_service import (
         StrategyCenterService,

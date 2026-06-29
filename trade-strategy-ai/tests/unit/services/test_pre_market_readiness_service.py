@@ -416,6 +416,39 @@ async def test_pre_market_readiness_marks_partial_rule_applicability_as_degraded
         await engine.dispose()
 
 
+def test_rule_applicability_check_accepts_level_1_global_profile_without_market_snapshot_binding() -> None:
+    from types import SimpleNamespace
+
+    from src.services.pre_market_readiness_service import PreMarketReadinessService, PreMarketTraceabilityView
+
+    service = PreMarketReadinessService()
+    rule_version_id = uuid4()
+    profile_id = uuid4()
+    market_snapshot_id = uuid4()
+    traceability = PreMarketTraceabilityView(trade_date="2024-05-31")
+
+    check = service._build_rule_applicability_check(
+        memberships=[SimpleNamespace(rule_version_id=rule_version_id)],
+        market_snapshot=SimpleNamespace(id=market_snapshot_id),
+        applicability_profiles=[
+            SimpleNamespace(
+                applicability_profile_id=profile_id,
+                rule_version_id=rule_version_id,
+                market_snapshot_ids=[],
+                effective_level="level_1",
+                quality_status="complete",
+                result_status="ready",
+                reviewed_at=None,
+                created_at=None,
+            )
+        ],
+        traceability=traceability,
+    )
+
+    assert check.status == "ready"
+    assert traceability.rule_applicability_profile_ids == [str(profile_id)]
+
+
 @pytest.mark.asyncio()
 async def test_pre_market_readiness_blocks_when_pre_market_snapshot_or_market_state_missing(tmp_path: Path) -> None:
     from src.services.pre_market_readiness_service import PreMarketReadinessService

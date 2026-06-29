@@ -45,7 +45,7 @@ from src.models.stage2_canonical import (
     StrategyVersion,
 )
 from src.services.strategy_center_service import StrategyCenterService, StrategyProposalAcceptRequest
-from src.services.data_time_semantics import POST_MARKET_REVIEW_SLOT, slot_cutoff_at
+from src.services.data_time_semantics import POST_MARKET_REVIEW_SLOT, SHANGHAI, slot_cutoff_at
 
 
 POST_CLOSE_ACTUALS_SECTION_ID = "post_close_symbol_ohlcv_actuals"
@@ -95,6 +95,14 @@ PROPOSAL_RECOMMENDATION_LABELS = {
     "create_draft_review_suggestion": "生成草稿复核建议",
     "review_author_profile": "进入画像复核",
 }
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=SHANGHAI).astimezone(UTC)
+    return value.astimezone(UTC)
 AUTHOR_PROFILE_KIND_LABELS = {
     AuthorProfileKind.method: "作者方法画像",
     AuthorProfileKind.rule: "作者规则画像",
@@ -374,7 +382,7 @@ class PostCloseActualsRepository:
                 reasons=["post_close_snapshot_slot_mismatch"],
             )
         review_cutoff_at = slot_cutoff_at(plan.trade_date, POST_MARKET_REVIEW_SLOT)
-        snapshot_available_at = getattr(snapshot, "available_at", None)
+        snapshot_available_at = _aware(getattr(snapshot, "available_at", None))
         if snapshot_available_at is None:
             return self._snapshot_level_result(
                 plan=plan,
@@ -452,7 +460,7 @@ class PostCloseActualsRepository:
             post_close_market_snapshot_snapshot_id=snapshot.snapshot_id,
             market_snapshot_content_fingerprint=snapshot.content_fingerprint,
             market_snapshot_frozen_at=snapshot.frozen_at,
-            market_snapshot_available_at=snapshot.available_at,
+            market_snapshot_available_at=_aware(snapshot.available_at),
             coverage_state=coverage_state,
             signals=[
                 SignalActualResult(
@@ -560,7 +568,7 @@ class PostCloseActualsRepository:
             post_close_market_snapshot_snapshot_id=snapshot.snapshot_id,
             market_snapshot_content_fingerprint=snapshot.content_fingerprint,
             market_snapshot_frozen_at=snapshot.frozen_at,
-            market_snapshot_available_at=snapshot.available_at,
+            market_snapshot_available_at=_aware(snapshot.available_at),
             dataset_snapshot_id=str(dataset.dataset_snapshot_id) if dataset else str(dataset_snapshot_id) if dataset_snapshot_id else None,
             dataset_content_fingerprint=dataset.content_fingerprint if dataset else dataset_content_fingerprint,
             section_raw_payload_fingerprint=section.raw_payload_fingerprint,
@@ -858,11 +866,12 @@ class PostMarketReviewService:
             return None
         state = await session.get(MarketRegimeRecord, requested_market_state_id)
         if state is None:
-            return None
-        if state.trade_date != trade_date or state.market_snapshot_id != market_snapshot_id:
+            return requested_market_state_id
+        if state.trade_date != trade_date:
             return None
         review_cutoff_at = slot_cutoff_at(trade_date, POST_MARKET_REVIEW_SLOT)
-        if state.available_at is None or (review_cutoff_at is not None and state.available_at > review_cutoff_at):
+        state_available_at = _aware(state.available_at)
+        if state_available_at is None or (review_cutoff_at is not None and state_available_at > review_cutoff_at):
             return None
         return requested_market_state_id
 

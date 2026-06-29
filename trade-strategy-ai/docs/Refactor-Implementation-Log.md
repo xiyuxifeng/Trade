@@ -23,16 +23,29 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 preflight PARTIAL_READY；Minimal Canonical Evidence Repair Resume STILL_BLOCKED；实现仍未开始`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 reference chain READY_FOR_RT_S12_002_IMPLEMENTATION；Browser E2E Acceptance 未开始`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：`RT-S12-002 preflight / reference-chain completion`；tooling/runtime blocker 已收敛，BacktestRun status ORM/schema compatibility 已修复，原始数据设备上已生成 reference BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft；当前真实 blocker 是 `StrategyCenterService.validate_version` 返回 `insufficient_coverage`（`backtest.out_of_sample_state=unavailable`、`sample_coverage.state=unknown`），因此 reference Strategy publish、daily/post-close/proposal reference chain 仍未完成。`RT-S12-002` browser E2E、`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：无 reference-chain blocker；`StrategyCenterService.validate_version` 已通过真实 nested `BacktestResult.coverage_json` / level-1 coverage evidence 返回 `passed`，reference Strategy 已发布，并已生成 DailyRuleSelection、DailyStrategyInstance、TradingDayPlan、PostMarketReview 和 OptimizationProposal reference chain。`RT-S12-002` browser E2E、`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：先执行 `RT-S12-002 Reference Chain Completion Repair`，修复 Strategy validation coverage evidence 并完成 reference Strategy publish → DailyRuleSelection → DailyStrategyInstance → TradingDayPlan → PostMarketReview → OptimizationProposal；不得自动启动 Browser E2E、`RT-S12-003`、用户文档生成或 Stage 12 Gate。
+- 下一步：等待用户明确授权后启动 `RT-S12-002 Browser E2E Acceptance`；不得自动启动 Browser E2E、`RT-S12-003`、用户文档生成或 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-002 Reference Chain Completion Repair`
+- 状态: `进行中（READY_FOR_RT_S12_002_IMPLEMENTATION；Browser E2E 未开始）`
+- 修改范围: `src/services/strategy_center_service.py`、`src/db/repositories/backtest_run_repository.py`、`src/services/pre_market_readiness_service.py`、`src/services/post_close_actuals_service.py`、focused backend tests、Stage 12 implementation logs
+- 关键设计决定: 修复 service/repository contract mismatch，读取真实 nested backtest coverage；level-1 market-state coverage 明确使用 `not_required`；禁止未来 dataset snapshot 被选入 backtest；reference chain 只作为 pre-E2E smoke/contract evidence。
+- 数据库迁移: 无
+- 兼容处理: 未创建 PostgreSQL enum，未变更 frozen validation/publication/schema/data-source contract；保留 reference-chain / final-E2E-chain 分离边界。
+- 已运行测试: `python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、focused backend aggregate、`web` typecheck、`web` route-config test、`git diff --check`、changed-files secret scan
+- 测试结果: backend focused aggregate `73 passed`；route-config `12 passed`；typecheck/pass；DB current/head `2026_06_20_0001`；secret scan no matches
+- 已完成项: Strategy validation `passed`；reference StrategyVersion published；reference DailyRuleSelection、DailyStrategyInstance、TradingDayPlan、PostMarketReview、RuleOptimizationProposal、AuthorProfileRevisionProposal 和 StrategyRevisionProposal created.
+- 未完成项: Browser E2E Acceptance 未开始；RT-S12-003、用户文档和 Stage 12 Gate 未开始。
+- 已知风险: repair/reference records 不能作为 Browser E2E final pass evidence；Browser E2E 必须生成或 lifecycle-transition separate final E2E chain。
+- 验收结论: `READY_FOR_RT_S12_002_IMPLEMENTATION`
 
 - Task ID: `RT-S12-002 Reference Chain Boundary Documentation Repair`
 - 状态: `已完成（BOUNDARY_DOCUMENTED）`
@@ -157,7 +170,7 @@
 - Stage 9 Gate 最终 `ACCEPTED`；`RT-S9-001/002/003` 已接受。
 - Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`；Stage 11 Gate 已于 2026-06-23 最终 `ACCEPTED`。
 - Stage 12 Bootstrap 已于 2026-06-23 `READY`；`RT-S12-001` 已于 2026-06-23 `ACCEPTED`。
-- RT-S12-002 reference chain 当前仍因 Strategy validation `insufficient_coverage` 阻塞；需要先完成 Reference Chain Completion Repair，再进入 Browser E2E Acceptance。
+- RT-S12-002 reference chain 已完成 pre-E2E smoke/contract evidence；Browser E2E not run，必须等待用户明确授权并生成 separate final E2E chain。
 - Browser E2E not run：归类为 final Stage 12 E2E；Browser E2E 必须生成 separate final E2E chain，不能只读取 reference-chain records。
 - legacy compatibility source / admin diagnostics / historical docs 仍包含 internal terms；普通用户正式入口不得暴露 legacy main entries。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
@@ -218,7 +231,7 @@
 | RT-S11-007 | `[x]` | 用户友好错误、共享错误契约和 Stage 11 focused verification 已接受 | [Stage 11](refactor-implementation-logs/stage-11.md) |
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
-| RT-S12-002 | `[!]` | 端到端验收未开始；reference chain 已推进到 Strategy draft，但 Strategy validation `insufficient_coverage` 阻塞；Browser E2E 必须生成 separate final E2E chain，不能复用 reference chain 作为通过证据 | [Stage 12](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
+| RT-S12-002 | `[-]` | reference chain 已完成并达到 `READY_FOR_RT_S12_002_IMPLEMENTATION`；Browser E2E Acceptance 未开始，且必须生成 separate final E2E chain，不能复用 reference chain 作为通过证据 | [Stage 12](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 | RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
@@ -237,15 +250,15 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` final E2E 未开始；reference chain 因 Strategy validation `insufficient_coverage` 阻塞；Browser E2E boundary 已记录；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` reference chain ready for Browser E2E implementation authorization；Browser E2E boundary 已记录；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 
 ## 下一步建议
 
 建议下一次先处理：
 
 ```text
-Stage 12 next required repair:
-`RT-S12-002 Reference Chain Completion Repair`：修复 Strategy validation `insufficient_coverage`（已存在 BacktestRun、BacktestResult、RuleApplicabilityProfile、AuthorProfileVersion、published RuleVersion 和 Strategy draft，但策略验证缺少 out-of-sample/sample coverage evidence），完成 reference Strategy publish -> DailyRuleSelection -> DailyStrategyInstance -> TradingDayPlan -> PostMarketReview -> OptimizationProposal。所有 repair 产物只能作为 reference-chain evidence；不得计为 Browser E2E final pass evidence。不得启动 final browser E2E、RT-S12-003、用户文档或 Stage 12 Gate。
+Stage 12 next authorized work, only after explicit user approval:
+`RT-S12-002 Browser E2E Acceptance`：通过正式入口生成或 lifecycle-transition separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。不得把 reference-chain repair records 计为 Browser E2E final pass evidence；不得自动启动 RT-S12-003、用户文档或 Stage 12 Gate。
 ```
 
 执行前应读取：
@@ -255,4 +268,4 @@ Stage 12 next required repair:
 - [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 - 本文件的“当前硬约束”和“当前残余风险”
 
-不得自动开始任何后续 Stage 12 工作；必须等待用户明确授权后再进入 `RT-S12-002` 或 `RT-S12-003`。
+不得自动开始任何后续 Stage 12 工作；必须等待用户明确授权后再进入 `RT-S12-002 Browser E2E Acceptance` 或 `RT-S12-003`。

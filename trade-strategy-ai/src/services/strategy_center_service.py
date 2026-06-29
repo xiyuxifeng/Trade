@@ -334,6 +334,57 @@ def _float_or_none(value: Any) -> float | None:
         return None
 
 
+def _sample_count_from_result(result: Any) -> int | None:
+    coverage = result.coverage_json or {}
+    samples = coverage.get("samples") if isinstance(coverage.get("samples"), dict) else {}
+    for value in (
+        coverage.get("sample_count"),
+        samples.get("count"),
+        (result.sample_state_counts or {}).get("total"),
+        (result.overall_metrics or {}).get("evaluated_sample_count"),
+        (result.overall_metrics or {}).get("eligible_sample_count"),
+        (result.sample_state_counts or {}).get("eligible"),
+    ):
+        if value is not None:
+            return int(value)
+    return None
+
+
+def _sample_coverage_is_insufficient(result: Any) -> bool:
+    coverage = result.coverage_json or {}
+    samples = coverage.get("samples") if isinstance(coverage.get("samples"), dict) else {}
+    sample_state = str(samples.get("state") or "")
+    if sample_state in {"insufficient", "insufficient_sample", "insufficient_coverage"}:
+        return True
+    return ((result.sample_state_counts or {}).get("insufficient_sample") or 0) > 0
+
+
+def _out_of_sample_state_from_backtest(result: Any | None, run: Any | None) -> str:
+    if result:
+        coverage = result.coverage_json or {}
+        if coverage.get("out_of_sample_state"):
+            return str(coverage["out_of_sample_state"])
+        if run and (run.audit_json or {}).get("out_of_sample_state"):
+            return str((run.audit_json or {})["out_of_sample_state"])
+        market_state = coverage.get("market_state") if isinstance(coverage.get("market_state"), dict) else {}
+        if _state(result.effective_level) == "level_1" and market_state.get("state") == "not_required":
+            return "not_required"
+        samples = coverage.get("samples") if isinstance(coverage.get("samples"), dict) else {}
+        if samples.get("state") == "ready":
+            return "available"
+    if run:
+        return str((run.audit_json or {}).get("out_of_sample_state") or "unavailable")
+    return "unavailable"
+
+
+def _backtest_execution_state(result: Any | None, run: Any | None) -> str | None:
+    if result and result.status:
+        return _state(result.status)
+    if run and run.status:
+        return _state(run.status)
+    return None
+
+
 class StrategyCenterService:
     def __init__(self, *, repository: StrategyRepository | None = None, session_scope_factory: Any | None = None) -> None:
         self.repository = repository or StrategyRepository()
@@ -1185,24 +1236,21 @@ class StrategyCenterService:
         dataset_state = "ready" if dataset else "unavailable"
         market_state = "ready" if market_snapshot_ids and len(market_snapshot_map) == len(market_snapshot_ids) else ("unavailable" if not market_snapshot_ids else "partial")
         backtest_state = "ready" if run and result else ("unavailable" if not backtest_run_ids and not backtest_result_ids else "partial")
-        out_of_sample_state = "unavailable"
-        if result:
-            out_of_sample_state = str((result.coverage_json or {}).get("out_of_sample_state") or (run.audit_json if run else {}).get("out_of_sample_state") or "unavailable")
-        elif run:
-            out_of_sample_state = str((run.audit_json or {}).get("out_of_sample_state") or "unavailable")
+        out_of_sample_state = _out_of_sample_state_from_backtest(result, run)
 
         sample_count = None
         insufficient_sample = False
         if result:
-            sample_count = (result.coverage_json or {}).get("sample_count") or (result.sample_state_counts or {}).get("total")
-            insufficient_sample = ((result.sample_state_counts or {}).get("insufficient_sample") or 0) > 0
+            sample_count = _sample_count_from_result(result)
+            insufficient_sample = _sample_coverage_is_insufficient(result)
         sample_state = "unknown" if sample_count is None else ("insufficient" if insufficient_sample else "sufficient")
 
         warnings = list(result.warnings if result else [])
         limitations = list(result.limitations if result else [])
         if run:
             limitations = list(dict.fromkeys([*limitations, *(run.limitations or [])]))
-        data_quality_state = "verified" if run and result and _state(run.quality_state) == "verified" and not warnings else ("unavailable" if not run or not result else "partial")
+        execution_state = _backtest_execution_state(result, run)
+        data_quality_state = "verified" if result and execution_state == "completed_valid" and not warnings else ("unavailable" if not run or not result else "partial")
 
         if dataset_state == "unavailable" or backtest_state == "unavailable":
             validation_state = "unavailable"
@@ -1212,7 +1260,7 @@ class StrategyCenterService:
             validation_state = "insufficient_coverage"
         elif insufficient_sample:
             validation_state = "insufficient_sample"
-        elif run and _state(run.status) not in {"completed_valid"}:
+        elif execution_state not in {"completed_valid"}:
             validation_state = "invalid"
         else:
             validation_state = "passed"

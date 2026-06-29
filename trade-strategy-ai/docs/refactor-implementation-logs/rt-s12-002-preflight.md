@@ -1,5 +1,89 @@
 # RT-S12-002 Preflight — Tooling, Config, Data, and E2E Readiness
 
+## 0C. 2026-06-29 Reference chain completion repair
+
+- Status: `READY_FOR_RT_S12_002_IMPLEMENTATION`
+- Scope remained bounded to reference-chain completion. Final `RT-S12-002`
+  Browser E2E Acceptance, `RT-S12-003`, Stage 12 Gate, user documentation,
+  broad live provider refresh, article recrawl, broad market backfill, and LLM
+  execution were not started.
+- Boundary: this repair/reference chain is pre-E2E smoke/contract evidence
+  only. Browser E2E Acceptance must still generate or lifecycle-transition a
+  separate final E2E chain and record new object IDs or new audit/lifecycle
+  transitions.
+- DB recheck: reference IDs recorded by the prior repair still existed. The
+  prior StrategyVersion remained `6bbaf1a0-0b97-4254-a9b2-b7d696260849`;
+  the DB is now the source of truth for the additional reference-chain IDs
+  below.
+
+Validation repair:
+
+- Root cause: `StrategyCenterService.validate_version` expected flat sample
+  coverage fields, while formal `BacktestResult.coverage_json` stores nested
+  sample coverage under `samples`. The real result evidence had sample count
+  `40` and sample state `ready`; it was not being read by the validation
+  summary.
+- Repair: validation now reads nested `BacktestResult.coverage_json`, uses
+  `BacktestResult.status` as execution evidence, and reports level-1
+  market-state coverage as `not_required` when formal result coverage records
+  market-state checks as not required.
+- Strategy validation result:
+  - Strategy `15416124-5087-4cbc-998b-ca107423c74b`
+  - StrategyVersion `6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+  - validation state `passed`
+  - `out_of_sample_state=not_required`
+  - `sample_coverage.state=sufficient`
+  - `sample_count=40`
+  - evidence source: BacktestRun `ec58660b-7a34-46e3-8744-b2cec0436655`,
+    BacktestResult `46f17a5c-5895-427f-8b6b-19d309aeafac`
+- Published reference strategy evidence:
+  - `current_published_version_id=6bbaf1a0-0b97-4254-a9b2-b7d696260849`
+  - audit/lifecycle transitions include `submitted_for_review`, `validated`,
+    and `published`
+
+Additional bounded repairs:
+
+- `BacktestRunRepository.find_dataset_snapshot` now rejects future dataset
+  snapshots for requested backtest end dates to avoid point-in-time leakage.
+- Pre-market readiness accepts snapshot-unbound level-1 global applicability
+  profiles while retaining exact snapshot binding for snapshot-bound profiles.
+- Post-close actual comparisons normalize naive database datetimes as
+  Asia/Shanghai timestamps before cutoff comparison.
+
+Reference chain generated:
+
+- Dataset-bound BacktestRun `cd19b7bc-ff03-47ae-8183-79bd36258a51`
+- Dataset-bound BacktestResult `8571385f-1a3a-40d5-82fb-3cd7c205aa55`
+- RuleApplicabilityProfile stable id `e49756c0-21c1-4558-a57f-aabd7c91f94d`
+- RuleApplicabilityProfile row id `ea020370-e641-41ea-9791-69688a72a38e`
+- DailyRuleSelection `8db45d9a-d944-4686-a1ab-d2564552ba85`
+- DailyStrategyInstance `9a8858ec-70c1-4348-bc41-b969dd131d40`
+- TradingDayPlan `ce6dd260-c916-4151-bb33-4361837b19fa`
+- PostMarketReview `4249b5b2-6e9a-4c93-88c8-d76c4fa47429`
+- RuleOptimizationProposal `0d82c843-0130-435d-af0e-9b507c228de8`
+- AuthorProfileRevisionProposal `f328e549-8be8-4ab1-b07b-fb287872a806`
+- StrategyRevisionProposal `0cad8dc4-a2b6-4961-9e8e-2d356df67fca`
+
+Verification:
+
+- `python -m scripts.web_local env-check`: pass.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass,
+  current/head `2026_06_20_0001`.
+- Focused backend aggregate: pass, `73 passed`.
+- `web` typecheck with Node 18: pass.
+- `web` route-config test: pass, `12 passed`.
+- `git diff --check`: pass.
+- Changed-files secret scan: pass, no matches.
+
+Residual:
+
+- Browser E2E Acceptance remains unstarted.
+- The reference chain does not satisfy final E2E pass evidence. Final E2E must
+  use a separate chain or new lifecycle/audit transitions.
+- Post-close review/proposal evidence states reflect the available partial or
+  invalid actuals truthfully; they were not overwritten to ready.
+
 ## 0A. 2026-06-25 BacktestRun schema compatibility repair
 
 - Status: `BACKTESTRUN_SCHEMA_REPAIR_ACCEPTED_WITH_RESIDUALS`
@@ -600,7 +684,21 @@ Additional evidence:
 
 ## 13. Can RT-S12-002 start?
 
-`BLOCKED`
+Current decision after the 2026-06-29 reference-chain completion repair:
+
+`READY_FOR_RT_S12_002_IMPLEMENTATION`
+
+Boundary:
+
+- This means the next authorized work may be `RT-S12-002 Browser E2E
+  Acceptance`.
+- It does not mean Browser E2E passed.
+- It does not allow starting `RT-S12-003`, Stage 12 Gate, or user
+  documentation without explicit authorization.
+- It does not allow counting the reference-chain repair records as Browser E2E
+  final pass evidence.
+
+Historical initial preflight reason before the 2026-06-24 to 2026-06-29 repairs:
 
 Reason:
 
@@ -611,6 +709,18 @@ Reason:
 - existing legacy rule/backtest rows cannot be counted as final RT-S12-002 pass evidence
 
 ## 14. Exact next actions before RT-S12-002 implementation
+
+Current next action after the 2026-06-29 repair:
+
+1. Wait for explicit user authorization before starting `RT-S12-002 Browser E2E
+   Acceptance`.
+2. During Browser E2E, generate or lifecycle-transition a separate final E2E
+   chain and record new object IDs or new audit/lifecycle transitions.
+3. Do not use the reference-chain repair records as final E2E pass evidence.
+4. Do not start `RT-S12-003`, user documentation, or Stage 12 Gate.
+
+Historical initial preflight actions before the 2026-06-24 to 2026-06-29
+repairs:
 
 1. Fix local runtime commands
 
@@ -645,10 +755,10 @@ pnpm e2e:install  # run with Node 18 PATH
 
 ## Record summary
 
-- preflight status: `BLOCKED`
+- preflight status: `READY_FOR_RT_S12_002_IMPLEMENTATION`
 - config baseline used: `config/app.template.yaml`
 - database-first decision: reuse existing DB articles; do not recrawl or bulk-regenerate
-- next allowed action: repair tooling and minimum canonical evidence set before RT-S12-002 implementation
+- next allowed action: wait for explicit authorization to start `RT-S12-002 Browser E2E Acceptance`; Browser E2E must create or transition a separate final E2E chain
 
 ## 15. Minimal canonical evidence repair 5.5
 

@@ -19,21 +19,21 @@
 
 - Documentation-only delivery for Stage 12 final user/admin/deployment handoff.
 - No production code, frontend route, backend API, database migration, browser E2E data generation, live provider refresh, article recrawl, broad backfill, or LLM run was started.
-- Formal documents were placed under `docs/` and indexed from `docs/User-Docs-README.md` plus `docs/README.md`.
+- Formal documents were placed under `docs/stage-12-user-docs/` and indexed from `docs/stage-12-user-docs/README.md` plus `docs/README.md`.
 - Documentation was checked against `web/src/app/route-config.tsx` and RT-S12-002 final E2E route sequence:
   `/research/add` → `/research/articles` → `/research/results` → `/rules/review` → `/rules/backtests` → `/rules/results` → `/authors` → `/strategies` → `/daily/pre-market` → `/daily/after-close`.
 
 ### Documents delivered
 
-- `docs/User-Docs-README.md`: formal documentation entry for ordinary users, administrators, and deployers.
-- `docs/Quick-Start.md`: ordinary-user quick start for article import through daily plan/review.
-- `docs/User-Manual.md`: complete ordinary-user manual for formal navigation and product pages.
-- `docs/First-Time-Initialization.md`: administrator first-time initialization guide.
-- `docs/Daily-Pre-Market-Guide.md`: ordinary-user daily pre-market guide.
-- `docs/Daily-After-Close-Guide.md`: ordinary-user post-close review guide.
-- `docs/Data-Failure-Handling.md`: ordinary-user missing/partial/unavailable/degraded/invalid/conflict handling guide.
-- `docs/Admin-Operations-Guide.md`: administrator operations guide for diagnostics, migration, backup, recovery, scheduling, permissions, audit, and failure handling.
-- `docs/Deployment-Runbook.md`: deployer/admin deployment and runtime runbook.
+- `docs/stage-12-user-docs/README.md`: formal documentation entry for ordinary users, administrators, and deployers.
+- `docs/stage-12-user-docs/Quick-Start.md`: ordinary-user quick start for article import through daily plan/review.
+- `docs/stage-12-user-docs/User-Manual.md`: complete ordinary-user manual for formal navigation and product pages.
+- `docs/stage-12-user-docs/First-Time-Initialization.md`: administrator first-time initialization guide.
+- `docs/stage-12-user-docs/Daily-Pre-Market-Guide.md`: ordinary-user daily pre-market guide.
+- `docs/stage-12-user-docs/Daily-After-Close-Guide.md`: ordinary-user post-close review guide.
+- `docs/stage-12-user-docs/Data-Failure-Handling.md`: ordinary-user missing/partial/unavailable/degraded/invalid/conflict handling guide.
+- `docs/stage-12-user-docs/Admin-Operations-Guide.md`: administrator operations guide for diagnostics, migration, backup, recovery, scheduling, permissions, audit, and failure handling.
+- `docs/stage-12-user-docs/Deployment-Runbook.md`: deployer/admin deployment and runtime runbook.
 - `docs/README.md`: formal docs index updated.
 
 ### Review and bounded fix loop
@@ -44,7 +44,7 @@
   - Rerun: terminology grep, safety grep, link validation, route/source review.
 - Loop 2:
   - Finding: formal docs index needed to expose the new Stage 12 handoff without creating a second TaskList, route source, schema source, governance source, or architecture source.
-  - Fix: updated `docs/README.md` and kept `docs/User-Docs-README.md` as a documentation entry only.
+  - Fix: updated `docs/README.md` and kept `docs/stage-12-user-docs/README.md` as a documentation entry only.
   - Rerun: terminology grep, safety grep, markdown link validation, route-config test, deployment command verification.
 
 ### Verification
@@ -71,6 +71,24 @@
 `RT_S12_003_USER_DOCS_ACCEPTED`
 
 Next allowed item is `Stage 12 Gate`, only after explicit user authorization.
+
+## 2026-06-30 RT-S12-003 Documentation Folder Consolidation
+
+### Status
+
+`RT_S12_003_USER_DOCS_ACCEPTED` remains unchanged.
+
+### Scope
+
+- Moved RT-S12-003 user/admin/deployment documents into `docs/stage-12-user-docs/`.
+- Updated `docs/README.md`, `docs/Refactor-Implementation-Log.md`, and this Stage 12 log to reference the consolidated folder.
+- No content contract, route, UI, API, database, runtime, Browser E2E, live provider, broad backfill, or LLM work was started.
+
+### Verification
+
+- Markdown link validation rerun after the move.
+- Terminology and safety greps rerun against the consolidated folder.
+- `git diff --check` rerun.
 
 ## 2026-06-29 RT-S12-002 Browser E2E Acceptance
 

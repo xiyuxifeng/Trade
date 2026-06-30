@@ -37,14 +37,14 @@
 
 - Task ID: `RT-S12-003 用户文档`
 - 状态: `已完成（RT_S12_003_USER_DOCS_ACCEPTED）`
-- 修改范围: `docs/User-Docs-README.md`、`docs/Quick-Start.md`、`docs/User-Manual.md`、`docs/First-Time-Initialization.md`、`docs/Daily-Pre-Market-Guide.md`、`docs/Daily-After-Close-Guide.md`、`docs/Data-Failure-Handling.md`、`docs/Admin-Operations-Guide.md`、`docs/Deployment-Runbook.md`、`docs/README.md`、Stage 12 implementation logs
+- 修改范围: `docs/stage-12-user-docs/README.md`、`docs/stage-12-user-docs/Quick-Start.md`、`docs/stage-12-user-docs/User-Manual.md`、`docs/stage-12-user-docs/First-Time-Initialization.md`、`docs/stage-12-user-docs/Daily-Pre-Market-Guide.md`、`docs/stage-12-user-docs/Daily-After-Close-Guide.md`、`docs/stage-12-user-docs/Data-Failure-Handling.md`、`docs/stage-12-user-docs/Admin-Operations-Guide.md`、`docs/stage-12-user-docs/Deployment-Runbook.md`、`docs/README.md`、Stage 12 implementation logs
 - 关键设计决定: 以 `web/src/app/route-config.tsx` 和 RT-S12-002 final E2E route sequence 为文档事实依据；普通用户文档仅描述正式业务入口和中文操作；管理员/部署者文档单独标记技术诊断、迁移、备份、恢复、权限、观测和部署运行；部署手册只描述当前系统如何部署运行，不建立新的架构事实源。
 - 数据库迁移: 无
 - 兼容处理: 旧 `bak/` / `Deprecated/` 文档保留为历史材料；新增正式文档放在 `docs/`，不要求普通用户进入 retired/developer-facing routes。
 - 已运行测试: `git diff --check`、formal docs terminology grep、formal docs safety grep、markdown link validation、`python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、`python -m alembic -c src/db/migrations/alembic.ini heads`、`web` route-config test
 - 测试结果: docs terminology grep no matches；docs safety grep no matches；markdown links ok；env-check redacted output only；DB check `DB OK: 1` after elevated rerun；Alembic current `2026_06_14_0006` and head `2026_06_20_0001` recorded as environment residual; route-config `12 passed`; `git diff --check` passed
 - 未完成项: Stage 12 Gate 未开始；full browser E2E 未重跑，沿用 RT-S12-002 final E2E evidence 作为文档路径依据。
-- 已知风险: 当前本地数据库不在 migration head，部署者需按 `Deployment-Runbook.md` 在目标环境执行迁移并确认 head；本任务未改变数据库或运行时。
+- 已知风险: 当前本地数据库不在 migration head，部署者需按 `docs/stage-12-user-docs/Deployment-Runbook.md` 在目标环境执行迁移并确认 head；本任务未改变数据库或运行时。
 - 验收结论: `RT_S12_003_USER_DOCS_ACCEPTED`
 
 - Task ID: `RT-S12-002 Browser E2E Acceptance`

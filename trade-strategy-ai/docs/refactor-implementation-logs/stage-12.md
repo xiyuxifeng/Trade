@@ -4,10 +4,73 @@
 
 - Stage：`Stage 12 旧入口退役与最终交付`
 - 当前活动：`Stage 12 Gate`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_BLOCKED`
-- 当前 Task：Stage 12 Gate 已执行 review + bounded fix loop；Gate 阻塞于当前本地数据库无法迁移到 head 以及当前环境缺少 E2E 所需管理员 API key。
-- 下一可执行项：修复本地 DB migration owner/role 和 E2E 管理员认证环境后，重新执行 `Stage 12 Gate`。
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_ACCEPTED`
+- 当前 Task：Stage 12 Gate fresh rerun 已完成；当前设备环境重新验证通过，DB current/head 一致，Browser E2E 通过。
+- 下一可执行项：无。Stage 12 已完成；不得自动开始任何新 Stage 或后续重构任务。
 - 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
+
+## 2026-06-30 Stage 12 Gate Fresh Rerun
+
+### Status
+
+`STAGE_12_GATE_ACCEPTED`
+
+### Scope
+
+- 重新执行 Stage 12 final Gate review、required verification 和 bounded fix loop。
+- 本次不假设上一轮 blocker 仍然存在；从当前设备环境重新验证。
+- 不改变 route/schema/governance/data-source/lifecycle/prompt/product contract。
+- 无 production code 改动。
+- 详细记录：[Stage 12 Gate](stage-12-gate.md)。
+
+### Gate Review Result
+
+- `RT-S12-001`: review pass；retired ordinary-user legacy routes remain redirect-only compatibility entries in the single route registry. Primary navigation exposes only formal product entries and allowed System Management entries.
+- `RT-S12-002`: review pass；fresh Browser E2E passed through the formal product journey, and accepted RT-S12-002 final evidence remains separate from reference-chain records.
+- `RT-S12-003`: review pass；formal user/admin/deployment docs remain under `docs/stage-12-user-docs/` and indexed from `docs/README.md`; delivered docs terminology/safety/link checks passed.
+- Global contract: no second route/schema/governance/data-source/documentation source of truth found in the reviewed Stage 12 state; truthful missing/partial/unavailable/degraded/invalid/conflict handling remains documented and covered by focused UI tests.
+
+### Prior Residual Reclassification
+
+- Prior local DB current/head blocker is resolved in this environment: `current=2026_06_20_0001 (head)`, `head=2026_06_20_0001 (head)`.
+- Prior E2E authentication blocker is resolved in this environment: `env-check` reports `ADMIN_API_KEY` set with redacted output, and fresh Browser E2E passed.
+- Prior Playwright harness fix remains accepted and unchanged; runtime cache files are not committed.
+
+### Review and bounded fix loop
+
+- Loop 1: reclassified prior DB blocker by rerunning `db-check`, `alembic current`, and `alembic heads`; no fix needed.
+- Loop 2: corrected an invalid focused backend test path by using current files from `rg --files`; reran corrected focused backend/API/service aggregate.
+- Loop 3: corrected a docs safety grep regex; reran safety grep, markdown link validation, and route/docs consistency check.
+- Loop 4: reclassified prior E2E authentication blocker by rerunning fresh Browser E2E; no fix needed.
+
+### Verification
+
+- `python -m scripts.web_local env-check`: pass, redacted output only; `DATABASE_URL` and `ADMIN_API_KEY` set from `.env`.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass, `DB OK: 1`.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, `2026_06_20_0001 (head)`.
+- `python -m alembic -c src/db/migrations/alembic.ini heads`: pass, `2026_06_20_0001 (head)`.
+- Focused Stage 12 backend/API/service aggregate: pass, `82 passed`, warnings only.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`: pass.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`.
+- Focused route/navigation/state frontend aggregate: pass, `43 passed`.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm build`: pass; includes typecheck, lint, and Vite build.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm e2e`: pass, `1 passed`.
+- Delivered-doc terminology grep: no matches.
+- Delivered-doc safety grep: no matches.
+- Markdown link validation: pass, `markdown links ok`.
+- Route/docs consistency check: pass, `route/docs consistency ok`.
+
+### Unrun or partial verification
+
+- Full backend suite was not run because Gate did not change backend source and the affected Stage 12 formal API/service path was covered by the focused aggregate plus fresh Browser E2E.
+- Full frontend suite was not run because Gate did not change frontend source in this rerun and the affected route/navigation/state/E2E surface was covered by focused tests, build, and fresh Browser E2E.
+- Prompt regression suite was not run because Gate did not modify prompts, prompt loader code, or schema contracts; replacement evidence is unchanged prompt artifacts plus RT-S12-002 recorded prompt/schema evidence.
+
+### Decision
+
+`STAGE_12_GATE_ACCEPTED`
+
+Stage 12 is complete. Do not automatically start any new Stage or additional refactor work.
 
 ## 2026-06-30 Stage 12 Gate
 
@@ -580,7 +643,7 @@ Required command:
 rg -n "Job|Workflow|Pipeline|Artifact|Provider|Schema|config_path|prompt_run_id|run_id|/jobs|/artifacts|/workflows" web/src docs -g '!**/*.test.*'
 ```
 
-Post-repair final scan captured `5044` hits to `/private/tmp/rt_s12_001_terms_scan_final.txt`.
+Post-repair final scan captured `5044` hits in a temporary local evidence file that is not a formal documentation source.
 
 | Hit group | Representative files | Classification | Action |
 | --- | --- | --- | --- |

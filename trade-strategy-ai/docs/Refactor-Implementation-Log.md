@@ -24,28 +24,28 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[!] RT-S12-001 ACCEPTED；RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED；RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED；Stage 12 Gate STAGE_12_GATE_BLOCKED`
+- Stage 状态：`[x] RT-S12-001 ACCEPTED；RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED；RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED；Stage 12 Gate STAGE_12_GATE_ACCEPTED`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：`Stage 12 Gate`。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Gate fresh verification 阻塞于本地 DB 无法迁移到 head（configured DB user is not owner of `ohlcv_bars`）以及当前环境缺少 `ADMIN_API_KEY`，导致 fresh Browser E2E 停留在登录页。
+- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：修复当前环境的 DB migration owner/role 和管理员认证环境后，重新执行 `Stage 12 Gate`；不得自动启动任何新 Stage 或后续重构任务。
+- 下一步：无。Stage 12 已完成；不得自动启动任何新 Stage 或后续重构任务。
 
 ## 最近 Gate 记录
 
 - Task ID: `Stage 12 Gate`
-- 状态: `阻塞（STAGE_12_GATE_BLOCKED）`
-- 修改范围: `web/playwright.config.ts`、`docs/refactor-implementation-logs/stage-12-gate.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
-- 关键设计决定: 不改变 Stage 12 冻结合同；只做 E2E harness bounded fix，使 localhost 绕过代理；DB migration owner/role 和 E2E 管理员认证环境作为 blocker 处理。
-- 数据库迁移: 尝试执行 committed migration chain to head，但失败于 `ohlcv_bars` table owner 权限；Alembic current 仍为 `2026_06_14_0006`，head 为 `2026_06_20_0001`。
-- 兼容处理: legacy route retirement、reference-chain/final-E2E-chain 边界和用户文档事实源均保持不变。
-- 已运行测试: `python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、`python -m alembic -c src/db/migrations/alembic.ini heads`、`python -m cli.main db-migrate --config config/app.template.yaml`、focused backend/API/service aggregate、`web` typecheck、`web` route-config test、`web` build、`web` E2E、docs terminology/safety grep、markdown link validation。
-- 测试结果: DB check pass；current/head mismatch remains; migration failed with insufficient owner privilege; backend focused aggregate `69 passed`; typecheck pass; route-config `12 passed`; build pass; E2E failed at login-page precondition because `ADMIN_API_KEY` is unset in current environment; docs checks passed.
-- 未完成项: Stage 12 final Gate acceptance；fresh Browser E2E pass in this environment；local DB migration to head.
-- 已知风险: 当前环境无法证明 fresh final E2E chain because admin authentication is unavailable and DB is not at head; previously accepted RT-S12-002 evidence remains historical evidence but is not a fresh Gate pass.
-- 验收结论: `STAGE_12_GATE_BLOCKED`
+- 状态: `已完成（STAGE_12_GATE_ACCEPTED）`
+- 修改范围: `docs/refactor-implementation-logs/stage-12-gate.md`、`docs/refactor-implementation-logs/stage-12.md`、`docs/Refactor-Implementation-Log.md`
+- 关键设计决定: 不改变 Stage 12 冻结合同；不沿用上一轮 blocker 假设，重新验证当前设备环境；prior DB current/head 和 E2E auth blockers 在当前环境中已解除。
+- 数据库迁移: 无新增迁移；Alembic current/head 均为 `2026_06_20_0001 (head)`。
+- 兼容处理: legacy route retirement、reference-chain/final-E2E-chain 边界和用户文档事实源均保持不变；retired normal-user routes 保持 redirect-only compatibility 且不进入普通导航。
+- 已运行测试: `python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、`python -m alembic -c src/db/migrations/alembic.ini heads`、focused Stage 12 backend/API/service aggregate、`web` typecheck、`web` route-config test、focused route/navigation/state frontend aggregate、`web` build、`web` E2E、docs terminology/safety grep、markdown link validation、route/docs consistency check。
+- 测试结果: env-check pass with redacted values; DB check pass; current/head `2026_06_20_0001`; backend focused aggregate `82 passed`; route-config `12 passed`; focused frontend aggregate `43 passed`; build pass; Browser E2E `1 passed`; docs checks passed.
+- 未完成项: 无。
+- 已知风险: full backend/full frontend suites 未在本 Gate rerun 中执行；替代证据为 focused Stage 12 backend/API/service tests、route/navigation/state tests、build 和 Browser E2E。Prompt regression 未运行，因为 Gate 未修改 Prompt/Schema/loader。
+- 验收结论: `STAGE_12_GATE_ACCEPTED`
 
 ## 最近实施记录
 
@@ -211,9 +211,9 @@
 - Stage 10 Gate 已于 2026-06-22 最终 `ACCEPTED`；Stage 11 Gate 已于 2026-06-23 最终 `ACCEPTED`。
 - Stage 12 Bootstrap 已于 2026-06-23 `READY`；`RT-S12-001` 已于 2026-06-23 `ACCEPTED`。
 - RT-S12-002 reference chain 已完成 pre-E2E smoke/contract evidence；Browser E2E 已生成 separate final E2E chain，reference-chain records 未计为 final pass evidence。
-- Browser E2E 已通过正式 UI/API 路径；下一步仍需用户明确授权后进入 `RT-S12-003 用户文档`，不得自动启动 Stage 12 Gate。
+- RT-S12-003 用户文档已接受；Stage 12 Gate fresh rerun 已于 2026-06-30 `STAGE_12_GATE_ACCEPTED`。
 - legacy compatibility source / admin diagnostics / historical docs 仍包含 internal terms；普通用户正式入口不得暴露 legacy main entries。
-- UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞当前 Stage。
+- UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞 Stage 12 final acceptance。
 
 ## Task 状态索引
 
@@ -290,22 +290,15 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` Browser E2E accepted；`RT-S12-003` user docs accepted；Stage 12 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
+| Stage 12 | `[x]` | Gate 最终 `STAGE_12_GATE_ACCEPTED`；RT-S12-001 / 002 / 003 已接受 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Stage 12 Gate](refactor-implementation-logs/stage-12-gate.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 
 ## 下一步建议
 
-建议下一次先处理：
+无。Stage 12 已完成；不得自动开始任何新 Stage、后续重构任务或额外交付。
 
-```text
-Stage 12 next authorized work, only after explicit user approval:
-`Stage 12 Gate`：仅在用户明确授权后启动。不得自动启动 Stage 12 Gate。
-```
-
-执行前应读取：
+如用户后续明确授权新工作，开始前仍需读取：
 
 - [Stage 12 计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
-- [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
+- [Stage 12 Gate](refactor-implementation-logs/stage-12-gate.md)
 - 本文件的“当前硬约束”和“当前残余风险”
-
-不得自动开始任何后续 Stage 12 工作；必须等待用户明确授权后再进入 `RT-S12-003 用户文档`。

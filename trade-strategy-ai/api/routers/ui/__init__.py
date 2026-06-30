@@ -28,6 +28,7 @@ from .rule_pool import router as rule_pool_router
 from .rule_lifecycle import router as rule_lifecycle_router
 from .rule_review import router as rule_review_router
 from .formal_backtests import router as formal_backtests_router
+from .rule_pool_backtest_batches import router as rule_pool_backtest_batches_router
 from .system import legacy_router as legacy_system_router
 from .system import router as system_router
 from api.routers.ui.jobs import router as jobs_router
@@ -62,6 +63,7 @@ __all__ = [
     "rule_lifecycle_router",
     "rule_review_router",
     "formal_backtests_router",
+    "rule_pool_backtest_batches_router",
     "strategy_studio_router",
     "system_router",
 ]

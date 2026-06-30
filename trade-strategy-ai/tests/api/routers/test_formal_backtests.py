@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
 from api.routers.ui.formal_backtests import get_backtest_application_service
+from api.routers.ui.rule_pool_backtest_batches import get_rule_pool_backtest_batch_service
 
 
 @dataclass
@@ -200,6 +201,67 @@ class _FakeBacktestApplicationService:
         return _FakeProfile(review_status="published")
 
 
+class _FakeRulePoolBacktestBatchService:
+    def __init__(self) -> None:
+        self.created = 0
+        self.started = 0
+        self.merged = 0
+
+    async def create_batch_run(self, **kwargs):
+        self.created += 1
+        assert kwargs["rule_ids"] == ["rule-1", "rule-2", "rule-3"]
+        assert kwargs["batch_size"] == 2
+        assert kwargs["created_by"] == "operator"
+        return {
+            "batch_run_id": "batch-run-1",
+            "status": "draft",
+            "selected_rule_count": 3,
+            "batch_size": 2,
+            "batches": [
+                {"batch_index": 1, "rule_ids": ["rule-1", "rule-2"], "status": "pending"},
+                {"batch_index": 2, "rule_ids": ["rule-3"], "status": "pending"},
+            ],
+        }
+
+    async def list_batch_runs(self, **kwargs):
+        return {"items": [], "count": 0, "total": 0, "skip": kwargs["skip"], "limit": kwargs["limit"]}
+
+    async def get_batch_run(self, batch_run_id: str):
+        assert batch_run_id == "batch-run-1"
+        return {
+            "batch_run_id": "batch-run-1",
+            "status": "draft",
+            "selected_rule_count": 3,
+            "batch_size": 2,
+            "batches": [{"batch_index": 1, "rule_ids": ["rule-1", "rule-2"], "status": "pending"}],
+        }
+
+    async def start_batch(self, batch_run_id: str, *, batch_index: int, actor: str):
+        self.started += 1
+        assert batch_run_id == "batch-run-1"
+        assert batch_index == 1
+        assert actor == "operator"
+        return {
+            "batch_run_id": "batch-run-1",
+            "status": "running",
+            "batches": [{"batch_index": 1, "rule_ids": ["rule-1", "rule-2"], "status": "running", "job_id": "job-1"}],
+        }
+
+    async def refresh_batch_status(self, batch_run_id: str):
+        assert batch_run_id == "batch-run-1"
+        return await self.get_batch_run(batch_run_id)
+
+    async def merge_batch_results(self, batch_run_id: str):
+        self.merged += 1
+        assert batch_run_id == "batch-run-1"
+        return {
+            "batch_run_id": "batch-run-1",
+            "status": "merged",
+            "merged_result_id": "merged-batch-run-1",
+            "merged_result": {"summary": {"total_trades": 3}, "rule_results": []},
+        }
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     fake_service = _FakeBacktestApplicationService()
@@ -299,6 +361,51 @@ async def test_operator_can_create_and_read_formal_run() -> None:
     assert loaded.status_code == 200
     assert loaded.json()["request_fingerprint"] == "request-fp"
     assert fake_service.create_calls == 1
+
+
+@pytest.mark.asyncio()
+async def test_operator_can_create_start_and_merge_rule_pool_batch_run() -> None:
+    fake_service = _FakeRulePoolBacktestBatchService()
+    app.dependency_overrides.clear()
+    try:
+        app.dependency_overrides[verify_api_key] = lambda: "test-key"
+        app.dependency_overrides[get_rule_pool_backtest_batch_service] = lambda: fake_service
+        app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+            role="operator",
+            api_key_label="operator",
+            authenticated=True,
+            source="api_key",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            created = await ac.post(
+                "/api/ui/v1/rules/backtests/batch-runs",
+                json={
+                    "rule_ids": ["rule-1", "rule-2", "rule-3"],
+                    "batch_size": 2,
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-06-30",
+                    "min_confidence": 0.7,
+                    "market_regime_version": "market-regime-v3",
+                    "profile_id": "default",
+                },
+            )
+            loaded = await ac.get("/api/ui/v1/rules/backtests/batch-runs/batch-run-1")
+            started = await ac.post("/api/ui/v1/rules/backtests/batch-runs/batch-run-1/batches/1/start")
+            merged = await ac.post("/api/ui/v1/rules/backtests/batch-runs/batch-run-1/merge")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert created.status_code == 201
+    assert created.json()["selected_rule_count"] == 3
+    assert loaded.status_code == 200
+    assert started.status_code == 200
+    assert started.json()["batches"][0]["job_id"] == "job-1"
+    assert merged.status_code == 200
+    assert merged.json()["status"] == "merged"
+    assert fake_service.created == 1
+    assert fake_service.started == 1
+    assert fake_service.merged == 1
 
 
 @pytest.mark.asyncio()

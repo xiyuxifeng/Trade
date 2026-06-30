@@ -13,6 +13,12 @@ import type {
   FormalBacktestRunCreateRequest,
   FormalBacktestSelection,
 } from '@/types/backtests';
+import type {
+  RulePoolBacktestBatchRun,
+  RulePoolBacktestBatchRunCreateRequest,
+  RulePoolBacktestBatchRunListResponse,
+} from '@/types/rule-pool-backtest-batches';
+import { pauseJob, resumeJob } from './jobs';
 
 type BacktestResultsQuery = {
   trader_id?: string;
@@ -126,20 +132,71 @@ export function buildBacktestReproducibilityParams(submission: BacktestJobSubmis
 
 export type RulePoolBacktestSubmission = {
   ruleId?: string;
+  ruleIds?: string[];
   startDate: string;
   endDate: string;
   minConfidence?: number;
   marketRegimeVersion?: string;
+  profileId?: string;
 };
 
 export function buildRulePoolBacktestParams(submission: RulePoolBacktestSubmission): Record<string, unknown> {
   return {
+    rule_ids: submission.ruleIds?.length ? submission.ruleIds : undefined,
     rule_id: submission.ruleId || undefined,
     start_date: submission.startDate,
     end_date: submission.endDate,
     min_confidence: submission.minConfidence ?? 0.5,
     market_regime_version: submission.marketRegimeVersion || 'market-regime-v3',
+    profile_id: submission.profileId || undefined,
   };
+}
+
+export function createRulePoolBacktestBatchRun(request: RulePoolBacktestBatchRunCreateRequest) {
+  return fetchJson<RulePoolBacktestBatchRun>('/rules/backtests/batch-runs', {
+    method: 'POST',
+    body: JSON.stringify({
+      rule_ids: request.ruleIds,
+      batch_size: request.batchSize,
+      start_date: request.startDate,
+      end_date: request.endDate,
+      min_confidence: request.minConfidence ?? 0.7,
+      market_regime_version: request.marketStateVersion || request.marketRegimeVersion || 'market-regime-v3',
+      profile_id: request.profileId || null,
+    }),
+  });
+}
+
+export function listRulePoolBacktestBatchRuns(query: { skip?: number; limit?: number } = {}) {
+  const params = new URLSearchParams();
+  if (query.skip !== undefined) params.set('skip', String(query.skip));
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchJson<RulePoolBacktestBatchRunListResponse>(`/rules/backtests/batch-runs${suffix}`);
+}
+
+export function getRulePoolBacktestBatchRun(batchRunId: string) {
+  return fetchJson<RulePoolBacktestBatchRun>(`/rules/backtests/batch-runs/${batchRunId}`);
+}
+
+export function startRulePoolBacktestBatch(batchRunId: string, batchIndex: number) {
+  return fetchJson<RulePoolBacktestBatchRun>(`/rules/backtests/batch-runs/${batchRunId}/batches/${batchIndex}/start`, {
+    method: 'POST',
+  });
+}
+
+export function mergeRulePoolBacktestBatchRun(batchRunId: string) {
+  return fetchJson<RulePoolBacktestBatchRun>(`/rules/backtests/batch-runs/${batchRunId}/merge`, {
+    method: 'POST',
+  });
+}
+
+export function pauseRulePoolBacktestRunRecord(recordId: string) {
+  return pauseJob(recordId, '用户手动暂停当前批次');
+}
+
+export function resumeRulePoolBacktestRunRecord(recordId: string) {
+  return resumeJob(recordId);
 }
 
 export type { BacktestSummary };

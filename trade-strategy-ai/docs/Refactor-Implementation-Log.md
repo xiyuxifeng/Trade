@@ -18,20 +18,34 @@
 - [Stage 10 日志](refactor-implementation-logs/stage-10.md)
 - [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
+- [RT-PERF-001 规则池批量回测](refactor-implementation-logs/rt-perf-001.md)
 - [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 - [RT-S12-002 Browser E2E Acceptance](refactor-implementation-logs/rt-s12-002-browser-e2e.md)
 
 ## 当前状态
 
-- 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[x] RT-S12-001 ACCEPTED；RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED；RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED；Stage 12 Gate STAGE_12_GATE_ACCEPTED`
+- 当前 Stage：`Post-delivery hardening`
+- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。
+- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：无。Stage 12 已完成；不得自动启动任何新 Stage 或后续重构任务。
+- 下一步：小规模真实数据试运行。
+
+## 当前实施记录
+
+- Task ID: `RT-PERF-001 Rule Pool Backtest Batch Selection and Result Merge`
+- 状态: `已完成（RT_PERF_001_ACCEPTED）`
+- 修改范围: `rule-pool-backtest` 参数兼容、规则池批量回测持久化模型/迁移、batch service/API、`/rules/backtests` 批量页签、`/rules/results` 合并结果展示、用户/管理员/部署文档。
+- 关键设计决定: 保留 `/rules/backtests` 和 `/rules/results` 作为正式入口；不新增普通用户历史/开发主入口；批次必须手动启动，不做自动暂停/恢复、不做并行；合并只接受全部 completed 且参数一致的批次。
+- 数据库迁移: 新增 `2026_06_30_0001_rule_pool_backtest_batches.py`。
+- 兼容处理: 旧 `rule_id` 继续可用；新增 `rule_ids` 优先；两者都没有时保持回测全部 approved 且 confidence 达标规则。
+- 已运行测试: env-check；DB check；Alembic heads/current；migration upgrade/downgrade/upgrade；目标后端/API/service/repository 测试 `7 passed`；扩展后端/API aggregate `19 passed`；migration unit tests `11 passed`；目标前端 API/文案测试 `8 passed`；route/API/page tests `20 passed`；frontend typecheck；frontend build；`git diff --check`；ordinary-user docs terminology grep；changed-files sensitive/local-path scan。
+- 未完成项: 无。
+- 已知风险: Full backend/full frontend suites 和 Browser E2E 未运行；替代证据为本任务相关 service/repository/API/migration/UI/route tests、typecheck、build 和 migration upgrade/downgrade verification。
+- 验收结论: `RT_PERF_001_ACCEPTED`
 
 ## 最近 Gate 记录
 

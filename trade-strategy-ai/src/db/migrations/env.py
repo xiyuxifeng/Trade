@@ -28,6 +28,7 @@ from src.models import (  # noqa: F401
     raw_article,
     market_regime,
     rule_applicability,
+    rule_pool_backtest_batch,
     workflow_run,
     signal,
     stock_info,

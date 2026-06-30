@@ -624,8 +624,15 @@ class JobRunner(BaseService):
 
         async def _rule_pool_backtest(params: dict[str, Any]) -> ServiceResult:
             service = self._backtest_service_factory()
-            rule_id = str(params.get("rule_id") or "").strip()
-            rule_ids = [rule_id] if rule_id else None
+            raw_rule_ids = params.get("rule_ids")
+            if isinstance(raw_rule_ids, list):
+                rule_ids = [str(item).strip() for item in raw_rule_ids if str(item).strip()]
+                if not rule_ids:
+                    rule_id = str(params.get("rule_id") or "").strip()
+                    rule_ids = [rule_id] if rule_id else None
+            else:
+                rule_id = str(params.get("rule_id") or "").strip()
+                rule_ids = [rule_id] if rule_id else None
             start_date = _parse_optional_date(params.get("start_date"))
             end_date = _parse_optional_date(params.get("end_date"))
             if start_date is None or end_date is None:

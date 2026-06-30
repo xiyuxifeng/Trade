@@ -33,6 +33,9 @@ describe('/rules/backtests formal workbench copy', () => {
     expect(source).toContain('开始回测');
     expect(source).toContain('可复现证据');
     expect(source).toContain('适用性画像草稿');
+    expect(source).toContain('规则池批量回测');
+    expect(source).toContain('创建批次计划');
+    expect(source).toContain('合并批次结果');
   });
 
   it('uses market-state business wording in formal results', () => {
@@ -63,5 +66,7 @@ describe('/rules/backtests formal workbench copy', () => {
     expect(resultsSource).toContain('系统建议');
     expect(resultsSource).toContain('人工审核状态');
     expect(resultsSource).toContain('批准画像');
+    expect(resultsSource).toContain('批次来源');
+    expect(resultsSource).toContain('合并后的规则池回测结果');
   });
 });

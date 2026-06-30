@@ -6,14 +6,17 @@ import {
   downloadBacktestReport,
   downloadBacktestValidationReport,
   checkFormalBacktestDependencies,
+  createRulePoolBacktestBatchRun,
   createFormalBacktestRun,
   executeFormalBacktestRun,
   generateFormalApplicabilityProfileDraft,
   getBacktestResult,
   getFormalBacktestResult,
   getFormalBacktestRun,
+  mergeRulePoolBacktestBatchRun,
   listBacktestResults,
   reviewFormalApplicabilityProfile,
+  startRulePoolBacktestBatch,
 } from './backtests';
 
 describe('backtests api client', () => {
@@ -256,5 +259,52 @@ describe('backtests api client', () => {
     expect(urls.some((url) => url.includes('/api/ui/v1/jobs'))).toBe(false);
     expect(urls.some((url) => url.includes('/backtest_results'))).toBe(false);
     expect(urls.some((url) => url.includes('/rule-pool'))).toBe(false);
+  });
+
+  it('supports rule pool batch runs and rule_ids params', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ batch_run_id: 'batch-run-1', selected_rule_count: 2, batches: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ batch_run_id: 'batch-run-1', batches: [{ batch_index: 1, job_id: 'job-1' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ batch_run_id: 'batch-run-1', status: 'merged', merged_result_id: 'merged-batch-run-1' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createRulePoolBacktestBatchRun({
+      ruleIds: ['rule-1', 'rule-2'],
+      batchSize: 30,
+      startDate: '2026-01-01',
+      endDate: '2026-06-30',
+      minConfidence: 0.7,
+      marketRegimeVersion: 'market-regime-v3',
+      profileId: 'default',
+    });
+    await startRulePoolBacktestBatch('batch-run-1', 1);
+    await mergeRulePoolBacktestBatchRun('batch-run-1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/ui/v1/rules/backtests/batch-runs', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        rule_ids: ['rule-1', 'rule-2'],
+        batch_size: 30,
+        start_date: '2026-01-01',
+        end_date: '2026-06-30',
+        min_confidence: 0.7,
+        market_regime_version: 'market-regime-v3',
+        profile_id: 'default',
+      }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ui/v1/rules/backtests/batch-runs/batch-run-1/batches/1/start', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ui/v1/rules/backtests/batch-runs/batch-run-1/merge', expect.objectContaining({ method: 'POST' }));
   });
 });

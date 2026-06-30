@@ -936,7 +936,9 @@ JOB_DEFINITIONS: tuple[JobDefinition, ...] = (
         param_schema=_schema(
             "规则池回测参数",
             {
+                "profile_id": _string("Profile ID"),
                 "rule_id": _string("规则 ID"),
+                "rule_ids": _array_field("规则 ID 列表", default=[]),
                 "start_date": _date_field("开始日期", required=True),
                 "end_date": _date_field("结束日期", required=True),
                 "min_confidence": _number("最小置信度", default=0.5),

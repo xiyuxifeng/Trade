@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/kit';
 import { useAuth } from '@/features/auth/auth-context';
-import { executeFormalBacktestRun, generateFormalApplicabilityProfileDraft, getFormalBacktestResult, reviewFormalApplicabilityProfile } from '@/lib/api/backtests';
+import { executeFormalBacktestRun, generateFormalApplicabilityProfileDraft, getFormalBacktestResult, getRulePoolBacktestBatchRun, reviewFormalApplicabilityProfile } from '@/lib/api/backtests';
 import { ApiError } from '@/lib/api/http';
 import type { FormalApplicabilityProfile, FormalMarketStateMetric } from '@/types/backtests';
 
@@ -175,6 +175,7 @@ function ApplicabilityProfilePanel({
 
 export function FormalBacktestResults() {
   const { canAccess, principal } = useAuth();
+  const batchRunIdFromUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('batch_run_id') : null;
   const [runId, setRunId] = useState('');
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
@@ -191,6 +192,12 @@ export function FormalBacktestResults() {
   });
 
   const result = executeMutation.data ?? resultQuery.data ?? null;
+  const batchResultQuery = useQuery({
+    queryKey: ['rule-pool-backtest-batch-result', batchRunIdFromUrl],
+    queryFn: () => getRulePoolBacktestBatchRun(batchRunIdFromUrl as string),
+    enabled: Boolean(batchRunIdFromUrl),
+    retry: false,
+  });
 
   const draftMutation = useMutation({
     mutationFn: () => generateFormalApplicabilityProfileDraft(result?.run_id ?? runId, { result_id: result?.result_id ?? null, reason: '根据本次正式回测生成草稿' }),
@@ -233,6 +240,67 @@ export function FormalBacktestResults() {
 
       {(executeMutation.isPending || resultQuery.isFetching) ? <LoadingState label="正在读取回测结果" description="系统正在核对固定快照、市场状态和样本统计。" /> : null}
       {error ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{errorMessage(error)}</p> : null}
+      {batchResultQuery.isFetching ? <LoadingState label="正在读取合并结果" description="系统正在核对批次来源、参数一致性和合并状态。" /> : null}
+      {batchResultQuery.error ? (
+        <p className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          合并结果暂时无法读取。可能是批次尚未全部完成、存在参数冲突或结果不可用，请回到回测实验查看批次状态。
+        </p>
+      ) : null}
+
+      {batchResultQuery.data ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-slate-950">合并后的规则池回测结果</p>
+              <p className="mt-1 text-sm text-slate-600">展示所有已完成批次合并后的摘要，并保留每条规则对应的批次来源。</p>
+            </div>
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700">{batchResultQuery.data.status}</span>
+          </div>
+          {batchResultQuery.data.status !== 'merged' ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              当前批次计划尚未形成可用的合并结果。影响：不能作为完整规则池回测结论；处理：回到回测实验完成失败或未完成批次后再合并。
+            </div>
+          ) : null}
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+            <span>批次计划：{batchResultQuery.data.batch_run_id}</span>
+            <span>规则数：{batchResultQuery.data.selected_rule_count}</span>
+            <span>每批规则数：{batchResultQuery.data.batch_size}</span>
+            <span>合并结果：{batchResultQuery.data.merged_result_id ?? '未生成'}</span>
+          </div>
+          {batchResultQuery.data.merged_result ? (
+            <>
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+                <span>总交易：{batchResultQuery.data.merged_result.summary.total_trades ?? 0}</span>
+                <span>有效交易：{batchResultQuery.data.merged_result.summary.valid_trades ?? 0}</span>
+                <span>跳过交易：{batchResultQuery.data.merged_result.summary.skipped_trades ?? 0}</span>
+                <span>覆盖天数：{batchResultQuery.data.merged_result.summary.total_days ?? 0}</span>
+              </div>
+              <div className="mt-4 overflow-auto">
+                <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">规则编号</th>
+                      <th className="px-4 py-3 font-medium">批次来源</th>
+                      <th className="px-4 py-3 font-medium">运行记录</th>
+                      <th className="px-4 py-3 font-medium">来源结果</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchResultQuery.data.merged_result.rule_results.map((item) => (
+                      <tr key={`${item.rule_id}-${item.batch_id}`} className="border-t border-slate-100">
+                        <td className="px-4 py-3 text-slate-700">{item.rule_id}</td>
+                        <td className="px-4 py-3 text-slate-700">Batch {item.batch_index}</td>
+                        <td className="px-4 py-3 text-slate-700">{item.job_id ?? '未记录'}</td>
+                        <td className="px-4 py-3 text-slate-700">{item.source_result_reference || '未记录'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       {result ? (
         <>

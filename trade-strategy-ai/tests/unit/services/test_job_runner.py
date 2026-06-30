@@ -1556,6 +1556,65 @@ def test_submit_rule_pool_backtest_binds_regime_artifacts(tmp_path: Path) -> Non
     asyncio.run(engine.dispose())
 
 
+def test_submit_rule_pool_backtest_prefers_rule_ids_over_legacy_rule_id(tmp_path: Path) -> None:
+    """rule-pool-backtest 应优先使用多选规则列表，并保留旧 rule_id 兼容。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, _job_service, engine, _ServiceResult = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="rule-pool-backtest",
+            params={
+                "rule_id": "legacy-rule",
+                "rule_ids": [" rule-001 ", "", "rule-002"],
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-03",
+                "min_confidence": 0.6,
+                "market_regime_version": "market-regime-v3",
+                "config_path": "config/app.yaml",
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+
+    assert submitted.status == "ok"
+    assert fake_backtest_service.rule_pool_calls[0]["rule_ids"] == ["rule-001", "rule-002"]
+    asyncio.run(engine.dispose())
+
+
+def test_submit_rule_pool_backtest_keeps_all_rules_behavior_when_no_rule_id(tmp_path: Path) -> None:
+    """rule-pool-backtest 未指定规则时仍回测全部达标规则。"""
+    fake_backtest_service = _FakeBacktestService()
+    runner, _job_service, engine, _ServiceResult = _build_job_runner(
+        tmp_path,
+        backtest_service_factory=lambda: fake_backtest_service,
+    )
+
+    submitted = asyncio.run(
+        runner.submit_job(
+            job_type="rule-pool-backtest",
+            params={
+                "rule_ids": [],
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-03",
+                "min_confidence": 0.6,
+                "market_regime_version": "market-regime-v3",
+                "config_path": "config/app.yaml",
+            },
+            created_by="web",
+            confirmed=True,
+        )
+    )
+
+    assert submitted.status == "ok"
+    assert fake_backtest_service.rule_pool_calls[0]["rule_ids"] is None
+    asyncio.run(engine.dispose())
+
+
 def test_submit_backtest_validate_rules_binds_validation_report(tmp_path: Path) -> None:
     """backtest-validate-rules 应绑定规则验真报告。"""
     fake_backtest_service = _FakeBacktestService()

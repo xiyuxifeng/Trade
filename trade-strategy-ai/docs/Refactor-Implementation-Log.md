@@ -24,16 +24,28 @@
 ## 当前状态
 
 - 当前 Stage：`Stage 12 旧入口退役与最终交付`
-- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED；RT-S12-003 未开始；Stage 12 Gate 未开始`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`
+- Stage 状态：`[-] RT-S12-001 ACCEPTED；RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED；RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED；Stage 12 Gate 未开始`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003`、用户文档和 Stage 12 Gate 仍未开始。
+- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate 仍未开始。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：等待用户明确授权后启动 `RT-S12-003 用户文档`；不得自动启动 `RT-S12-003`、用户文档生成或 Stage 12 Gate。
+- 下一步：等待用户明确授权后启动 `Stage 12 Gate`；不得自动启动 Stage 12 Gate。
 
 ## 最近实施记录
+
+- Task ID: `RT-S12-003 用户文档`
+- 状态: `已完成（RT_S12_003_USER_DOCS_ACCEPTED）`
+- 修改范围: `docs/User-Docs-README.md`、`docs/Quick-Start.md`、`docs/User-Manual.md`、`docs/First-Time-Initialization.md`、`docs/Daily-Pre-Market-Guide.md`、`docs/Daily-After-Close-Guide.md`、`docs/Data-Failure-Handling.md`、`docs/Admin-Operations-Guide.md`、`docs/Deployment-Runbook.md`、`docs/README.md`、Stage 12 implementation logs
+- 关键设计决定: 以 `web/src/app/route-config.tsx` 和 RT-S12-002 final E2E route sequence 为文档事实依据；普通用户文档仅描述正式业务入口和中文操作；管理员/部署者文档单独标记技术诊断、迁移、备份、恢复、权限、观测和部署运行；部署手册只描述当前系统如何部署运行，不建立新的架构事实源。
+- 数据库迁移: 无
+- 兼容处理: 旧 `bak/` / `Deprecated/` 文档保留为历史材料；新增正式文档放在 `docs/`，不要求普通用户进入 retired/developer-facing routes。
+- 已运行测试: `git diff --check`、formal docs terminology grep、formal docs safety grep、markdown link validation、`python -m scripts.web_local env-check`、`python -m cli.main db-check --config config/app.template.yaml`、`python -m alembic -c src/db/migrations/alembic.ini current`、`python -m alembic -c src/db/migrations/alembic.ini heads`、`web` route-config test
+- 测试结果: docs terminology grep no matches；docs safety grep no matches；markdown links ok；env-check redacted output only；DB check `DB OK: 1` after elevated rerun；Alembic current `2026_06_14_0006` and head `2026_06_20_0001` recorded as environment residual; route-config `12 passed`; `git diff --check` passed
+- 未完成项: Stage 12 Gate 未开始；full browser E2E 未重跑，沿用 RT-S12-002 final E2E evidence 作为文档路径依据。
+- 已知风险: 当前本地数据库不在 migration head，部署者需按 `Deployment-Runbook.md` 在目标环境执行迁移并确认 head；本任务未改变数据库或运行时。
+- 验收结论: `RT_S12_003_USER_DOCS_ACCEPTED`
 
 - Task ID: `RT-S12-002 Browser E2E Acceptance`
 - 状态: `已完成（RT_S12_002_BROWSER_E2E_ACCEPTED）`
@@ -246,7 +258,7 @@
 | Stage 12 Bootstrap | `[x]` | Stage 12 retirement/final delivery contracts、task order、acceptance criteria 和 residual risk classification 已冻结 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-002 | `[x]` | Browser E2E Acceptance 已通过正式 UI/API 路径生成 separate final E2E chain；reference chain 未计为 final pass evidence | [Stage 12](refactor-implementation-logs/stage-12.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
-| RT-S12-003 | `[ ]` | 用户文档未开始；可在 RT-S12-001 接受后与 RT-S12-002 有条件组合 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| RT-S12-003 | `[x]` | 用户文档、管理员文档和部署与运行手册已接受；匹配 Stage 12 final UI / route/navigation 与 RT-S12-002 final E2E 路径 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
 
@@ -264,7 +276,7 @@
 | Stage 9 | `[x]` | Gate 最终 `ACCEPTED` | [stage-9.md](refactor-implementation-logs/stage-9.md) |
 | Stage 10 | `[x]` | Gate 最终 `ACCEPTED` | [stage-10.md](refactor-implementation-logs/stage-10.md) |
 | Stage 11 | `[x]` | Gate 最终 `ACCEPTED`；RT-S11-001 / 002 / 003 / 004 / 005 / 006 / 007 已接受 | [stage-11.md](refactor-implementation-logs/stage-11.md) |
-| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` Browser E2E accepted；`RT-S12-003`、用户文档和 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
+| Stage 12 | `[-]` | `RT-S12-001` accepted；`RT-S12-002` Browser E2E accepted；`RT-S12-003` user docs accepted；Stage 12 Gate 未开始 | [stage-12.md](refactor-implementation-logs/stage-12.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 
 ## 下一步建议
 
@@ -272,7 +284,7 @@
 
 ```text
 Stage 12 next authorized work, only after explicit user approval:
-`RT-S12-003 用户文档`：仅在用户明确授权后启动。不得自动启动用户文档或 Stage 12 Gate。
+`Stage 12 Gate`：仅在用户明确授权后启动。不得自动启动 Stage 12 Gate。
 ```
 
 执行前应读取：

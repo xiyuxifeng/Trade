@@ -2,6 +2,15 @@
 
 包含：
 
+- `docs/User-Docs-README.md`：Stage 12 正式用户、管理员和部署文档入口。
+- `docs/Quick-Start.md`：普通用户快速开始。
+- `docs/User-Manual.md`：普通用户完整使用手册。
+- `docs/First-Time-Initialization.md`：管理员首次初始化指南。
+- `docs/Daily-Pre-Market-Guide.md`：每日盘前说明。
+- `docs/Daily-After-Close-Guide.md`：每日盘后说明。
+- `docs/Data-Failure-Handling.md`：数据不足和失败处理说明。
+- `docs/Admin-Operations-Guide.md`：管理员运维指南。
+- `docs/Deployment-Runbook.md`：部署与运行手册。
 - `docs/Trade-Refactor-TaskList.md`：AI 可执行主 TaskList。
 - `docs/TaskList-Review.md`：基于前期讨论的 Review 结论。
 - `docs/trade-strategy-ai-web-refactor-plan-market-state-v2.md`：完整重构方案。

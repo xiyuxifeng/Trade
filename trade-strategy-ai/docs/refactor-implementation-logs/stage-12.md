@@ -3,12 +3,74 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`RT-S12-002 Browser E2E Acceptance`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`
-- 当前 Task：`RT-S12-002` final browser E2E 验收已通过；reference-chain records 未计为 final pass evidence
-- 下一可执行项：等待用户明确授权后进入 `RT-S12-003 用户文档`；不得自动启动
-  `RT-S12-003`、Stage 12 Gate 或用户文档生成
-- 不得自动开始：不得自动开始后续 Stage 12 Task
+- 当前活动：`RT-S12-003 用户文档`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`
+- 当前 Task：`RT-S12-003` 用户文档、管理员文档和部署与运行手册已交付；文档匹配 Stage 12 final UI / route/navigation 和 RT-S12-002 final E2E route sequence。
+- 下一可执行项：等待用户明确授权后进入 `Stage 12 Gate`
+- 不得自动开始：不得自动开始 Stage 12 Gate 或后续 review/gate task
+
+## 2026-06-30 RT-S12-003 用户文档
+
+### Status
+
+`RT_S12_003_USER_DOCS_ACCEPTED`
+
+### Scope
+
+- Documentation-only delivery for Stage 12 final user/admin/deployment handoff.
+- No production code, frontend route, backend API, database migration, browser E2E data generation, live provider refresh, article recrawl, broad backfill, or LLM run was started.
+- Formal documents were placed under `docs/` and indexed from `docs/User-Docs-README.md` plus `docs/README.md`.
+- Documentation was checked against `web/src/app/route-config.tsx` and RT-S12-002 final E2E route sequence:
+  `/research/add` → `/research/articles` → `/research/results` → `/rules/review` → `/rules/backtests` → `/rules/results` → `/authors` → `/strategies` → `/daily/pre-market` → `/daily/after-close`.
+
+### Documents delivered
+
+- `docs/User-Docs-README.md`: formal documentation entry for ordinary users, administrators, and deployers.
+- `docs/Quick-Start.md`: ordinary-user quick start for article import through daily plan/review.
+- `docs/User-Manual.md`: complete ordinary-user manual for formal navigation and product pages.
+- `docs/First-Time-Initialization.md`: administrator first-time initialization guide.
+- `docs/Daily-Pre-Market-Guide.md`: ordinary-user daily pre-market guide.
+- `docs/Daily-After-Close-Guide.md`: ordinary-user post-close review guide.
+- `docs/Data-Failure-Handling.md`: ordinary-user missing/partial/unavailable/degraded/invalid/conflict handling guide.
+- `docs/Admin-Operations-Guide.md`: administrator operations guide for diagnostics, migration, backup, recovery, scheduling, permissions, audit, and failure handling.
+- `docs/Deployment-Runbook.md`: deployer/admin deployment and runtime runbook.
+- `docs/README.md`: formal docs index updated.
+
+### Review and bounded fix loop
+
+- Loop 1:
+  - Finding: existing formal `docs/` lacked a Stage 12 current user/admin/deployment handoff; prior user/deployment docs under `bak/` and `Deprecated/` were old-route materials.
+  - Fix: added the new formal docs listed above and kept old materials untouched as historical documents.
+  - Rerun: terminology grep, safety grep, link validation, route/source review.
+- Loop 2:
+  - Finding: formal docs index needed to expose the new Stage 12 handoff without creating a second TaskList, route source, schema source, governance source, or architecture source.
+  - Fix: updated `docs/README.md` and kept `docs/User-Docs-README.md` as a documentation entry only.
+  - Rerun: terminology grep, safety grep, markdown link validation, route-config test, deployment command verification.
+
+### Verification
+
+- `git diff --check`: pass.
+- Formal docs terminology grep for `Job|Workflow|Pipeline|Artifact|Provider|Schema|config_path|prompt_run_id|run_id`: no matches in the delivered docs and updated docs index.
+- Formal docs safety grep for required sensitive/local-path terms: no matches in the delivered docs and updated docs index.
+- Markdown link validation for delivered docs and updated docs index: pass, `markdown links ok`.
+- `python -m scripts.web_local env-check`: pass; output was redacted. It reported only `DASHSCOPE_API_KEY` set in the current shell and did not print sensitive values.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass after approved elevated rerun; sandboxed run was blocked by socket permissions.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: command reachable after approved elevated rerun; current DB reported `2026_06_14_0006`.
+- `python -m alembic -c src/db/migrations/alembic.ini heads`: pass; migration head is `2026_06_20_0001`.
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`.
+
+### Unrun or partial verification
+
+- Full browser E2E was not rerun because RT-S12-003 is documentation-only and must not start new E2E data generation; RT-S12-002 final E2E evidence is reused as route/product-path source.
+- Web build/typecheck were not rerun because no frontend source changed; route-config test was rerun because the docs describe final routes.
+- Backend full test suite was not rerun because no backend source changed.
+- Current local database is not at migration head (`current=2026_06_14_0006`, `head=2026_06_20_0001`); this is recorded as a deployment/environment residual risk, not as a documentation content blocker.
+
+### Decision
+
+`RT_S12_003_USER_DOCS_ACCEPTED`
+
+Next allowed item is `Stage 12 Gate`, only after explicit user authorization.
 
 ## 2026-06-29 RT-S12-002 Browser E2E Acceptance
 

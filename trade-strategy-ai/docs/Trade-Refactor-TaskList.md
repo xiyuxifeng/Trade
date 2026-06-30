@@ -1413,7 +1413,102 @@ Stage 0 现状审计
 
 任何一项为否，都不能视为本轮重构完成。
 
-RT-S10-002： LLM 归因。
-JSON source bindings-hardening
-Risk
-Gate task card Review
+
+建议保留
+
+  - alembic_version：必须保留，表示 schema migration 状态。
+  - raw_articles：131 条，真正原始抓取文章。
+  - blog_articles：131 条，当前系统文章主表，包含正文、标题、作者、来源、raw_payload。
+  - authors：1 条，可保留作为文章作者归属。
+  - article_revisions：131 条，建议保留。它是 canonical 文章版本，仍属于“原始文章版本化引用”，不是 LLM/回测结果。
+  - 可选保留 users：1 条。如果交付环境需要可登录管理员账号，保留；否则交付前重新初始化用户更干净。
+  - 可选保留 config_profiles：1 条。若它只是不含密钥的模板配置可保留；若包含本地配置痕迹，删除并由部署初始化重建。
+
+  应删除的数据库数据
+  这些都是文章之后生成的派生结果或运行证据，不应随“只保留原始文章”的交付一起出现：
+
+  - LLM/文章结构化派生：
+      - prompt_runs 286
+      - article_structures 286
+      - article_metadata 262
+      - article_metadata_selections 7
+      - article_classification 6
+      - rule_candidates 505
+
+  - 规则/规则池/适用性：
+      - rules 15
+      - rule_versions 15
+      - rule_families 15
+      - rule_family_memberships 15
+      - rule_version_source_links 15
+      - rule_pool 14
+      - rule_applicability_profiles 14
+      - rule_applicability_profile_audits 43
+
+  - 回测/行情快照/市场状态：
+      - dataset_snapshots 3
+      - backtest_runs 17
+      - backtest_results 17
+      - backtest_result_runs 14
+      - ohlcv_bars 124
+      - market_snapshots 2
+      - market_snapshot_sections 3
+      - market_snapshot_items 6
+      - market_regimes 2
+      - signals 8
+      - stock_info 5850，若交付只保留文章，也应删除；若作为基础证券字典交付，可另行保留。
+
+  - 作者画像/策略/每日交易/盘后建议：
+      - author_profile_versions 30
+      - author_profile_version_audits 90
+      - strategies 9
+      - strategy_versions 9
+      - strategy_version_audits 33
+      - strategy_rule_memberships 9
+      - daily_rule_selections 4
+      - daily_rule_selection_items 4
+      - daily_strategy_instances 4
+      - trading_day_plans 4
+      - post_market_reviews 4
+      - optimization_proposals 12
+
+  - 运行/迁移/审计/兼容证据：
+      - jobs 8
+      - job_audit_events 613
+      - data_audit_events 85
+      - lifecycle_events 25
+      - legacy_id_mappings 629
+      - migration_runs 1
+      - migration_run_items 498
+      - migration_quality_reports 9
+      - alert_history 18
+      - user_sessions 1
+      - crawl_state 1，如果交付后要从头抓取状态，应删除。
+
+  应删除的文件产物
+  当前本地最大、最明确的派生产物：
+
+  - data/processed/pipeline/clean/all.articles.cleaned.jsonl 约 118MB
+  - data/processed/pipeline/validate/all.articles.cleaned.validated.jsonl 约 118MB
+  - data/processed/pipeline/validate/validation_report.json
+  - data/processed/dashboard/dashboard.html
+  - data/jobs/
+  - data/logs/
+  - logs/
+  - web/test-results/
+  - .pytest_cache/
+  - .mypy_cache/
+  - .vite/
+  - tmp_stage2_test.db
+  - .DS_Store 文件
+
+  不要删除
+
+  - docs/ 正式文档和实施日志：这是交付说明和验收记录。
+  - prompts/：版本化 prompt 是产品能力的一部分。
+  - data/patterns/canonical/*.yaml：看起来是代码/规则模板资产，已被 git 跟踪，不是运行产物。
+  - data/backtest/trading_calendar.json：被 git 跟踪，像基础静态资产；除非你明确要求“完全无市场数据资产”，否则保留。
+
+  交付前判断
+  如果目标真的是“只带文章，让用户从规则提取重新开始”，那么必须删除上述派生表和产物。否则首页、规则、策略、盘前盘后页面可能
+  看到历史 E2E/测试链路，误以为系统已有正式规则、回测、策略和每日计划。

@@ -19,22 +19,35 @@
 - [Stage 11 日志](refactor-implementation-logs/stage-11.md)
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
 - [RT-PERF-001 规则池批量回测](refactor-implementation-logs/rt-perf-001.md)
+- [RT-PERF-002 规则池回测共享市场上下文缓存](refactor-implementation-logs/rt-perf-002.md)
 - [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 - [RT-S12-002 Browser E2E Acceptance](refactor-implementation-logs/rt-s12-002-browser-e2e.md)
 
 ## 当前状态
 
 - 当前 Stage：`Post-delivery hardening`
-- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED`
+- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED；RT-PERF-002 RT_PERF_002_ACCEPTED`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。
+- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 和 `RT-PERF-002` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：小规模真实数据试运行。
+- 下一步：小规模真实批次回测观察耗时；如仍然太慢，单独立项 Backtest Performance Instrumentation 或 Parallel Rule Executor。
 
 ## 当前实施记录
+
+- Task ID: `RT-PERF-002 Shared Market Context Cache for Rule Pool Backtest`
+- 状态: `已完成（RT_PERF_002_ACCEPTED）`
+- 修改范围: `src/backtest/engine.py` 规则池回测日期级 market context / indicators cache、focused rule-pool backtest tests、RT-PERF-002 实施日志。
+- 关键设计决定: 不改变 Stage 12 accepted route/governance/data-source/result contract；不引入并行、自动暂停/恢复、DB schema、UI 或 API；`run_rules_backtest()` 在规则循环前按交易日预加载 context，`_backtest_single_rule()` 仅在传入 cache 时复用，未传 cache 保持旧行为。
+- 数据库迁移: 无。
+- 兼容处理: 保留旧 `_backtest_single_rule()` 参数行为；外层 `rule_index` / `rule_results` / `current_rule_state` 和内层 `trade_date_index` / `hit_returns` / `hit_count` / `total_checks` / `regime_returns` / `source_feature_version` checkpoint 语义不变。
+- 已运行测试: rule-pool backtest RED/GREEN focused tests；完整 `test_rule_pool_backtest.py`；backtest engine/regime/reproducibility focused aggregate；BacktestService rule-pool test；JobRunner rule-pool focused tests；env-check；DB check；Alembic current/heads；parallelism source scan。
+- 测试结果: initial RED reproduced `6 != 3`; final focused aggregates passed (`16 passed`, `24 passed`, `38 passed`); env-check redacted pass; DB OK; current/head `2026_06_30_0001 (head)`; no executor/gather/task parallelism matches in `src/backtest/engine.py`。
+- 未完成项: 无。
+- 已知风险: Full backend suite、frontend tests、Browser E2E 和 Prompt regression 未运行；替代证据为本任务直接后端路径 focused tests、DB/migration status、source scan。真实数据耗时仍需小批次观察。
+- 验收结论: `RT_PERF_002_ACCEPTED`
 
 - Task ID: `RT-PERF-001 Rule Pool Backtest Batch Selection and Result Merge`
 - 状态: `已完成（RT_PERF_001_ACCEPTED）`

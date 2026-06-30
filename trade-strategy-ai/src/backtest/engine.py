@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+RuleBacktestMarketContext = dict[str, Any]
+
 
 async def _resolve_maybe_awaitable(value: Any) -> Any:
     """兼容 SQLAlchemy 同步 Result 与单元测试 AsyncMock 的 awaitable 链路。"""
@@ -1708,6 +1710,76 @@ class BacktestEngine:
             forward_days=forward_days,
         )
 
+    async def _preload_rule_backtest_market_contexts(
+        self,
+        *,
+        trade_dates: list[date],
+        forward_bars: dict[str, list[dict[str, Any]]],
+        market_regime_version: str | None = None,
+    ) -> dict[str, RuleBacktestMarketContext]:
+        """按交易日预加载规则池回测市场上下文，供所有规则共享。"""
+        contexts_by_date: dict[str, RuleBacktestMarketContext] = {}
+        loader_context_load_count = 0
+        derived_context_dates_count = 0
+        missing_context_dates_count = 0
+
+        for trade_date in trade_dates:
+            trade_date_str = trade_date.isoformat()
+            context: RuleBacktestMarketContext = {
+                "indicators_by_symbol": {},
+                "market_regime": None,
+                "source_feature_version": self._feature_version_for_regime_version(market_regime_version),
+            }
+            if self.loader is not None:
+                try:
+                    loader_context_load_count += 1
+                    loaded = await self.loader.load_market_context(
+                        trade_date=trade_date,
+                        symbols=[],
+                        regime_version=market_regime_version,
+                    )
+                    if isinstance(loaded, dict):
+                        market_regime_obj = loaded.get("market_regime")
+                        source_feature_version = None
+                        if isinstance(market_regime_obj, dict):
+                            loaded_source_feature_version = market_regime_obj.get("source_feature_version")
+                            if isinstance(loaded_source_feature_version, str) and loaded_source_feature_version:
+                                source_feature_version = loaded_source_feature_version
+                        if source_feature_version is None:
+                            loaded_source_feature_version = loaded.get("source_feature_version")
+                            if isinstance(loaded_source_feature_version, str) and loaded_source_feature_version:
+                                source_feature_version = loaded_source_feature_version
+                        context = {
+                            "indicators_by_symbol": loaded.get("indicators_by_symbol") or {},
+                            "market_regime": market_regime_obj,
+                            "source_feature_version": source_feature_version
+                            or self._feature_version_for_regime_version(market_regime_version),
+                        }
+                except Exception as exc:
+                    logger.debug("预加载规则池市场上下文失败: date=%s, error=%s", trade_date, exc)
+            else:
+                context["indicators_by_symbol"] = _derive_indicators_from_bars(
+                    forward_bars, trade_date_str
+                )
+                derived_context_dates_count += 1
+
+            if not context.get("indicators_by_symbol"):
+                missing_context_dates_count += 1
+            contexts_by_date[trade_date_str] = context
+
+        logger.debug(
+            "规则池共享市场上下文缓存: shared_context_cache_enabled=%s, trade_dates_count=%d, "
+            "cached_context_dates_count=%d, loader_context_load_count=%d, "
+            "derived_context_dates_count=%d, missing_context_dates_count=%d",
+            True,
+            len(trade_dates),
+            len(contexts_by_date),
+            loader_context_load_count,
+            derived_context_dates_count,
+            missing_context_dates_count,
+        )
+        return contexts_by_date
+
     async def run_rules_backtest(
         self,
         session: AsyncSession,
@@ -1793,8 +1865,15 @@ class BacktestEngine:
             "批量预加载 OHLCV bars 完成: symbols=%d", len(forward_bars)
         )
 
-        # 3. 对每条规则执行回测（共享预加载的 forward_bars）
+        # 3. 按交易日预加载市场上下文/指标，供所有规则共享。
         trade_dates = iter_trade_dates(start_date, end_date)
+        shared_contexts_by_date = await self._preload_rule_backtest_market_contexts(
+            trade_dates=trade_dates,
+            forward_bars=forward_bars,
+            market_regime_version=market_regime_version,
+        )
+
+        # 4. 对每条规则执行回测（共享预加载的 forward_bars 和日期级市场上下文）
         total_steps = len(rules) * max(len(trade_dates), 1)
         runtime_state_payload = runtime_state if isinstance(runtime_state, dict) else {}
         checkpoint = runtime_state_payload.get("checkpoint") if isinstance(runtime_state_payload.get("checkpoint"), dict) else {}
@@ -1860,6 +1939,7 @@ class BacktestEngine:
             result = await self._backtest_single_rule(
                 rule, start_date, end_date,
                 session=session, forward_bars=forward_bars,
+                market_contexts_by_date=shared_contexts_by_date,
                 market_regime_version=market_regime_version,
                 runtime_state=rule_runtime_state,
                 progress_callback=_rule_progress,
@@ -1893,7 +1973,7 @@ class BacktestEngine:
                 next_rule_index=rule_index + 1,
             )
 
-        # 4. 汇总结果
+        # 5. 汇总结果
         aggregated = self._aggregate_rule_results(completed_rule_results)
 
         logger.info(
@@ -1912,6 +1992,7 @@ class BacktestEngine:
         end_date: date,
         session: AsyncSession | None = None,
         forward_bars: dict[str, list[dict[str, Any]]] | None = None,
+        market_contexts_by_date: dict[str, RuleBacktestMarketContext] | None = None,
         market_regime_version: str | None = None,
         runtime_state: dict[str, Any] | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -1935,6 +2016,7 @@ class BacktestEngine:
             end_date: 回测结束日期
             session: 数据库会话（用于预加载 OHLCV 数据）
             forward_bars: 共享预加载的 OHLCV bars（由 run_rules_backtest 批量传入）
+            market_contexts_by_date: 日期级共享市场上下文（由 run_rules_backtest 批量传入）
 
         Returns:
             RuleBacktestResult（真实统计指标）
@@ -2007,7 +2089,8 @@ class BacktestEngine:
                 forward_days=5,
             )
 
-        # 确定加载策略：loader 可用时走 loader，否则从预加载的 bars 派生基础 OHLCV 指标
+        # 确定加载策略：优先使用规则池日期级共享上下文；未传入时保留旧行为。
+        use_shared_market_context = market_contexts_by_date is not None
         use_loader = self.loader is not None
 
         total_days = len(trade_dates)
@@ -2019,7 +2102,14 @@ class BacktestEngine:
 
             # 加载指标数据
             indicators_by_symbol: dict[str, dict[str, Any]] = {}
-            if use_loader:
+            if use_shared_market_context:
+                context = market_contexts_by_date.get(trade_date_str, {}) if market_contexts_by_date is not None else {}
+                indicators_by_symbol = context.get("indicators_by_symbol") or {}
+                market_regime_obj = context.get("market_regime")
+                loaded_source_feature_version = context.get("source_feature_version")
+                if isinstance(loaded_source_feature_version, str) and loaded_source_feature_version:
+                    source_feature_version = loaded_source_feature_version
+            elif use_loader:
                 try:
                     ctx = await self.loader.load_market_context(
                         trade_date=trade_date,
@@ -2072,7 +2162,7 @@ class BacktestEngine:
                     )
                 if t1_ret is not None:
                     hit_returns.append(t1_ret)
-                    regime_label = _resolve_regime_label(market_regime_obj) if use_loader else "unknown"
+                    regime_label = _resolve_regime_label(market_regime_obj) if market_regime_obj is not None else "unknown"
                     regime_returns[regime_label].append(t1_ret)
 
             if progress_callback is not None and progress_total:

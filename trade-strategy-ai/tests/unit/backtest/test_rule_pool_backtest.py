@@ -136,6 +136,111 @@ class TestBacktestEngineRulePool:
             mock_repo_instance.update_backtest_result.assert_called()
 
     @pytest.mark.asyncio
+    async def test_run_rules_backtest_loads_market_context_once_per_trade_date(self, mock_session, sample_rules):
+        """规则池回测应按交易日共享 loader 市场上下文，避免每条规则重复加载。"""
+        trade_dates = [date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)]
+        forward_bars = {
+            "000001.SZ": [
+                {"symbol": "000001.SZ", "date": "2026-04-01", "close": 10.0},
+                {"symbol": "000001.SZ", "date": "2026-04-02", "close": 10.5},
+                {"symbol": "000001.SZ", "date": "2026-04-03", "close": 11.0},
+                {"symbol": "000001.SZ", "date": "2026-04-04", "close": 11.5},
+            ]
+        }
+        loader = MagicMock()
+        loader.load_market_context = AsyncMock(
+            return_value={
+                "indicators_by_symbol": {"000001.SZ": {"rsi": 20.0, "close": 10.0}},
+                "market_regime": {
+                    "primary_label": "trend_up",
+                    "source_feature_version": "features-v1",
+                },
+            }
+        )
+        engine = BacktestEngine(loader=loader)
+        engine._preload_rule_backtest_bars = AsyncMock(return_value=forward_bars)
+        for rule in sample_rules[:2]:
+            rule.extraction_layer = {
+                "rule_type": "breakout",
+                "mapped_condition": {"op": "lt", "field": "rsi", "value": 30},
+            }
+
+        with (
+            patch("src.rule_pool.repository.RulePoolRepository") as MockRepo,
+            patch("src.backtest.engine.iter_trade_dates", return_value=trade_dates),
+        ):
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_rules_by_status = AsyncMock(return_value=sample_rules[:2])
+            mock_repo_instance.update_backtest_result = AsyncMock(return_value=True)
+
+            result = await engine.run_rules_backtest(
+                session=mock_session,
+                rule_ids=None,
+                start_date=date(2026, 4, 1),
+                end_date=date(2026, 4, 3),
+                market_regime_version="market-regime-v1",
+            )
+
+        assert result.summary.total_trades == 6
+        assert loader.load_market_context.call_count == len(trade_dates)
+        assert [call.kwargs["trade_date"] for call in loader.load_market_context.call_args_list] == trade_dates
+        updated_results = [
+            call.kwargs["backtest_result"]
+            for call in mock_repo_instance.update_backtest_result.call_args_list
+        ]
+        assert {result.source_feature_version for result in updated_results} == {"features-v1"}
+        assert {
+            result.regime_metrics[0].regime_label
+            for result in updated_results
+            if result.regime_metrics
+        } == {"trend_up"}
+
+    @pytest.mark.asyncio
+    async def test_run_rules_backtest_derives_indicators_once_per_trade_date_without_loader(self, mock_session, sample_rules):
+        """无 loader 时规则池回测应按交易日共享从 bars 派生的指标。"""
+        trade_dates = [date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)]
+        forward_bars = {
+            "000001.SZ": [
+                {"symbol": "000001.SZ", "date": "2026-04-01", "close": 10.0},
+                {"symbol": "000001.SZ", "date": "2026-04-02", "close": 10.5},
+                {"symbol": "000001.SZ", "date": "2026-04-03", "close": 11.0},
+                {"symbol": "000001.SZ", "date": "2026-04-04", "close": 11.5},
+            ]
+        }
+        engine = BacktestEngine()
+        engine._preload_rule_backtest_bars = AsyncMock(return_value=forward_bars)
+        for rule in sample_rules[:2]:
+            rule.extraction_layer = {
+                "rule_type": "breakout",
+                "mapped_condition": {"op": "gt", "field": "close", "value": 9.0},
+            }
+
+        with (
+            patch("src.rule_pool.repository.RulePoolRepository") as MockRepo,
+            patch("src.backtest.engine.iter_trade_dates", return_value=trade_dates),
+            patch(
+                "src.backtest.engine._derive_indicators_from_bars",
+                side_effect=lambda _bars, _trade_date: {"000001.SZ": {"close": 10.0}},
+            ) as derive_mock,
+        ):
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_rules_by_status = AsyncMock(return_value=sample_rules[:2])
+            mock_repo_instance.update_backtest_result = AsyncMock(return_value=True)
+
+            result = await engine.run_rules_backtest(
+                session=mock_session,
+                rule_ids=None,
+                start_date=date(2026, 4, 1),
+                end_date=date(2026, 4, 3),
+            )
+
+        assert result.summary.total_trades == 6
+        assert derive_mock.call_count == len(trade_dates)
+        assert [call.args[1] for call in derive_mock.call_args_list] == [
+            day.isoformat() for day in trade_dates
+        ]
+
+    @pytest.mark.asyncio
     async def test_run_rules_backtest_specific_rule_ids(self, mock_session, sample_rules):
         """测试指定 rule_ids 的回测"""
         engine = BacktestEngine()
@@ -292,6 +397,88 @@ class TestBacktestEngineRulePool:
         assert result.run_id is not None
         assert result.start_date == date(2026, 4, 1)
         assert result.end_date == date(2026, 4, 3)
+
+    @pytest.mark.asyncio
+    async def test_backtest_single_rule_cache_keeps_core_statistics_compatible(self):
+        """传入共享 cache 后，核心统计应与旧 loader 路径一致且不再调用 loader。"""
+        rule = MagicMock(spec=RulePool)
+        rule.rule_id = "rule_cache_equiv_001"
+        rule.extraction_layer = {
+            "rule_type": "breakout",
+            "mapped_condition": {"op": "lt", "field": "rsi", "value": 30},
+        }
+        forward_bars = {
+            "000001.SZ": [
+                {"symbol": "000001.SZ", "date": "2026-04-01", "close": 10.0},
+                {"symbol": "000001.SZ", "date": "2026-04-02", "close": 10.5},
+                {"symbol": "000001.SZ", "date": "2026-04-03", "close": 10.0},
+                {"symbol": "000001.SZ", "date": "2026-04-04", "close": 11.0},
+            ]
+        }
+        contexts_by_date = {
+            "2026-04-01": {
+                "indicators_by_symbol": {"000001.SZ": {"rsi": 20.0}},
+                "market_regime": {
+                    "primary_label": "trend_up",
+                    "source_feature_version": "features-v1",
+                },
+                "source_feature_version": "features-v1",
+            },
+            "2026-04-02": {
+                "indicators_by_symbol": {"000001.SZ": {"rsi": 40.0}},
+                "market_regime": {
+                    "primary_label": "trend_up",
+                    "source_feature_version": "features-v1",
+                },
+                "source_feature_version": "features-v1",
+            },
+            "2026-04-03": {
+                "indicators_by_symbol": {"000001.SZ": {"rsi": 25.0}},
+                "market_regime": {
+                    "primary_label": "trend_down",
+                    "source_feature_version": "features-v1",
+                },
+                "source_feature_version": "features-v1",
+            },
+        }
+        loader = MagicMock()
+        loader.load_market_context = AsyncMock(
+            side_effect=lambda *, trade_date, symbols, regime_version=None: contexts_by_date[trade_date.isoformat()]
+        )
+        engine = BacktestEngine(loader=loader)
+
+        legacy_result = await engine._backtest_single_rule(
+            rule=rule,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 3),
+            forward_bars=forward_bars,
+            market_regime_version="market-regime-v1",
+        )
+        assert loader.load_market_context.call_count == 3
+
+        loader.load_market_context.reset_mock()
+        cached_result = await engine._backtest_single_rule(
+            rule=rule,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 3),
+            forward_bars=forward_bars,
+            market_contexts_by_date=contexts_by_date,
+            market_regime_version="market-regime-v1",
+        )
+
+        assert loader.load_market_context.call_count == 0
+        assert cached_result.total_trades == legacy_result.total_trades
+        assert cached_result.hit_trades == legacy_result.hit_trades
+        assert cached_result.hit_rate == legacy_result.hit_rate
+        assert cached_result.avg_return == legacy_result.avg_return
+        assert cached_result.source_feature_version == legacy_result.source_feature_version
+        assert [
+            (metric.regime_label, metric.sample_count, metric.win_trades, metric.loss_trades)
+            for metric in cached_result.regime_metrics
+        ] == [
+            (metric.regime_label, metric.sample_count, metric.win_trades, metric.loss_trades)
+            for metric in legacy_result.regime_metrics
+        ]
 
     @pytest.mark.asyncio
     async def test_run_rules_backtest_updates_db(self, mock_session, sample_rules):

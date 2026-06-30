@@ -1,6 +1,12 @@
 import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8000";
+const localhostNoProxy = ["127.0.0.1", "localhost", "::1"];
+
+for (const key of ["NO_PROXY", "no_proxy"] as const) {
+  const existing = process.env[key]?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+  process.env[key] = Array.from(new Set([...existing, ...localhostNoProxy])).join(",");
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",

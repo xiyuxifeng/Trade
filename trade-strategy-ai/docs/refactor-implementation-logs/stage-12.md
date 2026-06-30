@@ -3,11 +3,65 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`RT-S12-003 用户文档`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`
-- 当前 Task：`RT-S12-003` 用户文档、管理员文档和部署与运行手册已交付；文档匹配 Stage 12 final UI / route/navigation 和 RT-S12-002 final E2E route sequence。
-- 下一可执行项：等待用户明确授权后进入 `Stage 12 Gate`
-- 不得自动开始：不得自动开始 Stage 12 Gate 或后续 review/gate task
+- 当前活动：`Stage 12 Gate`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_BLOCKED`
+- 当前 Task：Stage 12 Gate 已执行 review + bounded fix loop；Gate 阻塞于当前本地数据库无法迁移到 head 以及当前环境缺少 E2E 所需管理员 API key。
+- 下一可执行项：修复本地 DB migration owner/role 和 E2E 管理员认证环境后，重新执行 `Stage 12 Gate`。
+- 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
+
+## 2026-06-30 Stage 12 Gate
+
+### Status
+
+`STAGE_12_GATE_BLOCKED`
+
+### Scope
+
+- 执行 Stage 12 final Gate review、required verification 和 bounded fix loop。
+- 不改变 route/schema/governance/data-source/lifecycle/prompt/product contract。
+- 仅修复 Playwright E2E harness 的 localhost proxy 敏感问题：`web/playwright.config.ts` 现在将 `127.0.0.1`、`localhost`、`::1` 加入 `NO_PROXY` / `no_proxy`。
+- 详细记录：[Stage 12 Gate](stage-12-gate.md)。
+
+### Gate Review Result
+
+- `RT-S12-001`: review pass；retired ordinary-user legacy routes remain redirect-only in the single route registry; primary navigation exposes only formal product entries and allowed System Management entries.
+- `RT-S12-002`: accepted evidence remains valid in `rt-s12-002-browser-e2e.md`; reference-chain records remain excluded from final pass evidence. Fresh Gate E2E rerun is blocked by current environment authentication.
+- `RT-S12-003`: review pass；formal user/admin/deployment docs remain under `docs/stage-12-user-docs/` and indexed from `docs/README.md`; delivered docs terminology/safety/link checks passed.
+- Global contract: no second route/schema/governance/data-source/documentation source of truth found in the reviewed Stage 12 Gate diff; truthful missing/partial/unavailable/degraded/invalid/conflict handling remains documented.
+
+### Blocking Findings
+
+- Local DB current/head mismatch remains: `current=2026_06_14_0006`, `head=2026_06_20_0001`.
+- Bounded migration attempt failed because the configured DB user is not owner of `ohlcv_bars`; Alembic current stayed at `2026_06_14_0006`.
+- Fresh `pnpm e2e` reaches the browser test after harness repair but remains on the login page because `ADMIN_API_KEY` is unset in the current environment.
+
+### Bounded Fixes
+
+- Restored local `@playwright/test 1.61.1` from lockfile so `pnpm e2e` uses the Node Playwright test runner instead of an unrelated Playwright CLI on PATH.
+- Installed matching Playwright Chromium runtime into local cache; no runtime files were committed.
+- Added localhost no-proxy protection to `web/playwright.config.ts`.
+
+### Verification
+
+- `python -m scripts.web_local env-check`: pass, redacted output only; `ADMIN_API_KEY` / `DATABASE_URL` unset in this shell.
+- `python -m cli.main db-check --config config/app.template.yaml`: pass, `DB OK: 1`.
+- `python -m alembic -c src/db/migrations/alembic.ini current`: pass, `2026_06_14_0006`.
+- `python -m alembic -c src/db/migrations/alembic.ini heads`: pass, `2026_06_20_0001 (head)`.
+- `python -m cli.main db-migrate --config config/app.template.yaml`: failed with insufficient table owner privilege on `ohlcv_bars`.
+- Focused backend/API/service aggregate: pass, `69 passed`.
+- `cd web && pnpm typecheck`: pass.
+- `cd web && pnpm test -- src/app/route-config.test.tsx`: pass, `12 passed`.
+- `cd web && pnpm build`: pass.
+- `cd web && pnpm e2e`: failed after harness repair at authentication/login-page precondition.
+- Delivered docs terminology grep: no matches.
+- Delivered docs safety grep: no matches.
+- Markdown link validation: pass.
+
+### Decision
+
+`STAGE_12_GATE_BLOCKED`
+
+Stage 12 is not finally accepted. Minimum repair is to provide a DB migration role/owner that can advance the local database to head and provide a valid admin API key through the approved local environment mechanism, then rerun Stage 12 Gate verification and Browser E2E.
 
 ## 2026-06-30 RT-S12-003 用户文档
 

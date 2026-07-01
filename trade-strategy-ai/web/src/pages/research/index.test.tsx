@@ -1,9 +1,7 @@
-import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api/http';
-import { getArticleMetadataSummary, listArticleMetadataArticles, selectArticleMetadataVersion } from '@/lib/api/article-metadata';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -17,12 +15,6 @@ import { ResearchAddPage, ResearchArticlesPage, ResearchResultsPage } from './in
 vi.mock('@/lib/api/articles', () => ({
   listArticleFilterOptions: vi.fn(),
   listArticles: vi.fn(),
-}));
-
-vi.mock('@/lib/api/article-metadata', () => ({
-  getArticleMetadataSummary: vi.fn(),
-  listArticleMetadataArticles: vi.fn(),
-  selectArticleMetadataVersion: vi.fn(),
 }));
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -39,9 +31,6 @@ vi.mock('@/lib/api/pipelines', () => ({
 
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
-const mockedListArticleMetadataArticles = vi.mocked(listArticleMetadataArticles);
-const mockedGetArticleMetadataSummary = vi.mocked(getArticleMetadataSummary);
-const mockedSelectArticleMetadataVersion = vi.mocked(selectArticleMetadataVersion);
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
 const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
@@ -83,76 +72,6 @@ function buildArticleFilterOptions() {
   };
 }
 
-function buildArticleMetadataList() {
-  return {
-    items: [
-      {
-        article_id: 'article-1',
-        title: 'Article One',
-        author_name: 'Alice',
-        author_id: 'author-1',
-        source: 'tgb',
-        source_url: 'https://example.com/article-1',
-        published_at: '2026-05-10T08:00:00Z',
-        crawled_at: '2026-05-10T09:00:00Z',
-        summary: 'summary',
-        tags: ['trend'],
-        selection_status: 'unselected' as const,
-        selected_schema_version: 'v1',
-        selected_by: 'system',
-        selected_at: '2026-05-10T10:00:00Z',
-        selection_mode: 'auto',
-        selection_reason: '自动推荐',
-        recommended_schema_version: 'v1',
-        effective_schema_version: 'v1',
-      },
-    ],
-    total: 1,
-    page: 1,
-    page_size: 8,
-    pages: 1,
-  };
-}
-
-function buildArticleMetadataDetail(articleId: string) {
-  return {
-    article_id: articleId,
-    selected_schema_version: 'v1',
-    selected_by: 'system',
-    selected_at: '2026-05-10T10:00:00Z',
-    selection_mode: 'auto',
-    selection_score: 4.2,
-    selection_reason: '自动推荐',
-    recommended_schema_version: 'v1',
-    recommended_score: 4.2,
-    recommended_reason: '自动推荐',
-    effective_schema_version: 'v1',
-    effective_score: 4.2,
-    effective_reason: '自动推荐',
-    warning: null,
-    candidates: [
-      {
-        schema_version: 'v1',
-        score: 4.2,
-        score_reasons: ['字段完整'],
-        processed_at: '2026-05-10T10:00:00Z',
-        provider: 'openai',
-        model: 'gpt-5',
-        article_type: 'rule',
-        extraction_version: 'v1',
-        sentiment_score: 0.8,
-        confidence_score: 0.9,
-        extracted_concepts_count: 3,
-        trading_symbols_count: 2,
-        strategy_rules_count: 1,
-        preconditions_count: 1,
-        comment_insights_count: 1,
-        raw_llm_output_keys: 4,
-      },
-    ],
-  };
-}
-
 async function expectNoForbiddenTerms() {
   for (const forbidden of ['Job', 'Workflow', 'Pipeline', 'Artifact', 'Provider', 'force', 'config_path', 'profile_id']) {
     expect(screen.queryByText(forbidden)).not.toBeInTheDocument();
@@ -171,7 +90,7 @@ describe('research pages', () => {
     expect(screen.getByText('输入')).toBeInTheDocument();
     expect(screen.getByText('处理状态')).toBeInTheDocument();
     expect(screen.getByText('输出')).toBeInTheDocument();
-    expect(screen.getByText('下一步')).toBeInTheDocument();
+    expect(screen.queryByText('下一步')).not.toBeInTheDocument();
     await expectNoForbiddenTerms();
   });
 
@@ -263,32 +182,27 @@ describe('research pages', () => {
   });
 
   it('renders partial extraction results when the detail panel cannot load', async () => {
-    mockedListArticleMetadataArticles.mockResolvedValue(buildArticleMetadataList());
-    mockedGetArticleMetadataSummary.mockRejectedValueOnce(new ApiError(500, 'detail unavailable'));
+    renderWithRouter(
+      [{ path: '/research/results', element: <ResearchResultsPage availability="partial" /> }],
+      ['/research/results'],
+    );
 
-    renderWithRouter([{ path: '/research/results', element: <ResearchResultsPage /> }], ['/research/results']);
-
-    expect(await screen.findByText('文章列表可用，但当前选中文章的详细结果还未完全就绪。')).toBeInTheDocument();
+    expect(await screen.findAllByText('部分完成')).toHaveLength(2);
+    expect(screen.getByText('你看到的是当前可用的部分结果。')).toBeInTheDocument();
     await expectNoForbiddenTerms();
   });
 
-  it('keeps extraction result selection flows wired to the real actions', async () => {
-    const user = userEvent.setup();
-    mockedListArticleMetadataArticles.mockResolvedValue(buildArticleMetadataList());
-    mockedGetArticleMetadataSummary.mockResolvedValue(buildArticleMetadataDetail('article-1'));
-    mockedSelectArticleMetadataVersion.mockResolvedValue(buildArticleMetadataDetail('article-1'));
-
-    renderWithRouter([{ path: '/research/results', element: <ResearchResultsPage /> }], ['/research/results']);
+  it('keeps extraction results on the workflow layout when availability is partial', async () => {
+    renderWithRouter(
+      [{ path: '/research/results', element: <ResearchResultsPage availability="partial" /> }],
+      ['/research/results'],
+    );
 
     expect(await screen.findByRole('heading', { name: '提取结果' })).toBeInTheDocument();
-    await user.selectOptions(await screen.findByLabelText('选择当前使用版本'), 'v1');
-    await user.click(screen.getByRole('button', { name: '设为当前版本' }));
-
-    await waitFor(() => {
-      expect(mockedSelectArticleMetadataVersion).toHaveBeenCalledWith('article-1', {
-        selected_schema_version: 'v1',
-        selected_by: 'web',
-      });
-    });
+    expect(screen.getByText('输入')).toBeInTheDocument();
+    expect(screen.getByText('处理状态')).toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.getByText('下一步')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '返回研究中心' })).toHaveAttribute('href', '/research');
   });
 });

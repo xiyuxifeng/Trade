@@ -36,12 +36,18 @@ export type PagePrerequisite = {
   detail?: string;
 };
 
+export type PageLayoutMode = 'workflow' | 'overview' | 'management' | 'detail' | 'library';
+
 export type BusinessPageShellProps = {
   title: string;
   purpose: string;
   inputDescription: string;
   processingDescription: string;
   outputDescription: string;
+  layoutMode?: PageLayoutMode;
+  showInputSection?: boolean;
+  showProcessingSection?: boolean;
+  showOutputSection?: boolean;
   currentStep?: string;
   prerequisites?: PagePrerequisite[];
   availability?: PageAvailability;
@@ -125,6 +131,14 @@ const STATE_COPY: Record<Exclude<PageAvailability, 'ready'>, StateCopy> = {
 const actionClassName =
   'inline-flex h-8 whitespace-nowrap items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-900 px-3 text-sm font-medium text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50';
 
+const LAYOUT_SECTION_DEFAULTS: Record<PageLayoutMode, { input: boolean; processing: boolean; output: boolean }> = {
+  workflow: { input: true, processing: true, output: true },
+  overview: { input: false, processing: false, output: true },
+  management: { input: false, processing: false, output: true },
+  detail: { input: false, processing: false, output: true },
+  library: { input: false, processing: false, output: true },
+};
+
 function availabilityLabel(availability: PageAvailability) {
   return availability === 'ready' ? '已就绪' : STATE_COPY[availability].title;
 }
@@ -147,6 +161,21 @@ function renderPageAction(action: PageAction) {
       {action.label}
     </Button>
   );
+}
+
+function resolveSectionVisibility({
+  layoutMode = 'workflow',
+  showInputSection,
+  showProcessingSection,
+  showOutputSection,
+}: Pick<BusinessPageShellProps, 'layoutMode' | 'showInputSection' | 'showProcessingSection' | 'showOutputSection'>) {
+  const defaults = LAYOUT_SECTION_DEFAULTS[layoutMode];
+
+  return {
+    showInputSection: showInputSection ?? defaults.input,
+    showProcessingSection: showProcessingSection ?? defaults.processing,
+    showOutputSection: showOutputSection ?? defaults.output,
+  };
 }
 
 function SectionCard({
@@ -177,12 +206,84 @@ function SectionCard({
   );
 }
 
+function AvailabilityPanel({
+  availability,
+  resolvedStateTitle,
+  resolvedStateDescription,
+  resolvedImpact,
+  resolvedRecoveryText,
+  recoveryAction,
+}: {
+  availability: PageAvailability;
+  resolvedStateTitle?: string;
+  resolvedStateDescription?: string;
+  resolvedImpact?: string;
+  resolvedRecoveryText?: string;
+  recoveryAction?: PageAction;
+}) {
+  if (availability === 'ready') {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="m-0 text-sm font-medium text-emerald-900">已就绪</p>
+            <p className="mt-1 text-sm text-emerald-800">页面内容可以直接查看。</p>
+          </div>
+          <Badge variant="success">就绪</Badge>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div>
+            <p className="m-0 text-xs font-medium uppercase tracking-[0.16em] text-amber-900">发生了什么</p>
+            {resolvedStateTitle ? <p className="mt-1 text-sm font-medium text-amber-950">{resolvedStateTitle}</p> : null}
+            {resolvedStateDescription ? <p className="mt-1 text-sm text-amber-900">{resolvedStateDescription}</p> : null}
+          </div>
+        </div>
+        <Badge
+          variant={
+            availability === 'error' || availability === 'invalid' || availability === 'conflict'
+              ? 'destructive'
+              : availability === 'partial' || availability === 'degraded'
+                ? 'warning'
+                : 'default'
+          }
+        >
+          {resolvedStateTitle ?? '处理中'}
+        </Badge>
+      </div>
+      {resolvedImpact ? (
+        <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
+          <span className="font-medium text-slate-900">影响什么：</span>
+          {resolvedImpact}
+        </div>
+      ) : null}
+      {resolvedRecoveryText ? (
+        <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
+          <span className="font-medium text-slate-900">应该怎么处理：</span>
+          <span className="ml-1">{resolvedRecoveryText}</span>
+        </div>
+      ) : null}
+      {recoveryAction ? <div className="mt-3">{renderPageAction(recoveryAction)}</div> : null}
+    </div>
+  );
+}
+
 export function BusinessPageShell({
   title,
   purpose,
   inputDescription,
   processingDescription,
   outputDescription,
+  layoutMode = 'workflow',
+  showInputSection,
+  showProcessingSection,
+  showOutputSection,
   currentStep,
   prerequisites,
   availability = 'ready',
@@ -207,6 +308,14 @@ export function BusinessPageShell({
   const resolvedRecoveryText = stateCopy?.recoveryAction;
   const shouldShowNextAction = nextAction && (availability === 'ready' || availability === 'partial' || availability === 'degraded');
   const hasNextActionDetails = hasRenderableContent(help);
+  const sectionVisibility = resolveSectionVisibility({
+    layoutMode,
+    showInputSection,
+    showProcessingSection,
+    showOutputSection,
+  });
+  const inlineAvailabilityInPurpose = !sectionVisibility.showProcessingSection && (availability !== 'ready' || progress);
+  const progressPanel = progress ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{progress}</div> : null;
 
   return (
     <main className={cn('page-stack', shouldShowNextAction && 'pb-36 md:pb-32', className)}>
@@ -247,66 +356,44 @@ export function BusinessPageShell({
               ))}
             </div>
           ) : null}
+          {inlineAvailabilityInPurpose ? (
+            <AvailabilityPanel
+              availability={availability}
+              resolvedStateTitle={resolvedStateTitle}
+              resolvedStateDescription={resolvedStateDescription}
+              resolvedImpact={resolvedImpact}
+              resolvedRecoveryText={resolvedRecoveryText}
+              recoveryAction={recoveryAction}
+            />
+          ) : null}
+          {inlineAvailabilityInPurpose ? progressPanel : null}
         </SectionCard>
 
-        <SectionCard title="输入" description={inputDescription}>
-          {input ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{input}</div> : null}
-        </SectionCard>
+        {sectionVisibility.showInputSection ? (
+          <SectionCard title="输入" description={inputDescription}>
+            {input ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{input}</div> : null}
+          </SectionCard>
+        ) : null}
 
-        <SectionCard title="处理状态" description={processingDescription}>
-          {availability === 'ready' ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="m-0 text-sm font-medium text-emerald-900">已就绪</p>
-                  <p className="mt-1 text-sm text-emerald-800">页面内容可以直接查看。</p>
-                </div>
-                <Badge variant="success">就绪</Badge>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
-                  <div>
-                    <p className="m-0 text-xs font-medium uppercase tracking-[0.16em] text-amber-900">发生了什么</p>
-                    {resolvedStateTitle ? <p className="mt-1 text-sm font-medium text-amber-950">{resolvedStateTitle}</p> : null}
-                    {resolvedStateDescription ? <p className="mt-1 text-sm text-amber-900">{resolvedStateDescription}</p> : null}
-                  </div>
-                </div>
-                <Badge
-                  variant={
-                    availability === 'error' || availability === 'invalid' || availability === 'conflict'
-                      ? 'destructive'
-                      : availability === 'partial' || availability === 'degraded'
-                        ? 'warning'
-                        : 'default'
-                  }
-                >
-                  {resolvedStateTitle ?? '处理中'}
-                </Badge>
-              </div>
-              {resolvedImpact ? (
-                <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">影响什么：</span>
-                  {resolvedImpact}
-                </div>
-              ) : null}
-              {resolvedRecoveryText ? (
-                <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">应该怎么处理：</span>
-                  <span className="ml-1">{resolvedRecoveryText}</span>
-                </div>
-              ) : null}
-              {recoveryAction ? <div className="mt-3">{renderPageAction(recoveryAction)}</div> : null}
-            </div>
-          )}
-          {progress ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{progress}</div> : null}
-        </SectionCard>
+        {sectionVisibility.showProcessingSection ? (
+          <SectionCard title="处理状态" description={processingDescription}>
+            <AvailabilityPanel
+              availability={availability}
+              resolvedStateTitle={resolvedStateTitle}
+              resolvedStateDescription={resolvedStateDescription}
+              resolvedImpact={resolvedImpact}
+              resolvedRecoveryText={resolvedRecoveryText}
+              recoveryAction={recoveryAction}
+            />
+            {progressPanel}
+          </SectionCard>
+        ) : null}
 
-        <SectionCard title="输出" description={outputDescription} className="lg:col-span-2">
-          {output ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{output}</div> : null}
-        </SectionCard>
+        {sectionVisibility.showOutputSection ? (
+          <SectionCard title="输出" description={outputDescription} className="lg:col-span-2">
+            {output ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{output}</div> : null}
+          </SectionCard>
+        ) : null}
 
         {children ? <div className="lg:col-span-2">{children}</div> : null}
       </div>

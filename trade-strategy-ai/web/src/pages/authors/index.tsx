@@ -37,6 +37,7 @@ export function AuthorsPage({ availability }: AuthorsPageProps = {}) {
     <ProductPageAdapter
       title="作者画像"
       queryState={state}
+      layoutMode="library"
       purpose="汇总作者文章表达的方法、规则证据和验证观察。"
       inputDescription="输入来自已确认文章、规则证据和回测观察。"
       processingDescription="系统只展示已落库的画像版本、审核状态、证据区间和生效时间段。"

@@ -78,6 +78,32 @@ describe('BusinessPageShell', () => {
     expect(screen.queryByText('下一步')).not.toBeInTheDocument();
   });
 
+  it('supports non-workflow layouts by hiding workflow-only sections while keeping state messaging visible', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <BusinessPageShell
+          title="系统状态"
+          purpose="查看系统状态和依赖可用性。"
+          inputDescription="本页无需输入。"
+          processingDescription="系统会持续读取当前状态。"
+          outputDescription="输出当前状态和处理建议。"
+          layoutMode="overview"
+          availability="unavailable"
+          output={<p>状态摘要</p>}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('页面用途')).toBeInTheDocument();
+    expect(screen.queryByText('输入')).not.toBeInTheDocument();
+    expect(screen.queryByText('处理状态')).not.toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.getAllByText('当前不可用').length).toBeGreaterThan(0);
+    expect(screen.getByText('发生了什么')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="section-content-输入"]')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="section-content-处理状态"]')).not.toBeInTheDocument();
+  });
+
   it('renders a compact sticky next-action bar with expandable details when actionable', async () => {
     const user = userEvent.setup();
 

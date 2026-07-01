@@ -232,6 +232,34 @@ Create the UI foundation that allows pages to use the right layout instead of al
 - Update any page-shell usage documentation or tests that previously assumed all product pages show `Input / Processing Status / Output`.
 - Update the active implementation log with the migration approach and affected pages.
 
+## Page Layout Matrix
+
+Task 1 uses a conservative rollout rule:
+
+- `workflow` remains the default layout for backward compatibility.
+- Pages only switch to non-workflow layouts when the page shell contract is explicitly migrated.
+- Hiding a workflow section must not remove truthful `loading` / `empty` / `partial` / `degraded` / `unavailable` / `error` / `invalid` / `conflict` / `permission_denied` messaging.
+
+| Path | Target layout | Task 1 state | Notes |
+| --- | --- | --- | --- |
+| `/system/status` | `overview` | migrated | Hide workflow-only `Input` / `Processing Status`; keep availability messaging visible. |
+| `/system/configuration` | `management` | migrated | Read-only config summary does not need workflow framing. |
+| `/system/data` | `workflow` | unchanged | Still centers on repair, backfill, and recompute actions. |
+| `/system/jobs` | `management` | deferred | Reserved for Task 2; not implemented in Task 1. |
+| `/system/runs` | `detail` | deferred | Current shell stays workflow-shaped until the bounded Task 3 redesign. |
+| `/research/articles` | `library` | deferred | Matrix defined now; shell migration can happen later without breaking current pages. |
+| `/research/add` | `workflow` | migrated | Explicitly pinned to workflow layout to prove default-compatible migration. |
+| `/research/results` | `detail` | deferred | Current shell remains workflow-compatible. |
+| `/rules/review` | `workflow` | unchanged | Review flow still needs input, status, and output framing. |
+| `/rules/library` | `library` | deferred | Matrix defined now; current page remains backward-compatible. |
+| `/rules/backtests` | `workflow` | unchanged | Creating and rerunning backtests remains workflow-oriented. |
+| `/rules/results` | `detail` | deferred | Current shell remains workflow-compatible. |
+| `/authors` | `library` | migrated | Read-only version library hides meaningless workflow sections. |
+| `/daily/overview` | `overview` | deferred | Current shell remains workflow-compatible in Task 1. |
+| `/daily/pre-market` | `workflow` | unchanged | Generation flow remains workflow-oriented. |
+| `/daily/after-close` | `workflow` | unchanged | Review generation flow remains workflow-oriented. |
+| `/strategies` | `management` | deferred | Current shell remains workflow-compatible in Task 1. |
+
 ## Validation
 
 Required checks:

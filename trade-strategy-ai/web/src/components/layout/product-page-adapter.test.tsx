@@ -73,6 +73,29 @@ describe('ProductPageAdapter', () => {
     expect(screen.getByText(/database=\/tmp/)).toBeInTheDocument();
   });
 
+  it('forwards layout selection to the business shell for non-workflow pages', () => {
+    renderAdapter(
+      <ProductPageAdapter
+        title="作者画像"
+        queryState="partial"
+        purpose="查看已生成的作者画像版本。"
+        inputDescription="输入来自文章、规则和回测证据。"
+        processingDescription="系统会整理并显示当前画像状态。"
+        outputDescription="输出画像版本和限制说明。"
+        businessAction={{ label: '查看规则验证结果', to: '/rules/results' }}
+        layoutMode="library"
+        result={<p>画像列表</p>}
+      />,
+    );
+
+    expect(screen.getByText('页面用途')).toBeInTheDocument();
+    expect(screen.queryByText('输入')).not.toBeInTheDocument();
+    expect(screen.queryByText('处理状态')).not.toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.getAllByText('部分完成').length).toBeGreaterThan(0);
+    expect(screen.getByText('影响什么：')).toBeInTheDocument();
+  });
+
   it.each([
     ['loading', '正在加载', '页面内容正在获取中，请稍后再看。', '你暂时还不能查看完整内容。', '等待加载完成后刷新页面。'],
     ['empty', '暂无内容', '当前没有可展示的业务内容。', '这部分页面暂时不会给出结果。', '补齐输入后重新查看。'],

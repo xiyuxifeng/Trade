@@ -21,6 +21,9 @@ describe('authors page', () => {
     renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
 
     expect(await screen.findAllByText('暂无正式画像版本')).toHaveLength(2);
+    expect(screen.queryByText('输入')).not.toBeInTheDocument();
+    expect(screen.queryByText('处理状态')).not.toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
     expect(screen.getByText('新证据会先生成草稿或修订建议，不会自动覆盖已发布画像。')).toBeInTheDocument();
     expect(screen.queryByText('交易风格画像')).not.toBeInTheDocument();
   });
@@ -31,6 +34,8 @@ describe('authors page', () => {
     renderWithRouter([{ path: '/authors', element: <AuthorsPage /> }], ['/authors']);
 
     expect(await screen.findAllByText('当前不可用')).toHaveLength(2);
+    expect(screen.queryByText('输入')).not.toBeInTheDocument();
+    expect(screen.queryByText('处理状态')).not.toBeInTheDocument();
     expect(screen.getByText('相关服务或数据暂时不可用。')).toBeInTheDocument();
     expect(screen.getByText('作者画像读取失败')).toBeInTheDocument();
   });

@@ -9,6 +9,58 @@
 - 下一可执行项：无。Stage 12 已完成；不得自动开始任何新 Stage 或后续重构任务。
 - 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
 
+## 2026-07-01 Post-delivery shell layout foundation
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 只实现 `docs/system-jobs-runs-page-cleanup-plan.md` Task 1 的页面壳层布局能力；
+- 不实现 `/system/jobs`；
+- 不重做 `/system/runs` 信息架构；
+- 不改动 route/governance/schema/data-source contract；
+- 不改变未迁移页面的默认 workflow shell。
+
+### Implementation
+
+- `web/src/components/layout/business-page-shell.tsx`
+  - 新增 `layoutMode` 与显式 section visibility contract。
+  - 默认 layout 仍为 `workflow`，保证旧页面不迁移时继续显示 `Input / Processing Status / Output`。
+  - 当页面隐藏 `Processing Status` 时，将 truthful availability panel 内联到 `页面用途`，继续显示 `发生了什么 / 影响什么 / 应该怎么处理`。
+- `web/src/components/layout/product-page-adapter.tsx`
+  - 透传 `layoutMode` 与 section visibility props，保持旧调用点兼容。
+- 保守迁移页面：
+  - `/research/add` 明确固定为 `workflow`，作为兼容迁移示例。
+  - `/authors` 切换为 `library`。
+  - `/system/status` 切换为 `overview`。
+  - `/system/configuration` 切换为 `management`。
+- `docs/system-jobs-runs-page-cleanup-plan.md`
+  - 补充页面布局矩阵、迁移状态和 deferred 页面说明。
+- frontend tests
+  - 更新 layout/page-state tests，去掉“所有正式页面都必须渲染 Input / Processing Status / Output”这一旧假设。
+
+### Verification
+
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/product-page-state-matrix.test.tsx src/pages/authors/index.test.tsx`
+  - 结果：`46 passed`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx src/pages/system/index.test.tsx src/pages/research/index.test.tsx`
+  - 结果：`31 passed`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`
+  - 结果：pass
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm exec eslint src/components/layout/business-page-shell.tsx src/components/layout/product-page-adapter.tsx src/pages/research/index.tsx src/pages/authors/index.tsx src/pages/system/index.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/product-page-state-matrix.test.tsx src/pages/authors/index.test.tsx src/pages/research/index.test.tsx src/pages/system/index.test.tsx src/app/route-config.test.tsx`
+  - 结果：pass
+
+### Residual Risks
+
+- 页面矩阵中 `deferred` 的非 workflow 页面仍保留旧 shell，后续逐页迁移时需要同步更新测试矩阵。
+- 本次未变更 `/system/runs`，因此其更细的 `detail` 信息架构仍留待后续 bounded task。
+
+### Decision
+
+`ACCEPTED`
+
 ## 2026-06-30 Stage 12 Gate Fresh Rerun
 
 ### Status

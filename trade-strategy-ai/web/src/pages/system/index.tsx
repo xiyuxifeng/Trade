@@ -826,6 +826,7 @@ export function SystemStatusPage({ availability }: FormalSystemPageProps = {}) {
     <ProductPageAdapter
       title="系统状态"
       queryState={state}
+      layoutMode="overview"
       purpose="查看服务和关键依赖是否能够支持当前业务操作。"
       inputDescription="本页无需输入，状态来自现有系统检查。"
       processingDescription="系统读取真实检查结果，不隐藏失败或缺失项。"
@@ -842,6 +843,7 @@ export function SystemConfigurationPage({ availability }: FormalSystemPageProps 
     <ProductPageAdapter
       title="配置管理"
       queryState={state}
+      layoutMode="management"
       purpose="维护业务运行所需的受控配置。"
       inputDescription="输入来自现有配置记录和已保存版本。"
       processingDescription="正式业务化配置界面仍在迁移，现有配置能力继续保留。"

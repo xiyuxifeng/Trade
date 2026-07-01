@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { useAuth } from '@/features/auth/auth-context';
-import type { PageAction, PageAvailability, PagePrerequisite } from './business-page-shell';
+import type { PageAction, PageAvailability, PageLayoutMode, PagePrerequisite } from './business-page-shell';
 import { BusinessPageShell } from './business-page-shell';
 
 type ProductPageAdapterProps = {
@@ -11,6 +11,10 @@ type ProductPageAdapterProps = {
   inputDescription: string;
   processingDescription: string;
   outputDescription: string;
+  layoutMode?: PageLayoutMode;
+  showInputSection?: boolean;
+  showProcessingSection?: boolean;
+  showOutputSection?: boolean;
   businessAction: PageAction;
   result?: ReactNode;
   input?: ReactNode;
@@ -33,6 +37,10 @@ export function ProductPageAdapter({
   inputDescription,
   processingDescription,
   outputDescription,
+  layoutMode,
+  showInputSection,
+  showProcessingSection,
+  showOutputSection,
   businessAction,
   result,
   input,
@@ -57,6 +65,10 @@ export function ProductPageAdapter({
       inputDescription={inputDescription}
       processingDescription={processingDescription}
       outputDescription={outputDescription}
+      layoutMode={layoutMode}
+      showInputSection={showInputSection}
+      showProcessingSection={showProcessingSection}
+      showOutputSection={showOutputSection}
       availability={queryState}
       currentStep={currentStep}
       prerequisites={prerequisites}

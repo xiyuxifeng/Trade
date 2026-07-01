@@ -17,10 +17,85 @@ const states: PageAvailability[] = [
   'unavailable',
 ];
 const actionableStates: PageAvailability[] = ['ready', 'partial', 'degraded'];
+const compactLayoutRoutes = new Set(['/authors', '/system/status', '/system/configuration']);
+
+function expectedHeadingsForRoute(path: string, availability: PageAvailability) {
+  const headings = ['页面用途'];
+
+  if (!compactLayoutRoutes.has(path)) {
+    headings.push('输入', '处理状态');
+  }
+
+  headings.push('输出');
+
+  if (availability === 'partial') {
+    headings.push('下一步');
+  }
+
+  return headings;
+}
 
 afterEach(cleanup);
 
 describe('formal page state matrix', () => {
+  it('keeps workflow pages on the full workflow layout and allows library pages to hide workflow-only sections', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider
+          initialPrincipal={{
+            role: 'viewer',
+            api_key_label: null,
+            authenticated: true,
+            source: 'session',
+            username: 'viewer',
+          }}
+        >
+          <MemoryRouter>{renderRouteWithAvailability(routeConfig.find((route) => route.path === '/research/add')!, 'partial')}</MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    for (const heading of ['页面用途', '输入', '处理状态', '输出']) {
+      expect(screen.getByText(heading), `/research/add ${heading}`).toBeInTheDocument();
+    }
+
+    unmount();
+
+    const secondClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={secondClient}>
+        <AuthProvider
+          initialPrincipal={{
+            role: 'viewer',
+            api_key_label: null,
+            authenticated: true,
+            source: 'session',
+            username: 'viewer',
+          }}
+        >
+          <MemoryRouter>{renderRouteWithAvailability(routeConfig.find((route) => route.path === '/authors')!, 'partial')}</MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('页面用途')).toBeInTheDocument();
+    expect(screen.queryByText('输入')).not.toBeInTheDocument();
+    expect(screen.queryByText('处理状态')).not.toBeInTheDocument();
+    expect(screen.getByText('输出')).toBeInTheDocument();
+    expect(screen.getAllByText('部分完成').length).toBeGreaterThan(0);
+  });
+
   it('derives every rendered page category from route config', () => {
     const renderedRoutes = routeConfig.filter((route) => route.renderMode !== 'redirect');
 
@@ -58,8 +133,9 @@ describe('formal page state matrix', () => {
           </QueryClientProvider>,
         );
 
+        const expectedHeadings = expectedHeadingsForRoute(route.path, availability);
         for (const heading of ['页面用途', '输入', '处理状态', '输出', '下一步']) {
-          if (heading === '下一步' && availability !== 'partial') {
+          if (!expectedHeadings.includes(heading)) {
             expect(screen.queryByText(heading), `${route.path} ${availability}`).not.toBeInTheDocument();
             continue;
           }
@@ -155,5 +231,43 @@ describe('formal page state matrix', () => {
     expect(screen.getByRole('button', { name: '展开更多信息' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '状态验证页' })).toBeInTheDocument();
     expect(screen.queryByText('正式业务页面')).not.toBeInTheDocument();
+  });
+
+  it('preserves default workflow compatibility when no layout mode is provided', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider
+          initialPrincipal={{
+            role: 'viewer',
+            api_key_label: null,
+            authenticated: true,
+            source: 'session',
+            username: 'viewer',
+          }}
+        >
+          <MemoryRouter>
+            <ProductPageAdapter
+              title="默认工作流页"
+              queryState="partial"
+              purpose="验证默认兼容行为。"
+              inputDescription="输入说明。"
+              processingDescription="处理说明。"
+              outputDescription="输出说明。"
+              businessAction={{ label: '返回首页', to: '/' }}
+              result={<div>当前可用结果</div>}
+            />
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    for (const heading of ['页面用途', '输入', '处理状态', '输出']) {
+      expect(screen.getByText(heading)).toBeInTheDocument();
+    }
   });
 });

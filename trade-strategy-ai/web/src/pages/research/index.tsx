@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 import { ArticleAddPage, ArticleExtractionResultsPage, ArticleLibraryPage } from '@/pages/articles';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PageAvailability } from '@/components/layout/business-page-shell';
+import type { PageAvailability, PageLayoutMode } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 
 const navigationTargets = {
@@ -80,7 +80,15 @@ export function ResearchPage() {
   );
 }
 
-function ResearchAvailabilityBoundary({ title, availability }: { title: string; availability: PageAvailability }) {
+function ResearchAvailabilityBoundary({
+  title,
+  availability,
+  layoutMode = 'workflow',
+}: {
+  title: string;
+  availability: PageAvailability;
+  layoutMode?: PageLayoutMode;
+}) {
   return (
     <ProductPageAdapter
       title={title}
@@ -89,6 +97,7 @@ function ResearchAvailabilityBoundary({ title, availability }: { title: string; 
       inputDescription="输入来自已有文章和用户选择。"
       processingDescription="系统读取真实研究数据。"
       outputDescription="输出只展示当前可确认的结果。"
+      layoutMode={layoutMode}
       businessAction={{ label: '返回研究中心', to: '/research' }}
     />
   );
@@ -100,7 +109,7 @@ export function ResearchArticlesPage({ availability }: { availability?: PageAvai
 }
 
 export function ResearchAddPage({ availability }: { availability?: PageAvailability } = {}) {
-  if (availability) return <ResearchAvailabilityBoundary title="添加文章" availability={availability} />;
+  if (availability) return <ResearchAvailabilityBoundary title="添加文章" availability={availability} layoutMode="workflow" />;
   return <ArticleAddPage productMode navigationTargets={navigationTargets} />;
 }
 

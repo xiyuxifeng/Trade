@@ -1,7 +1,9 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api/http';
+import { getArticleAnalysis, reviewArticleCandidate } from '@/lib/api/article-analysis';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -15,6 +17,12 @@ import { ResearchAddPage, ResearchArticlesPage, ResearchResultsPage } from './in
 vi.mock('@/lib/api/articles', () => ({
   listArticleFilterOptions: vi.fn(),
   listArticles: vi.fn(),
+}));
+
+vi.mock('@/lib/api/article-analysis', () => ({
+  getArticleAnalysis: vi.fn(),
+  reviewArticleCandidate: vi.fn(),
+  runArticleAnalysis: vi.fn(),
 }));
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -31,6 +39,8 @@ vi.mock('@/lib/api/pipelines', () => ({
 
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
+const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
+const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
 const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
@@ -69,6 +79,106 @@ function buildArticleFilterOptions() {
     author_ids: ['author-1'],
     sources: ['tgb'],
     trader_ids: ['trader_a'],
+  };
+}
+
+function buildArticleAnalysisDetail() {
+  return {
+    status: 'ready' as const,
+    warning: null,
+    message: null,
+    article: {
+      article_id: 'article-1',
+      article_revision_id: 'revision-1',
+      content_hash: 'hash-1',
+      title: 'Article One',
+      source: 'tgb',
+      source_url: 'https://example.com/article-1',
+      author_name: 'Alice',
+      author_id: 'author-1',
+      published_at: '2026-05-10T08:00:00Z',
+      crawled_at: '2026-05-10T09:00:00Z',
+      original_text: 'original',
+      cleaned_content: 'cleaned',
+      summary: 'summary',
+      tags: ['trend'],
+    },
+    summary_provenance: {
+      source: 'blog_article_current' as const,
+      article_revision_id: 'revision-1',
+      content_hash: 'hash-1',
+      available: true,
+      aligned: true,
+      reason: null,
+    },
+    article_structure_provenance: {
+      article_structure_id: 'structure-1',
+      article_revision_id: 'revision-1',
+      prompt_run_id: 'prompt-run-1',
+      prompt_name: 'article_analysis_v1',
+      prompt_version: 'v1',
+      schema_name: 'article_analysis',
+      schema_version: 'v1',
+      available: true,
+    },
+    method_tags: ['trend'],
+    explicit_facts: [{ fact: 'explicit' }],
+    hypotheses: [{ hypothesis: 'inferred' }],
+    missing_fields: {},
+    prompt_trace: {
+      run_id: 'prompt-run-1',
+      prompt_name: 'article_analysis_v1',
+      prompt_version: 'v1',
+      schema_name: 'article_analysis',
+      schema_version: 'v1',
+      provider: 'openai',
+      model: 'gpt-5',
+      validation_state: 'valid',
+      retry_count: 0,
+      token_usage: {},
+      cost_amount: null,
+      cost_currency: null,
+      started_at: '2026-05-10T10:00:00Z',
+      completed_at: '2026-05-10T10:01:00Z',
+    },
+    candidates: [
+      {
+        candidate_id: 'candidate-1',
+        candidate_index: 0,
+        title: '突破规则',
+        rule_type: 'entry',
+        explicit_facts: { condition: 'breakout' },
+        hypotheses: {},
+        missing_fields: {},
+        evidence: { quote: '突破' },
+        data_dependencies: { ohlcv: true },
+        backtestability_status: 'backtestable',
+        kaipan_dependency: false,
+        market_state_declaration_status: 'not_declared',
+        automatic_review: {
+          status: 'needs_human_review' as const,
+          reasons: ['需要人工确认参数'],
+          risk_level: 'medium' as const,
+        },
+        human_review: {
+          review_state: 'pending',
+          formal_rule_created: false,
+          rule_version_id: null,
+          formal_lifecycle_state: null,
+          stage3_status: null,
+        },
+        governance: {
+          algorithm_version: 'v1',
+          exact_fingerprint: 'exact-1',
+          family_fingerprint: 'family-1',
+          family_key: 'breakout',
+          exact_duplicate_of_rule_version_id: null,
+          eligible_for_formal_version: true,
+          eligible_for_backtest: true,
+          related_rules: [],
+        },
+      },
+    ],
   };
 }
 
@@ -204,5 +314,25 @@ describe('research pages', () => {
     expect(screen.getByText('输出')).toBeInTheDocument();
     expect(screen.getByText('下一步')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '返回研究中心' })).toHaveAttribute('href', '/research');
+  });
+
+  it('keeps extraction result review flows wired to the real actions', async () => {
+    const user = userEvent.setup();
+    const detail = buildArticleAnalysisDetail();
+    mockedListArticles.mockResolvedValue(buildArticleList());
+    mockedGetArticleAnalysis.mockResolvedValue(detail);
+    mockedReviewArticleCandidate.mockResolvedValue(detail);
+
+    renderWithRouter([{ path: '/research/results', element: <ResearchResultsPage /> }], ['/research/results']);
+
+    expect(await screen.findByText('单篇文章分析与审核')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '人工批准为待回测规则' }));
+
+    await waitFor(() => {
+      expect(mockedReviewArticleCandidate).toHaveBeenCalledWith('article-1', 'candidate-1', {
+        decision: 'approve',
+        reason: '人工确认后进入待回测。',
+      });
+    });
   });
 });

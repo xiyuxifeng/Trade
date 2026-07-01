@@ -40,16 +40,17 @@
   - 补充页面布局矩阵、迁移状态和 deferred 页面说明。
 - frontend tests
   - 更新 layout/page-state tests，去掉“所有正式页面都必须渲染 Input / Processing Status / Output”这一旧假设。
+  - Gate review 恢复 `/research/results` 当前 article-analysis 审核动作回归测试，确保页面壳层调整没有降低既有业务动作覆盖。
 
 ### Verification
 
-- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/product-page-state-matrix.test.tsx src/pages/authors/index.test.tsx`
-  - 结果：`46 passed`
-- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/app/route-config.test.tsx src/pages/system/index.test.tsx src/pages/research/index.test.tsx`
-  - 结果：`31 passed`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/product-page-state-matrix.test.tsx src/pages/authors/index.test.tsx src/app/route-config.test.tsx src/pages/system/index.test.tsx src/pages/research/index.test.tsx`
+  - 结果：`78 passed`
 - `cd web && PATH=${NODE18_BIN}:$PATH pnpm typecheck`
   - 结果：pass
-- `cd web && PATH=${NODE18_BIN}:$PATH pnpm exec eslint src/components/layout/business-page-shell.tsx src/components/layout/product-page-adapter.tsx src/pages/research/index.tsx src/pages/authors/index.tsx src/pages/system/index.tsx src/components/layout/business-page-shell.test.tsx src/components/layout/product-page-adapter.test.tsx src/pages/product-page-state-matrix.test.tsx src/pages/authors/index.test.tsx src/pages/research/index.test.tsx src/pages/system/index.test.tsx src/app/route-config.test.tsx`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm lint`
+  - 结果：pass
+- `git diff --check`
   - 结果：pass
 
 ### Residual Risks

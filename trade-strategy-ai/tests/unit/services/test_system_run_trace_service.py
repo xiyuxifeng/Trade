@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from src.services.system_run_trace_service import SystemRunTraceService
@@ -117,3 +118,29 @@ def test_build_system_data_operation_trace_exposes_retry_policy_and_idempotency_
     assert trace["admin_diagnostics"]["payload_fingerprints"]["idempotency_key"] == "system-data-operation:abc"
     assert trace["admin_diagnostics"]["raw_metadata"]["retry_policy"]["max_retries"] == 3
     assert trace["admin_diagnostics"]["raw_metadata"]["failure_evidence"]["error"]["message"] == "provider timeout"
+
+
+def test_build_post_market_review_trace_returns_truthful_partial_without_prompt_run() -> None:
+    service = SystemRunTraceService(session_scope_factory=lambda: None)
+    now = datetime(2026, 6, 30, 15, 30, tzinfo=UTC)
+    review = SimpleNamespace(
+        post_market_review_id="review-1",
+        trading_day_plan_id="plan-1",
+        created_at=now,
+        updated_at=now,
+        evidence_json={"actuals": {"available": False}},
+    )
+
+    trace = service._build_post_market_review_trace(
+        review,
+        actor_role="admin",
+        market_snapshot=None,
+        prompt_run=None,
+    )
+
+    assert trace["run_id"] == "post-market-review:review-1"
+    assert trace["business_label"] == "生成正式盘后复盘"
+    assert trace["status"] == "partial"
+    assert trace["prompt_calls"] == []
+    assert trace["steps"][0]["output_references"][0]["id"] == "review-1"
+    assert trace["admin_diagnostics"]["payload_fingerprints"]["prompt_run_linked"] is False

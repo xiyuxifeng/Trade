@@ -38,6 +38,18 @@
 
 ## 当前实施记录
 
+- Task ID: `POST-DELIVERY-HOTFIX System Runs PostMarketReview trace`
+- 状态: `已完成`
+- 修改范围: `src/services/system_run_trace_service.py`、`tests/unit/services/test_system_run_trace_service.py`
+- 关键设计决定: 恢复 `_build_post_market_review_trace()` 的正式盘后复盘 trace 组装逻辑；无 linked prompt 时保留 truthful `partial` 状态，不伪造成 ready；不改变 `/api/ui/v1/system/runs` API contract、Stage 12 accepted contract 或 RT-PERF Gate 结论。
+- 数据库迁移: 无。
+- 兼容处理: `/system/runs` 继续聚合 Prompt、正式回测、每日规则选择、今日计划、盘后复盘和系统数据处理记录；本修复仅阻止盘后复盘记录生成 `None` trace 后在排序阶段触发 500。
+- 已运行测试: `python -m pytest tests/unit/services/test_system_run_trace_service.py tests/api/routers/ui/test_ui_system_runs.py -q`；`python -m pytest tests/unit/services/test_system_cost_control_service.py tests/api/routers/ui/test_ui_system_cost_control.py -q`；真实 DB-backed `SystemRunTraceService().list_run_traces(actor_role="admin", limit=10)` smoke。
+- 测试结果: system runs focused tests `7 passed`；system cost-control regression `2 passed`；真实 service smoke `status=ok`、`items=10`、`none_items=0`、第一条 `生成正式盘后复盘`。
+- 未完成项: 无。
+- 已知风险: 未重跑完整系统管理前端页面套件；替代证据为 service regression、UI API router regression 和真实 DB-backed `/system/runs` service smoke。
+- 验收结论: 修复 `/api/ui/v1/system/runs` 因盘后复盘 trace 返回 `None` 导致排序阶段 `AttributeError` 的 500。
+
 - Task ID: `POST-DELIVERY-HOTFIX System Cost Control AuthorProfileVersion source versions`
 - 状态: `已完成`
 - 修改范围: `src/services/system_cost_control_service.py`、`tests/unit/services/test_system_cost_control_service.py`

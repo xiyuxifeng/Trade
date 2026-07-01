@@ -432,6 +432,47 @@ class SystemRunTraceService(BaseService):
             object_type="post-market-review",
             object_id=str(review.post_market_review_id),
         )
+        prompt_calls = [self._build_prompt_call_view(prompt_run)] if prompt_run is not None else []
+        status = "partial" if prompt_run is None else "ready"
+        return self._assemble_trace(
+            run_id=run_id,
+            business_label="生成正式盘后复盘",
+            status=status,
+            started_at=review.created_at,
+            finished_at=review.updated_at,
+            happened="正式盘后复盘已生成。",
+            affected="用户可以查看盘后结果、差异和建议动作；诊断信息仅对管理员开放。",
+            repair_guidance="如果需要更多诊断细节，请补充运行链路证据后重新生成正式盘后复盘。",
+            next_action={"label": "查看正式盘后", "target_path": "/daily/after-close"},
+            attempt=self._build_attempt_view(run_id=run_id, retry_count=0, attempt_id=None),
+            steps=[
+                {
+                    "step_id": "post-market-review",
+                    "business_label": "生成正式盘后复盘",
+                    "status": status,
+                    "started_at": self._iso(review.created_at),
+                    "finished_at": self._iso(review.updated_at),
+                    "duration_seconds": self._duration_seconds(review.created_at, review.updated_at),
+                    "error": None,
+                    "retry_count": 0,
+                    "input_references": [
+                        {"type": "trading_day_plan", "id": str(review.trading_day_plan_id), "label": "盘前计划"},
+                    ],
+                    "output_references": [{"type": "post_market_review", "id": str(review.post_market_review_id), "label": "正式盘后复盘"}],
+                    "repair_guidance": "若需补充解释，请在允许的正式流程中重新执行盘后复盘。",
+                }
+            ],
+            prompt_calls=prompt_calls,
+            data_fetches=[self._build_market_fetch_view(market_snapshot)],
+            backtests=[],
+            linked_records=[{"type": "post_market_review", "id": str(review.post_market_review_id), "label": "正式盘后复盘"}],
+            admin_diagnostics={
+                "technical_status": status,
+                "linked_ids": {"post_market_review_ids": [str(review.post_market_review_id)]},
+                "payload_fingerprints": {"prompt_run_linked": bool(prompt_run)},
+                "raw_metadata": {"evidence_keys": sorted((review.evidence_json or {}).keys())},
+            } if actor_role in {"operator", "admin"} else None,
+        )
 
     def _build_system_job_trace(self, job: Any, *, actor_role: str) -> dict[str, Any]:
         params = job.params if isinstance(job.params, dict) else {}
@@ -546,47 +587,6 @@ class SystemRunTraceService(BaseService):
                     },
                     "action_level": "admin_approval_required",
                 },
-            } if actor_role in {"operator", "admin"} else None,
-        )
-        prompt_calls = [self._build_prompt_call_view(prompt_run)] if prompt_run is not None else []
-        status = "partial" if prompt_run is None else "ready"
-        return self._assemble_trace(
-            run_id=run_id,
-            business_label="生成正式盘后复盘",
-            status=status,
-            started_at=review.created_at,
-            finished_at=review.updated_at,
-            happened="正式盘后复盘已生成。",
-            affected="用户可以查看盘后结果、差异和建议动作；诊断信息仅对管理员开放。",
-            repair_guidance="如果需要更多诊断细节，请补充运行链路证据后重新生成正式盘后复盘。",
-            next_action={"label": "查看正式盘后", "target_path": "/daily/after-close"},
-            attempt=self._build_attempt_view(run_id=run_id, retry_count=0, attempt_id=None),
-            steps=[
-                {
-                    "step_id": "post-market-review",
-                    "business_label": "生成正式盘后复盘",
-                    "status": status,
-                    "started_at": self._iso(review.created_at),
-                    "finished_at": self._iso(review.updated_at),
-                    "duration_seconds": self._duration_seconds(review.created_at, review.updated_at),
-                    "error": None,
-                    "retry_count": 0,
-                    "input_references": [
-                        {"type": "trading_day_plan", "id": str(review.trading_day_plan_id), "label": "盘前计划"},
-                    ],
-                    "output_references": [{"type": "post_market_review", "id": str(review.post_market_review_id), "label": "正式盘后复盘"}],
-                    "repair_guidance": "若需补充解释，请在允许的正式流程中重新执行盘后复盘。",
-                }
-            ],
-            prompt_calls=prompt_calls,
-            data_fetches=[self._build_market_fetch_view(market_snapshot)],
-            backtests=[],
-            linked_records=[{"type": "post_market_review", "id": str(review.post_market_review_id), "label": "正式盘后复盘"}],
-            admin_diagnostics={
-                "technical_status": status,
-                "linked_ids": {"post_market_review_ids": [str(review.post_market_review_id)]},
-                "payload_fingerprints": {"prompt_run_linked": bool(prompt_run)},
-                "raw_metadata": {"evidence_keys": sorted((review.evidence_json or {}).keys())},
             } if actor_role in {"operator", "admin"} else None,
         )
 

@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from src.backtest.schemas import BacktestResult, BacktestSummary, BacktestTradeRecord
 
 
@@ -249,3 +251,33 @@ def test_backtest_service_reproducibility_and_rule_pool_run(tmp_path: Path) -> N
     assert session_factory.calls == 2
     assert engine.rule_pool_calls[0]["rule_ids"] == ["rule-001"]
     assert engine.rule_pool_calls[0]["runtime_state"]["checkpoint"]["rule_index"] == 1
+
+
+def test_default_engine_factory_accepts_runtime_config_without_loaded_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Profile runtime config should not require a LoadedConfig wrapper."""
+    from src.services.backtest_service import _default_engine_factory
+
+    captured: dict[str, object] = {}
+
+    class _FakeLoader:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("src.services.backtest_service.apply_database_config_to_env", lambda _config: None)
+    monkeypatch.setattr("config.database.get_session_factory", lambda: object())
+    monkeypatch.setattr("src.backtest.snapshot_loader.SnapshotLoader", _FakeLoader)
+    monkeypatch.setattr("src.indicators.indicator_service.IndicatorService", lambda _session_factory: object())
+    monkeypatch.setattr("src.market_data.strategy_repo_adapter.StrategyRepoAdapter", lambda: object())
+    monkeypatch.setattr("src.market_universe.snapshot_service.SnapshotService", lambda **_kwargs: object())
+    monkeypatch.setattr("src.services.market_snapshot_service.MarketSnapshotService", lambda: object())
+
+    config = SimpleNamespace(
+        data=SimpleNamespace(market_universe_snapshot_dir="data/market_universe/snapshots"),
+        stage4=SimpleNamespace(market_universe_slot="09-25"),
+    )
+
+    engine = _default_engine_factory(config=config, base_dir=tmp_path, use_snapshot_only=True)
+
+    assert engine.loader is engine.strategy_loader
+    assert captured["config_path"] is None
+    assert str(captured["snapshot_service"]).startswith("<object object")

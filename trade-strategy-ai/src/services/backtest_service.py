@@ -215,12 +215,14 @@ def _default_engine_factory(
     if config is None and config_path is None:
         return BacktestEngine()
 
+    loaded_config_path: Path | None = None
     if config is None:
         try:
             loaded = load_app_config(config_path)
         except Exception:
             return BacktestEngine()
         config = loaded.config
+        loaded_config_path = loaded.config_path
         if base_dir is None:
             base_dir = Path(loaded.config_path).parent.parent if Path(loaded.config_path).parent.name == "config" else Path(loaded.config_path).parent
 
@@ -248,7 +250,7 @@ def _default_engine_factory(
         indicator_service=IndicatorService(session_factory),
         session_factory=session_factory,
         use_snapshot_only=use_snapshot_only,
-        config_path=str(loaded.config_path),
+        config_path=str(loaded_config_path) if loaded_config_path is not None else None,
         market_universe_slot=getattr(config.stage4, "market_universe_slot", "09-25"),
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)

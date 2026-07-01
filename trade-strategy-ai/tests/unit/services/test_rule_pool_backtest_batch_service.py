@@ -171,3 +171,62 @@ def test_batch_service_merges_completed_batch_rule_results(tmp_path: Path) -> No
 
     asyncio.run(_run())
     asyncio.run(engine.dispose())
+
+
+def test_batch_service_merges_job_service_result_payload_and_keeps_rule_provenance(tmp_path: Path) -> None:
+    from src.services.rule_pool_backtest_batch_service import RulePoolBacktestBatchService
+
+    session_scope, engine = _build_session(tmp_path)
+    service = RulePoolBacktestBatchService(session_scope_factory=session_scope, job_service=_FakeJobService())
+
+    async def _run() -> None:
+        created = await service.create_batch_run(
+            rule_ids=["rule-1", "rule-2", "rule-3"],
+            batch_size=2,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 5),
+            min_confidence=0.7,
+            market_regime_version="market-regime-v3",
+            profile_id="default",
+            created_by="operator",
+        )
+        async with session_scope() as session:
+            for index, rule_ids in enumerate((["rule-1", "rule-2"], ["rule-3"]), start=1):
+                batch = await session.get(RulePoolBacktestBatch, f"{created['batch_run_id']}-{index:03d}")
+                assert batch is not None
+                batch.status = "completed"
+                batch.job_id = UUID(f"00000000-0000-0000-0000-00000000000{index}")
+                batch.result_json = {
+                    "status": "ok",
+                    "message": "rule pool backtest completed",
+                    "payload": {
+                        "start_date": "2026-01-01",
+                        "end_date": "2026-01-05",
+                        "min_confidence": 0.7,
+                        "market_regime_version": "market-regime-v3",
+                        "profile_id": "default",
+                        "rule_ids": rule_ids,
+                        "summary": {"total_days": 0, "total_trades": 0, "valid_trades": 0, "skipped_trades": 0},
+                        "result": {
+                            "summary": {"total_days": 0, "total_trades": 0, "valid_trades": 0, "skipped_trades": 0},
+                            "records": [],
+                            "rule_regime_metrics": {},
+                        },
+                    },
+                    "warnings": [],
+                }
+
+        merged = await service.merge_batch_results(created["batch_run_id"])
+
+        assert merged["status"] == "merged"
+        assert merged["merged_result"]["summary"]["total_trades"] == 0
+        assert [item["rule_id"] for item in merged["merged_result"]["rule_results"]] == ["rule-1", "rule-2", "rule-3"]
+        assert merged["merged_result"]["rule_results"][0]["batch_run_id"] == created["batch_run_id"]
+        assert merged["merged_result"]["rule_results"][0]["job_id"] == "00000000-0000-0000-0000-000000000001"
+        assert merged["merged_result"]["provenance"]["job_ids"] == [
+            "00000000-0000-0000-0000-000000000001",
+            "00000000-0000-0000-0000-000000000002",
+        ]
+
+    asyncio.run(_run())
+    asyncio.run(engine.dispose())

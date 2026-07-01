@@ -35,6 +35,16 @@ def _fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _result_payload(result_json: dict[str, Any]) -> dict[str, Any]:
+    payload = result_json.get("payload")
+    return payload if isinstance(payload, dict) else result_json
+
+
+def _result_body(result_payload: dict[str, Any]) -> dict[str, Any]:
+    result = result_payload.get("result")
+    return result if isinstance(result, dict) else result_payload
+
+
 class RulePoolBacktestBatchService:
     def __init__(
         self,
@@ -270,7 +280,10 @@ class RulePoolBacktestBatchService:
         }
         conflicts: list[int] = []
         for batch in batches:
-            request = (batch.result_json or {}).get("request")
+            result_payload = _result_payload(batch.result_json or {})
+            request = result_payload.get("request")
+            if not isinstance(request, dict):
+                request = result_payload
             if not isinstance(request, dict):
                 conflicts.append(batch.batch_index)
                 continue
@@ -288,8 +301,11 @@ class RulePoolBacktestBatchService:
         rule_regime_metrics: dict[str, Any] = {}
         for batch in list(batch_run.batches or []):
             payload = batch.result_json or {}
-            result = payload.get("result") if isinstance(payload.get("result"), dict) else payload
+            result_payload = _result_payload(payload)
+            result = _result_body(result_payload)
             summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+            if not summary and isinstance(result_payload.get("summary"), dict):
+                summary = result_payload["summary"]
             total_days = max(total_days, int(summary.get("total_days") or 0))
             total_trades += int(summary.get("total_trades") or 0)
             valid_trades += int(summary.get("valid_trades") or 0)
@@ -298,7 +314,7 @@ class RulePoolBacktestBatchService:
                 if isinstance(record, dict):
                     records.append({**record, "batch_id": batch.batch_id, "batch_run_id": batch.batch_run_id, "job_id": str(batch.job_id) if batch.job_id else None})
             raw_metrics = result.get("rule_regime_metrics")
-            if isinstance(raw_metrics, dict):
+            if isinstance(raw_metrics, dict) and raw_metrics:
                 for rule_id, metrics in raw_metrics.items():
                     rule_regime_metrics[str(rule_id)] = metrics
                     rule_results.append(
@@ -310,6 +326,19 @@ class RulePoolBacktestBatchService:
                             "job_id": str(batch.job_id) if batch.job_id else None,
                             "source_result_reference": batch.result_artifact_id or str(batch.job_id or ""),
                             "market_state_metrics": metrics,
+                        }
+                    )
+            else:
+                for rule_id in list(result_payload.get("rule_ids") or batch.rule_ids_json or []):
+                    rule_results.append(
+                        {
+                            "rule_id": str(rule_id),
+                            "batch_id": batch.batch_id,
+                            "batch_index": batch.batch_index,
+                            "batch_run_id": batch.batch_run_id,
+                            "job_id": str(batch.job_id) if batch.job_id else None,
+                            "source_result_reference": batch.result_artifact_id or str(batch.job_id or ""),
+                            "market_state_metrics": [],
                         }
                     )
         summary = {

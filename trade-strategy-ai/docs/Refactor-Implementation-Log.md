@@ -20,22 +20,35 @@
 - [Stage 12 日志](refactor-implementation-logs/stage-12.md)
 - [RT-PERF-001 规则池批量回测](refactor-implementation-logs/rt-perf-001.md)
 - [RT-PERF-002 规则池回测共享市场上下文缓存](refactor-implementation-logs/rt-perf-002.md)
+- [RT-PERF-GATE-001 规则池批量回测与共享缓存 Gate](refactor-implementation-logs/rt-perf-gate-001.md)
 - [RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md)
 - [RT-S12-002 Browser E2E Acceptance](refactor-implementation-logs/rt-s12-002-browser-e2e.md)
 
 ## 当前状态
 
 - 当前 Stage：`Post-delivery hardening`
-- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED；RT-PERF-002 RT_PERF_002_ACCEPTED`
+- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED；RT-PERF-002 RT_PERF_002_ACCEPTED；RT-PERF-GATE-001 RT_PERF_GATE_001_ACCEPTED`
 - 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
-- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 和 `RT-PERF-002` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。
+- 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 和 `RT-PERF-002` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。`RT-PERF-GATE-001` 已完成小规模真实 DB smoke、targeted `/rules/backtests` batch E2E、bounded fix 和回归验证。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：小规模真实批次回测观察耗时；如仍然太慢，单独立项 Backtest Performance Instrumentation 或 Parallel Rule Executor。
+- 下一步：真实业务小批次观察耗时；如仍然太慢，单独立项 Backtest Performance Instrumentation；只有在仍然太慢且 instrumentation 证据支持时，单独评估 Parallel Rule Executor。
 
 ## 当前实施记录
+
+- Task ID: `RT-PERF-GATE-001 Rule Pool Batch Backtest and Shared Cache Gate Review`
+- 状态: `已完成（RT_PERF_GATE_001_ACCEPTED）`
+- 修改范围: `src/services/backtest_service.py` profile runtime config fix、`src/services/rule_pool_backtest_batch_service.py` real JobRunner payload merge/provenance fix、focused backend tests、targeted Playwright E2E、Gate 实施日志。
+- 关键设计决定: 不改变 Stage 12 accepted route/governance/data-source/documentation/result semantics contract；不新增普通用户 Workflow / Job / Pipeline / Artifact 主入口；真实 completed 但 zero-trade batch 允许合并为 truthful no-sample result，并保留每条规则 provenance。
+- 数据库迁移: 无新增迁移；Alembic current/head 均为 `2026_06_30_0001 (head)`。本 Gate 未执行 downgrade，因为真实 smoke 已生成 completed/merged batch data，迁移设计会拒绝不安全 downgrade。
+- 兼容处理: 旧 `rule_id`、新 `rule_ids`、不传规则时 all-approved + min-confidence 行为保持；merge 同时兼容旧顶层 `request/result` payload 和真实 `ServiceResult.payload` payload。
+- 已运行测试: env-check；DB check；Alembic current/heads；focused backend aggregate；migration unit tests；frontend typecheck；route/API/page focused tests；frontend build；targeted Playwright E2E；real-data smoke；`git diff --check`；engine parallelism source scan；changed-files safety scan。
+- 测试结果: focused backend aggregate `14 passed`；migration tests `11 passed`；frontend focused tests `20 passed`；targeted E2E `1 passed`；frontend build passed；DB OK；current/head `2026_06_30_0001 (head)`；engine parallelism scan no matches。
+- 未完成项: 无。
+- 已知风险: 真实 smoke 的 merged summary 为 zero trades，证明链路和 provenance，不证明非空样本性能；full backend/full frontend suites 未运行；Prompt regression 未运行，因为未修改 Prompt/Schema。
+- 验收结论: `RT_PERF_GATE_001_ACCEPTED`
 
 - Task ID: `RT-PERF-002 Shared Market Context Cache for Rule Pool Backtest`
 - 状态: `已完成（RT_PERF_002_ACCEPTED）`

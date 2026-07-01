@@ -123,16 +123,196 @@ def test_start_supervises_api_and_worker(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     assert excinfo.value.code == 1
 
-    assert spawned[0][0] == ("uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000")
+    assert spawned[0][0] == (
+        "uvicorn",
+        "api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "info",
+    )
     assert spawned[0][1] == project_root
-    assert spawned[1][0] == ("python", "-m", "cli.main", "job-worker-start", "--config", "config/app.template.yaml")
+    assert spawned[1][0] == (
+        "python",
+        "-m",
+        "cli.main",
+        "job-worker-start",
+        "--config",
+        "config/app.template.yaml",
+        "--log-level",
+        "INFO",
+    )
     assert spawned[1][1] == project_root
     assert spawned[0][2]["TGB_COOKIE"] == "from-dotenv"
     assert spawned[1][2]["TGB_COOKIE"] == "from-dotenv"
+    assert spawned[0][2]["LOG_LEVEL"] == "INFO"
+    assert spawned[1][2]["LOG_LEVEL"] == "INFO"
     assert output.count("本机脚本已读取到以下关键配置（已设置 ") == 1
     assert "/10 项）" in output
     assert "WEB_STATIC_DIR:" in output
     assert spawned[0][2]["PATH"].startswith(str(project_root / ".nvm" / "versions" / "node" / "v18.20.8" / "bin"))
+    assert not (project_root / ".pids" / "api.pid").exists()
+    assert not (project_root / ".pids" / "worker.pid").exists()
+
+
+def test_start_passes_log_controls_to_api_worker_and_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from scripts import web_local
+
+    spawned: list[dict[str, object]] = []
+    project_root = tmp_path / "trade-strategy-ai"
+    project_root.mkdir()
+
+    class FakeProcess:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+            self.returncode: int | None = None
+            self._polls = 0
+
+        def poll(self) -> int | None:
+            self._polls += 1
+            if self._polls < 2:
+                return None
+            self.returncode = 0
+            return 0
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def wait(self, timeout: float | None = None) -> int:
+            self.returncode = 0
+            return 0
+
+    def fake_popen(cmd, cwd=None, env=None, stdout=None, stderr=None):  # type: ignore[no-untyped-def]
+        spawned.append(
+            {
+                "cmd": tuple(cmd),
+                "cwd": Path(cwd) if cwd else None,
+                "env": env,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+        )
+        return FakeProcess(pid=20000 + len(spawned))
+
+    dist = tmp_path / "web" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text("<html><body>web</body></html>", encoding="utf-8")
+
+    monkeypatch.setattr(web_local.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(web_local.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(web_local, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(web_local, "DEFAULT_WEB_DIST", dist)
+    monkeypatch.setattr(web_local, "_require_web_dist", lambda *_: dist)
+    monkeypatch.setattr(web_local.sys, "executable", "python")
+
+    with pytest.raises(SystemExit):
+        web_local.start(log_level="WARNING", no_access_log=True, quiet=True)
+
+    assert spawned[0]["cmd"] == (
+        "uvicorn",
+        "api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "warning",
+        "--no-access-log",
+    )
+    assert spawned[1]["cmd"] == (
+        "python",
+        "-m",
+        "cli.main",
+        "job-worker-start",
+        "--config",
+        "config/app.template.yaml",
+        "--log-level",
+        "WARNING",
+    )
+    assert spawned[0]["env"]["LOG_LEVEL"] == "WARNING"
+    assert spawned[1]["env"]["LOG_LEVEL"] == "WARNING"
+    assert spawned[0]["stdout"] is web_local.subprocess.DEVNULL
+    assert spawned[0]["stderr"] is web_local.subprocess.DEVNULL
+    assert spawned[1]["stdout"] is web_local.subprocess.DEVNULL
+    assert spawned[1]["stderr"] is web_local.subprocess.DEVNULL
+
+
+def test_start_api_passes_uvicorn_log_options(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from scripts import web_local
+
+    calls: list[tuple[tuple[str, ...], Path | None, dict[str, str] | None]] = []
+    project_root = tmp_path / "trade-strategy-ai"
+    project_root.mkdir()
+    dist = tmp_path / "web" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text("<html><body>web</body></html>", encoding="utf-8")
+
+    def fake_run(cmd, cwd=None, check=None, env=None, stdout=None, stderr=None):  # type: ignore[no-untyped-def]
+        calls.append((tuple(cmd), Path(cwd) if cwd else None, env))
+        assert stdout is None
+        assert stderr is None
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(web_local.subprocess, "run", fake_run)
+    monkeypatch.setattr(web_local, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(web_local, "_require_web_dist", lambda *_: dist)
+
+    web_local.start_api(web_dist=dist, log_level="ERROR", no_access_log=True, quiet=False)
+
+    assert calls[0][0] == (
+        "uvicorn",
+        "api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "error",
+        "--no-access-log",
+    )
+    assert calls[0][2]["LOG_LEVEL"] == "ERROR"
+
+
+def test_start_worker_passes_worker_log_level_and_quiet(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from scripts import web_local
+
+    calls: list[dict[str, object]] = []
+    project_root = tmp_path / "trade-strategy-ai"
+    project_root.mkdir()
+
+    def fake_run(cmd, cwd=None, check=None, env=None, stdout=None, stderr=None):  # type: ignore[no-untyped-def]
+        calls.append(
+            {
+                "cmd": tuple(cmd),
+                "cwd": Path(cwd) if cwd else None,
+                "env": env,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(web_local.subprocess, "run", fake_run)
+    monkeypatch.setattr(web_local.sys, "executable", "python")
+    monkeypatch.setattr(web_local, "PROJECT_ROOT", project_root)
+
+    web_local.start_worker(log_level="CRITICAL", quiet=True)
+
+    assert calls[0]["cmd"] == (
+        "python",
+        "-m",
+        "cli.main",
+        "job-worker-start",
+        "--config",
+        "config/app.template.yaml",
+        "--log-level",
+        "CRITICAL",
+    )
+    assert calls[0]["env"]["LOG_LEVEL"] == "CRITICAL"
+    assert calls[0]["stdout"] is web_local.subprocess.DEVNULL
+    assert calls[0]["stderr"] is web_local.subprocess.DEVNULL
 
 
 def test_env_check_reads_dotenv_without_exposing_secret_values(

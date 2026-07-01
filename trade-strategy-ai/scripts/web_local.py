@@ -5,8 +5,9 @@ import signal
 import subprocess
 import sys
 import time
+from enum import Enum
 from pathlib import Path
-from typing import Sequence
+from typing import Annotated, Sequence
 
 import typer
 
@@ -29,6 +30,21 @@ _CONFIG_SUMMARY_KEYS = (
 )
 
 app = typer.Typer(add_completion=False, help="本机非 Docker 部署命令")
+
+
+class LogLevel(str, Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+def _normalize_log_level(log_level: str | LogLevel) -> LogLevel:
+    """兼容 CLI 入参与测试中的直接字符串调用。"""
+    if isinstance(log_level, LogLevel):
+        return log_level
+    return LogLevel(log_level.upper())
 
 
 def _load_dotenv_file(path: Path | None = None) -> dict[str, str]:
@@ -127,14 +143,33 @@ def _print_config_summary(*, env: dict[str, str], sources: dict[str, str]) -> No
         typer.echo(f"  - WEB_STATIC_DIR: {env['WEB_STATIC_DIR']}（来源: {sources.get('WEB_STATIC_DIR', '脚本生成')}）")
 
 
-def _run_command(cmd: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
+def _stdio_kwargs(*, quiet: bool) -> dict[str, int]:
+    """根据 quiet 配置子进程输出。"""
+    if not quiet:
+        return {}
+    return {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+
+
+def _run_command(
+    cmd: Sequence[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    quiet: bool = False,
+) -> None:
     """在指定工作目录执行一次性命令。"""
-    subprocess.run(list(cmd), cwd=str(cwd), env=env, check=True)
+    subprocess.run(list(cmd), cwd=str(cwd), env=env, check=True, **_stdio_kwargs(quiet=quiet))
 
 
-def _spawn_command(cmd: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
+def _spawn_command(
+    cmd: Sequence[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    quiet: bool = False,
+) -> subprocess.Popen[str]:
     """启动长驻子进程。"""
-    return subprocess.Popen(list(cmd), cwd=str(cwd), env=env)
+    return subprocess.Popen(list(cmd), cwd=str(cwd), env=env, **_stdio_kwargs(quiet=quiet))
 
 
 def _require_web_dist(web_dist: Path = DEFAULT_WEB_DIST) -> Path:
@@ -146,19 +181,50 @@ def _require_web_dist(web_dist: Path = DEFAULT_WEB_DIST) -> Path:
     return web_dist
 
 
-def _api_env(*, web_dist: Path | None = None, emit_summary: bool = False) -> dict[str, str]:
+def _apply_log_level(env: dict[str, str], *, log_level: LogLevel) -> dict[str, str]:
+    """把显式日志级别写回子进程环境。"""
+    log_level = _normalize_log_level(log_level)
+    child_env = dict(env)
+    child_env["LOG_LEVEL"] = log_level.value
+    return child_env
+
+
+def _api_env(*, web_dist: Path | None = None, emit_summary: bool = False, log_level: LogLevel = LogLevel.INFO) -> dict[str, str]:
     """构造 API 子进程环境。"""
-    return _local_env(web_dist=web_dist, emit_summary=emit_summary)
+    return _apply_log_level(_local_env(web_dist=web_dist, emit_summary=emit_summary), log_level=log_level)
 
 
-def _api_command() -> tuple[str, ...]:
+def _api_command(*, log_level: LogLevel = LogLevel.INFO, no_access_log: bool = False) -> tuple[str, ...]:
     """返回 API 启动命令。"""
-    return ("uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000")
+    log_level = _normalize_log_level(log_level)
+    cmd = [
+        "uvicorn",
+        "api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        log_level.value.lower(),
+    ]
+    if no_access_log:
+        cmd.append("--no-access-log")
+    return tuple(cmd)
 
 
-def _worker_command() -> tuple[str, ...]:
+def _worker_command(*, log_level: LogLevel = LogLevel.INFO) -> tuple[str, ...]:
     """返回 Worker 启动命令。"""
-    return (sys.executable, "-m", "cli.main", "job-worker-start", "--config", DEFAULT_CONFIG_PATH)
+    log_level = _normalize_log_level(log_level)
+    return (
+        sys.executable,
+        "-m",
+        "cli.main",
+        "job-worker-start",
+        "--config",
+        DEFAULT_CONFIG_PATH,
+        "--log-level",
+        log_level.value,
+    )
 
 
 def _get_pid_dir() -> Path:
@@ -275,28 +341,47 @@ def seed_admin(
 @app.command("start-api")
 def start_api(
     web_dist: Path = typer.Option(DEFAULT_WEB_DIST, help="前端构建产物目录"),
+    log_level: Annotated[LogLevel, typer.Option(case_sensitive=False, help="API 控制台日志级别")] = LogLevel.INFO,
+    no_access_log: Annotated[bool, typer.Option(help="关闭 uvicorn access log")] = False,
+    quiet: Annotated[bool, typer.Option(help="不向当前终端输出子进程日志")] = False,
 ) -> None:
     """启动 API，并可选托管本机前端静态资源。"""
     static_dir = _require_web_dist(web_dist)
-    _run_command(_api_command(), cwd=PROJECT_ROOT, env=_api_env(web_dist=static_dir, emit_summary=True))
+    _run_command(
+        _api_command(log_level=log_level, no_access_log=no_access_log),
+        cwd=PROJECT_ROOT,
+        env=_api_env(web_dist=static_dir, emit_summary=True, log_level=log_level),
+        quiet=quiet,
+    )
 
 
 @app.command("start-worker")
-def start_worker() -> None:
+def start_worker(
+    log_level: Annotated[LogLevel, typer.Option(case_sensitive=False, help="Worker 控制台日志级别")] = LogLevel.INFO,
+    quiet: Annotated[bool, typer.Option(help="不向当前终端输出子进程日志")] = False,
+) -> None:
     """启动数据库轮询式 Job Worker。"""
-    _run_command(_worker_command(), cwd=PROJECT_ROOT, env=_local_env(emit_summary=True))
+    _run_command(
+        _worker_command(log_level=log_level),
+        cwd=PROJECT_ROOT,
+        env=_apply_log_level(_local_env(emit_summary=True), log_level=log_level),
+        quiet=quiet,
+    )
 
 
 @app.command("start")
 def start(
     web_dist: Path = typer.Option(DEFAULT_WEB_DIST, help="前端构建产物目录"),
+    log_level: Annotated[LogLevel, typer.Option(case_sensitive=False, help="API/Worker 控制台日志级别")] = LogLevel.INFO,
+    no_access_log: Annotated[bool, typer.Option(help="关闭 uvicorn access log")] = False,
+    quiet: Annotated[bool, typer.Option(help="不向当前终端输出子进程日志")] = False,
 ) -> None:
     """同时启动 API 和 Worker，并在任一子进程退出时停止整个本机部署。"""
     static_dir = _require_web_dist(web_dist)
-    api_env = _api_env(web_dist=static_dir, emit_summary=True)
-    worker_env = _local_env()
-    api_proc = _spawn_command(_api_command(), cwd=PROJECT_ROOT, env=api_env)
-    worker_proc = _spawn_command(_worker_command(), cwd=PROJECT_ROOT, env=worker_env)
+    api_env = _api_env(web_dist=static_dir, emit_summary=True, log_level=log_level)
+    worker_env = _apply_log_level(_local_env(), log_level=log_level)
+    api_proc = _spawn_command(_api_command(log_level=log_level, no_access_log=no_access_log), cwd=PROJECT_ROOT, env=api_env, quiet=quiet)
+    worker_proc = _spawn_command(_worker_command(log_level=log_level), cwd=PROJECT_ROOT, env=worker_env, quiet=quiet)
 
     _write_pid_file("api", api_proc.pid)
     _write_pid_file("worker", worker_proc.pid)

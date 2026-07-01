@@ -38,6 +38,18 @@
 
 ## 当前实施记录
 
+- Task ID: `POST-DELIVERY-HOTFIX System Cost Control AuthorProfileVersion source versions`
+- 状态: `已完成`
+- 修改范围: `src/services/system_cost_control_service.py`、`tests/unit/services/test_system_cost_control_service.py`
+- 关键设计决定: 以 `AuthorProfileVersion` ORM 当前字段为事实源，系统成本与增量控制摘要读取 `source_versions_json`；不改变 `/api/ui/v1/system/cost-control` API contract、Stage 12 accepted contract 或 RT-PERF Gate 结论。
+- 数据库迁移: 无。
+- 兼容处理: 保留增量画像样本输出字段 `profile_kind`、`author_id`、`update_scope`、`status`、`invalidation_reasons` 不变；仅修复 ORM 字段读取错误。
+- 已运行测试: `python -m pytest tests/unit/services/test_system_cost_control_service.py tests/api/routers/ui/test_ui_system_cost_control.py -q`；真实 DB-backed `SystemCostControlService().get_summary(actor_role="admin")` smoke；`git diff --check`。
+- 测试结果: focused tests `2 passed`；真实 service smoke `status=ok`、`incremental_profile_samples=5`；`git diff --check` passed。
+- 未完成项: 无。
+- 已知风险: 未重跑完整系统管理前端页面套件；替代证据为 service regression、UI API router regression 和真实 DB-backed service smoke。
+- 验收结论: 修复 `/api/ui/v1/system/cost-control` 因 `AuthorProfileVersion.source_versions` 字段不存在导致的 500。
+
 - Task ID: `RT-PERF-GATE-001 Rule Pool Batch Backtest and Shared Cache Gate Review`
 - 状态: `已完成（RT_PERF_GATE_001_ACCEPTED）`
 - 修改范围: `src/services/backtest_service.py` profile runtime config fix、`src/services/rule_pool_backtest_batch_service.py` real JobRunner payload merge/provenance fix、focused backend tests、targeted Playwright E2E、Gate 实施日志。

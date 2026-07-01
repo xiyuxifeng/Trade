@@ -182,7 +182,7 @@ class SystemCostControlService(BaseService):
         }
 
     def _build_incremental_profile_sample(self, row: AuthorProfileVersion) -> dict[str, Any]:
-        source_versions = row.source_versions if isinstance(row.source_versions, dict) else {}
+        source_versions = row.source_versions_json if isinstance(row.source_versions_json, dict) else {}
         source_article_ids = row.source_article_ids if isinstance(row.source_article_ids, dict) else {}
         invalidation_reasons = source_versions.get("invalidation_reasons")
         if not isinstance(invalidation_reasons, list):

@@ -60,6 +60,87 @@ Recommended separation:
 
 ---
 
+## Required Reading Before Implementation
+
+Before starting any of the tasks, read the current project constraints and implementation history that control navigation, system management, traceability, and user-facing availability semantics.
+
+### Required for all tasks
+
+- `docs/AI-Conversation-Project-Constraints.md`
+- `docs/AI-Conversation-Templates.md`
+- `docs/RT-S12-002-preflight-residual-risk-triage.md`
+- `docs/refactor-implementation-logs/stage-11.md`
+- `docs/refactor-implementation-logs/stage-12.md`
+- `web/src/app/route-config.tsx`
+- `web/src/components/layout/business-page-shell.tsx`
+- `web/src/components/layout/product-page-adapter.tsx`
+- `web/src/pages/system/index.tsx`
+
+### Required for Task 2
+
+- `api/routers/ui/jobs.py`
+- `src/services/job_service.py`
+- `src/services/job_registry.py`
+- worker implementation files that pick up and execute jobs
+- `web/src/lib/api/jobs.ts`
+- `web/src/types/jobs.ts`
+- `web/src/pages/jobs/JobListPage.tsx`
+- `web/src/pages/jobs/JobDetailPage.tsx`
+- `web/src/components/jobs/JobTable.tsx`
+- `web/src/components/jobs/JobControls.tsx`
+- `web/src/components/jobs/JobProgress.tsx`
+- existing tests under `tests/api/routers/ui/`, `tests/services/`, and `web/src/**/__tests__` or adjacent `*.test.tsx` files related to jobs
+
+### Required for Task 3
+
+- `api/routers/ui/system.py`
+- `src/services/system_run_trace_service.py`
+- `src/services/system_service.py`
+- `src/services/system_rollout_service.py`
+- `src/services/system_cost_control_service.py`
+- `web/src/lib/api/system.ts`
+- tests covering `/api/ui/v1/system/runs` and `SystemRunsPage`
+
+If any file above has moved, find the current equivalent before implementing. Do not continue using stale assumptions if route ownership, API shape, or page ownership has changed.
+
+---
+
+## Documentation Update Requirements
+
+The implementation must update documentation when behavior changes. This is part of acceptance, not optional cleanup.
+
+At minimum, update or create documentation for:
+
+1. **System navigation and user-facing page ownership**
+   - Record that `/system/jobs` is the formal Job Management entry.
+   - Record that `/system/runs` is Runs & Alerts, not a Job control page.
+   - Record that `/jobs` and `/jobs/:jobId` are compatibility redirects to `/system/jobs` paths.
+
+2. **Page layout matrix**
+   - Record which pages use workflow, overview, management, detail, or library layout.
+   - Record which pages intentionally hide `Input`, `Processing Status`, or `Output` sections.
+
+3. **Job lifecycle and control semantics**
+   - Record which job types support create, pause, resume, cancel, and retry.
+   - Record which job types intentionally do not support a control action and why.
+   - Record the expected progress fields and user-facing progress meaning.
+
+4. **Runs & Alerts semantics**
+   - Record default view behavior, pagination/load-more behavior, filter semantics, and operator-only diagnostics.
+   - Record how `partial`, `degraded`, `unavailable`, and `error` should be explained to users.
+
+5. **Implementation logs**
+   - Update the relevant stage implementation log after each task with: changed files, test commands/results, known residual risks, and any escalation decisions.
+
+Recommended documentation targets:
+
+- this document, if the final design differs from the plan;
+- `docs/refactor-implementation-logs/stage-12.md` or the active implementation log;
+- user/admin documentation if a user-facing manual exists for system management;
+- any route/navigation matrix or page ownership document currently used by the project.
+
+---
+
 # Task 1 — System Page Information Architecture and Page Shell Foundation
 
 ## Goal
@@ -143,6 +224,12 @@ Create the UI foundation that allows pages to use the right layout instead of al
 - Do not rewrite every page in this task.
 - Do not redesign `/system/runs` completely in this task.
 - Do not implement job management in this task.
+
+## Documentation updates
+
+- Update the page layout matrix.
+- Update any page-shell usage documentation or tests that previously assumed all product pages show `Input / Processing Status / Output`.
+- Update the active implementation log with the migration approach and affected pages.
 
 ## Validation
 
@@ -276,6 +363,13 @@ This must be guarded so it is not exposed as a normal production job unless expl
 - Do not move `/system/runs` responsibilities into `/system/jobs`.
 - Do not expose raw internal JSON to normal users.
 - Do not pretend unsupported job controls are available.
+
+## Documentation updates
+
+- Update route/navigation documentation to make `/system/jobs` the formal Job Management entry.
+- Update job lifecycle/control documentation with supported and unsupported actions per job type.
+- Update business page documentation where user-facing actions now create jobs.
+- Update the active implementation log with worker lifecycle test evidence and any unsupported job controls.
 
 ## Validation
 
@@ -444,6 +538,13 @@ Do not remove workflow sections from pages that actually execute workflows unles
 - Do not delete diagnostics required for audit/reproducibility.
 - Do not make `/system/runs` a second job control page.
 - Do not hide real failures just to make the page look clean.
+
+## Documentation updates
+
+- Update Runs & Alerts documentation with summary, needs-attention, history pagination/load-more, filters, and diagnostic visibility semantics.
+- Update user/admin documentation if `/system/runs` or `/system/jobs` behavior is described there.
+- Update the active implementation log with API changes, migration choices, test results, and any residual risks.
+- Update this plan if the final API shape differs materially from the recommended or minimum acceptable API shape.
 
 ## Validation
 

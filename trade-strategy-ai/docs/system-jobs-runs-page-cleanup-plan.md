@@ -66,7 +66,8 @@ Before starting any of the tasks, read the current project constraints and imple
 
 ### Required for all tasks
 
-- `docs/AI-Conversation-Project-Constraints.md`
+- `docs/AI-Conversation-Project-Constraints-1.md`
+- `docs/AI-Conversation-Project-Constraints-2.md`
 - `docs/AI-Conversation-Templates.md`
 - `docs/RT-S12-002-preflight-residual-risk-triage.md`
 - `docs/refactor-implementation-logs/stage-11.md`

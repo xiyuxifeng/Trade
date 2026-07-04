@@ -43,15 +43,15 @@ api:
     api_keys:
       - "${ADMIN_API_KEY}"
 
-storage:
+runtime:
   # 通用处理产物输出目录；日报、报告、证据包等都会用到这里。
   output_dir: data/processed/phase0
 
 traders:
   # 至少保留一个 trader 配置，供策略、盘前、盘后、回测等流程使用。
-  - trader_id: trader_a
+  - trader_id: javxsp
     # 展示名，用于页面和报告显示。
-    display_name: Trader A
+    display_name: javxsp
     article_sources:
       # 交易员文章来源 URL 列表；如果文章抓取走 crawl.sources，这里可先留空。
       urls: []
@@ -291,10 +291,10 @@ crawl:
     # 失败后退避序列（秒）；按顺序重试。
     backoff_seconds: [5, 15, 30]
 
-# 盘前主链路开关：交付默认开启盘前候选池快照流程。
-stage4:
-  # 是否启用盘前主链路。
-  enable: true
+# 盘前正式主链路开关：交付默认开启盘前候选池快照流程。
+pre_market_formal_flow:
+  # 是否启用盘前正式主链路。
+  enabled: true
   # 候选池快照时段。
   market_universe_slot: "09-25"
 

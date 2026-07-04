@@ -313,7 +313,7 @@ Config baseline used: `config/app.template.yaml`
   - `schedule.pre_market_time: "09:25"`
   - `schedule.after_close_time: "18:00"`
 - Output / storage expectation:
-  - `storage.output_dir: data/processed/phase0`
+  - `runtime.output_dir: data/processed/phase0`
   - `data.market_universe_snapshot_dir: data/market_universe/snapshots`
   - `kaipan.data_dir: data/kaipan`
 

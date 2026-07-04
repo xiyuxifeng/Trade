@@ -32,7 +32,7 @@ class _FakeSeedStats:
 
 def test_setup_service_seed_and_init_project(tmp_path: Path) -> None:
     """SetupService 应能封装 seed-data 和 init-project。"""
-    from src.common.config import AppConfig, DataConfig, StorageConfig
+    from src.common.config import AppConfig, DataConfig, RuntimeConfig
     from src.services.setup_service import SetupService
 
     config_path = tmp_path / "app.yaml"
@@ -48,7 +48,7 @@ def test_setup_service_seed_and_init_project(tmp_path: Path) -> None:
     def fake_init_db(*, project_root: Path) -> None:
         calls["init_db"] = project_root
 
-    loaded_config = AppConfig(storage=StorageConfig(output_dir="data/processed/phase0"), data=DataConfig())
+    loaded_config = AppConfig(runtime=RuntimeConfig(output_dir="data/processed/phase0"), data=DataConfig())
 
     service = SetupService(
         seed_runner=fake_seed_project_data,
@@ -143,4 +143,3 @@ def test_setup_service_import_logs_and_migrate_crawl_state(tmp_path: Path) -> No
     assert migrate_result.status == "ok"
     assert migrate_result.payload["migrated"] == 1
     assert calls["crawl_state"][0][0] == "tgb"
-

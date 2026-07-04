@@ -65,8 +65,8 @@ class _FailingSnapshotProfileService:
             archived_at=None,
         )
 
-    async def capture_profile_snapshot(self, profile_id: str, *, job_id: str | None = None):
-        del profile_id, job_id
+    async def capture_profile_snapshot(self, profile_id: str, *, job_id: str | None = None, source=None, config_path=None):
+        del profile_id, job_id, source, config_path
         from src.services.base import ServiceResult
 
         return ServiceResult(status="error", message="snapshot failed", payload={"reason": "boom"})
@@ -80,7 +80,7 @@ def test_preview_migration_reports_missing_sections_and_masks_preview(tmp_path: 
     config_path.write_text(
         """
 environment: dev
-storage:
+runtime:
   output_dir: data/processed
 llm:
   api_key: secret-1
@@ -111,7 +111,7 @@ def test_migrate_config_path_saves_profile_and_snapshot(tmp_path: Path) -> None:
     config_path.write_text(
         """
 environment: dev
-storage:
+runtime:
   output_dir: data/processed
 llm:
   api_key: secret-1
@@ -146,7 +146,7 @@ def test_migrate_config_path_surfaces_snapshot_failure_without_crashing(tmp_path
     config_path.write_text(
         """
 environment: dev
-storage:
+runtime:
   output_dir: data/processed
 llm:
   api_key: secret-1

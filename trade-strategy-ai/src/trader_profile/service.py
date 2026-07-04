@@ -31,7 +31,7 @@ from src.trader_profile.schemas import (
 
 def default_profiles_path(*, base_dir: Path, config: AppConfig) -> Path:
     """Return the canonical on-disk path for trader profiles."""
-    return base_dir / config.storage.output_dir / "trader_profiles.json"
+    return base_dir / config.runtime.output_dir / "trader_profiles.json"
 
 
 def _infer_trader_id(*, raw_payload: Any, author_id: Any, config: AppConfig) -> str | None:

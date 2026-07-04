@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.common.config import AppConfig, StorageConfig
+from src.common.config import AppConfig, RuntimeConfig
 from src.pipeline.completion import run_incremental_data_completion
 
 
 @pytest.mark.asyncio
 async def test_run_incremental_data_completion_raises_when_any_step_fails() -> None:
-    config = AppConfig(storage=StorageConfig(output_dir="data/processed/test"))
+    config = AppConfig(runtime=RuntimeConfig(output_dir="data/processed/test"))
 
     with (
         patch("src.pipeline.completion.handle_ohlcv_crawl", new=AsyncMock(side_effect=RuntimeError("ohlcv failed"))) as mocked_ohlcv,

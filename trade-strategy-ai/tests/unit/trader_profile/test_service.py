@@ -3,13 +3,14 @@
 from collections.abc import AsyncGenerator
 from datetime import date
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.trader_profile.service import _aggregate_profile
 from src.trader_profile.service import build_trader_profiles
-from src.common.config import AppConfig, CrawlConfig, StorageConfig, TradeLogSourceConfig, TraderConfig
+from src.common.config import AppConfig, CrawlConfig, RuntimeConfig, TradeLogSourceConfig, TraderConfig
 from src.trader_profile.schemas import (
     PositionBias,
     RiskStyle,
@@ -153,12 +154,16 @@ class _FakeSession:
         self._idx += 1
         return result
 
+    async def scalars(self, stmt):
+        del stmt
+        return _FakeResult([])
+
 
 @pytest.mark.asyncio
 async def test_build_trader_profiles_includes_trade_logs(tmp_path, monkeypatch):
     """build_trader_profiles 应该把 trade_logs 纳入画像主链路。"""
     article_rows = [
-        ("author-1", {"trader_id": "trader-001"}, ["000001.SZ"], [], []),
+        ("article-1", "author-1", {"trader_id": "trader-001"}),
     ]
     trade_rows = [
         ("acct-1", "600519.SH"),
@@ -171,9 +176,22 @@ async def test_build_trader_profiles_includes_trade_logs(tmp_path, monkeypatch):
         yield session
 
     monkeypatch.setattr("src.trader_profile.service.session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        "src.services.article_metadata_selection_service.ArticleMetadataSelectionService.load_effective_metadata_map",
+        AsyncMock(
+            return_value={
+                "article-1": SimpleNamespace(
+                    processed_at=date(2026, 4, 1),
+                    trading_symbols=["000001.SZ"],
+                    extracted_concepts=[],
+                    strategy_rules=[],
+                )
+            }
+        ),
+    )
 
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         crawl=CrawlConfig(),
         traders=[
             TraderConfig(

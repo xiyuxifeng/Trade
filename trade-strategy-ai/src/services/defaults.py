@@ -71,7 +71,7 @@ crawl:
   #     list_url: "https://www.tgb.cn/xxxxx"
   #     enabled: true
 
-storage:
+runtime:
   # 输出目录（日报、persona_route 等产物默认写到这里）
   output_dir: data/processed/phase0
 
@@ -85,10 +85,10 @@ llm:
   # 大模型 API Key（建议通过环境变量注入）
   api_key: null
 
-# 盘前主链路开关：交付默认开启盘前候选池快照流程
-stage4:
-  # 是否启用盘前主链路
-  enable: true
+# 盘前正式主链路开关：交付默认开启盘前候选池快照流程
+pre_market_formal_flow:
+  # 是否启用盘前正式主链路
+  enabled: true
   # 候选池快照时段
   market_universe_slot: "09-25"
 

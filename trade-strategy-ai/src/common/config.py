@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.common.exceptions import ConfigError
 from src.common.paths import resolve_project_path
@@ -71,7 +71,7 @@ class TraderConfig(BaseModel):
 
     # P2-101: Trader 画像配置
     style_preference: TraderStylePreference = TraderStylePreference.MODERATE
-    memory_path: str | None = None  # 可选自定义 memory JSONL 路径，默认使用 storage.output_dir/trader_memory.jsonl
+    memory_path: str | None = None  # 可选自定义 memory JSONL 路径，默认使用 runtime.output_dir/trader_memory.jsonl
 
 
 class DataConfig(BaseModel):
@@ -109,7 +109,7 @@ class CrawlConfig(BaseModel):
     sources: list[CrawlSourceConfig] = Field(default_factory=list)
 
 
-class StorageConfig(BaseModel):
+class RuntimeConfig(BaseModel):
     output_dir: str = "data/processed/phase0"
 
 
@@ -171,15 +171,23 @@ class PersonaConfig(BaseModel):
     market_state_path: str | None = None  # optional JSON file for MarketState
 
 
-class Stage4Config(BaseModel):
-    """盘前主链路配置（NTL-S4-009）。
+class PreMarketFormalFlowConfig(BaseModel):
+    """盘前正式主链路配置（NTL-S4-009）。
 
     控制是否启用新版盘前链路（策略版本 + 候选池快照）。
     当前主流程要求 released strategy_version 必须可用，缺失时直接报错。
     """
 
-    enable: bool = True  # 默认启用盘前主链路
+    enabled: bool = Field(default=True, validation_alias=AliasChoices("enabled", "enable"))
     market_universe_slot: str = "09-25"  # 候选池快照时段
+
+    @property
+    def enable(self) -> bool:
+        return self.enabled
+
+
+StorageConfig = RuntimeConfig
+Stage4Config = PreMarketFormalFlowConfig
 
 class KaipanConfig(BaseModel):
     """开盘啦私有接口运行配置。"""
@@ -231,10 +239,16 @@ class AppConfig(BaseModel):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     data: DataConfig = Field(default_factory=DataConfig)
     crawl: CrawlConfig = Field(default_factory=CrawlConfig)
-    storage: StorageConfig = Field(default_factory=StorageConfig)
+    runtime: RuntimeConfig = Field(
+        default_factory=RuntimeConfig,
+        validation_alias=AliasChoices("runtime", "storage"),
+    )
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
-    stage4: Stage4Config = Field(default_factory=Stage4Config)
+    pre_market_formal_flow: PreMarketFormalFlowConfig = Field(
+        default_factory=PreMarketFormalFlowConfig,
+        validation_alias=AliasChoices("pre_market_formal_flow", "stage4"),
+    )
     api: ApiConfig = Field(default_factory=ApiConfig)
     kaipan: KaipanConfig = Field(default_factory=KaipanConfig)
     akshare: AkshareConfig = Field(default_factory=AkshareConfig)
@@ -244,10 +258,20 @@ class AppConfig(BaseModel):
     traders: list[TraderConfig] = Field(default_factory=list)
     alerting: dict[str, Any] | None = None  # S7-007 告警配置
 
+    @property
+    def storage(self) -> RuntimeConfig:
+        return self.runtime
+
+    @property
+    def stage4(self) -> PreMarketFormalFlowConfig:
+        return self.pre_market_formal_flow
+
 
 _DEPRECATED_CONFIG_KEYS = {
     "watchlist",
     "allow_phase0_fallback",
+    "storage",
+    "stage4",
 }
 
 

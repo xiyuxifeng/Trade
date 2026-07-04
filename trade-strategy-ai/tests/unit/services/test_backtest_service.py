@@ -273,7 +273,7 @@ def test_default_engine_factory_accepts_runtime_config_without_loaded_config(mon
 
     config = SimpleNamespace(
         data=SimpleNamespace(market_universe_snapshot_dir="data/market_universe/snapshots"),
-        stage4=SimpleNamespace(market_universe_slot="09-25"),
+        pre_market_formal_flow=SimpleNamespace(market_universe_slot="09-25"),
     )
 
     engine = _default_engine_factory(config=config, base_dir=tmp_path, use_snapshot_only=True)

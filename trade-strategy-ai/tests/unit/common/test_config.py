@@ -104,9 +104,10 @@ def test_load_app_config_rejects_deprecated_config_keys(tmp_path: Path) -> None:
     config_path.write_text(
         """
 timezone: Asia/Shanghai
-stage4:
-  enable: true
-  allow_phase0_fallback: true
+pre_market_formal_flow:
+  enabled: true
+storage:
+  output_dir: data/processed/phase0
 traders:
   - trader_id: trader_a
     display_name: Trader A
@@ -117,6 +118,27 @@ traders:
 
     with pytest.raises(ConfigError, match="Deprecated config keys found"):
         load_app_config(config_path)
+
+
+def test_load_app_config_supports_runtime_and_pre_market_formal_flow(tmp_path: Path) -> None:
+    config_path = tmp_path / "app.yaml"
+    config_path.write_text(
+        """
+timezone: Asia/Shanghai
+runtime:
+  output_dir: data/processed/phase0
+pre_market_formal_flow:
+  enabled: true
+  market_universe_slot: "09-25"
+        """,
+        encoding="utf-8",
+    )
+
+    loaded = load_app_config(config_path)
+
+    assert loaded.config.runtime.output_dir == "data/processed/phase0"
+    assert loaded.config.pre_market_formal_flow.enabled is True
+    assert loaded.config.pre_market_formal_flow.market_universe_slot == "09-25"
 
 
 def test_load_app_config_resolves_project_relative_config_path() -> None:
@@ -137,9 +159,10 @@ def test_init_config_template_exposes_required_top_level_sections() -> None:
         "evaluation",
         "kaipan",
         "llm",
+        "pre_market_formal_flow",
         "run_mode",
+        "runtime",
         "schedule",
-        "storage",
         "timezone",
         "traders",
     ]

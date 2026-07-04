@@ -65,7 +65,7 @@ def test_system_service_checks_database_and_directories(tmp_path: Path) -> None:
     config_path.write_text(
         """
 timezone: Asia/Shanghai
-storage:
+runtime:
   output_dir: data/processed/phase0
 data:
   market_data_cache_dir: data/processed/market_data
@@ -100,7 +100,7 @@ def test_system_service_reports_missing_directories_as_partial(tmp_path: Path) -
     config_path.write_text(
         """
 timezone: Asia/Shanghai
-storage:
+runtime:
   output_dir: data/processed/phase0
 data:
   market_data_cache_dir: data/processed/market_data

@@ -251,7 +251,7 @@ def _default_engine_factory(
         session_factory=session_factory,
         use_snapshot_only=use_snapshot_only,
         config_path=str(loaded_config_path) if loaded_config_path is not None else None,
-        market_universe_slot=getattr(config.stage4, "market_universe_slot", "09-25"),
+        market_universe_slot=getattr(config.pre_market_formal_flow, "market_universe_slot", "09-25"),
     )
     return BacktestEngine(loader=loader, strategy_loader=loader)
 

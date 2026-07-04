@@ -106,7 +106,7 @@ class ManagerAgent:
         self.base_dir = base_dir
         self.logger = get_logger("agent.manager")
 
-        self.output_dir = ensure_dir(self.base_dir / self.config.storage.output_dir)
+        self.output_dir = ensure_dir(self.base_dir / self.config.runtime.output_dir)
         self.tasks_path = self.output_dir / "agent_tasks.jsonl"
         self.memory_store = TraderMemoryStore()
         self.trader_profiles = self._load_trader_profiles()
@@ -167,7 +167,7 @@ class ManagerAgent:
         market_universe_snapshot: MarketUniverse | None = None
 
         config_path = self._resolve_path("config/app.yaml")
-        slot = self.config.stage4.market_universe_slot
+        slot = self.config.pre_market_formal_flow.market_universe_slot
 
         if config_path is not None and config_path.exists():
             try:
@@ -188,7 +188,7 @@ class ManagerAgent:
             if loaded_snapshot is not None:
                 market_context_snapshot = loaded_snapshot.to_dict()
 
-        if market_universe_snapshot is None and self.config.stage4.enable:
+        if market_universe_snapshot is None and self.config.pre_market_formal_flow.enabled:
             try:
                 candidate_pool = self.snapshot_service.load(as_of_date.isoformat(), slot)
                 if candidate_pool is not None:
@@ -556,14 +556,14 @@ class ManagerAgent:
             return DailyReport.model_validate(payload)
 
         # === Stage 4 路径：尝试加载统一市场上下文快照（所有 trader 共享同一快照）===
-        # NTL-S4-009: stage4.enable 控制是否使用新版盘前链路
+        # NTL-S4-009: pre_market_formal_flow.enabled 控制是否使用新版盘前链路
         market_context_snapshot, market_universe = self._load_market_context_snapshot(as_of_date=as_of_date)
-        if self.config.stage4.enable and market_context_snapshot is None and market_universe is None:
+        if self.config.pre_market_formal_flow.enabled and market_context_snapshot is None and market_universe is None:
             self._append_task(
                 AgentTask(
                     type="data_missing",
                     title="Market context snapshot load failed",
-                    details={"date": as_of_date.isoformat(), "slot": self.config.stage4.market_universe_slot},
+                    details={"date": as_of_date.isoformat(), "slot": self.config.pre_market_formal_flow.market_universe_slot},
                 )
             )
 
@@ -600,7 +600,7 @@ class ManagerAgent:
         # 从规则池加载高置信度规则预测，作为盘前辅助信号
         rule_prediction_count = 0
         rule_predictions = []
-        if self.config.stage4.enable:
+        if self.config.pre_market_formal_flow.enabled:
             try:
                 async with session_scope() as session:
                     from src.rule_pool.prediction import RulePoolPredictionService

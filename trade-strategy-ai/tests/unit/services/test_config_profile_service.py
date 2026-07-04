@@ -83,7 +83,7 @@ llm:
   api_key: secret-1
 database:
   url: postgresql+asyncpg://trade:trade@localhost:5432/trade_strategy_ai
-storage:
+runtime:
   output_dir: data/processed
 """,
         encoding="utf-8",

@@ -226,9 +226,15 @@ crawl:
     # 触发 403/429/非登录态等失败时的退避序列（秒），按序重试
     backoff_seconds: [5, 15, 30]
 
-storage:
+runtime:
   # 输出目录（Phase 0/0.5 日报、persona_route 等产物默认写到这里）
   output_dir: data/processed/phase0
+
+pre_market_formal_flow:
+  # 是否启用盘前正式主链路
+  enabled: true
+  # 候选池快照时段
+  market_universe_slot: "09-25"
 
 llm:
   # 大模型提供商（预留）：openai/anthropic/...

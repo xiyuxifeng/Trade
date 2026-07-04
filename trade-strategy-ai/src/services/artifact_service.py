@@ -135,7 +135,7 @@ class ArtifactService(BaseService):
             if loaded is not None:
                 roots.extend(
                     [
-                        ("storage_output", project_root / loaded.config.storage.output_dir),
+                        ("runtime_output", project_root / loaded.config.runtime.output_dir),
                         ("market_data_cache", project_root / loaded.config.data.market_data_cache_dir),
                         ("market_universe_snapshot", project_root / loaded.config.data.market_universe_snapshot_dir),
                         ("kaipan_data", project_root / loaded.config.kaipan.data_dir),

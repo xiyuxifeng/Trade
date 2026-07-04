@@ -95,7 +95,7 @@ async def seed_project_data(
 ) -> SeedDataStats:
     """Seed the local database from crawl output and configured trade logs."""
 
-    ensure_dir(base_dir / config.storage.output_dir)
+    ensure_dir(base_dir / config.runtime.output_dir)
     audit = audit_service or AuditService()
     dataset_version = default_dataset_version(prefix="seed")
 

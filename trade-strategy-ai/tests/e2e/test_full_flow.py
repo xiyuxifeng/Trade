@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from cli.main import _e2e_regression_async, e2e_regression
-from src.common.config import AppConfig, LoadedConfig, PersonaConfig, StorageConfig
+from src.common.config import AppConfig, LoadedConfig, PersonaConfig, RuntimeConfig
 from src.schemas.contracts import DailyReport
 from src.trader_profile.schemas import TraderProfilesFile
 
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.smoke
 
 def _make_loaded_config(config_path: Path) -> LoadedConfig:
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         persona=PersonaConfig(
             enable=False,
             clusters_path="data/processed/persona/clusters.sample.json",

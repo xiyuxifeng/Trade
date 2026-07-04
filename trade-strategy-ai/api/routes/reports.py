@@ -30,7 +30,7 @@ async def _resolve_runtime_output_dir(profile_id: str | None = None) -> tuple[Pa
     service = ConfigProfileService()
     resolved_profile_id = service.resolve_runtime_profile_id(profile_id)
     runtime = await service.load_profile_runtime_config(resolved_profile_id)
-    return runtime.base_dir / runtime.config.storage.output_dir, runtime.profile_id, runtime.profile_snapshot_id
+    return runtime.base_dir / runtime.config.runtime.output_dir, runtime.profile_id, runtime.profile_snapshot_id
 
 
 def _daily_report_path(output_dir: Path, as_of_date: date) -> Path:

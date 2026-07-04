@@ -16,10 +16,19 @@ from src.pipeline.tasks.postmortem_tasks import handle_postmortem_analysis
 class TestHandlePostmortemAnalysis:
     """测试 handle_postmortem_analysis 各种场景。"""
 
+    @pytest.fixture(autouse=True)
+    def patch_memory_store_constructor(self):
+        mock_store = MagicMock()
+        mock_store.list_filtered = AsyncMock(return_value=[])
+        mock_store.append = AsyncMock()
+        mock_store.update = AsyncMock(return_value=True)
+        with patch("src.pipeline.tasks.postmortem_tasks.TraderMemoryStore", return_value=mock_store):
+            yield mock_store
+
     @pytest.fixture
     def mock_config(self):
         config = MagicMock()
-        config.storage.output_dir = "data/agent"
+        config.runtime.output_dir = "data/agent"
         return config
 
     @pytest.fixture
@@ -63,7 +72,7 @@ class TestHandlePostmortemAnalysis:
                     await handle_postmortem_analysis(valid_details, config=mock_config)
 
     @pytest.mark.asyncio
-    async def test_writes_memory_on_success(self, mock_config, valid_details):
+    async def test_writes_memory_on_success(self, mock_config, valid_details, patch_memory_store_constructor):
         """成功执行时写入 TraderMemory。"""
         from src.schemas.contracts import DailyReport, TradeIdea, TradeEntry
 
@@ -82,10 +91,7 @@ class TestHandlePostmortemAnalysis:
         )
 
         mock_report = DailyReport(as_of_date=date(2026, 4, 25), ideas=[mock_idea])
-        mock_store = MagicMock()
-        # list_filtered 返回空列表 → 走 append 分支（fallback）
-        mock_store.list_filtered = AsyncMock(return_value=[])
-        mock_store.append = AsyncMock()
+        mock_store = patch_memory_store_constructor
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
@@ -95,19 +101,18 @@ class TestHandlePostmortemAnalysis:
                 mock_path.return_value = report_path
                 with patch("src.pipeline.tasks.postmortem_tasks.read_json", return_value=mock_report.model_dump()):
                     with patch("src.pipeline.tasks.postmortem_tasks._fetch_last_prices", new_callable=AsyncMock, return_value={"000001": 9.5}):
-                        with patch("src.pipeline.tasks.postmortem_tasks.TraderMemoryStore", return_value=mock_store):
-                            await handle_postmortem_analysis(valid_details, config=mock_config)
-                            mock_store.append.assert_called_once()
-                            # 验证写入的 memory 类型
-                            call_args = mock_store.append.call_args[0][0]
-                            assert call_args.memory_type.value == "postmortem"
-                            # fallback 现在会把 last_price 映射为 bars，return_pct 不应固定为 0
-                            assert call_args.postmortem_data["return_pct"] == pytest.approx(-0.05)
-                            assert call_args.postmortem_data["postmortem_notes"] is not None
-                            assert "000001" in call_args.postmortem_data["postmortem_notes"]
+                        await handle_postmortem_analysis(valid_details, config=mock_config)
+                        mock_store.append.assert_called_once()
+                        # 验证写入的 memory 类型
+                        call_args = mock_store.append.call_args[0][0]
+                        assert call_args.memory_type.value == "postmortem"
+                        # fallback 现在会把 last_price 映射为 bars，return_pct 不应固定为 0
+                        assert call_args.postmortem_data["return_pct"] == pytest.approx(-0.05)
+                        assert call_args.postmortem_data["postmortem_notes"] is not None
+                        assert "000001" in call_args.postmortem_data["postmortem_notes"]
 
     @pytest.mark.asyncio
-    async def test_updates_existing_failure_case_in_place(self, mock_config, valid_details):
+    async def test_updates_existing_failure_case_in_place(self, mock_config, valid_details, patch_memory_store_constructor):
         """existing failure_case 存在时原地更新，不新增条目（NTL-S5-012）。"""
         from src.schemas.contracts import DailyReport, TradeIdea, TradeEntry
         from src.trader_memory.schemas import TraderMemoryItem, TraderMemoryType
@@ -139,12 +144,9 @@ class TestHandlePostmortemAnalysis:
             content="原始内容",
         )
 
-        mock_store = MagicMock()
+        mock_store = patch_memory_store_constructor
         # list_filtered 返回已有的 failure_case
         mock_store.list_filtered = AsyncMock(return_value=[existing_failure])
-        # update 方法（async）
-        mock_store.update = AsyncMock(return_value=True)
-        mock_store.append = AsyncMock()
 
         with TemporaryDirectory() as tmpdir:
             report_path = Path(tmpdir) / "daily_report_2026-04-25.json"
@@ -154,17 +156,16 @@ class TestHandlePostmortemAnalysis:
                 mock_path.return_value = report_path
                 with patch("src.pipeline.tasks.postmortem_tasks.read_json", return_value=mock_report.model_dump()):
                     with patch("src.pipeline.tasks.postmortem_tasks._fetch_last_prices", new_callable=AsyncMock, return_value={"000001": 9.5}):
-                        with patch("src.pipeline.tasks.postmortem_tasks.TraderMemoryStore", return_value=mock_store):
-                            await handle_postmortem_analysis(valid_details, config=mock_config)
+                        await handle_postmortem_analysis(valid_details, config=mock_config)
 
-                            # 验证 update 被调用（不是 append）
-                            mock_store.update.assert_called_once()
-                            mock_store.append.assert_not_called()
+                        # 验证 update 被调用（不是 append）
+                        mock_store.update.assert_called_once()
+                        mock_store.append.assert_not_called()
 
-                            # 验证 update 的参数
-                            call_args = mock_store.update.call_args
-                            updated_item = call_args[0][1]  # 第二个参数是 updated_item
-                            assert updated_item.postmortem_data is not None
-                            assert updated_item.postmortem_data["attribution_source"] == "auto"
-                            assert updated_item.postmortem_data["postmortem_notes"] is not None
-                            assert updated_item.extra.get("auto_original") == {"reason": "original reason", "confidence": 0.5}
+                        # 验证 update 的参数
+                        call_args = mock_store.update.call_args
+                        updated_item = call_args[0][1]  # 第二个参数是 updated_item
+                        assert updated_item.postmortem_data is not None
+                        assert updated_item.postmortem_data["attribution_source"] == "auto"
+                        assert updated_item.postmortem_data["postmortem_notes"] is not None
+                        assert updated_item.extra.get("auto_original") == {"reason": "original reason", "confidence": 0.5}

@@ -93,7 +93,7 @@ class SystemService(BaseService):
         directory_specs: dict[str, Path] = {
             "data": base_dir / "data",
             "logs": base_dir / "logs",
-            "storage.output_dir": base_dir / loaded_config.storage.output_dir,
+            "runtime.output_dir": base_dir / loaded_config.runtime.output_dir,
             "data.market_data_cache_dir": base_dir / loaded_config.data.market_data_cache_dir,
             "data.market_universe_snapshot_dir": base_dir / loaded_config.data.market_universe_snapshot_dir,
         }

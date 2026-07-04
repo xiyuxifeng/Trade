@@ -14,6 +14,7 @@ from src.services.config_profile_service import ConfigProfileService
 from src.common.config import ConfigError
 from api.main import app
 from api.dependencies import verify_api_key
+from src.services.base import ServiceResult
 
 
 class _FakeRuntime:
@@ -23,7 +24,7 @@ class _FakeRuntime:
         self.base_dir = Path("/tmp/project")
         self.config = SimpleNamespace(
             run_mode="web",
-            storage=SimpleNamespace(output_dir="output"),
+            runtime=SimpleNamespace(output_dir="output"),
             data=SimpleNamespace(
                 market_data_cache_dir="data/cache",
                 market_universe_snapshot_dir="data/snapshots",
@@ -34,12 +35,37 @@ class _FakeRuntime:
 @pytest_asyncio.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     """创建带认证覆盖的测试客户端。"""
+    class _FakeSystemService:
+        async def check_database(self):
+            return ServiceResult(
+                status="ok",
+                message="database ok",
+                payload={"database": {"status": "ok", "message": "database ok"}},
+            )
+
+        async def check_key_directories(self, *, profile_id=None, config_path=None):
+            del config_path
+            return ServiceResult(
+                status="ok",
+                message="directories ok",
+                payload={
+                    "profile_id": profile_id,
+                    "directories": {
+                        "runtime.output_dir": {"path": "/tmp/project/output", "exists": True},
+                        "data.market_data_cache_dir": {"path": "/tmp/project/data/cache", "exists": True},
+                        "data.market_universe_snapshot_dir": {"path": "/tmp/project/data/snapshots", "exists": True},
+                    },
+                },
+                warnings=[],
+            )
+
     async def _load_profile_runtime_config(self, profile_id: str):  # noqa: ANN001
         del self
         return _FakeRuntime(profile_id=profile_id, profile_snapshot_id=f"{profile_id}-snapshot")
 
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(ConfigProfileService, "load_profile_runtime_config", _load_profile_runtime_config, raising=True)
+    monkeypatch.setattr("api.routers.ui.system.SystemService", _FakeSystemService, raising=True)
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

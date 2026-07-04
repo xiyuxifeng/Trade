@@ -127,7 +127,7 @@ crawl:
 	#     list_url: "https://www.tgb.cn/xxxxx"
 	#     enabled: true
 
-storage:
+runtime:
 	# 输出目录（日报、persona_route 等产物默认写到这里）
 	output_dir: data/processed/phase0
 
@@ -140,6 +140,13 @@ llm:
 	url: null
 	# 大模型 API Key（建议通过环境变量注入）
 	api_key: null
+
+# 盘前正式主链路开关：交付默认开启盘前候选池快照流程
+pre_market_formal_flow:
+	# 是否启用盘前正式主链路
+	enabled: true
+	# 候选池快照时段
+	market_universe_slot: "09-25"
 
 traders:
 	- trader_id: trader_a
@@ -1000,7 +1007,9 @@ def persona_init_sample(
 	"""
 
 	configure_logging(log_level)
-	result = PersonaService().build_sample_clusters(config_path=config, dest=dest)
+	result = run_async_with_cleanup(
+		PersonaService().build_sample_clusters(config_path=config, dest=dest)
+	)
 	if result.status == "error":
 		typer.echo(result.message or "persona init sample failed")
 		raise typer.Exit(code=2)
@@ -1021,13 +1030,15 @@ def market_state_build(
 	"""从显式选择的基准指数日线构建 MarketState(regime/vol) 并输出 JSON。"""
 
 	configure_logging(log_level)
-	result = PersonaService().build_market_state(
-		config_path=config,
-		benchmark_symbol=benchmark_symbol,
-		as_of=as_of,
-		dest=dest,
-		from_akshare=from_akshare,
-		cache_csv=cache_csv,
+	result = run_async_with_cleanup(
+		PersonaService().build_market_state(
+			config_path=config,
+			benchmark_symbol=benchmark_symbol,
+			as_of=as_of,
+			dest=dest,
+			from_akshare=from_akshare,
+			cache_csv=cache_csv,
+		)
 	)
 	if result.status == "error":
 		typer.echo(result.message or "market state build failed")

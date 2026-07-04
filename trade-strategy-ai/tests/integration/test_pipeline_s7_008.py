@@ -20,10 +20,11 @@ from src.agents.manager_agent.agent import ManagerAgent
 from src.agents.manager_agent.premarket_service import PreMarketService
 from src.backtest.engine import BacktestEngine, TradeCalendar
 from src.backtest.schemas import BacktestRequest, BacktestTradeRecord
-from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig, TraderConfig
+from src.common.config import AppConfig, DataConfig, PreMarketFormalFlowConfig, RuntimeConfig, TraderConfig
 from src.market_universe.schemas import HotTopic, HotTopicsPayload, MarketUniverse
 from src.market_universe.snapshot_service import SnapshotService
 from src.schemas.contracts import DailyReport, EvaluationResult, IdeaEvaluation, TradeEntry, TradeIdea
+from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
 from src.strategy_library.schemas import (
     StrategyRecommendation,
     StrategyVersion,
@@ -52,6 +53,65 @@ async def _mock_session_scope():
     yield session
 
 
+@pytest.fixture(autouse=True)
+def _patch_pipeline_runtime(monkeypatch: pytest.MonkeyPatch):
+    async def _fake_generate_evidence_pack(self, idea, daily_report, last_prices, config):
+        del self, daily_report, config
+        last_price = float(last_prices.get(idea.symbol, idea.entry.price if idea.entry else 0.0))
+        return EvidencePack(
+            idea_id=idea.idea_id,
+            trade_date=str(idea.as_of_date),
+            trade_idea=idea,
+            signal_context=None,
+            market_data=MarketDataSnapshot(
+                bars=[],
+                entry_price=float(idea.entry.price) if idea.entry and idea.entry.price else 0.0,
+                target_price=idea.target_price,
+                stop_loss_price=idea.stop_loss_price,
+                last_price=last_price,
+            ),
+        )
+
+    default_strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-20:released:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 20),
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+        ],
+    )
+    memory_store = MagicMock()
+    memory_store.summarize_context = AsyncMock(
+        return_value=MagicMock(
+            total_items=0,
+            by_type={},
+            recent_titles=[],
+            symbol_titles=[],
+            review_notes=[],
+            postmortem_notes=[],
+            strategy_adjustments=[],
+            success_case_titles=[],
+            failure_case_titles=[],
+        )
+    )
+    memory_store.list_recent = AsyncMock(return_value=[])
+    memory_store.append = AsyncMock(return_value=MagicMock(memory_id=uuid4()))
+    monkeypatch.setattr("src.agents.manager_agent.agent.session_scope", _mock_session_scope)
+    monkeypatch.setattr("src.db.session.session_scope", _mock_session_scope)
+    monkeypatch.setattr("src.agents.manager_agent.agent.TraderMemoryStore", MagicMock(return_value=memory_store))
+    monkeypatch.setattr("src.agents.manager_agent.agent.run_incremental_data_completion", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        "src.rule_pool.prediction.RulePoolPredictionService.predict_high_confidence_rules",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "src.strategy_library.service.StrategyLibraryService.get_current_released_version",
+        AsyncMock(return_value=default_strategy_version),
+    )
+    monkeypatch.setattr(ManagerAgent, "_generate_evidence_pack", _fake_generate_evidence_pack)
+
+
 # ============================================================================
 # 盘前链路测试
 # ============================================================================
@@ -61,9 +121,9 @@ async def _mock_session_scope():
 def pre_market_config(tmp_path: Path) -> AppConfig:
     """盘前链路测试配置"""
     return AppConfig(
-        storage=StorageConfig(output_dir=str(tmp_path / "data/processed/phase0")),
+        runtime=RuntimeConfig(output_dir=str(tmp_path / "data/processed/phase0")),
         data=DataConfig(mock_prices={"000001.SZ": 12.0, "600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -214,9 +274,9 @@ class TestPreMarketService:
 
         day = date(2026, 4, 24)
         config = AppConfig(
-            storage=StorageConfig(output_dir="/tmp/test"),
+            runtime=RuntimeConfig(output_dir="/tmp/test"),
             data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-            stage4=Stage4Config(enable=True),
+            pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
             traders=[
                 TraderConfig(
                     trader_id="trader_a",
@@ -295,7 +355,7 @@ class TestPreMarketService:
 def after_close_config(tmp_path: Path) -> AppConfig:
     """盘后链路测试配置"""
     return AppConfig(
-        storage=StorageConfig(output_dir=str(tmp_path / "data/processed/phase0")),
+        runtime=RuntimeConfig(output_dir=str(tmp_path / "data/processed/phase0")),
         data=DataConfig(mock_prices={"000001.SZ": 12.0, "600000.SH": 10.5}),
         traders=[
             TraderConfig(

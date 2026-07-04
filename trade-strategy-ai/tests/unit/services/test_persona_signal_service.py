@@ -51,7 +51,7 @@ def _write_basic_config(config_path: Path) -> None:
 	config_path.write_text(
 		"""
 timezone: Asia/Shanghai
-storage:
+runtime:
   output_dir: data/processed/phase0
 persona:
   clusters_path: data/processed/persona/clusters.sample.json
@@ -142,7 +142,8 @@ def test_signal_service_list_signals_prefers_database(tmp_path: Path) -> None:
 	assert result.payload["signals"][0]["context"]["trend"] == "up"
 
 
-def test_persona_service_build_sample_clusters(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_persona_service_build_sample_clusters(tmp_path: Path) -> None:
 	"""PersonaService 应支持生成样例 clusters 文件。"""
 	from src.services.persona_service import PersonaService
 
@@ -150,7 +151,7 @@ def test_persona_service_build_sample_clusters(tmp_path: Path) -> None:
 	_write_basic_config(config_path)
 
 	service = PersonaService()
-	result = service.build_sample_clusters(config_path=config_path)
+	result = await service.build_sample_clusters(config_path=config_path)
 
 	assert result.status == "ok"
 	assert Path(result.payload["clusters_path"]).exists()
@@ -158,7 +159,8 @@ def test_persona_service_build_sample_clusters(tmp_path: Path) -> None:
 	assert result.payload["clusters_count"] == 6
 
 
-def test_persona_service_build_market_state_from_csv(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_persona_service_build_market_state_from_csv(tmp_path: Path) -> None:
 	"""PersonaService 应支持从 benchmark CSV 构建 MarketState。"""
 	from src.services.persona_service import PersonaService
 
@@ -173,7 +175,7 @@ def test_persona_service_build_market_state_from_csv(tmp_path: Path) -> None:
 	csv_path.write_text("\n".join(rows), encoding="utf-8")
 
 	service = PersonaService()
-	result = service.build_market_state(
+	result = await service.build_market_state(
 		config_path=config_path,
 		benchmark_symbol="510300.SH",
 		as_of="2026-04-15",

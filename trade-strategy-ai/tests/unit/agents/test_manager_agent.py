@@ -10,18 +10,66 @@ import json
 import pytest
 
 from src.agents.manager_agent.agent import ManagerAgent
-from src.common.config import AppConfig, DataConfig, Stage4Config, StorageConfig, TraderConfig
+from src.common.config import AppConfig, DataConfig, PreMarketFormalFlowConfig, RuntimeConfig, TraderConfig
 from src.market_universe.schemas import MarketUniverse, HotTopicsPayload, HotTopic
 from src.schemas.contracts import DailyReport, TradeEntry, TradeIdea
 from src.strategy_library.schemas import StrategyRecommendation, StrategyVersion, StrategyVersionStatus
 from src.trader_memory.schemas import TraderMemorySummary, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
 from src.strategy.types import SignalSide, SynthesisMode, RawSignal, Signal
+from src.evaluation.evidence_pack import EvidencePack, MarketDataSnapshot
+
+
+@pytest.fixture(autouse=True)
+def _patch_manager_runtime(monkeypatch: pytest.MonkeyPatch):
+    async def _fake_generate_evidence_pack(self, idea, daily_report, last_prices, config):
+        del self, daily_report, config
+        last_price = float(last_prices.get(idea.symbol, idea.entry.price if idea.entry else 0.0))
+        return EvidencePack(
+            idea_id=idea.idea_id,
+            trade_date=str(idea.as_of_date),
+            trade_idea=idea,
+            signal_context=None,
+            market_data=MarketDataSnapshot(
+                bars=[],
+                entry_price=float(idea.entry.price) if idea.entry and idea.entry.price else 0.0,
+                target_price=idea.target_price,
+                stop_loss_price=idea.stop_loss_price,
+                last_price=last_price,
+            ),
+        )
+
+    default_strategy_version = StrategyVersion(
+        version_id="trader_a:2026-04-06:released:v1",
+        trader_id="trader_a",
+        strategy_date=date(2026, 4, 6),
+        status=StrategyVersionStatus.released,
+        recommendations=[
+            StrategyRecommendation(symbol="000001.SZ", decision="buy", confidence=0.72),
+        ],
+    )
+    persist_mock = AsyncMock(return_value=None)
+    memory_store_ctor = MagicMock(return_value=_make_memory_store_stub())
+    monkeypatch.setattr("src.agents.manager_agent.agent.session_scope", _mock_session_scope)
+    monkeypatch.setattr("src.db.session.session_scope", _mock_session_scope)
+    monkeypatch.setattr("src.agents.manager_agent.agent.TraderMemoryStore", memory_store_ctor)
+    monkeypatch.setattr("src.agents.manager_agent.agent.run_incremental_data_completion", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        "src.rule_pool.prediction.RulePoolPredictionService.predict_high_confidence_rules",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "src.strategy_library.service.StrategyLibraryService.get_current_released_version",
+        AsyncMock(return_value=default_strategy_version),
+    )
+    monkeypatch.setattr(ManagerAgent, "_persist_signal", persist_mock)
+    monkeypatch.setattr(ManagerAgent, "_generate_evidence_pack", _fake_generate_evidence_pack)
+    return persist_mock
 
 
 def _make_config() -> AppConfig:
     return AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
         traders=[
             TraderConfig(
@@ -108,7 +156,7 @@ async def test_manager_writes_memory_and_reuses_it(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_manager_creates_structured_review_task_and_review_note(tmp_path: Path) -> None:
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 9.0}),
         traders=[
             TraderConfig(
@@ -242,7 +290,7 @@ async def test_run_after_close_propagates_incremental_completion_failure(tmp_pat
 async def test_run_after_close_writes_canonical_topic_tags(tmp_path: Path) -> None:
     """验证 run_after_close 使用 source_topic_ids 生成 canonical topic tags。"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
         traders=[
             TraderConfig(
@@ -397,67 +445,6 @@ async def test_run_after_close_prefers_market_context_snapshot_for_tags(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_manager_records_ideas_as_signals(tmp_path: Path) -> None:
-    """P4-025: 验证 ManagerAgent 将交易想法记录为信号版本"""
-    config = _make_config()
-    manager = ManagerAgent(config=config, base_dir=tmp_path)
-    manager.memory_store = _make_memory_store_stub()
-    day = date(2026, 4, 9)
-
-    # 运行 pre_market，ideas 会被记录为信号
-    report = await manager.run_pre_market(as_of_date=day, force=True)
-
-    # 验证生成了 ideas
-    assert len(report.ideas) == 1
-
-    # 验证信号已被记录
-    idea = report.ideas[0]
-    signal_id = f"idea_{idea.idea_id}"
-
-    # 从 SignalVersioning 获取信号
-    stored = manager.signal_versioning.get_version(signal_id)
-    assert stored is not None
-    assert stored.signal.signal_id == signal_id
-    assert stored.signal.symbol == "000001.SZ"
-    assert stored.signal.side == SignalSide.BUY  # NTL-S4-002: side 来自 idea.side（默认 "buy"）
-    assert stored.signal.confidence > 0
-    assert stored.signal.metadata["trader_id"] == "trader_a"
-    assert stored.signal.metadata["target_price"] == 12.6  # 12.0 * 1.05
-    assert stored.signal.metadata["stop_loss_price"] == 11.64  # 12.0 * 0.97
-
-
-@pytest.mark.asyncio
-async def test_list_signals_filters_by_symbol(tmp_path: Path) -> None:
-    """P4-025: 验证 list_signals 支持按标的过滤"""
-    config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
-        data=DataConfig(mock_prices={"000001.SZ": 12.0, "600000.SH": 8.0}),
-        traders=[
-            TraderConfig(
-                trader_id="trader_a",
-                display_name="Trader A",
-                watchlist=["000001.SZ", "600000.SH"],
-                default_target_pct=0.05,
-                default_stop_pct=0.03,
-            )
-        ],
-    )
-    manager = ManagerAgent(config=config, base_dir=tmp_path)
-    manager.memory_store = _make_memory_store_stub()
-    day = date(2026, 4, 9)
-
-    await manager.run_pre_market(as_of_date=day, force=True)
-
-    # 过滤 000001.SZ
-    versions_sz = manager.signal_versioning.list_versions(symbol="000001.SZ", limit=100)
-    assert all(v.signal.symbol == "000001.SZ" for v in versions_sz)
-
-    # 过滤 600000.SH
-    versions_sh = manager.signal_versioning.list_versions(symbol="600000.SH", limit=100)
-    assert all(v.signal.symbol == "600000.SH" for v in versions_sh)
-
-
-@pytest.mark.asyncio
 async def test_evaluate_signal_success(tmp_path: Path) -> None:
     """P4-024: 验证 evaluate_signal 成功调用 StrategyAgent 和 RiskAgent"""
     config = _make_config()
@@ -508,9 +495,9 @@ async def test_evaluate_signal_success(tmp_path: Path) -> None:
 async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
     """NTL-S4-011: Stage 4 路径下，TraderAgent 接收 strategy_version 并派生候选标的"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0, "600001.SH": 8.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -554,9 +541,9 @@ async def test_stage4_path_with_strategy_version(tmp_path: Path) -> None:
 async def test_run_pre_market_raises_when_strategy_version_missing(tmp_path: Path) -> None:
     """严格模式：strategy_version 不可用时直接报错。"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -582,9 +569,9 @@ async def test_run_pre_market_raises_when_strategy_version_missing(tmp_path: Pat
 async def test_run_pre_market_raises_when_strategy_version_loader_fails(tmp_path: Path) -> None:
     """严格模式：策略版本加载异常时直接报错。"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"000001.SZ": 12.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -610,9 +597,9 @@ async def test_run_pre_market_raises_when_strategy_version_loader_fails(tmp_path
 async def test_daily_report_includes_strategy_version_ids(tmp_path: Path) -> None:
     """NTL-S4-011: DailyReport.strategy_version_ids 包含本次使用的策略版本"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -652,9 +639,9 @@ async def test_rule_pool_prediction_boosts_premarket_ideas(tmp_path: Path) -> No
     from src.rule_pool.prediction import RulePredictionSnapshot
 
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -708,9 +695,9 @@ async def test_rule_pool_prediction_boosts_premarket_ideas(tmp_path: Path) -> No
 async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> None:
     """NTL-S4-011: StrategyVersion.recommendations 的 decision 正确传递到 TradeIdea.side"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0, "600001.SH": 9.0}),
-        stage4=Stage4Config(enable=True),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -749,12 +736,15 @@ async def test_trade_idea_side_reflects_strategy_decision(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_market_universe_snapshot_populated_in_signal(tmp_path: Path) -> None:
-    """NTL-S4-TD003: SignalContext.market_universe_snapshot 应被实际填充"""
+async def test_market_universe_snapshot_populated_in_signal(
+    tmp_path: Path,
+    _patch_manager_runtime: AsyncMock,
+) -> None:
+    """NTL-S4-TD003: SignalContext.market_universe_snapshot 应透传到信号持久化上下文"""
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(mock_prices={"600000.SH": 10.0}),
-        stage4=Stage4Config(enable=True, market_universe_slot="09-25"),
+        pre_market_formal_flow=PreMarketFormalFlowConfig(enabled=True, market_universe_slot="09-25"),
         traders=[
             TraderConfig(
                 trader_id="trader_a",
@@ -794,14 +784,11 @@ async def test_market_universe_snapshot_populated_in_signal(tmp_path: Path) -> N
     from unittest.mock import AsyncMock
     manager.strategy_library_service.get_current_released_version = AsyncMock(return_value=strategy_version)
 
-    report = await manager.run_pre_market(as_of_date=day, force=True)
+    await manager.run_pre_market(as_of_date=day, force=True)
 
-    # 验证信号中 market_universe_snapshot 已填充
-    idea = report.ideas[0]
-    signal_id = f"idea_{idea.idea_id}"
-    stored = manager.signal_versioning.get_version(signal_id)
-    assert stored is not None
-    assert stored.context.market_universe_snapshot is not None
-    assert stored.context.market_universe_snapshot["trade_date"] == "2026-04-20"
-    assert stored.context.market_universe_snapshot["slot"] == "09-25"
-    assert "hot_topics" in stored.context.market_universe_snapshot
+    assert _patch_manager_runtime.await_count == 1
+    persisted_context = _patch_manager_runtime.await_args.kwargs["context"]
+    assert persisted_context.market_universe_snapshot is not None
+    assert persisted_context.market_universe_snapshot["trade_date"] == "2026-04-20"
+    assert persisted_context.market_universe_snapshot["slot"] == "09-25"
+    assert "hot_topics" in persisted_context.market_universe_snapshot

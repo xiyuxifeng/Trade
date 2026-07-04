@@ -9,7 +9,7 @@ from cli.main import app
 from scripts.seed_data import seed_project_data
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from src.common.config import AppConfig, CrawlConfig, CrawlSourceConfig, DataConfig, StorageConfig, TradeLogSourceConfig, TraderConfig
+from src.common.config import AppConfig, CrawlConfig, CrawlSourceConfig, DataConfig, RuntimeConfig, TradeLogSourceConfig, TraderConfig
 
 
 class _FakeArticleStats:
@@ -35,7 +35,7 @@ async def test_seed_project_data_discovers_articles_and_trade_logs(tmp_path: Pat
     trade_path.write_text("symbol,side,executed_at,quantity,price,account_id\n", encoding="utf-8")
 
     config = AppConfig(
-        storage=StorageConfig(output_dir="data/processed/phase0"),
+        runtime=RuntimeConfig(output_dir="data/processed/phase0"),
         data=DataConfig(),
         crawl=CrawlConfig(
             sources=[

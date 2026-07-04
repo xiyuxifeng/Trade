@@ -10,6 +10,16 @@ This document consolidates the product cleanup work around System Management int
 
 The tasks below intentionally avoid splitting the work too finely. Each task includes required scope, implementation notes, and validation expectations.
 
+## Final Status
+
+As of `POST-DELIVERY-CLOSEOUT-001`, all three cleanup tasks are accepted:
+
+- Task 1: System page layout shell foundation accepted.
+- Task 2: `/system/jobs` is the formal Job Management route family; legacy `/jobs` and `/jobs/:jobId` redirect to `/system/jobs` and `/system/jobs/:jobId`.
+- Task 3: `/system/runs` is Runs & Alerts, with summary, needs-attention, filter/load-more history, and viewer/operator/admin diagnostic visibility rules.
+
+Earlier problem statements in this document describe the pre-Task-2/3 state and are retained as historical rationale, not current behavior.
+
 ---
 
 ## Current Problems
@@ -26,9 +36,9 @@ The current page mixes formal business traces, E2E/repair artifacts, data fetch 
 
 The current API accepts only `limit`; the frontend currently requests a small recent set. There is no real pagination, status filtering, business-type filtering, or grouped overview.
 
-### 2. Job management exists but is not exposed as a formal system entry
+### 2. Job management existed but was not exposed as a formal system entry
 
-The backend already has job definition, creation, listing, detail, logs, timeline, artifacts, pause, resume, cancel, and retry APIs. The frontend also has legacy Job list/table/progress/control components. However, `/jobs` and `/jobs/:jobId` are compatibility routes that redirect to `/system/runs`, and `/system/runs` does not actually provide job management.
+The backend already had job definition, creation, listing, detail, logs, timeline, artifacts, pause, resume, cancel, and retry APIs. The frontend also had legacy Job list/table/progress/control components. Before Task 2, `/jobs` and `/jobs/:jobId` were compatibility routes that redirected to `/system/runs`, and `/system/runs` did not actually provide job management.
 
 Users need to freely start, pause, resume, cancel, retry, and inspect jobs. This needs a dedicated formal system entry.
 

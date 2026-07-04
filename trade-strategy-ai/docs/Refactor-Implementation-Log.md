@@ -27,16 +27,28 @@
 ## 当前状态
 
 - 当前 Stage：`Post-delivery hardening`
-- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED；RT-PERF-002 RT_PERF_002_ACCEPTED；RT-PERF-GATE-001 RT_PERF_GATE_001_ACCEPTED`
-- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`
+- Stage 状态：`Stage 12 Gate STAGE_12_GATE_ACCEPTED；RT-PERF-001 RT_PERF_001_ACCEPTED；RT-PERF-002 RT_PERF_002_ACCEPTED；RT-PERF-GATE-001 RT_PERF_GATE_001_ACCEPTED；Post-delivery Task 1/2/3 ACCEPTED`
+- 当前已接受 Task：`RT-S7-004 画像版本与时间分段`、`RT-S7-001 作者方法画像`、`RT-S7-002 作者规则画像`、`RT-S7-003 作者验证画像`、`RT-S8-001 策略草稿与发布`、`RT-S8-002 策略验证和回滚`、`RT-S8-003 策略优化建议`、`RT-S9-001 自动前置检查`、`RT-S9-002 每日规则选择`、`RT-S9-003 每日策略实例和盘前计划`、`RT-S10-001 信号结果评估`、`RT-S10-002 结构化归因`、`RT-S10-003 优化建议`、`RT-S10-004 盘后用户页面`、`RT-S11-001 系统管理入口`、`RT-S11-002 自动化和恢复`、`RT-S11-003 可观测性和运行追踪`、`RT-S11-004 成本与增量控制`、`RT-S11-005 数据时间语义`、`RT-S11-006 灰度迁移和回滚`、`RT-S11-007 用户友好错误`、`RT-S12-003 用户文档`、`POST-DELIVERY-HOTFIX System page layout shell foundation`、`POST-DELIVERY-TASK-2 Job Management Review, Repair, Formalization, and Lifecycle Validation`、`POST-DELIVERY-TASK-3 Runs & Alerts Cleanup, Pagination, and Page Simplification Rollout`
 - 当前已接受 Stage Bootstrap：`Stage 8 Bootstrap`、`Stage 9 Bootstrap`、`Stage 10 Bootstrap`、`Stage 11 Bootstrap`、`Stage 12 Bootstrap`
 - 当前阻塞 Task：无。`RT-S12-002` Browser E2E 已通过正式 UI/API 路径生成 separate final E2E chain；reference-chain records 未计为 final pass evidence。`RT-S12-003` 用户文档已接受。Stage 12 Gate fresh rerun 已重新验证当前设备环境，DB current/head 一致且 Browser E2E 通过。`RT-PERF-001` 和 `RT-PERF-002` 是 Stage 12 accepted 后的 post-delivery hardening，不改变 Stage 12 frozen contract。`RT-PERF-GATE-001` 已完成小规模真实 DB smoke、targeted `/rules/backtests` batch E2E、bounded fix 和回归验证。
 - 当前边界：[RT-S12-002 reference-chain boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) 已冻结：repair/reference chain 只能作为 pre-E2E smoke/contract evidence，Browser E2E Acceptance 必须通过正式入口生成或 lifecycle-transition 一套 separate final E2E chain，并记录新对象 ID 或新 audit/lifecycle transition。
 - 当前计划：[Stage 12 实施计划](refactor-implementation-plans/stage-12-implementation-plan.md)
 - 详细日志：[Stage 12](refactor-implementation-logs/stage-12.md)
-- 下一步：真实业务小批次观察耗时；如仍然太慢，单独立项 Backtest Performance Instrumentation；只有在仍然太慢且 instrumentation 证据支持时，单独评估 Parallel Rule Executor。
+- 下一步：无。Stage 12 和 post-delivery cleanup line 已完成；不得自动开始任何新 Stage、后续重构任务、性能任务或额外交付。真实业务小批次性能观察仅作为非阻塞运行观察，不是当前可执行任务；如用户后续明确授权，再单独立项。
 
 ## 当前实施记录
+
+- Task ID: `POST-DELIVERY-CLOSEOUT-001 Documentation Consistency and Final Verification Review`
+- 状态: `已完成`
+- 修改范围: post-delivery cleanup line 文档一致性复核；`docs/Refactor-Implementation-Log.md` 当前状态、accepted task list、下一步和残余风险分类；`docs/refactor-implementation-logs/stage-12.md` Current Snapshot、closeout 记录和残余风险分类；`docs/system-jobs-runs-page-cleanup-plan.md` Final Status 和历史问题表述。
+- 关键设计决定: 本 closeout 不启动新 Stage、不创建新功能任务、不改变 Stage 12 accepted contracts；仅把 Task 1/2/3 已接受、`/system/jobs` 与 `/system/runs` 路由所有权、残余风险和“无下一可执行项”写成一致事实。
+- 数据库迁移: 无。
+- 兼容处理: 无代码兼容变更；`/system/jobs` 继续是正式 Job Management，`/system/runs` 继续是 Runs & Alerts，legacy `/jobs` 继续兼容重定向到 `/system/jobs`。
+- 已运行测试: closeout focused docs consistency review；`git diff --check`。
+- 测试结果: 文档复核发现 root log 与 Stage 12 snapshot 状态摘要不一致、cleanup plan pre-Task-2 wording 易被误读为当前行为，并已修正；`git diff --check` passed。
+- 未完成项: 未运行 backend/frontend focused suites 和 frontend typecheck；本 closeout 仅修改文档状态记录，未修改运行时、API、测试或类型定义。
+- 已知风险: Task 2 heavy/external-provider job live execution 仍为 contract/documented coverage；Task 3 未新增 `/system/runs` Playwright/E2E；Task 1 deferred 非 workflow 页面仍需未来显式授权逐页迁移。这些均分类为非阻塞，不自动生成下一实现任务。
+- 验收结论: `已完成`。Task 1/2/3 均记录为 accepted；root log、Stage 12 log、cleanup plan、migration matrix 和管理员文档对 `/system/jobs`、`/system/runs`、legacy `/jobs` redirect、diagnostics visibility 和 no-auto-next-task 结论一致。
 
 - Task ID: `POST-DELIVERY-TASK-3 Runs & Alerts Cleanup, Pagination, and Page Simplification Rollout`
 - 状态: `已完成`
@@ -312,8 +324,14 @@
 - Stage 12 Bootstrap 已于 2026-06-23 `READY`；`RT-S12-001` 已于 2026-06-23 `ACCEPTED`。
 - RT-S12-002 reference chain 已完成 pre-E2E smoke/contract evidence；Browser E2E 已生成 separate final E2E chain，reference-chain records 未计为 final pass evidence。
 - RT-S12-003 用户文档已接受；Stage 12 Gate fresh rerun 已于 2026-06-30 `STAGE_12_GATE_ACCEPTED`。
+- Post-delivery Task 1/2/3 已接受；`/system/jobs` 与 `/system/runs` 路由所有权已冻结并完成 closeout 一致性复核。
 - legacy compatibility source / admin diagnostics / historical docs 仍包含 internal terms；普通用户正式入口不得暴露 legacy main entries。
 - UI 视觉一致性、非关键响应式细节和文案润色进入 backlog，不阻塞 Stage 12 final acceptance。
+- Task 1 residual: deferred 非 workflow 页面仍保持旧 shell。分类：非阻塞；只有用户明确授权逐页迁移时才成为新任务。
+- Task 2 residual: heavy/external-provider job types 未逐一 live-execute。分类：非阻塞；当前以 registry/contract tests 和 coverage matrix 作为验收证据，若需实盘级信心应单独授权运行环境和 live-provider 验证任务。
+- Task 2 residual: broader legacy/internal terminology retirement 不在 Task 2 范围。分类：非阻塞；不得自动扩大到新退役任务。
+- Task 3 residual: 未新增 `/system/runs` Playwright/E2E。分类：非阻塞；focused service/router/page tests 已作为替代证据，浏览器级覆盖需用户另行授权。
+- Post-delivery cleanup line 当前无阻塞风险，无隐藏下一实现任务。
 
 ## Task 状态索引
 
@@ -373,6 +391,10 @@
 | RT-S12-001 | `[x]` | old-entry route retirement and ordinary-user terminology blocker repair 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 | RT-S12-002 | `[x]` | Browser E2E Acceptance 已通过正式 UI/API 路径生成 separate final E2E chain；reference chain 未计为 final pass evidence | [Stage 12](refactor-implementation-logs/stage-12.md) / [Browser E2E](refactor-implementation-logs/rt-s12-002-browser-e2e.md) / [Boundary](refactor-implementation-logs/rt-s12-002-reference-chain-boundary.md) |
 | RT-S12-003 | `[x]` | 用户文档、管理员文档和部署与运行手册已接受；匹配 Stage 12 final UI / route/navigation 与 RT-S12-002 final E2E 路径 | [Stage 12](refactor-implementation-logs/stage-12.md) |
+| POST-DELIVERY-HOTFIX System page layout shell foundation | `[x]` | Task 1 页面壳层 foundation、layout matrix 和保守页面迁移已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) / [cleanup plan](system-jobs-runs-page-cleanup-plan.md) |
+| POST-DELIVERY-TASK-2 Job Management | `[x]` | `/system/jobs` 正式 Job Management、legacy `/jobs` redirect、lifecycle/progress/control 修复和 coverage matrix 已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) / [cleanup plan](system-jobs-runs-page-cleanup-plan.md) |
+| POST-DELIVERY-TASK-3 Runs & Alerts cleanup | `[x]` | `/system/runs` 正式 Runs & Alerts、filter/load-more、viewer/operator diagnostics visibility 和页面简化已接受 | [Stage 12](refactor-implementation-logs/stage-12.md) / [cleanup plan](system-jobs-runs-page-cleanup-plan.md) |
+| POST-DELIVERY-CLOSEOUT-001 | `[x]` | Documentation consistency and final verification review accepted；无自动下一任务 | [Stage 12](refactor-implementation-logs/stage-12.md) |
 
 ## Stage 状态索引
 

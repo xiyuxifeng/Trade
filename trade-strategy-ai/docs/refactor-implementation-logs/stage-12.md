@@ -3,11 +3,55 @@
 ## Current Snapshot
 
 - Stage：`Stage 12 旧入口退役与最终交付`
-- 当前活动：`Stage 12 Gate`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_ACCEPTED`；`Post-delivery Task 2 Job Management formalization ACCEPTED`
-- 当前 Task：Stage 12 Gate fresh rerun 已完成；当前设备环境重新验证通过，DB current/head 一致，Browser E2E 通过。
+- 当前活动：`Post-delivery cleanup closeout`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_ACCEPTED`；`Post-delivery Task 1 System page shell foundation ACCEPTED`；`Post-delivery Task 2 Job Management formalization ACCEPTED`；`Post-delivery Task 3 Runs & Alerts cleanup ACCEPTED`
+- 当前 Task：`POST-DELIVERY-CLOSEOUT-001` 已完成文档一致性和最终验证复核；未启动新 Stage 或新功能任务。
 - 下一可执行项：无。Stage 12 已完成；不得自动开始任何新 Stage 或后续重构任务。
 - 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
+
+## 2026-07-04 POST-DELIVERY-CLOSEOUT-001 Documentation Consistency and Final Verification Review
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 复核 Task 1、Task 2、Task 3 是否均已记录为 accepted。
+- 复核 root implementation log 与 Stage 12 log 对当前状态、accepted post-delivery tasks、下一可执行项和残余风险是否一致。
+- 复核 cleanup plan、migration matrix 和管理员文档对 `/system/jobs`、`/system/runs`、legacy `/jobs` redirect 和 diagnostics visibility 的描述。
+- 不启动新 Stage、不新建功能任务、不改变 Stage 12 accepted contracts。
+
+### Findings and fixes
+
+- Root implementation log 已记录 Task 3 为当前实施记录，但 accepted task list 和 Stage 状态摘要未显式列出 post-delivery Task 1/2/3；已补齐。
+- Stage 12 Current Snapshot 已有 Task 3 accepted section，但摘要行仍停留在 Task 2；已更新为 Task 1/2/3 全部 accepted。
+- Root implementation log 的“下一步”仍指向前序性能观察；已改为无下一可执行项，性能观察仅为非阻塞运行观察，需用户另行授权才可立项。
+- Cleanup plan、migration matrix 和管理员文档均确认：`/system/jobs` 是正式 Job Management，`/system/runs` 是 Runs & Alerts，legacy `/jobs` routes redirect 到 `/system/jobs`，viewer 默认不看 raw diagnostics，operator/admin 可展开诊断。
+- 本日志较早的 Stage 12 历史记录中 `/jobs -> /system/runs` 属于 Task 2 之前的已退役状态；当前事实以本 closeout、Task 2/3 记录、cleanup plan Final Status 和 migration matrix 为准。
+
+### Residual risk classification
+
+- Task 1 deferred 非 workflow 页面仍保持旧 shell。分类：非阻塞；不得自动启动逐页迁移。
+- Task 2 heavy/external-provider job types 未全部 live-execute。分类：非阻塞；当前验收证据为 registry/contract tests 和 coverage matrix，live-provider 验证需单独授权。
+- Task 2 broader legacy/internal terminology retirement 不在本任务范围。分类：非阻塞；不得自动扩大范围。
+- Task 3 未新增 `/system/runs` Playwright/E2E。分类：非阻塞；focused backend service/router tests 和 frontend page/API/layout tests 是当前替代证据。
+- 未发现需要立即 code fix 的 blocker；未发现需要启动新 Stage 或新实现任务的隐藏前置项。
+
+### Verification
+
+- Focused docs consistency review:
+  - `docs/Refactor-Implementation-Log.md`
+  - `docs/refactor-implementation-logs/stage-12.md`
+  - `docs/system-jobs-runs-page-cleanup-plan.md`
+  - `docs/stage-12-user-docs/Admin-Operations-Guide.md`
+  - `docs/Refactor-Migration-Matrix.md`
+- `git diff --check`
+  - result: passed
+
+### Acceptance
+
+`ACCEPTED`。Post-delivery cleanup line 已完成 closeout：Task 1/2/3 均为 accepted，`/system/jobs` 和 `/system/runs` 所有权无歧义，残余风险均为非阻塞或需另行授权的后续工作，当前没有自动下一实现任务。
 
 ## 2026-07-04 Post-delivery Task 3 Runs & Alerts cleanup and page simplification
 

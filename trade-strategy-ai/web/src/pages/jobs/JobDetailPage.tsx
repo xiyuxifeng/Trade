@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -15,7 +15,7 @@ import { JobProgress } from '@/components/jobs/JobProgress';
 import { JobControls } from '@/components/jobs/JobControls';
 import { useAuth } from '@/features/auth/auth-context';
 import { buildErrorRecoveryState } from '@/lib/error-recovery';
-import { cancelJob, createJob, getJob, getJobDefinition, getJobLogs, pauseJob, resumeJob, retryJob } from '@/lib/api/jobs';
+import { cancelJob, getJob, getJobDefinition, getJobLogs, pauseJob, resumeJob, retryJob } from '@/lib/api/jobs';
 import type { JobDefinitionSummary, JobRecord, JobDetailResponse } from '@/types/jobs';
 import type { StepTimelineItem } from '@/types/job';
 
@@ -96,41 +96,12 @@ export function JobDetailPage() {
     staleTime: 60_000,
   });
   const jobDefinition = jobDefinitionQuery.data ?? null;
-  const [rerunError, setRerunError] = useState<string | null>(null);
 
   const logsQuery = useQuery({
     queryKey: ['job-logs', jobId],
     queryFn: () => getJobLogs(jobId),
     enabled: Boolean(jobId) && Boolean(detail),
     refetchInterval: detail?.status === 'running' || detail?.status === 'pending' ? 5000 : false,
-  });
-
-  const rerunMutation = useMutation({
-    mutationFn: async () => {
-      if (!detail) {
-        throw new Error('No job selected');
-      }
-      setRerunError(null);
-      return createJob({
-        job_type: detail.job_type,
-        params: detail.params as Record<string, unknown>,
-        created_by: 'web',
-        max_retries: detail.max_retries,
-        retry_backoff_seconds: detail.retry_backoff_seconds,
-        timeout_seconds: detail.timeout_seconds,
-      });
-    },
-    onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
-      await queryClient.invalidateQueries({ queryKey: ['job-detail', jobId] });
-      await queryClient.invalidateQueries({ queryKey: ['job-logs', jobId] });
-      if (data.job?.id) {
-        navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
-      }
-    },
-    onError: (error) => {
-      setRerunError(error instanceof Error ? error.message : '重新运行任务失败');
-    },
   });
 
   const cancelMutation = useMutation({
@@ -182,8 +153,8 @@ export function JobDetailPage() {
           category="validation error"
           title="任务详情参数缺失"
           description="缺少任务 ID，无法打开详情页。"
-          suggestion="请从任务列表重新打开一个 Job 详情。"
-          actions={[{ label: '返回任务列表', to: '/jobs' }]}
+          suggestion="请从任务列表重新打开一个任务详情。"
+          actions={[{ label: '返回任务管理', to: '/system/jobs' }]}
         />
       </main>
     );
@@ -222,8 +193,8 @@ export function JobDetailPage() {
           category="data empty"
           title="任务不存在"
           description="无法读取任务详情。"
-          suggestion="请返回任务列表重新选择一个 Job。"
-          actions={[{ label: '返回任务列表', to: '/jobs' }]}
+          suggestion="请返回任务列表重新选择一个任务。"
+          actions={[{ label: '返回任务管理', to: '/system/jobs' }]}
         />
       </main>
     );
@@ -234,15 +205,15 @@ export function JobDetailPage() {
   return (
     <main className="page-stack">
       <PageHeader
-        kicker="任务"
+        kicker="系统任务"
         title="任务详情"
         description="查看任务输入、执行过程、结果、失败原因、产物和配置快照。"
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" onClick={() => navigate('/jobs')}>
+        <Button variant="outline" onClick={() => navigate('/system/jobs')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          返回任务列表
+          返回任务管理
         </Button>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -254,9 +225,6 @@ export function JobDetailPage() {
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             {runningRefresh ? '自动刷新中' : '刷新'}
-          </Button>
-          <Button variant="secondary" onClick={() => rerunMutation.mutate()} disabled={rerunMutation.isPending || !canOperateJobs}>
-            {rerunMutation.isPending ? '重新运行中' : '重新运行任务'}
           </Button>
           <JobControls
             status={detail.status}
@@ -274,12 +242,6 @@ export function JobDetailPage() {
         </div>
       </div>
 
-      {rerunError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          {rerunError}
-        </div>
-      ) : null}
-
       {runningRefresh ? (
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
           任务仍在运行，页面会自动刷新状态。
@@ -289,8 +251,8 @@ export function JobDetailPage() {
       <section className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         <div className="min-w-0 space-y-6">
           <SectionCard
-            title={`${detail.job_type}`}
-            description={detail.id}
+            title={jobDefinition?.title ?? detail.job_type}
+            description={`任务编号 ${detail.id}`}
             action={<StatusBadge value={detail.status} />}
           >
             <div className="grid gap-3 md:grid-cols-3">
@@ -303,12 +265,15 @@ export function JobDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="参数快照" description="展示任务提交时的参数、关联 Profile 和配置快照。">
+          <SectionCard title="任务输入与结果" description="默认显示摘要；高级详情用于排查参数、结果和关联快照。">
             <div className="grid gap-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <JsonViewer value={detail.params} title="参数" />
-                <JsonViewer value={detail.result} title="执行结果" />
-              </div>
+              <details className="rounded-xl border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-sm font-medium text-slate-900">展开高级参数和结果</summary>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <JsonViewer value={detail.params} title="参数" />
+                  <JsonViewer value={detail.result} title="执行结果" />
+                </div>
+              </details>
               {detail.progress ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">步骤进度</p>
@@ -375,8 +340,8 @@ export function JobDetailPage() {
             {errorObject ? (
               <ErrorState
                 {...buildErrorRecoveryState(errorObject, 'job-detail')}
-                onRetry={canOperateJobs ? () => rerunMutation.mutate() : undefined}
-                retryLabel="重新运行"
+                onRetry={canOperateJobs && jobDefinition?.can_retry && detail.status === 'failed' ? () => retryMutation.mutate() : undefined}
+                retryLabel="重试任务"
               />
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">暂无错误。</div>

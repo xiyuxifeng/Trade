@@ -160,7 +160,7 @@ export function MarketPage() {
       primaryLabel: '打开快照页',
       primaryHref: '/market/snapshots',
       secondaryLinks: [
-        { label: '查看市场上下文构建任务', href: '/jobs?job_type=snapshot-build' },
+        { label: '查看市场上下文构建任务', href: '/system/jobs?job_type=snapshot-build' },
         { label: '查看市场上下文产物', href: '/artifacts?jobType=snapshot-build&source=market-snapshot-browser' },
       ],
     },
@@ -185,7 +185,7 @@ export function MarketPage() {
       primaryLabel: '前往 OHLCV 页面',
       primaryHref: '/market/ohlcv',
       secondaryLinks: [
-        { label: '查看 OHLCV 任务', href: '/jobs?job_type=ohlcv-crawl' },
+        { label: '查看 OHLCV 任务', href: '/system/jobs?job_type=ohlcv-crawl' },
         { label: '查看 OHLCV 产物', href: '/artifacts?jobType=ohlcv-crawl' },
       ],
     },
@@ -295,7 +295,7 @@ export function MarketPage() {
         <SectionCard
           title="最近失败任务"
           description="仅显示最需要处理的市场相关失败任务。"
-          action={<Link className="text-sm font-medium text-sky-700 hover:underline" to="/jobs?status=failed">查看任务中心</Link>}
+          action={<Link className="text-sm font-medium text-sky-700 hover:underline" to="/system/jobs?status=failed">查看任务中心</Link>}
         >
           {jobsLoading ? (
             <LoadingState label="正在加载最近任务" description="稍后会显示最近提交的市场任务和执行结果。" />
@@ -313,7 +313,7 @@ export function MarketPage() {
                   <p className="font-medium text-slate-900">{job.job_type}</p>
                   <p className="mt-1 text-sm text-slate-600">{typeof job.error === 'string' ? job.error : job.error?.message ?? '任务失败'}</p>
                   <div className="mt-3 flex items-center gap-3">
-                    <Link className="text-sm font-medium text-sky-700 hover:underline" to={`/jobs/${job.id}`}>
+                    <Link className="text-sm font-medium text-sky-700 hover:underline" to={`/system/jobs/${job.id}`}>
                       查看 Job 详情
                     </Link>
                   </div>

@@ -161,7 +161,7 @@ export function ProfileSnapshotPage() {
                 <CardDescription className="text-slate-600">可以继续跳回任务详情查看上下文。</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate(`/jobs/${encodeURIComponent(snapshot.job_id as string)}`)}>
+                <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate(`/system/jobs/${encodeURIComponent(snapshot.job_id as string)}`)}>
                   查看关联任务 <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>

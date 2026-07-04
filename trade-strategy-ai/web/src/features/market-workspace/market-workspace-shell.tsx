@@ -586,7 +586,7 @@ function MarketWorkspaceShellInner({ mode = 'all' }: MarketWorkspaceShellProps) 
               {submissionJobId ? (
                 <a
                   className="inline-flex h-10 items-center justify-center rounded-lg border border-sky-200 bg-white px-4 text-sm font-medium text-sky-800 transition-colors hover:bg-sky-50"
-                  href={`/jobs/${submissionJobId}`}
+                  href={`/system/jobs/${submissionJobId}`}
                 >
                   打开 Job 详情
                 </a>

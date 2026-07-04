@@ -85,7 +85,7 @@ export function MarketSnapshotBrowserDetail({
       )}`;
   const fallbackArtifactLink = `/artifacts?jobType=snapshot-build&date=${tradeDate}&source=market-snapshot-browser`;
   const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : fallbackArtifactLink;
-  const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : '/jobs';
+  const jobLink = sourceJobId ? `/system/jobs/${encodeURIComponent(sourceJobId)}` : '/system/jobs';
   const errorState = error ? buildErrorRecoveryState(error, 'market') : null;
   const qualityReport = quality?.quality_report as Record<string, unknown> | null | undefined;
   const qualityStatus = typeof qualityReport?.overall_status === 'string' ? qualityReport.overall_status : selectedSnapshot?.quality_status ?? 'unknown';

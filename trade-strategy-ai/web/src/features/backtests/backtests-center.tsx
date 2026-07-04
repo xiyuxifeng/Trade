@@ -417,7 +417,7 @@ export function BacktestsCenter() {
         title="回测与画像"
         description="浏览回测结果，提交规则验证和复现性检查，并查看画像相关结果。"
         actionLabel="打开任务"
-        onAction={() => navigate('/jobs')}
+        onAction={() => navigate('/system/jobs')}
       />
 
       <section className="grid gap-6 xl:grid-cols-[minmax(360px,0.92fr)_minmax(0,1.08fr)]">
@@ -554,7 +554,7 @@ export function BacktestsCenter() {
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
                   任务 {submittedJobType} 已提交: {submittedJobId}
                   <div className="mt-3">
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(submittedJobId)}`)}>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/system/jobs/${encodeURIComponent(submittedJobId)}`)}>
                       在任务中心查看
                     </Button>
                   </div>

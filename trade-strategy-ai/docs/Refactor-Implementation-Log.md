@@ -38,6 +38,18 @@
 
 ## 当前实施记录
 
+- Task ID: `POST-DELIVERY-TASK-2 Job Management Review, Repair, Formalization, and Lifecycle Validation`
+- 状态: `已完成`
+- 修改范围: `/system/jobs` 路由、Job API validate、JobService 生命周期控制和进度规范化、JobRegistry 控制定义、Job list/detail/new 前端页面、系统管理入口、业务页任务链接、Job contract/worker/frontend tests、系统管理和迁移文档。
+- 关键设计决定: `/system/jobs` 成为正式 Job Management 入口；`/system/runs` 保持运行与告警，不承载任务控制；旧 `/jobs` 和 `/jobs/:jobId` 仅作为兼容重定向；普通业务页继续通过中文业务动作创建任务并链接到正式任务管理；高级创建入口仅面向 operator/admin。
+- 数据库迁移: 无。
+- 兼容处理: Job 数据和原 API path 保持；前端兼容路由重定向；不删除 legacy route；不改变 `/system/runs` 设计。
+- 已运行测试: targeted backend RED/GREEN tests；Job registry contract test；focused frontend jobs/route/progress tests；focused backend aggregate；frontend typecheck；Python py_compile；legacy `/jobs` direct-link scan；`git diff --check`。
+- 测试结果: `test_update_job_progress_bounds_percent_and_remaining` and `test_job_controls_reject_unsupported_actions_and_retry_limits` first failed then passed；registry contract `1 passed`；frontend focused `23 passed`；backend aggregate `80 passed`；frontend `pnpm typecheck` passed；`py_compile` passed；legacy direct `/jobs` link scan found no matches；`git diff --check` passed.
+- 未完成项: 无。
+- 已知风险: heavy/external-provider job types are contract-tested and documented rather than fully live-executed; broader legacy/internal terminology retirement remains outside this Task 2 scope.
+- 验收结论: `已完成`。`/system/jobs` is the formal Job Management entry, legacy `/jobs` routes redirect to `/system/jobs`, lifecycle/progress/control bugs found during audit were fixed or documented as non-blocking, every registered job type appears in the coverage matrix, and `/system/runs` was not redesigned.
+
 - Task ID: `POST-DELIVERY-HOTFIX System page layout shell foundation`
 - 状态: `已完成`
 - 修改范围: `web/src/components/layout/business-page-shell.tsx`、`web/src/components/layout/product-page-adapter.tsx`、`web/src/pages/research/index.tsx`、`web/src/pages/authors/index.tsx`、`web/src/pages/system/index.tsx`、相关 frontend tests、`docs/system-jobs-runs-page-cleanup-plan.md`、`docs/refactor-implementation-logs/stage-12.md`

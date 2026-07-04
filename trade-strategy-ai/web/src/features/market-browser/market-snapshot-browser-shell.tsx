@@ -195,7 +195,7 @@ export function MarketSnapshotBrowserShell() {
     ? `/artifacts?jobType=snapshot-build&date=${encodeURIComponent(appliedTradeDate)}&source=market-snapshot-browser`
     : '/artifacts?jobType=snapshot-build&source=market-snapshot-browser';
   const snapshotBuildLink = '/strategies/pre-market';
-  const snapshotJobLink = '/jobs?job_type=snapshot-build';
+  const snapshotJobLink = '/system/jobs?job_type=snapshot-build';
 
   const selectedDetail: MarketSnapshotDetailResponse | null = detail;
   const regimeDetail: MarketRegimeDetailResponse | null = regimeDetailQuery.data ?? null;

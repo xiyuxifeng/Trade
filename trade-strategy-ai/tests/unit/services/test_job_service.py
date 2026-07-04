@@ -188,6 +188,44 @@ def test_update_job_progress_persists_and_serializes(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_update_job_progress_bounds_percent_and_remaining(tmp_path: Path) -> None:
+    """Job progress stored for UI must be bounded and internally consistent."""
+    service, engine = _build_job_service(tmp_path)
+
+    created = asyncio.run(service.create_job(job_type="backtest-run", params={}, created_by="web"))
+    job_id = created.payload["job"]["id"]
+
+    updated = asyncio.run(
+        service.update_job_progress(
+            job_id=job_id,
+            progress={
+                "job_type": "backtest-run",
+                "stage": "run",
+                "current": 12,
+                "total": 10,
+                "percent": 250,
+                "remaining": -5,
+                "sub_current": -2,
+                "sub_total": 4,
+                "sub_percent": -20,
+                "status": "running",
+            },
+        )
+    )
+
+    progress = updated.payload["job"]["progress"]
+    assert progress["current"] == 10
+    assert progress["total"] == 10
+    assert progress["percent"] == 100
+    assert progress["remaining"] == 0
+    assert progress["sub_current"] == 0
+    assert progress["sub_total"] == 4
+    assert progress["sub_percent"] == 0
+    assert progress["updated_at"] is not None
+
+    asyncio.run(engine.dispose())
+
+
 def test_create_stage5_raw_data_job_is_compatibility_only(tmp_path: Path) -> None:
     """低层 JobService 不得绕过正式系统数据入口创建原始 Stage 5 数据 job。"""
     service, engine = _build_job_service(tmp_path)
@@ -200,11 +238,39 @@ def test_create_stage5_raw_data_job_is_compatibility_only(tmp_path: Path) -> Non
     asyncio.run(engine.dispose())
 
 
+def test_job_controls_reject_unsupported_actions_and_retry_limits(tmp_path: Path) -> None:
+    """Service-level lifecycle controls must match job definition support flags."""
+    service, engine = _build_job_service(tmp_path)
+
+    no_pause = asyncio.run(service.create_job(job_type="run-pre-market", params={}, created_by="web"))
+    no_pause_id = no_pause.payload["job"]["id"]
+    pause_result = asyncio.run(service.pause_job(job_id=no_pause_id, actor="web", reason="check"))
+
+    no_retry = asyncio.run(service.create_job(job_type="candidate-review", params={}, created_by="web", max_retries=1))
+    no_retry_id = no_retry.payload["job"]["id"]
+    asyncio.run(service.fail_job(job_id=no_retry_id, error="boom", increment_retry=False))
+    retry_unsupported = asyncio.run(service.retry_job(job_id=no_retry_id, actor="web"))
+
+    limited = asyncio.run(service.create_job(job_type="backtest-run", params={}, created_by="web", max_retries=1))
+    limited_id = limited.payload["job"]["id"]
+    asyncio.run(service.fail_job(job_id=limited_id, error="boom", increment_retry=True))
+    retry_limited = asyncio.run(service.retry_job(job_id=limited_id, actor="web"))
+
+    assert pause_result.status == "error"
+    assert "does not support pause" in (pause_result.message or "")
+    assert retry_unsupported.status == "error"
+    assert "does not support retry" in (retry_unsupported.message or "")
+    assert retry_limited.status == "error"
+    assert "retry limit reached" in (retry_limited.message or "")
+
+    asyncio.run(engine.dispose())
+
+
 def test_serialize_job_includes_runtime_state(tmp_path: Path) -> None:
     """Job 详情序列化应透出 runtime_state，供 pause/resume checkpoint 使用。"""
     service, engine = _build_job_service(tmp_path)
 
-    created = asyncio.run(service.create_job(job_type="pipeline-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    created = asyncio.run(service.create_job(job_type="backtest-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
     job_id = created.payload["job"]["id"]
 
     async def _set_runtime_state() -> None:
@@ -380,7 +446,7 @@ def test_job_pause_resume_and_retry_flow(tmp_path: Path) -> None:
     """JobService 应支持暂停、恢复和错误重试。"""
     service, engine = _build_job_service(tmp_path)
 
-    created = asyncio.run(service.create_job(job_type="pipeline-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
+    created = asyncio.run(service.create_job(job_type="backtest-run", params={"symbols": ["000001.SZ"]}, created_by="web"))
     job_id = created.payload["job"]["id"]
 
     paused = asyncio.run(service.pause_job(job_id=job_id, actor="web", reason="need to wait"))

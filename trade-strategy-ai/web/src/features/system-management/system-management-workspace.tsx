@@ -514,7 +514,7 @@ export function DatabaseMigrationSection() {
       setErrorMessage(null);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       if (data.job?.id) {
-        navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
+        navigate(`/system/jobs/${encodeURIComponent(data.job.id)}`);
       }
     },
     onError: (error: unknown) => {
@@ -663,7 +663,7 @@ export function BackupManagementSection() {
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       await queryClient.invalidateQueries({ queryKey: ['system-backups'] });
       if (data.job?.id) {
-        navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
+        navigate(`/system/jobs/${encodeURIComponent(data.job.id)}`);
       }
     },
     onError: (error: unknown) => {
@@ -697,7 +697,7 @@ export function BackupManagementSection() {
       setRestoreConfirmOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
       if (data.job?.id) {
-        navigate(`/jobs/${encodeURIComponent(data.job.id)}`);
+        navigate(`/system/jobs/${encodeURIComponent(data.job.id)}`);
       }
     },
     onError: (error: unknown) => {

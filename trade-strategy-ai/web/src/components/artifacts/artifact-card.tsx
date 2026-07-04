@@ -64,7 +64,7 @@ export function ArtifactCard({
           {artifact.job_id ? (
             <Link
               className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-transparent px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40"
-              to={`/jobs/${artifact.job_id}`}
+              to={`/system/jobs/${artifact.job_id}`}
             >
               查看来源 Job
             </Link>

@@ -232,7 +232,7 @@ export function ProfileDetailPage() {
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
               {linkedJobs.length ? (
                 linkedJobs.map((job) => (
-                  <LinkedJobCard key={job.job_id} job={job} onOpen={() => navigate(`/jobs/${encodeURIComponent(job.job_id)}`)} />
+                  <LinkedJobCard key={job.job_id} job={job} onOpen={() => navigate(`/system/jobs/${encodeURIComponent(job.job_id)}`)} />
                 ))
               ) : (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">暂无关联任务。</div>

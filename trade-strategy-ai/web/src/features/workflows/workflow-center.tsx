@@ -442,7 +442,7 @@ export function WorkflowCenter() {
                     <TabsContent value="run">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
                         <WorkflowParameterForm
-                          onSubmitted={(jobId) => navigate(`/jobs/${encodeURIComponent(jobId)}`)}
+                          onSubmitted={(jobId) => navigate(`/system/jobs/${encodeURIComponent(jobId)}`)}
                           workflow={selectedWorkflow}
                         />
 

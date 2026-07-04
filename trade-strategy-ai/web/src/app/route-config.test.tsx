@@ -19,8 +19,8 @@ const expectedLegacyMetadata = {
   '/login': ['/login', 'notice', '长期保留', false, 'canonical'],
   '/': ['/', 'notice', '长期保留', false, 'canonical'],
   '/dashboard': ['/', 'redirect', 'Stage 1', true, 'compat'],
-  '/jobs': ['/system/runs', 'redirect', 'Stage 12', true, 'compat'],
-  '/jobs/:jobId': ['/system/runs', 'redirect', 'Stage 12', true, 'compat'],
+  '/jobs': ['/system/jobs', 'redirect', 'Post-delivery Task 2', true, 'compat'],
+  '/jobs/:jobId': ['/system/jobs/:jobId', 'redirect', 'Post-delivery Task 2', true, 'compat'],
   '/profiles': ['/system/configuration', 'redirect', 'Stage 11', true, 'compat'],
   '/profiles/import': ['/system/configuration', 'redirect', 'Stage 11', true, 'compat'],
   '/profiles/:profileId': ['/system/configuration', 'redirect', 'Stage 12', true, 'compat'],
@@ -151,6 +151,9 @@ describe('route config', () => {
       '/system/status',
       '/system/configuration',
       '/system/data',
+      '/system/jobs',
+      '/system/jobs/:jobId',
+      '/system/jobs/new',
       '/system/runs',
       '/system/audit',
       '/system/users',
@@ -262,6 +265,9 @@ describe('route config', () => {
       '/system/status',
       '/system/configuration',
       '/system/data',
+      '/system/jobs',
+      '/system/jobs/:jobId',
+      '/system/jobs/new',
       '/system/runs',
     ];
     for (const path of formalPagePaths) {
@@ -279,10 +285,27 @@ describe('route config', () => {
     expect(resolveRoute('/system/status')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/configuration')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/data')?.minRole).toBeUndefined();
+    expect(resolveRoute('/system/jobs')?.minRole).toBeUndefined();
+    expect(resolveRoute('/system/jobs/job-1')?.minRole).toBeUndefined();
+    expect(resolveRoute('/system/jobs/new')?.minRole).toBe('operator');
     expect(resolveRoute('/system/runs')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/audit')?.minRole).toBe('admin');
     expect(resolveRoute('/system/users')?.minRole).toBe('admin');
     expect(resolveRoute('/system/db-migrate')?.minRole).toBe('admin');
     expect(resolveRoute('/system/backup')?.minRole).toBe('admin');
+  });
+
+  it('keeps legacy job paths pointed at formal job management, not runs and alerts', () => {
+    expect(resolveLegacyRoute('/jobs')?.legacy).toMatchObject({
+      targetPath: '/system/jobs',
+      mode: 'redirect',
+    });
+    expect(resolveLegacyRoute('/jobs/:jobId')?.legacy).toMatchObject({
+      targetPath: '/system/jobs/:jobId',
+      mode: 'redirect',
+    });
+    expect(resolveRoute('/system/jobs')?.kind).toBe('canonical');
+    expect(resolveRoute('/system/jobs/job-1')?.kind).toBe('canonical');
+    expect(resolveRoute('/system/jobs/new')?.kind).toBe('canonical');
   });
 });

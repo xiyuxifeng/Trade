@@ -38,7 +38,7 @@ export function MarketWorkspaceErrors({ failedJobs }: MarketWorkspaceErrorsProps
               <StatusBadge value="failed" label={classifyJobError(job)} />
             </div>
             <div className="mt-3">
-              <a className="text-sm font-medium text-sky-700 hover:text-sky-800" href={`/jobs/${job.id}`}>
+              <a className="text-sm font-medium text-sky-700 hover:text-sky-800" href={`/system/jobs/${job.id}`}>
                 查看 Job 详情
               </a>
             </div>

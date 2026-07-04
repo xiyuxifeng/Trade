@@ -473,7 +473,7 @@ export function AdminAuditWorkspace() {
                       <p className="text-xs uppercase tracking-[0.16em] text-slate-500">审计轨迹</p>
                       <h3 className="mt-1 text-lg font-semibold text-slate-950">事件列表</h3>
                     </div>
-                    <Link className="text-sm font-medium text-sky-700 hover:underline" to={`/jobs/${detail.job.id}`}>
+                    <Link className="text-sm font-medium text-sky-700 hover:underline" to={`/system/jobs/${detail.job.id}`}>
                       打开 Job 详情
                     </Link>
                   </div>

@@ -428,7 +428,7 @@ export function RulePoolDetailPage() {
             刷新详情
           </Button>
           {backtestJobId ? (
-            <Button variant="secondary" onClick={() => navigate(`/jobs/${encodeURIComponent(backtestJobId)}`)}>
+            <Button variant="secondary" onClick={() => navigate(`/system/jobs/${encodeURIComponent(backtestJobId)}`)}>
               前往 Job 详情
             </Button>
           ) : null}
@@ -525,7 +525,7 @@ export function RulePoolDetailPage() {
               {ruleBacktestMutation.isPending ? '提交中' : '运行当前规则回测'}
             </Button>
             {backtestJobId ? (
-              <Button variant="outline" onClick={() => navigate(`/jobs/${encodeURIComponent(backtestJobId)}`)}>
+              <Button variant="outline" onClick={() => navigate(`/system/jobs/${encodeURIComponent(backtestJobId)}`)}>
                 打开 Job 详情
               </Button>
             ) : null}

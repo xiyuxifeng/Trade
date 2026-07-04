@@ -148,7 +148,7 @@ export function JobListPage() {
   if (!canViewJobs) {
     return (
       <main className="page-stack">
-        <PageHeader kicker="任务中心" title="任务中心" description="统一查看任务状态、进度、日志、产物和操作。" />
+        <PageHeader kicker="系统任务" title="任务管理" description="统一查看后台任务状态、进度、日志、结果和可用操作。" />
         <section className="page-card">
           <p className="text-lg font-semibold text-slate-900">没有权限访问任务中心</p>
           <p className="mt-2 text-sm text-slate-600">当前身份为 {principal.role}，查看任务中心至少需要 viewer 权限。</p>
@@ -159,11 +159,11 @@ export function JobListPage() {
 
   return (
     <main className="page-stack">
-      {/* <PageHeader
-        kicker="任务中心"
-        title="任务中心"
-        description="查看最近的任务记录，按状态、任务类型和创建者筛选，并跳转到任务详情。"
-      /> */}
+      <PageHeader
+        kicker="系统任务"
+        title="任务管理"
+        description="查看当前和历史任务，筛选状态、任务类型和创建者，并处理可暂停、可恢复、可取消或可重试的任务。"
+      />
 
       <section className="space-y-6">
         <Card>
@@ -173,9 +173,16 @@ export function JobListPage() {
                 <CardTitle>最近任务</CardTitle>
                 <CardDescription>按状态、任务类型和创建者筛选。</CardDescription>
               </div>
-              <Button variant="outline" onClick={() => jobsQuery.refetch()} disabled={jobsQuery.isFetching}>
-                {jobsQuery.isFetching ? '刷新中' : '刷新'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {canAccess('operator') ? (
+                  <Button onClick={() => navigate('/system/jobs/new')}>
+                    新建任务
+                  </Button>
+                ) : null}
+                <Button variant="outline" onClick={() => jobsQuery.refetch()} disabled={jobsQuery.isFetching}>
+                  {jobsQuery.isFetching ? '刷新中' : '刷新'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -187,13 +194,20 @@ export function JobListPage() {
                   updateFilters({ createdBy: event.target.value, page: 0 });
                 }}
               />
-              <Input
-                placeholder="按任务类型过滤"
+              <Select
+                aria-label="按任务类型过滤"
                 value={jobType}
                 onChange={(event) => {
                   updateFilters({ jobType: event.target.value, page: 0 });
                 }}
-              />
+              >
+                <option value="">所有任务类型</option>
+                {(definitionsQuery.data ?? []).map((definition) => (
+                  <option key={definition.job_type} value={definition.job_type}>
+                    {definition.title}
+                  </option>
+                ))}
+              </Select>
               <Select
                 value={status}
                 onChange={(event) => {
@@ -284,7 +298,7 @@ export function JobListPage() {
                   jobs={jobs}
                   canOperate={canAccess('operator')}
                   jobDefinitionsByType={jobDefinitionsByType}
-                  onViewDetail={(jobId) => navigate(`/jobs/${encodeURIComponent(jobId)}`)}
+                  onViewDetail={(jobId) => navigate(`/system/jobs/${encodeURIComponent(jobId)}`)}
                   onPause={(jobId) => pauseMutation.mutate(jobId)}
                   onResume={(jobId) => resumeMutation.mutate(jobId)}
                   onCancel={(jobId) => cancelMutation.mutate(jobId)}

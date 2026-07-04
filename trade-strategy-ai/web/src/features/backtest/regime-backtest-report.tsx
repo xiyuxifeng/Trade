@@ -488,7 +488,7 @@ export function RegimeBacktestReportWorkspace({ productMode = false }: { product
           action={
             <div className="flex flex-wrap gap-2">
               {selectedResultIdResolved ? (
-                <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/jobs/${selectedResultIdResolved}`)}>
+                <Button variant="outline" className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" onClick={() => navigate(`/system/jobs/${selectedResultIdResolved}`)}>
                   打开 Job
                 </Button>
               ) : null}

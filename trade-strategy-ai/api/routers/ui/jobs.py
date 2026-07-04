@@ -106,7 +106,12 @@ async def validate_submission(
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     """校验 UI 提交的 Job 参数。"""
-    result = validate_job_submission(job_type=request.job_type, params=request.params, created_by=request.created_by)
+    result = validate_job_submission(
+        job_type=request.job_type,
+        params=request.params,
+        created_by=request.created_by,
+        confirmed=request.confirmed,
+    )
     if result.status != "ok":
         raise HTTPException(status_code=400, detail=result.message or "invalid job submission")
     return result.payload

@@ -352,7 +352,7 @@ export function StrategyWorkspaceCandidate({
                           {artifact.job_id ? (
                             <Button
                               className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                              onClick={() => navigate(`/jobs/${artifact.job_id}`)}
+                              onClick={() => navigate(`/system/jobs/${artifact.job_id}`)}
                               variant="outline"
                             >
                               查看来源 Job

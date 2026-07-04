@@ -79,6 +79,19 @@ export function retryJob(jobId: string, reason?: string) {
   });
 }
 
+export function validateJobSubmission(request: JobSubmissionRequest) {
+  return fetchJson<{ params: Record<string, unknown>; definition: JobDefinitionSummary; warnings: string[] }>(
+    '/jobs/validate',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  );
+}
+
 export function createJob(request: JobSubmissionRequest) {
   return fetchJson<{ created: boolean; job: JobDetailResponse['job']; job_dir: string; log_path: string; params_path: string; result_path: string; artifacts_path: string }>(
     '/jobs',

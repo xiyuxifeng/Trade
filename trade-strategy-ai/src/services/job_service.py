@@ -94,6 +94,58 @@ def _sanitize_result_payload_for_output(payload: dict[str, Any]) -> dict[str, An
     return _sanitize(_to_plain(payload))
 
 
+def _coerce_progress_number(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bounded_percent(value: Any) -> float:
+    return max(0.0, min(100.0, _coerce_progress_number(value)))
+
+
+def _normalize_progress_payload(progress: dict[str, Any]) -> dict[str, Any]:
+    """Normalize progress so UI state remains bounded and readable."""
+    normalized = dict(progress)
+
+    total = max(0, int(_coerce_progress_number(normalized.get("total"), default=0)))
+    current = max(0, int(_coerce_progress_number(normalized.get("current"), default=0)))
+    if total > 0:
+        current = min(current, total)
+    normalized["current"] = current
+    normalized["total"] = total
+
+    if "percent" in normalized:
+        normalized["percent"] = _bounded_percent(normalized.get("percent"))
+    elif total > 0:
+        normalized["percent"] = _bounded_percent(current / total * 100)
+    else:
+        normalized["percent"] = 0
+
+    normalized["remaining"] = max(0, int(_coerce_progress_number(normalized.get("remaining"), default=max(total - current, 0))))
+
+    if "sub_total" in normalized or "sub_current" in normalized:
+        sub_total = max(0, int(_coerce_progress_number(normalized.get("sub_total"), default=0)))
+        sub_current = max(0, int(_coerce_progress_number(normalized.get("sub_current"), default=0)))
+        if sub_total > 0:
+            sub_current = min(sub_current, sub_total)
+        normalized["sub_current"] = sub_current
+        normalized["sub_total"] = sub_total
+        if "sub_percent" in normalized:
+            normalized["sub_percent"] = _bounded_percent(normalized.get("sub_percent"))
+        elif sub_total > 0:
+            normalized["sub_percent"] = _bounded_percent(sub_current / sub_total * 100)
+        else:
+            normalized["sub_percent"] = 0
+        normalized["sub_remaining"] = max(
+            0,
+            int(_coerce_progress_number(normalized.get("sub_remaining"), default=max(sub_total - sub_current, 0))),
+        )
+
+    return normalized
+
+
 def _parse_optional_date(value: Any) -> date | None:
     """将可选日期参数统一解析为 date。"""
     if value in {None, ""}:
@@ -1108,6 +1160,13 @@ class JobService(BaseService):
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            job_definition = get_job_definition(job.job_type)
+            if job_definition is not None and not job_definition.can_cancel:
+                return ServiceResult(
+                    status="error",
+                    message=f"job type does not support cancel: {job.job_type}",
+                    payload={"job_id": str(job_id), "job_type": job.job_type},
+                )
             if job.status in {JobStatus.success.value, JobStatus.failed.value, JobStatus.cancelled.value} and job.status != JobStatus.running.value:
                 return ServiceResult(
                     status="error",
@@ -1168,6 +1227,13 @@ class JobService(BaseService):
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            job_definition = get_job_definition(job.job_type)
+            if job_definition is not None and not job_definition.can_pause:
+                return ServiceResult(
+                    status="error",
+                    message=f"job type does not support pause: {job.job_type}",
+                    payload={"job_id": str(job_id), "job_type": job.job_type},
+                )
             if job.status not in {JobStatus.pending.value, JobStatus.running.value}:
                 return ServiceResult(
                     status="error",
@@ -1223,6 +1289,13 @@ class JobService(BaseService):
             job = await self._load_job(session, job_id)
             if job is None:
                 return ServiceResult(status="partial", message="job not found", payload={"job_id": str(job_id)})
+            job_definition = get_job_definition(job.job_type)
+            if job_definition is not None and not job_definition.can_resume:
+                return ServiceResult(
+                    status="error",
+                    message=f"job type does not support resume: {job.job_type}",
+                    payload={"job_id": str(job_id), "job_type": job.job_type},
+                )
             if job.status != JobStatus.paused.value:
                 return ServiceResult(
                     status="error",
@@ -1291,6 +1364,16 @@ class JobService(BaseService):
                     status="error",
                     message=f"job type does not support retry: {job.job_type}",
                     payload={"job_id": str(job_id), "job_type": job.job_type},
+                )
+            if int(job.retry_count or 0) >= int(job.max_retries or 0):
+                return ServiceResult(
+                    status="error",
+                    message="job retry limit reached",
+                    payload={
+                        "job_id": str(job_id),
+                        "retry_count": int(job.retry_count or 0),
+                        "max_retries": int(job.max_retries or 0),
+                    },
                 )
 
             control_state = JobControlState.from_runtime_state(job.runtime_state)
@@ -1407,7 +1490,7 @@ class JobService(BaseService):
         """更新 Job 的结构化进度。"""
         session_scope = self._ensure_session_factory()
         now = datetime.now(UTC)
-        normalized_progress = None if progress is None else {**progress, "updated_at": now.isoformat()}
+        normalized_progress = None if progress is None else {**_normalize_progress_payload(progress), "updated_at": now.isoformat()}
         runtime_state_update = None
         if isinstance(normalized_progress, dict):
             runtime_state_update = normalized_progress.pop("runtime_state", None)

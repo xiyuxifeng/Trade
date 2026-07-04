@@ -40,6 +40,11 @@ const quickEntries: QuickEntry[] = [
     to: '/system/data',
   },
   {
+    title: '任务管理',
+    description: '查看后台任务进度并执行可用控制。',
+    to: '/system/jobs',
+  },
+  {
     title: '运行与告警',
     description: '查看最近失败、告警和恢复建议。',
     to: '/system/runs',
@@ -73,11 +78,11 @@ const managementGroups: ManagementGroup[] = [
   },
   {
     title: '任务运行',
-    description: '查看运行记录、流程运行和结果附件的对应入口。',
-    to: '/system/runs',
+    description: '集中查看后台任务、进度、日志和可用控制。',
+    to: '/system/jobs',
     icon: Shield,
     badge: '运行',
-    related: ['运行记录', '流程运行', '结果附件'],
+    related: ['任务列表', '任务详情', '进度', '日志', '结果附件'],
   },
   {
     title: '失败与告警',

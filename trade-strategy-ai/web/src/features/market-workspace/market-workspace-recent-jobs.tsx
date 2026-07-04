@@ -24,7 +24,7 @@ export function MarketWorkspaceRecentJobs({ jobs, loading, compact = false }: Ma
       action={
         <a
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          href="/jobs"
+          href="/system/jobs"
         >
           查看任务中心
         </a>
@@ -45,7 +45,7 @@ export function MarketWorkspaceRecentJobs({ jobs, loading, compact = false }: Ma
               </div>
               {job.progress ? <JobProgress progress={job.progress} compact className={compact ? 'mt-2' : 'mt-3'} /> : null}
               <div className={compact ? 'mt-2 flex flex-wrap items-center gap-2' : 'mt-3 flex flex-wrap items-center gap-3'}>
-                <a className={compact ? 'text-xs font-medium text-sky-700 hover:text-sky-800' : 'text-sm font-medium text-sky-700 hover:text-sky-800'} href={`/jobs/${job.id}`}>
+                <a className={compact ? 'text-xs font-medium text-sky-700 hover:text-sky-800' : 'text-sm font-medium text-sky-700 hover:text-sky-800'} href={`/system/jobs/${job.id}`}>
                   打开 Job 详情
                 </a>
                 <span className={compact ? 'text-[11px] text-slate-400' : 'text-xs text-slate-400'}>创建者：{job.created_by}</span>

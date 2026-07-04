@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { Navigate, matchPath } from 'react-router-dom';
+import { Navigate, matchPath, useParams } from 'react-router-dom';
 import type { PrincipalRole } from '@/types/auth';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { AuthorsPage } from '@/pages/authors';
 import { DashboardPage } from '@/pages/dashboard';
 import { DailyAfterClosePage, DailyOverviewPage, DailyPreMarketPage } from '@/pages/daily';
+import { JobsPage, JobDetailPage, JobNewPage } from '@/pages/jobs';
 import { LoginPage } from '@/pages/login';
 import {
   ResearchAddPage,
@@ -137,6 +138,11 @@ const RETIREMENT = {
 
 function redirect(targetPath: string) {
   return <Navigate to={targetPath} replace />;
+}
+
+function JobDetailRedirect() {
+  const { jobId } = useParams<{ jobId?: string }>();
+  return <Navigate to={`/system/jobs/${encodeURIComponent(jobId ?? '')}`} replace />;
 }
 
 function legacy(
@@ -391,6 +397,34 @@ export const routeConfig: ProductRoute[] = [
     parentId: 'system',
   },
   {
+    id: 'system-jobs',
+    kind: 'canonical',
+    path: '/system/jobs',
+    label: '任务管理',
+    description: '查看、筛选和控制后台任务。',
+    element: <JobsPage />,
+    parentId: 'system',
+  },
+  {
+    id: 'system-job-new',
+    kind: 'canonical',
+    path: '/system/jobs/new',
+    label: '新建任务',
+    description: '操作员和管理员创建高级系统任务。',
+    element: <JobNewPage />,
+    minRole: 'operator',
+    parentId: 'system',
+  },
+  {
+    id: 'system-job-detail',
+    kind: 'canonical',
+    path: '/system/jobs/:jobId',
+    label: '任务详情',
+    description: '查看单个任务的状态、进度、日志、结果和产物。',
+    element: <JobDetailPage />,
+    parentId: 'system',
+  },
+  {
     id: 'system-runs',
     kind: 'canonical',
     path: '/system/runs',
@@ -415,23 +449,23 @@ export const routeConfig: ProductRoute[] = [
     id: 'jobs',
     kind: 'compat',
     path: '/jobs',
-    label: '运行记录',
-    description: '查看现有运行记录。',
-    element: redirect('/system/runs'),
+    label: '任务管理旧入口',
+    description: '旧任务管理入口已迁移到系统任务管理。',
+    element: redirect('/system/jobs'),
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
+    legacy: legacy('/system/jobs', 'redirect', 'Post-delivery Task 2', RETIREMENT.runtime),
   },
   {
     id: 'job-detail',
     kind: 'compat',
     path: '/jobs/:jobId',
-    label: '运行详情',
-    description: '查看本次运行的状态、日志和结果。',
-    element: redirect('/system/runs'),
+    label: '任务详情旧入口',
+    description: '旧任务详情入口已迁移到系统任务管理。',
+    element: <JobDetailRedirect />,
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/runs', 'redirect', 'Stage 12', RETIREMENT.runtime),
+    legacy: legacy('/system/jobs/:jobId', 'redirect', 'Post-delivery Task 2', RETIREMENT.runtime),
   },
   {
     id: 'profiles',

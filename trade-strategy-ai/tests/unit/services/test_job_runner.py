@@ -2007,11 +2007,11 @@ def test_job_runner_pauses_running_job_on_request(tmp_path: Path) -> None:
 
     runner, job_service, engine, _ = _build_job_runner(
         tmp_path,
-        handlers={"run-pre-market": _handler},
+        handlers={"backtest-run": _handler},
     )
     created = asyncio.run(
         job_service.create_job(
-            job_type="run-pre-market",
+            job_type="backtest-run",
             params={"config_path": "config/app.yaml"},
             created_by="web",
         )

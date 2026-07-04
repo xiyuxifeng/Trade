@@ -455,7 +455,7 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
 
   useEffect(() => {
     if (!productMode && submittedJobId) {
-      navigate(`/jobs/${encodeURIComponent(submittedJobId)}`);
+      navigate(`/system/jobs/${encodeURIComponent(submittedJobId)}`);
     }
   }, [navigate, productMode, submittedJobId]);
 

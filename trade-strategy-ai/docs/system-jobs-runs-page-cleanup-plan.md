@@ -245,7 +245,7 @@ Task 1 uses a conservative rollout rule:
 | `/system/status` | `overview` | migrated | Hide workflow-only `Input` / `Processing Status`; keep availability messaging visible. |
 | `/system/configuration` | `management` | migrated | Read-only config summary does not need workflow framing. |
 | `/system/data` | `workflow` | unchanged | Still centers on repair, backfill, and recompute actions. |
-| `/system/jobs` | `management` | deferred | Reserved for Task 2; not implemented in Task 1. |
+| `/system/jobs` | `management` | migrated | Formal Job Management entry from Task 2. |
 | `/system/runs` | `detail` | deferred | Current shell stays workflow-shaped until the bounded Task 3 redesign. |
 | `/research/articles` | `library` | deferred | Matrix defined now; shell migration can happen later without breaking current pages. |
 | `/research/add` | `workflow` | migrated | Explicitly pinned to workflow layout to prove default-compatible migration. |
@@ -450,6 +450,78 @@ Document any job types that cannot be fully lifecycle-tested and why.
 - Users can start jobs from business pages without raw job JSON.
 - Operators/admins can create advanced jobs and manage all jobs centrally.
 - Progress and lifecycle controls are tested with at least one real worker-backed flow.
+
+## Task 2 Implementation Record
+
+Task 2 formalizes route ownership:
+
+- `/system/jobs` is the formal Job Management list and control page.
+- `/system/jobs/:jobId` is the formal Job detail page.
+- `/system/jobs/new` is the operator/admin advanced creation page.
+- `/jobs` redirects to `/system/jobs`.
+- `/jobs/:jobId` redirects to `/system/jobs/:jobId`.
+- `/system/runs` remains Runs & Alerts and must not expose job lifecycle controls as its default responsibility.
+
+Legacy review bug inventory:
+
+| Finding | Blocking | Resolution |
+| --- | --- | --- |
+| `/jobs` and `/jobs/:jobId` redirected to `/system/runs`, leaving no formal Job Management route. | yes | Added canonical `/system/jobs*` routes and compatibility redirects to those paths. |
+| `system-data-operation` advertised `can_resume=true` while `can_pause=false`. | yes | Corrected definition to `can_resume=false`; registry contract test now rejects incoherent definitions. |
+| `pause_job`, `resume_job`, and `cancel_job` did not enforce job definition support flags. | yes | Service-level lifecycle guards now reject unsupported controls even if called directly. |
+| `retry_job` ignored retry limits for manual retry. | yes | Manual retry now rejects when `retry_count >= max_retries`. |
+| Progress accepted out-of-range `current`, `remaining`, and `percent`. | yes | JobService normalizes and bounds progress before persistence. |
+| Legacy detail page offered a raw-param clone rerun separate from retry semantics. | yes | Removed normal rerun clone; failed jobs use supported retry only. |
+| Legacy list default showed full UUIDs and raw `job_type` as dominant content. | yes | Table now shows short task IDs and user-facing registry labels first. |
+| Business pages linked to `/jobs` compatibility paths after job creation. | non-blocking but delivery-facing | User-facing job links now point to `/system/jobs` or `/system/jobs/:jobId`. |
+| Some heavy/external job types cannot be safely live-executed during this task. | no | Contract-level coverage documents support flags and validation; live lifecycle evidence uses lightweight worker-backed tests. |
+
+Lifecycle semantics:
+
+- Allowed transitions are `pending -> running`, `pending/running -> paused` only for definitions with pause support, `paused -> pending/running` only for definitions with resume support, `pending/running/paused -> cancelled` where cancel is supported, `running -> success`, `running -> failed`, and `failed -> pending` where retry is supported and retry limits allow it.
+- Invalid or unsupported transitions return an error and leave the existing job state intact.
+- Pause and cancel are cooperative worker controls. The worker polls control state and handlers that receive `cancel_check` stop at safe checkpoints.
+- Retry reuses the same job record but records attempt history before failure; previous result/artifact files remain in job storage and the database keeps audit history. Manual retry is blocked after the retry limit.
+- Progress persisted through `JobService.update_job_progress()` must keep `current`, `total`, `percent`, `remaining`, and sub-progress bounded for UI display. Missing progress is displayed as a clear fallback.
+
+Job type coverage matrix:
+
+| Job type | Label | Required params | UI exposure | Supported controls | Expected progress | Worker checkpoint behavior | Test coverage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `system-data-operation` | 数据与调度操作 | action | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests; focused operation tests |
+| `db-migrate` | 数据库迁移 | none | internal-only | cancel | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `init-project` | 初始化项目 | config_path | internal-only | cancel | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `seed-data` | 导入样例数据 | config_path | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `backup-data` | 备份数据 | none | advanced-only | create, cancel | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `restore-data` | 恢复数据 | none | advanced-only | create, cancel | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `crawl` | 抓取文章 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests; worker progress tests |
+| `clean` | 清洗文章 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `validate` | 校验文章 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `store` | 入库文章 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `process` | 处理文章任务 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests; cancel-check unit tests |
+| `import-trade-logs` | 导入交易记录 | config_path, csv_path | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `pipeline-run` | 执行完整 Pipeline | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `pipeline-step` | 执行 Pipeline 单步 | step | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `migrate-crawl-state` | 迁移爬虫状态 | config_path | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `clusters-build` | 构建画像聚类 | config_path, dest | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `e2e-regression` | 端到端回归 | config_path | internal-only | cancel | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `run-pre-market` | 盘前执行 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `run-after-close` | 盘后执行 | none | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `persona-init-sample` | 生成示例画像 | config_path | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `market-state-build` | 构建市场状态 | config_path, benchmark_symbol | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `snapshot-build` | 构建快照 | none | internal-only | pause, resume, cancel, retry | not worker-runnable | legacy definition only; no runner handler | contract tests |
+| `strategy-build` | 构建策略版本 | trader_id, strategy_date | business/advanced | create, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `ohlcv-crawl` | 抓取 OHLCV | symbols | internal-only | pause, resume, cancel, retry | not worker-runnable | legacy definition only; use `system-data-operation` | contract tests |
+| `backtest-run` | 执行回测 | trader_id, date_from, date_to | business/advanced | create, pause, resume, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests; worker lifecycle tests |
+| `backtest-validate-rules` | 规则验真 | trader_id, date_from, date_to | business/advanced | create, pause, resume, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `backtest-reproducibility-check` | 回测可复现性检查 | trader_id, date_from, date_to | business/advanced | create, cancel | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `rule-pool-backtest` | 规则池回测 | start_date, end_date | advanced-only | create, pause, resume, cancel, retry | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests; rule-pool worker tests |
+| `optimize-create-candidate` | 生成优化候选版本 | adjustments_path | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `candidate-review` | 候选版本审核 | candidate_version_id, decision | advanced-only | create, cancel | structured progress when handler reports; fallback unavailable | worker checkpoint-capable | contract tests |
+| `rule-review` | 规则审核 | rule_id, decision | internal-only | cancel | not worker-runnable | no pause checkpoint claimed | contract tests |
+| `kaipan-fetch` | Kaipan 抓取 | none | internal-only | pause, resume, cancel, retry | not worker-runnable | legacy definition only; use `system-data-operation` | contract tests |
+| `kaipan-normalize` | Kaipan 归一化 | none | internal-only | pause, resume, cancel, retry | not worker-runnable | legacy definition only; use `system-data-operation` | contract tests |
+| `kaipan-run` | Kaipan 一键运行 | none | internal-only | cancel, retry | not worker-runnable | no pause checkpoint claimed | contract tests |
 
 ---
 

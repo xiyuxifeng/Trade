@@ -44,7 +44,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
         <div className="flex flex-wrap gap-2">
           <Link
             className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-            to="/jobs"
+            to="/system/jobs"
           >
             打开任务列表
           </Link>
@@ -64,7 +64,7 @@ export function StrategyWorkspaceHistory({ jobs, isLoading, error, onRetry }: St
             <button
               key={job.id}
               className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-sky-200 hover:bg-sky-50/70"
-              onClick={() => navigate(`/jobs/${job.id}`)}
+              onClick={() => navigate(`/system/jobs/${job.id}`)}
               type="button"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">

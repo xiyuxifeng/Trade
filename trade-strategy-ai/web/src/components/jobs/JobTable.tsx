@@ -33,6 +33,11 @@ function formatTimestamp(value: string | null) {
   }).format(new Date(value));
 }
 
+function shortJobId(id: string) {
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
+
 export function JobTable({
   jobs,
   onViewDetail,
@@ -57,7 +62,7 @@ export function JobTable({
       <Table>
         <TableHeader className="bg-slate-50">
           <TableRow>
-            <TableHead>Job ID</TableHead>
+            <TableHead>任务编号</TableHead>
             <TableHead>任务类型</TableHead>
             <TableHead>状态</TableHead>
             <TableHead>步骤进度</TableHead>
@@ -73,9 +78,14 @@ export function JobTable({
           {jobs.map((job) => (
             <TableRow key={job.id}>
               <TableCell>
-                <p className="break-all font-medium text-slate-900">{job.id}</p>
+                <p className="font-medium text-slate-900" title={job.id}>{shortJobId(job.id)}</p>
               </TableCell>
-              <TableCell>{job.job_type}</TableCell>
+              <TableCell>
+                <div className="min-w-[9rem]">
+                  <p className="font-medium text-slate-900">{jobDefinitionsByType?.[job.job_type]?.title ?? job.job_type}</p>
+                  <p className="mt-1 text-xs text-slate-500">{jobDefinitionsByType?.[job.job_type]?.description ?? '任务定义待同步'}</p>
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge variant={statusVariant(job.status)}>{getStatusLabel(job.status)}</Badge>
               </TableCell>

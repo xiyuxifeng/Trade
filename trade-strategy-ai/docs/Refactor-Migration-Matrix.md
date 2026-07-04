@@ -51,8 +51,8 @@ Stage 以 `Trade-Refactor-TaskList.md` 为准。
 | 旧入口 | 当前能力 | 处置 | 新入口 | 允许保留到 | 最终删除 | 退役条件 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `/dashboard` | 工程概览 | 改造 | `/` 首页 | Stage 1 | 否，可重定向 | 首页具备今日状态、待办和下一步。 |
-| `/jobs` | Job 中心 | 迁移、兼容 | 系统管理 → 任务运行；业务页“运行详情” | Stage 12 | 是，普通入口 | 所有业务页可直接查看和恢复运行。 |
-| `/jobs/:jobId` | Job 详情 | 保留、改造 | 统一运行详情 | 长期 | 否 | 用户文案业务化，技术信息仅管理员展开。 |
+| `/jobs` | Job 中心 | 迁移、兼容 | 系统管理 → 任务管理 | Post-delivery Task 2 | 是，普通入口 | `/system/jobs` 正式入口可筛选、查看和控制任务。 |
+| `/jobs/:jobId` | Job 详情 | 保留、兼容重定向 | 系统管理 → 任务详情 | 长期 | 否 | `/system/jobs/:jobId` 可显示进度、日志、时间线、产物和支持的控制动作。 |
 | `/articles` | 文章入口目录 | 改造 | 研究中心 | Stage 1 | 否，可重定向 | 新研究中心路由上线。 |
 | `/articles/run` | Pipeline/Step 表单 | 合并、迁移 | 研究中心 → 添加文章/批量处理 | Stage 3 | 是 | 导入、提取和修复由业务动作自动编排。 |
 | `/articles/list` | 文章列表 | 保留、迁移 | 研究中心 → 文章库 | Stage 3 | 否，可重定向 | Article 新契约上线。 |
@@ -89,8 +89,8 @@ Stage 以 `Trade-Refactor-TaskList.md` 为准。
 | `/login` | 登录 | 用户和 Session 表原地保留 | 长期 | 保留 |
 | `/` | 首页 | 无数据迁移，改默认重定向 | Stage 1 | 改为首页 |
 | `/dashboard` | 首页 | Dashboard 查询改读今日业务状态 | Stage 1 | 兼容重定向 |
-| `/jobs` | 系统管理 → 任务运行 | Job 数据原地保留 | Stage 12 | 删除普通入口 |
-| `/jobs/:jobId` | 运行详情 | Job、timeline、artifact 引用原地保留 | 长期 | 保留深链 |
+| `/jobs` | 系统管理 → 任务管理 | Job 数据原地保留 | Post-delivery Task 2 | 兼容重定向到 `/system/jobs` |
+| `/jobs/:jobId` | 系统管理 → 任务详情 | Job、timeline、artifact 引用原地保留 | 长期 | 兼容重定向到 `/system/jobs/:jobId` |
 | `/profiles` | 系统管理 → Profile 配置 | ConfigProfile 原地保留 | Stage 11 | 兼容重定向 |
 | `/profiles/import` | 系统管理 → 导入配置 | 导入记录关联 ConfigProfile | Stage 11 | 兼容重定向 |
 | `/profiles/:profileId` | 系统管理 → 配置详情 | Profile ID 原地保留 | Stage 11 | 兼容重定向 |

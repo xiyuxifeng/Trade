@@ -537,7 +537,7 @@ export function BacktestCenter({ productMode = false }: { productMode?: boolean 
               {submissionJobId ? (
                 <a
                   className="inline-flex h-10 items-center justify-center rounded-lg border border-sky-200 bg-white px-4 text-sm font-medium text-sky-800 transition-colors hover:bg-sky-50"
-                  href={`/jobs/${submissionJobId}`}
+                  href={`/system/jobs/${submissionJobId}`}
                 >
                   打开 Job 详情
                 </a>
@@ -564,7 +564,7 @@ export function BacktestCenter({ productMode = false }: { productMode?: boolean 
         </Link>
         <Link
           className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          to="/jobs"
+          to="/system/jobs"
         >
           打开任务中心
         </Link>
@@ -857,7 +857,7 @@ export function BacktestCenter({ productMode = false }: { productMode?: boolean 
                   variant="outline"
                   disabled={!lastJob?.id}
                   onClick={() => {
-                    if (lastJob?.id) navigate(`/jobs/${encodeURIComponent(lastJob.id)}`);
+                    if (lastJob?.id) navigate(`/system/jobs/${encodeURIComponent(lastJob.id)}`);
                   }}
                 >
                   前往任务详情

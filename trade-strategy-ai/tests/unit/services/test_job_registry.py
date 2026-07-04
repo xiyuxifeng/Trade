@@ -80,6 +80,26 @@ def test_job_registry_marks_only_connected_jobs_runnable() -> None:
     ]
 
 
+def test_every_job_definition_has_lifecycle_contract_metadata() -> None:
+    """Every registered job type must expose coherent UI/control contract metadata."""
+    definitions = list_job_definitions()
+    assert definitions
+    for definition in definitions:
+        assert definition.job_type
+        assert definition.title
+        assert definition.description
+        assert definition.permission.value in {"viewer", "operator", "admin"}
+        assert definition.risk.value in {"low", "medium", "high", "critical"}
+        assert definition.param_schema.description
+        assert isinstance(definition.param_schema.fields, dict)
+        if definition.can_resume:
+            assert definition.can_pause, f"{definition.job_type} cannot resume without pause support"
+        if definition.requires_confirmation:
+            assert definition.risk.value in {"high", "critical", "medium"}
+        if definition.runnable:
+            assert definition.job_type in get_runnable_job_types()
+
+
 def test_validate_job_submission_enforces_schema() -> None:
     """提交校验应拒绝未知 job type、非 runnable job type 和缺失参数。"""
     unknown = validate_job_submission(job_type="unknown-job", params={}, created_by="web")

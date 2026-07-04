@@ -4,10 +4,93 @@
 
 - Stage：`Stage 12 旧入口退役与最终交付`
 - 当前活动：`Stage 12 Gate`
-- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_ACCEPTED`
+- 当前状态：`RT-S12-001 ACCEPTED`；`RT-S12-002 RT_S12_002_BROWSER_E2E_ACCEPTED`；`RT-S12-003 RT_S12_003_USER_DOCS_ACCEPTED`；`Stage 12 Gate STAGE_12_GATE_ACCEPTED`；`Post-delivery Task 2 Job Management formalization ACCEPTED`
 - 当前 Task：Stage 12 Gate fresh rerun 已完成；当前设备环境重新验证通过，DB current/head 一致，Browser E2E 通过。
 - 下一可执行项：无。Stage 12 已完成；不得自动开始任何新 Stage 或后续重构任务。
 - 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
+
+## 2026-07-04 Post-delivery Task 2 Job Management formalization
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 执行 `docs/system-jobs-runs-page-cleanup-plan.md` Task 2。
+- 不重做 `/system/runs`。
+- 不改变 Job 数据库 schema。
+- 不新增普通用户原始 JSON 创建路径。
+
+### Implementation
+
+- `web/src/app/route-config.tsx`
+  - 新增正式 `/system/jobs`、`/system/jobs/new`、`/system/jobs/:jobId`。
+  - `/jobs` 兼容重定向到 `/system/jobs`。
+  - `/jobs/:jobId` 兼容重定向到 `/system/jobs/:jobId`。
+- `web/src/pages/jobs/*`
+  - `JobListPage` 作为正式任务管理页，显示筛选、分页、状态计数、进度、刷新/自动刷新和按定义启用的控制动作。
+  - `JobDetailPage` 改为正式系统任务详情，返回 `/system/jobs`，默认收敛 raw 参数，失败任务只在支持 retry 时显示重试。
+  - 新增 `JobNewPage`，操作员/管理员可按注册定义创建高级任务，高风险任务需要确认。
+- `web/src/components/jobs/JobTable.tsx`
+  - 默认显示短任务编号和用户可读任务类型标题，减少 raw UUID / raw `job_type` 主导。
+- `web/src/pages/system/SystemHubPage.tsx`
+  - 系统管理增加“任务管理”入口；“任务运行”指向 `/system/jobs`，“失败与告警”继续指向 `/system/runs`。
+- `src/services/job_registry.py`
+  - 修复 `system-data-operation` 定义中 `can_resume=true` 但 `can_pause=false` 的不一致。
+- `src/services/job_service.py`
+  - 进度写入统一边界化 `current`、`total`、`percent`、`remaining` 和 sub-progress。
+  - `pause`、`resume`、`cancel`、`retry` 在 service 层按 JobDefinition 支持标记拒绝不支持动作。
+  - 手动 retry 遵守 retry limit。
+- `api/routers/ui/jobs.py`
+  - `/validate` 使用 `confirmed`，保证高风险任务在确认后可被同一校验路径接受。
+- Business page links
+  - 任务创建后的用户可见链接改向 `/system/jobs` 或 `/system/jobs/:jobId`。
+- Docs
+  - `docs/system-jobs-runs-page-cleanup-plan.md` 记录 Task 2 路由所有权、bug inventory、生命周期语义和全 job type coverage matrix。
+  - `docs/Refactor-Migration-Matrix.md` 更新 `/jobs` 迁移目标。
+  - `docs/stage-12-user-docs/Admin-Operations-Guide.md` 增加“任务管理”管理员说明。
+
+### Lifecycle evidence
+
+- Backend RED tests first failed for unbounded progress and unsupported pause being accepted.
+- Green fix adds service-level guards and progress normalization.
+- Worker-backed lifecycle evidence is covered by `tests/unit/services/test_job_runner.py`:
+  - running job pause at checkpoint.
+  - running job cancel at checkpoint.
+  - resume after pause.
+  - retry path for failed supported jobs.
+  - backtest/rule-pool progress writes.
+- Heavy or provider-dependent job types are covered by registry/contract tests and documented as not fully live-executed in this task.
+
+### Verification
+
+- `python -m pytest tests/unit/services/test_job_service.py::test_update_job_progress_bounds_percent_and_remaining tests/unit/services/test_job_service.py::test_job_controls_reject_unsupported_actions_and_retry_limits -q`
+  - result: `2 passed`
+- `python -m pytest tests/unit/services/test_job_registry.py::test_every_job_definition_has_lifecycle_contract_metadata -q`
+  - result: `1 passed`
+- `cd web && pnpm test -- src/pages/jobs/index.test.tsx src/app/route-config.test.tsx src/components/jobs/JobProgress.test.tsx`
+  - result: `23 passed`
+- `python -m pytest tests/unit/services/test_job_registry.py tests/unit/services/test_job_service.py tests/unit/services/test_job_runner.py tests/api/routers/test_jobs.py tests/api/routers/test_jobs_api.py -q`
+  - result: `80 passed`
+- `cd web && pnpm typecheck`
+  - result: passed
+- `python -m py_compile api/routers/ui/jobs.py src/services/job_registry.py src/services/job_service.py src/services/job_runner.py`
+  - result: passed
+- Legacy direct `/jobs` link scan under `web/src/pages`, `web/src/features`, and `web/src/components`
+  - result: no direct legacy links found outside compatibility route tests/routes
+- `git diff --check`
+  - result: passed
+- Note: an earlier focused backend aggregate attempt hit one SQLite `database is locked` in `test_submit_backtest_jobs_write_progress_to_job_record`; isolated rerun passed and the final aggregate rerun passed.
+
+### Residual risks
+
+- Full live execution for every heavy/external-provider job type is intentionally not run; contract-level coverage and registry matrix document the reason.
+- Some legacy/internal compatibility pages still contain internal terminology; normal business links now target formal `/system/jobs` paths, but broader legacy retirement remains outside Task 2.
+
+### Acceptance
+
+`ACCEPTED`. Task 2 scope is complete: `/system/jobs` is the formal Job Management entry, `/jobs` compatibility routes point to `/system/jobs`, `/system/runs` was not redesigned, lifecycle/progress/control bugs found during audit were fixed or documented as non-blocking, and every registered job type is covered in the matrix.
 
 ## 2026-07-01 Post-delivery shell layout foundation
 

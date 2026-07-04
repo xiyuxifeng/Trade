@@ -147,7 +147,7 @@ export function StrategyWorkspaceActions({
             suggestion="请先查看错误详情，再确认是否重新提交。"
             detail={submissionError}
             actions={[
-              { label: '查看任务列表', to: '/jobs' },
+              { label: '查看任务列表', to: '/system/jobs' },
               { label: '前往配置管理', to: '/profiles' },
             ]}
           />

@@ -65,7 +65,7 @@ export function MarketDatasetViewerDetail({
   );
   const snapshotId = detail?.snapshot?.snapshot_id ?? selectedDataset?.snapshot_id ?? null;
   const datasetLink = snapshotId ? `/market?snapshot_id=${encodeURIComponent(snapshotId)}` : null;
-  const jobLink = sourceJobId ? `/jobs/${encodeURIComponent(sourceJobId)}` : null;
+  const jobLink = sourceJobId ? `/system/jobs/${encodeURIComponent(sourceJobId)}` : null;
   const artifactLink = sourceJobId ? `/artifacts?jobId=${encodeURIComponent(sourceJobId)}` : null;
   const warnings = detail?.warnings ?? [];
   const pageTotal = detail?.page.total ?? detail?.items.length ?? 0;

@@ -290,10 +290,10 @@ function ResultSummaryCard({ latestJob, productMode = false }: { latestJob: JobR
           <p className="mt-1 break-words text-rose-800">原因：{describeJobError(latestJob.error)}</p>
           {!productMode ? (
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs/${encodeURIComponent(latestJob.id)}`}>
+              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/system/jobs/${encodeURIComponent(latestJob.id)}`}>
                 打开任务详情
               </Link>
-              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/jobs?job_type=run-after-close`}>
+              <Link className="text-sm font-medium text-rose-700 hover:underline" to={`/system/jobs?job_type=run-after-close`}>
                 查看任务列表
               </Link>
             </div>
@@ -460,7 +460,7 @@ function ResultSummaryCard({ latestJob, productMode = false }: { latestJob: JobR
                   <div className="flex flex-wrap gap-2">
                     <Link
                       className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-sky-700 transition-colors hover:bg-slate-50"
-                      to={`/jobs/${encodeURIComponent(latestJob.id)}`}
+                      to={`/system/jobs/${encodeURIComponent(latestJob.id)}`}
                     >
                       查看任务详情
                     </Link>
@@ -676,7 +676,7 @@ function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/dail
           {...buildErrorRecoveryState(queryError, 'strategy')}
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), jobsQuery.refetch()])}
           actions={[
-            { label: '查看任务列表', to: '/jobs?job_type=run-after-close' },
+            { label: '查看任务列表', to: '/system/jobs?job_type=run-after-close' },
             { label: '前往配置管理', to: '/profiles' },
           ]}
         />
@@ -727,10 +727,10 @@ function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/dail
             Job {submissionState.jobId} · {formatWorkspaceTimestamp(submissionState.submittedAt)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-              <Link className="text-sm font-medium text-emerald-700 hover:underline" to={`/jobs/${encodeURIComponent(submissionState.jobId)}`}>
+              <Link className="text-sm font-medium text-emerald-700 hover:underline" to={`/system/jobs/${encodeURIComponent(submissionState.jobId)}`}>
               打开任务详情
             </Link>
-            <Link className="text-sm font-medium text-emerald-700 hover:underline" to="/jobs?job_type=run-after-close">
+            <Link className="text-sm font-medium text-emerald-700 hover:underline" to="/system/jobs?job_type=run-after-close">
               查看任务列表
             </Link>
           </div>

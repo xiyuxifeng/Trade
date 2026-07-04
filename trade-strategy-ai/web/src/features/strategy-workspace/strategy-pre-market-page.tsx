@@ -459,7 +459,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           {...buildErrorRecoveryState(error, 'strategy')}
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), snapshotJobsQuery.refetch(), runJobsQuery.refetch()])}
           actions={[
-            { label: '查看任务列表', to: '/jobs' },
+            { label: '查看任务列表', to: '/system/jobs' },
             { label: '前往配置管理', to: '/profiles' },
           ]}
         />
@@ -509,7 +509,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           suggestion="请先查看错误详情，再确认是否重新提交。"
           detail={submissionError}
           actions={[
-            { label: '查看任务列表', to: '/jobs' },
+            { label: '查看任务列表', to: '/system/jobs' },
             { label: '前往配置管理', to: '/profiles' },
           ]}
         />
@@ -522,10 +522,10 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           </p>
           <p className="mt-1 break-all">Job ID: {submissionState.jobId}</p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <Link className="font-medium text-emerald-900 underline underline-offset-4" to={`/jobs/${submissionState.jobId}`}>
+            <Link className="font-medium text-emerald-900 underline underline-offset-4" to={`/system/jobs/${submissionState.jobId}`}>
               查看任务详情
             </Link>
-            <Link className="font-medium text-emerald-900 underline underline-offset-4" to="/jobs">
+            <Link className="font-medium text-emerald-900 underline underline-offset-4" to="/system/jobs">
               进入任务列表
             </Link>
           </div>
@@ -587,20 +587,20 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
             <CardDescription className="text-slate-600">执行结果、日志、产物和失败重试都在任务列表和任务详情查看。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <Link className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" to="/jobs">
+            <Link className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70" to="/system/jobs">
               <p className="text-sm font-medium text-slate-950">进入任务列表</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">查看所有任务、日志、产物与重试。</p>
             </Link>
             <Link
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
-              to="/jobs?job_type=snapshot-build"
+              to="/system/jobs?job_type=snapshot-build"
             >
               <p className="text-sm font-medium text-slate-950">查看市场上下文准备</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的市场上下文准备任务。</p>
             </Link>
             <Link
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
-              to="/jobs?job_type=run-pre-market"
+              to="/system/jobs?job_type=run-pre-market"
             >
               <p className="text-sm font-medium text-slate-950">查看盘前分析</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">只看最近的盘前分析任务。</p>
@@ -745,7 +745,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
               <Link
                 key={job.id}
                 className="rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-sky-200 hover:bg-sky-50/70"
-                to={`/jobs/${job.id}`}
+                to={`/system/jobs/${job.id}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -772,7 +772,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
             description="提交市场上下文准备或盘前分析后，这里会显示最近任务。"
             actionLabel="查看任务列表"
             onAction={() => {
-              navigate('/jobs');
+              navigate('/system/jobs');
             }}
           />
         )}

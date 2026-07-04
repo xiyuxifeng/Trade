@@ -17,7 +17,15 @@ const states: PageAvailability[] = [
   'unavailable',
 ];
 const actionableStates: PageAvailability[] = ['ready', 'partial', 'degraded'];
-const compactLayoutRoutes = new Set(['/authors', '/system/status', '/system/configuration']);
+const compactLayoutRoutes = new Set([
+  '/authors',
+  '/system/status',
+  '/system/configuration',
+  '/system/runs',
+  '/research/articles',
+  '/rules/library',
+  '/rules/results',
+]);
 
 function expectedHeadingsForRoute(path: string, availability: PageAvailability) {
   const headings = ['页面用途'];

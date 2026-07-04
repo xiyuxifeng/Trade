@@ -38,6 +38,18 @@
 
 ## 当前实施记录
 
+- Task ID: `POST-DELIVERY-TASK-3 Runs & Alerts Cleanup, Pagination, and Page Simplification Rollout`
+- 状态: `已完成`
+- 修改范围: `/api/ui/v1/system/runs` overview/filter/pagination contract、`SystemRunTraceService` 聚合与 viewer/operator 诊断可见性、`/system/runs` 前端信息架构、`/research/articles` `/rules/library` `/rules/results` 页面壳层迁移、相关 backend/frontend tests、Task 3 文档与管理员说明。
+- 关键设计决定: `/system/runs` 只做“运行与告警”概览，不承载 Job 控制；默认先回答“是否可继续、哪里受影响、下一步做什么”，再把技术 traceability 收敛到 operator/admin 折叠详情；历史记录采用 cursor load-more；viewer payload 默认不返回原始 diagnostics。
+- 数据库迁移: 无。
+- 兼容处理: `/system/jobs` 保持 Task 2 的正式任务管理入口；`/system/runs` 保留 traceability 数据但把 viewer 默认视图去技术化；未迁移 workflow 页仍保持原有 workflow shell。
+- 已运行测试: `python -m pytest tests/unit/services/test_system_run_trace_service.py tests/api/routers/ui/test_ui_system_runs.py -q`；`cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/pages/system/index.test.tsx src/lib/api/system.test.ts src/pages/product-page-state-matrix.test.tsx`
+- 测试结果: backend focused runs overview/router tests `8 passed`；frontend focused system/api/layout tests `28 passed`。
+- 未完成项: 未新增专门的 Playwright/E2E 覆盖。
+- 已知风险: 本次 E2E 缺口仍依赖 focused service/router/page tests 作为替代证据；若后续需要更强浏览器级保证，应单独补 `/system/runs` 用户流 E2E。
+- 验收结论: `已完成`。`/system/runs` 已成为用户可读的“运行与告警”概览，支持筛选和 load-more，默认不暴露技术噪音但保留 operator/admin 可展开诊断；`/system/jobs` 仍为正式 Job control 页面。
+
 - Task ID: `POST-DELIVERY-TASK-2 Job Management Review, Repair, Formalization, and Lifecycle Validation`
 - 状态: `已完成`
 - 修改范围: `/system/jobs` 路由、Job API validate、JobService 生命周期控制和进度规范化、JobRegistry 控制定义、Job list/detail/new 前端页面、系统管理入口、业务页任务链接、Job contract/worker/frontend tests、系统管理和迁移文档。

@@ -19,7 +19,7 @@ import {
 import { EmptyState, LoadingState } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { useAuth } from '@/features/auth/auth-context';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import type { SystemDataOperation, SystemDataReadinessStatus, SystemRolloutSummaryResponse, SystemRunTraceItem } from '@/types/system';
@@ -475,9 +475,64 @@ function SystemDataSummary() {
   );
 }
 
+function mergeHistoryGroups(
+  current: Array<{ group_key: string; label: string; items: SystemRunTraceItem[] }>,
+  incoming: Array<{ group_key: string; label: string; items: SystemRunTraceItem[] }>,
+) {
+  const merged = new Map<string, { group_key: string; label: string; items: SystemRunTraceItem[] }>();
+  for (const group of current) {
+    merged.set(group.group_key, { ...group, items: [...group.items] });
+  }
+  for (const group of incoming) {
+    const existing = merged.get(group.group_key);
+    if (!existing) {
+      merged.set(group.group_key, { ...group, items: [...group.items] });
+      continue;
+    }
+    const seen = new Set(existing.items.map((item) => item.run_id));
+    for (const item of group.items) {
+      if (!seen.has(item.run_id)) existing.items.push(item);
+    }
+  }
+  return Array.from(merged.values()).sort((left, right) => right.group_key.localeCompare(left.group_key));
+}
+
+function businessTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    data: '数据',
+    prompt: 'Prompt',
+    backtest: '回测',
+    'pre-market': '盘前',
+    'after-close': '盘后',
+    'daily-rule-selection': '每日规则选择',
+    'trading-plan': '今日计划',
+    'system-job': '系统任务',
+  };
+  return labels[value] ?? value;
+}
+
 function SystemRunsSummary() {
   const { canAccess } = useAuth();
   const showDiagnostics = canAccess('operator');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'needs_attention' | 'failed' | 'partial' | 'ready'>('all');
+  const [businessTypeFilter, setBusinessTypeFilter] = useState<'all' | 'data' | 'prompt' | 'backtest' | 'pre-market' | 'after-close' | 'daily-rule-selection' | 'trading-plan' | 'system-job'>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [historyGroups, setHistoryGroups] = useState<Array<{ group_key: string; label: string; items: SystemRunTraceItem[] }>>([]);
+  const [pageInfo, setPageInfo] = useState<{ limit: number; has_more: boolean; next_cursor: string | null; total_filtered: number } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [technicalExpanded, setTechnicalExpanded] = useState(false);
+  const queryArgs = useMemo(
+    () => ({
+      limit: 10,
+      status: statusFilter,
+      businessType: businessTypeFilter,
+      cursor: undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    }),
+    [businessTypeFilter, dateFrom, dateTo, statusFilter],
+  );
   const rolloutQuery = useQuery({
     queryKey: ['formal-system', 'rollout'],
     queryFn: getSystemRolloutSummary,
@@ -491,21 +546,136 @@ function SystemRunsSummary() {
     enabled: showDiagnostics,
   });
   const query = useQuery({
-    queryKey: ['formal-system', 'run-traces'],
-    queryFn: () => listSystemRunTraces(10),
+    queryKey: ['formal-system', 'run-traces', queryArgs],
+    queryFn: () => listSystemRunTraces(queryArgs),
     staleTime: 15_000,
+    placeholderData: (previous) => previous,
   });
 
-  if (query.isLoading) {
+  useEffect(() => {
+    if (!query.data) return;
+    setHistoryGroups(query.data.history.groups);
+    setPageInfo(query.data.history.page);
+  }, [query.data]);
+
+  const loadMore = async () => {
+    if (!pageInfo?.has_more || !pageInfo.next_cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await listSystemRunTraces({
+        ...queryArgs,
+        cursor: pageInfo.next_cursor,
+      });
+      setHistoryGroups((current) => mergeHistoryGroups(current, response.history.groups));
+      setPageInfo(response.history.page);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  if (query.isLoading && !query.data) {
     return <LoadingState label="正在加载运行状态" description="正在整理正式运行记录、步骤状态和修复建议。" />;
   }
   if (query.error || !query.data) {
     return <p>运行状态暂不可用，请稍后重试。</p>;
   }
+
   return (
     <div className="space-y-4">
-      {showDiagnostics && rolloutQuery.data ? <SystemRolloutCard summary={rolloutQuery.data} /> : null}
-      {showDiagnostics && costControlQuery.data ? (
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+          <p className="text-xs text-slate-500">当前判断</p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">{query.data.summary.headline}</p>
+          <p className="mt-2 text-sm text-slate-600">原因：{query.data.summary.reason}</p>
+          <p className="mt-1 text-sm text-slate-600">影响：{query.data.summary.impact}</p>
+          <Link className="mt-3 inline-flex text-sm font-medium text-sky-700 hover:text-sky-900" to={query.data.summary.next_action.target_path}>
+            {query.data.summary.next_action.label}
+          </Link>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs text-slate-500">需要处理</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">{query.data.summary.counts.needs_attention}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs text-slate-500">已就绪</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">{query.data.summary.counts.ready}</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-sm text-slate-700">
+            <span>状态筛选</span>
+            <select
+              aria-label="状态筛选"
+              className="rounded-lg border border-slate-300 px-3 py-2"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+            >
+              <option value="all">全部</option>
+              <option value="needs_attention">需要处理</option>
+              <option value="failed">失败</option>
+              <option value="partial">部分受限</option>
+              <option value="ready">已就绪</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm text-slate-700">
+            <span>业务类型筛选</span>
+            <select
+              aria-label="业务类型筛选"
+              className="rounded-lg border border-slate-300 px-3 py-2"
+              value={businessTypeFilter}
+              onChange={(event) => setBusinessTypeFilter(event.target.value as typeof businessTypeFilter)}
+            >
+              <option value="all">全部</option>
+              <option value="data">数据</option>
+              <option value="prompt">Prompt</option>
+              <option value="backtest">回测</option>
+              <option value="pre-market">盘前</option>
+              <option value="after-close">盘后</option>
+              <option value="daily-rule-selection">每日规则选择</option>
+              <option value="trading-plan">今日计划</option>
+              <option value="system-job">系统任务</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm text-slate-700">
+            <span>开始日期</span>
+            <input aria-label="开始日期" className="rounded-lg border border-slate-300 px-3 py-2" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm text-slate-700">
+            <span>结束日期</span>
+            <input aria-label="结束日期" className="rounded-lg border border-slate-300 px-3 py-2" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          </label>
+          {showDiagnostics ? (
+            <button
+              type="button"
+              className="ml-auto inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+              onClick={() => setTechnicalExpanded((value) => !value)}
+            >
+              {technicalExpanded ? '收起技术详情' : '展开技术详情'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-medium text-slate-950">需要优先处理</p>
+          <span className="text-sm text-slate-500">最多显示 5 项</span>
+        </div>
+        {query.data.needs_attention.length ? (
+          <div className="mt-3 space-y-3">
+            {query.data.needs_attention.map((item) => (
+              <RunTraceCard key={`attention-${item.run_id}`} item={item} showDiagnostics={showDiagnostics && technicalExpanded} condensed />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-600">当前没有需要优先处理的运行。</p>
+        )}
+      </div>
+
+      {showDiagnostics && technicalExpanded && rolloutQuery.data ? <SystemRolloutCard summary={rolloutQuery.data} /> : null}
+      {showDiagnostics && technicalExpanded && costControlQuery.data ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="font-medium text-slate-950">成本与增量控制</p>
           <p className="mt-2 text-sm text-slate-600">
@@ -561,33 +731,36 @@ function SystemRunsSummary() {
           </div>
         </div>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-sm text-slate-600">最近正式运行</p>
-          <p className="mt-2 font-medium text-slate-950">{query.data.count} 项</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-slate-950">历史运行记录</p>
+            <p className="mt-1 text-sm text-slate-600">按日期分组显示，便于回看已经发生的处理和影响范围。</p>
+          </div>
+          <span className="text-sm text-slate-500">当前筛选共 {pageInfo?.total_filtered ?? 0} 项</span>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-sm text-slate-600">仍需处理</p>
-          <p className="mt-2 font-medium text-slate-950">
-            {query.data.items.filter((item) => item.status !== 'ready').length} 项
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="text-sm text-slate-600">可直接继续</p>
-          <p className="mt-2 font-medium text-slate-950">
-            {query.data.items.filter((item) => item.status === 'ready').length} 项
-          </p>
-        </div>
+        {historyGroups.length ? (
+          <div className="mt-4 space-y-4">
+            {historyGroups.map((group) => (
+              <div key={group.group_key} className="space-y-3">
+                <p className="text-sm font-medium text-slate-700">{group.label}</p>
+                {group.items.map((item) => (
+                  <RunTraceCard key={`${group.group_key}-${item.run_id}`} item={item} showDiagnostics={showDiagnostics && technicalExpanded} />
+                ))}
+              </div>
+            ))}
+            {pageInfo?.has_more ? (
+              <div className="pt-2">
+                <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
+                  {loadingMore ? '加载中' : '加载更多'}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <EmptyState title="暂无正式运行记录" description="当前筛选条件下没有可展示的历史运行。" />
+        )}
       </div>
-      {query.data.items.length ? (
-        <div className="space-y-3">
-          {query.data.items.map((item) => (
-            <RunTraceCard key={item.run_id} item={item} showDiagnostics={showDiagnostics} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="暂无正式运行记录" description="当前还没有可展示的正式运行追踪。" />
-      )}
     </div>
   );
 }
@@ -685,26 +858,35 @@ function renderSimpleValue(value: unknown) {
   return JSON.stringify(value);
 }
 
-function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; showDiagnostics: boolean }) {
+function RunTraceCard({
+  item,
+  showDiagnostics,
+  condensed = false,
+}: {
+  item: SystemRunTraceItem;
+  showDiagnostics: boolean;
+  condensed?: boolean;
+}) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-medium text-slate-950">{item.business_label}</p>
           <p className="mt-1 text-sm text-slate-600">
-            状态：{formatTraceStatus(item.status)} · 开始时间：{formatTime(item.started_at)}
+            {businessTypeLabel(item.business_type)} · 状态：{formatTraceStatus(item.status)} · 开始时间：{formatTime(item.started_at)}
           </p>
         </div>
-        <Link className="text-sm font-medium text-slate-700 hover:text-slate-950" to={item.next_action.target_path}>
-          {item.next_action.label}
+        <Link className="text-sm font-medium text-slate-700 hover:text-slate-950" to={item.safe_next_action.target_path}>
+          {item.safe_next_action.label}
         </Link>
       </div>
       <div className="mt-3 space-y-2 text-sm text-slate-700">
         <div><span className="font-medium text-slate-900">发生了什么：</span>{item.happened}</div>
+        <div><span className="font-medium text-slate-900">为什么需要关注：</span>{item.reason}</div>
         <div><span className="font-medium text-slate-900">影响：</span>{item.affected}</div>
-        <div><span className="font-medium text-slate-900">处理方式：</span>{item.repair_guidance}</div>
+        <div><span className="font-medium text-slate-900">下一步建议：</span>{item.repair_guidance}</div>
       </div>
-      {item.steps.length ? (
+      {!condensed && item.steps.length ? (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="font-medium text-slate-900">关键步骤</p>
           <div className="mt-2 space-y-2">
@@ -722,7 +904,7 @@ function RunTraceCard({ item, showDiagnostics }: { item: SystemRunTraceItem; sho
       ) : null}
       {showDiagnostics && item.admin_diagnostics ? (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="font-medium text-slate-900">查看运维诊断详情</p>
+          <p className="font-medium text-slate-900">运维诊断详情</p>
           <p className="mt-1 text-sm text-slate-600">技术状态：{formatTraceStatus(item.admin_diagnostics.technical_status)}</p>
           {item.admin_diagnostics.linked_ids ? (
             <div className="mt-2 space-y-1 text-sm text-slate-700">
@@ -913,9 +1095,17 @@ export function SystemDataPage({ availability }: FormalSystemPageProps = {}) {
 }
 
 export function SystemRunsPage({ availability }: FormalSystemPageProps = {}) {
+  const initialRunsQueryArgs = {
+    limit: 10,
+    status: 'all' as const,
+    businessType: 'all' as const,
+    cursor: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+  };
   const query = useQuery({
-    queryKey: ['formal-system', 'run-traces', 'page-shell'],
-    queryFn: () => listSystemRunTraces(10),
+    queryKey: ['formal-system', 'run-traces', initialRunsQueryArgs],
+    queryFn: () => listSystemRunTraces(initialRunsQueryArgs),
     staleTime: 15_000,
     enabled: availability == null,
   });
@@ -935,13 +1125,13 @@ export function SystemRunsPage({ availability }: FormalSystemPageProps = {}) {
       stateTitle = '运行追踪暂不可用';
       stateDescription = '当前无法读取正式运行追踪信息。';
       impact = '普通用户暂时只能依赖业务页状态，管理员无法在本页查看详细运行链路。';
-    } else if (query.data && query.data.items.length === 0) {
+    } else if (query.data && query.data.history.groups.length === 0) {
       state = 'empty';
       stateTitle = '暂无正式运行记录';
       stateDescription = '当前还没有可展示的正式运行追踪。';
       impact = '不会展示虚假的成功状态。';
     } else if (query.data) {
-      const hasProblem = query.data.items.some((item) => item.status !== 'ready');
+      const hasProblem = query.data.summary.counts.needs_attention > 0;
       state = hasProblem ? 'partial' : 'ready';
       stateTitle = hasProblem ? '存在待处理运行' : '正式运行状态已就绪';
       stateDescription = hasProblem
@@ -957,6 +1147,7 @@ export function SystemRunsPage({ availability }: FormalSystemPageProps = {}) {
     <ProductPageAdapter
       title="运行与告警"
       queryState={state}
+      layoutMode="detail"
       purpose="查看业务处理状态、失败影响和恢复建议。"
       inputDescription="输入来自正式业务运行记录、Prompt 调用、数据快照和回测证据。"
       processingDescription="系统会聚合正式运行状态、步骤、依赖和修复建议，并对普通用户与管理员分层展示。"

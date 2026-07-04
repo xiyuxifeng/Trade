@@ -22,23 +22,53 @@ def _result(payload: dict[str, Any], *, status: str = "ok", message: str = "ok")
 class _FakeSystemRunTraceService:
     calls: list[dict[str, Any]] = field(default_factory=list)
 
-    async def list_run_traces(self, *, actor_role: str, limit: int = 20) -> Any:
-        self.calls.append({"actor_role": actor_role, "limit": limit})
+    async def list_run_traces(
+        self,
+        *,
+        actor_role: str,
+        limit: int = 20,
+        cursor: str | None = None,
+        status_filter: str = "all",
+        business_type_filter: str = "all",
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> Any:
+        self.calls.append(
+            {
+                "actor_role": actor_role,
+                "limit": limit,
+                "cursor": cursor,
+                "status_filter": status_filter,
+                "business_type_filter": business_type_filter,
+                "date_from": date_from,
+                "date_to": date_to,
+            }
+        )
         return _result(
             {
-                "count": 1,
-                "items": [
+                "summary": {
+                    "overall_status": "needs_attention",
+                    "headline": "有 1 项运行仍需处理。",
+                    "counts": {"total": 1, "needs_attention": 1, "ready": 0},
+                    "next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+                },
+                "needs_attention": [
                     {
                         "run_id": "daily-plan:2026-06-22",
                         "business_label": "生成今日交易计划",
+                        "business_type": "trading-plan",
                         "status": "partial",
                         "started_at": "2026-06-22T08:55:00+00:00",
                         "finished_at": "2026-06-22T08:58:00+00:00",
                         "duration_seconds": 180,
                         "happened": "今日交易计划已生成，但仍有部分输入处于降级状态。",
+                        "reason": "盘前输入仍有降级项。",
                         "affected": "普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。",
+                        "impact": "限制部分执行范围。",
+                        "blocks_user": False,
                         "repair_guidance": "先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。",
                         "next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+                        "safe_next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
                         "attempt": {"attempt_id": "attempt-1", "retry_count": 0},
                         "steps": [
                             {
@@ -96,6 +126,52 @@ class _FakeSystemRunTraceService:
                         } if actor_role in {"operator", "admin"} else None,
                     }
                 ],
+                "history": {
+                    "groups": [
+                        {
+                            "group_key": "2026-06-22",
+                            "label": "2026-06-22",
+                            "items": [
+                                {
+                                    "run_id": "daily-plan:2026-06-22",
+                                    "business_label": "生成今日交易计划",
+                                    "business_type": "trading-plan",
+                                    "status": "partial",
+                                    "started_at": "2026-06-22T08:55:00+00:00",
+                                    "finished_at": "2026-06-22T08:58:00+00:00",
+                                    "duration_seconds": 180,
+                                    "happened": "今日交易计划已生成，但仍有部分输入处于降级状态。",
+                                    "reason": "盘前输入仍有降级项。",
+                                    "affected": "普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。",
+                                    "impact": "限制部分执行范围。",
+                                    "blocks_user": False,
+                                    "repair_guidance": "先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。",
+                                    "next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+                                    "safe_next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+                                    "attempt": {"attempt_id": "attempt-1", "retry_count": 0},
+                                    "steps": [],
+                                    "prompt_calls": [],
+                                    "data_fetches": [],
+                                    "backtests": [],
+                                    "linked_records": [],
+                                    "admin_diagnostics": {
+                                        "technical_status": "partial",
+                                        "linked_ids": {"job_ids": ["job-1"], "workflow_run_ids": ["workflow-1"]},
+                                    } if actor_role in {"operator", "admin"} else None,
+                                }
+                            ],
+                        }
+                    ],
+                    "page": {"limit": 5, "has_more": False, "next_cursor": None, "total_filtered": 1},
+                },
+                "filters": {
+                    "applied": {
+                        "status": status_filter,
+                        "business_type": business_type_filter,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                    }
+                },
             }
         )
 
@@ -124,15 +200,33 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 @pytest.mark.asyncio
 async def test_system_runs_endpoint_returns_run_trace_summary(client: AsyncClient) -> None:
-    response = await client.get("/api/ui/v1/system/runs", params={"limit": 5})
+    response = await client.get(
+        "/api/ui/v1/system/runs",
+        params={
+            "limit": 5,
+            "cursor": "cursor-1",
+            "status": "partial",
+            "business_type": "trading-plan",
+            "date_from": "2026-06-22",
+            "date_to": "2026-06-23",
+        },
+    )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["count"] == 1
-    assert payload["items"][0]["run_id"] == "daily-plan:2026-06-22"
-    assert payload["items"][0]["steps"][0]["step_id"] == "generate-plan"
-    assert payload["items"][0]["admin_diagnostics"]["linked_ids"]["job_ids"] == ["job-1"]
-    assert client.fake_service.calls[0] == {"actor_role": "admin", "limit": 5}  # type: ignore[attr-defined]
+    assert payload["summary"]["overall_status"] == "needs_attention"
+    assert payload["needs_attention"][0]["run_id"] == "daily-plan:2026-06-22"
+    assert payload["needs_attention"][0]["steps"][0]["step_id"] == "generate-plan"
+    assert payload["history"]["groups"][0]["items"][0]["admin_diagnostics"]["linked_ids"]["job_ids"] == ["job-1"]
+    assert client.fake_service.calls[0] == {  # type: ignore[attr-defined]
+        "actor_role": "admin",
+        "limit": 5,
+        "cursor": "cursor-1",
+        "status_filter": "partial",
+        "business_type_filter": "trading-plan",
+        "date_from": "2026-06-22",
+        "date_to": "2026-06-23",
+    }
 
 
 @pytest.mark.asyncio
@@ -149,7 +243,8 @@ async def test_system_runs_endpoint_hides_admin_diagnostics_from_viewer(client: 
         response = await client.get("/api/ui/v1/system/runs")
         assert response.status_code == 200
         payload = response.json()
-        assert payload["items"][0]["admin_diagnostics"] is None
+        assert payload["needs_attention"][0]["admin_diagnostics"] is None
+        assert payload["history"]["groups"][0]["items"][0]["admin_diagnostics"] is None
     finally:
         if previous is None:
             app.dependency_overrides.pop(get_current_principal, None)

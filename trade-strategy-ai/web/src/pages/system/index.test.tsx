@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { SystemDataPage, SystemPage, SystemRunsPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
 
@@ -245,19 +245,31 @@ describe('SystemPage', () => {
 
   it('renders formal run traces on /system/runs for viewers without exposing diagnostics', async () => {
     mockedListSystemRunTraces.mockResolvedValue({
-      count: 1,
-      items: [
+      summary: {
+        overall_status: 'needs_attention',
+        headline: '有 1 项运行仍需处理。',
+        reason: '盘前输入仍有降级项。',
+        impact: '今日计划会受到影响。',
+        counts: { total: 2, needs_attention: 1, ready: 1, partial: 1, failed: 0 },
+        next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+      },
+      needs_attention: [
         {
           run_id: 'daily-plan:2026-06-22',
           business_label: '生成今日交易计划',
+          business_type: 'trading-plan',
           status: 'partial',
           started_at: '2026-06-22T08:55:00Z',
           finished_at: '2026-06-22T08:58:00Z',
           duration_seconds: 180,
           happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+          reason: '盘前输入仍有降级项。',
           affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+          impact: '今日计划会受到影响。',
+          blocks_user: false,
           repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
           next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+          safe_next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
           attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
           steps: [],
           prompt_calls: [],
@@ -298,6 +310,46 @@ describe('SystemPage', () => {
           admin_diagnostics: null,
         },
       ],
+      history: {
+        groups: [
+          {
+            group_key: '2026-06-22',
+            label: '2026-06-22',
+            items: [
+              {
+                run_id: 'daily-plan:2026-06-22',
+                business_label: '生成今日交易计划',
+                business_type: 'trading-plan',
+                status: 'partial',
+                started_at: '2026-06-22T08:55:00Z',
+                finished_at: '2026-06-22T08:58:00Z',
+                duration_seconds: 180,
+                happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+                reason: '盘前输入仍有降级项。',
+                affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+                impact: '今日计划会受到影响。',
+                blocks_user: false,
+                repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
+                next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+                safe_next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+                attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+                steps: [],
+                prompt_calls: [],
+                data_fetches: [],
+                backtests: [],
+                linked_records: [],
+                admin_diagnostics: null,
+              },
+            ],
+          },
+        ],
+        page: { limit: 10, has_more: false, next_cursor: null, total_filtered: 1 },
+      },
+      filters: {
+        applied: { status: 'all', business_type: 'all', date_from: null, date_to: null },
+        available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+        available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+      },
     } as never);
 
     const { container } = renderWithRouter(
@@ -314,12 +366,16 @@ describe('SystemPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: '运行与告警' })).toBeInTheDocument();
-    expect(await screen.findByText('生成今日交易计划')).toBeInTheDocument();
-    expect(screen.getByText('今日交易计划已生成，但仍有部分输入处于降级状态。')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看今日计划' })).toHaveAttribute('href', '/daily/pre-market');
+    expect(await screen.findByText('有 1 项运行仍需处理。')).toBeInTheDocument();
+    expect(screen.getByText('需要优先处理')).toBeInTheDocument();
+    expect((await screen.findAllByText('生成今日交易计划')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('今日交易计划已生成，但仍有部分输入处于降级状态。').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: '查看今日计划' })[0]).toHaveAttribute('href', '/daily/pre-market');
     expect(container.textContent).not.toContain('run_id');
     expect(container.textContent).not.toContain('job_id');
     expect(container.textContent).not.toContain('workflow_run_id');
+    expect(container.textContent).not.toContain('dataset-fp');
+    expect(container.textContent).not.toContain('market-state-v2');
   });
 
   it('shows admin diagnostics on /system/runs only for admins', async () => {
@@ -491,19 +547,31 @@ describe('SystemPage', () => {
       ],
     } as never);
     mockedListSystemRunTraces.mockResolvedValue({
-      count: 1,
-      items: [
+      summary: {
+        overall_status: 'needs_attention',
+        headline: '有 1 项运行仍需处理。',
+        reason: '盘前输入仍有降级项。',
+        impact: '今日计划会受到影响。',
+        counts: { total: 1, needs_attention: 1, ready: 0, partial: 1, failed: 0 },
+        next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+      },
+      needs_attention: [
         {
           run_id: 'daily-plan:2026-06-22',
           business_label: '生成今日交易计划',
+          business_type: 'trading-plan',
           status: 'partial',
           started_at: '2026-06-22T08:55:00Z',
           finished_at: '2026-06-22T08:58:00Z',
           duration_seconds: 180,
           happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+          reason: '盘前输入仍有降级项。',
           affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+          impact: '今日计划会受到影响。',
+          blocks_user: false,
           repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
           next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+          safe_next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
           attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
           steps: [],
           prompt_calls: [
@@ -569,6 +637,51 @@ describe('SystemPage', () => {
           },
         },
       ],
+      history: {
+        groups: [
+          {
+            group_key: '2026-06-22',
+            label: '2026-06-22',
+            items: [
+              {
+                run_id: 'daily-plan:2026-06-22',
+                business_label: '生成今日交易计划',
+                business_type: 'trading-plan',
+                status: 'partial',
+                started_at: '2026-06-22T08:55:00Z',
+                finished_at: '2026-06-22T08:58:00Z',
+                duration_seconds: 180,
+                happened: '今日交易计划已生成，但仍有部分输入处于降级状态。',
+                reason: '盘前输入仍有降级项。',
+                affected: '普通用户可以查看今日计划，但需要关注降级输入对执行范围的影响。',
+                impact: '今日计划会受到影响。',
+                blocks_user: false,
+                repair_guidance: '先补齐缺失的盘前输入，或在降级范围内继续查看本次结果。',
+                next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+                safe_next_action: { label: '查看今日计划', target_path: '/daily/pre-market' },
+                attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+                steps: [],
+                prompt_calls: [],
+                data_fetches: [],
+                backtests: [],
+                linked_records: [],
+                admin_diagnostics: {
+                  technical_status: 'partial',
+                  linked_ids: { job_ids: ['job-1'], workflow_run_ids: ['workflow-1'] },
+                  payload_fingerprints: { idempotency_key: 'system-data-operation:abc' },
+                  raw_metadata: { retry_policy: { max_retries: 3, backoff_seconds: 300 } },
+                },
+              },
+            ],
+          },
+        ],
+        page: { limit: 10, has_more: false, next_cursor: null, total_filtered: 1 },
+      },
+      filters: {
+        applied: { status: 'all', business_type: 'all', date_from: null, date_to: null },
+        available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+        available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+      },
     } as never);
 
     renderWithRouter(
@@ -584,7 +697,9 @@ describe('SystemPage', () => {
       },
     );
 
-    expect(await screen.findByText('查看运维诊断详情')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '展开技术详情' })).toBeInTheDocument();
+    expect(screen.queryByText('job-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '展开技术详情' }));
     expect(screen.getByText('灰度迁移与回滚')).toBeInTheDocument();
     expect(screen.getByText('正式数据库迁移')).toBeInTheDocument();
     expect(screen.getByText('静默数据丢失：未发现')).toBeInTheDocument();
@@ -600,8 +715,8 @@ describe('SystemPage', () => {
     expect(screen.getByText('schema_version_changed')).toBeInTheDocument();
     expect(screen.getByText('运行编号：backtest-run-1 · reused')).toBeInTheDocument();
     expect(screen.getByText('changed_article_revision_group')).toBeInTheDocument();
-    expect(screen.getByText('job-1')).toBeInTheDocument();
-    expect(screen.getByText('workflow-1')).toBeInTheDocument();
+    expect(screen.getAllByText('job-1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('workflow-1').length).toBeGreaterThan(0);
     expect(screen.getByText('Prompt 调用')).toBeInTheDocument();
     expect(screen.getByText('openai / gpt-5.4')).toBeInTheDocument();
     expect(screen.getByText('数据抓取')).toBeInTheDocument();
@@ -613,8 +728,287 @@ describe('SystemPage', () => {
     expect(screen.getByText('生效时间：2026-06-22 08:35:00 UTC')).toBeInTheDocument();
     expect(screen.getByText('正式回测证据')).toBeInTheDocument();
     expect(screen.getByText('代码版本：engine-v5')).toBeInTheDocument();
-    expect(screen.getByText('idempotency_key：')).toBeInTheDocument();
-    expect(screen.getByText(/max_retries/)).toBeInTheDocument();
+    expect(screen.getAllByText('idempotency_key：').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/max_retries/).length).toBeGreaterThan(0);
+  });
+
+  it('updates filters and loads more history on /system/runs', async () => {
+    mockedListSystemRunTraces
+      .mockResolvedValueOnce({
+        summary: {
+          overall_status: 'needs_attention',
+          headline: '有 2 项运行仍需处理。',
+          reason: '回测和数据更新都需要处理。',
+          impact: '会影响规则验证与每日流程。',
+          counts: { total: 3, needs_attention: 2, ready: 1, partial: 1, failed: 1 },
+          next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+        },
+        needs_attention: [
+          {
+            run_id: 'backtest-1',
+            business_label: '执行正式回测',
+            business_type: 'backtest',
+            status: 'error',
+            started_at: '2026-07-04T09:05:00Z',
+            finished_at: '2026-07-04T09:08:00Z',
+            duration_seconds: 180,
+            happened: '正式回测失败。',
+            reason: '关键回测输入未通过校验。',
+            affected: '无法继续查看这次验证结果。',
+            impact: '阻断规则验证。',
+            blocks_user: true,
+            repair_guidance: '先补齐输入后重新发起回测。',
+            next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+            safe_next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+            attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+            steps: [],
+            prompt_calls: [],
+            data_fetches: [],
+            backtests: [],
+            linked_records: [],
+            admin_diagnostics: null,
+          },
+        ],
+        history: {
+          groups: [
+            {
+              group_key: '2026-07-04',
+              label: '2026-07-04',
+              items: [
+                {
+                  run_id: 'backtest-1',
+                  business_label: '执行正式回测',
+                  business_type: 'backtest',
+                  status: 'error',
+                  started_at: '2026-07-04T09:05:00Z',
+                  finished_at: '2026-07-04T09:08:00Z',
+                  duration_seconds: 180,
+                  happened: '正式回测失败。',
+                  reason: '关键回测输入未通过校验。',
+                  affected: '无法继续查看这次验证结果。',
+                  impact: '阻断规则验证。',
+                  blocks_user: true,
+                  repair_guidance: '先补齐输入后重新发起回测。',
+                  next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  safe_next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+                  steps: [],
+                  prompt_calls: [],
+                  data_fetches: [],
+                  backtests: [],
+                  linked_records: [],
+                  admin_diagnostics: null,
+                },
+              ],
+            },
+          ],
+          page: { limit: 1, has_more: true, next_cursor: 'cursor-2', total_filtered: 3 },
+        },
+        filters: {
+          applied: { status: 'all', business_type: 'all', date_from: null, date_to: null },
+          available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+          available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        summary: {
+          overall_status: 'needs_attention',
+          headline: '有 1 项失败运行。',
+          reason: '正式运行里仍有失败项。',
+          impact: '需要继续缩小问题范围。',
+          counts: { total: 3, needs_attention: 2, ready: 1, partial: 1, failed: 1 },
+          next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+        },
+        needs_attention: [],
+        history: {
+          groups: [
+            {
+              group_key: '2026-07-04',
+              label: '2026-07-04',
+              items: [
+                {
+                  run_id: 'backtest-1',
+                  business_label: '执行正式回测',
+                  business_type: 'backtest',
+                  status: 'error',
+                  started_at: '2026-07-04T09:05:00Z',
+                  finished_at: '2026-07-04T09:08:00Z',
+                  duration_seconds: 180,
+                  happened: '正式回测失败。',
+                  reason: '关键回测输入未通过校验。',
+                  affected: '无法继续查看这次验证结果。',
+                  impact: '阻断规则验证。',
+                  blocks_user: true,
+                  repair_guidance: '先补齐输入后重新发起回测。',
+                  next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  safe_next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+                  steps: [],
+                  prompt_calls: [],
+                  data_fetches: [],
+                  backtests: [],
+                  linked_records: [],
+                  admin_diagnostics: null,
+                },
+              ],
+            },
+          ],
+          page: { limit: 1, has_more: true, next_cursor: 'cursor-2', total_filtered: 2 },
+        },
+        filters: {
+          applied: { status: 'failed', business_type: 'all', date_from: null, date_to: null },
+          available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+          available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        summary: {
+          overall_status: 'needs_attention',
+          headline: '有 1 项回测失败。',
+          reason: '关键回测输入未通过校验。',
+          impact: '阻断规则验证。',
+          counts: { total: 3, needs_attention: 2, ready: 1, partial: 1, failed: 1 },
+          next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+        },
+        needs_attention: [],
+        history: {
+          groups: [
+            {
+              group_key: '2026-07-04',
+              label: '2026-07-04',
+              items: [
+                {
+                  run_id: 'backtest-1',
+                  business_label: '执行正式回测',
+                  business_type: 'backtest',
+                  status: 'error',
+                  started_at: '2026-07-04T09:05:00Z',
+                  finished_at: '2026-07-04T09:08:00Z',
+                  duration_seconds: 180,
+                  happened: '正式回测失败。',
+                  reason: '关键回测输入未通过校验。',
+                  affected: '无法继续查看这次验证结果。',
+                  impact: '阻断规则验证。',
+                  blocks_user: true,
+                  repair_guidance: '先补齐输入后重新发起回测。',
+                  next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  safe_next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  attempt: { attempt_id: 'attempt-1', retry_count: 0, state: 'ready' },
+                  steps: [],
+                  prompt_calls: [],
+                  data_fetches: [],
+                  backtests: [],
+                  linked_records: [],
+                  admin_diagnostics: null,
+                },
+              ],
+            },
+          ],
+          page: { limit: 1, has_more: true, next_cursor: 'cursor-2', total_filtered: 2 },
+        },
+        filters: {
+          applied: { status: 'failed', business_type: 'backtest', date_from: null, date_to: null },
+          available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+          available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        summary: {
+          overall_status: 'needs_attention',
+          headline: '有 1 项回测失败。',
+          reason: '关键回测输入未通过校验。',
+          impact: '阻断规则验证。',
+          counts: { total: 3, needs_attention: 2, ready: 1, partial: 1, failed: 1 },
+          next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+        },
+        needs_attention: [],
+        history: {
+          groups: [
+            {
+              group_key: '2026-07-04',
+              label: '2026-07-04',
+              items: [
+                {
+                  run_id: 'backtest-2',
+                  business_label: '执行正式回测',
+                  business_type: 'backtest',
+                  status: 'error',
+                  started_at: '2026-07-04T08:05:00Z',
+                  finished_at: '2026-07-04T08:08:00Z',
+                  duration_seconds: 180,
+                  happened: '上一条回测也失败。',
+                  reason: '样本快照仍然缺失。',
+                  affected: '历史验证暂时不可继续。',
+                  impact: '继续阻断规则验证。',
+                  blocks_user: true,
+                  repair_guidance: '补齐样本快照后重试。',
+                  next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  safe_next_action: { label: '查看规则与回测', target_path: '/rules/backtests' },
+                  attempt: { attempt_id: 'attempt-2', retry_count: 1, state: 'ready' },
+                  steps: [],
+                  prompt_calls: [],
+                  data_fetches: [],
+                  backtests: [],
+                  linked_records: [],
+                  admin_diagnostics: null,
+                },
+              ],
+            },
+          ],
+          page: { limit: 1, has_more: false, next_cursor: null, total_filtered: 2 },
+        },
+        filters: {
+          applied: { status: 'failed', business_type: 'backtest', date_from: null, date_to: null },
+          available_statuses: ['all', 'needs_attention', 'failed', 'partial', 'ready'],
+          available_business_types: ['all', 'data', 'prompt', 'backtest', 'pre-market', 'after-close', 'daily-rule-selection', 'trading-plan', 'system-job'],
+        },
+      } as never);
+
+    renderWithRouter(
+      [{ path: '/system/runs', element: <SystemRunsPage /> }],
+      ['/system/runs'],
+      {
+        initialPrincipal: {
+          role: 'viewer',
+          api_key_label: 'Viewer',
+          authenticated: true,
+          source: 'api_key',
+        },
+      },
+    );
+
+    expect(await screen.findByText('执行正式回测')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(2));
+    const filters = screen.getAllByRole('combobox');
+    fireEvent.change(filters[0], { target: { value: 'failed' } });
+    fireEvent.change(filters[1], { target: { value: 'backtest' } });
+
+    await waitFor(() =>
+      expect(mockedListSystemRunTraces).toHaveBeenLastCalledWith({
+        limit: 10,
+        cursor: undefined,
+        status: 'failed',
+        businessType: 'backtest',
+        dateFrom: undefined,
+        dateTo: undefined,
+      }),
+    );
+
+    expect(await screen.findByText('当前没有需要优先处理的运行。')).toBeInTheDocument();
+    const loadMoreButton = await screen.findByRole('button', { name: '加载更多' });
+    fireEvent.click(loadMoreButton);
+
+    await waitFor(() =>
+      expect(mockedListSystemRunTraces).toHaveBeenLastCalledWith({
+        limit: 10,
+        cursor: 'cursor-2',
+        status: 'failed',
+        businessType: 'backtest',
+        dateFrom: undefined,
+        dateTo: undefined,
+      }),
+    );
+    expect(await screen.findByText('上一条回测也失败。')).toBeInTheDocument();
   });
 
   it('shows operator automation diagnostics on recent system data operations', async () => {

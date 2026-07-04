@@ -20,8 +20,30 @@ export function getSystemDashboard() {
   return fetchJson<SystemDashboardResponse>('/system/dashboard');
 }
 
-export function listSystemRunTraces(limit = 20) {
-  return fetchJson<SystemRunTraceListResponse>(`/system/runs?limit=${limit}`);
+export function listSystemRunTraces({
+  limit = 20,
+  cursor,
+  status = 'all',
+  businessType = 'all',
+  dateFrom,
+  dateTo,
+}: {
+  limit?: number;
+  cursor?: string;
+  status?: 'all' | 'needs_attention' | 'failed' | 'partial' | 'ready';
+  businessType?: 'all' | 'data' | 'prompt' | 'backtest' | 'pre-market' | 'after-close' | 'daily-rule-selection' | 'trading-plan' | 'system-job';
+  dateFrom?: string;
+  dateTo?: string;
+} = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    status,
+    business_type: businessType,
+  });
+  if (cursor) query.set('cursor', cursor);
+  if (dateFrom) query.set('date_from', dateFrom);
+  if (dateTo) query.set('date_to', dateTo);
+  return fetchJson<SystemRunTraceListResponse>(`/system/runs?${query.toString()}`);
 }
 
 export function getSystemCostControlSummary() {

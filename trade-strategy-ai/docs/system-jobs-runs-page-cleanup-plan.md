@@ -246,14 +246,14 @@ Task 1 uses a conservative rollout rule:
 | `/system/configuration` | `management` | migrated | Read-only config summary does not need workflow framing. |
 | `/system/data` | `workflow` | unchanged | Still centers on repair, backfill, and recompute actions. |
 | `/system/jobs` | `management` | migrated | Formal Job Management entry from Task 2. |
-| `/system/runs` | `detail` | deferred | Current shell stays workflow-shaped until the bounded Task 3 redesign. |
-| `/research/articles` | `library` | deferred | Matrix defined now; shell migration can happen later without breaking current pages. |
+| `/system/runs` | `detail` | migrated | Runs & Alerts now uses summary + attention + history layout; technical diagnostics stay collapsed for operator/admin. |
+| `/research/articles` | `library` | migrated | Read-only article library no longer keeps meaningless workflow-only sections. |
 | `/research/add` | `workflow` | migrated | Explicitly pinned to workflow layout to prove default-compatible migration. |
 | `/research/results` | `detail` | deferred | Current shell remains workflow-compatible. |
 | `/rules/review` | `workflow` | unchanged | Review flow still needs input, status, and output framing. |
-| `/rules/library` | `library` | deferred | Matrix defined now; current page remains backward-compatible. |
+| `/rules/library` | `library` | migrated | Rule library now uses library layout rather than workflow framing. |
 | `/rules/backtests` | `workflow` | unchanged | Creating and rerunning backtests remains workflow-oriented. |
-| `/rules/results` | `detail` | deferred | Current shell remains workflow-compatible. |
+| `/rules/results` | `detail` | migrated | Rule results now uses detail layout rather than workflow framing. |
 | `/authors` | `library` | migrated | Read-only version library hides meaningless workflow sections. |
 | `/daily/overview` | `overview` | deferred | Current shell remains workflow-compatible in Task 1. |
 | `/daily/pre-market` | `workflow` | unchanged | Generation flow remains workflow-oriented. |
@@ -596,6 +596,23 @@ The page should support filters for at least:
 - business type: all / data / prompt / backtest / pre-market / after-close / daily-rule-selection / trading-plan / system-job;
 - date range if practical.
 
+Implemented API shape:
+
+```text
+GET /api/ui/v1/system/runs?status=&business_type=&date_from=&date_to=&limit=10&cursor=
+```
+
+Returned payload shape:
+
+```text
+{
+  summary,
+  needs_attention,
+  history: { groups, page },
+  filters
+}
+```
+
 ### Content cleanup rules
 
 Default user view should hide or translate:
@@ -638,6 +655,18 @@ Do not remove workflow sections from pages that actually execute workflows unles
 - Do not remove the underlying traceability data.
 - Do not delete diagnostics required for audit/reproducibility.
 - Do not make `/system/runs` a second job control page.
+
+## 2026-07-04 implementation notes
+
+- `/system/runs` now defaults to a user-readable Runs & Alerts overview:
+  - top summary with current state, impact, and next action;
+  - capped `needs_attention` list;
+  - grouped history with cursor-based load-more;
+  - operator/admin-only technical diagnostics collapsed by default.
+- Viewer payload no longer exposes raw diagnostics by default; operator/admin can still expand prompt/data/backtest/admin detail panels.
+- Historical filters are implemented for `status`, `business_type`, `date_from`, and `date_to`.
+- Default content hides raw UUID-heavy diagnostics, fingerprints, raw snapshot IDs, and repair/test labels from the viewer-facing surface.
+- `/system/jobs` remains the formal job control page and is not redesigned by this task.
 - Do not hide real failures just to make the page look clean.
 
 ## Documentation updates

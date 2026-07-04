@@ -81,12 +81,25 @@ async def get_system_dashboard(
 @router.get("/runs")
 async def list_system_runs(
     limit: int = 20,
+    cursor: str | None = None,
+    status: str = "all",
+    business_type: str = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
     service: SystemRunTraceService = Depends(get_system_run_trace_service),
     principal: CurrentPrincipal = Depends(get_current_principal),
     _: str = Depends(verify_api_key),
 ) -> dict[str, object]:
     """返回系统管理运行追踪视图。"""
-    result = await service.list_run_traces(actor_role=principal.role, limit=limit)
+    result = await service.list_run_traces(
+        actor_role=principal.role,
+        limit=limit,
+        cursor=cursor,
+        status_filter=status,
+        business_type_filter=business_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
     return result.payload
 
 

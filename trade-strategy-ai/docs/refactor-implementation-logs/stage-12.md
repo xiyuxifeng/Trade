@@ -9,6 +9,59 @@
 - 下一可执行项：无。Stage 12 已完成；不得自动开始任何新 Stage 或后续重构任务。
 - 不得自动开始：不得自动开始任何新 Stage 或后续重构任务。
 
+## 2026-07-04 Post-delivery Task 3 Runs & Alerts cleanup and page simplification
+
+### Status
+
+`ACCEPTED`
+
+### Scope
+
+- 执行 `docs/system-jobs-runs-page-cleanup-plan.md` Task 3。
+- 将 `/system/runs` 改为“运行与告警”概览，不承载 Job 控制。
+- 为历史运行增加筛选和分页。
+- 在不改动 workflow 页业务闭环的前提下，继续迁移高噪音非 workflow 页面壳层。
+
+### Implementation
+
+- `src/services/system_run_trace_service.py`
+  - `/system/runs` 聚合输出改为 `summary`、`needs_attention`、`history`、`filters` 四段结构。
+  - 新增 `status`、`business_type`、`date_from`、`date_to`、`cursor`、`limit` 过滤和分页能力。
+  - 对 viewer 默认移除 `admin_diagnostics`，保留 operator/admin 可展开的诊断细节。
+  - 为 `partial` / `degraded` / `unavailable` / `error` 等状态补齐 `reason`、`impact`、`blocks_user` 和 `safe_next_action`。
+  - 历史记录按日期分组，并保持稳定排序。
+- `api/routers/ui/system.py`
+  - `/api/ui/v1/system/runs` 暴露新的筛选和分页 query 参数，并转发到 service。
+- `web/src/pages/system/index.tsx`
+  - `/system/runs` 默认改为顶部摘要、优先处理事项、筛选器、历史记录、折叠技术详情。
+  - viewer 默认不显示 raw diagnostics；operator/admin 可展开 prompt/data/backtest/admin 诊断。
+  - 历史记录使用 cursor load-more；筛选切换时保留上一屏数据，避免表单闪断。
+- `web/src/lib/api/system.ts`、`web/src/types/system.ts`
+  - 对齐新的 overview API contract。
+- 非 workflow 页面壳层继续收敛：
+  - `/research/articles` -> `library`
+  - `/rules/library` -> `library`
+  - `/rules/results` -> `detail`
+- Docs
+  - `docs/system-jobs-runs-page-cleanup-plan.md` 更新 Task 3 最终 API shape、布局矩阵和实现说明。
+  - `docs/stage-12-user-docs/Admin-Operations-Guide.md` 更新“运行与告警”行为说明。
+
+### Verification
+
+- `python -m pytest tests/unit/services/test_system_run_trace_service.py tests/api/routers/ui/test_ui_system_runs.py -q`
+  - result: `8 passed`
+- `cd web && PATH=${NODE18_BIN}:$PATH pnpm test -- src/pages/system/index.test.tsx src/lib/api/system.test.ts src/pages/product-page-state-matrix.test.tsx`
+  - result: `28 passed`
+
+### Residual risks
+
+- 本次未新增 Playwright/E2E 用例；替代证据是后端 service/router focused tests 和前端页面/API/layout focused tests。
+- `/system/jobs` 保持 Task 2 的正式 Job Management 定位，没有在本任务中重做交互或信息架构。
+
+### Acceptance
+
+`ACCEPTED`。`/system/runs` 已改为用户可读的“运行与告警”概览，历史记录支持筛选和 load-more，默认视图收敛技术噪音且保留 operator/admin 可展开的 traceability 细节；`/system/jobs` 仍然是任务控制页。
+
 ## 2026-07-04 Post-delivery Task 2 Job Management formalization
 
 ### Status

@@ -104,7 +104,7 @@ function ResearchAvailabilityBoundary({
 }
 
 export function ResearchArticlesPage({ availability }: { availability?: PageAvailability } = {}) {
-  if (availability) return <ResearchAvailabilityBoundary title="文章库" availability={availability} />;
+  if (availability) return <ResearchAvailabilityBoundary title="文章库" availability={availability} layoutMode="library" />;
   return <ArticleLibraryPage productMode navigationTargets={navigationTargets} />;
 }
 

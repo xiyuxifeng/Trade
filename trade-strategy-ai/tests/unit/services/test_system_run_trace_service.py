@@ -144,3 +144,119 @@ def test_build_post_market_review_trace_returns_truthful_partial_without_prompt_
     assert trace["prompt_calls"] == []
     assert trace["steps"][0]["output_references"][0]["id"] == "review-1"
     assert trace["admin_diagnostics"]["payload_fingerprints"]["prompt_run_linked"] is False
+
+
+def test_build_runs_overview_caps_attention_applies_filters_and_paginates_history() -> None:
+    service = SystemRunTraceService(session_scope_factory=lambda: None)
+    traces = [
+        {
+            "run_id": "backtest-1",
+            "business_label": "执行正式回测",
+            "business_type": "backtest",
+            "status": "error",
+            "started_at": "2026-07-04T09:05:00+00:00",
+            "finished_at": "2026-07-04T09:08:00+00:00",
+            "happened": "正式回测失败。",
+            "reason": "关键回测输入未通过校验。",
+            "affected": "无法继续查看这次验证结果。",
+            "impact": "阻断规则验证。",
+            "blocks_user": True,
+            "repair_guidance": "先补齐输入后重新发起回测。",
+            "next_action": {"label": "查看规则与回测", "target_path": "/rules/backtests"},
+            "safe_next_action": {"label": "查看规则与回测", "target_path": "/rules/backtests"},
+            "admin_diagnostics": {"technical_status": "error"},
+        },
+        {
+            "run_id": "data-1",
+            "business_label": "补齐缺失数据",
+            "business_type": "data",
+            "status": "partial",
+            "started_at": "2026-07-04T08:30:00+00:00",
+            "finished_at": "2026-07-04T08:40:00+00:00",
+            "happened": "盘前数据只补齐了一部分。",
+            "reason": "部分市场快照仍然缺失。",
+            "affected": "今日盘前计划会受到影响。",
+            "impact": "限制盘前流程。",
+            "blocks_user": True,
+            "repair_guidance": "去数据与调度补齐盘前快照。",
+            "next_action": {"label": "查看数据与调度", "target_path": "/system/data"},
+            "safe_next_action": {"label": "查看数据与调度", "target_path": "/system/data"},
+            "admin_diagnostics": {"technical_status": "partial"},
+        },
+        {
+            "run_id": "prompt-1",
+            "business_label": "结构化文章提取",
+            "business_type": "prompt",
+            "status": "degraded",
+            "started_at": "2026-07-04T07:30:00+00:00",
+            "finished_at": "2026-07-04T07:35:00+00:00",
+            "happened": "结构化结果已返回，但仍有字段降级。",
+            "reason": "部分字段缺少正式证据。",
+            "affected": "研究结果需要人工复核。",
+            "impact": "限制研究输出可信度。",
+            "blocks_user": False,
+            "repair_guidance": "返回研究中心查看待复核项。",
+            "next_action": {"label": "查看研究中心", "target_path": "/research/articles"},
+            "safe_next_action": {"label": "查看研究中心", "target_path": "/research/articles"},
+            "admin_diagnostics": {"technical_status": "degraded"},
+        },
+        {
+            "run_id": "plan-1",
+            "business_label": "生成今日交易计划",
+            "business_type": "trading-plan",
+            "status": "ready",
+            "started_at": "2026-07-03T23:30:00+00:00",
+            "finished_at": "2026-07-03T23:35:00+00:00",
+            "happened": "今日交易计划已生成。",
+            "reason": "全部输入已就绪。",
+            "affected": "可以继续查看今日计划。",
+            "impact": "不阻断用户。",
+            "blocks_user": False,
+            "repair_guidance": "无需额外处理。",
+            "next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+            "safe_next_action": {"label": "查看今日计划", "target_path": "/daily/pre-market"},
+            "admin_diagnostics": {"technical_status": "ready"},
+        },
+    ]
+
+    payload = service._build_runs_overview_payload(
+        traces,
+        actor_role="viewer",
+        status_filter="needs_attention",
+        business_type_filter="all",
+        cursor=None,
+        limit=2,
+        date_from=None,
+        date_to=None,
+    )
+
+    assert payload["summary"]["overall_status"] == "needs_attention"
+    assert payload["summary"]["counts"]["needs_attention"] == 3
+    assert payload["summary"]["counts"]["ready"] == 1
+    assert payload["summary"]["next_action"]["target_path"] == "/rules/backtests"
+    assert len(payload["needs_attention"]) == 3
+    assert payload["needs_attention"][0]["run_id"] == "backtest-1"
+    assert payload["needs_attention"][0]["reason"] == "关键回测输入未通过校验。"
+    assert payload["needs_attention"][0]["safe_next_action"]["target_path"] == "/rules/backtests"
+    assert payload["history"]["groups"][0]["items"][0]["run_id"] == "backtest-1"
+    assert payload["history"]["groups"][0]["items"][1]["run_id"] == "data-1"
+    assert payload["history"]["page"]["has_more"] is True
+    assert payload["history"]["page"]["next_cursor"] is not None
+    assert payload["history"]["page"]["total_filtered"] == 3
+    assert payload["history"]["groups"][0]["items"][0]["admin_diagnostics"] is None
+
+    next_payload = service._build_runs_overview_payload(
+        traces,
+        actor_role="admin",
+        status_filter="all",
+        business_type_filter="prompt",
+        cursor=payload["history"]["page"]["next_cursor"],
+        limit=2,
+        date_from="2026-07-04",
+        date_to="2026-07-04",
+    )
+
+    assert next_payload["summary"]["counts"]["total"] == 4
+    assert next_payload["history"]["page"]["total_filtered"] == 1
+    assert next_payload["history"]["groups"][0]["items"][0]["run_id"] == "prompt-1"
+    assert next_payload["history"]["groups"][0]["items"][0]["admin_diagnostics"]["technical_status"] == "degraded"

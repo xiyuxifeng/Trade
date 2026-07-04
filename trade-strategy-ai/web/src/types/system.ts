@@ -323,14 +323,22 @@ export type SystemBacktestTrace = {
 export type SystemRunTraceItem = {
   run_id: string;
   business_label: string;
+  business_type: string;
   status: string;
   started_at: string | null;
   finished_at: string | null;
   duration_seconds: number | null;
   happened: string;
+  reason: string;
   affected: string;
+  impact: string;
+  blocks_user: boolean;
   repair_guidance: string;
   next_action: {
+    label: string;
+    target_path: string;
+  };
+  safe_next_action: {
     label: string;
     target_path: string;
   };
@@ -352,9 +360,50 @@ export type SystemRunTraceItem = {
   } | null;
 };
 
+export type SystemRunsOverviewSummary = {
+  overall_status: 'ready' | 'needs_attention';
+  headline: string;
+  reason: string;
+  impact: string;
+  counts: {
+    total: number;
+    needs_attention: number;
+    ready: number;
+    partial: number;
+    failed: number;
+  };
+  next_action: {
+    label: string;
+    target_path: string;
+  };
+};
+
 export type SystemRunTraceListResponse = {
-  count: number;
-  items: SystemRunTraceItem[];
+  summary: SystemRunsOverviewSummary;
+  needs_attention: SystemRunTraceItem[];
+  history: {
+    groups: Array<{
+      group_key: string;
+      label: string;
+      items: SystemRunTraceItem[];
+    }>;
+    page: {
+      limit: number;
+      has_more: boolean;
+      next_cursor: string | null;
+      total_filtered: number;
+    };
+  };
+  filters: {
+    applied: {
+      status: string;
+      business_type: string;
+      date_from: string | null;
+      date_to: string | null;
+    };
+    available_statuses?: string[];
+    available_business_types?: string[];
+  };
 };
 
 export type SystemCostControlSummaryResponse = {

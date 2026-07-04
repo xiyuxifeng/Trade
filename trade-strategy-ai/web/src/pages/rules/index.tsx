@@ -291,6 +291,7 @@ export function RulesLibraryPage({ availability }: FormalPageProps = {}) {
     <ProductPageAdapter
       title="正式规则"
       queryState={state}
+      layoutMode="library"
       purpose="查看已经通过人工审核的规则，并说明当前版本化边界。"
       inputDescription="输入来自现有规则库中的真实审核状态。"
       processingDescription="系统按真实审核结果展示规则，不推断尚未建立的正式版本。"
@@ -323,6 +324,7 @@ export function RulesResultsPage({ availability }: FormalPageProps = {}) {
     <ProductPageAdapter
       title="回测结果"
       queryState={state}
+      layoutMode="detail"
       purpose="查看全周期及分市场状态的回测验证结果。"
       inputDescription="输入来自已经完成且可追溯的回测记录。"
       processingDescription="系统只展示已保存的真实结果和明确的数据缺口。"

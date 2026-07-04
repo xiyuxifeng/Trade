@@ -460,7 +460,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), snapshotJobsQuery.refetch(), runJobsQuery.refetch()])}
           actions={[
             { label: '查看任务列表', to: '/system/jobs' },
-            { label: '前往配置管理', to: '/profiles' },
+            { label: '前往配置管理', to: '/system/configuration' },
           ]}
         />
       </main>
@@ -483,7 +483,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           title="暂无可用画像。"
           description="请先导入或创建正式画像，再返回盘前分析页提交盘前准备与盘前分析任务。"
           actionLabel="前往配置管理"
-          onAction={() => navigate('/profiles')}
+          onAction={() => navigate('/system/configuration')}
         />
       </main>
     );
@@ -510,7 +510,7 @@ export function StrategyPreMarketPage({ productMode = false, navigationTarget = 
           detail={submissionError}
           actions={[
             { label: '查看任务列表', to: '/system/jobs' },
-            { label: '前往配置管理', to: '/profiles' },
+            { label: '前往配置管理', to: '/system/configuration' },
           ]}
         />
       ) : null}

@@ -753,7 +753,7 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
                 title="暂无可用 Profile"
                 description="请先到配置管理创建 Profile，再回到这里运行文章处理。"
                 actionLabel="前往配置管理"
-                onAction={() => navigate('/profiles')}
+                onAction={() => navigate('/system/configuration')}
               />
             ) : (
               <>

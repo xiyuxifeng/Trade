@@ -22,10 +22,10 @@ const expectedLegacyMetadata = {
   '/jobs': ['/system/jobs', 'redirect', 'Post-delivery Task 2', true, 'compat'],
   '/jobs/:jobId': ['/system/jobs/:jobId', 'redirect', 'Post-delivery Task 2', true, 'compat'],
   '/profiles': ['/system/configuration', 'redirect', 'Stage 11', true, 'compat'],
-  '/profiles/import': ['/system/configuration', 'redirect', 'Stage 11', true, 'compat'],
-  '/profiles/:profileId': ['/system/configuration', 'redirect', 'Stage 12', true, 'compat'],
-  '/profiles/:profileId/edit': ['/system/configuration', 'redirect', 'Stage 12', true, 'compat'],
-  '/profiles/:profileId/snapshots/:snapshotId': ['/system/configuration', 'redirect', 'Stage 12', true, 'compat'],
+  '/profiles/import': ['/system/configuration/import', 'redirect', 'Stage 11', true, 'compat'],
+  '/profiles/:profileId': ['/system/configuration/:profileId', 'redirect', 'Stage 12', true, 'compat'],
+  '/profiles/:profileId/edit': ['/system/configuration/:profileId/edit', 'redirect', 'Stage 12', true, 'compat'],
+  '/profiles/:profileId/snapshots/:snapshotId': ['/system/configuration/:profileId/snapshots/:snapshotId', 'redirect', 'Stage 12', true, 'compat'],
   '/workflows': ['/system/runs', 'redirect', 'Stage 11', true, 'compat'],
   '/workflows/pre-market': ['/daily/pre-market', 'redirect', 'Stage 9', true, 'compat'],
   '/workflows/pre-market/run': ['/daily/pre-market', 'redirect', 'Stage 9', true, 'compat'],
@@ -150,6 +150,10 @@ describe('route config', () => {
       '/system',
       '/system/status',
       '/system/configuration',
+      '/system/configuration/import',
+      '/system/configuration/:profileId',
+      '/system/configuration/:profileId/edit',
+      '/system/configuration/:profileId/snapshots/:snapshotId',
       '/system/data',
       '/system/jobs',
       '/system/jobs/:jobId',
@@ -264,6 +268,10 @@ describe('route config', () => {
       '/daily/after-close',
       '/system/status',
       '/system/configuration',
+      '/system/configuration/import',
+      '/system/configuration/:profileId',
+      '/system/configuration/:profileId/edit',
+      '/system/configuration/:profileId/snapshots/:snapshotId',
       '/system/data',
       '/system/jobs',
       '/system/jobs/:jobId',
@@ -284,6 +292,10 @@ describe('route config', () => {
     expect(resolveRoute('/system')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/status')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/configuration')?.minRole).toBeUndefined();
+    expect(resolveRoute('/system/configuration/import')?.minRole).toBe('operator');
+    expect(resolveRoute('/system/configuration/default')?.minRole).toBeUndefined();
+    expect(resolveRoute('/system/configuration/default/edit')?.minRole).toBe('operator');
+    expect(resolveRoute('/system/configuration/default/snapshots/snapshot-1')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/data')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/jobs')?.minRole).toBeUndefined();
     expect(resolveRoute('/system/jobs/job-1')?.minRole).toBeUndefined();

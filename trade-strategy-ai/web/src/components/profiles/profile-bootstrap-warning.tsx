@@ -52,7 +52,7 @@ export function ProfileBootstrapWarning({ profileId, profileSnapshotId, classNam
           className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
           variant="outline"
           onClick={() => {
-            navigate('/profiles/import');
+            navigate('/system/configuration/import');
           }}
         >
           去导入正式配置

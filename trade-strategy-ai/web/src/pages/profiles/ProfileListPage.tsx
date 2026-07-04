@@ -117,7 +117,7 @@ export function ProfileListPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               {profilesQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
-            <Button onClick={() => navigate('/profiles/import')}>
+            <Button onClick={() => navigate('/system/configuration/import')}>
               <Upload className="mr-2 h-4 w-4" />
               导入配置
             </Button>
@@ -192,7 +192,7 @@ export function ProfileListPage() {
               title="暂无配置"
               description="当前没有可用的正式配置。"
               actionLabel="前往导入"
-              onAction={() => navigate('/profiles/import')}
+              onAction={() => navigate('/system/configuration/import')}
             />
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -211,7 +211,7 @@ export function ProfileListPage() {
                     <ProfileRow
                       key={profile.profile_id}
                       profile={profile}
-                      onOpen={() => navigate(`/profiles/${encodeURIComponent(profile.profile_id)}`)}
+                      onOpen={() => navigate(`/system/configuration/${encodeURIComponent(profile.profile_id)}`)}
                     />
                   ))}
                 </TableBody>

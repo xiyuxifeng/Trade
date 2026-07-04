@@ -145,12 +145,12 @@ export function ProfileDetailPage() {
               {profileQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
             {canEditProfiles && profile ? (
-              <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/profiles/${encodeURIComponent(profile.profile_id)}/edit`)}>
+              <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/system/configuration/${encodeURIComponent(profile.profile_id)}/edit`)}>
                 <PencilLine className="mr-2 h-4 w-4" />
                 编辑配置
               </Button>
             ) : null}
-            <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate('/profiles')}>
+            <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate('/system/configuration')}>
               返回列表
             </Button>
           </div>
@@ -256,7 +256,7 @@ export function ProfileDetailPage() {
                     snapshot={snapshot}
                     onOpen={() =>
                       navigate(
-                        `/profiles/${encodeURIComponent(profile.profile_id)}/snapshots/${encodeURIComponent(snapshot.snapshot_id)}`,
+                        `/system/configuration/${encodeURIComponent(profile.profile_id)}/snapshots/${encodeURIComponent(snapshot.snapshot_id)}`,
                       )
                     }
                   />

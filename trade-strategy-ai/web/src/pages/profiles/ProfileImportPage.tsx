@@ -107,7 +107,7 @@ export function ProfileImportPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/profiles')}>
+            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate('/system/configuration')}>
               返回列表
             </Button>
             <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => importMutation.mutate()} disabled={importMutation.isPending}>
@@ -195,7 +195,7 @@ export function ProfileImportPage() {
             ) : null}
             <ResultPanel result={submittedResult} />
             {submittedResult ? (
-              <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate(`/profiles/${encodeURIComponent(submittedResult.profile.profile_id)}`)}>
+              <Button className="bg-sky-500 text-slate-950 hover:bg-sky-400" onClick={() => navigate(`/system/configuration/${encodeURIComponent(submittedResult.profile.profile_id)}`)}>
                 进入配置详情 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : null}

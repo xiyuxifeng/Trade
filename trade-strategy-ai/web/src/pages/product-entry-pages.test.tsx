@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/features/auth/auth-context';
+import { ProfileListPage } from '@/pages/profiles';
 
 vi.mock('@/pages/articles', () => ({
   ArticleLibraryPage: () => <div data-testid="article-list">真实文章列表</div>,
@@ -225,8 +226,19 @@ vi.mock('@/lib/api/system', () => ({
     }],
   }),
   listSystemRunTraces: vi.fn().mockResolvedValue({
-    count: 0,
-    items: [],
+    summary: {
+      overall_status: 'needs_attention',
+      headline: '暂无正式运行记录',
+      reason: '当前还没有可展示的正式运行历史。',
+      impact: '系统暂时无法提供最近运行的处理建议。',
+      counts: { total: 0, needs_attention: 0, ready: 0, partial: 0, failed: 0 },
+      next_action: { label: '查看运行与告警', target_path: '/system/runs' },
+    },
+    needs_attention: [],
+    history: {
+      groups: [],
+      page: { limit: 10, has_more: false, next_cursor: null, total_filtered: 0 },
+    },
   }),
   getSystemCostControlSummary: vi.fn().mockResolvedValue({
     state: 'empty',
@@ -281,7 +293,6 @@ import {
   StrategyOverviewPage,
 } from './strategies';
 import {
-  SystemConfigurationPage,
   SystemDataPage,
   SystemRunsPage,
   SystemStatusPage,
@@ -344,10 +355,10 @@ describe('formal product entry pages', () => {
     cleanup();
 
     renderPage(<SystemRunsPage />);
-    expect(await screen.findByText('暂无正式运行记录')).toBeInTheDocument();
-    expect(screen.getByText('最近正式运行')).toBeInTheDocument();
-    expect(screen.getByText('仍需处理')).toBeInTheDocument();
-    expect(screen.getByText('可直接继续')).toBeInTheDocument();
+    expect(await screen.findByText('历史运行记录')).toBeInTheDocument();
+    expect(screen.getAllByText('暂无正式运行记录').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('需要处理').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('已就绪').length).toBeGreaterThan(0);
   });
 
   it('does not invent author profile or strategy version counts', async () => {
@@ -373,9 +384,9 @@ describe('formal product entry pages', () => {
   });
 
   it('connects system configuration to saved records without exposing technical fields', async () => {
-    renderPage(<SystemConfigurationPage />);
+    renderPage(<ProfileListPage />);
     expect(await screen.findByText('正式配置')).toBeInTheDocument();
-    expect(screen.getByText('校验状态：已校验')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看现有配置' })).toHaveAttribute('href', '/profiles');
+    expect(screen.getByText('配置管理工作台')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '导入配置' })).toBeInTheDocument();
   });
 });

@@ -82,7 +82,7 @@ export function ProfileSnapshotPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               {snapshotQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
-            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/profiles/${encodeURIComponent(profileId)}`)}>
+            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/system/configuration/${encodeURIComponent(profileId)}`)}>
               返回详情
             </Button>
           </div>

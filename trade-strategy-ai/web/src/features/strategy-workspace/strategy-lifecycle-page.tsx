@@ -677,7 +677,7 @@ function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/dail
           onRetry={permissionDenied ? undefined : () => void Promise.all([profilesQuery.refetch(), jobsQuery.refetch()])}
           actions={[
             { label: '查看任务列表', to: '/system/jobs?job_type=run-after-close' },
-            { label: '前往配置管理', to: '/profiles' },
+            { label: '前往配置管理', to: '/system/configuration' },
           ]}
         />
       </main>
@@ -701,7 +701,7 @@ function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/dail
           description="先到配置管理创建或导入画像，再提交盘后复盘。"
           actionLabel="前往配置管理"
           onAction={() => {
-            navigate('/profiles');
+            navigate('/system/configuration');
           }}
         />
       </main>
@@ -818,7 +818,7 @@ function StrategyAfterCloseBody({ productMode = false, navigationTarget = '/dail
               </Button>
               <Link
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                to="/profiles"
+                to="/system/configuration"
               >
                 前往配置管理
               </Link>

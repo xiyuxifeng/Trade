@@ -9,6 +9,13 @@ import { DailyAfterClosePage, DailyOverviewPage, DailyPreMarketPage } from '@/pa
 import { JobsPage, JobDetailPage, JobNewPage } from '@/pages/jobs';
 import { LoginPage } from '@/pages/login';
 import {
+  ProfileDetailPage,
+  ProfileEditPage,
+  ProfileImportPage,
+  ProfileListPage,
+  ProfileSnapshotPage,
+} from '@/pages/profiles';
+import {
   ResearchAddPage,
   ResearchArticlesPage,
   ResearchResultsPage,
@@ -143,6 +150,26 @@ function redirect(targetPath: string) {
 function JobDetailRedirect() {
   const { jobId } = useParams<{ jobId?: string }>();
   return <Navigate to={`/system/jobs/${encodeURIComponent(jobId ?? '')}`} replace />;
+}
+
+function ProfileDetailRedirect() {
+  const { profileId } = useParams<{ profileId?: string }>();
+  return <Navigate to={`/system/configuration/${encodeURIComponent(profileId ?? '')}`} replace />;
+}
+
+function ProfileEditRedirect() {
+  const { profileId } = useParams<{ profileId?: string }>();
+  return <Navigate to={`/system/configuration/${encodeURIComponent(profileId ?? '')}/edit`} replace />;
+}
+
+function ProfileSnapshotRedirect() {
+  const { profileId, snapshotId } = useParams<{ profileId?: string; snapshotId?: string }>();
+  return (
+    <Navigate
+      to={`/system/configuration/${encodeURIComponent(profileId ?? '')}/snapshots/${encodeURIComponent(snapshotId ?? '')}`}
+      replace
+    />
+  );
 }
 
 function legacy(
@@ -382,8 +409,46 @@ export const routeConfig: ProductRoute[] = [
     path: '/system/configuration',
     label: '配置管理',
     description: '管理配置、版本和导入入口。',
-    element: <SystemConfigurationPage />,
+    element: <ProfileListPage />,
     renderWithAvailability: (availability) => <SystemConfigurationPage availability={availability} />,
+    parentId: 'system',
+  },
+  {
+    id: 'system-configuration-import',
+    kind: 'canonical',
+    path: '/system/configuration/import',
+    label: '导入配置',
+    description: '从交付模板导入正式配置。',
+    element: <ProfileImportPage />,
+    minRole: 'operator',
+    parentId: 'system',
+  },
+  {
+    id: 'system-configuration-detail',
+    kind: 'canonical',
+    path: '/system/configuration/:profileId',
+    label: '配置详情',
+    description: '查看单个正式配置、关联任务和历史快照。',
+    element: <ProfileDetailPage />,
+    parentId: 'system',
+  },
+  {
+    id: 'system-configuration-edit',
+    kind: 'canonical',
+    path: '/system/configuration/:profileId/edit',
+    label: '编辑配置',
+    description: '编辑正式配置并保存新版本。',
+    element: <ProfileEditPage />,
+    minRole: 'operator',
+    parentId: 'system',
+  },
+  {
+    id: 'system-configuration-snapshot',
+    kind: 'canonical',
+    path: '/system/configuration/:profileId/snapshots/:snapshotId',
+    label: '配置快照',
+    description: '查看配置快照和关联任务。',
+    element: <ProfileSnapshotPage />,
     parentId: 'system',
   },
   {
@@ -484,10 +549,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/import',
     label: '导入配置',
     description: '导入现有配置。',
-    element: redirect('/system/configuration'),
+    element: redirect('/system/configuration/import'),
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'redirect', 'Stage 11', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration/import', 'redirect', 'Stage 11', RETIREMENT.profiles),
   },
   {
     id: 'profile-detail',
@@ -495,10 +560,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId',
     label: '配置详情',
     description: '查看现有配置详情。',
-    element: redirect('/system/configuration'),
+    element: <ProfileDetailRedirect />,
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration/:profileId', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'profile-edit',
@@ -506,10 +571,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId/edit',
     label: '编辑配置',
     description: '编辑现有配置。',
-    element: redirect('/system/configuration'),
+    element: <ProfileEditRedirect />,
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration/:profileId/edit', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'profile-snapshot',
@@ -517,10 +582,10 @@ export const routeConfig: ProductRoute[] = [
     path: '/profiles/:profileId/snapshots/:snapshotId',
     label: '配置版本',
     description: '查看现有配置版本。',
-    element: redirect('/system/configuration'),
+    element: <ProfileSnapshotRedirect />,
     renderMode: 'redirect',
     visibleInNavigation: false,
-    legacy: legacy('/system/configuration', 'redirect', 'Stage 12', RETIREMENT.profiles),
+    legacy: legacy('/system/configuration/:profileId/snapshots/:snapshotId', 'redirect', 'Stage 12', RETIREMENT.profiles),
   },
   {
     id: 'workflows',

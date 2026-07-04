@@ -148,7 +148,7 @@ export function StrategyWorkspaceActions({
             detail={submissionError}
             actions={[
               { label: '查看任务列表', to: '/system/jobs' },
-              { label: '前往配置管理', to: '/profiles' },
+              { label: '前往配置管理', to: '/system/configuration' },
             ]}
           />
         ) : null}

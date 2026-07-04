@@ -3,7 +3,6 @@ import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { SystemStatusPanel } from '@/features/system-status/system-status-panel';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { listProfiles } from '@/lib/api/profiles';
 import {
   cancelSystemDataOperation,
   createSystemDataOperation,
@@ -23,43 +22,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import type { SystemDataOperation, SystemDataReadinessStatus, SystemRolloutSummaryResponse, SystemRunTraceItem } from '@/types/system';
-
-function describeValidationStatus(status: string) {
-  if (status === 'validated') return '已校验';
-  if (status === 'draft') return '草稿';
-  if (status === 'invalid_config') return '校验失败';
-  if (status === 'archived') return '已归档';
-  return '状态待确认';
-}
-
-function SystemConfigurationSummary() {
-  const query = useQuery({
-    queryKey: ['formal-system', 'profiles'],
-    queryFn: () => listProfiles({ skip: 0, limit: 50 }),
-    staleTime: 30_000,
-  });
-
-  if (query.isLoading) {
-    return <LoadingState label="正在加载配置" description="正在读取已保存的业务配置。" />;
-  }
-  if (query.error) {
-    return <p>配置读取失败，当前配置状态不可用，请稍后重试。</p>;
-  }
-  const items = query.data?.items ?? [];
-  if (!items.length) {
-    return <p>暂无可用配置，不会显示为已就绪。</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.profile_id} className="rounded-xl border border-slate-200 bg-white p-3">
-          <p className="font-medium text-slate-950">{item.name}</p>
-          <p className="mt-1 text-sm text-slate-600">校验状态：{describeValidationStatus(item.validation_status)}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function formatTime(value: string | null) {
   if (!value) return '未记录';
@@ -1027,11 +989,25 @@ export function SystemConfigurationPage({ availability }: FormalSystemPageProps 
       queryState={state}
       layoutMode="management"
       purpose="维护业务运行所需的受控配置。"
-      inputDescription="输入来自现有配置记录和已保存版本。"
-      processingDescription="正式业务化配置界面仍在迁移，现有配置能力继续保留。"
-      outputDescription="输出为现有配置记录；内部文件和路径不在正式页面展示。"
-      businessAction={{ label: '查看现有配置', to: '/profiles' }}
-      result={availability ? undefined : <SystemConfigurationSummary />}
+      inputDescription="输入来自已保存配置、导入模板和受控编辑内容。"
+      processingDescription="系统读取正式配置记录，导入模板或保存新版本时会执行真实校验与脱敏快照。"
+      outputDescription="输出为配置列表、详情、历史快照和导入结果；内部文件路径不会作为正式业务结果展示。"
+      businessAction={{ label: '导入正式配置', to: '/system/configuration/import' }}
+      result={
+        availability ? undefined : (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-700">正式入口已统一到系统管理下的配置管理页面。</p>
+            <div className="flex flex-wrap gap-3">
+              <Link className="text-sm font-medium text-sky-700 underline underline-offset-4" to="/system/configuration">
+                查看配置列表
+              </Link>
+              <Link className="text-sm font-medium text-sky-700 underline underline-offset-4" to="/system/configuration/import">
+                导入正式配置
+              </Link>
+            </div>
+          </div>
+        )
+      }
     />
   );
 }

@@ -305,7 +305,7 @@ export function ProfileEditPage() {
         queryClient.invalidateQueries({ queryKey: ['profiles'] }),
         queryClient.invalidateQueries({ queryKey: ['profile-edit', profileId] }),
       ]);
-      navigate(`/profiles/${encodeURIComponent(result.profile.profile_id)}`);
+      navigate(`/system/configuration/${encodeURIComponent(result.profile.profile_id)}`);
     },
     onError: (error) => {
       setValidationMessage(getErrorMessage(error));
@@ -326,7 +326,7 @@ export function ProfileEditPage() {
         queryClient.invalidateQueries({ queryKey: ['profiles'] }),
         queryClient.invalidateQueries({ queryKey: ['profile-edit', profileId] }),
       ]);
-      navigate(`/profiles/${encodeURIComponent(profileId)}`);
+      navigate(`/system/configuration/${encodeURIComponent(profileId)}`);
     },
     onError: (error) => {
       if (error instanceof Error && error.message === '已取消归档。') {
@@ -374,7 +374,7 @@ export function ProfileEditPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               {editQuery.isFetching ? '刷新中' : '刷新'}
             </Button>
-            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/profiles/${encodeURIComponent(profileId)}`)}>
+            <Button className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50" variant="outline" onClick={() => navigate(`/system/configuration/${encodeURIComponent(profileId)}`)}>
               返回详情
             </Button>
           </div>

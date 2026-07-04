@@ -291,7 +291,7 @@ export function JobDetailPage() {
                     variant="outline"
                     onClick={() =>
                       navigate(
-                        `/profiles/${encodeURIComponent(configSnapshot.profile_id!)}/snapshots/${encodeURIComponent(
+                        `/system/configuration/${encodeURIComponent(configSnapshot.profile_id!)}/snapshots/${encodeURIComponent(
                           configSnapshot.config_snapshot_id!,
                         )}`,
                       )

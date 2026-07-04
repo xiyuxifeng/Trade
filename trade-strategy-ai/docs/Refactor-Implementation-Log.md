@@ -38,6 +38,18 @@
 
 ## 当前实施记录
 
+- Task ID: `DELIVERY-DATA-CLEANUP-001 仅保留原始文章数据与必要静态资产`
+- 状态: `已完成`
+- 修改范围: 本地 PostgreSQL `trade_strategy_ai` 派生业务数据清理；补删遗漏的 `rule_pool_backtest_batch_runs` / `rule_pool_backtest_batches`；本地运行产物、任务日志、测试缓存、抓取中间产物、空生成目录和 `.DS_Store` 清理；保留原始文章、canonical 文章版本、管理员账号、migration 状态和 git 跟踪静态资产。
+- 关键设计决定: 严格按 `docs/Trade-Refactor-TaskList.md` “数据库处理”执行；保留 `alembic_version`、`raw_articles`、`blog_articles`、`authors`、`article_revisions`、`users`、`config_profiles`；删除文章结构化、规则、回测、市场状态、画像、策略、每日交易、运行审计和迁移派生数据；`stock_info`、`crawl_state`、`rule_pool_backtest_batch_runs` 与关联 batch 表按“只保留文章重新开始”口径删除；`data/processed/crawl/*` 视为抓取中间产物删除。
+- 数据库迁移: 无；仅删除数据，不改 schema。
+- 兼容处理: `config_profiles` 当前为空表，保持不动；`data/backtest/trading_calendar.json` 和 `data/patterns/canonical/*.yaml` 保留；`data/kaipan/raw/.gitkeep` 与 `data/kaipan/snapshots/.gitkeep` 保留；仅清空生成内容，不删除必要目录骨架。
+- 已运行测试: PostgreSQL 删除前后行数核对；文件产物存在性核对；保留资产核对。
+- 测试结果: 保留表计数为 `raw_articles=131`、`blog_articles=131`、`authors=1`、`article_revisions=131`、`users=1`、`config_profiles=0`、`alembic_version=1`；最终数据库仅剩 `alembic_version`、`raw_articles`、`blog_articles`、`authors`、`article_revisions`、`users` 非空；派生表抽样核对为 `article_metadata=0`、`rules=0`、`backtest_runs=0`、`stock_info=0`、`strategies=0`、`jobs=0`、`alert_history=0`、`crawl_state=0`、`rule_pool_backtest_batch_runs=0`；`data/backtest/trading_calendar.json` 与 `data/patterns/canonical/*.yaml` 仍存在，`data/processed/crawl/*` 已删除。
+- 未完成项: 无。
+- 已知风险: 清理后规则、回测、策略、盘前盘后和运行追踪历史都需要从文章重新生成；如果后续希望保留基础证券字典或抓取游标，需要用户明确授权重新导入而不是恢复本次已删数据。
+- 验收结论: `已完成`。当前交付态只保留原始文章链路与必要静态资产，不再携带历史 E2E/测试/派生业务证据。
+
 - Task ID: `POST-DELIVERY-CLOSEOUT-001 Documentation Consistency and Final Verification Review`
 - 状态: `已完成`
 - 修改范围: post-delivery cleanup line 文档一致性复核；`docs/Refactor-Implementation-Log.md` 当前状态、accepted task list、下一步和残余风险分类；`docs/refactor-implementation-logs/stage-12.md` Current Snapshot、closeout 记录和残余风险分类；`docs/system-jobs-runs-page-cleanup-plan.md` Final Status 和历史问题表述。

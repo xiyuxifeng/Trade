@@ -543,6 +543,228 @@ def test_submit_crawl_writes_progress_and_uses_db_mode(tmp_path: Path) -> None:
     asyncio.run(engine.dispose())
 
 
+def test_crawl_progress_tracker_coalesces_stale_pending_updates(tmp_path: Path) -> None:
+    """crawl 高频进度在写回慢时应只保留最新待写状态，避免 UI 长时间停在旧文章。"""
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="crawl",
+            params={"profile_id": "default"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    original_update = job_service.update_job_progress
+    updated_steps: list[str] = []
+
+    async def _slow_update_job_progress(**kwargs: Any) -> Any:
+        progress = kwargs.get("progress") or {}
+        updated_steps.append(str(progress.get("current_step")))
+        await asyncio.sleep(0.03)
+        return await original_update(**kwargs)
+
+    job_service.update_job_progress = _slow_update_job_progress  # type: ignore[method-assign]
+
+    async def _run() -> None:
+        report, finish = runner._create_progress_tracker(job_id=job_id, job_type="crawl")  # noqa: SLF001
+        report({"job_type": "crawl", "stage": "crawl", "current": 0, "total": 2, "current_step": "fetch:https://example.com/a"})
+        await asyncio.sleep(0.005)
+        report({"job_type": "crawl", "stage": "crawl", "current": 1, "total": 2, "current_step": "store:https://example.com/a"})
+        report({"job_type": "crawl", "stage": "crawl", "current": 1, "total": 2, "current_step": "fetch:https://example.com/b"})
+        await finish()
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert updated_steps == [
+        "fetch:https://example.com/a",
+        "fetch:https://example.com/b",
+    ]
+    assert loaded.payload["job"]["progress"]["current_step"] == "fetch:https://example.com/b"
+    asyncio.run(engine.dispose())
+
+
+def test_pipeline_run_process_progress_tracker_coalesces_stale_pending_updates(tmp_path: Path) -> None:
+    """pipeline-run 在 process 阶段高频更新时应优先保留最新文章进度。"""
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="pipeline-run",
+            params={"config_path": "config/app.yaml"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    original_update = job_service.update_job_progress
+    updated_steps: list[str] = []
+
+    async def _slow_update_job_progress(**kwargs: Any) -> Any:
+        progress = kwargs.get("progress") or {}
+        updated_steps.append(str(progress.get("current_step")))
+        await asyncio.sleep(0.03)
+        return await original_update(**kwargs)
+
+    job_service.update_job_progress = _slow_update_job_progress  # type: ignore[method-assign]
+
+    async def _run() -> None:
+        report, finish = runner._create_progress_tracker(job_id=job_id, job_type="pipeline-run")  # noqa: SLF001
+        report({"job_type": "pipeline-run", "stage": "process", "current": 1, "total": 3, "current_step": "process:article-001"})
+        await asyncio.sleep(0.005)
+        report({"job_type": "pipeline-run", "stage": "process", "current": 2, "total": 3, "current_step": "process:article-002"})
+        report({"job_type": "pipeline-run", "stage": "process", "current": 3, "total": 3, "current_step": "process:article-003"})
+        await finish()
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert updated_steps == [
+        "process:article-001",
+        "process:article-003",
+    ]
+    assert loaded.payload["job"]["progress"]["current_step"] == "process:article-003"
+    asyncio.run(engine.dispose())
+
+
+@pytest.mark.parametrize(
+    ("job_type", "steps"),
+    [
+        (
+            "kaipan-fetch",
+            [
+                "fetch:market_overview",
+                "fetch:limit_up_pool",
+                "fetch:hot_topics",
+            ],
+        ),
+        (
+            "kaipan-normalize",
+            [
+                "normalize:market_overview",
+                "normalize:limit_up_pool",
+                "normalize:hot_topics",
+            ],
+        ),
+    ],
+)
+def test_kaipan_progress_tracker_coalesces_stale_pending_updates(
+    tmp_path: Path,
+    job_type: str,
+    steps: list[str],
+) -> None:
+    """kaipan 高频进度在写回慢时应优先保留最新数据集状态。"""
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="crawl",
+            params={"profile_id": "default"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    original_update = job_service.update_job_progress
+    updated_steps: list[str] = []
+
+    async def _slow_update_job_progress(**kwargs: Any) -> Any:
+        progress = kwargs.get("progress") or {}
+        updated_steps.append(str(progress.get("current_step")))
+        await asyncio.sleep(0.03)
+        return await original_update(**kwargs)
+
+    job_service.update_job_progress = _slow_update_job_progress  # type: ignore[method-assign]
+
+    async def _run() -> None:
+        report, finish = runner._create_progress_tracker(job_id=job_id, job_type=job_type)  # noqa: SLF001
+        report({"job_type": job_type, "stage": "fetch", "current": 1, "total": 3, "current_step": steps[0]})
+        await asyncio.sleep(0.005)
+        report({"job_type": job_type, "stage": "fetch", "current": 2, "total": 3, "current_step": steps[1]})
+        report({"job_type": job_type, "stage": "fetch", "current": 3, "total": 3, "current_step": steps[2]})
+        await finish()
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert updated_steps == [
+        steps[0],
+        steps[2],
+    ]
+    assert loaded.payload["job"]["progress"]["current_step"] == steps[2]
+    asyncio.run(engine.dispose())
+
+
+@pytest.mark.parametrize(
+    ("job_type", "steps"),
+    [
+        (
+            "snapshot-build",
+            [
+                "snapshot:hot_topics",
+                "snapshot:topic_constituents",
+                "snapshot:strong_symbols",
+            ],
+        ),
+        (
+            "backtest-validate-rules",
+            [
+                "collect:2026-04-01",
+                "classify:rule-001",
+                "classify:rule-002",
+            ],
+        ),
+    ],
+)
+def test_snapshot_and_rule_validation_progress_tracker_coalesces_stale_pending_updates(
+    tmp_path: Path,
+    job_type: str,
+    steps: list[str],
+) -> None:
+    """snapshot / 规则验真高频进度在写回慢时应优先保留最新状态。"""
+
+    runner, job_service, engine, _ = _build_job_runner(tmp_path)
+    created = asyncio.run(
+        job_service.create_job(
+            job_type="crawl",
+            params={"profile_id": "default"},
+            created_by="web",
+        )
+    )
+    job_id = created.payload["job"]["id"]
+
+    original_update = job_service.update_job_progress
+    updated_steps: list[str] = []
+
+    async def _slow_update_job_progress(**kwargs: Any) -> Any:
+        progress = kwargs.get("progress") or {}
+        updated_steps.append(str(progress.get("current_step")))
+        await asyncio.sleep(0.03)
+        return await original_update(**kwargs)
+
+    job_service.update_job_progress = _slow_update_job_progress  # type: ignore[method-assign]
+
+    async def _run() -> None:
+        report, finish = runner._create_progress_tracker(job_id=job_id, job_type=job_type)  # noqa: SLF001
+        report({"job_type": job_type, "stage": "test", "current": 1, "total": 3, "current_step": steps[0]})
+        await asyncio.sleep(0.005)
+        report({"job_type": job_type, "stage": "test", "current": 2, "total": 3, "current_step": steps[1]})
+        report({"job_type": job_type, "stage": "test", "current": 3, "total": 3, "current_step": steps[2]})
+        await finish()
+
+    asyncio.run(_run())
+    loaded = asyncio.run(job_service.get_job(job_id))
+
+    assert updated_steps == [
+        steps[0],
+        steps[2],
+    ]
+    assert loaded.payload["job"]["progress"]["current_step"] == steps[2]
+    asyncio.run(engine.dispose())
+
+
 def test_run_pre_market_handler_prefers_profile_over_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """盘前运行 handler 应优先使用 Profile 解析结果。"""
     from src.services import job_runner as job_runner_module

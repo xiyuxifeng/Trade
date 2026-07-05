@@ -176,8 +176,20 @@ class JobRunner(BaseService):
         self,
         *,
         job_id: str | UUID,
+        job_type: str | None = None,
     ) -> tuple[Callable[[dict[str, Any]], None], Callable[[], Awaitable[None]]]:
         """创建按顺序写入 Job progress 的回调与收尾器。"""
+        if job_type in {
+            "crawl",
+            "process",
+            "pipeline-run",
+            "kaipan-fetch",
+            "kaipan-normalize",
+            "snapshot-build",
+            "backtest-validate-rules",
+        }:
+            return self._create_latest_progress_tracker(job_id=job_id)
+
         progress_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         update_failed = False
 
@@ -207,6 +219,59 @@ class JobRunner(BaseService):
         async def _finish() -> None:
             progress_queue.put_nowait(None)
             await progress_queue.join()
+            with suppress(Exception):
+                await consumer_task
+
+        return _report, _finish
+
+    def _create_latest_progress_tracker(
+        self,
+        *,
+        job_id: str | UUID,
+    ) -> tuple[Callable[[dict[str, Any]], None], Callable[[], Awaitable[None]]]:
+        """创建仅保留最新待写进度的回调与收尾器。"""
+        update_failed = False
+        is_closed = False
+        pending_progress: dict[str, Any] | None = None
+        pending_event = asyncio.Event()
+
+        async def _drain() -> None:
+            nonlocal update_failed, pending_progress
+            while True:
+                await pending_event.wait()
+                item = pending_progress
+                pending_progress = None
+                pending_event.clear()
+                if item is None:
+                    if is_closed:
+                        return
+                    continue
+                if update_failed:
+                    if is_closed and pending_progress is None:
+                        return
+                    continue
+                try:
+                    result = await self._job_service.update_job_progress(job_id=job_id, progress=item)
+                    if result.status != "ok":
+                        update_failed = True
+                except Exception:
+                    update_failed = True
+                if is_closed and pending_progress is None:
+                    return
+
+        consumer_task = asyncio.create_task(_drain())
+
+        def _report(progress: dict[str, Any]) -> None:
+            nonlocal pending_progress
+            if update_failed or is_closed:
+                return
+            pending_progress = progress
+            pending_event.set()
+
+        async def _finish() -> None:
+            nonlocal is_closed
+            is_closed = True
+            pending_event.set()
             with suppress(Exception):
                 await consumer_task
 
@@ -959,7 +1024,7 @@ class JobRunner(BaseService):
             "backtest-validate-rules",
             "rule-pool-backtest",
         }:
-            progress_reporter, progress_finish = self._create_progress_tracker(job_id=job_id)
+            progress_reporter, progress_finish = self._create_progress_tracker(job_id=job_id, job_type=job_payload["job_type"])
 
         async def _finish_progress() -> None:
             if progress_finish is not None:

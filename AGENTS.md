@@ -1,92 +1,101 @@
 # AGENTS.md
 
-## 1. 当前项目状态
+## 1. 当前阶段
 
-`trade-strategy-ai` 的重构 Stage 已完成。当前工作不再是继续执行历史 Stage、扩展旧兼容层或追加新的重构任务，而是进入交付前手动测试、修复和最终稳定阶段。
+`trade-strategy-ai` 已完成重构阶段，现在处于交付前手动测试、用户需求调整、问题修复和最终稳定阶段。
 
-历史重构文档如果已归档到 `refactor-stage-docs` 或其他归档目录，仅用于追溯事实，不再作为新修复任务的执行协议。之后所有 AI/Codex 修改都必须以本文件为最高约束。
+历史 Stage / Task / Gate 文档如果已经归档，只作为事实追溯，不再作为后续修改的执行规则。之后所有 AI/Codex 修改以本文件为准。
 
 当前目标：
 
 ```text
-手动测试发现问题
-→ 找到真实根因
-→ 全面修复受影响功能
-→ 删除错误路径和重复路径
+用户提出需求或手动测试发现问题
+→ 明确修改意图或真实根因
+→ 正确完成 UI / 功能 / 流程
+→ 删除无用旧路径和重复实现
 → 验证相邻流程
-→ 保持代码整洁、单一路径、可交付
+→ 保持代码路径清晰、单一、可交付
 ```
 
-## 2. 最高优先级
+## 2. 基本优先级
 
-之后所有修改的优先级固定为：
+所有修改按以下优先级判断：
 
 ```text
-功能正确
-> 数据和业务契约正确
-> 单一路径、无重复实现、无兼容堆叠
+用户明确需求和功能正确
+> 数据与业务契约正确
+> 单一路径、无重复实现、无旧兼容堆叠
 > 可运行、可测试、可恢复
 > 用户可理解、可交付
-> 视觉细节和非关键体验优化
+> 非关键视觉细节
 ```
 
-功能正确永远第一。不得为了“最小 diff”“少改文件”“避免扩大范围”而保留错误实现、重复实现、旧路径、局部绕过或隐藏风险。
+用户在手动测试中明确提出的 UI、交互、流程、页面结构、信息层级或需求变化，只要影响用户理解、流程完成、交付质量、数据真实性或操作安全，就属于功能正确的一部分，不得降级为普通视觉优化。
 
-“控制范围”的含义不是只改当前报错点，而是修改范围必须覆盖真实根因和所有受影响功能；不得包含无关新功能、无关视觉重设计或未经授权的产品扩展。
+不得为了减少改动而保留错误实现、重复实现、旧路径、局部绕过或隐藏风险。
 
-## 3. 新项目单一路径原则
+修改范围必须覆盖用户需求、真实根因和所有受影响功能；不得包含无关新功能、无关视觉重设计或未经授权的产品扩展。
+
+## 3. 单一路径原则
 
 本项目按新项目交付处理，不为旧 UI、旧 workflow、旧 route、旧 API 或旧内部工具保留长期兼容。
 
+如果发现旧路径、重复路径或兼容层影响当前功能、用户需求或代码清晰度，应优先迁移到正式路径并删除旧路径，而不是继续补兼容。
+
 禁止为了兼容而新增或保留：
 
-- 两套路由入口；
+- 两套正式入口；
 - 两套正式 API；
 - 两套页面实现；
 - 两套状态机；
-- 两套 service/repository 写入路径；
-- 两套 schema/DTO；
-- legacy fallback；
-- compatibility wrapper；
-- silent redirect 作为正常业务路径；
-- 为了不改旧代码而新增 adapter/bypass。
+- 两套写入路径；
+- 两套 schema / DTO；
+- 正常业务流程中的旧路径 fallback；
+- 正常业务流程中的兼容 wrapper；
+- 为了不改旧代码而新增 adapter。
 
-如果发现旧路径、重复路径或兼容层影响当前功能，应优先迁移到正式路径并删除旧路径，而不是继续补兼容。
+允许短期保留的唯一情况：删除会立即导致当前正式功能无法验证、数据无法恢复或证据不可追溯。即便保留，也必须只作为临时诊断或数据恢复入口，不出现在普通用户导航、文档或正常流程中，并且有明确删除条件。
 
-允许短期保留的唯一情况：删除会立即导致当前正式功能无法验证、数据无法恢复或证据不可追溯。即便保留，也必须满足：
+## 4. 三类修改流程
 
-1. 只作为临时诊断或数据恢复入口；
-2. 不出现在普通用户导航、文档或正常流程；
-3. 有明确删除条件；
-4. 不继续承载新功能；
-5. 不作为修复当前问题的捷径。
+### 4.1 用户授权的 UI / 需求 / 流程变更
 
-## 4. 手动测试修复任务定义
+用户在手动测试中明确提出的 UI、交互、页面结构、流程、文案、信息层级或需求变化，属于当前阶段的正常工作。
 
-之后的任务统一称为 `RELEASE-STABILIZATION-FIX-xxx`，除非用户明确授权新功能或新重构任务。
+这类任务以用户明确授权的产品目标为交付依据，不需要强行编造 Root Cause。
 
-允许处理：
+实施前输出：
 
-- 手动测试发现的真实问题；
-- 正式用户流程阻塞；
-- 数据、权限、迁移、备份、恢复、初始化等交付风险；
-- 文档与最终 UI 不一致；
-- 页面显示虚假成功、虚假数据、错误状态被隐藏；
-- 普通用户仍被迫使用旧路径、内部术语或开发工具入口；
-- 代码中因兼容、重复实现、局部 patch 导致的真实缺陷。
+```text
+Change Intent:
+- 用户要求改变什么？
+- 目标体验是什么？
 
-禁止处理：
+Product Reason:
+- 为什么这影响用户理解、流程完成、交付质量或操作安全？
 
-- 未经授权的新产品功能；
-- 大型视觉重设计；
-- 与当前缺陷无关的技术探索；
-- 无验证目标的性能优化；
-- 为旧路径继续补兼容；
-- 为了局部通过测试而引入新的 wrapper、fallback 或临时层。
+Impact Radius:
+- 影响页面/路由：
+- 影响组件：
+- 影响 API/client：
+- 影响 backend/service/repository：
+- 影响数据状态/权限/角色：
+- 影响测试：
 
-## 5. Root Cause + Impact Radius 强制流程
+Replacement Plan:
+- 是否需要删除旧路径、旧 UI、重复逻辑或兼容层？
+- 正式替代路径是什么？
 
-任何修复在写代码前必须先完成并输出：
+Verification Plan:
+- 如何验证新需求正确完成？
+- 如何验证相邻流程没有被破坏？
+```
+
+### 4.2 Bug / 回归 / 错误行为修复
+
+如果任务是修复 bug、回归、数据错误、权限错误、状态错误、旧路径泄漏、API/service 错误或正式流程阻塞，必须使用 Root Cause 流程。
+
+实施前输出：
 
 ```text
 Root Cause:
@@ -107,146 +116,76 @@ Impact Radius:
 
 Repair Strategy:
 - 修根因还是修症状？
-- 为什么这个方案能消除错误路径？
 - 是否需要删除重复实现或旧路径？
 - 明确不改什么，为什么？
 
 Verification Plan:
 - 当前失败功能如何验证？
 - 相邻功能如何验证？
-- negative/unavailable/partial/error 状态如何验证？
+- 不可用/部分/错误状态如何验证？
 - 哪些测试/检查必须运行？
 ```
 
 没有完成以上分析，不得开始写代码。
 
-## 6. 全面修复原则
+### 4.3 低风险文案 / 视觉微调
 
-修复必须是：
+如果只涉及文案、间距、样式或非关键布局，且不影响流程、数据、权限、状态、路由、API 或测试，可以使用轻量检查：
 
 ```text
-smallest complete root-cause repair
+Change:
+Affected page/component:
+User-visible result:
+Interaction/data/permission impact:
+Verification:
 ```
 
-含义：在不引入无关新功能的前提下，完整修复根因和受影响功能。
+若微调过程中发现会影响流程或路径，必须升级为 4.1 或 4.2。
 
-明确禁止把“最小修复”理解为：
+## 5. 正确修改原则
+
+所有修改都必须正确完成用户目标，不得只做局部表面调整。
+
+Bug 修复必须是最小但完整的根因修复。
+
+用户授权的 UI / 需求变更必须完整实现用户明确提出的产品意图，并清理不再需要的旧路径、旧 UI、重复逻辑或兼容层。
+
+禁止：
 
 - 只修当前报错点；
 - 只让当前测试通过；
-- 只改当前按钮；
-- 只在当前页面加条件分支；
-- 只加 fallback 绕过错误；
+- 只改当前按钮但保留错误流程；
 - 只隐藏错误提示；
 - 只放宽测试断言；
-- 只保留旧路径继续工作。
+- 只保留旧路径继续工作；
+- 为满足新需求新增第二套页面、第二套路由或第二套 API；
+- 为避免改动共享层而堆叠局部绕过。
 
-如果根因位于共享层，必须修共享层。共享层包括但不限于：
+如果根因或需求影响位于共享层，必须修共享层。共享层包括 route config、navigation、API client、backend router、application service、repository、DTO/schema、state machine、permission/role guard、data readiness、job/run lifecycle、daily strategy/post-market proposal flow。
 
-- route config；
-- navigation；
-- API client；
-- backend router；
-- application service；
-- repository；
-- DTO/schema；
-- state machine；
-- permission/role guard；
-- data readiness/unavailable handling；
-- job/run lifecycle；
-- daily strategy/post-market proposal flow。
+## 6. 用户路径和术语
 
-不得在单个页面做 page-specific bypass 来规避共享层错误。
+普通用户只能看到正式产品路径。页面和文档必须使用业务中文说明：当前页面做什么、用户需要提供什么、系统会处理什么、输出结果是什么、下一步应该做什么、失败或数据不足时如何处理。
 
-## 7. 禁止的坏味道
-
-任何修改不得引入以下模式：
-
-- fake default；
-- silent fallback；
-- test-only workaround；
-- page-specific bypass；
-- legacy shortcut；
-- duplicate source of truth；
-- compatibility shim for normal workflow；
-- mock pretending to be production；
-- hard-coded success；
-- empty placeholder as finished feature；
-- catch-all error swallowing；
-- deleting tests to remove failures；
-- weakening assertions to match wrong behavior；
-- hiding missing data as success；
-- converting `unavailable` / `partial` / `degraded` / `invalid` / `conflict` into success；
-- making users understand internal IDs, raw job types, run IDs, prompt IDs, schema names, provider names or file paths to complete normal work。
-
-发现上述模式时，应删除或重构，而不是继续堆叠。
-
-## 8. 用户路径和术语
-
-普通用户只能看到正式产品路径。页面和文档必须使用业务中文说明：
-
-- 当前页面做什么；
-- 用户需要提供什么；
-- 系统会处理什么；
-- 输出结果是什么；
-- 下一步应该做什么；
-- 失败或数据不足时如何处理。
-
-普通用户正常流程不得要求理解：
-
-- Job；
-- Workflow；
-- Pipeline；
-- Artifact；
-- Provider；
-- Schema；
-- config_path；
-- prompt_run_id；
-- run_id；
-- raw JSON；
-- 数据库表名；
-- 内部函数名；
-- 本机路径。
+普通用户正常流程不得要求理解 Job、Workflow、Pipeline、Artifact、Provider、Schema、config_path、prompt_run_id、run_id、raw JSON、数据库表名、内部函数名或本机路径。
 
 管理员诊断可以出现必要技术信息，但必须与普通用户路径分离，并默认不作为完成业务流程的前提。
 
-## 9. 数据真实性和可追溯
+## 7. 数据真实性和可追溯
 
 缺失、部分、不可用、降级、无效和冲突状态必须真实展示。
 
-不得：
+不得默认为 false、0 或成功；不得静默降级；不得用最新数据替代历史版本；不得用实时 Provider 替代固定回测数据；不得伪造 fingerprint、version、snapshot、traceability；不得用单日结果覆盖正式规则、画像或策略。
 
-- 默认为 false；
-- 默认为 0；
-- 默认为成功；
-- 静默降级；
-- 用最新数据替代历史版本；
-- 用实时 Provider 替代固定回测数据；
-- 伪造 fingerprint、version、snapshot、traceability；
-- 用单日结果覆盖正式规则、画像或策略。
+正式对象必须保持单一事实源和可追溯关系，包括 article revision、prompt/schema version、rule version、dataset snapshot、market snapshot/state model、backtest run/result、applicability profile、author profile version、strategy version、daily plan、post-market review、optimization proposal。
 
-正式对象必须保持单一事实源和可追溯关系，包括但不限于：
+## 8. 测试和验证要求
 
-- article revision；
-- prompt/schema version；
-- rule version；
-- dataset snapshot；
-- market snapshot/state model；
-- backtest run/result；
-- applicability profile；
-- author profile version；
-- strategy version；
-- daily plan；
-- post-market review；
-- optimization proposal。
-
-## 10. 测试和验证要求
-
-每个修复必须按影响半径运行或补充验证，而不是只跑当前失败测试。
+每个修改必须按影响半径运行或补充验证，而不是只跑当前失败测试。
 
 至少验证：
 
-1. 当前失败功能已恢复；
+1. 当前用户需求或失败功能已正确完成；
 2. 同一页面相邻 primary/secondary actions 未破坏；
 3. 同一路由组导航、深链、返回路径未破坏；
 4. 同一 API client 的相邻调用未破坏；
@@ -256,48 +195,24 @@ smallest complete root-cause repair
 8. 普通用户不依赖 legacy route 或内部术语；
 9. 必要的 focused tests、typecheck、lint、build、backend tests 或 E2E smoke 已运行。
 
-无法运行测试时，必须记录：
+无法运行测试时，必须记录未运行项、原因、替代验证、剩余风险和是否阻塞交付。不得声称未运行的测试已通过。
 
-```text
-未运行项：
-原因：
-替代验证：
-剩余风险：
-是否阻塞交付：
-```
+## 9. 删除和重构规则
 
-不得声称未运行的测试已通过。
+如果一个问题或用户需求暴露出旧路径、重复实现、临时兼容或错误抽象，应优先删除或替换错误结构，而不是继续在其上修补。
 
-## 11. 删除和重构规则
+允许大范围修改，当且仅当它是为了完成用户明确需求、修复真实根因、消除重复事实源、删除旧路径、合并重复页面/API/service、让正式用户流程单一路径可用、保证数据真实性或让测试覆盖真实业务链路。
 
-如果一个问题的根因是旧路径、重复实现、临时兼容或错误抽象，应优先删除或替换错误结构，而不是继续在其上修补。
+大范围修改必须说明为什么局部修改不正确、哪些旧路径/重复实现被删除、哪些正式路径替代它、受影响功能清单和回归验证结果。
 
-允许大范围修改，当且仅当它是为了：
+## 10. 升级和停止条件
 
-- 修复真实根因；
-- 消除重复事实源；
-- 删除旧路径；
-- 合并重复页面/API/service；
-- 让正式用户流程单一路径可用；
-- 保证数据真实性；
-- 让测试覆盖真实业务链路。
+如果正确完成用户需求或正确修复问题需要以下任一行为，必须停止并向用户说明，不得用临时绕过继续：
 
-大范围修改必须同时给出：
-
-- 为什么局部修复不正确；
-- 哪些旧路径/重复实现被删除；
-- 哪些正式路径替代它；
-- 受影响功能清单；
-- 回归验证结果。
-
-## 12. 升级和停止条件
-
-如果正确修复需要以下任一行为，必须停止并向用户说明，不得用 workaround 继续：
-
-- 新增产品功能；
-- 改变业务目标；
+- 引入用户未授权的新产品能力；
+- 改变用户明确目标；
 - 改变正式对象生命周期；
-- 破坏现有用户数据；
+- 影响现有用户数据安全；
 - 无恢复方案的破坏性迁移；
 - 无法判断应该删除还是保留某个证据路径；
 - 需要真实外部数据源或访问配置才能证明；
@@ -316,16 +231,17 @@ ESCALATION_REQUIRED
 建议选项：
 ```
 
-## 13. 完成回复格式
+## 11. 完成回复格式
 
-每次修复完成后，必须输出：
+每次修改完成后，必须输出：
 
 ```text
 任务：
+类型：UI/需求变更 / Bug修复 / 低风险微调
 状态：ACCEPTED / NOT_ACCEPTED / ESCALATION_REQUIRED
-Root Cause：
+Change Intent 或 Root Cause：
 Impact Radius：
-修复内容：
+修改内容：
 删除的旧路径/重复实现：
 保留的临时路径及原因：
 修改文件：
@@ -338,7 +254,7 @@ Impact Radius：
 
 不得使用“基本完成”“应该可以”“看起来没问题”等模糊结论。
 
-## 14. 交付标准
+## 12. 交付标准
 
 最终交付前必须满足：
 

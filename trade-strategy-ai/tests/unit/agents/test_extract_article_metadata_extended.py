@@ -379,13 +379,16 @@ async def test_process_article_isolated_sets_article_type(
         ) -> object:
             class FakeResult:
                 data = {
-                    "extracted_concepts": [{"name": "test", "type": "concept", "evidence": "test"}],
-                    "trading_symbols": ["000001.SZ"],
-                    "strategy_rules": [],
-                    "preconditions": [],
-                    "comment_insights": [],
-                    "sentiment_score": 0.3,
-                    "confidence_score": 0.7,
+                    "schema_version": "article_analysis_v1",
+                    "concept_extraction": {
+                        "concepts": [{"name": "test", "type": "concept", "evidence": "test"}],
+                        "trading_symbols": ["000001.SZ"],
+                        "sentiment": {"score": 0.3},
+                        "confidence": 0.7,
+                    },
+                    "rule_extraction": {"strategy_rules": []},
+                    "explicit_preconditions": {"preconditions": []},
+                    "quality": {},
                 }
                 model = "test-model"
 

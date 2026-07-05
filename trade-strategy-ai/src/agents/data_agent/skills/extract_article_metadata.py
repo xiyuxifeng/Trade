@@ -13,6 +13,7 @@ from uuid import UUID
 
 # 并发处理限制：每次同时处理的文章数
 CONCURRENCY_LIMIT = 3
+ARTICLE_ANALYSIS_CONTENT_MAX_CHARS = 80000
 
 from sqlalchemy import and_, or_, select
 from src.common.config import AppConfig
@@ -338,7 +339,14 @@ def _clamp(value: float | None, lo: float, hi: float) -> float | None:
     return max(lo, min(hi, value))
 
 
-def _quality_gate(raw: dict[str, Any]) -> dict[str, Any]:
+def _quality_gate(
+    raw: dict[str, Any],
+    *,
+    article_type: str | None = None,
+    rules: list[dict[str, Any]] | None = None,
+    preconditions: list[dict[str, Any]] | None = None,
+    trading_symbols: list[str] | None = None,
+) -> dict[str, Any]:
     """质量门禁：检查 sentiment_score / confidence_score 是否满足最低要求。
 
     返回 dict：
@@ -346,6 +354,7 @@ def _quality_gate(raw: dict[str, Any]) -> dict[str, Any]:
         rejected_fields: list[str]  — 不满足条件的字段名
         quality_score: float  — 综合质量分（0~1）
     """
+    normalized_type = _normalize_article_type(article_type)
     rejected: list[str] = []
     quality_factors: list[float] = []
 
@@ -367,12 +376,30 @@ def _quality_gate(raw: dict[str, Any]) -> dict[str, Any]:
         sent_score = (sent + 1.0) / 2.0 if sent is not None else 0.5  # None 时取中性 0.5
     quality_factors.append(sent_score)
 
+    concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
+    rules = rules if rules is not None else raw.get("strategy_rules")
+    preconditions = preconditions if preconditions is not None else raw.get("preconditions")
+    trading_symbols = trading_symbols if trading_symbols is not None else raw.get("trading_symbols")
+    has_concepts = isinstance(concepts, list) and len(concepts) > 0
+    has_rules = isinstance(rules, list) and len(rules) > 0
+    has_preconditions = isinstance(preconditions, list) and len(preconditions) > 0
+    has_symbols = isinstance(trading_symbols, list) and len(trading_symbols) > 0
+
     # strategy_rules 非空且置信度较高 → 额外加分
-    rules = raw.get("strategy_rules")
     rules_score = 0.0
     if isinstance(rules, list) and len(rules) > 0 and conf is not None and conf >= 0.5:
         rules_score = min(len(rules) / 5.0, 1.0)  # 最多 5 条规则满分
     quality_factors.append(rules_score)
+
+    terminal_empty = False
+    if normalized_type == ArticleType.NOISE.value:
+        terminal_empty = not any([has_concepts, has_symbols, has_rules, has_preconditions])
+    elif normalized_type == ArticleType.CONCEPT.value:
+        if not any([has_concepts, has_symbols, has_preconditions]):
+            rejected.append("extracted_concepts")
+    elif normalized_type in {ArticleType.RULE.value, ArticleType.RECORD.value, ArticleType.MIXED.value}:
+        if not any([has_concepts, has_symbols, has_rules, has_preconditions]):
+            rejected.append("extraction_payload")
 
     quality_score = sum(quality_factors) / len(quality_factors) if quality_factors else 0.0
 
@@ -380,6 +407,8 @@ def _quality_gate(raw: dict[str, Any]) -> dict[str, Any]:
         "passed": len(rejected) == 0,
         "rejected_fields": rejected,
         "quality_score": quality_score,
+        "article_type": normalized_type,
+        "terminal_empty": terminal_empty,
     }
 
 
@@ -445,10 +474,11 @@ def _legacy_compat_output_from_article_analysis(raw: dict[str, Any]) -> dict[str
         strategy_rules.append(
             {
                 "schema_version": "v0_compat_from_rule_v1",
+                "claim_key": _legacy_claim_key_for_rule(item),
                 "rule_type": item.get("rule_type") or "entry",
-                "instrument_focus": ",".join(item.get("instrument_focus") or []) if isinstance(item.get("instrument_focus"), list) else "mixed",
+                "instrument_focus": _legacy_instrument_focus(item.get("instrument_focus")),
                 "condition": item.get("condition") or {},
-                "action": item.get("action") or {"type": "enter", "side": "buy", "order": "market", "price": None, "params": {}},
+                "action": _legacy_action(item.get("action"), item.get("rule_type")),
                 "confidence": item.get("confidence"),
                 "quoted_text": _first_evidence_quote(item.get("evidence")),
                 "source_url": None,
@@ -464,18 +494,19 @@ def _legacy_compat_output_from_article_analysis(raw: dict[str, Any]) -> dict[str
         compat_preconditions.append(
             {
                 "schema_version": "v0_compat_from_explicit_precondition_v1",
-                "precondition_id": item.get("precondition_id") or f"precondition-{index}",
-                "precondition_type": item.get("type") or "market_regime",
-                "description": item.get("description") or item.get("raw_expression") or "",
-                "source": item.get("source") or "explicit",
+                "claim_key": _legacy_claim_key_for_precondition(item),
+                "instrument_focus": "mixed",
+                "condition": item.get("condition") if isinstance(item.get("condition"), dict) else {},
                 "confidence": item.get("confidence"),
-                "evidence": item.get("evidence") or [],
+                "quoted_text": _first_evidence_quote(item.get("evidence")),
+                "source_url": None,
+                "published_at": None,
             }
         )
 
     return {
         "extracted_concepts": concepts.get("concepts") if isinstance(concepts.get("concepts"), list) else [],
-        "trading_symbols": concepts.get("trading_symbols") if isinstance(concepts.get("trading_symbols"), list) else [],
+        "trading_symbols": _legacy_symbol_values(concepts.get("trading_symbols")),
         "strategy_rules": strategy_rules,
         "preconditions": compat_preconditions,
         "comment_insights": [],
@@ -495,6 +526,81 @@ def _first_evidence_quote(evidence: Any) -> str | None:
         if isinstance(item, str):
             return item
     return None
+
+
+def _legacy_claim_key_for_rule(item: dict[str, Any]) -> str:
+    rule_type = str(item.get("rule_type") or "").lower()
+    if rule_type == "exit":
+        return "exit.invalidation"
+    if rule_type == "filter":
+        return "filter.market_regime"
+    if rule_type == "sizing":
+        return "sizing.base_pct"
+    if rule_type == "risk":
+        return "risk.no_trade_conditions"
+    if rule_type == "selection":
+        return "universe.instruments"
+    return "entry.trigger"
+
+
+def _legacy_claim_key_for_precondition(item: dict[str, Any]) -> str:
+    condition_type = str(item.get("condition_type") or "").lower()
+    if condition_type == "volatility":
+        return "filter.volatility"
+    if condition_type in {"liquidity", "sector", "theme", "sentiment"}:
+        return "filter.liquidity" if condition_type == "liquidity" else "filter.market_regime"
+    if condition_type == "event_risk":
+        return "filter.event_risk"
+    return "filter.market_regime"
+
+
+def _legacy_instrument_focus(value: Any) -> str:
+    valid = {"stock", "etf", "cb", "mixed"}
+    if isinstance(value, list):
+        for item in value:
+            normalized = str(item).strip().lower()
+            if normalized in valid:
+                return normalized
+        return "mixed"
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in valid else "mixed"
+
+
+def _legacy_action(action: Any, rule_type: Any) -> dict[str, Any]:
+    if not isinstance(action, dict):
+        action = {}
+    action_type = str(action.get("type") or "").strip().lower()
+    side = action.get("side")
+    price_reference = action.get("price_reference")
+    if not action_type:
+        action_type = "exit" if str(rule_type or "").lower() == "exit" else "enter"
+    return {
+        "type": action_type,
+        "side": side if isinstance(side, str) and side != "none" else None,
+        "order": "market",
+        "price": {"reference": price_reference} if isinstance(price_reference, str) and price_reference != "unknown" else None,
+        "params": {},
+    }
+
+
+def _legacy_symbol_values(raw_symbols: Any) -> list[str]:
+    if not isinstance(raw_symbols, list):
+        return []
+    values: list[str] = []
+    for item in raw_symbols:
+        value: str | None = None
+        if isinstance(item, str):
+            value = item
+        elif isinstance(item, dict):
+            symbol = item.get("symbol")
+            raw_name = item.get("raw_name")
+            if isinstance(symbol, str) and symbol.strip():
+                value = symbol
+            elif isinstance(raw_name, str) and raw_name.strip():
+                value = raw_name
+        if value and value.strip() and value.strip() not in values:
+            values.append(value.strip())
+    return values
 
 
 def _compat_confidence(*payloads: dict[str, Any]) -> float:
@@ -1113,8 +1219,8 @@ async def _extract_one(
 
     # 控制输入长度：避免把超长评论一次性塞爆
     content = article.content_text.strip()
-    if len(content) > 20000:
-        content = content[:20000]
+    if len(content) > ARTICLE_ANALYSIS_CONTENT_MAX_CHARS:
+        content = content[:ARTICLE_ANALYSIS_CONTENT_MAX_CHARS]
 
     user_prompt = json.dumps(
         {
@@ -1330,15 +1436,49 @@ async def _run_article_extraction_pipeline(
         )
         return state
 
-    meta.extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
+    extracted_concepts = raw.get("extracted_concepts") if isinstance(raw.get("extracted_concepts"), list) else []
     raw_symbols = raw.get("trading_symbols") if isinstance(raw.get("trading_symbols"), list) else []
-    meta.trading_symbols = await _normalize_symbols_with_db(raw_symbols)
+    normalized_symbols = await _normalize_symbols_with_db(raw_symbols)
+    comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
+    sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
+    confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
+    quality_gate = _quality_gate(
+        raw,
+        article_type=state.classification_type,
+        rules=rules,
+        preconditions=preconds,
+        trading_symbols=normalized_symbols,
+    )
+    if state.mode == "llm" and not quality_gate["passed"]:
+        state.failed = True
+        state.error_type = ExtractErrorType.QUALITY
+        rejected_fields = ", ".join(quality_gate["rejected_fields"])
+        state.error_message = f"LLM extraction quality gate failed: {rejected_fields}"
+        meta.raw_llm_output = {
+            "mode": state.mode,
+            "raw": raw,
+            "version": version,
+            "quality_gate": quality_gate,
+            "error": state.error_message,
+        }
+        _record_error(
+            article_id=str(article.id),
+            source_url=article.source_url,
+            error_type=ExtractErrorType.QUALITY,
+            error_message=state.error_message,
+            raw_output=raw,
+            error_log_path=error_log_path,
+        )
+        return state
+
+    meta.extracted_concepts = extracted_concepts
+    meta.trading_symbols = normalized_symbols
     meta.strategy_rules = rules
     meta.preconditions = preconds
-    meta.comment_insights = raw.get("comment_insights") if isinstance(raw.get("comment_insights"), list) else []
-    meta.sentiment_score = _clamp(_safe_float(raw.get("sentiment_score")), -1.0, 1.0)
-    meta.confidence_score = _clamp(_safe_float(raw.get("confidence_score")), 0.0, 1.0)
-    meta.raw_llm_output = {"mode": state.mode, "raw": raw, "version": version}
+    meta.comment_insights = comment_insights
+    meta.sentiment_score = sentiment_score
+    meta.confidence_score = confidence_score
+    meta.raw_llm_output = {"mode": state.mode, "raw": raw, "version": version, "quality_gate": quality_gate}
     if state.error_message:
         meta.raw_llm_output["error"] = state.error_message
     meta.processed_at = _now_utc()
@@ -1614,8 +1754,8 @@ async def _extract_one_with_retry(
 
     # 控制输入长度：避免把超长评论一次性塞爆
     content = article.content_text.strip()
-    if len(content) > 20000:
-        content = content[:20000]
+    if len(content) > ARTICLE_ANALYSIS_CONTENT_MAX_CHARS:
+        content = content[:ARTICLE_ANALYSIS_CONTENT_MAX_CHARS]
 
     user_prompt = json.dumps(
         {

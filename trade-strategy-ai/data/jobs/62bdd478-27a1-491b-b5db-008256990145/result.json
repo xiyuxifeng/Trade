@@ -1,0 +1,18 @@
+{
+  "status": "success",
+  "result": {
+    "status": "ok",
+    "message": "crawl completed",
+    "payload": {
+      "profile_id": "V1",
+      "base_dir": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai",
+      "line_count": 1,
+      "lines": [
+        "tgb:10461311:10"
+      ],
+      "force": false
+    },
+    "warnings": []
+  },
+  "error": null
+}

@@ -1,0 +1,8 @@
+{
+  "status": "cancelled",
+  "result": {},
+  "error": {
+    "type": "cancelled",
+    "message": "cancel requested"
+  }
+}

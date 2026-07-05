@@ -1,0 +1,31 @@
+[
+  {
+    "kind": "result-json",
+    "title": "result.json",
+    "job_id": "f1819a1f-a9cc-4074-96ab-f3ca8575cccf",
+    "step_id": null,
+    "summary": null,
+    "metadata": {
+      "job_type": "crawl"
+    },
+    "created_at": "2026-07-05T12:47:12.131119Z",
+    "size_bytes": 273,
+    "visibility": "internal",
+    "artifact_id": "be234f26f3e9a0a0",
+    "dataset_ref": null,
+    "storage_ref": {
+      "uri": null,
+      "source": "file",
+      "metadata": {
+        "job_id": "f1819a1f-a9cc-4074-96ab-f3ca8575cccf"
+      },
+      "logical_id": "be234f26f3e9a0a0",
+      "relative_path": "result.json"
+    },
+    "workflow_id": null,
+    "snapshot_ref": null,
+    "download_token": null,
+    "safe_download_url": "/api/ui/v1/artifacts/be234f26f3e9a0a0/download",
+    "config_snapshot_ref": null
+  }
+]

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from src.common.config import AppConfig
 from src.db.session import session_scope
 from src.models.blog_article import BlogArticle
-from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
+from src.services.article_analysis_selection_service import ArticleAnalysisSelectionService
 from src.persona.schemas import (
     ClusterApplicability,
     InstrumentFocus,
@@ -82,7 +82,7 @@ async def build_clusters_from_db(
     )
     evidence_by_trader: dict[str, list[dict[str, Any]]] = defaultdict(list)
     article_count_by_trader: dict[str, int] = defaultdict(int)
-    metadata_selection_service = ArticleMetadataSelectionService()
+    analysis_selection_service = ArticleAnalysisSelectionService()
 
     async with session_scope() as session:
         stmt = (
@@ -100,10 +100,9 @@ async def build_clusters_from_db(
 
         rows = await session.execute(stmt)
         article_rows = rows.all()
-        effective_metadata_map = await metadata_selection_service.load_effective_metadata_map(
+        effective_analysis_map = await analysis_selection_service.load_effective_analysis_map(
             session,
             article_ids=[row[0] for row in article_rows],
-            selected_by="system",
         )
 
         for article_id, author_id, source_url, published_at, raw_payload in article_rows:
@@ -119,11 +118,11 @@ async def build_clusters_from_db(
             if not trader_id:
                 continue
 
-            meta = effective_metadata_map.get(article_id)
-            if meta is None or meta.processed_at is None:
+            analysis = effective_analysis_map.get(article_id)
+            if analysis is None or analysis.processed_at is None:
                 continue
             # 仅当有规则/前置条件时才用于聚类
-            if not meta.strategy_rules and not meta.preconditions:
+            if not analysis.strategy_rules and not analysis.preconditions:
                 continue
 
             stats.used_articles += 1
@@ -132,11 +131,11 @@ async def build_clusters_from_db(
                 {
                     "source_url": article.source_url,
                     "published_at": article.published_at.isoformat() if article.published_at else None,
-                    "processed_at": meta.processed_at.isoformat() if meta.processed_at else None,
+                    "processed_at": analysis.processed_at.isoformat() if analysis.processed_at else None,
                 }
             )
 
-            for r in meta.strategy_rules:
+            for r in analysis.strategy_rules:
                 if not isinstance(r, dict):
                     continue
                 rule = _safe_rule(r)
@@ -144,7 +143,7 @@ async def build_clusters_from_db(
                     continue
                 rules_by_trader_focus[trader_id][_safe_focus(rule.instrument_focus.value)].append(rule)
 
-            for p in meta.preconditions:
+            for p in analysis.preconditions:
                 if not isinstance(p, dict):
                     continue
                 pre = _safe_pre(p)

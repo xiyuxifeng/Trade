@@ -17,26 +17,6 @@ def test_prompt_registry_matches_frozen_stage3_contract() -> None:
             "article_analysis_repair_v1",
             PromptProductionStatus.conditional,
         ),
-        "concept_extraction_v1": (
-            "prompts/concept_extraction_v1.md",
-            "concept_v1",
-            PromptProductionStatus.test_special_only,
-        ),
-        "article_structure_extraction_v1": (
-            "prompts/article_structure_extraction_v1.md",
-            "article_structure_v1",
-            PromptProductionStatus.test_special_only,
-        ),
-        "rule_extraction_v1": (
-            "prompts/rule_extraction_v1.md",
-            "rule_v1",
-            PromptProductionStatus.test_special_only,
-        ),
-        "explicit_precondition_extraction_v1": (
-            "prompts/explicit_precondition_extraction_v1.md",
-            "explicit_precondition_v1",
-            PromptProductionStatus.test_special_only,
-        ),
         "author_method_profile_batch_v1": (
             "prompts/author_method_profile_batch_v1.md",
             "author_method_profile_batch_v1",
@@ -96,6 +76,24 @@ def test_prompt_registry_loads_prompt_files_and_embedded_versions() -> None:
         assert spec.embedded_prompt_version == spec.prompt_version
         if spec.embedded_schema_version is not None:
             assert spec.embedded_schema_version == spec.schema_version
+
+
+def test_article_analysis_prompt_is_self_contained_without_runtime_prompt_concatenation() -> None:
+    text = get_prompt_registry()["article_analysis_v1"].load_prompt_text()
+
+    assert "# Concept Extraction v1" not in text
+    assert "# Article Structure Extraction v1" not in text
+    assert "# Rule Extraction v1" not in text
+    assert "# Explicit Precondition Extraction v1" not in text
+    assert "子 Prompt 详细规范" not in text
+    assert '"classification": {' in text
+    assert '"concept_extraction": {' in text
+    assert '"article_structure": {' in text
+    assert '"rule_extraction": {' in text
+    assert '"explicit_preconditions": {' in text
+    assert '"market_state": {' in text
+    assert '"quantification": {' in text
+    assert "不得编造止盈、止损、持有周期、仓位和参数" in text
 
 
 def test_prompt_registry_exposes_pydantic_schema_exports() -> None:

@@ -1,0 +1,18 @@
+{
+  "status": "success",
+  "result": {
+    "status": "ok",
+    "message": "validate completed",
+    "payload": {
+      "result": {
+        "validated_paths": [
+          "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/validate/all.articles.cleaned.validated.jsonl"
+        ],
+        "report_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/validate/validation_report.json"
+      },
+      "validate_dir": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/validate"
+    },
+    "warnings": []
+  },
+  "error": null
+}

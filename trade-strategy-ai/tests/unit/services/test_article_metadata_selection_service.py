@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.models.article_metadata import ArticleMetadata
 from src.models.article_metadata_selection import ArticleMetadataSelection
+from src.services.article_analysis_selection_service import ArticleAnalysisRecord
 from src.models.blog_article import BlogArticle
 from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
 
@@ -199,3 +200,56 @@ async def test_article_metadata_selection_service_manual_override_and_effective_
     assert resolution.effective_schema_version == 'v1'
     assert resolution.effective_reason == 'manual selection'
     assert effective_map[article_id].version == 'v1'
+
+
+@pytest.mark.asyncio
+async def test_article_metadata_candidates_include_stage3_analysis_when_legacy_metadata_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    article_id = uuid4()
+
+    class _EmptyScalarResult:
+        def all(self) -> list[object]:
+            return []
+
+    class _FakeSession:
+        async def scalars(self, _stmt: object) -> _EmptyScalarResult:
+            return _EmptyScalarResult()
+
+        async def run_sync(self, fn):  # noqa: ANN001
+            class _Bind:
+                pass
+
+            return True
+
+    async def fake_load_effective_analysis_map(self, session, *, article_ids):  # noqa: ANN001
+        return {
+            article_id: ArticleAnalysisRecord(
+                article_id=article_id,
+                schema_version="article_analysis_v1",
+                processed_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC),
+                provider="qwen",
+                model="qwen3",
+                article_type="rule",
+                extraction_version="article_analysis_v1",
+                extracted_concepts=[{"name": "AI"}],
+                trading_symbols=["000001.SZ"],
+                strategy_rules=[{"claim_key": "entry.trigger"}],
+                preconditions=[],
+                comment_insights=[],
+                raw_llm_output={"classification": {}},
+                sentiment_score=0.5,
+                confidence_score=0.8,
+            )
+        }
+
+    monkeypatch.setattr(
+        "src.services.article_analysis_selection_service.ArticleAnalysisSelectionService.load_effective_analysis_map",
+        fake_load_effective_analysis_map,
+    )
+
+    service = ArticleMetadataSelectionService()
+    candidates = await service.load_candidates(_FakeSession(), article_ids=[article_id])
+
+    assert candidates[article_id][0].schema_version == "article_analysis_v1"
+    assert candidates[article_id][0].strategy_rules_count == 1

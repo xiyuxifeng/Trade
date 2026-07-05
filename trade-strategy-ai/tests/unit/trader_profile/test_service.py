@@ -177,7 +177,7 @@ async def test_build_trader_profiles_includes_trade_logs(tmp_path, monkeypatch):
 
     monkeypatch.setattr("src.trader_profile.service.session_scope", _fake_session_scope)
     monkeypatch.setattr(
-        "src.services.article_metadata_selection_service.ArticleMetadataSelectionService.load_effective_metadata_map",
+        "src.services.article_analysis_selection_service.ArticleAnalysisSelectionService.load_effective_analysis_map",
         AsyncMock(
             return_value={
                 "article-1": SimpleNamespace(

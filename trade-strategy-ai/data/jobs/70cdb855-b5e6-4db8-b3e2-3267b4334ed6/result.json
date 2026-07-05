@@ -1,0 +1,10 @@
+{
+  "status": "failed",
+  "result": {},
+  "error": {
+    "type": "system_error",
+    "message": "[Errno 8] nodename nor servname provided, or not known",
+    "code": "system_error",
+    "retryable": true
+  }
+}

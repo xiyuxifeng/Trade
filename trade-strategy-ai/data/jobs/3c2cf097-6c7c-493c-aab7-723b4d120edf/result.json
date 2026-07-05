@@ -1,0 +1,8 @@
+{
+  "status": "running",
+  "result": {},
+  "error": {
+    "type": "cancel_requested",
+    "message": "web console request"
+  }
+}

@@ -16,7 +16,7 @@ from src.db.session import session_scope
 from src.db.repositories.market_regime_repository import MarketRegimeRepository
 from src.db.repositories.rule_applicability_repository import RuleApplicabilityRepository
 from src.models.blog_article import BlogArticle
-from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
+from src.services.article_analysis_selection_service import ArticleAnalysisSelectionService
 from src.strategy_library.service import StrategyLibraryService
 from src.strategy_library.schemas import StrategyVersionStatus
 from src.trader_profile.service import default_profiles_path, load_trader_profiles_file
@@ -101,7 +101,7 @@ async def handle_build_trader_strategy_version(
                 return
 
     # 查询文章证据
-    metadata_selection_service = ArticleMetadataSelectionService()
+    analysis_selection_service = ArticleAnalysisSelectionService()
 
     async with session_scope() as session:
         # 查找该交易员最近的 N 篇文章
@@ -114,10 +114,9 @@ async def handle_build_trader_strategy_version(
             .limit(50)
         )
         article_rows = rows.all()
-        effective_metadata_map = await metadata_selection_service.load_effective_metadata_map(
+        effective_analysis_map = await analysis_selection_service.load_effective_analysis_map(
             session,
             article_ids=[row[0] for row in article_rows],
-            selected_by="system",
         )
 
         # 按 trader_id 过滤文章
@@ -130,8 +129,8 @@ async def handle_build_trader_strategy_version(
             if payload_trader_id != trader_id:
                 continue
 
-            meta = effective_metadata_map.get(article_id)
-            if meta is None:
+            analysis = effective_analysis_map.get(article_id)
+            if analysis is None:
                 continue
 
             class _ArticleEvidence:
@@ -145,9 +144,9 @@ async def handle_build_trader_strategy_version(
 
             articles.append(_ArticleEvidence(
                 article_id=str(article_id),
-                symbols=meta.trading_symbols,
-                sentiment=meta.sentiment_score,
-                confidence=meta.confidence_score,
+                symbols=analysis.trading_symbols,
+                sentiment=analysis.sentiment_score,
+                confidence=analysis.confidence_score,
             ))
 
         # 构建并保存 draft 版本

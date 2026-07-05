@@ -12,17 +12,13 @@ from pydantic import BaseModel, ValidationError
 from src.schemas.prompt_outputs import (
     ArticleAnalysisOutput,
     ArticleAnalysisRepairOutput,
-    ArticleStructureExtractionOutput,
     AuthorMethodProfileBatchOutput,
     AuthorProfileMergeOutput,
     AuthorProfileRevisionOutput,
     AuthorRuleProfileSummaryOutput,
     AuthorValidatedProfileOutput,
-    ConceptExtractionOutput,
-    ExplicitPreconditionExtractionOutput,
     LLMAttributionOutput,
     LLMPostmortemNotesOutput,
-    RuleExtractionOutput,
     StrategyRevisionProposalOutput,
 )
 
@@ -78,10 +74,6 @@ def _build_registry() -> dict[str, PromptSpec]:
     entries = [
         ("article_analysis_v1", "article_analysis_v1.md", ArticleAnalysisOutput, "article_analysis_v1", "article_analysis_v1", PromptProductionStatus.active),
         ("article_analysis_repair_v1", "article_analysis_repair_v1.md", ArticleAnalysisRepairOutput, "article_analysis_repair_v1", "article_analysis_repair_v1", PromptProductionStatus.conditional),
-        ("concept_extraction_v1", "concept_extraction_v1.md", ConceptExtractionOutput, "concept_v1", "concept_v1", PromptProductionStatus.test_special_only),
-        ("article_structure_extraction_v1", "article_structure_extraction_v1.md", ArticleStructureExtractionOutput, "article_structure_v1", "article_structure_v1", PromptProductionStatus.test_special_only),
-        ("rule_extraction_v1", "rule_extraction_v1.md", RuleExtractionOutput, "rule_v1", "rule_v1", PromptProductionStatus.test_special_only),
-        ("explicit_precondition_extraction_v1", "explicit_precondition_extraction_v1.md", ExplicitPreconditionExtractionOutput, "explicit_precondition_v1", "explicit_precondition_v1", PromptProductionStatus.test_special_only),
         ("author_method_profile_batch_v1", "author_method_profile_batch_v1.md", AuthorMethodProfileBatchOutput, "author_method_profile_batch_v1", "author_method_profile_batch_v1", PromptProductionStatus.batch_only),
         ("author_rule_profile_summary_v1", "author_rule_profile_summary_v1.md", AuthorRuleProfileSummaryOutput, "author_rule_profile_summary_v1", "author_rule_profile_summary_v1", PromptProductionStatus.asset_validated),
         ("author_validated_profile_v1", "author_validated_profile_v1.md", AuthorValidatedProfileOutput, "author_validated_profile_v1", "author_validated_profile_v1", PromptProductionStatus.asset_validated),

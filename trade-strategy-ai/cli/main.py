@@ -32,7 +32,6 @@ from src.pipeline.tasks.export_task import run_export_task
 from src.pipeline.tasks.crawl_task import run_crawl_task
 from src.pipeline.tasks.stock_info_task import run_stock_info_update
 from src.agents.data_agent.skills.store_db import store_articles_jsonl_to_db
-from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.data_agent.skills.import_trade_logs import (
 	import_trade_logs_from_csv,
 	import_trade_logs_from_excel,
@@ -743,10 +742,7 @@ async def _e2e_regression_async(
 		skip_crawl=False,
 	)
 
-	# 3) extract
-	await extract_and_store_metadata(config=loaded_cfg.config, base_dir=base_dir, total_limit=extract_limit)
-
-	# 4) build clusters
+	# 3) build clusters. Article analysis is executed by pipeline process using Stage3 outputs.
 	full_clusters = clusters_dest if clusters_dest.is_absolute() else (base_dir / clusters_dest)
 	ensure_dir(full_clusters.parent)
 	await build_clusters_from_db(config=loaded_cfg.config, dest=full_clusters)

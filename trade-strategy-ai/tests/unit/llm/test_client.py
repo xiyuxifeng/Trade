@@ -164,3 +164,100 @@ async def test_complete_json_with_trace_captures_usage_and_raw_output(monkeypatc
     assert trace.raw_output["usage"]["total_tokens"] == 18
     assert trace.raw_output_text == '{"ok": true}'
     assert trace.token_usage["total_tokens"] == 18
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_json_does_not_set_max_tokens_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.llm import client as client_mod
+
+    captured: dict[str, object] = {}
+
+    class _Message:
+        content = '{"ok": true}'
+
+    class _Choice:
+        message = _Message()
+        finish_reason = "stop"
+
+    class _Completion:
+        choices = [_Choice()]
+        usage = {}
+
+        def model_dump(self, mode="json"):
+            del mode
+            return {"choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}]}
+
+    class _FakeCompletions:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            return _Completion()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(client_mod, "AsyncOpenAI", _FakeOpenAI)
+
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model="qwen3-8b",
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+
+    await client.complete_json_with_trace(system_prompt="system", user_prompt="user")
+
+    assert "max_tokens" not in captured
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_json_rejects_length_truncated_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.llm import client as client_mod
+
+    class _Message:
+        content = '{"ok": true}'
+
+    class _Choice:
+        message = _Message()
+        finish_reason = "length"
+
+    class _Completion:
+        choices = [_Choice()]
+        usage = {}
+
+        def model_dump(self, mode="json"):
+            del mode
+            return {"choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "length"}]}
+
+    class _FakeCompletions:
+        async def create(self, **kwargs):
+            del kwargs
+            return _Completion()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            del kwargs
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(client_mod, "AsyncOpenAI", _FakeOpenAI)
+
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model="qwen3-8b",
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+
+    with pytest.raises(LLMError, match="truncated"):
+        await client.complete_json_with_trace(system_prompt="system", user_prompt="user")

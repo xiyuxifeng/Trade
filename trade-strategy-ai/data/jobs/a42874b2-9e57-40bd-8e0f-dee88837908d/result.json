@@ -1,0 +1,41 @@
+{
+  "status": "failed",
+  "result": {},
+  "error": {
+    "type": "permission",
+    "message": "LLM request failed: Error code: 403 - {'error': {'message': 'The free quota has been exhausted. To continue accessing the model on a paid basis, please complete your payment information （or disable the \"use free tier only\" mode in the management console if already completed).', 'type': 'AllocationQuota.FreeTierOnly', 'param': None, 'code': 'AllocationQuota.FreeTierOnly'}, 'id': 'chatcmpl-84ce5db4-878f-9f85-98d4-dc1171d519e1', 'request_id': '84ce5db4-878f-9f85-98d4-dc1171d519e1'}",
+    "code": "permission_denied",
+    "retryable": false,
+    "result": {
+      "status": "error",
+      "message": "LLM request failed: Error code: 403 - {'error': {'message': 'The free quota has been exhausted. To continue accessing the model on a paid basis, please complete your payment information （or disable the \"use free tier only\" mode in the management console if already completed).', 'type': 'AllocationQuota.FreeTierOnly', 'param': None, 'code': 'AllocationQuota.FreeTierOnly'}, 'id': 'chatcmpl-84ce5db4-878f-9f85-98d4-dc1171d519e1', 'request_id': '84ce5db4-878f-9f85-98d4-dc1171d519e1'}",
+      "payload": {
+        "result": {
+          "processed": 0,
+          "skipped_dedup": 0,
+          "retried": 0,
+          "failed": 1,
+          "dead": 0,
+          "duration_ms": 4976,
+          "failure_details": [
+            {
+              "task_id": "7e76addd-eeb1-4085-a276-1d05b59d6065",
+              "task_type": "article_ingested",
+              "fatal": true,
+              "retryable": false,
+              "error": "LLM request failed: Error code: 403 - {'error': {'message': 'The free quota has been exhausted. To continue accessing the model on a paid basis, please complete your payment information （or disable the \"use free tier only\" mode in the management console if already completed).', 'type': 'AllocationQuota.FreeTierOnly', 'param': None, 'code': 'AllocationQuota.FreeTierOnly'}, 'id': 'chatcmpl-84ce5db4-878f-9f85-98d4-dc1171d519e1', 'request_id': '84ce5db4-878f-9f85-98d4-dc1171d519e1'}",
+              "error_type": "auth",
+              "article_id": "a02ae793-7566-4d80-9d1f-67320f8c46d4",
+              "source_url": "https://www.tgb.cn/a/2t70FbebGWN"
+            }
+          ],
+          "fatal_error": "LLM request failed: Error code: 403 - {'error': {'message': 'The free quota has been exhausted. To continue accessing the model on a paid basis, please complete your payment information （or disable the \"use free tier only\" mode in the management console if already completed).', 'type': 'AllocationQuota.FreeTierOnly', 'param': None, 'code': 'AllocationQuota.FreeTierOnly'}, 'id': 'chatcmpl-84ce5db4-878f-9f85-98d4-dc1171d519e1', 'request_id': '84ce5db4-878f-9f85-98d4-dc1171d519e1'}",
+          "fatal_error_type": "auth",
+          "fatal_task_id": "7e76addd-eeb1-4085-a276-1d05b59d6065",
+          "fatal_task_type": "article_ingested"
+        }
+      },
+      "warnings": []
+    }
+  }
+}

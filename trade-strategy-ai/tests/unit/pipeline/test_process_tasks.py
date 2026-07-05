@@ -36,34 +36,31 @@ class TestCreateHandlers:
         assert callable(article_ingested)
 
     @pytest.mark.asyncio
-    async def test_article_ingested_handler_targets_single_article(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_article_ingested_handler_runs_stage3_single_article_analysis(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_config = MagicMock()
-        captured: dict[str, object] = {}
+        mock_config.llm.model = ["qwen3-8b", "fallback"]
+        captured: dict[str, object] = {"models": []}
 
-        async def fake_extract_and_store_metadata(**kwargs: object) -> object:
-            captured.update(kwargs)
-            return SimpleNamespace(
-                fatal_error=None,
-                failed=0,
-                extracted=1,
-                skipped=0,
-                processed=1,
-                failure_details=[],
-                fatal_error_type=None,
-                fatal_article_id=None,
-            )
+        class _Service:
+            def __init__(self, **kwargs: object) -> None:
+                runtime = kwargs["prompt_runtime_service"]
+                captured["models"].append(runtime._model)
+
+            async def run_analysis(self, **kwargs: object) -> object:
+                captured.update(kwargs)
+                return SimpleNamespace(status="ready")
 
         class _Session:
             async def scalar(self, _query: object) -> object | None:
-                return SimpleNamespace(processed_at=True)
+                return True
 
         @asynccontextmanager
         async def fake_session_scope() -> object:
             yield _Session()
 
         monkeypatch.setattr(
-            "src.agents.data_agent.skills.extract_article_metadata.extract_and_store_metadata",
-            fake_extract_and_store_metadata,
+            "src.pipeline.tasks.process_tasks.Stage3SingleArticleService",
+            _Service,
         )
         monkeypatch.setattr("src.db.session.session_scope", fake_session_scope)
 
@@ -71,28 +68,23 @@ class TestCreateHandlers:
         article_id = str(uuid4())
         await handlers["article_ingested"]({"article_id": article_id})
 
-        assert "target_article_ids" in captured
-        assert [str(item) for item in captured["target_article_ids"]] == [article_id]
+        assert str(captured["article_id"]) == article_id
+        assert captured["article_revision_id"] is None
+        assert captured["models"] == ["qwen3-8b"]
 
     @pytest.mark.asyncio
-    async def test_article_ingested_handler_fails_when_metadata_not_persisted(
+    async def test_article_ingested_handler_fails_when_stage3_structure_not_persisted(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         mock_config = MagicMock()
 
-        class _Stats:
-            processed = 1
-            extracted = 1
-            skipped = 0
-            failed = 0
-            fatal_error = None
-            fatal_error_type = None
-            fatal_article_id = None
-            failure_details: list[dict[str, object]] = []
+        class _Service:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
 
-        async def fake_extract_and_store_metadata(**kwargs: object) -> object:
-            return _Stats()
+            async def run_analysis(self, **_kwargs: object) -> object:
+                return SimpleNamespace(status="partial")
 
         class _Session:
             async def scalar(self, _query: object) -> object | None:
@@ -103,15 +95,15 @@ class TestCreateHandlers:
             yield _Session()
 
         monkeypatch.setattr(
-            "src.agents.data_agent.skills.extract_article_metadata.extract_and_store_metadata",
-            fake_extract_and_store_metadata,
+            "src.pipeline.tasks.process_tasks.Stage3SingleArticleService",
+            _Service,
         )
         monkeypatch.setattr("src.db.session.session_scope", fake_session_scope)
 
         handlers = _create_handlers(mock_config, version="v1")
         article_id = str(uuid4())
 
-        with pytest.raises(ProcessFatalError, match="article metadata was not persisted"):
+        with pytest.raises(ProcessFatalError, match="article analysis was not persisted"):
             await handlers["article_ingested"]({"article_id": article_id})
 
 
@@ -142,8 +134,8 @@ class TestDedupByArticleId:
 
 
 @pytest.mark.asyncio
-async def test_rebuild_pending_tasks_v1_only_uses_v1_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    article_v1_target = (
+async def test_rebuild_pending_tasks_uses_missing_stage3_article_structure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    article_without_structure = (
         uuid4(),
         "tgb",
         "author-a",
@@ -152,31 +144,13 @@ async def test_rebuild_pending_tasks_v1_only_uses_v1_metadata(tmp_path: Path, mo
         "hash-a",
         {"site": "tgb", "trader_id": "trader_a"},
     )
-    article_other_version = (
-        uuid4(),
-        "tgb",
-        "author-b",
-        "author B",
-        "https://example.com/b",
-        "hash-b",
-        {"site": "tgb", "trader_id": "trader_b"},
-    )
 
     class _QueryAwareSession:
-        def __init__(self) -> None:
-            self._execute_calls = 0
-
         async def execute(self, query: object) -> object:
-            self._execute_calls += 1
-            if self._execute_calls > 1:
-                return SimpleNamespace(all=lambda: [])
-
             compiled = str(query)
-            if "schema_version" in compiled:
-                rows = [article_v1_target]
-            else:
-                rows = [article_v1_target, article_other_version]
-            return SimpleNamespace(all=lambda: rows)
+            assert "article_structures" in compiled
+            assert "article_metadata" not in compiled
+            return SimpleNamespace(all=lambda: [article_without_structure])
 
     appended: list[dict[str, object]] = []
 
@@ -194,7 +168,7 @@ async def test_rebuild_pending_tasks_v1_only_uses_v1_metadata(tmp_path: Path, mo
     await _rebuild_pending_tasks(pending_path, "v1")
 
     assert len(appended) == 1
-    assert appended[0]["details"]["article_id"] == str(article_v1_target[0])
+    assert appended[0]["details"]["article_id"] == str(article_without_structure[0])
 
 
 @pytest.mark.asyncio
@@ -243,6 +217,8 @@ async def test_run_process_tasks_counts_failed_tasks(tmp_path: Path, monkeypatch
     stats = await run_process_tasks(
         config=SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None)),
         pending_path=pending_path,
+        failed_path=tmp_path / "failed_tasks.jsonl",
+        dead_path=tmp_path / "dead_tasks.jsonl",
     )
 
     assert stats.failed == 1

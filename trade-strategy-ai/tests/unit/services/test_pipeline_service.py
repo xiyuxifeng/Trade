@@ -224,10 +224,6 @@ traders:
         calls["pipeline"] = kwargs
         return _FakePipelineResult(name="pipeline", nested=_FakeNested(value="ok"))
 
-    async def fake_extract(**kwargs):
-        calls["extract"] = kwargs
-        return type("Stats", (), {"scanned": 1, "extracted": 1, "skipped": 0, "failed": 0})()
-
     async def fake_build_clusters(**kwargs):
         calls["clusters"] = kwargs
         return (Path("/tmp/clusters.real.json"), type("Stats", (), {"scanned_articles": 2, "used_articles": 2, "clusters_built": 1})())
@@ -242,7 +238,6 @@ traders:
 
     service = PipelineService(
         pipeline_runner=fake_pipeline,
-        extract_metadata_runner=fake_extract,
         build_clusters_runner=fake_build_clusters,
         build_trader_profiles_runner=fake_build_profiles,
         write_trader_profiles_runner=fake_write_profiles,
@@ -264,5 +259,6 @@ traders:
     assert result.payload["daily_report"]["kind"] == "report"
     assert result.payload["evaluation"]["kind"] == "evaluation"
     assert calls["pipeline"]["max_articles"] == 10
-    assert calls["extract"]["total_limit"] == 7
+    assert result.payload["extract"]["source"] == "pipeline_process"
+    assert result.payload["extract"]["requested_limit"] == 7
     assert calls["profiles"]["max_articles_per_trader"] == 7

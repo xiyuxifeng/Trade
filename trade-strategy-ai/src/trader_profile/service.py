@@ -14,7 +14,7 @@ from src.common.utils import read_json, write_json
 from src.db.session import session_scope
 from src.models.blog_article import BlogArticle
 from src.models.trade_log import TradeLog
-from src.services.article_metadata_selection_service import ArticleMetadataSelectionService
+from src.services.article_analysis_selection_service import ArticleAnalysisSelectionService
 from src.persona.schemas import PersonaClustersFile
 from src.persona.storage import load_persona_clusters_file
 from src.trader_profile.schemas import (
@@ -284,7 +284,7 @@ async def build_trader_profiles(
 
     profiles: dict[str, TraderProfile] = {}
     trader_ids = [t.trader_id for t in config.traders if isinstance(t.trader_id, str) and t.trader_id.strip()]
-    metadata_selection_service = ArticleMetadataSelectionService()
+    analysis_selection_service = ArticleAnalysisSelectionService()
 
     async with session_scope() as session:
         max_per_trader = max(1, int(max_articles_per_trader))
@@ -301,10 +301,9 @@ async def build_trader_profiles(
         )
 
         article_rows = rows.all()
-        effective_metadata_map = await metadata_selection_service.load_effective_metadata_map(
+        effective_analysis_map = await analysis_selection_service.load_effective_analysis_map(
             session,
             article_ids=[row[0] for row in article_rows],
-            selected_by="system",
         )
 
         symbols_map: dict[str, list[list[str]]] = {tid: [] for tid in trader_ids}
@@ -321,13 +320,13 @@ async def build_trader_profiles(
             if len(symbols_map[tid]) >= max_per_trader:
                 continue
 
-            meta = effective_metadata_map.get(article_id)
-            if meta is None or meta.processed_at is None:
+            analysis = effective_analysis_map.get(article_id)
+            if analysis is None or analysis.processed_at is None:
                 continue
 
-            symbols_map[tid].append(meta.trading_symbols if isinstance(meta.trading_symbols, list) else [])
-            concepts_map[tid].append(meta.extracted_concepts if isinstance(meta.extracted_concepts, list) else [])
-            rules_map[tid].append(meta.strategy_rules if isinstance(meta.strategy_rules, list) else [])
+            symbols_map[tid].append(analysis.trading_symbols if isinstance(analysis.trading_symbols, list) else [])
+            concepts_map[tid].append(analysis.extracted_concepts if isinstance(analysis.extracted_concepts, list) else [])
+            rules_map[tid].append(analysis.strategy_rules if isinstance(analysis.strategy_rules, list) else [])
             article_rows_by_trader[tid] += 1
 
         trade_account_ids = list(account_map.keys())

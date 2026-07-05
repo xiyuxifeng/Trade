@@ -1,0 +1,19 @@
+{
+  "status": "success",
+  "result": {
+    "status": "ok",
+    "message": "store completed",
+    "payload": {
+      "result": {
+        "read_records": 136,
+        "inserted_articles": 136,
+        "updated_articles": 0,
+        "skipped_duplicates": 0,
+        "ensured_metadata": 136,
+        "generated_tasks": 136
+      }
+    },
+    "warnings": []
+  },
+  "error": null
+}

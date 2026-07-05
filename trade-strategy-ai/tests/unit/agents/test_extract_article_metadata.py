@@ -283,6 +283,141 @@ async def test_extract_one_uses_article_analysis_v1_and_compat_projection(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_extract_one_keeps_up_to_80000_content_chars(tmp_path: Path) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+
+    article = _make_article(content_text="前" * 25000 + "后" * 55000 + "丢" * 1000)
+    captured: dict[str, str] = {}
+
+    class FakeClient:
+        async def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, object]:
+            del system_prompt
+            captured["user_prompt"] = user_prompt
+            return {
+                "schema_version": "article_analysis_v1",
+                "concept_extraction": {
+                    "concepts": [],
+                    "trading_symbols": [],
+                    "sentiment": {"score": 0.0},
+                    "confidence": 0.8,
+                },
+                "rule_extraction": {"strategy_rules": []},
+                "explicit_preconditions": {"preconditions": []},
+                "quality": {},
+            }
+
+    await mod._extract_one(client=FakeClient(), prompts_dir=prompts_dir, article=article)
+
+    assert "后" in captured["user_prompt"]
+    assert "丢" not in captured["user_prompt"]
+
+
+def test_article_analysis_compat_projection_normalizes_symbol_objects() -> None:
+    raw = {
+        "schema_version": "article_analysis_v1",
+        "concept_extraction": {
+            "concepts": [],
+            "trading_symbols": [
+                {"raw_name": "平安银行", "symbol": "000001.SZ", "asset_type": "stock", "confidence": 0.9, "evidence": ["平安银行"]},
+                {"raw_name": "贵州茅台", "symbol": None, "asset_type": "stock", "confidence": 0.6, "evidence": ["贵州茅台"]},
+            ],
+            "sentiment": {"score": 0.1},
+            "confidence": 0.8,
+        },
+        "rule_extraction": {"strategy_rules": []},
+        "explicit_preconditions": {"preconditions": []},
+        "quality": {},
+    }
+
+    result = mod._legacy_compat_output_from_article_analysis(raw)
+
+    assert result["trading_symbols"] == ["000001.SZ", "贵州茅台"]
+
+
+def test_article_analysis_compat_projection_rules_survive_legacy_validation() -> None:
+    published_at = datetime(2026, 4, 6, tzinfo=UTC)
+    raw = {
+        "schema_version": "article_analysis_v1",
+        "concept_extraction": {
+            "concepts": [],
+            "trading_symbols": [],
+            "sentiment": {"score": 0.1},
+            "confidence": 0.8,
+        },
+        "rule_extraction": {
+            "strategy_rules": [
+                {
+                    "rule_key": "r1",
+                    "title": "放量突破买入",
+                    "rule_type": "entry",
+                    "instrument_focus": ["stock"],
+                    "timeframe": "1d",
+                    "holding_period": "short_term",
+                    "condition": {
+                        "logic": "single",
+                        "clauses": [{"field": "volume", "operator": "gt", "value": 2, "unit": "x", "lookback": 5, "raw_expression": "明显放量"}],
+                    },
+                    "action": {"type": "enter", "side": "buy", "price_reference": "close"},
+                    "risk_controls": [],
+                    "data_dependencies": ["ohlcv_1d"],
+                    "market_state_applicability": {"status": "not_declared", "explicit_conditions": [], "inferred_hypotheses": []},
+                    "quantification": {"status": "partially_executable", "missing_fields": [], "ambiguous_terms": ["明显放量"], "manual_review_required": True},
+                    "confidence": 0.82,
+                    "evidence": [{"quote": "明显放量突破后关注", "supports": "condition"}],
+                    "source_article_id": "a1",
+                }
+            ]
+        },
+        "explicit_preconditions": {"status": "not_declared", "preconditions": []},
+        "quality": {},
+    }
+
+    result = mod._legacy_compat_output_from_article_analysis(raw)
+    validated = mod._validate_rules(result["strategy_rules"], source_url="https://example.com/a", published_at=published_at)
+
+    assert len(validated) == 1
+    assert validated[0]["claim_key"] == "entry.trigger"
+    assert validated[0]["instrument_focus"] == "stock"
+    assert validated[0]["action"]["order"] == "market"
+    assert validated[0]["quoted_text"] == "明显放量突破后关注"
+
+
+def test_article_analysis_compat_projection_preconditions_survive_legacy_validation() -> None:
+    published_at = datetime(2026, 4, 6, tzinfo=UTC)
+    raw = {
+        "schema_version": "article_analysis_v1",
+        "concept_extraction": {
+            "concepts": [],
+            "trading_symbols": [],
+            "sentiment": {"score": 0.0},
+            "confidence": 0.7,
+        },
+        "rule_extraction": {"strategy_rules": []},
+        "explicit_preconditions": {
+            "status": "explicit",
+            "preconditions": [
+                {
+                    "condition_type": "sentiment",
+                    "condition": {"field": "market_sentiment", "operator": "eq", "value": "strong", "raw_expression": "情绪好时"},
+                    "confidence": 0.76,
+                    "evidence": ["情绪好时更适合"],
+                }
+            ],
+        },
+        "quality": {},
+    }
+
+    result = mod._legacy_compat_output_from_article_analysis(raw)
+    validated = mod._validate_preconditions(result["preconditions"], source_url="https://example.com/a", published_at=published_at)
+
+    assert len(validated) == 1
+    assert validated[0]["claim_key"] == "filter.market_regime"
+    assert validated[0]["condition"]["raw_expression"] == "情绪好时"
+    assert validated[0]["quoted_text"] == "情绪好时更适合"
+
+
+@pytest.mark.asyncio
 async def test_extract_and_store_metadata_uses_heuristic_when_llm_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
@@ -417,6 +552,132 @@ async def test_run_article_extraction_pipeline_aborts_on_fatal_llm_error(tmp_pat
     assert "invalid_api_key" in (state.error_message or "")
     assert meta.raw_llm_output["mode"] == "fatal_error"
     assert meta.processed_at is None
+
+
+@pytest.mark.asyncio
+async def test_run_article_extraction_pipeline_rejects_empty_rule_result_without_processed_at(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+
+    article = _make_article(content_text="这是一篇规则文章，提到突破以后关注机会。" * 10)
+    meta = _make_metadata(article)
+
+    class _Session:
+        async def commit(self) -> None:
+            return None
+
+    async def fake_classify_article(**_: object) -> object:
+        return SimpleNamespace(article_type="rule", confidence=0.9, type_scores={}, reason="rule article")
+
+    async def fake_persist_article_classification(**_: object) -> object:
+        return SimpleNamespace(article_type="rule")
+
+    async def fake_extract_one_with_retry(**_: object) -> object:
+        return SimpleNamespace(
+            data={
+                "extracted_concepts": [],
+                "trading_symbols": [],
+                "strategy_rules": [],
+                "preconditions": [],
+                "comment_insights": [],
+                "sentiment_score": 0.0,
+                "confidence_score": 0.8,
+            },
+            model="test-model",
+        )
+
+    async def fake_normalize_symbols(syms: list[str]) -> list[str]:
+        return syms
+
+    monkeypatch.setattr("src.article_classifier.classifier.classify_article", fake_classify_article)
+    monkeypatch.setattr(mod, "_persist_article_classification", fake_persist_article_classification)
+    monkeypatch.setattr(mod, "_extract_one_with_retry", fake_extract_one_with_retry)
+    monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize_symbols)
+
+    state = await mod._run_article_extraction_pipeline(
+        session=_Session(),
+        article=article,
+        meta=meta,
+        client=SimpleNamespace(is_enabled=lambda: True),
+        prompts_dir=prompts_dir,
+        error_log_path=tmp_path / "error.log",
+        checkpoint_path=tmp_path / "checkpoint.jsonl",
+        version="v1",
+        llm_provider="llm",
+    )
+
+    assert state.failed is True
+    assert state.error_type == mod.ExtractErrorType.QUALITY
+    assert meta.processed_at is None
+    assert meta.raw_llm_output["quality_gate"]["passed"] is False
+
+
+@pytest.mark.asyncio
+async def test_run_article_extraction_pipeline_allows_empty_noise_result_as_completed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+
+    article = _make_article(content_text="这是一篇闲聊文章，没有明确交易方法。" * 10)
+    meta = _make_metadata(article)
+
+    class _Session:
+        async def commit(self) -> None:
+            return None
+
+    async def fake_classify_article(**_: object) -> object:
+        return SimpleNamespace(article_type="noise", confidence=0.9, type_scores={}, reason="not about rules")
+
+    async def fake_persist_article_classification(**_: object) -> object:
+        return SimpleNamespace(article_type="noise")
+
+    async def fake_extract_one_with_retry(**_: object) -> object:
+        return SimpleNamespace(
+            data={
+                "extracted_concepts": [],
+                "trading_symbols": [],
+                "strategy_rules": [],
+                "preconditions": [],
+                "comment_insights": [],
+                "sentiment_score": 0.0,
+                "confidence_score": 0.8,
+            },
+            model="test-model",
+        )
+
+    async def fake_finalize_extraction_artifacts(**_: object) -> None:
+        return None
+
+    async def fake_normalize_symbols(syms: list[str]) -> list[str]:
+        return syms
+
+    monkeypatch.setattr("src.article_classifier.classifier.classify_article", fake_classify_article)
+    monkeypatch.setattr(mod, "_persist_article_classification", fake_persist_article_classification)
+    monkeypatch.setattr(mod, "_extract_one_with_retry", fake_extract_one_with_retry)
+    monkeypatch.setattr(mod, "_normalize_symbols_with_db", fake_normalize_symbols)
+    monkeypatch.setattr(mod, "_finalize_extraction_artifacts", fake_finalize_extraction_artifacts)
+
+    state = await mod._run_article_extraction_pipeline(
+        session=_Session(),
+        article=article,
+        meta=meta,
+        client=SimpleNamespace(is_enabled=lambda: True),
+        prompts_dir=prompts_dir,
+        error_log_path=tmp_path / "error.log",
+        checkpoint_path=tmp_path / "checkpoint.jsonl",
+        version="v1",
+        llm_provider="llm",
+    )
+
+    assert state.success is True
+    assert state.failed is False
+    assert meta.processed_at is not None
+    assert meta.raw_llm_output["quality_gate"]["passed"] is True
 
 
 @pytest.mark.asyncio

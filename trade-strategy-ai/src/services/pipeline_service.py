@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from cli.crawl import run_crawl_command
 from src.agents.data_agent.skills.crawl_blog import run_crawl_to_db
-from src.agents.data_agent.skills.extract_article_metadata import extract_and_store_metadata
 from src.agents.manager_agent.agent import ManagerAgent
 from src.common.config import apply_database_config_to_env, load_app_config
 from src.persona.cluster_builder import build_clusters_from_db
@@ -49,7 +48,7 @@ class PipelineService(BaseService):
         *,
         crawl_runner: Callable[..., list[str]] = run_crawl_command,
         pipeline_runner: Callable[..., Any] = run_pipeline,
-        extract_metadata_runner: Callable[..., Any] = extract_and_store_metadata,
+        extract_metadata_runner: Callable[..., Any] | None = None,
         build_clusters_runner: Callable[..., Any] = build_clusters_from_db,
         build_trader_profiles_runner: Callable[..., Any] = build_trader_profiles,
         write_trader_profiles_runner: Callable[..., Path] = write_trader_profiles_file,
@@ -271,11 +270,11 @@ class PipelineService(BaseService):
             use_db=False,
             process_version="v1",
         )
-        extract_stats = await self._extract_metadata_runner(
-            config=config,
-            base_dir=base_dir,
-            total_limit=extract_limit,
-        )
+        extract_stats = {
+            "source": "pipeline_process",
+            "requested_limit": extract_limit,
+            "message": "article analysis is executed by pipeline process using Stage3 outputs",
+        }
         full_clusters = Path(clusters_dest)
         if not full_clusters.is_absolute():
             full_clusters = base_dir / full_clusters

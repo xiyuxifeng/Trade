@@ -7,10 +7,12 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.article_metadata import ArticleMetadata
 from src.models.article_metadata_selection import ArticleMetadataSelection
+from src.services.article_analysis_selection_service import ArticleAnalysisRecord, ArticleAnalysisSelectionService
 
 
 def _count_items(value: Any) -> int:
@@ -201,6 +203,53 @@ class ArticleMetadataSelectionService:
             raw_llm_output_keys=len(meta.raw_llm_output or {}) if isinstance(meta.raw_llm_output, dict) else 0,
         )
 
+    def _candidate_from_analysis(self, analysis: ArticleAnalysisRecord) -> ArticleMetadataCandidateResolution:
+        reasons: list[str] = ["Stage3结构化分析"]
+        score = 1.5
+        concept_count = _count_items(analysis.extracted_concepts)
+        symbol_count = _count_items(analysis.trading_symbols)
+        strategy_rule_count = _count_items(analysis.strategy_rules)
+        precondition_count = _count_items(analysis.preconditions)
+        llm_output_count = len(analysis.raw_llm_output or {}) if isinstance(analysis.raw_llm_output, dict) else 0
+
+        if concept_count:
+            score += min(2.0, concept_count * 0.35)
+            reasons.append(f"concepts={concept_count}")
+        if symbol_count:
+            score += min(1.5, symbol_count * 0.4)
+            reasons.append(f"symbols={symbol_count}")
+        if strategy_rule_count:
+            score += min(2.5, strategy_rule_count * 0.5)
+            reasons.append(f"strategy_rules={strategy_rule_count}")
+        if precondition_count:
+            score += min(1.5, precondition_count * 0.35)
+            reasons.append(f"preconditions={precondition_count}")
+        if analysis.confidence_score is not None:
+            score += 0.8
+            reasons.append(f"confidence={float(analysis.confidence_score)}")
+        if llm_output_count:
+            score += 0.3
+            reasons.append("raw_llm_output_present")
+
+        return ArticleMetadataCandidateResolution(
+            schema_version=analysis.schema_version,
+            score=round(score, 4),
+            score_reasons=reasons,
+            processed_at=analysis.processed_at,
+            provider=analysis.provider,
+            model=analysis.model,
+            article_type=analysis.article_type,
+            extraction_version=analysis.extraction_version,
+            sentiment_score=analysis.sentiment_score,
+            confidence_score=analysis.confidence_score,
+            extracted_concepts_count=concept_count,
+            trading_symbols_count=symbol_count,
+            strategy_rules_count=strategy_rule_count,
+            preconditions_count=precondition_count,
+            comment_insights_count=_count_items(analysis.comment_insights),
+            raw_llm_output_keys=llm_output_count,
+        )
+
     @staticmethod
     def _select_best_candidate(candidates: list[ArticleMetadataCandidateResolution]) -> ArticleMetadataCandidateResolution | None:
         if not candidates:
@@ -262,6 +311,10 @@ class ArticleMetadataSelectionService:
         grouped: dict[UUID, list[ArticleMetadataCandidateResolution]] = {}
         for meta in result.all():
             grouped.setdefault(meta.article_id, []).append(self._candidate_from_metadata(meta))
+        if await session.run_sync(lambda sync_session: inspect(sync_session.get_bind()).has_table("article_structures")):
+            analysis_map = await ArticleAnalysisSelectionService().load_effective_analysis_map(session, article_ids=article_ids)
+            for article_id, analysis in analysis_map.items():
+                grouped.setdefault(article_id, []).append(self._candidate_from_analysis(analysis))
         return grouped
 
     async def load_selection_map(self, session: AsyncSession, *, article_ids: list[UUID]) -> dict[UUID, ArticleMetadataSelection]:

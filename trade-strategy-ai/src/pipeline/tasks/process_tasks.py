@@ -11,7 +11,11 @@ from typing import Any, Callable, Awaitable
 from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
+from src.llm.client import from_env_and_config
+from src.llm.runtime import LLMClientGateway
 from src.services.job_control import JobControlInterrupted
+from src.services.stage3_prompt_runtime_service import Stage3PromptRuntimeService
+from src.services.stage3_single_article_service import Stage3SingleArticleError, Stage3SingleArticleService
 
 _logger = get_logger(__name__)
 
@@ -159,11 +163,38 @@ def _dedup_by_article_id(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(latest.values())
 
 
-async def _should_skip_metadata_extracted(details: dict[str, Any]) -> bool:
-    """Check if metadata already extracted for this article."""
+def _configured_llm_model(config: AppConfig) -> str:
+    model = getattr(getattr(config, "llm", None), "model", None)
+    if isinstance(model, list):
+        for item in model:
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    return "gpt-5.4"
+
+
+def _optional_config_str(value: Any) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _configured_llm_gateway(config: AppConfig, *, model: str) -> LLMClientGateway:
+    llm_config = getattr(config, "llm", None)
+    return LLMClientGateway.from_config(
+        from_env_and_config(
+            provider=_optional_config_str(getattr(llm_config, "provider", None)),
+            model=model,
+            url=_optional_config_str(getattr(llm_config, "url", None)),
+            api_key=_optional_config_str(getattr(llm_config, "api_key", None)),
+        )
+    )
+
+
+async def _should_skip_article_analysis(details: dict[str, Any]) -> bool:
+    """Check if the latest article revision already has Stage3 analysis output."""
     from sqlalchemy import select
     from src.db.session import session_scope
-    from src.models.article_metadata import ArticleMetadata
+    from src.models.stage2_canonical import ArticleRevision, ArticleStructure
 
     article_id_str = details.get("article_id")
     if not article_id_str:
@@ -175,13 +206,22 @@ async def _should_skip_metadata_extracted(details: dict[str, Any]) -> bool:
     except (ValueError, TypeError):
         return False
 
-    version = details.get("version")
     async with session_scope() as session:
-        query = select(ArticleMetadata).where(ArticleMetadata.article_id == article_uuid)
-        if isinstance(version, str) and version:
-            query = query.where(ArticleMetadata.version == version)
-        meta = await session.scalar(query)
-        return meta is not None and meta.processed_at is not None
+        revision = await session.scalar(
+            select(ArticleRevision)
+            .where(ArticleRevision.article_id == article_uuid)
+            .order_by(ArticleRevision.revision_no.desc(), ArticleRevision.captured_at.desc())
+            .limit(1)
+        )
+        if revision is None:
+            return False
+        structure = await session.scalar(
+            select(ArticleStructure.article_structure_id)
+            .where(ArticleStructure.article_id == article_uuid)
+            .where(ArticleStructure.article_revision_id == revision.article_revision_id)
+            .limit(1)
+        )
+        return structure is not None
 
 
 MAX_RETRIES = 3
@@ -199,8 +239,8 @@ async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -
     task_type = task.get("type")
     details = task.get("details", {})
 
-    if task_type == "article_metadata_extracted":
-        if await _should_skip_metadata_extracted(details):
+    if task_type == "article_ingested":
+        if await _should_skip_article_analysis(details):
             return True, True
 
     handler = handlers.get(task_type)
@@ -241,65 +281,66 @@ def _create_handlers(
     """
 
     async def handle_article_ingested(details: dict[str, Any]) -> None:
-        from src.agents.data_agent.skills.extract_article_metadata import (
-            extract_and_store_metadata,
-        )
         from src.db.session import session_scope
-        from src.models.article_metadata import ArticleMetadata
+        from src.models.stage2_canonical import ArticleRevision, ArticleStructure
         from sqlalchemy import select
         from uuid import UUID
 
         article_id_str = details.get("article_id")
         if not isinstance(article_id_str, str) or not article_id_str:
             raise ValueError("article_ingested task missing article_id")
-        stats = await extract_and_store_metadata(
-            config=config,
-            base_dir=resolve_project_path("."),
-            force=force,
-            version=version,
-            target_article_ids=[UUID(article_id_str)],
-            cancel_check=cancel_check,
+        article_id = UUID(article_id_str)
+        if cancel_check is not None and await cancel_check():
+            raise JobControlInterrupted("cancel")
+
+        model = _configured_llm_model(config)
+        service = Stage3SingleArticleService(
+            session_scope_factory=session_scope,
+            prompt_runtime_service=Stage3PromptRuntimeService(
+                session_scope_factory=session_scope,
+                gateway=_configured_llm_gateway(config, model=model),
+                model=model,
+            ),
         )
-        fatal_error = getattr(stats, "fatal_error", None)
-        if fatal_error:
+        try:
+            journey = await service.run_analysis(article_id=article_id, article_revision_id=None)
+        except Stage3SingleArticleError as exc:
             raise ProcessFatalError(
-                fatal_error,
+                str(exc),
                 task={"type": "article_ingested", "details": details},
                 details={
-                    "error_type": getattr(stats, "fatal_error_type", None),
-                    "article_id": getattr(stats, "fatal_article_id", None) or article_id_str,
-                    "failure_details": getattr(stats, "failure_details", []),
-                },
-            )
-        if int(getattr(stats, "failed", 0) or 0) > 0:
-            raise ProcessFatalError(
-                f"article metadata extraction returned failures: failed={int(getattr(stats, 'failed', 0) or 0)}",
-                task={"type": "article_ingested", "details": details},
-                details={
+                    "error_type": "stage3_article_analysis",
                     "article_id": article_id_str,
-                    "failure_details": getattr(stats, "failure_details", []),
                 },
-            )
+            ) from exc
+        if cancel_check is not None and await cancel_check():
+            raise JobControlInterrupted("cancel")
+
+        revision_id = getattr(getattr(journey, "revision", None), "article_revision_id", None)
         async with session_scope() as session:
-            persisted_meta = await session.scalar(
-                select(ArticleMetadata).where(
-                    ArticleMetadata.article_id == UUID(article_id_str),
-                    ArticleMetadata.version == version,
+            if revision_id is None:
+                revision_id = await session.scalar(
+                    select(ArticleRevision.article_revision_id)
+                    .where(ArticleRevision.article_id == article_id)
+                    .order_by(ArticleRevision.revision_no.desc(), ArticleRevision.captured_at.desc())
+                    .limit(1)
                 )
-            )
-        if persisted_meta is None or persisted_meta.processed_at is None:
+            persisted_structure = None
+            if revision_id is not None:
+                persisted_structure = await session.scalar(
+                    select(ArticleStructure.article_structure_id).where(
+                        ArticleStructure.article_id == article_id,
+                        ArticleStructure.article_revision_id == revision_id,
+                    )
+                )
+        if persisted_structure is None:
             raise ProcessFatalError(
-                "article metadata was not persisted after extraction",
+                "article analysis was not persisted after Stage3 extraction",
                 task={"type": "article_ingested", "details": details},
                 details={
                     "article_id": article_id_str,
-                    "version": version,
-                    "stats": {
-                        "processed": getattr(stats, "processed", None),
-                        "extracted": getattr(stats, "extracted", None),
-                        "skipped": getattr(stats, "skipped", None),
-                        "failed": getattr(stats, "failed", None),
-                    },
+                    "article_revision_id": str(revision_id) if revision_id is not None else None,
+                    "journey_status": getattr(journey, "status", None),
                 },
             )
 
@@ -363,41 +404,46 @@ async def _rebuild_pending_tasks(pending_path: Path, version: str) -> None:
     from src.common.utils import append_jsonl
     from src.db.session import session_scope
     from src.models.blog_article import BlogArticle
-    from src.models.article_metadata import ArticleMetadata
-    from sqlalchemy import and_, or_, select
+    from src.models.stage2_canonical import ArticleRevision, ArticleStructure
+    from sqlalchemy import and_, func, select
 
     pending_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with session_scope() as session:
-        if version == "v1":
-            # v1: 找没有 metadata 记录的文章
-            rows = await session.execute(
-                select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
-                       BlogArticle.author_name, BlogArticle.source_url,
-                       BlogArticle.content_hash, BlogArticle.raw_payload)
-                .outerjoin(
-                    ArticleMetadata,
-                    and_(
-                        ArticleMetadata.article_id == BlogArticle.id,
-                        ArticleMetadata.version == version,
-                    ),
+        latest_revision = (
+            select(
+                ArticleRevision.article_id.label("article_id"),
+                ArticleRevision.article_revision_id.label("article_revision_id"),
+                func.row_number()
+                .over(
+                    partition_by=ArticleRevision.article_id,
+                    order_by=(ArticleRevision.revision_no.desc(), ArticleRevision.captured_at.desc()),
                 )
-                .where(or_(
-                    ArticleMetadata.id.is_(None),
-                    ArticleMetadata.processed_at.is_(None)
-                ))
+                .label("revision_rank"),
             )
-        else:
-            # v2+: 找没有该版本 metadata 记录的文章
-            subq = select(ArticleMetadata.article_id).where(
-                ArticleMetadata.version == version
+            .subquery()
+        )
+        rows = await session.execute(
+            select(
+                BlogArticle.id,
+                BlogArticle.source,
+                BlogArticle.author_id,
+                BlogArticle.author_name,
+                BlogArticle.source_url,
+                BlogArticle.content_hash,
+                BlogArticle.raw_payload,
             )
-            rows = await session.execute(
-                select(BlogArticle.id, BlogArticle.source, BlogArticle.author_id,
-                       BlogArticle.author_name, BlogArticle.source_url,
-                       BlogArticle.content_hash, BlogArticle.raw_payload)
-                .where(BlogArticle.id.not_in(subq))
+            .join(latest_revision, latest_revision.c.article_id == BlogArticle.id)
+            .outerjoin(
+                ArticleStructure,
+                and_(
+                    ArticleStructure.article_id == BlogArticle.id,
+                    ArticleStructure.article_revision_id == latest_revision.c.article_revision_id,
+                ),
             )
+            .where(latest_revision.c.revision_rank == 1)
+            .where(ArticleStructure.article_structure_id.is_(None))
+        )
 
         for row in rows.all():
             article_id, source, author_id, author_name, source_url, content_hash, raw_payload = row

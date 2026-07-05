@@ -1,0 +1,17 @@
+{
+  "status": "success",
+  "result": {
+    "status": "ok",
+    "message": "clean completed",
+    "payload": {
+      "result": {
+        "cleaned_paths": [
+          "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/clean/all.articles.cleaned.jsonl"
+        ],
+        "stats_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/processed/pipeline/clean/clean_stats.json"
+      }
+    },
+    "warnings": []
+  },
+  "error": null
+}

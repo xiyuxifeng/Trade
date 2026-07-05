@@ -1,0 +1,31 @@
+[
+  {
+    "kind": "result-json",
+    "title": "result.json",
+    "job_id": "7ef1e4f4-fc22-42ae-a424-2a90d1bdfdbd",
+    "step_id": null,
+    "summary": null,
+    "metadata": {
+      "job_type": "store"
+    },
+    "created_at": "2026-07-05T12:49:34.172390Z",
+    "size_bytes": 291,
+    "visibility": "internal",
+    "artifact_id": "8f9b326f0dece2a9",
+    "dataset_ref": null,
+    "storage_ref": {
+      "uri": null,
+      "source": "file",
+      "metadata": {
+        "job_id": "7ef1e4f4-fc22-42ae-a424-2a90d1bdfdbd"
+      },
+      "logical_id": "8f9b326f0dece2a9",
+      "relative_path": "result.json"
+    },
+    "workflow_id": null,
+    "snapshot_ref": null,
+    "download_token": null,
+    "safe_download_url": "/api/ui/v1/artifacts/8f9b326f0dece2a9/download",
+    "config_snapshot_ref": null
+  }
+]

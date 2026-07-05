@@ -40,7 +40,6 @@ class LLMTraceResult:
     cost_currency: str | None = None
 
 
-# LLM API 调用重试次数
 LLM_MAX_RETRIES = 3
 _FATAL_LLM_KEYWORDS = (
     "invalid_api_key",
@@ -307,6 +306,9 @@ class LLMClient:
             content = completion.choices[0].message.content
         except Exception as exc:  # noqa: BLE001
             raise LLMError(f"Unexpected LLM response shape: {completion}") from exc
+        finish_reason = getattr(completion.choices[0], "finish_reason", None)
+        if finish_reason == "length":
+            raise LLMError("LLM response was truncated by max_tokens", retryable=True, code="truncated")
         if not isinstance(content, str) or not content.strip():
             raise LLMError(f"Empty LLM content: {content!r}")
 
@@ -352,7 +354,6 @@ class LLMClient:
         }
         payload: dict[str, Any] = {
             "model": model,
-            "max_tokens": 2048,
             "system": system_prompt,
             "messages": [{"role": "user", "content": user_prompt}],
         }
@@ -377,6 +378,8 @@ class LLMClient:
 
         raw_output = data if isinstance(data, dict) else None
         token_usage = data.get("usage", {}) if isinstance(data, dict) else {}
+        if data.get("stop_reason") == "max_tokens":
+            raise LLMError("LLM response was truncated by max_tokens", retryable=True, code="truncated")
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError as exc:

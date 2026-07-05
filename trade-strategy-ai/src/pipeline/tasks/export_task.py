@@ -14,6 +14,7 @@ from src.common.paths import resolve_project_path
 from src.db.session import session_scope
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.stage2_canonical import ArticleStructure, RuleCandidate
 
 
 DUCKDB_DIR = resolve_project_path("data/processed/duckdb")
@@ -34,11 +35,26 @@ METADATA_COLUMNS = [
     "sentiment_score", "confidence_score",
 ]
 
+ARTICLE_STRUCTURE_COLUMNS = [
+    "article_structure_id", "article_id", "article_revision_id", "prompt_run_id",
+    "schema_version", "payload", "evidence_json", "missing_fields",
+    "inference_fields", "lifecycle_state", "quality_status", "processed_at",
+]
+
+RULE_CANDIDATE_COLUMNS = [
+    "rule_candidate_id", "article_structure_id", "source_article_id",
+    "candidate_index", "candidate_fingerprint", "rule_type", "canonical_payload",
+    "evidence_json", "explicit_fields", "inferred_fields", "missing_fields",
+    "data_dependencies", "backtestability_status", "review_state", "quality_status",
+]
+
 
 @dataclass
 class ExportStats:
     new_articles: int = 0
     new_metadata: int = 0
+    new_article_structures: int = 0
+    new_rule_candidates: int = 0
     skipped: int = 0
     duration_ms: int = 0
     watermark_before: datetime | None = None
@@ -108,6 +124,45 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_article_version ON metadata(article_id, schema_version)"
     )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS article_structures (
+            article_structure_id UUID PRIMARY KEY,
+            article_id UUID,
+            article_revision_id UUID,
+            prompt_run_id UUID,
+            schema_version VARCHAR,
+            payload JSON,
+            evidence_json JSON,
+            missing_fields JSON,
+            inference_fields JSON,
+            lifecycle_state VARCHAR,
+            quality_status VARCHAR,
+            processed_at TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS rule_candidates (
+            rule_candidate_id UUID PRIMARY KEY,
+            article_structure_id UUID,
+            source_article_id UUID,
+            candidate_index INTEGER,
+            candidate_fingerprint VARCHAR,
+            rule_type VARCHAR,
+            canonical_payload JSON,
+            evidence_json JSON,
+            explicit_fields JSON,
+            inferred_fields JSON,
+            missing_fields JSON,
+            data_dependencies JSON,
+            backtestability_status VARCHAR,
+            review_state VARCHAR,
+            quality_status VARCHAR
+        )
+        """
+    )
 
 
 def _ensure_export_state_table(conn: duckdb.DuckDBPyConnection) -> None:
@@ -169,6 +224,47 @@ def _serialize_metadata(meta: ArticleMetadata) -> tuple[Any, ...]:
         _serialize_value(meta.raw_llm_output),
         float(meta.sentiment_score) if meta.sentiment_score is not None else None,
         float(meta.confidence_score) if meta.confidence_score is not None else None,
+    )
+
+
+def _enum_value(value: Any) -> Any:
+    return getattr(value, "value", value)
+
+
+def _serialize_article_structure(structure: ArticleStructure) -> tuple[Any, ...]:
+    return (
+        str(structure.article_structure_id),
+        str(structure.article_id),
+        str(structure.article_revision_id) if structure.article_revision_id is not None else None,
+        str(structure.prompt_run_id),
+        structure.schema_version,
+        _serialize_value(structure.payload),
+        _serialize_value(structure.evidence_json),
+        _serialize_value(structure.missing_fields),
+        _serialize_value(structure.inference_fields),
+        _enum_value(structure.lifecycle_state),
+        _enum_value(structure.quality_status),
+        structure.updated_at,
+    )
+
+
+def _serialize_rule_candidate(candidate: RuleCandidate) -> tuple[Any, ...]:
+    return (
+        str(candidate.rule_candidate_id),
+        str(candidate.article_structure_id),
+        str(candidate.source_article_id),
+        candidate.candidate_index,
+        candidate.candidate_fingerprint,
+        candidate.rule_type,
+        _serialize_value(candidate.canonical_payload),
+        _serialize_value(candidate.evidence_json),
+        _serialize_value(candidate.explicit_fields),
+        _serialize_value(candidate.inferred_fields),
+        _serialize_value(candidate.missing_fields),
+        _serialize_value(candidate.data_dependencies),
+        candidate.backtestability_status,
+        _enum_value(candidate.review_state),
+        _enum_value(candidate.quality_status),
     )
 
 
@@ -266,8 +362,19 @@ async def run_export_task(
                     if col not in ("article_id", "schema_version")
                 ])
             )
+            structure_placeholders = ", ".join(["?"] * len(ARTICLE_STRUCTURE_COLUMNS))
+            structure_sql = (
+                f"INSERT OR REPLACE INTO article_structures ({', '.join(ARTICLE_STRUCTURE_COLUMNS)}) "
+                f"VALUES ({structure_placeholders})"
+            )
+            candidate_placeholders = ", ".join(["?"] * len(RULE_CANDIDATE_COLUMNS))
+            candidate_sql = (
+                f"INSERT OR REPLACE INTO rule_candidates ({', '.join(RULE_CANDIDATE_COLUMNS)}) "
+                f"VALUES ({candidate_placeholders})"
+            )
 
             max_crawled_at: datetime | None = None
+            article_ids: set[Any] = set()
 
             for article, meta in all_rows:
                 # Track max crawled_at for ALL articles (including skipped) to advance watermark
@@ -275,17 +382,35 @@ async def run_export_task(
                     max_crawled_at = article.crawled_at
 
                 article_id_str = str(article.id)
+                article_ids.add(article.id)
 
                 if article_id_str in existing_ids:
                     stats.skipped += 1
-                    continue
-
-                conn.execute(article_sql, _serialize_article(article))
-                stats.new_articles += 1
+                else:
+                    conn.execute(article_sql, _serialize_article(article))
+                    stats.new_articles += 1
 
                 if meta is not None:
                     conn.execute(metadata_sql, _serialize_metadata(meta))
                     stats.new_metadata += 1
+
+            if article_ids:
+                structure_rows = await session.execute(
+                    select(ArticleStructure).where(ArticleStructure.article_id.in_(list(article_ids)))
+                )
+                structures = structure_rows.scalars().all()
+                structure_ids = [structure.article_structure_id for structure in structures]
+                for structure in structures:
+                    conn.execute(structure_sql, _serialize_article_structure(structure))
+                    stats.new_article_structures += 1
+
+                if structure_ids:
+                    candidate_rows = await session.execute(
+                        select(RuleCandidate).where(RuleCandidate.article_structure_id.in_(structure_ids))
+                    )
+                    for candidate in candidate_rows.scalars().all():
+                        conn.execute(candidate_sql, _serialize_rule_candidate(candidate))
+                        stats.new_rule_candidates += 1
 
         # Update watermark after successful export
         if max_crawled_at is not None:

@@ -11,6 +11,7 @@ import pytest
 
 from src.models.blog_article import BlogArticle
 from src.models.article_metadata import ArticleMetadata
+from src.models.stage2_canonical import ArticleStructure, RuleCandidate
 from src.pipeline.tasks.export_task import (
     ExportStats,
     _ensure_export_state_table,
@@ -129,6 +130,41 @@ class TestRunExportTask:
         meta.sentiment_score = 0.75
         meta.confidence_score = 0.85
         return meta
+
+    def _create_mock_structure(self, article_id: uuid.UUID) -> MagicMock:
+        structure = MagicMock(spec=ArticleStructure)
+        structure.article_structure_id = uuid4()
+        structure.article_id = article_id
+        structure.article_revision_id = uuid4()
+        structure.prompt_run_id = uuid4()
+        structure.schema_version = "article_analysis_v1"
+        structure.payload = {"article_type": "rule"}
+        structure.evidence_json = {}
+        structure.missing_fields = {}
+        structure.inference_fields = {}
+        structure.lifecycle_state = "draft"
+        structure.quality_status = "partial"
+        structure.updated_at = datetime(2026, 4, 6, 10, 0, 0, tzinfo=timezone.utc)
+        return structure
+
+    def _create_mock_candidate(self, article_id: uuid.UUID, structure_id: uuid.UUID) -> MagicMock:
+        candidate = MagicMock(spec=RuleCandidate)
+        candidate.rule_candidate_id = uuid4()
+        candidate.article_structure_id = structure_id
+        candidate.source_article_id = article_id
+        candidate.candidate_index = 0
+        candidate.candidate_fingerprint = "fingerprint"
+        candidate.rule_type = "entry"
+        candidate.canonical_payload = {"rule_key": "entry_breakout"}
+        candidate.evidence_json = {}
+        candidate.explicit_fields = {}
+        candidate.inferred_fields = {}
+        candidate.missing_fields = {}
+        candidate.data_dependencies = {}
+        candidate.backtestability_status = "partially_executable"
+        candidate.review_state = "extracted"
+        candidate.quality_status = "partial"
+        return candidate
 
     @pytest.mark.asyncio
     async def test_force_full_resets_watermark(self, tmp_path: Path) -> None:
@@ -280,3 +316,44 @@ class TestRunExportTask:
         assert result2.stats.watermark_before.replace(tzinfo=None) == watermark_after_first.replace(tzinfo=None)
         assert result2.stats.watermark_after.replace(tzinfo=None) == watermark_after_first.replace(tzinfo=None)
         assert result2.stats.new_articles == 0
+
+    @pytest.mark.asyncio
+    async def test_exports_stage3_article_structures_and_rule_candidates(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test_export_stage3.duckdb"
+
+        article_id = uuid4()
+        article = self._create_mock_article(article_id=str(article_id))
+        article.id = article_id
+        mock_meta = self._create_mock_metadata(article_id)
+        structure = self._create_mock_structure(article_id)
+        candidate = self._create_mock_candidate(article_id, structure.article_structure_id)
+
+        article_result = MagicMock()
+        article_result.all.return_value = [(article, mock_meta)]
+        structure_result = MagicMock()
+        structure_result.scalars.return_value.all.return_value = [structure]
+        candidate_result = MagicMock()
+        candidate_result.scalars.return_value.all.return_value = [candidate]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(side_effect=[article_result, structure_result, candidate_result])
+
+        mock_session_scope = AsyncMock()
+        mock_session_scope.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_scope.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("src.pipeline.tasks.export_task.session_scope", return_value=mock_session_scope):
+            result = await run_export_task(duckdb_path=db_path, force_full=True)
+
+        assert result.stats.new_article_structures == 1
+        assert result.stats.new_rule_candidates == 1
+
+        import duckdb
+        conn = duckdb.connect(str(db_path))
+        try:
+            structure_count = conn.execute("SELECT COUNT(*) FROM article_structures").fetchone()[0]
+            candidate_count = conn.execute("SELECT COUNT(*) FROM rule_candidates").fetchone()[0]
+            assert structure_count == 1
+            assert candidate_count == 1
+        finally:
+            conn.close()

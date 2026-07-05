@@ -85,7 +85,6 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
     loaded = _make_loaded_config(base_dir / "config" / "app.yaml")
 
     run_pipeline_mock = AsyncMock(return_value=None)
-    extract_mock = AsyncMock(return_value=SimpleNamespace(scanned=1, extracted=1, skipped=0, failed=0))
     build_clusters_mock = AsyncMock(return_value=(1, SimpleNamespace(scanned_articles=1, used_articles=1, clusters_built=1)))
     build_profiles_mock = AsyncMock(return_value=TraderProfilesFile())
     write_profiles_mock = MagicMock(return_value=base_dir / "data/processed/phase0/trader_profiles.json")
@@ -99,7 +98,6 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
 
     with (
         patch("cli.main.run_pipeline", run_pipeline_mock),
-        patch("cli.main.extract_and_store_metadata", extract_mock),
         patch("cli.main.build_clusters_from_db", build_clusters_mock),
         patch("cli.main.build_trader_profiles", build_profiles_mock),
         patch("cli.main.write_trader_profiles_file", write_profiles_mock),
@@ -121,8 +119,6 @@ async def test_e2e_regression_async_orchestrates_core_steps(tmp_path: Path) -> N
     assert pipeline_kwargs["max_articles"] == 7
     assert pipeline_kwargs["force"] is True
     assert pipeline_kwargs["skip_crawl"] is False
-
-    extract_mock.assert_awaited_once_with(config=loaded.config, base_dir=base_dir, total_limit=4)
 
     full_clusters = base_dir / clusters_dest
     build_clusters_mock.assert_awaited_once_with(config=loaded.config, dest=full_clusters)

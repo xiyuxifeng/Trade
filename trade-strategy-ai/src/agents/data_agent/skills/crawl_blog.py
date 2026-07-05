@@ -313,6 +313,21 @@ async def load_crawl_state_from_db(session: AsyncSession, source: str, author_id
     }
 
 
+async def load_existing_raw_article_index_from_db(session: AsyncSession, source: str, author_id: str) -> dict[str, set[str]]:
+    """从 RawArticle 读取当前 source/author 的真实已存在索引。"""
+    result = await session.execute(
+        select(RawArticle.source_url, RawArticle.content_hash).where(
+            RawArticle.source == source,
+            RawArticle.author_id == author_id,
+        )
+    )
+    rows = result.all()
+    return {
+        "seen_urls": {str(source_url) for source_url, _content_hash in rows if source_url},
+        "seen_hashes": {str(content_hash) for _source_url, content_hash in rows if content_hash},
+    }
+
+
 async def save_crawl_state_to_db(
     session: AsyncSession,
     source: str,
@@ -440,7 +455,16 @@ async def crawl_source_to_db(
     latest_url = index.last_seen_article_url
     latest_published_at = index.last_seen_published_at
 
-    def _emit_progress(*, status: str, current: int, total: int, current_step: str, error: str | None = None) -> None:
+    def _emit_progress(
+        *,
+        status: str,
+        current: int,
+        total: int,
+        current_step: str,
+        candidate_total: int,
+        existing_total: int,
+        error: str | None = None,
+    ) -> None:
         if progress_callback is None:
             return
         safe_total = max(total, 0)
@@ -454,6 +478,8 @@ async def crawl_source_to_db(
                 "total": safe_total,
                 "percent": percent,
                 "remaining": max(safe_total - safe_current, 0),
+                "candidate_total": max(candidate_total, 0),
+                "existing_total": max(existing_total, 0),
                 "current_step": current_step,
                 "current_fetcher": source_cfg.source,
                 "current_dataset": source_cfg.author_id,
@@ -465,14 +491,29 @@ async def crawl_source_to_db(
     async with session_scope() as session:
         articles = crawler.fetch_article_list()
         total_articles = len(articles)
-        _emit_progress(status="running", current=0, total=total_articles, current_step="fetch_article_list")
+        pending_articles = [item for item in articles if item["source_url"] not in seen_urls]
+        existing_total = max(total_articles - len(pending_articles), 0)
+        if max_articles is not None:
+            pending_articles = pending_articles[:max_articles]
+        effective_total = len(pending_articles)
+        _emit_progress(
+            status="running",
+            current=0,
+            total=effective_total,
+            candidate_total=total_articles,
+            existing_total=existing_total,
+            current_step="fetch_article_list",
+        )
 
-        for index, item in enumerate(articles, start=1):
-            # 跳过已处理过的 URL
-            if item["source_url"] in seen_urls:
-                _emit_progress(status="running", current=index, total=total_articles, current_step=f"skip:{item['source_url']}")
-                continue
-
+        for item in pending_articles:
+            _emit_progress(
+                status="running",
+                current=written,
+                total=effective_total,
+                candidate_total=total_articles,
+                existing_total=existing_total,
+                current_step=f"fetch:{item['source_url']}",
+            )
             # 继续抓取详情
             detail = crawler.fetch_article_detail(item["source_url"])
             content_text = detail.get("content_text", "")
@@ -504,7 +545,7 @@ async def crawl_source_to_db(
                 for comment in raw_comments
             ]
 
-            await upsert_raw_article(
+            inserted = await upsert_raw_article(
                 session=session,
                 source=source_cfg.source,
                 site=source_cfg.site,
@@ -525,11 +566,14 @@ async def crawl_source_to_db(
             )
             await session.commit()  # 每篇 article 立即提交，避免中断丢数据
 
-            written += 1
+            if inserted:
+                written += 1
             _emit_progress(
-                status="running" if (max_articles is None or written < max_articles) else "success",
+                status="running" if written < effective_total else "success",
                 current=written,
-                total=max_articles if max_articles is not None else total_articles,
+                total=effective_total,
+                candidate_total=total_articles,
+                existing_total=existing_total,
                 current_step=f"store:{item['source_url']}",
             )
             seen_urls.add(item["source_url"])
@@ -538,8 +582,6 @@ async def crawl_source_to_db(
             # 每次都更新为最新的 URL 和时间（用于断点续爬）
             latest_url = item["source_url"]
             latest_published_at = item.get("published_at")
-            if max_articles is not None and written >= max_articles:
-                break
 
         # 保存状态到数据库
         await save_crawl_state_to_db(
@@ -555,7 +597,9 @@ async def crawl_source_to_db(
         _emit_progress(
             status="success",
             current=written,
-            total=max_articles if max_articles is not None else max(total_articles, written),
+            total=effective_total,
+            candidate_total=total_articles,
+            existing_total=existing_total,
             current_step="save_crawl_state",
         )
 
@@ -591,6 +635,9 @@ async def run_crawl_to_db(
                 state_dict = {}
             else:
                 state_dict = await load_crawl_state_from_db(session, source_cfg.source, source_cfg.author_id)
+                existing_index = await load_existing_raw_article_index_from_db(session, source_cfg.source, source_cfg.author_id)
+                state_dict["seen_urls"] = sorted(set(state_dict.get("seen_urls", [])) | existing_index["seen_urls"])
+                state_dict["seen_hashes"] = sorted(set(state_dict.get("seen_hashes", [])) | existing_index["seen_hashes"])
 
         index = ExistingArticleIndex(
             seen_urls=set(state_dict.get("seen_urls", [])),

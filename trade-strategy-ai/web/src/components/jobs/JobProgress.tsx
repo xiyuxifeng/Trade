@@ -22,6 +22,15 @@ function formatDateTime(value: string | null | undefined) {
 
 function stepLabel(progress: JobProgressRecord) {
   if (progress.current_step) {
+    if (progress.job_type === 'crawl' && progress.current_step.startsWith('fetch:')) {
+      return `正在抓取：${progress.current_step.slice('fetch:'.length)}`;
+    }
+    if (progress.job_type === 'crawl' && progress.current_step.startsWith('skip:')) {
+      return `正在抓取：${progress.current_step.slice('skip:'.length)}`;
+    }
+    if (progress.job_type === 'crawl' && progress.current_step.startsWith('store:')) {
+      return `正在入库：${progress.current_step.slice('store:'.length)}`;
+    }
     return progress.current_step;
   }
   if (progress.current_dataset) {
@@ -59,7 +68,10 @@ export function JobProgress({
   const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
   const displayPercent = percent;
   const displayRemaining = progress.remaining;
-  const mainLine = `步骤进度 ${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
+  const isCrawlProgress = progress.job_type === 'crawl';
+  const mainLine = isCrawlProgress
+    ? `待抓取 ${progress.current} / ${progress.total} · ${formatPercent(percent)}`
+    : `步骤进度 ${progress.current} / ${progress.total} · ${formatPercent(percent)}`;
   const summaryLine =
     progress.status === 'success'
       ? '当前步骤已完成，任务终态请看上方 Job 状态。'
@@ -75,6 +87,10 @@ export function JobProgress({
   const subLine =
     progress.sub_total !== undefined && progress.sub_total !== null
       ? `子进度 ${progress.sub_current ?? 0} / ${progress.sub_total} · ${formatPercent(progress.sub_percent)}`
+      : null;
+  const crawlTotalsLine =
+    isCrawlProgress && progress.candidate_total !== undefined && progress.candidate_total !== null && progress.existing_total !== undefined && progress.existing_total !== null
+      ? `文章总数 ${progress.candidate_total}，已存在 ${progress.existing_total}`
       : null;
   const metaLine = [progress.current_trade_date, progress.current_slot, progress.current_fetcher, progress.current_dataset]
     .filter(Boolean)
@@ -112,6 +128,7 @@ export function JobProgress({
         <span>剩余 {displayRemaining}</span>
         <span>更新时间 {formatDateTime(progress.updated_at)}</span>
       </div>
+      {crawlTotalsLine ? <p className={cn('text-slate-500', compact ? 'text-xs' : 'text-sm')}>{crawlTotalsLine}</p> : null}
       {summaryLine ? <p className={cn('text-slate-500', compact ? 'text-xs' : 'text-sm')}>{summaryLine}</p> : null}
       {subLine ? <p className={cn('text-slate-500', compact ? 'text-xs' : 'text-sm')}>{subLine}</p> : null}
 

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, UTC
+from types import SimpleNamespace
 
+from src.agents.data_agent.skills import crawl_blog as crawl_blog_module
 from src.agents.data_agent.skills.crawl_blog import (
     ExistingArticleIndex,
     ClassifiedComment,
     classify_comment,
     should_stop_incremental_scan,
     compute_content_hash,
+    load_existing_raw_article_index_from_db,
     LOW_VALUE_COMMENTS,
 )
 from src.agents.data_agent.sites.base import AuthProvider
@@ -342,3 +347,103 @@ def test_tgb_crawler_uses_rendered_html_when_render_js_enabled(monkeypatch) -> N
 
     assert detail["title"] == "动态页面标题"
     assert "动态渲染后的正文内容" in detail["content_text"]
+
+
+def test_crawl_source_to_db_reports_pending_crawl_totals(monkeypatch) -> None:
+    """主进度应围绕待抓取的新文章数，并只上报待抓取文章。"""
+
+    class _FakeCrawler:
+        def fetch_article_list(self):
+            return [
+                {"source_url": "https://example.com/a1", "source_article_id": "a1", "title": "A1", "published_at": None},
+                {"source_url": "https://example.com/a2", "source_article_id": "a2", "title": "A2", "published_at": None},
+                {"source_url": "https://example.com/a3", "source_article_id": "a3", "title": "A3", "published_at": None},
+            ]
+
+        def fetch_article_detail(self, article_url: str):
+            return {
+                "title": article_url.rsplit("/", 1)[-1],
+                "content_text": "content",
+                "content_html": "<p>content</p>",
+                "full_html": "<html></html>",
+                "topic_id": "1",
+            }
+
+        def fetch_comments(self, **kwargs):
+            return []
+
+    class _FakeSession:
+        async def commit(self):
+            return None
+
+    @asynccontextmanager
+    async def _fake_session_scope():
+        yield _FakeSession()
+
+    async def _fake_upsert_raw_article(**kwargs):
+        return True
+
+    async def _fake_save_crawl_state_to_db(**kwargs):
+        return None
+
+    progress_events: list[dict] = []
+    monkeypatch.setattr(crawl_blog_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(crawl_blog_module, "upsert_raw_article", _fake_upsert_raw_article)
+    monkeypatch.setattr(crawl_blog_module, "save_crawl_state_to_db", _fake_save_crawl_state_to_db)
+
+    result = asyncio.run(
+        crawl_blog_module.crawl_source_to_db(
+            source_cfg=SimpleNamespace(
+                source="tgb",
+                site="tgb.cn",
+                trader_id="trader_a",
+                author_id="10461311",
+                author_name="author",
+            ),
+            crawler=_FakeCrawler(),
+            index=ExistingArticleIndex(
+                seen_urls={"https://example.com/a1"},
+                seen_hashes=set(),
+                last_seen_article_url=None,
+                last_seen_published_at=None,
+            ),
+            max_articles=None,
+            progress_callback=progress_events.append,
+        )
+    )
+
+    assert result == 2
+    assert progress_events[0]["candidate_total"] == 3
+    assert progress_events[0]["existing_total"] == 1
+    assert progress_events[0]["current"] == 0
+    assert progress_events[0]["total"] == 2
+    assert progress_events[1]["current"] == 0
+    assert progress_events[1]["total"] == 2
+    assert progress_events[1]["current_step"] == "fetch:https://example.com/a2"
+    assert progress_events[2]["current"] == 1
+    assert progress_events[2]["total"] == 2
+    assert progress_events[2]["current_step"] == "store:https://example.com/a2"
+    assert progress_events[3]["current_step"] == "fetch:https://example.com/a3"
+    assert progress_events[-1]["current"] == 2
+    assert progress_events[-1]["total"] == 2
+
+
+def test_load_existing_raw_article_index_from_db_reads_real_raw_articles() -> None:
+    """真实已存在数量应来自 raw_articles，而不是只依赖 crawl_state。"""
+
+    class _FakeResult:
+        def all(self):
+            return [
+                ("https://example.com/a1", "hash-1"),
+                ("https://example.com/a2", None),
+                (None, "hash-3"),
+            ]
+
+    class _FakeSession:
+        async def execute(self, stmt):
+            return _FakeResult()
+
+    result = asyncio.run(load_existing_raw_article_index_from_db(_FakeSession(), "tgb", "10461311"))
+
+    assert result["seen_urls"] == {"https://example.com/a1", "https://example.com/a2"}
+    assert result["seen_hashes"] == {"hash-1", "hash-3"}

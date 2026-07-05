@@ -115,16 +115,9 @@ Verification:
 
 ## 6. 用户路径和数据真实性
 
-普通用户只能看到正式产品路径。页面和文档必须使用业务中文说明：
+普通用户只能看到正式产品路径。
 
-- 当前页面做什么；
-- 用户需要提供什么；
-- 系统会处理什么；
-- 输出结果是什么；
-- 下一步应该做什么；
-- 失败或数据不足时如何处理。
-
-普通用户正常流程不得要求理解 Job、Workflow、Pipeline、Artifact、Provider、Schema、config_path、prompt_run_id、run_id、raw JSON、数据库表名、内部函数名或本机路径。
+普通用户正常流程不得依赖内部术语或技术 ID，例如 Job、Workflow、Pipeline、Artifact、Provider、Schema、config_path、prompt_run_id、run_id、raw JSON、数据库表名、内部函数名或本机路径。
 
 缺失、部分、不可用、降级、无效和冲突状态必须真实展示。不得默认为 false、0 或成功，不得静默降级，不得伪造 fingerprint、version、snapshot 或 traceability。
 

@@ -163,7 +163,25 @@ Bug 修复必须是最小但完整的根因修复。
 
 如果根因或需求影响位于共享层，必须修共享层。共享层包括 route config、navigation、API client、backend router、application service、repository、DTO/schema、state machine、permission/role guard、data readiness、job/run lifecycle、daily strategy/post-market proposal flow。
 
-## 6. 用户路径和术语
+## 6. 不可接受的完成状态
+
+以下情况不得标记为 ACCEPTED：
+
+- 只满足当前页面或当前按钮，但同一流程的相邻入口仍然错误；
+- 只让当前测试通过，但没有验证相邻页面、API、service 或状态；
+- 为了避免修改共享层，在单个页面增加特殊分支；
+- 保留已经无用的旧路径、旧组件、旧 API 或旧 service；
+- 新增第二套路由、第二套页面、第二套 API 或第二套状态来源；
+- 把旧路径 fallback、兼容 wrapper 或 silent redirect 作为正常业务路径；
+- 用 mock、硬编码、默认成功、隐藏错误或静默降级代替真实实现；
+- 删除测试或放宽断言来适配错误行为；
+- 把缺失、部分、不可用、降级、无效或冲突状态显示为成功；
+- 普通用户仍然需要理解 Job、Workflow、Pipeline、Artifact、Provider、Schema、config_path、prompt_run_id、run_id、raw JSON 或内部路径才能完成正常流程；
+- 修改后没有说明影响范围、删除了哪些旧路径、保留了哪些临时路径以及相邻回归验证结果。
+
+如果出现以上任一情况，必须继续修复或输出 ESCALATION_REQUIRED，不得标记完成。
+
+## 7. 用户路径和术语
 
 普通用户只能看到正式产品路径。页面和文档必须使用业务中文说明：当前页面做什么、用户需要提供什么、系统会处理什么、输出结果是什么、下一步应该做什么、失败或数据不足时如何处理。
 
@@ -171,7 +189,7 @@ Bug 修复必须是最小但完整的根因修复。
 
 管理员诊断可以出现必要技术信息，但必须与普通用户路径分离，并默认不作为完成业务流程的前提。
 
-## 7. 数据真实性和可追溯
+## 8. 数据真实性和可追溯
 
 缺失、部分、不可用、降级、无效和冲突状态必须真实展示。
 
@@ -179,7 +197,7 @@ Bug 修复必须是最小但完整的根因修复。
 
 正式对象必须保持单一事实源和可追溯关系，包括 article revision、prompt/schema version、rule version、dataset snapshot、market snapshot/state model、backtest run/result、applicability profile、author profile version、strategy version、daily plan、post-market review、optimization proposal。
 
-## 8. 测试和验证要求
+## 9. 测试和验证要求
 
 每个修改必须按影响半径运行或补充验证，而不是只跑当前失败测试。
 
@@ -197,7 +215,7 @@ Bug 修复必须是最小但完整的根因修复。
 
 无法运行测试时，必须记录未运行项、原因、替代验证、剩余风险和是否阻塞交付。不得声称未运行的测试已通过。
 
-## 9. 删除和重构规则
+## 10. 删除和重构规则
 
 如果一个问题或用户需求暴露出旧路径、重复实现、临时兼容或错误抽象，应优先删除或替换错误结构，而不是继续在其上修补。
 
@@ -205,7 +223,7 @@ Bug 修复必须是最小但完整的根因修复。
 
 大范围修改必须说明为什么局部修改不正确、哪些旧路径/重复实现被删除、哪些正式路径替代它、受影响功能清单和回归验证结果。
 
-## 10. 升级和停止条件
+## 11. 升级和停止条件
 
 如果正确完成用户需求或正确修复问题需要以下任一行为，必须停止并向用户说明，不得用临时绕过继续：
 
@@ -231,7 +249,7 @@ ESCALATION_REQUIRED
 建议选项：
 ```
 
-## 11. 完成回复格式
+## 12. 完成回复格式
 
 每次修改完成后，必须输出：
 
@@ -254,7 +272,7 @@ Impact Radius：
 
 不得使用“基本完成”“应该可以”“看起来没问题”等模糊结论。
 
-## 12. 交付标准
+## 13. 交付标准
 
 最终交付前必须满足：
 

@@ -72,4 +72,11 @@ describe('HomeDashboard', () => {
     expect(screen.queryByText('画像建议能力尚未建立：0')).not.toBeInTheDocument();
     expect(screen.getAllByText('有 1 项失败运行').length).toBeGreaterThan(0);
   });
+
+  it('links business flow steps to formal product pages', () => {
+    render(<MemoryRouter><HomeDashboard dashboard={dashboard()} /></MemoryRouter>);
+
+    expect(screen.getByRole('link', { name: /导入文章/ })).toHaveAttribute('href', '/research/add');
+    expect(screen.getByRole('link', { name: /策略发布/ })).toHaveAttribute('href', '/strategies');
+  });
 });

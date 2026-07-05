@@ -67,6 +67,8 @@ export type JobProgress = {
   total: number;
   percent: number;
   remaining: number;
+  candidate_total?: number | null;
+  existing_total?: number | null;
   sub_current?: number | null;
   sub_total?: number | null;
   sub_percent?: number | null;

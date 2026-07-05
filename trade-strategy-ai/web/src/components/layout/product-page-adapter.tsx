@@ -8,9 +8,15 @@ type ProductPageAdapterProps = {
   title: string;
   queryState: PageAvailability;
   purpose: string;
+  showPurposeSection?: boolean;
+  purposeTitle?: string;
   inputDescription: string;
+  inputTitle?: string;
+  inputSectionClassName?: string;
   processingDescription: string;
+  processingTitle?: string;
   outputDescription: string;
+  outputTitle?: string;
   layoutMode?: PageLayoutMode;
   showInputSection?: boolean;
   showProcessingSection?: boolean;
@@ -34,9 +40,15 @@ export function ProductPageAdapter({
   title,
   queryState,
   purpose,
+  showPurposeSection,
+  purposeTitle,
   inputDescription,
+  inputTitle,
+  inputSectionClassName,
   processingDescription,
+  processingTitle,
   outputDescription,
+  outputTitle,
   layoutMode,
   showInputSection,
   showProcessingSection,
@@ -62,9 +74,15 @@ export function ProductPageAdapter({
     <BusinessPageShell
       title={title}
       purpose={purpose}
+      showPurposeSection={showPurposeSection}
+      purposeTitle={purposeTitle}
       inputDescription={inputDescription}
+      inputTitle={inputTitle}
+      inputSectionClassName={inputSectionClassName}
       processingDescription={processingDescription}
+      processingTitle={processingTitle}
       outputDescription={outputDescription}
+      outputTitle={outputTitle}
       layoutMode={layoutMode}
       showInputSection={showInputSection}
       showProcessingSection={showProcessingSection}

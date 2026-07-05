@@ -4,20 +4,24 @@ import { ExternalLink, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { JobTable } from '@/components/jobs/JobTable';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/layout/page-header';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
+import { useAuth } from '@/features/auth/auth-context';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
+import { cancelJob, listJobDefinitions, listJobs, pauseJob, resumeJob, retryJob } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
 import {
   getArticlePipeline,
   getArticlePipelineScheduleStatus,
+  runArticlePipeline,
   runArticlePipelineStep,
   startArticlePipelineSchedule,
   stopArticlePipelineSchedule,
@@ -29,6 +33,7 @@ import {
 } from '@/lib/api/article-metadata';
 import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleQualitySummaryResponse } from '@/types/articles';
 import type { ArticleMetadataListResponse } from '@/types/article-metadata';
+import type { JobDefinitionSummary, JobsListResponse } from '@/types/jobs';
 import type { ProfileListResponse, ProfileRecord } from '@/types/profile';
 import type { ArticlePipelineScheduleState, PipelineDetailResponse } from '@/types/pipeline';
 import type { WorkflowParamField, WorkflowStep } from '@/types/workflows';
@@ -44,6 +49,8 @@ type ResearchModeProps = {
   productMode?: boolean;
   navigationTargets?: Partial<ProductNavigationTargets>;
 };
+
+type JobControlAction = 'pause' | 'resume' | 'cancel' | 'retry';
 
 const workspaceSections = [
   {
@@ -411,6 +418,7 @@ export function ArticleWorkspacePage() {
 export function ArticleRunPage({ productMode = false, navigationTargets }: ResearchModeProps = {}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { canAccess } = useAuth();
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [selectedStepId, setSelectedStepId] = useState('');
   const [stepValues, setStepValues] = useState<Record<string, string | boolean>>({});
@@ -418,6 +426,10 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   const [scheduleForce, setScheduleForce] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [submittedJobId, setSubmittedJobId] = useState<string | null>(null);
+  const [pendingJobControl, setPendingJobControl] = useState<{ jobId: string; action: JobControlAction } | null>(null);
+  const [pipelineMaxArticles, setPipelineMaxArticles] = useState('');
+  const [pipelineForce, setPipelineForce] = useState(false);
+  const [isStepPanelOpen, setIsStepPanelOpen] = useState(false);
 
   const profilesQuery = useQuery<ProfileListResponse, ApiError>({
     queryKey: ['profiles', 'article-run'],
@@ -438,14 +450,15 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   });
 
   const profiles = profilesQuery.data?.items ?? [];
+  const availableProfiles = profiles.filter((profile) => profile.archived_at == null && profile.validation_status !== 'archived');
   const workflow = pipelineQuery.data?.pipeline.workflow ?? null;
   const steps = workflow?.steps ?? [];
 
   useEffect(() => {
-    if (!selectedProfileId && profiles.length > 0) {
-      setSelectedProfileId(profiles[0].profile_id);
+    if (!selectedProfileId && availableProfiles.length > 0) {
+      setSelectedProfileId(availableProfiles[0].profile_id);
     }
-  }, [profiles, selectedProfileId]);
+  }, [availableProfiles, selectedProfileId]);
 
   useEffect(() => {
     if (!selectedStepId && steps.length > 0) {
@@ -460,8 +473,8 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   }, [navigate, productMode, submittedJobId]);
 
   const selectedProfile = useMemo<ProfileRecord | null>(() => {
-    return profiles.find((profile) => profile.profile_id === selectedProfileId) ?? null;
-  }, [profiles, selectedProfileId]);
+    return availableProfiles.find((profile) => profile.profile_id === selectedProfileId) ?? null;
+  }, [availableProfiles, selectedProfileId]);
 
   const selectedStep = useMemo<WorkflowStep | null>(() => {
     return steps.find((step) => step.step_id === selectedStepId) ?? steps[0] ?? null;
@@ -489,14 +502,46 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
     onSuccess: async (data) => {
       toast({
         title: productMode ? '文章已添加' : '文章抓取任务已提交',
-        description: productMode ? '文章导入已完成，正在打开提取结果。' : `Job ${data.job.id} 已创建，正在打开详情页。`,
+        description: productMode ? '文章任务已创建，你可以在当前页面继续查看进度和管理任务。' : `Job ${data.job.id} 已创建，正在打开详情页。`,
       });
-      setMessage(productMode ? '文章已添加，正在打开提取结果。' : '文章处理已提交，正在跳转到 Job Detail。');
+      setMessage(productMode ? '文章任务已创建，可以在下方查看进度、暂停、恢复或取消。' : '文章处理已提交，正在跳转到 Job Detail。');
       if (productMode) {
-        navigate(navigationTargets?.results ?? '/research/results');
+        setSubmittedJobId(data.job.id);
       } else {
         setSubmittedJobId(data.job.id);
       }
+      await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+    onError: (error: unknown) => {
+      setMessage(getErrorMessage(error));
+    },
+  });
+
+  const runPipelineMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedProfileId.trim()) {
+        throw new Error('未选择当前配置');
+      }
+
+      const normalizedMaxArticles = pipelineMaxArticles.trim();
+      return runArticlePipeline({
+        params: {
+          profile_id: selectedProfileId.trim(),
+          use_db: true,
+          force: pipelineForce,
+          ...(normalizedMaxArticles ? { max_articles: Math.trunc(Number(normalizedMaxArticles)) } : {}),
+        },
+        created_by: 'web',
+        confirmed: false,
+      });
+    },
+    onSuccess: async (data) => {
+      toast({
+        title: '一键处理已启动',
+        description: '系统会自动补齐未完成文章的抓取、清洗、校验、入库和处理任务。',
+      });
+      setMessage('一键处理任务已创建，可以在下方查看整体进度和后续管理操作。');
+      setSubmittedJobId(data.job.id);
       await queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (error: unknown) => {
@@ -542,6 +587,7 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   const isLoading = profilesQuery.isLoading || pipelineQuery.isLoading;
   const loadError = profilesQuery.error ?? pipelineQuery.error;
   const canSubmit = Boolean(selectedProfileId) && Boolean(selectedStep) && !isLoading && !loadError;
+  const canSubmitPipeline = Boolean(selectedProfileId) && !isLoading && !loadError && !runPipelineMutation.isPending;
   const scheduleState = scheduleStatusQuery.data ?? null;
   const scheduleActive = Boolean(scheduleState?.scheduler_started);
 
@@ -552,12 +598,84 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   const selectedStepJobType = selectedStep?.required_job_type ?? articlePipelineJobType;
   const scheduleDisabled = !selectedProfileId || !scheduleTime.trim() || isLoading || !!loadError || startScheduleMutation.isPending;
   const scheduleStopDisabled = !scheduleActive || stopScheduleMutation.isPending;
+  const canOperateJobs = canAccess('operator');
+
+  const jobDefinitionsQuery = useQuery<JobDefinitionSummary[], ApiError>({
+    queryKey: ['job-definitions', 'research-article-add'],
+    queryFn: () => listJobDefinitions(),
+    enabled: productMode,
+    staleTime: 60_000,
+  });
+
+  const recentJobsQuery = useQuery<JobsListResponse, ApiError>({
+    queryKey: ['jobs', 'research-article-add', selectedStepJobType],
+    queryFn: () => listJobs({ job_type: selectedStepJobType || undefined, limit: 10 }),
+    enabled: productMode && Boolean(selectedStepJobType),
+    staleTime: 10_000,
+    refetchInterval: (query) => {
+      const items = (query.state.data?.items ?? []) as Array<{ status?: string }>;
+      return items.some((item) => item.status === 'running' || item.status === 'pending') ? 5000 : false;
+    },
+  });
+
+  const recentJobs = recentJobsQuery.data?.items ?? [];
+  const jobDefinitionsByType = useMemo(() => {
+    return Object.fromEntries((jobDefinitionsQuery.data ?? []).map((definition) => [definition.job_type, definition]));
+  }, [jobDefinitionsQuery.data]);
+
+  const invalidateRecentJobs = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['jobs'] });
+  };
+
+  const pauseMutation = useMutation({
+    mutationFn: (jobId: string) => pauseJob(jobId, 'research article task management'),
+    onMutate: async (jobId: string) => {
+      setPendingJobControl({ jobId, action: 'pause' });
+    },
+    onSuccess: invalidateRecentJobs,
+    onSettled: () => {
+      setPendingJobControl(null);
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: (jobId: string) => resumeJob(jobId),
+    onMutate: async (jobId: string) => {
+      setPendingJobControl({ jobId, action: 'resume' });
+    },
+    onSuccess: invalidateRecentJobs,
+    onSettled: () => {
+      setPendingJobControl(null);
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (jobId: string) => cancelJob(jobId, 'research article task management'),
+    onMutate: async (jobId: string) => {
+      setPendingJobControl({ jobId, action: 'cancel' });
+    },
+    onSuccess: invalidateRecentJobs,
+    onSettled: () => {
+      setPendingJobControl(null);
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (jobId: string) => retryJob(jobId, 'research article task management'),
+    onMutate: async (jobId: string) => {
+      setPendingJobControl({ jobId, action: 'retry' });
+    },
+    onSuccess: invalidateRecentJobs,
+    onSettled: () => {
+      setPendingJobControl(null);
+    },
+  });
 
   if (productMode) {
     const availability = resolveAvailability({
       loading: profilesQuery.isLoading || pipelineQuery.isLoading,
       error: profilesQuery.error ?? pipelineQuery.error ?? null,
-      empty: !profilesQuery.isLoading && !profilesQuery.error && profiles.length === 0,
+      empty: !profilesQuery.isLoading && !profilesQuery.error && availableProfiles.length === 0,
     });
 
     const nextAction = {
@@ -576,24 +694,16 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
         title="添加文章"
         queryState={availability}
         purpose="把新文章导入文章库，并继续进入提取结果查看结构化内容。"
-        inputDescription="先选择当前文章配置，再选择导入方式，系统会按现有能力自动完成文章处理。"
+        showPurposeSection={false}
+        inputTitle="开始添加"
+        inputDescription="选择配置、任务和参数后提交任务，系统会按当前选择创建正式文章处理任务。"
+        inputSectionClassName="lg:col-span-2"
         processingDescription="系统将调用现有文章导入链路完成抓取、清洗、校验和入库；不需要理解内部实现步骤。"
-        outputDescription="返回已导入文章的处理结果和后续可查看的提取内容。"
+        outputTitle="任务管理"
+        outputDescription="查看当前任务的进度和状态，并在支持的情况下执行暂停、恢复、取消或重试。"
+        showProcessingSection={false}
         businessAction={nextAction}
         recoveryAction={recoveryAction}
-        currentStep={selectedStep ? `当前导入方式：${selectedStep.title}` : undefined}
-        prerequisites={[
-          {
-            label: '文章配置',
-            status: selectedProfile ? 'ready' : 'empty',
-            detail: selectedProfile ? selectedProfile.name : '请先选择一个可用配置。',
-          },
-          {
-            label: '导入方式',
-            status: selectedStep ? 'ready' : 'empty',
-            detail: selectedStep ? selectedStep.description : '请选择一个导入方式。',
-          },
-        ]}
         input={
           <div className="grid gap-4">
             <div className="space-y-2">
@@ -601,7 +711,7 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
                 当前配置
               </label>
               <Select id="research-article-profile" value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
-                {profiles.map((profile) => (
+                {availableProfiles.map((profile) => (
                   <option key={profile.profile_id} value={profile.profile_id}>
                     {profile.name}
                   </option>
@@ -610,36 +720,180 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
               <p className="text-xs text-slate-500">{selectedProfile ? selectedProfile.environment : '请先选择可用配置。'}</p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-900" htmlFor="research-article-step">
-                导入方式
-              </label>
-              <Select id="research-article-step" value={selectedStepId} onChange={(event) => setSelectedStepId(event.target.value)}>
-                {steps.map((step) => (
-                  <option key={step.step_id} value={step.step_id}>
-                    {step.title}
-                  </option>
-                ))}
-              </Select>
-              {selectedStep ? <p className="text-xs text-slate-500">{selectedStep.description}</p> : null}
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-emerald-950">一键处理未完成文章</p>
+                  <p className="text-sm text-emerald-900">自动补齐抓取、清洗、校验、入库和处理任务，适合直接完成本轮文章增量更新。</p>
+                </div>
+                <Badge variant="success" className="shrink-0 whitespace-nowrap">推荐</Badge>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-900" htmlFor="research-article-max-articles">
+                    最多处理篇数
+                  </label>
+                  <Input
+                    id="research-article-max-articles"
+                    type="number"
+                    min="1"
+                    placeholder="留空表示处理全部未完成文章"
+                    value={pipelineMaxArticles}
+                    onChange={(event) => setPipelineMaxArticles(event.target.value)}
+                  />
+                  <p className="text-xs text-slate-500">不填写时，系统会继续处理当前配置下所有未完成文章。</p>
+                </div>
+                <CheckboxField
+                  label="强制重跑"
+                  checked={pipelineForce}
+                  onChange={setPipelineForce}
+                  description="默认只补齐未完成文章；开启后按当前配置强制重跑整条处理链路。"
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button
+                  aria-busy={runPipelineMutation.isPending}
+                  onClick={() => runPipelineMutation.mutate()}
+                  disabled={!canSubmitPipeline}
+                >
+                  {runPipelineMutation.isPending ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
+                      提交中
+                    </>
+                  ) : (
+                    '开始一键处理'
+                  )}
+                </Button>
+                <p className="text-xs text-slate-600">系统会创建一个整体任务，你可以在下方统一查看进度和控制状态。</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                onClick={() => setIsStepPanelOpen((current) => !current)}
+              >
+                <div>
+                  <p className="text-base font-semibold text-slate-950">分步处理</p>
+                  <p className="mt-1 text-sm text-slate-600">需要单独抓取、清洗或排查问题时，再展开逐步执行。</p>
+                </div>
+                <span className="text-sm font-medium text-slate-600">{isStepPanelOpen ? '收起' : '展开'}</span>
+              </button>
+              {isStepPanelOpen ? (
+                <div className="border-t border-slate-200 px-4 py-4">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-900" htmlFor="research-article-step">
+                          任务
+                        </label>
+                        <Select id="research-article-step" value={selectedStepId} onChange={(event) => setSelectedStepId(event.target.value)}>
+                          {steps.map((step) => (
+                            <option key={step.step_id} value={step.step_id}>
+                              {step.title}
+                            </option>
+                          ))}
+                        </Select>
+                        {selectedStep ? <p className="text-xs text-slate-500">{selectedStep.description}</p> : null}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">任务参数</p>
+                          <p className="mt-1 text-xs text-slate-500">当前任务会根据所选能力显示可配置参数。</p>
+                        </div>
+                        <Badge variant={selectedStep ? 'success' : 'default'} className="shrink-0 whitespace-nowrap">{selectedStep?.title ?? '未选择任务'}</Badge>
+                      </div>
+                      {selectedStepFields.length > 0 ? (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          {selectedStepFields.map(([name, field]) => renderStepField(name, field))}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                          当前任务没有额外参数。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Button
+                      aria-busy={runMutation.isPending}
+                      onClick={() => runMutation.mutate()}
+                      disabled={!canSubmit || runMutation.isPending}
+                    >
+                      {runMutation.isPending ? (
+                        <>
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
+                          提交中
+                        </>
+                      ) : (
+                        '确认提交'
+                      )}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        if (steps.length > 0) {
+                          setSelectedStepId(steps[0].step_id);
+                        }
+                        setMessage(null);
+                      }}
+                      disabled={isLoading || loadError != null}
+                    >
+                      重置步骤
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         }
-        progress={<span>系统将按当前选择自动推进，不要求你填写内部参数。</span>}
         output={
           <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <MetricCard label="可用配置" value={String(profiles.length)} hint="用于导入文章的业务配置数量。" />
-              <MetricCard label="导入方式" value={String(steps.length)} hint="可选择的文章处理方式。" />
-            </div>
             {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <p className="font-medium text-slate-900">说明</p>
-              <p className="mt-2 leading-6">选择配置和导入方式后，系统会自动完成文章处理，并把结果送到提取结果页。</p>
-            </div>
+            {submittedJobId ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                最近创建任务：{submittedJobId}
+              </div>
+            ) : null}
+            {recentJobsQuery.isLoading || jobDefinitionsQuery.isLoading ? (
+              <LoadingState label="正在加载任务管理" description="正在读取当前任务类型的进度和控制能力。" />
+            ) : recentJobsQuery.error ? (
+              <ErrorState
+                category="network error"
+                title="任务管理暂时不可用"
+                description={getErrorMessage(recentJobsQuery.error)}
+                suggestion="稍后刷新，或前往系统任务页继续查看。"
+                retryLabel="重新加载任务"
+                onRetry={() => void recentJobsQuery.refetch()}
+              />
+            ) : recentJobs.filter((job) => !['success', 'failed', 'cancelled'].includes(job.status)).length === 0 ? (
+              <EmptyState
+                title="暂无任务"
+                description="当前任务类型没有未结束任务，新的提交会在这里显示进度和管理操作。"
+              />
+            ) : (
+              <JobTable
+                jobs={recentJobs.filter((job) => !['success', 'failed', 'cancelled'].includes(job.status))}
+                jobDefinitionsByType={jobDefinitionsByType}
+                canOperate={canOperateJobs}
+                pendingJobId={pendingJobControl?.jobId ?? null}
+                pendingAction={pendingJobControl?.action}
+                onViewDetail={(jobId) => navigate(`/system/jobs/${encodeURIComponent(jobId)}`)}
+                onPause={(jobId) => pauseMutation.mutate(jobId)}
+                onResume={(jobId) => resumeMutation.mutate(jobId)}
+                onCancel={(jobId) => cancelMutation.mutate(jobId)}
+                onRetry={(jobId) => retryMutation.mutate(jobId)}
+              />
+            )}
           </div>
         }
-        help="导入完成后，下一步通常是查看提取结果并确认当前版本。"
+        help="开始添加负责生成任务和配置参数；任务管理负责查看进度并执行暂停、恢复、取消或重试。"
       />
     );
   }
@@ -1027,7 +1281,11 @@ export function ArticleListPage({ productMode = false, navigationTargets }: Rese
         purpose="查看已导入文章、确认来源和筛选范围，并继续到添加文章或提取结果。"
         inputDescription="选择作者编号、来源、交易员和时间范围，缩小当前文章库的查看范围。"
         processingDescription="系统会读取文章库并应用当前筛选条件；如果只有部分辅助信息可用，会明确标记为部分完成。"
-        outputDescription="返回文章条目、摘要、发布时间、标签和原文链接。"
+        outputTitle="文章列表"
+        outputDescription=""
+        showPurposeSection={false}
+        showInputSection={false}
+        showProcessingSection={false}
         businessAction={nextAction}
         recoveryAction={recoveryAction}
         stateTitle={availability === 'partial' ? '部分完成' : undefined}

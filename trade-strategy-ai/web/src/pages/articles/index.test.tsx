@@ -448,7 +448,7 @@ describe('ArticlesPage', () => {
       }) as never,
     );
 
-    renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
+    renderWithRouter([{ path: '/articles/run', element: <ArticleRunPage /> }, { path: '/system/jobs/:jobId', element: <div>job detail page</div> }], ['/articles/run']);
 
     expect(await screen.findByRole('heading', { name: '文章导入与处理' })).toBeInTheDocument();
     expect(await screen.findByLabelText('Profile')).toBeInTheDocument();

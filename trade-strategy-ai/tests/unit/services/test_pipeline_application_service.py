@@ -42,8 +42,27 @@ class _FakeJobRunner:
 
     calls: list[dict[str, Any]]
 
+    async def enqueue_job(self, **kwargs: Any) -> Any:
+        self.calls.append({"mode": "enqueue", **kwargs})
+        return type(
+            "Result",
+            (),
+            {
+                "status": "ok",
+                "message": "job enqueued",
+                "payload": {
+                    "created": True,
+                    "job": {
+                        "id": "job-2",
+                        "job_type": kwargs["job_type"],
+                        "status": "pending",
+                    },
+                },
+            },
+        )()
+
     async def submit_job(self, **kwargs: Any) -> Any:
-        self.calls.append(kwargs)
+        self.calls.append({"mode": "submit", **kwargs})
         return type(
             "Result",
             (),
@@ -162,7 +181,7 @@ def test_pipeline_application_service_runs_article_pipeline_through_workflow_run
 
 
 def test_pipeline_application_service_runs_single_article_step_through_job_runner(monkeypatch) -> None:
-    """PipelineApplicationService 应支持单步运行并把 step 映射到对应 job。"""
+    """PipelineApplicationService 应异步创建单步 Job，而不是等待执行完成。"""
     from src.services import PipelineApplicationService
     from pathlib import Path
     from types import SimpleNamespace
@@ -196,6 +215,8 @@ def test_pipeline_application_service_runs_single_article_step_through_job_runne
 
     assert result.status == "ok"
     assert result.payload["job"]["job_type"] == "crawl"
+    assert result.payload["job"]["status"] == "pending"
+    assert fake_job_runner.calls[0]["mode"] == "enqueue"
     assert fake_job_runner.calls[0]["job_type"] == "crawl"
     assert fake_job_runner.calls[0]["params"]["profile_id"] == "default"
     assert fake_job_runner.calls[0]["params"]["force"] is True

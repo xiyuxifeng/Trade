@@ -4,8 +4,8 @@ import { ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { BusinessPageShell } from '@/components/layout/business-page-shell';
 import { PageHeader } from '@/components/layout/page-header';
-import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { LoadingState, EmptyState, ErrorState, SectionCard } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { listArticles } from '@/lib/api/articles';
@@ -391,7 +391,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
   const content = (
     <div className="space-y-6">
       {message ? <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{message}</div> : null}
-      <SectionCard title="单篇文章分析与审核" description="左侧选择文章，右侧查看结构化分析、自动审核和人工审核动作。">
+      <SectionCard title="文章分析与审核" description="左侧选择文章，右侧查看结构化分析、自动审核和人工审核动作。">
         <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/80 shadow-sm">
             <div className="border-b border-slate-200 bg-white/80 p-4 backdrop-blur">
@@ -400,7 +400,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                   <p className="text-base font-semibold tracking-tight text-slate-950">文章列表</p>
                   <p className="mt-1 text-xs text-slate-600">选择一篇文章后，右侧展示单篇分析和候选规则审核。</p>
                 </div>
-                <Badge variant="info">{totalCount} 篇</Badge>
+                <Badge variant="info" className="shrink-0 whitespace-nowrap self-start">{totalCount} 篇</Badge>
               </div>
             </div>
             <div className={scrollHeightClass + ' p-4'}>
@@ -472,22 +472,25 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
           ? { label: '重新加载', to: navigationTargets?.results ?? '/research/results' }
           : undefined;
     return (
-      <ProductPageAdapter
+      <BusinessPageShell
         title="文章分析与审核"
-        queryState={availability}
         purpose="查看单篇文章的结构化分析结果，并只在人工确认后创建待回测规则。"
         inputDescription="从左侧文章列表选择当前文章。"
         processingDescription="系统会读取对应内容版本的 PromptRun、ArticleStructure 和 RuleCandidate。"
         outputDescription="返回原文、清洗内容、显式事实、LLM 假设、候选规则、证据和审核状态。"
-        businessAction={{ label: '返回文章库', to: navigationTargets?.library ?? '/research/articles' }}
+        availability={availability}
+        showPurposeSection={false}
+        nextAction={{ label: '返回文章库', to: navigationTargets?.library ?? '/research/articles' }}
         recoveryAction={recoveryAction}
         stateTitle={availability === 'partial' ? '部分完成' : undefined}
         stateDescription={availability === 'partial' ? '文章存在，但当前结构化分析尚未完全就绪。' : undefined}
-        input={<span>从左侧列表选择文章后，右侧会显示当前分析结果。</span>}
-        progress={<span>自动审核只给出待回测或人工确认建议，不会直接生成正式可用规则。</span>}
-        output={content}
+        showInputSection={false}
+        showProcessingSection={false}
+        showOutputSection={false}
         help="人工批准后只会创建待回测边界内的规则版本，不会直接进入策略使用。"
-      />
+      >
+        {content}
+      </BusinessPageShell>
     );
   }
 

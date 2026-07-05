@@ -326,7 +326,7 @@ class PipelineApplicationService(BaseService):
         allowed_params = set(job_definition.param_schema.fields.keys())
         normalized_params = {key: value for key, value in normalized_params.items() if key in allowed_params and value is not None}
 
-        result = await self._job_runner.submit_job(
+        result = await self._job_runner.enqueue_job(
             job_type=step_spec.job_type,
             params=normalized_params,
             created_by=created_by,
@@ -337,11 +337,8 @@ class PipelineApplicationService(BaseService):
             return result
 
         payload = dict(result.payload)
-        execution = payload.get("execution") if isinstance(payload.get("execution"), dict) else {}
         job = {}
-        if isinstance(execution, dict) and isinstance(execution.get("job"), dict):
-            job = execution["job"]
-        elif isinstance(payload.get("job"), dict):
+        if isinstance(payload.get("job"), dict):
             job = payload["job"]
 
         payload["pipeline"] = self._pipeline_summary()

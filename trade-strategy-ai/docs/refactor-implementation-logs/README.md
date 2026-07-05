@@ -5,8 +5,11 @@
 ## 文件职责
 
 ```text
+trade-strategy-ai/docs/refactor-implementation-logs/refactor-implementation-status-archive.md
+= 历史重构状态总日志归档
+
 trade-strategy-ai/docs/Refactor-Implementation-Log.md
-= 当前状态摘要、Task 状态索引、阻塞项、下一步和 Stage 日志链接
+= 归档说明入口；保留旧引用并指向归档日志
 
 trade-strategy-ai/docs/refactor-implementation-logs/stage-<n>.md
 = 当前 Stage 的详细实施、Review、修复、验证和 Stage Gate 历史
@@ -23,16 +26,16 @@ trade-strategy-ai/docs/refactor-implementation-logs/rt-s12-002-reference-chain-b
 ## 状态事实源
 
 - TaskList：权威 Task 状态和验收条件。
-- 主实施日志：当前状态镜像和恢复入口。
+- 主实施日志归档：历史重构状态镜像和恢复入口。
 - Stage 日志：详细历史和证据摘要。
 - RT-S12-002 reference-chain boundary 文档：仅对 RT-S12-002 pre-E2E repair/reference chain 与 Browser E2E final chain 的边界判定负责；当较长历史日志仍包含旧 blocker 文字时，以该边界文档解释本边界决策。
 - `.codex/refactor-state`：临时执行证据，不是正式状态源。
 
-状态不一致时，以 TaskList 为准，并同步修正主实施日志和当前 Stage 日志。RT-S12-002 reference-chain 与 final E2E chain 的边界不清时，先读取 `rt-s12-002-reference-chain-boundary.md`，再修正主实施日志和 Stage 12 日志。
+状态不一致时，以 TaskList 为准，并同步修正归档日志和当前 Stage 日志。RT-S12-002 reference-chain 与 final E2E chain 的边界不清时，先读取 `rt-s12-002-reference-chain-boundary.md`，再修正归档日志和 Stage 12 日志。
 
 ## 新 Task 开始前
 
-1. 读取 `Refactor-Implementation-Log.md`。
+1. 读取 `Refactor-Implementation-Log.md`，再按其中指引进入归档日志。
 2. 只读取当前 Stage 对应的 `stage-<n>.md`。
 3. 不读取已完成 Stage 的详细日志，除非当前 Task 明确依赖其中的历史决定。
 4. RT-S12-002 Reference Chain Completion Repair 或 RT-S12-002 Browser E2E Acceptance 开始前，必须额外读取 `rt-s12-002-reference-chain-boundary.md`。
@@ -43,7 +46,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/rt-s12-002-reference-chain-b
 每个 Task 或修复批次完成后：
 
 1. 在当前 `stage-<n>.md` 追加详细记录。
-2. 在主实施日志中只更新：
+2. 在主实施总日志中只更新：
    - 当前 Stage/Task；
    - Task 状态；
    - 当前阻塞和未完成 Stage Gate；
@@ -51,7 +54,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/rt-s12-002-reference-chain-b
    - 最近接受的关键结论。
 3. 不把长测试输出、完整堆栈、完整 Task Card、subagent 对话或完整 diff 写入正式日志。
 4. 测试记录只保留命令、通过/失败数量、关键错误和证据路径。
-5. 历史条目不回写成当前状态；当前状态只在主实施日志维护。
+5. 历史条目不回写成当前状态；重构阶段的当前状态只在主实施总日志维护。
 6. RT-S12-002 的 repair/reference chain 不能直接计为 Browser E2E final pass evidence；若 repair 生成 reference 对象，后续 Browser E2E 必须记录新对象 ID 或新 lifecycle transition。
 
 ## Stage 结束规则
@@ -59,7 +62,7 @@ trade-strategy-ai/docs/refactor-implementation-logs/rt-s12-002-reference-chain-b
 Stage Gate 完成后：
 
 1. 在对应 Stage 日志追加最终验收记录。
-2. 更新主实施日志中的 Stage 状态和下一 Stage 入口。
+2. 更新主实施总日志中的 Stage 状态和下一 Stage 入口。
 3. 新建下一 Stage 的日志文件，使用以下结构：
 
 ```markdown
@@ -81,8 +84,8 @@ Stage Gate 完成后：
 
 ## 读取预算
 
-- 新 Session：主实施日志 + 当前 Stage 日志 + 当前 Task 文档。
-- 同一 Stage 延续：只读主实施日志变化、当前 Stage 新增条目、上游 handoff 和当前 diff。
+- 新 Session：主实施日志入口 + 归档总日志 + 当前 Stage 日志 + 当前 Task 文档。
+- 同一 Stage 延续：只读主实施日志变化、归档总日志变化、当前 Stage 新增条目、上游 handoff 和当前 diff。
 - 新 Stage：不默认重读旧 Stage 详细日志。
 - RT-S12-002 Reference Chain Completion Repair / Browser E2E Acceptance：在上述读取集之外，必须读取 `rt-s12-002-reference-chain-boundary.md`，以防把 reference-chain evidence 误计为 final E2E pass evidence。
 

@@ -41,9 +41,15 @@ export type PageLayoutMode = 'workflow' | 'overview' | 'management' | 'detail' |
 export type BusinessPageShellProps = {
   title: string;
   purpose: string;
+  showPurposeSection?: boolean;
+  purposeTitle?: string;
   inputDescription: string;
+  inputTitle?: string;
+  inputSectionClassName?: string;
   processingDescription: string;
+  processingTitle?: string;
   outputDescription: string;
+  outputTitle?: string;
   layoutMode?: PageLayoutMode;
   showInputSection?: boolean;
   showProcessingSection?: boolean;
@@ -277,9 +283,15 @@ function AvailabilityPanel({
 export function BusinessPageShell({
   title,
   purpose,
+  showPurposeSection = true,
+  purposeTitle = '页面用途',
   inputDescription,
+  inputTitle = '输入',
+  inputSectionClassName,
   processingDescription,
+  processingTitle = '处理状态',
   outputDescription,
+  outputTitle = '输出',
   layoutMode = 'workflow',
   showInputSection,
   showProcessingSection,
@@ -322,41 +334,8 @@ export function BusinessPageShell({
       <h1 className="sr-only">{title}</h1>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="页面用途" description={purpose} className="lg:col-span-2">
-          {currentStep ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="m-0 text-sm font-medium text-slate-900">当前步骤</p>
-              <p className="mt-1 text-sm text-slate-600">{currentStep}</p>
-            </div>
-          ) : null}
-          {prerequisites ? (
-            <div className="grid gap-3">
-              {prerequisites.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="m-0 text-sm font-medium text-slate-900">{item.label}</p>
-                      {item.detail ? <p className="mt-1 text-sm text-slate-600">{item.detail}</p> : null}
-                    </div>
-                    <Badge
-                      variant={
-                        item.status === 'ready'
-                          ? 'success'
-                          : item.status === 'error' || item.status === 'invalid' || item.status === 'conflict'
-                            ? 'destructive'
-                            : item.status === 'partial' || item.status === 'degraded'
-                              ? 'warning'
-                              : 'default'
-                      }
-                    >
-                      {availabilityLabel(item.status)}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {inlineAvailabilityInPurpose ? (
+        {!showPurposeSection && !sectionVisibility.showProcessingSection && inlineAvailabilityInPurpose ? (
+          <div className="lg:col-span-2">
             <AvailabilityPanel
               availability={availability}
               resolvedStateTitle={resolvedStateTitle}
@@ -365,18 +344,67 @@ export function BusinessPageShell({
               resolvedRecoveryText={resolvedRecoveryText}
               recoveryAction={recoveryAction}
             />
-          ) : null}
-          {inlineAvailabilityInPurpose ? progressPanel : null}
-        </SectionCard>
+            {progressPanel ? <div className="mt-4">{progressPanel}</div> : null}
+          </div>
+        ) : null}
+
+        {showPurposeSection ? (
+          <SectionCard title={purposeTitle} description={purpose} className="lg:col-span-2">
+            {currentStep ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="m-0 text-sm font-medium text-slate-900">当前步骤</p>
+                <p className="mt-1 text-sm text-slate-600">{currentStep}</p>
+              </div>
+            ) : null}
+            {prerequisites ? (
+              <div className="grid gap-3">
+                {prerequisites.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="m-0 text-sm font-medium text-slate-900">{item.label}</p>
+                        {item.detail ? <p className="mt-1 text-sm text-slate-600">{item.detail}</p> : null}
+                      </div>
+                      <Badge
+                        variant={
+                          item.status === 'ready'
+                            ? 'success'
+                            : item.status === 'error' || item.status === 'invalid' || item.status === 'conflict'
+                              ? 'destructive'
+                              : item.status === 'partial' || item.status === 'degraded'
+                                ? 'warning'
+                                : 'default'
+                        }
+                      >
+                        {availabilityLabel(item.status)}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {inlineAvailabilityInPurpose ? (
+              <AvailabilityPanel
+                availability={availability}
+                resolvedStateTitle={resolvedStateTitle}
+                resolvedStateDescription={resolvedStateDescription}
+                resolvedImpact={resolvedImpact}
+                resolvedRecoveryText={resolvedRecoveryText}
+                recoveryAction={recoveryAction}
+              />
+            ) : null}
+            {inlineAvailabilityInPurpose ? progressPanel : null}
+          </SectionCard>
+        ) : null}
 
         {sectionVisibility.showInputSection ? (
-          <SectionCard title="输入" description={inputDescription}>
+          <SectionCard title={inputTitle} description={inputDescription} className={inputSectionClassName}>
             {input ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{input}</div> : null}
           </SectionCard>
         ) : null}
 
         {sectionVisibility.showProcessingSection ? (
-          <SectionCard title="处理状态" description={processingDescription}>
+          <SectionCard title={processingTitle} description={processingDescription}>
             <AvailabilityPanel
               availability={availability}
               resolvedStateTitle={resolvedStateTitle}
@@ -390,7 +418,7 @@ export function BusinessPageShell({
         ) : null}
 
         {sectionVisibility.showOutputSection ? (
-          <SectionCard title="输出" description={outputDescription} className="lg:col-span-2">
+          <SectionCard title={outputTitle} description={outputDescription} className="lg:col-span-2">
             {output ? <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{output}</div> : null}
           </SectionCard>
         ) : null}

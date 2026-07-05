@@ -1168,6 +1168,27 @@ class JobRunner(BaseService):
             warnings=execution.warnings,
         )
 
+    async def enqueue_job(
+        self,
+        *,
+        job_type: str,
+        params: dict[str, Any] | None = None,
+        created_by: str | None = None,
+        idempotency_key: str | None = None,
+        confirmed: bool = False,
+    ) -> ServiceResult:
+        """只创建 Job，不在当前请求中等待执行完成。"""
+        validated = validate_job_submission(job_type=job_type, params=params or {}, created_by=created_by, confirmed=confirmed)
+        if validated.status != "ok":
+            return validated
+        return await self._job_service.create_job(
+            job_type=job_type,
+            params=validated.payload["params"],
+            created_by=created_by,
+            idempotency_key=idempotency_key,
+            confirmed=confirmed,
+        )
+
     async def run_worker_once(self, *, limit: int = 10) -> ServiceResult:
         """拉取一批可执行 Job，并受并发限制执行。"""
         ready = await self._job_service.list_ready_jobs(limit=limit)

@@ -46,6 +46,8 @@ export function JobTable({
   onResume,
   onCancel,
   onRetry,
+  pendingJobId,
+  pendingAction,
   jobDefinitionsByType,
 }: {
   jobs: JobRecord[];
@@ -56,6 +58,8 @@ export function JobTable({
   onResume?: (jobId: string) => void;
   onCancel?: (jobId: string) => void;
   onRetry?: (jobId: string) => void;
+  pendingJobId?: string | null;
+  pendingAction?: 'pause' | 'resume' | 'cancel' | 'retry';
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -105,6 +109,8 @@ export function JobTable({
                   <JobControls
                     status={job.status}
                     canOperate={canOperate}
+                    isPending={pendingJobId === job.id && Boolean(pendingAction)}
+                    pendingAction={pendingJobId === job.id ? pendingAction : undefined}
                     canPause={jobDefinitionsByType?.[job.job_type]?.can_pause ?? false}
                     canResume={jobDefinitionsByType?.[job.job_type]?.can_resume ?? false}
                     canCancel={jobDefinitionsByType?.[job.job_type]?.can_cancel ?? false}

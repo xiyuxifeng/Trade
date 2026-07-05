@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+import { BusinessPageShell } from '@/components/layout/business-page-shell';
 import { ArticleAddPage, ArticleExtractionResultsPage, ArticleLibraryPage } from '@/pages/articles';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PageAvailability, PageLayoutMode } from '@/components/layout/business-page-shell';
@@ -98,6 +99,7 @@ function ResearchAvailabilityBoundary({
       processingDescription="系统读取真实研究数据。"
       outputDescription="输出只展示当前可确认的结果。"
       layoutMode={layoutMode}
+      showPurposeSection={false}
       businessAction={{ label: '返回研究中心', to: '/research' }}
     />
   );
@@ -114,7 +116,32 @@ export function ResearchAddPage({ availability }: { availability?: PageAvailabil
 }
 
 export function ResearchResultsPage({ availability }: { availability?: PageAvailability } = {}) {
-  if (availability) return <ResearchAvailabilityBoundary title="提取结果" availability={availability} />;
+  if (availability) {
+    return (
+      <BusinessPageShell
+        title="提取结果"
+        purpose="查看文章提取后的分析结果，并在需要时继续人工审核。"
+        inputDescription="当前页面不需要额外输入。"
+        processingDescription="系统保留真实可用结果，不会用默认值补齐缺失分析。"
+        outputDescription="当前页面不再使用单独输出壳层。"
+        availability={availability}
+        showPurposeSection={false}
+        showInputSection={false}
+        showProcessingSection={false}
+        showOutputSection={false}
+        stateTitle={availability === 'partial' ? '部分完成' : undefined}
+        stateDescription={availability === 'partial' ? '文章列表可用，但当前选中文章的详细结果还未完全就绪。' : undefined}
+        nextAction={{ label: '返回研究中心', to: '/research' }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>文章分析与审核</CardTitle>
+            <CardDescription>左侧选择文章，右侧查看结构化分析、自动审核和人工审核动作。</CardDescription>
+          </CardHeader>
+        </Card>
+      </BusinessPageShell>
+    );
+  }
   return <ArticleExtractionResultsPage productMode navigationTargets={navigationTargets} />;
 }
 

@@ -28,6 +28,18 @@ const statusTitles: Record<(typeof statusOrder)[number], string> = {
   failed_runs: '失败运行',
 };
 
+const businessFlowSteps = [
+  { label: '导入文章', path: '/research/add' },
+  { label: '提取规则', path: '/research/results' },
+  { label: '人工审核', path: '/rules/review' },
+  { label: '历史回测', path: '/rules/backtests' },
+  { label: '市场状态验证', path: '/rules/results' },
+  { label: '作者画像', path: '/authors' },
+  { label: '策略发布', path: '/strategies' },
+  { label: '今日盘前', path: '/daily/pre-market' },
+  { label: '今日盘后', path: '/daily/after-close' },
+] as const;
+
 function badgeVariant(status: HomeBusinessStatus['status']) {
   if (status === 'ready' || status === 'complete') return 'success' as const;
   if (status === 'blocked' || status === 'partial') return 'warning' as const;
@@ -123,9 +135,15 @@ export function HomeDashboard({ dashboard }: { dashboard: SystemDashboardRespons
           <CardHeader><CardTitle>从文章到盘后的业务流程</CardTitle></CardHeader>
           <CardContent>
             <ol className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-              {['导入文章', '提取规则', '人工审核', '历史回测', '市场状态验证', '作者画像', '策略发布', '今日盘前', '今日盘后'].map((step, index) => (
-                <li className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" key={step}>
-                  <span className="mr-2 text-xs font-semibold text-emerald-800">{index + 1}</span>{step}
+              {businessFlowSteps.map((step, index) => (
+                <li key={step.label}>
+                  <Link
+                    className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition hover:border-emerald-300 hover:bg-emerald-50"
+                    to={step.path}
+                  >
+                    <span className="mr-2 text-xs font-semibold text-emerald-800">{index + 1}</span>
+                    {step.label}
+                  </Link>
                 </li>
               ))}
             </ol>

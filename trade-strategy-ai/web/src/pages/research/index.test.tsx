@@ -702,6 +702,113 @@ describe('research pages', () => {
     expect(await screen.findByText('最近创建任务：job-created-1')).toBeInTheDocument();
   });
 
+  it('keeps showing running pipeline jobs after refresh even when the default step uses a different job type', async () => {
+    mockedListJobDefinitions.mockResolvedValue(buildJobDefinitions());
+    mockedListJobs.mockImplementation(async (query) => {
+      if (query?.job_type === 'crawl') {
+        return {
+          count: 0,
+          total: 0,
+          skip: 0,
+          limit: 10,
+          status_counts: {
+            pending: 0,
+            running: 0,
+            paused: 0,
+            success: 0,
+            failed: 0,
+            cancelled: 0,
+          },
+          items: [],
+        };
+      }
+      return buildJobsList();
+    });
+    mockedListProfiles.mockResolvedValue({
+      count: 1,
+      total: 1,
+      skip: 0,
+      limit: 100,
+      items: [
+        {
+          profile_id: 'default',
+          name: 'Default Profile',
+          environment: 'production',
+          version: 1,
+          sections: {},
+          secret_refs: {},
+          validation_status: 'validated',
+          created_by: 'web',
+          created_at: '2026-05-10T08:00:00Z',
+          updated_at: '2026-05-10T08:00:00Z',
+          archived_at: null,
+        },
+      ],
+    });
+    mockedGetArticlePipeline.mockResolvedValue({
+      pipeline: {
+        pipeline_id: 'article_pipeline',
+        workflow_id: 'article_pipeline',
+        job_type: 'pipeline-run',
+        title: 'article_pipeline',
+        description: 'desc',
+        workflow: {
+          workflow_id: 'article_pipeline',
+          title: '文章处理链路',
+          description: 'desc',
+          job_type: 'pipeline-run',
+          permissions: 'operator',
+          steps: [
+            {
+              step_id: 'crawl_articles',
+              title: '抓取文章',
+              description: '抓取文章',
+              required_job_type: 'crawl',
+              parameters: [],
+              risk: 'medium',
+              requires_confirmation: false,
+              param_schema: {
+                description: '抓取参数',
+                allow_additional_fields: false,
+                fields: {},
+              },
+            },
+            {
+              step_id: 'process_articles',
+              title: '处理文章任务',
+              description: '处理文章',
+              required_job_type: 'process',
+              parameters: [],
+              risk: 'medium',
+              requires_confirmation: false,
+              param_schema: {
+                description: '处理参数',
+                allow_additional_fields: false,
+                fields: {},
+              },
+            },
+          ],
+        },
+      },
+    });
+    mockedGetArticlePipelineScheduleStatus.mockResolvedValue({
+      scheduler_started: false,
+      schedule_time: null,
+      force: false,
+      profile_id: null,
+    });
+
+    renderWithRouter([{ path: '/research/add', element: <ResearchAddPage /> }], ['/research/add']);
+
+    expect(await screen.findByRole('heading', { name: '开始添加' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('页面内容正在获取中，请稍后再看。')).not.toBeInTheDocument();
+    });
+
+    expect(await screen.findByText('job-1')).toBeInTheDocument();
+    expect(screen.getByText('运行中')).toBeInTheDocument();
+  });
+
   it('renders partial extraction results when the detail panel cannot load', async () => {
     renderWithRouter(
       [{ path: '/research/results', element: <ResearchResultsPage availability="partial" /> }],

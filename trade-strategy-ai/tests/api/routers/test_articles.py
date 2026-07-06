@@ -12,14 +12,30 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.dependencies import verify_api_key
 from api.main import app
 from api.routes import articles as article_routes
 from api.routers.ui import article_metadata as article_metadata_routes
+from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
 from src.models.article_metadata_selection import ArticleMetadataSelection
+from src.models.stage2_canonical import (
+    ArticleRevision,
+    ArticleStructure,
+    FormalLifecycleState,
+    PromptRun,
+    PromptValidationState,
+    QualityStatus,
+)
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(_type, _compiler, **_kw):  # noqa: ANN001
+    return "JSON"
 
 
 @pytest_asyncio.fixture
@@ -45,6 +61,10 @@ async def article_session_factory(tmp_path) -> AsyncIterator[async_sessionmaker[
 
     async with engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: BlogArticle.__table__.create(bind=sync_conn, checkfirst=True))
+        await conn.run_sync(lambda sync_conn: ArticleRevision.__table__.create(bind=sync_conn, checkfirst=True))
+        await conn.run_sync(lambda sync_conn: PromptRun.__table__.create(bind=sync_conn, checkfirst=True))
+        await conn.run_sync(lambda sync_conn: ArticleStructure.__table__.create(bind=sync_conn, checkfirst=True))
+        await conn.run_sync(lambda sync_conn: ArticleMetadata.__table__.create(bind=sync_conn, checkfirst=True))
         await conn.run_sync(lambda sync_conn: ArticleMetadataSelection.__table__.create(bind=sync_conn, checkfirst=True))
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -98,6 +118,59 @@ async def _seed_articles(session_factory: async_sessionmaker[AsyncSession]) -> N
                 ),
             ]
         )
+        revision_id = UUID("44444444-4444-4444-4444-444444444444")
+        prompt_run_id = UUID("55555555-5555-5555-5555-555555555555")
+        structure_id = UUID("66666666-6666-6666-6666-666666666666")
+        session.add(
+            ArticleRevision(
+                article_revision_id=revision_id,
+                article_id=UUID("22222222-2222-2222-2222-222222222222"),
+                revision_no=1,
+                content_hash="hash-2-revision",
+                content_text="another article content",
+                source_payload={},
+                captured_at=datetime(2026, 5, 11, 9, 0, tzinfo=UTC),
+                quality_status=QualityStatus.complete,
+            )
+        )
+        session.add(
+            PromptRun(
+                prompt_run_id=prompt_run_id,
+                article_id=UUID("22222222-2222-2222-2222-222222222222"),
+                prompt_name="article_analysis_v1",
+                prompt_version="article_analysis_v1",
+                schema_name="article_analysis_v1",
+                schema_version="article_analysis_v1",
+                provider="qwen",
+                model="qwen-plus",
+                input_object_type="ArticleRevision",
+                input_object_id=str(UUID("22222222-2222-2222-2222-222222222222")),
+                input_version_id=str(revision_id),
+                input_hash="prompt-hash-2",
+                request_json={},
+                raw_output={},
+                validation_state=PromptValidationState.valid,
+                validation_errors={},
+                retry_count=0,
+                token_usage={},
+                completed_at=datetime(2026, 5, 11, 10, 0, tzinfo=UTC),
+            )
+        )
+        session.add(
+            ArticleStructure(
+                article_structure_id=structure_id,
+                article_id=UUID("22222222-2222-2222-2222-222222222222"),
+                article_revision_id=revision_id,
+                prompt_run_id=prompt_run_id,
+                schema_version="article_analysis_v1",
+                payload={},
+                evidence_json={},
+                missing_fields={},
+                inference_fields={},
+                lifecycle_state=FormalLifecycleState.draft,
+                quality_status=QualityStatus.partial,
+            )
+        )
         session.add(
             ArticleMetadataSelection(
                 selection_id="selection-article-1",
@@ -112,6 +185,19 @@ async def _seed_articles(session_factory: async_sessionmaker[AsyncSession]) -> N
                 selected_by="web",
                 selected_at=datetime(2026, 5, 10, 10, 0, tzinfo=UTC),
                 candidate_versions_json=[],
+            )
+        )
+        session.add(
+            ArticleMetadata(
+                article_id=UUID("11111111-1111-1111-1111-111111111111"),
+                version="v1",
+                processed_at=datetime(2026, 5, 10, 10, 30, tzinfo=UTC),
+                extracted_concepts=[],
+                trading_symbols=[],
+                strategy_rules=[],
+                preconditions=[],
+                comment_insights=[],
+                raw_llm_output={},
             )
         )
         await session.commit()
@@ -187,6 +273,41 @@ async def test_article_list_still_returns_json_for_api_clients(
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
     assert response.json()["items"][0]["title"] == "Article Two"
+
+
+@pytest.mark.asyncio
+async def test_article_list_uses_stable_sorting_and_processing_filters(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """文章列表应保持稳定分页，并支持按处理状态过滤。"""
+    await _seed_articles(article_session_factory)
+
+    monkeypatch.setattr(article_routes, "async_session_factory", lambda: article_session_factory)
+
+    first_page = await client.get("/articles?page=1&page_size=1", headers={"Accept": "application/json"})
+    second_page = await client.get("/articles?page=2&page_size=1", headers={"Accept": "application/json"})
+    third_page = await client.get("/articles?page=3&page_size=1", headers={"Accept": "application/json"})
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert third_page.status_code == 200
+    assert first_page.json()["items"][0]["id"] == "22222222-2222-2222-2222-222222222222"
+    assert second_page.json()["items"][0]["id"] == "11111111-1111-1111-1111-111111111111"
+    assert third_page.json()["items"] == []
+
+    processed_response = await client.get("/articles?processing_status=processed", headers={"Accept": "application/json"})
+    unprocessed_response = await client.get("/articles?processing_status=unprocessed", headers={"Accept": "application/json"})
+
+    assert processed_response.status_code == 200
+    assert unprocessed_response.status_code == 200
+    assert [item["id"] for item in processed_response.json()["items"]] == [
+        "22222222-2222-2222-2222-222222222222",
+    ]
+    assert [item["id"] for item in unprocessed_response.json()["items"]] == [
+        "11111111-1111-1111-1111-111111111111",
+    ]
 
 
 @pytest.mark.asyncio

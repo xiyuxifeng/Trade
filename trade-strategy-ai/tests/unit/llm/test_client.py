@@ -3,10 +3,11 @@ from __future__ import annotations
 import pytest
 
 from src.llm.client import LLMClient, LLMClientConfig, LLMError
+from src.llm.model_selector import JobScopedModelSelector
 
 
 @pytest.mark.asyncio
-async def test_complete_json_with_retry_stops_on_non_retryable_error(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_complete_json_with_retry_falls_back_on_401_error(monkeypatch: pytest.MonkeyPatch) -> None:
     client = LLMClient(
         LLMClientConfig(
             provider="qwen",
@@ -21,16 +22,134 @@ async def test_complete_json_with_retry_stops_on_non_retryable_error(monkeypatch
     async def fake_call(model: str, system_prompt: str, user_prompt: str) -> dict[str, object]:
         attempts.append(model)
         del system_prompt, user_prompt
-        raise LLMError("LLM request failed: Error code: 401 - invalid_api_key", retryable=False, code="401")
+        if model == "qwen3-8b":
+            raise LLMError("LLM request failed: Error code: 401 - invalid_api_key", retryable=False, code="401")
+        return {"ok": True}
 
     monkeypatch.setattr(client, "_call_with_model", fake_call)
 
-    with pytest.raises(LLMError) as exc_info:
-        await client.complete_json_with_retry(system_prompt="system", user_prompt="user")
+    result = await client.complete_json_with_retry(system_prompt="system", user_prompt="user")
+
+    assert attempts == ["qwen3-8b", "qwen2-7b"]
+    assert result.data == {"ok": True}
+    assert result.model == "qwen2-7b"
+
+
+@pytest.mark.asyncio
+async def test_complete_json_with_retry_switches_model_on_auth_error_and_updates_selector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model=["qwen3-8b", "qwen2-7b"],
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+    selector = JobScopedModelSelector(["qwen3-8b", "qwen2-7b"])
+    attempts: list[str] = []
+
+    async def fake_call(model: str, system_prompt: str, user_prompt: str) -> dict[str, object]:
+        attempts.append(model)
+        del system_prompt, user_prompt
+        if model == "qwen3-8b":
+            raise LLMError("LLM request failed: Error code: 403 - AllocationQuota.FreeTierOnly", retryable=False, code="403")
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_call_with_model", fake_call)
+
+    result = await client.complete_json_with_retry(
+        system_prompt="system",
+        user_prompt="user",
+        model_selector=selector,
+    )
+
+    assert result.data == {"ok": True}
+    assert result.model == "qwen2-7b"
+    assert attempts == ["qwen3-8b", "qwen2-7b"]
+    assert await selector.current_model() == "qwen2-7b"
+
+
+@pytest.mark.asyncio
+async def test_complete_json_with_trace_switches_model_on_auth_error_and_updates_selector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model=["qwen3-8b", "qwen2-7b"],
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+    selector = JobScopedModelSelector(["qwen3-8b", "qwen2-7b"])
+    attempts: list[str] = []
+
+    async def fake_call(model: str, system_prompt: str, user_prompt: str):
+        attempts.append(model)
+        del system_prompt, user_prompt
+        if model == "qwen3-8b":
+            raise LLMError("LLM request failed: Error code: 403 - AllocationQuota.FreeTierOnly", retryable=False, code="403")
+        return type(
+            "_Trace",
+            (),
+            {
+                "data": {"ok": True},
+                "model": model,
+                "raw_output": {"ok": True},
+                "raw_output_text": '{"ok": true}',
+                "token_usage": {"total_tokens": 1},
+                "cost_amount": None,
+                "cost_currency": None,
+            },
+        )()
+
+    monkeypatch.setattr(client, "_call_with_model_trace", fake_call)
+
+    trace = await client.complete_json_with_trace(
+        system_prompt="system",
+        user_prompt="user",
+        model_selector=selector,
+    )
+
+    assert trace.data == {"ok": True}
+    assert trace.model == "qwen2-7b"
+    assert attempts == ["qwen3-8b", "qwen2-7b"]
+    assert await selector.current_model() == "qwen2-7b"
+
+
+@pytest.mark.asyncio
+async def test_complete_json_with_trace_keeps_current_model_on_retryable_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model=["qwen3-8b", "qwen2-7b"],
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="test-key",
+        )
+    )
+    selector = JobScopedModelSelector(["qwen3-8b", "qwen2-7b"])
+    attempts: list[str] = []
+
+    async def fake_call(model: str, system_prompt: str, user_prompt: str):
+        attempts.append(model)
+        del system_prompt, user_prompt
+        raise LLMError("timeout", retryable=True)
+
+    monkeypatch.setattr(client, "_call_with_model_trace", fake_call)
+
+    with pytest.raises(LLMError, match="timeout"):
+        await client.complete_json_with_trace(
+            system_prompt="system",
+            user_prompt="user",
+            model_selector=selector,
+        )
 
     assert attempts == ["qwen3-8b"]
-    assert exc_info.value.retryable is False
-    assert exc_info.value.code == "401"
+    assert await selector.current_model() == "qwen3-8b"
 
 
 @pytest.mark.asyncio
@@ -79,7 +198,7 @@ async def test_openai_chat_content_marks_401_as_non_retryable(monkeypatch: pytes
 
 
 @pytest.mark.asyncio
-async def test_complete_json_with_retry_stops_on_403_quota_error(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_complete_json_with_retry_falls_back_on_403_quota_error(monkeypatch: pytest.MonkeyPatch) -> None:
     client = LLMClient(
         LLMClientConfig(
             provider="qwen",
@@ -94,20 +213,21 @@ async def test_complete_json_with_retry_stops_on_403_quota_error(monkeypatch: py
     async def fake_call(model: str, system_prompt: str, user_prompt: str) -> dict[str, object]:
         attempts.append(model)
         del system_prompt, user_prompt
-        raise LLMError(
-            "LLM request failed: Error code: 403 - AllocationQuota.FreeTierOnly",
-            retryable=False,
-            code="403",
-        )
+        if model == "qwen3-8b":
+            raise LLMError(
+                "LLM request failed: Error code: 403 - AllocationQuota.FreeTierOnly",
+                retryable=False,
+                code="403",
+            )
+        return {"ok": True}
 
     monkeypatch.setattr(client, "_call_with_model", fake_call)
 
-    with pytest.raises(LLMError) as exc_info:
-        await client.complete_json_with_retry(system_prompt="system", user_prompt="user")
+    result = await client.complete_json_with_retry(system_prompt="system", user_prompt="user")
 
-    assert attempts == ["qwen3-8b"]
-    assert exc_info.value.retryable is False
-    assert exc_info.value.code == "403"
+    assert attempts == ["qwen3-8b", "qwen2-7b"]
+    assert result.data == {"ok": True}
+    assert result.model == "qwen2-7b"
 
 
 @pytest.mark.asyncio

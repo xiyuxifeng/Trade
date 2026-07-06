@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from src.llm.client import LLMClient, LLMClientConfig, LLMError
+from src.llm.model_selector import JobScopedModelSelector
 
 
 class PromptRuntimeError(RuntimeError):
@@ -36,12 +37,18 @@ class PromptGateway(Protocol):
 
 
 class LLMClientGateway:
-    def __init__(self, client: LLMClient) -> None:
+    def __init__(self, client: LLMClient, model_selector: JobScopedModelSelector | None = None) -> None:
         self._client = client
+        self._model_selector = model_selector
 
     @classmethod
-    def from_config(cls, config: LLMClientConfig) -> "LLMClientGateway":
-        return cls(LLMClient(config))
+    def from_config(
+        cls,
+        config: LLMClientConfig,
+        *,
+        model_selector: JobScopedModelSelector | None = None,
+    ) -> "LLMClientGateway":
+        return cls(LLMClient(config), model_selector=model_selector)
 
     async def invoke_json(
         self,
@@ -51,8 +58,13 @@ class LLMClientGateway:
         user_prompt: str,
         model: str,
     ) -> LLMInvocationTrace:
-        del prompt_name, model
-        trace = await self._client.complete_json_with_trace(system_prompt=system_prompt, user_prompt=user_prompt)
+        del prompt_name
+        trace = await self._client.complete_json_with_trace(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            preferred_model=model,
+            model_selector=self._model_selector,
+        )
         return LLMInvocationTrace(
             provider=str(self._client.cfg.provider or "unknown"),
             model=trace.model,

@@ -137,13 +137,6 @@ ARTICLE_PIPELINE_SPEC = PipelineSpec(
                 "default": False,
                 "enum": [],
             },
-            "new_version": {
-                "type": "string",
-                "description": "新版本标识",
-                "required": False,
-                "default": None,
-                "enum": [],
-            },
             "retry_failed": {
                 "type": "boolean",
                 "description": "是否重试失败任务",

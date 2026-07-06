@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 
 from src.pipeline.tasks.postmortem_tasks import handle_postmortem_analysis
+from src.llm.model_selector import JobScopedModelSelector
 
 
 class TestHandlePostmortemAnalysis:
@@ -169,3 +170,18 @@ class TestHandlePostmortemAnalysis:
                         assert updated_item.postmortem_data["attribution_source"] == "auto"
                         assert updated_item.postmortem_data["postmortem_notes"] is not None
                         assert updated_item.extra.get("auto_original") == {"reason": "original reason", "confidence": 0.5}
+
+    @pytest.mark.asyncio
+    async def test_build_llm_notes_client_can_share_job_model_selector(self, mock_config):
+        from src.pipeline.tasks.postmortem_tasks import _build_llm_notes_client
+
+        mock_config.llm.provider = "qwen"
+        mock_config.llm.model = ["model-a", "model-b"]
+        mock_config.llm.url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        mock_config.llm.api_key = "test-key"
+        selector = JobScopedModelSelector(["model-a", "model-b"])
+
+        client = _build_llm_notes_client(mock_config, model_selector=selector)
+
+        assert client is not None
+        assert client._default_model_selector is selector

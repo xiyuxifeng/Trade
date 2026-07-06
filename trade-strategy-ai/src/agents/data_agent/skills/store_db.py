@@ -8,13 +8,15 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.utils import append_jsonl, ensure_dir
 from src.db.session import session_scope
+from src.domain.enums import QualityStatus
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.stage2_canonical import ArticleRevision
 from src.schemas.contracts import AgentTask
 
 
@@ -185,6 +187,64 @@ async def ensure_article_metadata(session: AsyncSession, article_id: UUID) -> bo
 	return True
 
 
+def _build_article_revision_source_payload(article: BlogArticle) -> dict[str, Any]:
+	raw_payload = article.raw_payload if isinstance(article.raw_payload, dict) else {}
+	return {
+		"summary": article.summary,
+		"blog_article": {
+			"source": article.source,
+			"source_article_id": article.source_article_id,
+			"source_url": article.source_url,
+			"title": article.title,
+			"author_name": article.author_name,
+			"author_id": article.author_id,
+			"published_at": article.published_at.isoformat() if article.published_at else None,
+			"crawled_at": article.crawled_at.isoformat(),
+			"summary": article.summary,
+			"tags": article.tags,
+			"content_hash": article.content_hash,
+		},
+		"raw_article": raw_payload,
+	}
+
+
+async def ensure_article_revision(session: AsyncSession, article_id: UUID) -> bool:
+	article = await session.get(BlogArticle, article_id)
+	if article is None or not article.content_hash:
+		return False
+
+	existing = await session.scalar(
+		select(ArticleRevision).where(
+			ArticleRevision.article_id == article_id,
+			ArticleRevision.content_hash == article.content_hash,
+		)
+	)
+	if existing is not None:
+		return False
+
+	latest_revision = await session.scalar(
+		select(ArticleRevision)
+		.where(ArticleRevision.article_id == article_id)
+		.order_by(desc(ArticleRevision.revision_no))
+		.limit(1)
+	)
+	revision_no = 1 if latest_revision is None else latest_revision.revision_no + 1
+	session.add(
+		ArticleRevision(
+			article_id=article_id,
+			revision_no=revision_no,
+			content_hash=article.content_hash,
+			content_text=article.content_text,
+			content_html=article.content_html,
+			source_payload=_build_article_revision_source_payload(article),
+			captured_at=article.crawled_at,
+			quality_status=QualityStatus.complete,
+		)
+	)
+	await session.flush()
+	return True
+
+
 def default_pending_tasks_path(*, base_dir: Path) -> Path:
 	return base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
 
@@ -243,6 +303,8 @@ async def store_articles_jsonl_to_db(
 
 				if await ensure_article_metadata(session, article_id):
 					stats.ensured_metadata += 1
+
+				await ensure_article_revision(session, article_id)
 
 				# 增量触发：新入库或内容更新 → 生成抽取/聚类待办（先落盘，后续再异步化）
 				if inserted or updated:

@@ -9,6 +9,8 @@ from typing import Any
 from openai import AsyncOpenAI
 import httpx
 
+from src.llm.model_selector import JobScopedModelSelector
+
 
 class LLMError(RuntimeError):
     """LLM 调用错误。
@@ -101,7 +103,7 @@ def _llm_error_metadata(exc: Exception) -> tuple[bool, str | None]:
     return True, None
 
 
-def from_env_and_config(*, provider: str | None, model: str | None, url: str | None, api_key: str | None) -> LLMClientConfig:
+def from_env_and_config(*, provider: str | None, model: str | list[str] | None, url: str | None, api_key: str | None) -> LLMClientConfig:
     # 处理 model 可能是列表的情况
     resolved_model: str | list[str] | None = None
     if isinstance(model, list):
@@ -121,8 +123,9 @@ def from_env_and_config(*, provider: str | None, model: str | None, url: str | N
 
 
 class LLMClient:
-    def __init__(self, cfg: LLMClientConfig) -> None:
+    def __init__(self, cfg: LLMClientConfig, *, model_selector: JobScopedModelSelector | None = None) -> None:
         self.cfg = cfg
+        self._default_model_selector = model_selector
 
     def is_enabled(self) -> bool:
         return bool(self.cfg.provider and self.cfg.model and self.cfg.api_key)
@@ -150,12 +153,32 @@ class LLMClient:
             missing.append("api_key")
         return missing
 
-    async def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def complete_json(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        model_selector: JobScopedModelSelector | None = None,
+    ) -> dict[str, Any]:
         """单次 LLM 调用，不重试。"""
-        return (await self.complete_json_with_trace(system_prompt=system_prompt, user_prompt=user_prompt)).data
+        return (
+            await self.complete_json_with_trace(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model_selector=model_selector,
+            )
+        ).data
 
-    async def complete_json_with_trace(self, *, system_prompt: str, user_prompt: str) -> LLMTraceResult:
+    async def complete_json_with_trace(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        model_selector: JobScopedModelSelector | None = None,
+        preferred_model: str | None = None,
+    ) -> LLMTraceResult:
         """单次 LLM 调用，返回结构化 trace。"""
+        active_selector = model_selector or self._default_model_selector
         missing = self._missing_fields()
         if missing:
             raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})", retryable=False, code="config")
@@ -164,10 +187,33 @@ class LLMClient:
         if not models:
             raise LLMError("No models configured", retryable=False, code="config")
 
-        # 使用第一个模型
-        return await self._call_with_model_trace(models[0], system_prompt, user_prompt)
+        if active_selector is None:
+            target_model = preferred_model or models[0]
+            return await self._call_with_model_trace(target_model, system_prompt, user_prompt)
 
-    async def complete_json_with_retry(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
+        current_model = preferred_model or await active_selector.current_model()
+        attempted: set[str] = set()
+        while True:
+            attempted.add(current_model)
+            try:
+                trace = await self._call_with_model_trace(current_model, system_prompt, user_prompt)
+                await active_selector.mark_success(trace.model)
+                return trace
+            except LLMError as exc:
+                if not _should_switch_model(exc):
+                    raise
+                next_model = await active_selector.mark_unavailable(current_model)
+                if next_model is None or next_model in attempted:
+                    raise
+                current_model = next_model
+
+    async def complete_json_with_retry(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        model_selector: JobScopedModelSelector | None = None,
+    ) -> LLMResult:
         """带重试和模型降级的 LLM 调用。
 
         策略：
@@ -178,6 +224,7 @@ class LLMClient:
         Returns:
             LLMResult: 包含实际使用的模型和数据
         """
+        active_selector = model_selector or self._default_model_selector
         missing = self._missing_fields()
         if missing:
             raise LLMError(f"LLM is not configured (missing: {', '.join(missing)})", retryable=False, code="config")
@@ -187,13 +234,30 @@ class LLMClient:
             raise LLMError("No models configured", retryable=False, code="config")
 
         last_error: LLMError | None = None
-        for model in models:
+        ordered_models = models
+        if active_selector is not None:
+            current_model = await active_selector.current_model()
+            ordered_models = [current_model, *[model for model in models if model != current_model]]
+
+        attempted_models: set[str] = set()
+        for model in ordered_models:
+            if model in attempted_models:
+                continue
+            attempted_models.add(model)
             for attempt in range(LLM_MAX_RETRIES):
                 try:
                     data = await self._call_with_model(model, system_prompt, user_prompt)
+                    if active_selector is not None:
+                        await active_selector.mark_success(model)
                     return LLMResult(data=data, model=model)
                 except LLMError as exc:
                     last_error = exc
+                    if _should_switch_model(exc):
+                        if active_selector is not None:
+                            next_model = await active_selector.mark_unavailable(model)
+                            if next_model is not None and next_model not in attempted_models:
+                                ordered_models = [*ordered_models, next_model]
+                        break
                     if not exc.retryable:
                         raise
                     if attempt < LLM_MAX_RETRIES - 1:
@@ -391,3 +455,7 @@ class LLMClient:
             raw_output_text=text,
             token_usage=token_usage if isinstance(token_usage, dict) else {},
         )
+
+
+def _should_switch_model(exc: LLMError) -> bool:
+    return not exc.retryable and exc.code in {"401", "403", "auth"}

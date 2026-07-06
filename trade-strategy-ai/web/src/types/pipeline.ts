@@ -61,7 +61,6 @@ export type ArticlePipelineRunParams = {
   skip_crawl?: boolean;
   from_step?: string;
   use_db?: boolean;
-  new_version?: string;
   cleanup?: boolean;
   rebuild_pending?: boolean;
   retry_failed?: boolean;

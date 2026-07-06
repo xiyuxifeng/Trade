@@ -77,7 +77,6 @@ function getFieldPlaceholder(name: string, field: WorkflowParamField): unknown {
     if (name === 'snapshot_type') return field.default ?? 'all';
     if (name === 'slot') return field.default ?? '17-30';
     if (name === 'from_step') return 'crawl';
-    if (name === 'new_version') return 'stage5-preview';
     if (name === 'job_type') return field.default ?? 'workflow';
     if (isDateFieldName(name)) return dayjs().format('YYYY-MM-DD');
     if (isPathFieldName(name)) return `${name}.json`;

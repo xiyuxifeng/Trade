@@ -5,20 +5,42 @@ from __future__ import annotations
 import sys
 import json
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, UTC
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy import event
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 sys.path.insert(0, "src")
 
 from src.agents.data_agent.skills.store_db import (
     StoreStats,
+    store_articles_jsonl_to_db,
     iter_jsonl,
     _parse_dt,
     _normalize_article_payload,
 )
+from src.models.base import Base
+from src.models.article_metadata import ArticleMetadata
+from src.models.blog_article import BlogArticle
+from src.models.stage2_canonical import ArticleRevision
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(_element, _compiler, **_kw):  # noqa: ANN001
+    return "JSON"
+
+
+@compiles(ARRAY, "sqlite")
+def _compile_array_sqlite(_element, _compiler, **_kw):  # noqa: ANN001
+    return "JSON"
 
 
 class TestIterJsonl:
@@ -242,3 +264,260 @@ class TestStoreStats:
         assert stats.skipped_duplicates == 20
         assert stats.ensured_metadata == 50
         assert stats.generated_tasks == 80
+
+
+@pytest.fixture
+async def store_db_session_factory(tmp_path: Path):
+    db_path = tmp_path / "store-db.sqlite"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _register_char_length(dbapi_connection, _connection_record):  # noqa: ANN001
+        dbapi_connection.create_function("char_length", 1, lambda value: len(value) if value is not None else 0)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda sync_conn: Base.metadata.create_all(
+                sync_conn,
+                tables=[
+                    BlogArticle.__table__,
+                    ArticleMetadata.__table__,
+                    ArticleRevision.__table__,
+                ],
+            )
+        )
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        yield factory
+    finally:
+        await engine.dispose()
+
+
+def _write_validated_jsonl(path: Path, payloads: list[dict[str, object]]) -> None:
+    path.write_text("\n".join(json.dumps(item, ensure_ascii=False, default=str) for item in payloads) + "\n", encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_store_creates_article_revision_for_new_article(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    store_db_session_factory,
+) -> None:
+    jsonl_path = tmp_path / "sample.validated.jsonl"
+    _write_validated_jsonl(
+        jsonl_path,
+        [{
+            "source": "tgb",
+            "source_url": "https://example.com/a",
+            "source_article_id": "a",
+            "title": "Article A",
+            "author_name": "author",
+            "author_id": "author-1",
+            "published_at": "2026-07-06T01:00:00+00:00",
+            "crawled_at": "2026-07-06T01:05:00+00:00",
+            "content_text": "content-a",
+            "content_html": "<p>content-a</p>",
+            "summary": "summary-a",
+            "content_hash": "hash-a",
+            "raw_payload": {"origin": "validated"},
+        }],
+    )
+
+    from src.agents.data_agent.skills import store_db as mod
+
+    @asynccontextmanager
+    async def fake_session_scope():
+        async with store_db_session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+
+    await store_articles_jsonl_to_db(base_dir=tmp_path, jsonl_paths=[jsonl_path])
+
+    async with store_db_session_factory() as session:
+        article = await session.scalar(select(BlogArticle).where(BlogArticle.source_url == "https://example.com/a"))
+        revision = await session.scalar(select(ArticleRevision).where(ArticleRevision.article_id == article.id))
+        metadata = await session.scalar(select(ArticleMetadata).where(ArticleMetadata.article_id == article.id))
+
+    assert article is not None
+    assert metadata is not None
+    assert revision is not None
+    assert revision.revision_no == 1
+    assert revision.content_hash == "hash-a"
+    assert revision.content_text == "content-a"
+    assert revision.source_payload["summary"] == "summary-a"
+
+
+@pytest.mark.asyncio
+async def test_store_creates_new_revision_when_existing_article_content_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    store_db_session_factory,
+) -> None:
+    from src.agents.data_agent.skills import store_db as mod
+    from sqlalchemy import select
+
+    article_id = uuid4()
+    async with store_db_session_factory() as session:
+        article = BlogArticle(
+            id=article_id,
+            source="tgb",
+            source_article_id="a",
+            source_url="https://example.com/a",
+            title="Old Title",
+            author_name="author",
+            author_id="author-1",
+            published_at=datetime(2026, 7, 6, tzinfo=UTC),
+            crawled_at=datetime(2026, 7, 6, tzinfo=UTC),
+            content_text="old-content",
+            content_html=None,
+            summary="old-summary",
+            tags=[],
+            content_hash="old-hash",
+            view_count=0,
+            like_count=0,
+            bookmark_count=0,
+            comment_count=0,
+            comments_payload=[],
+            raw_payload={"origin": "old"},
+        )
+        session.add(article)
+        session.add(ArticleMetadata(article_id=article_id))
+        session.add(
+            ArticleRevision(
+                article_id=article_id,
+                revision_no=1,
+                content_hash="old-hash",
+                content_text="old-content",
+                content_html=None,
+                source_payload={"summary": "old-summary"},
+                captured_at=datetime(2026, 7, 6, tzinfo=UTC),
+                quality_status="complete",
+            )
+        )
+        await session.commit()
+
+    @asynccontextmanager
+    async def fake_session_scope():
+        async with store_db_session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+
+    jsonl_path = tmp_path / "sample.validated.jsonl"
+    _write_validated_jsonl(
+        jsonl_path,
+        [{
+            "source": "tgb",
+            "source_url": "https://example.com/a",
+            "source_article_id": "a",
+            "title": "New Title",
+            "author_name": "author",
+            "author_id": "author-1",
+            "published_at": "2026-07-06T01:00:00+00:00",
+            "crawled_at": "2026-07-06T02:00:00+00:00",
+            "content_text": "new-content",
+            "summary": "new-summary",
+            "content_hash": "new-hash",
+            "raw_payload": {"origin": "validated"},
+        }],
+    )
+
+    await store_articles_jsonl_to_db(base_dir=tmp_path, jsonl_paths=[jsonl_path])
+
+    async with store_db_session_factory() as session:
+        revisions = (await session.execute(select(ArticleRevision).where(ArticleRevision.article_id == article_id).order_by(ArticleRevision.revision_no))).scalars().all()
+
+    assert len(revisions) == 2
+    assert revisions[1].revision_no == 2
+    assert revisions[1].content_hash == "new-hash"
+    assert revisions[1].content_text == "new-content"
+
+
+@pytest.mark.asyncio
+async def test_store_backfills_revision_for_existing_article_without_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    store_db_session_factory,
+) -> None:
+    from src.agents.data_agent.skills import store_db as mod
+    from sqlalchemy import select
+
+    article_id = uuid4()
+    async with store_db_session_factory() as session:
+        session.add(
+            BlogArticle(
+                id=article_id,
+                source="tgb",
+                source_article_id="a",
+                source_url="https://example.com/a",
+                title="Existing Title",
+                author_name="author",
+                author_id="author-1",
+                published_at=datetime(2026, 7, 6, tzinfo=UTC),
+                crawled_at=datetime(2026, 7, 6, tzinfo=UTC),
+                content_text="same-content",
+                content_html=None,
+                summary="same-summary",
+                tags=[],
+                content_hash="same-hash",
+                view_count=0,
+                like_count=0,
+                bookmark_count=0,
+                comment_count=0,
+                comments_payload=[],
+                raw_payload={"origin": "existing"},
+            )
+        )
+        session.add(ArticleMetadata(article_id=article_id))
+        await session.commit()
+
+    @asynccontextmanager
+    async def fake_session_scope():
+        async with store_db_session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+
+    jsonl_path = tmp_path / "sample.validated.jsonl"
+    _write_validated_jsonl(
+        jsonl_path,
+        [{
+            "source": "tgb",
+            "source_url": "https://example.com/a",
+            "source_article_id": "a",
+            "title": "Existing Title",
+            "author_name": "author",
+            "author_id": "author-1",
+            "published_at": "2026-07-06T01:00:00+00:00",
+            "crawled_at": "2026-07-06T02:00:00+00:00",
+            "content_text": "same-content",
+            "summary": "same-summary",
+            "content_hash": "same-hash",
+            "raw_payload": {"origin": "validated"},
+        }],
+    )
+
+    await store_articles_jsonl_to_db(base_dir=tmp_path, jsonl_paths=[jsonl_path])
+
+    async with store_db_session_factory() as session:
+        revisions = (await session.execute(select(ArticleRevision).where(ArticleRevision.article_id == article_id))).scalars().all()
+
+    assert len(revisions) == 1
+    assert revisions[0].revision_no == 1
+    assert revisions[0].content_hash == "same-hash"

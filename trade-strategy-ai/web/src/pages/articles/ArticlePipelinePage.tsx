@@ -596,6 +596,15 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   );
   const selectedStepDescription = selectedStep?.description ?? '请选择一个 step。';
   const selectedStepJobType = selectedStep?.required_job_type ?? articlePipelineJobType;
+  const articleJobTypes = useMemo(() => {
+    const values = new Set<string>([articlePipelineJobType]);
+    steps.forEach((step) => {
+      if (typeof step.required_job_type === 'string' && step.required_job_type.trim()) {
+        values.add(step.required_job_type.trim());
+      }
+    });
+    return values;
+  }, [steps]);
   const scheduleDisabled = !selectedProfileId || !scheduleTime.trim() || isLoading || !!loadError || startScheduleMutation.isPending;
   const scheduleStopDisabled = !scheduleActive || stopScheduleMutation.isPending;
   const canOperateJobs = canAccess('operator');
@@ -608,9 +617,9 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
   });
 
   const recentJobsQuery = useQuery<JobsListResponse, ApiError>({
-    queryKey: ['jobs', 'research-article-add', selectedStepJobType],
-    queryFn: () => listJobs({ job_type: selectedStepJobType || undefined, limit: 10 }),
-    enabled: productMode && Boolean(selectedStepJobType),
+    queryKey: ['jobs', 'research-article-add', productMode ? 'article-flow' : selectedStepJobType],
+    queryFn: () => listJobs(productMode ? { limit: 20 } : { job_type: selectedStepJobType || undefined, limit: 10 }),
+    enabled: productMode ? articleJobTypes.size > 0 : Boolean(selectedStepJobType),
     staleTime: 10_000,
     refetchInterval: (query) => {
       const items = (query.state.data?.items ?? []) as Array<{ status?: string }>;
@@ -618,7 +627,13 @@ export function ArticleRunPage({ productMode = false, navigationTargets }: Resea
     },
   });
 
-  const recentJobs = recentJobsQuery.data?.items ?? [];
+  const recentJobs = useMemo(() => {
+    const items = recentJobsQuery.data?.items ?? [];
+    if (!productMode) {
+      return items;
+    }
+    return items.filter((job) => articleJobTypes.has(job.job_type));
+  }, [articleJobTypes, productMode, recentJobsQuery.data?.items]);
   const jobDefinitionsByType = useMemo(() => {
     return Object.fromEntries((jobDefinitionsQuery.data ?? []).map((definition) => [definition.job_type, definition]));
   }, [jobDefinitionsQuery.data]);

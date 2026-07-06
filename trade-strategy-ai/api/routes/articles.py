@@ -6,13 +6,12 @@ from io import BytesIO
 from collections.abc import Iterable
 from pathlib import Path
 
-from sqlalchemy import or_
+from sqlalchemy import exists, func, or_, select
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import verify_api_key
@@ -21,6 +20,7 @@ from src.common.config import load_app_config
 from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
+from src.models.stage2_canonical import ArticleStructure
 from src.services.config_profile_service import ConfigProfileService
 
 router = APIRouter(prefix="/articles", tags=["articles"])
@@ -203,6 +203,7 @@ def _apply_article_filters(
     trader_id: str | None = None,
     published_after: datetime | None = None,
     published_before: datetime | None = None,
+    processing_status: str | None = None,
     config: Any | None = None,
     exclude_fields: set[str] | frozenset[str] = frozenset(),
 ):
@@ -234,6 +235,20 @@ def _apply_article_filters(
         if count_query is not None:
             count_query = count_query.where(BlogArticle.published_at <= published_before)
 
+    if processing_status and "processing_status" not in excluded:
+        processed_exists = exists(select(1).where(ArticleStructure.article_id == BlogArticle.id))
+        if processing_status == "processed":
+            condition = processed_exists
+        elif processing_status == "unprocessed":
+            condition = ~processed_exists
+        else:
+            condition = None
+
+        if condition is not None:
+            query = query.where(condition)
+            if count_query is not None:
+                count_query = count_query.where(condition)
+
     if count_query is None:
         return query
     return query, count_query
@@ -249,6 +264,7 @@ async def list_articles(
     trader_id: str | None = None,
     published_after: datetime | None = None,
     published_before: datetime | None = None,
+    processing_status: str = Query(default="all", pattern="^(all|processed|unprocessed)$"),
     _: str = Depends(verify_api_key),
 ):
     """List articles with pagination and filters."""
@@ -271,9 +287,14 @@ async def list_articles(
             trader_id=trader_id,
             published_after=published_after,
             published_before=published_before,
+            processing_status=processing_status,
         )
 
-        query = query.order_by(BlogArticle.published_at.desc()).offset(offset).limit(page_size)
+        query = query.order_by(
+            BlogArticle.published_at.desc().nullslast(),
+            BlogArticle.crawled_at.desc(),
+            BlogArticle.id.desc(),
+        ).offset(offset).limit(page_size)
 
         total_result = await session.execute(count_query)
         total = total_result.scalar() or 0

@@ -73,6 +73,46 @@ class TestCreateHandlers:
         assert captured["models"] == ["qwen3-8b"]
 
     @pytest.mark.asyncio
+    async def test_article_ingested_handler_reuses_model_selected_by_same_job(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mock_config = MagicMock()
+        mock_config.llm.model = ["qwen3-8b", "fallback"]
+        captured: dict[str, object] = {"models": [], "call_count": 0}
+
+        class _Service:
+            def __init__(self, **kwargs: object) -> None:
+                runtime = kwargs["prompt_runtime_service"]
+                captured["models"].append(runtime._model)
+                self._runtime = runtime
+
+            async def run_analysis(self, **kwargs: object) -> object:
+                del kwargs
+                captured["call_count"] += 1
+                if captured["call_count"] == 1:
+                    await self._runtime._gateway._model_selector.mark_success("fallback")
+                return SimpleNamespace(status="ready")
+
+        class _Session:
+            async def scalar(self, _query: object) -> object | None:
+                return True
+
+        @asynccontextmanager
+        async def fake_session_scope() -> object:
+            yield _Session()
+
+        monkeypatch.setattr(
+            "src.pipeline.tasks.process_tasks.Stage3SingleArticleService",
+            _Service,
+        )
+        monkeypatch.setattr("src.db.session.session_scope", fake_session_scope)
+
+        handlers = _create_handlers(mock_config, version="v1")
+
+        await handlers["article_ingested"]({"article_id": str(uuid4())})
+        await handlers["article_ingested"]({"article_id": str(uuid4())})
+
+        assert captured["models"] == ["qwen3-8b", "fallback"]
+
+    @pytest.mark.asyncio
     async def test_article_ingested_handler_fails_when_stage3_structure_not_persisted(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -223,3 +263,46 @@ async def test_run_process_tasks_counts_failed_tasks(tmp_path: Path, monkeypatch
 
     assert stats.failed == 1
     assert stats.fatal_error is None
+
+
+@pytest.mark.asyncio
+async def test_run_process_tasks_force_rebuilds_pending_even_when_file_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pending_path = tmp_path / "pending_tasks.jsonl"
+    pending_path.write_text(
+        '{"task_id":"old","type":"article_ingested","details":{"article_id":"old"},"created_at":"2026-01-01"}\n',
+        encoding="utf-8",
+    )
+
+    rebuilt: list[str] = []
+
+    async def fake_rebuild(path: Path, version: str) -> None:
+        rebuilt.append(version)
+        path.write_text(
+            '{"task_id":"new","type":"article_ingested","details":{"article_id":"new"},"created_at":"2026-01-02"}\n',
+            encoding="utf-8",
+        )
+
+    async def fake_handler(_details: object) -> None:
+        return None
+
+    def fake_create_handlers(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"article_ingested": fake_handler}
+
+    monkeypatch.setattr("src.pipeline.tasks.process_tasks._rebuild_pending_tasks", fake_rebuild)
+    monkeypatch.setattr("src.pipeline.tasks.process_tasks._create_handlers", fake_create_handlers)
+
+    stats = await run_process_tasks(
+        config=SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None)),
+        pending_path=pending_path,
+        failed_path=tmp_path / "failed_tasks.jsonl",
+        dead_path=tmp_path / "dead_tasks.jsonl",
+        force=True,
+        version="v9",
+    )
+
+    assert rebuilt == ["v9"]
+    assert stats.processed == 1
+    assert pending_path.read_text(encoding="utf-8") == ""

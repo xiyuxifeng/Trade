@@ -12,6 +12,7 @@ from src.common.config import AppConfig
 from src.common.logger import get_logger
 from src.common.paths import resolve_project_path
 from src.llm.client import from_env_and_config
+from src.llm.model_selector import JobScopedModelSelector
 from src.llm.runtime import LLMClientGateway
 from src.services.job_control import JobControlInterrupted
 from src.services.stage3_prompt_runtime_service import Stage3PromptRuntimeService
@@ -163,30 +164,36 @@ def _dedup_by_article_id(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(latest.values())
 
 
-def _configured_llm_model(config: AppConfig) -> str:
+def _configured_llm_models(config: AppConfig) -> list[str]:
     model = getattr(getattr(config, "llm", None), "model", None)
     if isinstance(model, list):
-        for item in model:
-            if isinstance(item, str) and item.strip():
-                return item.strip()
+        normalized = [item.strip() for item in model if isinstance(item, str) and item.strip()]
+        if normalized:
+            return normalized
     if isinstance(model, str) and model.strip():
-        return model.strip()
-    return "gpt-5.4"
+        return [model.strip()]
+    return ["gpt-5.4"]
 
 
 def _optional_config_str(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def _configured_llm_gateway(config: AppConfig, *, model: str) -> LLMClientGateway:
+def _configured_llm_gateway(
+    config: AppConfig,
+    *,
+    models: list[str],
+    model_selector: JobScopedModelSelector | None = None,
+) -> LLMClientGateway:
     llm_config = getattr(config, "llm", None)
     return LLMClientGateway.from_config(
         from_env_and_config(
             provider=_optional_config_str(getattr(llm_config, "provider", None)),
-            model=model,
+            model=models,
             url=_optional_config_str(getattr(llm_config, "url", None)),
             api_key=_optional_config_str(getattr(llm_config, "api_key", None)),
-        )
+        ),
+        model_selector=model_selector,
     )
 
 
@@ -279,6 +286,8 @@ def _create_handlers(
     Each handler is a local async function that closes over the config
     passed in, eliminating the need for module-level global state.
     """
+    configured_models = _configured_llm_models(config)
+    llm_model_selector = JobScopedModelSelector(configured_models)
 
     async def handle_article_ingested(details: dict[str, Any]) -> None:
         from src.db.session import session_scope
@@ -293,12 +302,16 @@ def _create_handlers(
         if cancel_check is not None and await cancel_check():
             raise JobControlInterrupted("cancel")
 
-        model = _configured_llm_model(config)
+        model = await llm_model_selector.current_model()
         service = Stage3SingleArticleService(
             session_scope_factory=session_scope,
             prompt_runtime_service=Stage3PromptRuntimeService(
                 session_scope_factory=session_scope,
-                gateway=_configured_llm_gateway(config, model=model),
+                gateway=_configured_llm_gateway(
+                    config,
+                    models=configured_models,
+                    model_selector=llm_model_selector,
+                ),
                 model=model,
             ),
         )
@@ -378,7 +391,7 @@ def _create_handlers(
     from src.pipeline.tasks.postmortem_tasks import handle_postmortem_analysis
 
     async def handle_postmortem_analysis_wrapped(details: dict[str, Any]) -> None:
-        await handle_postmortem_analysis(details, config=config)
+        await handle_postmortem_analysis(details, config=config, model_selector=llm_model_selector)
 
     # ohlcv_crawl handler（S7-000）
     from src.pipeline.tasks.ohlcv_crawl_task import handle_ohlcv_crawl
@@ -490,8 +503,8 @@ async def run_process_tasks(
     f_path = failed_path or FAILED_PATH
     d_path = dead_path or DEAD_TASKS_PATH
 
-    # force 模式：pending_tasks.jsonl 不存在时从数据库重建
-    if force and not p_path.exists():
+    # force 模式：总是从数据库重建 pending_tasks.jsonl
+    if force:
         await _rebuild_pending_tasks(p_path, version)
         print(f"[process] force 模式：已从数据库重建 pending_tasks.jsonl（{p_path}）")
 

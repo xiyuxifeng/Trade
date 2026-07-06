@@ -223,7 +223,7 @@ function buildArticlePipelineDetail() {
             title: '处理文章任务',
             description: '消费待处理任务并生成结构化结果。',
             required_job_type: 'process',
-            parameters: ['profile_id', 'force', 'retry_failed', 'new_version', 'use_db'],
+            parameters: ['profile_id', 'force', 'retry_failed', 'use_db'],
             param_schema: {
               description: '处理参数',
               allow_additional_fields: false,
@@ -240,13 +240,6 @@ function buildArticlePipelineDetail() {
                   description: '是否重试失败任务',
                   required: false,
                   default: false,
-                  enum: [],
-                },
-                new_version: {
-                  type: 'string',
-                  description: '新版本标识',
-                  required: false,
-                  default: '',
                   enum: [],
                 },
                 use_db: {
@@ -628,6 +621,88 @@ describe('ArticlesPage', () => {
     expect(await screen.findByText('待回测')).toBeInTheDocument();
     expect(await screen.findByText('原始原文')).toBeInTheDocument();
     expect(await screen.findByText('清洗后内容')).toBeInTheDocument();
+  });
+
+  it('filters processed and unprocessed articles on the results page', async () => {
+    const user = userEvent.setup();
+    mockedListArticles.mockImplementation(async (query?: any) => {
+      const processingStatus = query?.processing_status ?? 'all';
+      if (processingStatus === 'processed') {
+        return {
+          items: [
+            {
+              ...buildArticleList().items[0],
+              id: 'processed-article',
+              title: 'Processed Article',
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 8,
+          pages: 1,
+        };
+      }
+      if (processingStatus === 'unprocessed') {
+        return {
+          items: [
+            {
+              ...buildArticleList().items[0],
+              id: 'unprocessed-article',
+              title: 'Unprocessed Article',
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 8,
+          pages: 1,
+        };
+      }
+      return {
+        items: [
+          {
+            ...buildArticleList().items[0],
+            id: 'processed-article',
+            title: 'Processed Article',
+          },
+          {
+            ...buildArticleList().items[0],
+            id: 'unprocessed-article',
+            title: 'Unprocessed Article',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 8,
+        pages: 1,
+      };
+    });
+    mockedGetArticleAnalysis.mockImplementation(async (articleId: string) => ({
+      ...buildArticleAnalysisDetail(articleId),
+      article: {
+        ...buildArticleAnalysisDetail(articleId).article,
+        title: `Analysis ${articleId}`,
+      },
+    }));
+
+    renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
+
+    expect(await screen.findByText('Processed Article')).toBeInTheDocument();
+    expect(screen.getByText('Unprocessed Article')).toBeInTheDocument();
+    expect(mockedListArticles).toHaveBeenCalledWith({ page: 1, page_size: 8, processing_status: 'all' });
+
+    await user.click(screen.getByRole('button', { name: '已处理' }));
+    expect(await screen.findByText('Processed Article')).toBeInTheDocument();
+    expect(screen.queryByText('Unprocessed Article')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedListArticles).toHaveBeenCalledWith({ page: 1, page_size: 8, processing_status: 'processed' });
+    });
+
+    await user.click(screen.getByRole('button', { name: '未处理' }));
+    expect(await screen.findByText('Unprocessed Article')).toBeInTheDocument();
+    expect(screen.queryByText('Processed Article')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedListArticles).toHaveBeenCalledWith({ page: 1, page_size: 8, processing_status: 'unprocessed' });
+    });
   });
 
   it('runs review action from the results page', async () => {

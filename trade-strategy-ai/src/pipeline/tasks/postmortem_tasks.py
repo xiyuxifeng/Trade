@@ -21,6 +21,7 @@ from src.schemas.contracts import DataRequest, DataResponseStatus, DailyReport, 
 from src.trader_memory.schemas import TraderMemoryFilter, TraderMemoryItem, TraderMemoryType
 from src.trader_memory.service import TraderMemoryStore
 from src.llm.client import LLMClient, from_env_and_config
+from src.llm.model_selector import JobScopedModelSelector
 
 logger = get_logger(__name__)
 
@@ -66,7 +67,11 @@ def _evidence_pack_path(pack_id: str, config: AppConfig) -> Path:
     return resolve_project_path(".") / config.runtime.output_dir / "evidence_packs" / f"{pack_id}.json"
 
 
-def _build_llm_notes_client(config: AppConfig):
+def _build_llm_notes_client(
+    config: AppConfig,
+    *,
+    model_selector: JobScopedModelSelector | None = None,
+):
     """根据配置构建 LLM 笔记客户端，配置缺失时返回 None。"""
     llm_cfg = getattr(config, "llm", None)
     provider = getattr(llm_cfg, "provider", None)
@@ -91,7 +96,8 @@ def _build_llm_notes_client(config: AppConfig):
             model=model if isinstance(model, (str, list)) else None,
             url=url,
             api_key=api_key,
-        )
+        ),
+        model_selector=model_selector,
     )
     return llm_client if llm_client.is_enabled() else None
 
@@ -100,6 +106,7 @@ async def handle_postmortem_analysis(
     details: dict[str, Any],
     *,
     config: AppConfig,
+    model_selector: JobScopedModelSelector | None = None,
 ) -> None:
     """对单笔交易执行自动归因并写回 TraderMemory。
 
@@ -215,7 +222,7 @@ async def handle_postmortem_analysis(
     # 执行自动归因
     service = PostmortemService(
         enable_llm_notes=True,
-        llm_notes_client=_build_llm_notes_client(config),
+        llm_notes_client=_build_llm_notes_client(config, model_selector=model_selector),
     )
     result = await service.generate(evidence_pack)
 

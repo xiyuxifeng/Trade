@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BusinessPageShell } from '@/components/layout/business-page-shell';
 import { PageHeader } from '@/components/layout/page-header';
 import { LoadingState, EmptyState, ErrorState, SectionCard } from '@/components/kit';
@@ -136,13 +137,14 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [processingStatus, setProcessingStatus] = useState<'all' | 'processed' | 'unprocessed'>('all');
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const pageSize = 8;
   const scrollHeightClass = 'h-[calc(100vh-330px)] overflow-y-auto';
 
   const articlesQuery = useQuery<ArticleListResponse, ApiError>({
-    queryKey: ['articles', 'analysis-results', page],
-    queryFn: () => listArticles({ page, page_size: pageSize }),
+    queryKey: ['articles', 'analysis-results', page, processingStatus],
+    queryFn: () => listArticles({ page, page_size: pageSize, processing_status: processingStatus }),
     staleTime: 20_000,
   });
 
@@ -401,6 +403,21 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                   <p className="mt-1 text-xs text-slate-600">选择一篇文章后，右侧展示单篇分析和候选规则审核。</p>
                 </div>
                 <Badge variant="info" className="shrink-0 whitespace-nowrap self-start">{totalCount} 篇</Badge>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="text-xs text-slate-500">筛选</span>
+                <Tabs value={processingStatus} onValueChange={(value) => {
+                  if (value === 'all' || value === 'processed' || value === 'unprocessed') {
+                    setProcessingStatus(value);
+                    setPage(1);
+                  }
+                }}>
+                  <TabsList>
+                    <TabsTrigger value="all">全部</TabsTrigger>
+                    <TabsTrigger value="processed">已处理</TabsTrigger>
+                    <TabsTrigger value="unprocessed">未处理</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
             </div>
             <div className={scrollHeightClass + ' p-4'}>

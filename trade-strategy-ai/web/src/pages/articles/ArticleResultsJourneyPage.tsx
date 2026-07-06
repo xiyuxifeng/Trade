@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { LoadingState, EmptyState, ErrorState, SectionCard } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { listArticles } from '@/lib/api/articles';
-import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis } from '@/lib/api/article-analysis';
+import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
 import type { ArticleAnalysisCandidate, ArticleAnalysisDetail } from '@/types/article-analysis';
 import type { ArticleListResponse } from '@/types/articles';
 
@@ -137,7 +137,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [processingStatus, setProcessingStatus] = useState<'all' | 'processed' | 'unprocessed'>('all');
+  const [processingStatus, setProcessingStatus] = useState<'all' | 'processed' | 'unprocessed' | 'failed' | 'manual_review_required' | 'ignored'>('all');
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const pageSize = 8;
   const scrollHeightClass = 'h-[calc(100vh-330px)] overflow-y-auto';
@@ -155,6 +155,10 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
     if (!selectedArticleId) return articles[0] ?? null;
     return articles.find((item) => item.id === selectedArticleId) ?? articles[0] ?? null;
   }, [articles, selectedArticleId]);
+  const selectedArticleProcessingStatus = selectedArticle?.processing_status ?? 'unprocessed';
+  const selectedArticleNeedsManualPanel = selectedArticleProcessingStatus === 'failed'
+    || selectedArticleProcessingStatus === 'manual_review_required'
+    || selectedArticleProcessingStatus === 'ignored';
 
   useEffect(() => {
     if (articles.length === 0) {
@@ -169,7 +173,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
   const detailQuery = useQuery<ArticleAnalysisDetail, ApiError>({
     queryKey: ['article-analysis', selectedArticle?.id],
     queryFn: () => getArticleAnalysis(selectedArticle?.id ?? ''),
-    enabled: Boolean(selectedArticle?.id),
+    enabled: Boolean(selectedArticle?.id) && !selectedArticleNeedsManualPanel,
     staleTime: 20_000,
   });
 
@@ -179,6 +183,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
       setMessage('文章分析已更新。');
       queryClient.setQueryData(['article-analysis', detail.article.article_id], detail);
       await queryClient.invalidateQueries({ queryKey: ['article-analysis', detail.article.article_id] });
+      await queryClient.invalidateQueries({ queryKey: ['articles', 'analysis-results'] });
     },
     onError: (error: unknown) => setMessage(getErrorMessage(error)),
   });
@@ -197,15 +202,106 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
     onError: (error: unknown) => setMessage(getErrorMessage(error)),
   });
 
+  const updateProcessingStatusMutation = useMutation({
+    mutationFn: async (payload: { articleId: string; action: 'ignored' | 'manual_review_required'; note: string }) =>
+      updateArticleProcessingStatus(payload.articleId, { action: payload.action, note: payload.note }),
+    onSuccess: async () => {
+      setMessage('文章状态已更新。');
+      await queryClient.invalidateQueries({ queryKey: ['articles', 'analysis-results'] });
+    },
+    onError: (error: unknown) => setMessage(getErrorMessage(error)),
+  });
+
   const availability = resolveAvailability({
-    loading: articlesQuery.isLoading || (Boolean(selectedArticle?.id) && detailQuery.isLoading && !detailQuery.data),
+    loading: articlesQuery.isLoading || (Boolean(selectedArticle?.id) && !selectedArticleNeedsManualPanel && detailQuery.isLoading && !detailQuery.data),
     error: articlesQuery.error ?? detailQuery.error ?? null,
     empty: !articlesQuery.isLoading && !articlesQuery.error && articles.length === 0,
     partial: detailQuery.data?.status === 'partial',
   });
 
+  const manualStatusLabel =
+    selectedArticleProcessingStatus === 'ignored'
+      ? '已忽略'
+      : selectedArticleProcessingStatus === 'manual_review_required'
+        ? '待人工补录'
+        : '提取失败';
+
   const detailPanel = !selectedArticle ? (
     <EmptyState title="请选择一篇文章" description="从左侧列表选择文章后，右侧会展示分析结果和审核动作。" />
+  ) : selectedArticleNeedsManualPanel ? (
+    <div className="space-y-6">
+      <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-lg font-semibold tracking-tight text-slate-950">{selectedArticle.title}</p>
+            <p className="mt-1 text-xs text-slate-600">
+              {selectedArticle.author_name ?? selectedArticle.author_id ?? '未记录'} · {selectedArticle.source}
+            </p>
+            <p className="mt-1 break-all text-[11px] text-slate-500">{selectedArticle.source_url}</p>
+          </div>
+          <Badge variant={selectedArticleProcessingStatus === 'ignored' ? 'default' : selectedArticleProcessingStatus === 'manual_review_required' ? 'warning' : 'danger'}>
+            {manualStatusLabel}
+          </Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-700">失败类型：{selectedArticle.failure_type ?? '未记录'}</div>
+          <div className="rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-700">失败时间：{selectedArticle.failed_at ? formatTimestamp(selectedArticle.failed_at) : '未记录'}</div>
+          <div className="rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-700">失败次数：{selectedArticle.failed_retry_count ?? 0}</div>
+          <div className="rounded-2xl border border-rose-200 bg-white p-4 text-sm text-slate-700">当前状态：{manualStatusLabel}</div>
+        </div>
+        <div className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-900">
+          {selectedArticle.processing_note ?? selectedArticle.failure_message ?? '当前文章提取失败，请重试或稍后人工复核。'}
+        </div>
+      </div>
+
+      <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold tracking-tight text-slate-950">人工处理</p>
+            <p className="mt-1 text-xs text-slate-600">这篇文章没有进入正式结构化结果。可以重新分析，或将其标记为忽略、待人工补录。</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => selectedArticle && runAnalysisMutation.mutate(selectedArticle.id)} disabled={!selectedArticle || runAnalysisMutation.isPending}>
+              {runAnalysisMutation.isPending ? '重试中' : '重新分析此文章'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                selectedArticle &&
+                updateProcessingStatusMutation.mutate({
+                  articleId: selectedArticle.id,
+                  action: 'manual_review_required',
+                  note: '需要人工补录',
+                })
+              }
+              disabled={!selectedArticle || updateProcessingStatusMutation.isPending}
+            >
+              标记需人工补录
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                selectedArticle &&
+                updateProcessingStatusMutation.mutate({
+                  articleId: selectedArticle.id,
+                  action: 'ignored',
+                  note: '非目标文章，人工忽略',
+                })
+              }
+              disabled={!selectedArticle || updateProcessingStatusMutation.isPending}
+            >
+              标记忽略
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 text-xs text-slate-600 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">处理人：{selectedArticle.processing_updated_by ?? '未记录'}</div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">处理时间：{selectedArticle.processing_updated_at ? formatTimestamp(selectedArticle.processing_updated_at) : '未记录'}</div>
+        </div>
+      </div>
+    </div>
   ) : detailQuery.isLoading ? (
     <LoadingState label="正在加载文章分析" description="正在读取当前文章的结构化结果、候选规则和审核状态。" />
   ) : detailQuery.error ? (
@@ -407,7 +503,14 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <span className="text-xs text-slate-500">筛选</span>
                 <Tabs value={processingStatus} onValueChange={(value) => {
-                  if (value === 'all' || value === 'processed' || value === 'unprocessed') {
+                  if (
+                    value === 'all'
+                    || value === 'processed'
+                    || value === 'unprocessed'
+                    || value === 'failed'
+                    || value === 'manual_review_required'
+                    || value === 'ignored'
+                  ) {
                     setProcessingStatus(value);
                     setPage(1);
                   }
@@ -416,6 +519,9 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                     <TabsTrigger value="all">全部</TabsTrigger>
                     <TabsTrigger value="processed">已处理</TabsTrigger>
                     <TabsTrigger value="unprocessed">未处理</TabsTrigger>
+                    <TabsTrigger value="failed">提取失败</TabsTrigger>
+                    <TabsTrigger value="manual_review_required">待人工补录</TabsTrigger>
+                    <TabsTrigger value="ignored">已忽略</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -431,6 +537,9 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                 <div className="space-y-3">
                   {articles.map((article) => {
                     const active = article.id === selectedArticle?.id;
+                    const failed = article.processing_status === 'failed';
+                    const manualReviewRequired = article.processing_status === 'manual_review_required';
+                    const ignored = article.processing_status === 'ignored';
                     return (
                       <button
                         key={article.id}
@@ -446,6 +555,9 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                         <p className="mt-1 text-xs text-slate-600">{article.author_name ?? article.author_id ?? '未记录'} · {article.source}</p>
                         <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{article.summary ?? '暂无摘要'}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {failed ? <Badge variant="danger">提取失败</Badge> : null}
+                          {manualReviewRequired ? <Badge variant="warning">待人工补录</Badge> : null}
+                          {ignored ? <Badge variant="default">已忽略</Badge> : null}
                           {article.tags.slice(0, 3).map((tag) => <Badge key={tag} variant="info">{tag}</Badge>)}
                         </div>
                       </button>

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleListPage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { getArticleAnalysis, reviewArticleCandidate } from '@/lib/api/article-analysis';
+import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -25,6 +25,8 @@ vi.mock('@/lib/api/articles', () => ({
 vi.mock('@/lib/api/article-analysis', () => ({
   getArticleAnalysis: vi.fn(),
   reviewArticleCandidate: vi.fn(),
+  runArticleAnalysis: vi.fn(),
+  updateArticleProcessingStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/api/profiles', () => ({
@@ -46,6 +48,8 @@ vi.mock('@/components/ui/toast', () => ({
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
 const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
+const mockedRunArticleAnalysis = vi.mocked(runArticleAnalysis);
+const mockedUpdateArticleProcessingStatus = vi.mocked(updateArticleProcessingStatus);
 const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedListArticles = vi.mocked(listArticles);
@@ -280,6 +284,14 @@ function buildArticleList() {
         like_count: 2,
         bookmark_count: 1,
         comment_count: 3,
+        processing_status: 'processed',
+        failure_message: null,
+        failure_type: null,
+        failed_at: null,
+        failed_retry_count: null,
+        processing_note: null,
+        processing_updated_at: null,
+        processing_updated_by: null,
       },
     ],
     total: 1,
@@ -703,6 +715,67 @@ describe('ArticlesPage', () => {
     await waitFor(() => {
       expect(mockedListArticles).toHaveBeenCalledWith({ page: 1, page_size: 8, processing_status: 'unprocessed' });
     });
+  });
+
+  it('shows failed articles in the same results page and supports retry and manual actions', async () => {
+    const user = userEvent.setup();
+    mockedListArticles.mockImplementation(async (query?: any) => {
+      const processingStatus = query?.processing_status ?? 'all';
+      if (processingStatus === 'failed') {
+        return {
+          items: [
+            {
+              ...buildArticleList().items[0],
+              id: 'failed-article',
+              title: 'Failed Article',
+              processing_status: 'failed',
+              failure_message: 'second repair is not allowed',
+              failure_type: 'stage3_article_analysis',
+              failed_at: '2026-07-06T14:28:40Z',
+              failed_retry_count: 1,
+              processing_note: null,
+              processing_updated_at: null,
+              processing_updated_by: null,
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 8,
+          pages: 1,
+        };
+      }
+      return buildArticleList();
+    });
+    mockedGetArticleAnalysis.mockImplementation(async (articleId: string) => buildArticleAnalysisDetail(articleId));
+    mockedRunArticleAnalysis.mockResolvedValue(buildArticleAnalysisDetail('failed-article'));
+    mockedUpdateArticleProcessingStatus.mockResolvedValue({
+      article_id: 'failed-article',
+      processing_status: 'manual_review_required',
+      processing_note: '需要人工补录',
+      processing_updated_at: '2026-07-06T14:29:00Z',
+      processing_updated_by: 'operator-user',
+    });
+
+    renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
+
+    await user.click(await screen.findByRole('button', { name: '提取失败' }));
+    expect((await screen.findAllByText('Failed Article')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('second repair is not allowed')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '重新分析此文章' }));
+    await waitFor(() => {
+      expect(mockedRunArticleAnalysis).toHaveBeenCalledWith('failed-article');
+    });
+    expect(await screen.findByText('文章分析已更新。')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '标记需人工补录' }));
+    await waitFor(() => {
+      expect(mockedUpdateArticleProcessingStatus).toHaveBeenCalledWith('failed-article', {
+        action: 'manual_review_required',
+        note: '需要人工补录',
+      });
+    });
+    expect(await screen.findByText('文章状态已更新。')).toBeInTheDocument();
   });
 
   it('runs review action from the results page', async () => {

@@ -124,3 +124,16 @@ export type ReviewArticleCandidateRequest = {
   reason?: string | null;
   article_revision_id?: string | null;
 };
+
+export type UpdateArticleProcessingStatusRequest = {
+  action: 'ignored' | 'manual_review_required';
+  note?: string | null;
+};
+
+export type ArticleProcessingStatus = {
+  article_id: string;
+  processing_status: 'ignored' | 'manual_review_required';
+  processing_note: string | null;
+  processing_updated_at: string;
+  processing_updated_by: string;
+};

@@ -135,3 +135,16 @@ class ReviewCandidateRequest(BaseModel):
     decision: Literal["approve", "reject"]
     reason: str | None = None
     article_revision_id: str | None = None
+
+
+class UpdateArticleProcessingStatusRequest(BaseModel):
+    action: Literal["ignored", "manual_review_required"]
+    note: str | None = None
+
+
+class ArticleProcessingStatusResponse(BaseModel):
+    article_id: str
+    processing_status: Literal["ignored", "manual_review_required"]
+    processing_note: str | None = None
+    processing_updated_at: datetime
+    processing_updated_by: str

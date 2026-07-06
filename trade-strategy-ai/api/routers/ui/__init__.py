@@ -9,6 +9,7 @@ from .imports import router as imports_router
 from .kaipan import router as kaipan_router
 from .data_health import router as data_health_router
 from .data_audits import router as data_audits_router
+from .article_analysis import router as article_analysis_router
 from .article_metadata import router as article_metadata_router
 from .persona import router as persona_router
 from .pipelines import router as pipelines_router
@@ -45,6 +46,7 @@ __all__ = [
     "kaipan_router",
     "data_health_router",
     "data_audits_router",
+    "article_analysis_router",
     "article_metadata_router",
     "legacy_system_router",
     "market_router",

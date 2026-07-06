@@ -113,7 +113,7 @@ test('RT-S12-002 formal product journey creates separate final browser E2E evide
   const article = await apiJson<Record<string, unknown>>(
     request,
     'GET',
-    `/article-metadata/articles/${setupIds.articleId}/analysis?article_revision_id=${setupIds.articleRevisionId}`,
+    `/article-analysis/articles/${setupIds.articleId}/analysis?article_revision_id=${setupIds.articleRevisionId}`,
     apiKey,
   );
   const articleRecord = recordField(article, 'article');

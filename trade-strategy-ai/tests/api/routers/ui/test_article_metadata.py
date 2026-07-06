@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from api.dependencies import CurrentPrincipal, get_current_principal, verify_api_key
 from api.main import app
+from api.routers.ui import article_analysis as article_analysis_routes
 from api.routers.ui import article_metadata as article_metadata_routes
 from src.models.article_metadata import ArticleMetadata
 from src.models.article_metadata_selection import ArticleMetadataSelection
@@ -102,7 +103,9 @@ async def client(tmp_path: Path) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides.clear()
     app.dependency_overrides[verify_api_key] = lambda: 'test-key'
     original_session_factory = article_metadata_routes.async_session_factory
+    original_analysis_session_factory = article_analysis_routes.async_session_factory
     article_metadata_routes.async_session_factory = lambda: session_factory
+    article_analysis_routes.async_session_factory = lambda: session_factory
     app.state.article_metadata_test_session_factory = session_factory
     try:
         transport = ASGITransport(app=app)
@@ -111,6 +114,7 @@ async def client(tmp_path: Path) -> AsyncIterator[AsyncClient]:
     finally:
         app.dependency_overrides.clear()
         article_metadata_routes.async_session_factory = original_session_factory
+        article_analysis_routes.async_session_factory = original_analysis_session_factory
         if hasattr(app.state, 'article_metadata_test_session_factory'):
             delattr(app.state, 'article_metadata_test_session_factory')
         TEST_SESSION_FACTORY = None
@@ -227,11 +231,11 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
             assert article_revision_id is None
             return _FakeJourney()
 
-    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: _FakeService()
+    app.dependency_overrides[article_analysis_routes.get_stage3_single_article_service] = lambda: _FakeService()
     try:
-        response = await client.get(f"/api/ui/v1/article-metadata/articles/{SEEDED_ARTICLE_ID}/analysis")
+        response = await client.get(f"/api/ui/v1/article-analysis/articles/{SEEDED_ARTICLE_ID}/analysis")
     finally:
-        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)
 
     assert response.status_code == 200
     payload = response.json()
@@ -365,7 +369,7 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
             return _FakeJourney()
 
     fake_service = _FakeService()
-    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: fake_service
+    app.dependency_overrides[article_analysis_routes.get_stage3_single_article_service] = lambda: fake_service
     app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
         role="operator",
         api_key_label="operator-user",
@@ -375,11 +379,11 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     )
     try:
         response = await client.post(
-            f"/api/ui/v1/article-metadata/articles/{article_id}/candidates/{candidate_id}/review",
+            f"/api/ui/v1/article-analysis/articles/{article_id}/candidates/{candidate_id}/review",
             json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
         )
     finally:
-        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)
         app.dependency_overrides.pop(get_current_principal, None)
 
     assert response.status_code == 200
@@ -391,7 +395,7 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     assert response.json()["article_structure_provenance"]["article_revision_id"] == revision_id
     assert response.json()["method_tags"] == ["突破"]
 
-    app.dependency_overrides[article_metadata_routes.get_stage3_single_article_service] = lambda: fake_service
+    app.dependency_overrides[article_analysis_routes.get_stage3_single_article_service] = lambda: fake_service
     app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
         role="viewer",
         api_key_label="viewer-user",
@@ -401,11 +405,63 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     )
     try:
         forbidden = await client.post(
-            f"/api/ui/v1/article-metadata/articles/{article_id}/candidates/{candidate_id}/review",
+            f"/api/ui/v1/article-analysis/articles/{article_id}/candidates/{candidate_id}/review",
             json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
         )
     finally:
-        app.dependency_overrides.pop(article_metadata_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(get_current_principal, None)
+
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"] == "insufficient permissions"
+
+
+@pytest.mark.asyncio
+async def test_operator_can_update_article_processing_status_and_viewer_cannot(
+    client: AsyncClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert SEEDED_ARTICLE_ID is not None
+
+    state_path = tmp_path / "article-processing-states.json"
+    monkeypatch.setattr(article_analysis_routes.article_processing_state, "PROCESSING_STATE_PATH", state_path)
+
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="operator",
+        api_key_label="operator-user",
+        authenticated=True,
+        source="api_key",
+        api_key="operator-key",
+    )
+    try:
+        response = await client.post(
+            f"/api/ui/v1/article-analysis/articles/{SEEDED_ARTICLE_ID}/processing-status",
+            json={"action": "manual_review_required", "note": "需要人工补录"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_principal, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["article_id"] == SEEDED_ARTICLE_ID
+    assert payload["processing_status"] == "manual_review_required"
+    assert payload["processing_note"] == "需要人工补录"
+    assert payload["processing_updated_by"] == "operator-user"
+
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="viewer",
+        api_key_label="viewer-user",
+        authenticated=True,
+        source="api_key",
+        api_key="viewer-key",
+    )
+    try:
+        forbidden = await client.post(
+            f"/api/ui/v1/article-analysis/articles/{SEEDED_ARTICLE_ID}/processing-status",
+            json={"action": "ignored", "note": "非目标文章"},
+        )
+    finally:
         app.dependency_overrides.pop(get_current_principal, None)
 
     assert forbidden.status_code == 403

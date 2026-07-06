@@ -381,3 +381,58 @@ async def test_openai_chat_json_rejects_length_truncated_response(monkeypatch: p
 
     with pytest.raises(LLMError, match="truncated"):
         await client.complete_json_with_trace(system_prompt="system", user_prompt="user")
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_completion_uses_configured_base_url_and_default_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.llm import client as client_mod
+
+    captured_client_kwargs: dict[str, object] = {}
+    captured_request_kwargs: dict[str, object] = {}
+
+    class _Message:
+        content = '{"ok": true}'
+
+    class _Choice:
+        message = _Message()
+        finish_reason = "stop"
+
+    class _Completion:
+        choices = [_Choice()]
+        usage = {}
+
+        def model_dump(self, mode="json"):
+            del mode
+            return {"choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}]}
+
+    class _FakeCompletions:
+        async def create(self, **kwargs):
+            captured_request_kwargs.update(kwargs)
+            return _Completion()
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured_client_kwargs.update(kwargs)
+            self.chat = _FakeChat()
+
+    monkeypatch.setattr(client_mod, "AsyncOpenAI", _FakeOpenAI)
+
+    client = LLMClient(
+        LLMClientConfig(
+            provider="qwen",
+            model="qwen3-8b",
+            url="https://ws-4eru7sgi4t75umeo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/",
+            api_key="test-key",
+        )
+    )
+
+    await client.complete_json_with_trace(system_prompt="system", user_prompt="user")
+
+    assert captured_client_kwargs["base_url"] == "https://ws-4eru7sgi4t75umeo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    assert captured_client_kwargs["timeout"] == 300.0
+    assert captured_request_kwargs["response_format"] == {"type": "json_object"}

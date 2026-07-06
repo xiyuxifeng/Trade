@@ -25,6 +25,14 @@ class ArticleResponse(BaseModel):
     like_count: int
     bookmark_count: int
     comment_count: int
+    processing_status: str = "unprocessed"
+    failure_message: str | None = None
+    failure_type: str | None = None
+    failed_at: datetime | None = None
+    failed_retry_count: int | None = None
+    processing_note: str | None = None
+    processing_updated_at: datetime | None = None
+    processing_updated_by: str | None = None
 
 
 class ArticleFilter(BaseModel):

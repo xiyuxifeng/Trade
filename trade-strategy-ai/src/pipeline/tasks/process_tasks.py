@@ -50,6 +50,23 @@ class ProcessFatalError(RuntimeError):
         self.details = details or {}
 
 
+class ProcessTaskError(RuntimeError):
+    """表示单个 task 失败，但不应中止整个 process job。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        task: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.task = task or {}
+        self.details = details or {}
+        self.retryable = retryable
+
+
 def register_handler(task_type: str, handler: TaskHandler) -> None:
     TASK_HANDLERS[task_type] = handler
 
@@ -261,6 +278,12 @@ async def _process_one(task: dict[str, Any], handlers: dict[str, TaskHandler]) -
             return True, False
         except ProcessFatalError:
             raise
+        except ProcessTaskError as exc:
+            last_error = exc
+            if not exc.retryable:
+                raise
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(2 ** attempt)
         except Exception as exc:
             last_error = exc
             if attempt < MAX_RETRIES - 1:
@@ -318,7 +341,7 @@ def _create_handlers(
         try:
             journey = await service.run_analysis(article_id=article_id, article_revision_id=None)
         except Stage3SingleArticleError as exc:
-            raise ProcessFatalError(
+            raise ProcessTaskError(
                 str(exc),
                 task={"type": "article_ingested", "details": details},
                 details={
@@ -660,6 +683,33 @@ async def run_process_tasks(
                     }
                 )
             break
+        except ProcessTaskError as exc:
+            error_message = str(exc)
+            error_type = str(exc.details.get("error_type") or "") or None
+            stats.failed += 1
+            _track_failure(task, fatal=False, error_message=error_message, error_type=error_type)
+            if progress_callback is not None and total > 0:
+                details = task.get("details", {})
+                progress_callback(
+                    {
+                        "job_type": "pipeline-run",
+                        "stage": "process",
+                        "current": overall_current if overall_current is not None else index,
+                        "total": overall_total if overall_total is not None else total,
+                        "percent": round(((overall_current if overall_current is not None else index) / (overall_total if overall_total else total)) * 100, 2) if (overall_total or total) else 0.0,
+                        "remaining": max((overall_total if overall_total is not None else total) - (overall_current if overall_current is not None else index), 0),
+                        "current_step": f"process:{details.get('article_id') or task_id or task.get('type')}",
+                        "current_trade_date": None,
+                        "current_dataset": task.get("type"),
+                        "status": "error",
+                        "error": error_message,
+                        "sub_current": index,
+                        "sub_total": total,
+                        "sub_percent": round((index / total) * 100, 2) if total else 0.0,
+                        "sub_remaining": max(total - index, 0),
+                    }
+                )
+            continue
         if progress_callback is not None and total > 0:
             details = task.get("details", {})
             progress_callback(

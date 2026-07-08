@@ -4,5 +4,9 @@
 data/processed/
 !data/processed/.gitkeep
 
+# Runtime job artifacts and profile snapshots
+data/jobs/
+data/profile_snapshots/
+
 # Environment
 .env

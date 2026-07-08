@@ -302,9 +302,9 @@ llm:
   # 大模型提供商；按你实际接入的服务修改。
   provider: "qwen"
   # 模型名；可写单个或多个候选模型。
-  model: ["qwen3.7-max-2026-05-17","qwen3.7-max-2026-06-08","qwen3.7-max-2026-05-20","qwen3.7-max"]
+  model: ["qwen3.7-max-preview","qwen3.7-max-2026-06-08","qwen3.7-max-2026-05-20","qwen3.7-max"]
   # 兼容 OpenAI 风格的接口地址。
-  url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  url: "https://ws-4eru7sgi4t75umeo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
   # 大模型 API Key；建议使用环境变量，例如 ${DASHSCOPE_API_KEY}。
   api_key: "${DASHSCOPE_API_KEY}"
 

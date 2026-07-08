@@ -1,0 +1,51 @@
+{
+  "status": "failed",
+  "result": {},
+  "error": {
+    "type": "external_dependency",
+    "message": "process completed with failures: failed=2",
+    "code": "provider_unavailable",
+    "retryable": true,
+    "result": {
+      "status": "error",
+      "message": "process completed with failures: failed=2",
+      "payload": {
+        "result": {
+          "processed": 4,
+          "skipped_dedup": 0,
+          "retried": 0,
+          "failed": 2,
+          "dead": 0,
+          "duration_ms": 854787,
+          "failure_details": [
+            {
+              "task_id": "e95cff37-f712-4f8c-b576-e8852b2f92f1",
+              "task_type": "article_ingested",
+              "fatal": false,
+              "retryable": true,
+              "error": "second repair is not allowed",
+              "error_type": "stage3_article_analysis",
+              "article_id": "6bf45ab0-1300-4afd-8459-7f14d16257e9",
+              "source_url": "https://www.tgb.cn/a/2kHhZfrihp7"
+            },
+            {
+              "task_id": "90b55036-06f6-4b5c-bb08-77c632b5669f",
+              "task_type": "article_ingested",
+              "fatal": false,
+              "retryable": true,
+              "error": "second repair is not allowed",
+              "error_type": "stage3_article_analysis",
+              "article_id": "7ddf1ec2-389a-458b-9f64-8efd5c067728",
+              "source_url": "https://www.tgb.cn/a/2mKUoZSjinS"
+            }
+          ],
+          "fatal_error": null,
+          "fatal_error_type": null,
+          "fatal_task_id": null,
+          "fatal_task_type": null
+        }
+      },
+      "warnings": []
+    }
+  }
+}

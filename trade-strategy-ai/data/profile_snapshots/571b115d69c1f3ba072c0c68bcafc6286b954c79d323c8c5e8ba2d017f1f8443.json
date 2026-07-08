@@ -1,0 +1,590 @@
+{
+  "profile_snapshot_id": "571b115d69c1f3ba072c0c68bcafc6286b954c79d323c8c5e8ba2d017f1f8443",
+  "profile_id": "V1",
+  "job_id": null,
+  "source": "profile",
+  "config_path": "",
+  "profile_hash": "571b115d69c1f3ba072c0c68bcafc6286b954c79d323c8c5e8ba2d017f1f8443",
+  "name": "V1",
+  "environment": "default",
+  "version": 8,
+  "sections": {
+    "api": {
+      "auth": {
+        "enabled": true,
+        "api_keys": [
+          "***"
+        ]
+      },
+      "host": "0.0.0.0",
+      "port": 8000,
+      "timeout_seconds": 300
+    },
+    "llm": {
+      "url": "https://ws-4eru7sgi4t75umeo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "model": [
+        "qwen3.7-max-2026-06-08",
+        "qwen3.7-max-2026-05-20",
+        "qwen3.7-max-preview",
+        "deepseek-v4-flash"
+      ],
+      "api_key": "***",
+      "provider": "qwen"
+    },
+    "data": {
+      "providers": [
+        "akshare"
+      ],
+      "mock_prices": {},
+      "market_data_cache_dir": "data/processed/market_data",
+      "market_universe_snapshot_dir": "data/market_universe/snapshots"
+    },
+    "risk": {
+      "industry": {
+        "max_sector_pct": 0.4,
+        "cache_ttl_hours": 24,
+        "max_industry_pct": 0.3
+      },
+      "portfolio": {
+        "var_window": 20,
+        "max_var_pct": 0.1,
+        "max_leverage": 1,
+        "max_volatility": 0.3,
+        "var_confidence": 0.95
+      },
+      "stop_loss": {
+        "mode": "volatility",
+        "fixed_pct": 0.05,
+        "atr_window": 14,
+        "drawdown_pct": 0.1,
+        "max_hold_days": 10,
+        "atr_multiplier": 2
+      },
+      "take_profit": {
+        "mode": "scaling",
+        "fixed_pct": 0.15,
+        "trailing_pct": 0.05,
+        "scaling_levels": [
+          {
+            "close_pct": 0.5,
+            "target_pct": 0.05
+          },
+          {
+            "close_pct": 0.3,
+            "target_pct": 0.1
+          },
+          {
+            "close_pct": 0.2,
+            "target_pct": 0.2
+          }
+        ],
+        "target_hold_days": 5
+      },
+      "concentration": {
+        "max_single_position_pct": 0.2,
+        "max_single_position_amount": 50000
+      },
+      "position_manager": {
+        "mode": "fixed_ratio",
+        "fixed_amount": 10000,
+        "fixed_ratio_pct": 0.05,
+        "max_position_pct": 0.2,
+        "target_volatility": 0.15,
+        "max_single_position": 50000
+      },
+      "simulated_account": {
+        "enabled": true,
+        "persist_to_db": true,
+        "initial_capital": 100000
+      }
+    },
+    "crawl": {
+      "auth": {
+        "tgb.cn": {
+          "mode": "cookie",
+          "cookie": "***"
+        }
+      },
+      "sources": [
+        {
+          "site": "tgb.cn",
+          "source": "tgb",
+          "enabled": true,
+          "list_url": "https://www.tgb.cn/user/blog/moreTopic",
+          "author_id": "10461311",
+          "render_js": false,
+          "trader_id": "javxsp",
+          "author_name": "javxsp"
+        }
+      ],
+      "throttling": {
+        "backoff_seconds": [
+          5,
+          15,
+          30
+        ],
+        "max_interval_seconds": 5,
+        "min_interval_seconds": 1
+      }
+    },
+    "kaipan": {
+      "token": "***",
+      "user_id": "3807176",
+      "data_dir": "data/kaipan",
+      "schema_dir": "src/providers/kaipan_schema",
+      "max_retries": 3,
+      "fetch_schedule": {
+        "post_close": "18:00",
+        "pre_market": "09:25"
+      },
+      "default_headers": {
+        "Connection": "Keep-Alive",
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Accept-Encoding": "gzip"
+      },
+      "trading_calendar": {
+        "source": "akshare"
+      },
+      "retry_status_codes": [
+        403,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "retry_backoff_seconds": [
+        1,
+        2,
+        4
+      ],
+      "min_request_interval_seconds": 1
+    },
+    "akshare": {
+      "max_retries": 2,
+      "fallback_enabled": true,
+      "retry_backoff_seconds": [
+        1,
+        3
+      ],
+      "min_request_interval_seconds": 1
+    },
+    "persona": {
+      "top_k": 2,
+      "enable": false,
+      "objective": "return_max",
+      "clusters_path": null,
+      "market_state_path": null
+    },
+    "runtime": {
+      "output_dir": "data/processed/phase0"
+    },
+    "traders": [
+      {
+        "enabled": true,
+        "trader_id": "javxsp",
+        "memory_path": null,
+        "display_name": "javxsp",
+        "article_sources": {
+          "rss": [],
+          "urls": [],
+          "site_type": null,
+          "crawl_frequency_minutes": null
+        },
+        "default_stop_pct": 0.03,
+        "style_preference": "moderate",
+        "trade_log_sources": {
+          "csv_paths": [],
+          "account_ids": []
+        },
+        "default_target_pct": 0.06
+      }
+    ],
+    "alerting": {
+      "wecom": {
+        "webhook_url": ""
+      },
+      "feishu": {
+        "webhook_url": ""
+      },
+      "channel": "dingtalk",
+      "enabled": false,
+      "dingtalk": {
+        "secret": "",
+        "webhook_url": ""
+      },
+      "min_level": "WARNING",
+      "aggregation": {
+        "max_count": 100,
+        "window_minutes": 60
+      },
+      "console_output": true
+    },
+    "database": {
+      "url": "postgresql+asyncpg://trade:***@localhost:5432/trade_strategy_ai",
+      "echo": false,
+      "pool_size": 10,
+      "max_overflow": 20,
+      "pool_recycle": 1800,
+      "pool_timeout": 30
+    },
+    "run_mode": "interactive",
+    "schedule": {
+      "enable": false,
+      "pre_market_time": "09:25",
+      "after_close_time": "18:00"
+    },
+    "strategy": {
+      "feature_engine": {
+        "mode": "realtime",
+        "compute_batch": true
+      },
+      "rule_evaluator": {
+        "dsl_executor": {
+          "mode": "all",
+          "timeout_ms": 100
+        }
+      },
+      "signal_synthesizer": {
+        "mode": "priority",
+        "weights": {
+          "exit": 1.2,
+          "risk": 2,
+          "entry": 1,
+          "filter": 1.5,
+          "sizing": 1
+        },
+        "priorities": [
+          "risk",
+          "filter",
+          "exit",
+          "sizing",
+          "entry"
+        ]
+      }
+    },
+    "timezone": "Asia/Shanghai",
+    "evaluation": {
+      "loss_trigger": true,
+      "trade_constraint": {
+        "board_type": "auto",
+        "t_plus_one": true,
+        "limit_up_pct": null,
+        "limit_down_pct": null
+      },
+      "min_expected_return": 0.05
+    },
+    "pre_market_formal_flow": {
+      "enabled": true,
+      "market_universe_slot": "09-25"
+    }
+  },
+  "secret_refs": {
+    "llm.api_key": "masked",
+    "database.url": "masked",
+    "kaipan.token": "masked",
+    "api.auth.api_keys": "masked",
+    "crawl.auth.tgb.cn.cookie": "masked"
+  },
+  "validation_status": "validated",
+  "masked_snapshot": {
+    "api": {
+      "auth": {
+        "enabled": true,
+        "api_keys": [
+          "***"
+        ]
+      },
+      "host": "0.0.0.0",
+      "port": 8000,
+      "timeout_seconds": 300
+    },
+    "llm": {
+      "url": "https://ws-4eru7sgi4t75umeo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "model": [
+        "qwen3.7-max-2026-06-08",
+        "qwen3.7-max-2026-05-20",
+        "qwen3.7-max-preview",
+        "deepseek-v4-flash"
+      ],
+      "api_key": "***",
+      "provider": "qwen"
+    },
+    "data": {
+      "providers": [
+        "akshare"
+      ],
+      "mock_prices": {},
+      "market_data_cache_dir": "data/processed/market_data",
+      "market_universe_snapshot_dir": "data/market_universe/snapshots"
+    },
+    "risk": {
+      "industry": {
+        "max_sector_pct": 0.4,
+        "cache_ttl_hours": 24,
+        "max_industry_pct": 0.3
+      },
+      "portfolio": {
+        "var_window": 20,
+        "max_var_pct": 0.1,
+        "max_leverage": 1,
+        "max_volatility": 0.3,
+        "var_confidence": 0.95
+      },
+      "stop_loss": {
+        "mode": "volatility",
+        "fixed_pct": 0.05,
+        "atr_window": 14,
+        "drawdown_pct": 0.1,
+        "max_hold_days": 10,
+        "atr_multiplier": 2
+      },
+      "take_profit": {
+        "mode": "scaling",
+        "fixed_pct": 0.15,
+        "trailing_pct": 0.05,
+        "scaling_levels": [
+          {
+            "close_pct": 0.5,
+            "target_pct": 0.05
+          },
+          {
+            "close_pct": 0.3,
+            "target_pct": 0.1
+          },
+          {
+            "close_pct": 0.2,
+            "target_pct": 0.2
+          }
+        ],
+        "target_hold_days": 5
+      },
+      "concentration": {
+        "max_single_position_pct": 0.2,
+        "max_single_position_amount": 50000
+      },
+      "position_manager": {
+        "mode": "fixed_ratio",
+        "fixed_amount": 10000,
+        "fixed_ratio_pct": 0.05,
+        "max_position_pct": 0.2,
+        "target_volatility": 0.15,
+        "max_single_position": 50000
+      },
+      "simulated_account": {
+        "enabled": true,
+        "persist_to_db": true,
+        "initial_capital": 100000
+      }
+    },
+    "crawl": {
+      "auth": {
+        "tgb.cn": {
+          "mode": "cookie",
+          "cookie": "***"
+        }
+      },
+      "sources": [
+        {
+          "site": "tgb.cn",
+          "source": "tgb",
+          "enabled": true,
+          "list_url": "https://www.tgb.cn/user/blog/moreTopic",
+          "author_id": "10461311",
+          "render_js": false,
+          "trader_id": "javxsp",
+          "author_name": "javxsp"
+        }
+      ],
+      "throttling": {
+        "backoff_seconds": [
+          5,
+          15,
+          30
+        ],
+        "max_interval_seconds": 5,
+        "min_interval_seconds": 1
+      }
+    },
+    "kaipan": {
+      "token": "***",
+      "user_id": "3807176",
+      "data_dir": "data/kaipan",
+      "schema_dir": "src/providers/kaipan_schema",
+      "max_retries": 3,
+      "fetch_schedule": {
+        "post_close": "18:00",
+        "pre_market": "09:25"
+      },
+      "default_headers": {
+        "Connection": "Keep-Alive",
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; SHARK PRS-A0 Build/PQ3A.190605.01141736)",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Accept-Encoding": "gzip"
+      },
+      "trading_calendar": {
+        "source": "akshare"
+      },
+      "retry_status_codes": [
+        403,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "retry_backoff_seconds": [
+        1,
+        2,
+        4
+      ],
+      "min_request_interval_seconds": 1
+    },
+    "akshare": {
+      "max_retries": 2,
+      "fallback_enabled": true,
+      "retry_backoff_seconds": [
+        1,
+        3
+      ],
+      "min_request_interval_seconds": 1
+    },
+    "persona": {
+      "top_k": 2,
+      "enable": false,
+      "objective": "return_max",
+      "clusters_path": null,
+      "market_state_path": null
+    },
+    "runtime": {
+      "output_dir": "data/processed/phase0"
+    },
+    "traders": [
+      {
+        "enabled": true,
+        "trader_id": "javxsp",
+        "memory_path": null,
+        "display_name": "javxsp",
+        "article_sources": {
+          "rss": [],
+          "urls": [],
+          "site_type": null,
+          "crawl_frequency_minutes": null
+        },
+        "default_stop_pct": 0.03,
+        "style_preference": "moderate",
+        "trade_log_sources": {
+          "csv_paths": [],
+          "account_ids": []
+        },
+        "default_target_pct": 0.06
+      }
+    ],
+    "alerting": {
+      "wecom": {
+        "webhook_url": ""
+      },
+      "feishu": {
+        "webhook_url": ""
+      },
+      "channel": "dingtalk",
+      "enabled": false,
+      "dingtalk": {
+        "secret": "",
+        "webhook_url": ""
+      },
+      "min_level": "WARNING",
+      "aggregation": {
+        "max_count": 100,
+        "window_minutes": 60
+      },
+      "console_output": true
+    },
+    "database": {
+      "url": "postgresql+asyncpg://trade:***@localhost:5432/trade_strategy_ai",
+      "echo": false,
+      "pool_size": 10,
+      "max_overflow": 20,
+      "pool_recycle": 1800,
+      "pool_timeout": 30
+    },
+    "run_mode": "interactive",
+    "schedule": {
+      "enable": false,
+      "pre_market_time": "09:25",
+      "after_close_time": "18:00"
+    },
+    "strategy": {
+      "feature_engine": {
+        "mode": "realtime",
+        "compute_batch": true
+      },
+      "rule_evaluator": {
+        "dsl_executor": {
+          "mode": "all",
+          "timeout_ms": 100
+        }
+      },
+      "signal_synthesizer": {
+        "mode": "priority",
+        "weights": {
+          "exit": 1.2,
+          "risk": 2,
+          "entry": 1,
+          "filter": 1.5,
+          "sizing": 1
+        },
+        "priorities": [
+          "risk",
+          "filter",
+          "exit",
+          "sizing",
+          "entry"
+        ]
+      }
+    },
+    "timezone": "Asia/Shanghai",
+    "evaluation": {
+      "loss_trigger": true,
+      "trade_constraint": {
+        "board_type": "auto",
+        "t_plus_one": true,
+        "limit_up_pct": null,
+        "limit_down_pct": null
+      },
+      "min_expected_return": 0.05
+    },
+    "pre_market_formal_flow": {
+      "enabled": true,
+      "market_universe_slot": "09-25"
+    }
+  },
+  "masked_sections": [
+    "akshare",
+    "alerting",
+    "api",
+    "crawl",
+    "data",
+    "database",
+    "evaluation",
+    "kaipan",
+    "llm",
+    "persona",
+    "pre_market_formal_flow",
+    "risk",
+    "run_mode",
+    "runtime",
+    "schedule",
+    "strategy",
+    "timezone",
+    "traders"
+  ],
+  "created_by": "web",
+  "created_at": "2026-07-04T13:48:49.688121+00:00",
+  "updated_at": "2026-07-06T15:26:06.427998+00:00",
+  "archived_at": null,
+  "captured_at": "2026-07-06T15:26:06.435907+00:00",
+  "snapshot_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/profile_snapshots/571b115d69c1f3ba072c0c68bcafc6286b954c79d323c8c5e8ba2d017f1f8443.json",
+  "profile_snapshot_path": "/Users/wanghui/Documents/Vibe/Trade/trade-strategy-ai/data/profile_snapshots/571b115d69c1f3ba072c0c68bcafc6286b954c79d323c8c5e8ba2d017f1f8443.json"
+}

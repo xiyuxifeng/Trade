@@ -11,6 +11,7 @@ import pytest
 
 from src.pipeline.tasks.process_tasks import (
     ProcessFatalError,
+    ProcessTaskError,
     ProcessTasksStats,
     _create_handlers,
     _dedup_by_article_id,
@@ -146,6 +147,36 @@ class TestCreateHandlers:
         with pytest.raises(ProcessFatalError, match="article analysis was not persisted"):
             await handlers["article_ingested"]({"article_id": article_id})
 
+    @pytest.mark.asyncio
+    async def test_article_ingested_handler_marks_stage3_failure_as_article_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from src.services.stage3_single_article_service import Stage3SingleArticleError
+
+        mock_config = MagicMock()
+
+        class _Service:
+            def __init__(self, **_kwargs: object) -> None:
+                pass
+
+            async def run_analysis(self, **_kwargs: object) -> object:
+                raise Stage3SingleArticleError("second repair is not allowed")
+
+        monkeypatch.setattr(
+            "src.pipeline.tasks.process_tasks.Stage3SingleArticleService",
+            _Service,
+        )
+
+        handlers = _create_handlers(mock_config, version="v1")
+        article_id = str(uuid4())
+
+        with pytest.raises(ProcessTaskError, match="second repair is not allowed") as exc_info:
+            await handlers["article_ingested"]({"article_id": article_id})
+
+        assert exc_info.value.details["error_type"] == "stage3_article_analysis"
+        assert exc_info.value.retryable is False
+
 
 class TestDedupByArticleId:
     def test_dedup_keeps_latest(self) -> None:
@@ -263,6 +294,44 @@ async def test_run_process_tasks_counts_failed_tasks(tmp_path: Path, monkeypatch
 
     assert stats.failed == 1
     assert stats.fatal_error is None
+
+
+@pytest.mark.asyncio
+async def test_run_process_tasks_continues_after_nonfatal_article_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pending_path = tmp_path / "pending_tasks.jsonl"
+    pending_path.write_text(
+        '{"task_id":"1","type":"article_ingested","details":{"article_id":"a"},"created_at":"2026-01-01"}\n'
+        '{"task_id":"2","type":"article_ingested","details":{"article_id":"b"},"created_at":"2026-01-02"}\n',
+        encoding="utf-8",
+    )
+
+    async def fake_handler(details: object) -> None:
+        if isinstance(details, dict) and details.get("article_id") == "a":
+            raise ProcessTaskError(
+                "second repair is not allowed",
+                task={"type": "article_ingested", "details": {"article_id": "a"}},
+                details={"error_type": "stage3_article_analysis", "article_id": "a"},
+            )
+
+    def fake_create_handlers(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"article_ingested": fake_handler}
+
+    monkeypatch.setattr("src.pipeline.tasks.process_tasks._create_handlers", fake_create_handlers)
+
+    failed_path = tmp_path / "failed_tasks.jsonl"
+    stats = await run_process_tasks(
+        config=SimpleNamespace(llm=SimpleNamespace(provider=None, model=None, url=None, api_key=None)),
+        pending_path=pending_path,
+        failed_path=failed_path,
+        dead_path=tmp_path / "dead_tasks.jsonl",
+    )
+
+    assert stats.failed == 1
+    assert stats.processed == 1
+    assert stats.fatal_error is None
+    failed_content = failed_path.read_text(encoding="utf-8")
+    assert "second repair is not allowed" in failed_content
+    assert "stage3_article_analysis" in failed_content
 
 
 @pytest.mark.asyncio

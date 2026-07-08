@@ -15,6 +15,14 @@ export type ArticleRecord = {
   like_count: number;
   bookmark_count: number;
   comment_count: number;
+  processing_status?: 'processed' | 'unprocessed' | 'failed' | 'manual_review_required' | 'ignored';
+  failure_message?: string | null;
+  failure_type?: string | null;
+  failed_at?: string | null;
+  failed_retry_count?: number | null;
+  processing_note?: string | null;
+  processing_updated_at?: string | null;
+  processing_updated_by?: string | null;
 };
 
 export type ArticleListResponse = {

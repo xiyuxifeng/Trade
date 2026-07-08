@@ -9,7 +9,7 @@ type ArticleListQuery = {
   trader_id?: string;
   published_after?: string;
   published_before?: string;
-  processing_status?: 'all' | 'processed' | 'unprocessed';
+  processing_status?: 'all' | 'processed' | 'unprocessed' | 'failed' | 'manual_review_required' | 'ignored';
 };
 
 type ArticleFilterOptionsQuery = Omit<ArticleListQuery, 'page' | 'page_size'>;

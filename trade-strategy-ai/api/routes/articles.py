@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from io import BytesIO
 from collections.abc import Iterable
 from pathlib import Path
+from uuid import UUID
 
 from sqlalchemy import exists, func, or_, select
 from typing import Any
@@ -21,6 +23,7 @@ from src.common.paths import resolve_project_path
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleStructure
+from src.services import article_processing_state_service as article_processing_state
 from src.services.config_profile_service import ConfigProfileService
 
 router = APIRouter(prefix="/articles", tags=["articles"])
@@ -204,6 +207,9 @@ def _apply_article_filters(
     published_after: datetime | None = None,
     published_before: datetime | None = None,
     processing_status: str | None = None,
+    failed_article_ids: set[str] | None = None,
+    manual_review_article_ids: set[str] | None = None,
+    ignored_article_ids: set[str] | None = None,
     config: Any | None = None,
     exclude_fields: set[str] | frozenset[str] = frozenset(),
 ):
@@ -237,10 +243,22 @@ def _apply_article_filters(
 
     if processing_status and "processing_status" not in excluded:
         processed_exists = exists(select(1).where(ArticleStructure.article_id == BlogArticle.id))
+        failed_uuid_values = [UUID(article_id) for article_id in sorted(failed_article_ids or set())]
+        failed_condition = BlogArticle.id.in_(failed_uuid_values) if failed_uuid_values else BlogArticle.id.in_([])
+        manual_review_uuid_values = [UUID(article_id) for article_id in sorted(manual_review_article_ids or set())]
+        manual_review_condition = BlogArticle.id.in_(manual_review_uuid_values) if manual_review_uuid_values else BlogArticle.id.in_([])
+        ignored_uuid_values = [UUID(article_id) for article_id in sorted(ignored_article_ids or set())]
+        ignored_condition = BlogArticle.id.in_(ignored_uuid_values) if ignored_uuid_values else BlogArticle.id.in_([])
         if processing_status == "processed":
-            condition = processed_exists
+            condition = processed_exists & (~manual_review_condition) & (~ignored_condition)
+        elif processing_status == "failed":
+            condition = failed_condition & (~processed_exists) & (~manual_review_condition) & (~ignored_condition)
+        elif processing_status == "manual_review_required":
+            condition = manual_review_condition
+        elif processing_status == "ignored":
+            condition = ignored_condition
         elif processing_status == "unprocessed":
-            condition = ~processed_exists
+            condition = (~processed_exists) & (~failed_condition) & (~manual_review_condition) & (~ignored_condition)
         else:
             condition = None
 
@@ -264,7 +282,7 @@ async def list_articles(
     trader_id: str | None = None,
     published_after: datetime | None = None,
     published_before: datetime | None = None,
-    processing_status: str = Query(default="all", pattern="^(all|processed|unprocessed)$"),
+    processing_status: str = Query(default="all", pattern="^(all|processed|unprocessed|failed|manual_review_required|ignored)$"),
     _: str = Depends(verify_api_key),
 ):
     """List articles with pagination and filters."""
@@ -274,6 +292,15 @@ async def list_articles(
             return FileResponse(web_index)
 
     offset = (page - 1) * page_size
+    failed_articles = article_processing_state.load_failed_article_records()
+    processing_state_records = article_processing_state.load_article_processing_state_records()
+    failed_article_ids = set(failed_articles.keys())
+    manual_review_article_ids = {
+        article_id for article_id, record in processing_state_records.items() if record.get("processing_status") == "manual_review_required"
+    }
+    ignored_article_ids = {
+        article_id for article_id, record in processing_state_records.items() if record.get("processing_status") == "ignored"
+    }
 
     session_factory = async_session_factory()
     async with session_factory() as session:
@@ -288,6 +315,9 @@ async def list_articles(
             published_after=published_after,
             published_before=published_before,
             processing_status=processing_status,
+            failed_article_ids=failed_article_ids,
+            manual_review_article_ids=manual_review_article_ids,
+            ignored_article_ids=ignored_article_ids,
         )
 
         query = query.order_by(
@@ -301,9 +331,31 @@ async def list_articles(
 
         result = await session.execute(query)
         articles = result.scalars().all()
+        article_ids = [article.id for article in articles]
+        processed_ids: set[str] = set()
+        if article_ids:
+            processed_rows = await session.execute(
+                select(ArticleStructure.article_id).where(ArticleStructure.article_id.in_(article_ids)).distinct()
+            )
+            processed_ids = {str(article_id) for article_id in processed_rows.scalars().all()}
 
         items = [
-            ArticleResponse.model_validate(a).model_dump(mode="json")
+            ArticleResponse.model_validate(
+                {
+                    **ArticleResponse.model_validate(a).model_dump(mode="json"),
+                    "processing_status": (
+                        processing_state_records.get(str(a.id), {}).get("processing_status")
+                        or ("processed" if str(a.id) in processed_ids else ("failed" if str(a.id) in failed_articles else "unprocessed"))
+                    ),
+                    "failure_message": failed_articles.get(str(a.id), {}).get("failure_message"),
+                    "failure_type": failed_articles.get(str(a.id), {}).get("failure_type"),
+                    "failed_at": failed_articles.get(str(a.id), {}).get("failed_at"),
+                    "failed_retry_count": failed_articles.get(str(a.id), {}).get("failed_retry_count"),
+                    "processing_note": processing_state_records.get(str(a.id), {}).get("processing_note"),
+                    "processing_updated_at": processing_state_records.get(str(a.id), {}).get("processing_updated_at"),
+                    "processing_updated_by": processing_state_records.get(str(a.id), {}).get("processing_updated_by"),
+                }
+            ).model_dump(mode="json")
             for a in articles
         ]
 

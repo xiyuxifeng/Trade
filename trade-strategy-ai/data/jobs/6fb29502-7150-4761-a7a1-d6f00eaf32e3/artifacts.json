@@ -1,0 +1,89 @@
+[
+  {
+    "kind": "result-json",
+    "title": "result.json",
+    "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3",
+    "step_id": null,
+    "summary": null,
+    "metadata": {
+      "job_type": "process"
+    },
+    "created_at": "2026-07-06T14:29:54.001183Z",
+    "size_bytes": 914,
+    "visibility": "internal",
+    "artifact_id": "b421b64b3bdab053",
+    "dataset_ref": null,
+    "storage_ref": {
+      "uri": null,
+      "source": "file",
+      "metadata": {
+        "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3"
+      },
+      "logical_id": "b421b64b3bdab053",
+      "relative_path": "result.json"
+    },
+    "workflow_id": null,
+    "snapshot_ref": null,
+    "download_token": null,
+    "safe_download_url": "/api/ui/v1/artifacts/b421b64b3bdab053/download",
+    "config_snapshot_ref": null
+  },
+  {
+    "kind": "result-json",
+    "title": "result.json",
+    "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3",
+    "step_id": null,
+    "summary": null,
+    "metadata": {
+      "job_type": "process"
+    },
+    "created_at": "2026-07-06T14:31:12.649703Z",
+    "size_bytes": 913,
+    "visibility": "internal",
+    "artifact_id": "b421b64b3bdab053",
+    "dataset_ref": null,
+    "storage_ref": {
+      "uri": null,
+      "source": "file",
+      "metadata": {
+        "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3"
+      },
+      "logical_id": "b421b64b3bdab053",
+      "relative_path": "result.json"
+    },
+    "workflow_id": null,
+    "snapshot_ref": null,
+    "download_token": null,
+    "safe_download_url": "/api/ui/v1/artifacts/b421b64b3bdab053/download",
+    "config_snapshot_ref": null
+  },
+  {
+    "kind": "result-json",
+    "title": "result.json",
+    "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3",
+    "step_id": null,
+    "summary": null,
+    "metadata": {
+      "job_type": "process"
+    },
+    "created_at": "2026-07-06T14:32:43.018614Z",
+    "size_bytes": 913,
+    "visibility": "internal",
+    "artifact_id": "b421b64b3bdab053",
+    "dataset_ref": null,
+    "storage_ref": {
+      "uri": null,
+      "source": "file",
+      "metadata": {
+        "job_id": "6fb29502-7150-4761-a7a1-d6f00eaf32e3"
+      },
+      "logical_id": "b421b64b3bdab053",
+      "relative_path": "result.json"
+    },
+    "workflow_id": null,
+    "snapshot_ref": null,
+    "download_token": null,
+    "safe_download_url": "/api/ui/v1/artifacts/b421b64b3bdab053/download",
+    "config_snapshot_ref": null
+  }
+]

@@ -71,7 +71,7 @@ class LLMClientConfig:
     model: str | list[str] | None  # 支持单模型或多模型数组
     url: str | None
     api_key: str | None
-    timeout_seconds: float = 60.0
+    timeout_seconds: float = 300.0
 
 
 def _env_or(value: str | None, env_key: str) -> str | None:

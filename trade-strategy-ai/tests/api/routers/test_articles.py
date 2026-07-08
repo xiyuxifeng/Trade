@@ -311,6 +311,86 @@ async def test_article_list_uses_stable_sorting_and_processing_filters(
 
 
 @pytest.mark.asyncio
+async def test_article_list_marks_failed_articles_and_supports_failed_filter(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_articles(article_session_factory)
+
+    monkeypatch.setattr(article_routes, "async_session_factory", lambda: article_session_factory)
+    monkeypatch.setattr(
+        article_routes.article_processing_state,
+        "load_failed_article_records",
+        lambda: {
+            "11111111-1111-1111-1111-111111111111": {
+                "failure_message": "second repair is not allowed",
+                "failure_type": "stage3_article_analysis",
+                "failed_at": "2026-07-06T22:28:40+08:00",
+                "failed_retry_count": 1,
+            }
+        },
+    )
+    monkeypatch.setattr(article_routes.article_processing_state, "load_article_processing_state_records", lambda: {})
+
+    failed_response = await client.get("/articles?processing_status=failed", headers={"Accept": "application/json"})
+    assert failed_response.status_code == 200
+    failed_items = failed_response.json()["items"]
+    assert [item["id"] for item in failed_items] == ["11111111-1111-1111-1111-111111111111"]
+    assert failed_items[0]["processing_status"] == "failed"
+    assert failed_items[0]["failure_message"] == "second repair is not allowed"
+    assert failed_items[0]["failure_type"] == "stage3_article_analysis"
+
+    unprocessed_response = await client.get("/articles?processing_status=unprocessed", headers={"Accept": "application/json"})
+    assert unprocessed_response.status_code == 200
+    assert unprocessed_response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_article_list_marks_manual_review_and_ignored_articles(
+    client: AsyncClient,
+    article_session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_articles(article_session_factory)
+
+    monkeypatch.setattr(article_routes, "async_session_factory", lambda: article_session_factory)
+    monkeypatch.setattr(article_routes.article_processing_state, "load_failed_article_records", lambda: {})
+    monkeypatch.setattr(
+        article_routes.article_processing_state,
+        "load_article_processing_state_records",
+        lambda: {
+            "11111111-1111-1111-1111-111111111111": {
+                "processing_status": "manual_review_required",
+                "processing_note": "需要人工补录",
+                "processing_updated_at": "2026-07-06T22:45:00+08:00",
+                "processing_updated_by": "operator-user",
+            },
+            "22222222-2222-2222-2222-222222222222": {
+                "processing_status": "ignored",
+                "processing_note": "非目标文章",
+                "processing_updated_at": "2026-07-06T22:46:00+08:00",
+                "processing_updated_by": "operator-user",
+            },
+        },
+    )
+
+    manual_response = await client.get("/articles?processing_status=manual_review_required", headers={"Accept": "application/json"})
+    assert manual_response.status_code == 200
+    manual_items = manual_response.json()["items"]
+    assert [item["id"] for item in manual_items] == ["11111111-1111-1111-1111-111111111111"]
+    assert manual_items[0]["processing_status"] == "manual_review_required"
+    assert manual_items[0]["processing_note"] == "需要人工补录"
+
+    ignored_response = await client.get("/articles?processing_status=ignored", headers={"Accept": "application/json"})
+    assert ignored_response.status_code == 200
+    ignored_items = ignored_response.json()["items"]
+    assert [item["id"] for item in ignored_items] == ["22222222-2222-2222-2222-222222222222"]
+    assert ignored_items[0]["processing_status"] == "ignored"
+    assert ignored_items[0]["processing_note"] == "非目标文章"
+
+
+@pytest.mark.asyncio
 async def test_article_quality_summary_filters_by_current_profile(
     client: AsyncClient,
     article_session_factory: async_sessionmaker[AsyncSession],

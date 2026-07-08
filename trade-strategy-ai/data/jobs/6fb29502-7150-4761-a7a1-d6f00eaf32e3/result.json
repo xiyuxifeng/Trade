@@ -1,0 +1,41 @@
+{
+  "status": "failed",
+  "result": {},
+  "error": {
+    "type": "external_dependency",
+    "message": "second repair is not allowed",
+    "code": "provider_unavailable",
+    "retryable": true,
+    "result": {
+      "status": "error",
+      "message": "second repair is not allowed",
+      "payload": {
+        "result": {
+          "processed": 0,
+          "skipped_dedup": 0,
+          "retried": 0,
+          "failed": 1,
+          "dead": 0,
+          "duration_ms": 85100,
+          "failure_details": [
+            {
+              "task_id": "849b31b5-fdb6-432d-83db-f2370499b065",
+              "task_type": "article_ingested",
+              "fatal": true,
+              "retryable": false,
+              "error": "second repair is not allowed",
+              "error_type": "stage3_article_analysis",
+              "article_id": "6658ced7-1a4f-4594-a548-3674a3083376",
+              "source_url": "https://www.tgb.cn/a/2k8fMtzWC9R"
+            }
+          ],
+          "fatal_error": "second repair is not allowed",
+          "fatal_error_type": "stage3_article_analysis",
+          "fatal_task_id": "849b31b5-fdb6-432d-83db-f2370499b065",
+          "fatal_task_type": "article_ingested"
+        }
+      },
+      "warnings": []
+    }
+  }
+}

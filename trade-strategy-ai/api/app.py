@@ -25,6 +25,7 @@ from api.routers.ui import job_audits_router as ui_job_audits_router
 from api.routers.ui import jobs_router as ui_jobs_router
 from api.routers.ui import data_health_router as ui_data_health_router
 from api.routers.ui import data_audits_router as ui_data_audits_router
+from api.routers.ui import article_analysis_router as ui_article_analysis_router
 from api.routers.ui import article_metadata_router as ui_article_metadata_router
 from api.routers.ui import kaipan_router as ui_kaipan_router
 from api.routers.ui import legacy_system_router as ui_legacy_system_router
@@ -227,6 +228,7 @@ def create_app() -> FastAPI:
     app.include_router(ui_kaipan_router)
     app.include_router(ui_data_health_router)
     app.include_router(ui_data_audits_router)
+    app.include_router(ui_article_analysis_router)
     app.include_router(ui_article_metadata_router)
     app.include_router(articles_router)
     app.include_router(trades_router)

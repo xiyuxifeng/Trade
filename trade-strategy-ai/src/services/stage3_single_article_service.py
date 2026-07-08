@@ -305,6 +305,7 @@ def determine_automatic_review(candidate: RuleCandidate) -> AutomaticReviewResul
     manual_review_required = bool(quantification.get("manual_review_required"))
 
     review_reasons: list[str] = []
+    trace_reasons: list[str] = []
     if heavy_ambiguous_terms:
         review_reasons.append(f"存在重度模糊词：{', '.join(heavy_ambiguous_terms)}")
     if core_missing_fields:
@@ -318,12 +319,12 @@ def determine_automatic_review(candidate: RuleCandidate) -> AutomaticReviewResul
     if manual_review_required and not has_relaxable_uncertainty:
         review_reasons.append("量化条件仍需人工确认")
     elif manual_review_required:
-        review_reasons.append("抽取层标记需人工复核，但未命中强风险门禁，保留追踪")
+        trace_reasons.append("抽取层标记需人工复核，但未命中强风险门禁，保留追踪")
 
     if review_reasons:
         return AutomaticReviewResult(
             status="needs_human_review",
-            reasons=review_reasons,
+            reasons=review_reasons + trace_reasons,
             risk_level="medium",
             backtestability_status=backtestability_status,
             kaipan_dependency=kaipan_dependency,
@@ -337,6 +338,7 @@ def determine_automatic_review(candidate: RuleCandidate) -> AutomaticReviewResul
         reasons.append(f"含非核心缺失字段：{', '.join(non_core_missing_fields)}；保留追踪但不单独触发人工")
     if risk_controls:
         reasons.append("包含风险控制条目；未发现缺失核心参数，保留追踪")
+    reasons.extend(trace_reasons)
     if manual_review_required:
         reasons.append("抽取层标记需人工复核，但仅命中可放行不确定性")
     if backtestability_status == "partially_executable":

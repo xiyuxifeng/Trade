@@ -112,10 +112,10 @@ def _extract_texts(values: Any, *, parent_key: str | None = None) -> list[str]:
     if isinstance(values, str):
         value = values.strip()
         return [f"{parent_key}:{value}" if parent_key and value else value] if value else []
-    if isinstance(values, (int, float)):
-        return [f"{parent_key}:{values}" if parent_key else str(values)]
     if isinstance(values, bool):
         return [parent_key] if parent_key and values else []
+    if isinstance(values, (int, float)):
+        return [f"{parent_key}:{values}" if parent_key else str(values)]
     if isinstance(values, list):
         texts: list[str] = []
         for value in values:

@@ -11,7 +11,7 @@ from src.domain.enums import FormalLifecycleState
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
-from src.services.article_review_policy import AutomaticReviewResult, AutomaticReviewStatus, determine_automatic_review
+from src.services.article_review_policy import AutomaticReviewResult, determine_automatic_review
 from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceService
 from src.services.rule_lifecycle_service import RuleLifecycleService, RuleLifecycleTransitionBlockedError
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService

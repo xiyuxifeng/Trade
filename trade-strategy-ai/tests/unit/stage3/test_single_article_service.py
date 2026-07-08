@@ -15,6 +15,7 @@ def _candidate_payload(
     missing_fields: list[str] | None = None,
     ambiguous_terms: list[str] | None = None,
     data_dependencies: list[str] | None = None,
+    risk_controls: object | None = None,
     evidence: list[dict] | None = None,
 ) -> object:
     return type(
@@ -37,7 +38,7 @@ def _candidate_payload(
                     "ambiguous_terms": ambiguous_terms or [],
                 },
                 "market_state_applicability": {"status": "not_declared"},
-                "risk_controls": [],
+                "risk_controls": risk_controls or [],
                 "data_dependencies": data_dependencies or ["ohlcv_1d"],
                 "evidence": evidence if evidence is not None else [{"quote": "原文", "supports": "condition"}],
             },
@@ -70,6 +71,16 @@ def test_automatic_review_allows_light_ambiguous_terms_when_candidate_is_complet
     assert "抽取层标记需人工复核，但仅命中可放行不确定性" in result.reasons
 
 
+def test_automatic_review_requires_human_review_when_manual_review_reason_is_unknown() -> None:
+    result = determine_automatic_review(
+        _candidate_payload(manual_review_required=True)
+    )
+
+    assert result.status == "needs_human_review"
+    assert result.risk_level == "medium"
+    assert "抽取层标记需人工复核，且未提供可放行的轻度原因" in result.reasons
+
+
 def test_automatic_review_requires_human_review_for_partial_or_kaipan_candidates() -> None:
     result = determine_automatic_review(
         _candidate_payload(
@@ -98,6 +109,30 @@ def test_automatic_review_requires_human_review_for_heavy_ambiguous_terms() -> N
     assert result.status == "needs_human_review"
     assert result.risk_level == "medium"
     assert "存在重度模糊词：止损边界不明确, 仓位看情况" in result.reasons
+
+
+def test_automatic_review_requires_human_review_for_subjective_risk_controls() -> None:
+    result = determine_automatic_review(
+        _candidate_payload(risk_controls=["严格止损", "仓位看情况"])
+    )
+
+    assert result.status == "needs_human_review"
+    assert result.risk_level == "medium"
+    assert "风险控制边界不明确：严格止损, 仓位看情况" in result.reasons
+
+
+def test_automatic_review_allows_numeric_risk_controls_with_trace_reason() -> None:
+    result = determine_automatic_review(
+        _candidate_payload(
+            manual_review_required=True,
+            risk_controls=[{"stop_loss": "5%"}, {"position_size": "10%"}],
+        )
+    )
+
+    assert result.status == "pending_backtest"
+    assert result.risk_level == "low"
+    assert "风险控制边界可解释：stop_loss:5%, position_size:10%；保留追踪" in result.reasons
+    assert "抽取层标记需人工复核，但仅命中可放行不确定性" in result.reasons
 
 
 def test_automatic_review_suggests_reject_when_material_evidence_is_missing() -> None:

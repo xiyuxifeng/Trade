@@ -11,6 +11,7 @@ from src.domain.enums import FormalLifecycleState
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
+from src.services.article_review_policy import AutomaticReviewResult, determine_automatic_review
 from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceService
 from src.services.rule_lifecycle_service import RuleLifecycleService, RuleLifecycleTransitionBlockedError
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
@@ -19,22 +20,9 @@ if TYPE_CHECKING:
     from src.services.stage3_regression_service import Stage3RegressionService
 
 
-AutomaticReviewStatus = Literal["pending_backtest", "needs_human_review", "suggested_reject"]
 JourneyStatus = Literal["ready", "partial", "empty"]
 HumanReviewDecision = Literal["approve", "reject"]
-
-
 SummarySource = Literal["article_revision_source_payload", "blog_article_current", "unavailable"]
-
-
-@dataclass(frozen=True)
-class AutomaticReviewResult:
-    status: AutomaticReviewStatus
-    reasons: list[str]
-    risk_level: Literal["low", "medium", "high"]
-    backtestability_status: str
-    kaipan_dependency: bool
-    market_state_status: str
 
 
 @dataclass(frozen=True)
@@ -151,78 +139,6 @@ def build_article_structure_provenance(
     )
 
 
-def _contains_kaipan_dependency(values: Any) -> bool:
-    if isinstance(values, str):
-        return "kaipan" in values.lower()
-    if isinstance(values, list):
-        return any(_contains_kaipan_dependency(item) for item in values)
-    if isinstance(values, dict):
-        return any(_contains_kaipan_dependency(item) for item in values.values())
-    return False
-
-
-def determine_automatic_review(candidate: RuleCandidate) -> AutomaticReviewResult:
-    payload = candidate.canonical_payload or {}
-    quantification = payload.get("quantification") or {}
-    condition = payload.get("condition") or {}
-    action = payload.get("action") or {}
-    evidence = payload.get("evidence") or []
-    market_state = payload.get("market_state_applicability") or {}
-    risk_controls = payload.get("risk_controls") or []
-    data_dependencies = payload.get("data_dependencies") or []
-
-    reasons: list[str] = []
-    if not evidence:
-        reasons.append("缺少原文证据")
-    if not condition:
-        reasons.append("缺少规则条件")
-    if not action:
-        reasons.append("缺少规则动作")
-
-    if reasons:
-        return AutomaticReviewResult(
-            status="suggested_reject",
-            reasons=reasons,
-            risk_level="high",
-            backtestability_status=candidate.backtestability_status,
-            kaipan_dependency=_contains_kaipan_dependency(data_dependencies),
-            market_state_status=str(market_state.get("status") or "not_declared"),
-        )
-
-    review_reasons: list[str] = []
-    if quantification.get("manual_review_required"):
-        review_reasons.append("量化条件仍需人工确认")
-    if quantification.get("missing_fields"):
-        review_reasons.append("仍有缺失字段")
-    if quantification.get("ambiguous_terms"):
-        review_reasons.append("存在模糊词")
-    if risk_controls:
-        review_reasons.append("包含风险控制条目")
-    if _contains_kaipan_dependency(data_dependencies):
-        review_reasons.append("依赖 Kaipan 数据")
-    if candidate.backtestability_status != "executable":
-        review_reasons.append("当前不满足直接回测条件")
-
-    if review_reasons:
-        return AutomaticReviewResult(
-            status="needs_human_review",
-            reasons=review_reasons,
-            risk_level="medium",
-            backtestability_status=candidate.backtestability_status,
-            kaipan_dependency=_contains_kaipan_dependency(data_dependencies),
-            market_state_status=str(market_state.get("status") or "not_declared"),
-        )
-
-    return AutomaticReviewResult(
-        status="pending_backtest",
-        reasons=["证据、条件和动作完整，可进入待回测"],
-        risk_level="low",
-        backtestability_status=candidate.backtestability_status,
-        kaipan_dependency=False,
-        market_state_status=str(market_state.get("status") or "not_declared"),
-    )
-
-
 class Stage3SingleArticleService:
     service_name = "stage3-single-article-service"
 
@@ -314,16 +230,16 @@ class Stage3SingleArticleService:
                 status=status,
                 article=article,
                 revision=revision,
-                    prompt_run=prompt_run,
-                    structure=structure,
-                    candidates=candidates,
-                    automatic_reviews=automatic_reviews,
-                    rule_versions=rule_versions,
-                    governance_assessments=governance_assessments,
-                    summary_provenance=resolve_summary_provenance(article=article, revision=revision),
-                    article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
-                    message=message,
-                )
+                prompt_run=prompt_run,
+                structure=structure,
+                candidates=candidates,
+                automatic_reviews=automatic_reviews,
+                rule_versions=rule_versions,
+                governance_assessments=governance_assessments,
+                summary_provenance=resolve_summary_provenance(article=article, revision=revision),
+                article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
+                message=message,
+            )
 
     async def run_analysis(
         self,

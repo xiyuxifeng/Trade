@@ -135,6 +135,34 @@ def test_automatic_review_allows_numeric_risk_controls_with_trace_reason() -> No
     assert "抽取层标记需人工复核，但仅命中可放行不确定性" in result.reasons
 
 
+def test_automatic_review_requires_human_review_for_numberless_risk_controls() -> None:
+    result = determine_automatic_review(
+        _candidate_payload(risk_controls=["空仓是最优解"])
+    )
+
+    assert result.status == "needs_human_review"
+    assert result.risk_level == "medium"
+    assert "风险控制边界不明确：空仓是最优解" in result.reasons
+
+
+def test_automatic_review_allows_structured_numeric_risk_controls_without_internal_type_leak() -> None:
+    result = determine_automatic_review(
+        _candidate_payload(
+            risk_controls=[
+                {
+                    "type": "invalidation",
+                    "description": "跌停家数超过35家则退潮未结束",
+                }
+            ]
+        )
+    )
+
+    assert result.status == "pending_backtest"
+    assert result.risk_level == "low"
+    assert "风险控制边界可解释：description:跌停家数超过35家则退潮未结束；保留追踪" in result.reasons
+    assert all("type:" not in reason for reason in result.reasons)
+
+
 def test_automatic_review_suggests_reject_when_material_evidence_is_missing() -> None:
     result = determine_automatic_review(_candidate_payload(evidence=[]))
 

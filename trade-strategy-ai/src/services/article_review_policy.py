@@ -93,6 +93,7 @@ SUBJECTIVE_RISK_CONTROL_MARKERS = (
     "人工判断",
 )
 
+_IGNORED_TEXT_KEYS = {"type"}
 _NUMERIC_PATTERN = re.compile(r"\d+(?:\.\d+)?\s*(?:%|percent|pct|bps|bp|倍|成|手|股|元|日|天)?", re.IGNORECASE)
 
 
@@ -122,17 +123,19 @@ def _extract_texts(values: Any, *, parent_key: str | None = None) -> list[str]:
             texts.extend(_extract_texts(value, parent_key=parent_key))
         return texts
     if isinstance(values, dict):
-        texts: list[str] = []
+        dict_texts: list[str] = []
         for key, value in values.items():
             key_text = str(key).strip()
             if value in (None, False, "", [], {}):
                 continue
+            if key_text.lower() in _IGNORED_TEXT_KEYS:
+                continue
             if isinstance(value, (str, int, float, bool)):
-                texts.extend(_extract_texts(value, parent_key=key_text))
+                dict_texts.extend(_extract_texts(value, parent_key=key_text))
             else:
-                texts.append(key_text)
-                texts.extend(_extract_texts(value, parent_key=key_text))
-        return [text for text in texts if text]
+                dict_texts.append(key_text)
+                dict_texts.extend(_extract_texts(value, parent_key=key_text))
+        return [text for text in dict_texts if text]
     text = str(values).strip()
     return [f"{parent_key}:{text}" if parent_key and text else text] if text else []
 
@@ -184,6 +187,8 @@ def _classify_risk_controls(values: Any) -> tuple[list[str], list[str]]:
         if has_core_marker and not has_numeric_boundary:
             heavy_controls.append(item)
         elif has_subjective_marker and not has_numeric_boundary:
+            heavy_controls.append(item)
+        elif not has_numeric_boundary:
             heavy_controls.append(item)
         else:
             relaxable_controls.append(item)

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, TYPE_CHECKING
+from typing import Any, Callable, Literal
 from uuid import UUID
 
-from src.common.stage2_writer_routing import canonical_write_scope
 from src.db.repositories.stage3_single_article_repository import Stage3SingleArticleRepository
-from src.domain.enums import FormalLifecycleState
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
@@ -15,9 +12,6 @@ from src.services.article_review_policy import AutomaticReviewResult, determine_
 from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceService
 from src.services.rule_lifecycle_service import RuleLifecycleService, RuleLifecycleTransitionBlockedError
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
-
-if TYPE_CHECKING:
-    from src.services.stage3_regression_service import Stage3RegressionService
 
 
 JourneyStatus = Literal["ready", "partial", "empty"]
@@ -145,7 +139,7 @@ class Stage3SingleArticleService:
     def __init__(
         self,
         *,
-        session_scope_factory,
+        session_scope_factory: Callable[[], Any],
         prompt_runtime_service: Stage3PromptRuntimeService | None = None,
         repository: Stage3SingleArticleRepository | None = None,
         regression_service: Any | None = None,

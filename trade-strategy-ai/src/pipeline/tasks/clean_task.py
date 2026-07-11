@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Callable
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from src.common.utils import ensure_dir, write_json
 from src.db.session import session_scope
 from src.models.blog_article import BlogArticle
 from src.models.raw_article import RawArticle
-from src.pipeline.validation import DataValidator
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -122,9 +120,6 @@ def clean_articles_jsonl(
 
 	# Deduplicate if requested
 	if remove_duplicates:
-		articles = [_to_blog_article(r) for r in records]
-		validator = DataValidator()
-		duplicate_issues = validator.detect_article_duplicates(articles)
 		# Build set of duplicate hashes
 		seen_hash: set[str] = set()
 		seen_url: set[str] = set()
@@ -276,7 +271,17 @@ async def _clean_raw_articles_from_db(
 		output_path.unlink()
 
 	async with session_scope() as session:
-		stmt = select(RawArticle).where(RawArticle.is_processed == False)  # noqa: E712
+		stmt = (
+			select(RawArticle)
+			.outerjoin(BlogArticle, BlogArticle.source_url == RawArticle.source_url)
+			.where(RawArticle.is_processed.is_(False))
+			.where(
+				or_(
+					BlogArticle.id.is_(None),
+					BlogArticle.content_hash.is_distinct_from(RawArticle.content_hash),
+				)
+			)
+		)
 		if source:
 			stmt = stmt.where(RawArticle.source == source)
 		if author_id:
@@ -388,8 +393,8 @@ async def run_clean_from_db_task(
 	out_path = out_dir / filename
 	stats: dict[str, Any] = {"files": [], "source": source, "author_id": author_id, "remove_duplicates": remove_duplicates, "max_articles": max_articles}
 
-	if out_path.exists() and not force:
-		return CleanResult(cleaned_paths=[out_path], stats_path=out_dir / "clean_stats.json")
+	# DB mode is incremental: a cached file may predate newly crawled RawArticle
+	# records. Rebuild from the authoritative unprocessed rows on every run.
 
 	file_stats = await _clean_raw_articles_from_db(
 		output_path=out_path,

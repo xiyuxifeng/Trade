@@ -7,7 +7,7 @@ import socket
 from dataclasses import asdict, is_dataclass
 from contextlib import suppress
 from contextvars import ContextVar
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -387,6 +387,7 @@ class JobRunner(BaseService):
         async def _validate(params: dict[str, Any]) -> ServiceResult:
             _config, base_dir, _loaded_path = await _article_pipeline_context(params)
             force = _parse_bool(params.get("force"), default=False)
+            use_db = _parse_bool(params.get("use_db"), default=False)
             max_articles = params.get("max_articles")
             validate_dir = base_dir / "data" / "processed" / "pipeline" / "validate"
             clean_dir = base_dir / "data" / "processed" / "pipeline" / "clean"
@@ -395,7 +396,7 @@ class JobRunner(BaseService):
             result = run_validate_task(
                 base_dir=base_dir,
                 input_paths=clean_paths,
-                force=force,
+                force=force or use_db,
                 max_articles=max_articles if isinstance(max_articles, int) else None,
                 progress_callback=_KAIPAN_PROGRESS_REPORTER.get(),
             )
@@ -433,8 +434,10 @@ class JobRunner(BaseService):
                     if target.exists():
                         target.unlink()
             pending_path = default_pending_tasks_path(base_dir=base_dir)
-            if not pending_path.exists() and not force:
-                _raise_missing_step("store")
+            if not force and (
+                not pending_path.exists() or not pending_path.read_text(encoding="utf-8").strip()
+            ):
+                raise ValueError("没有待处理文章；请先运行一键处理或执行 store")
             result = await run_process_tasks(
                 config=config,
                 force=force,

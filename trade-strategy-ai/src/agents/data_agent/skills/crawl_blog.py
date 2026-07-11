@@ -129,7 +129,7 @@ def run_crawl(
     if use_db:
         import asyncio
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             # 没有运行中的事件循环，可以安全使用 asyncio.run()
             return asyncio.run(run_crawl_to_db(config, max_articles=max_articles, force=force, progress_callback=progress_callback))
@@ -427,6 +427,11 @@ async def upsert_raw_article(
         return True
     else:
         # 更新已存在的记录（评论可能新增）
+        content_changed = (
+            existing.content_hash != content_hash
+            or existing.content_text != content_text
+            or existing.content_html != content_html
+        )
         existing.title = title
         existing.published_at = parsed_published_at
         existing.crawled_at = parsed_crawled_at
@@ -436,6 +441,9 @@ async def upsert_raw_article(
         existing.comment_count = comment_count
         existing.comments = comments
         existing.raw_payload = raw_payload
+        if content_changed:
+            existing.is_processed = False
+            existing.processed_at = None
         await session.flush()
         return False
 

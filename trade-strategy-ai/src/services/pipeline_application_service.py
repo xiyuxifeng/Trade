@@ -206,8 +206,9 @@ class PipelineApplicationService(BaseService):
             if force:
                 return
             pending_path = base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
-            if not pending_path.exists() or not await self._has_successful_job_for_context(job_type="store", runtime_config=runtime_config, loaded=loaded):
-                raise ValueError("请先执行 store")
+            has_pending_tasks = pending_path.exists() and bool(pending_path.read_text(encoding="utf-8").strip())
+            if not has_pending_tasks or not await self._has_successful_job_for_context(job_type="store", runtime_config=runtime_config, loaded=loaded):
+                raise ValueError("没有待处理文章；请先运行一键处理或执行 store")
 
     def _pipeline_summary(self) -> dict[str, Any]:
         """返回 canonical article_pipeline 摘要。"""

@@ -58,6 +58,7 @@ class RawArticle(TimestampMixin, Base):
     def to_clean_payload(self) -> dict[str, Any]:
         """转换为 clean_task 期望的 payload 格式。"""
         return {
+            "raw_article_id": str(self.id),
             "source": self.source,
             "site": self.site,
             "trader_id": self.trader_id,

@@ -186,7 +186,11 @@ def _build_data_pipeline_handlers(
 			raise ValueError("Cannot skip validate: clean_result not available")
 		_emit_progress("validate", status="running")
 		clean_result = context["clean_result"]
-		result = run_validate_task(base_dir=base_dir, input_paths=clean_result.cleaned_paths, force=force)
+		result = run_validate_task(
+			base_dir=base_dir,
+			input_paths=clean_result.cleaned_paths,
+			force=force or use_db,
+		)
 		context["validate_result"] = result
 		_emit_progress("validate", status="success")
 		return result

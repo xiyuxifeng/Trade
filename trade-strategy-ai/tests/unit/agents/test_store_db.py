@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 import json
-import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, UTC
@@ -30,6 +29,7 @@ from src.agents.data_agent.skills.store_db import (
 from src.models.base import Base
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.raw_article import RawArticle
 from src.models.stage2_canonical import ArticleRevision
 
 
@@ -72,7 +72,7 @@ class TestIterJsonl:
             {"id": 2},
             {"id": 3},
         ]
-        file.write_text("\n".join(json.dumps(l) for l in lines) + "\n", encoding="utf-8")
+        file.write_text("\n".join(json.dumps(record) for record in lines) + "\n", encoding="utf-8")
 
         result = list(iter_jsonl(file))
         assert len(result) == 3
@@ -283,6 +283,7 @@ async def store_db_session_factory(tmp_path: Path):
                     BlogArticle.__table__,
                     ArticleMetadata.__table__,
                     ArticleRevision.__table__,
+                    RawArticle.__table__,
                 ],
             )
         )
@@ -351,6 +352,72 @@ async def test_store_creates_article_revision_for_new_article(
     assert revision.content_hash == "hash-a"
     assert revision.content_text == "content-a"
     assert revision.source_payload["summary"] == "summary-a"
+
+
+@pytest.mark.asyncio
+async def test_store_marks_the_exact_consumed_raw_article_processed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    store_db_session_factory,
+) -> None:
+    from src.agents.data_agent.skills import store_db as mod
+
+    raw_id = uuid4()
+    async with store_db_session_factory() as session:
+        session.add(
+            RawArticle(
+                id=raw_id,
+                source="tgb",
+                site="tgb.cn",
+                author_id="author-1",
+                source_url="https://example.com/raw-1",
+                title="Raw article",
+                crawled_at=datetime(2026, 7, 11, tzinfo=UTC),
+                content_text="raw article content",
+                content_hash="raw-hash-1",
+                comments=[],
+                raw_payload={},
+            )
+        )
+        await session.commit()
+
+    jsonl_path = tmp_path / "raw.validated.jsonl"
+    _write_validated_jsonl(
+        jsonl_path,
+        [{
+            "raw_article_id": str(raw_id),
+            "source": "tgb",
+            "source_url": "https://example.com/raw-1",
+            "source_article_id": "raw-1",
+            "title": "Raw article",
+            "author_name": "author",
+            "author_id": "author-1",
+            "crawled_at": "2026-07-11T00:00:00+00:00",
+            "content_text": "raw article content",
+            "content_hash": "raw-hash-1",
+            "raw_payload": {},
+        }],
+    )
+
+    @asynccontextmanager
+    async def fake_session_scope():
+        async with store_db_session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    monkeypatch.setattr(mod, "session_scope", fake_session_scope)
+    stats = await store_articles_jsonl_to_db(base_dir=tmp_path, jsonl_paths=[jsonl_path])
+
+    async with store_db_session_factory() as session:
+        raw = await session.get(RawArticle, raw_id)
+    assert raw is not None
+    assert raw.is_processed is True
+    assert raw.processed_at is not None
+    assert stats.processed_raw_articles == 1
 
 
 @pytest.mark.asyncio

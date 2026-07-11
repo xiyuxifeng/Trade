@@ -16,6 +16,7 @@ from src.db.session import session_scope
 from src.domain.enums import QualityStatus
 from src.models.article_metadata import ArticleMetadata
 from src.models.blog_article import BlogArticle
+from src.models.raw_article import RawArticle
 from src.models.stage2_canonical import ArticleRevision
 from src.schemas.contracts import AgentTask
 
@@ -58,6 +59,7 @@ class StoreStats:
 	skipped_duplicates: int = 0
 	ensured_metadata: int = 0
 	generated_tasks: int = 0
+	processed_raw_articles: int = 0
 
 
 def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -245,6 +247,26 @@ async def ensure_article_revision(session: AsyncSession, article_id: UUID) -> bo
 	return True
 
 
+async def mark_raw_article_processed(session: AsyncSession, payload: dict[str, Any]) -> bool:
+	"""Mark only the exact raw source record consumed by a successful store."""
+	raw_article_id = payload.get("raw_article_id")
+	if not isinstance(raw_article_id, str) or not raw_article_id:
+		return False
+	try:
+		raw_id = UUID(raw_article_id)
+	except ValueError:
+		return False
+	raw = await session.get(RawArticle, raw_id)
+	if raw is None or raw.source_url != str(payload.get("source_url") or ""):
+		return False
+	if raw.is_processed:
+		return False
+	raw.is_processed = True
+	raw.processed_at = _now_utc()
+	await session.flush()
+	return True
+
+
 def default_pending_tasks_path(*, base_dir: Path) -> Path:
 	return base_dir / "data" / "processed" / "pipeline" / "pending_tasks.jsonl"
 
@@ -305,6 +327,8 @@ async def store_articles_jsonl_to_db(
 					stats.ensured_metadata += 1
 
 				await ensure_article_revision(session, article_id)
+				if await mark_raw_article_processed(session, payload):
+					stats.processed_raw_articles += 1
 
 				# 增量触发：新入库或内容更新 → 生成抽取/聚类待办（先落盘，后续再异步化）
 				if inserted or updated:

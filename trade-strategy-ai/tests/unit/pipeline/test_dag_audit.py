@@ -76,3 +76,24 @@ async def test_run_pipeline_aborts_when_process_reports_failures(tmp_path: Path)
     ):
         with pytest.raises(RuntimeError, match="process completed with failures"):
             await run_pipeline(config=config, base_dir=base_dir, max_articles=1, force=True)
+
+
+@pytest.mark.asyncio
+async def test_db_pipeline_forces_validation_refresh_after_incremental_clean(tmp_path: Path) -> None:
+    config = AppConfig()
+    base_dir = tmp_path / "project"
+    base_dir.mkdir()
+    validate = MagicMock(return_value=SimpleNamespace(validated_paths=[]))
+
+    with (
+        patch("src.pipeline.dag.AuditService", MagicMock(return_value=SimpleNamespace(record=AsyncMock()))),
+        patch("src.pipeline.dag.run_crawl_task", return_value=SimpleNamespace(outputs=[])),
+        patch("src.pipeline.dag.run_clean_from_db_task", AsyncMock(return_value=SimpleNamespace(cleaned_paths=[]))),
+        patch("src.pipeline.dag.run_validate_task", validate),
+        patch("src.pipeline.dag.store_articles_jsonl_to_db", AsyncMock(return_value=SimpleNamespace())),
+        patch("src.pipeline.dag.run_process_tasks", AsyncMock(return_value=SimpleNamespace(processed=0, failed=0, fatal_error=None))),
+        patch("src.pipeline.dag.run_export_task", AsyncMock(return_value=SimpleNamespace(stats=SimpleNamespace(), duckdb_path=Path("x")))),
+    ):
+        await run_pipeline(config=config, base_dir=base_dir, use_db=True)
+
+    assert validate.call_args.kwargs["force"] is True

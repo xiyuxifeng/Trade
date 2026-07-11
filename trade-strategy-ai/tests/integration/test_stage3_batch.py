@@ -10,8 +10,8 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.models.base import Base
 from src.models.blog_article import BlogArticle
+from src.models.extraction_taxonomy import ExtractionItem
 from src.models.job import Job
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, LifecycleEvent, PromptRun, Rule, RuleCandidate, RuleVersion
 from src.services.stage3_batch_service import Stage3BatchService
@@ -47,6 +47,7 @@ async def test_stage3_batch_dry_run_creates_single_checkpointed_job(tmp_path) ->
             PromptRun.__table__,
             ArticleStructure.__table__,
             RuleCandidate.__table__,
+            ExtractionItem.__table__,
             Rule.__table__,
             RuleVersion.__table__,
             LifecycleEvent.__table__,

@@ -7,10 +7,20 @@ def test_prompt_registry_matches_frozen_stage3_contract() -> None:
     registry = get_prompt_registry()
 
     expected = {
+        "article_taxonomy_v1": (
+            "prompts/article_taxonomy_v1.md",
+            "article_taxonomy_v1",
+            PromptProductionStatus.active,
+        ),
+        "article_taxonomy_repair_v1": (
+            "prompts/article_taxonomy_repair_v1.md",
+            "article_taxonomy_repair_v1",
+            PromptProductionStatus.conditional,
+        ),
         "article_analysis_v1": (
             "prompts/article_analysis_v1.md",
             "article_analysis_v1",
-            PromptProductionStatus.active,
+            PromptProductionStatus.test_special_only,
         ),
         "article_analysis_repair_v1": (
             "prompts/article_analysis_repair_v1.md",

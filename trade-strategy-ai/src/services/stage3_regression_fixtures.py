@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -23,6 +22,7 @@ Stage3RegressionCategory = Literal[
 ]
 
 SummarySource = Literal["article_revision_source_payload", "blog_article_current", "unavailable"]
+BacktestabilityStatus = Literal["executable", "partially_executable", "not_executable"]
 
 REQUIRED_STAGE3_REGRESSION_CATEGORIES: set[str] = {
     "explicit_and_actionable_rules",
@@ -86,10 +86,10 @@ class RegressionArticleFixture(BaseModel):
     article_revision_id: UUID
     content_hash: str
     article_content: str
-    prompt_name: str = "article_analysis_v1"
-    prompt_version: str = "article_analysis_v1"
-    schema_name: str = "article_analysis_v1"
-    schema_version: str = "article_analysis_v1"
+    prompt_name: str = "article_taxonomy_v1"
+    prompt_version: str = "article_taxonomy_v1"
+    schema_name: str = "article_taxonomy_v1"
+    schema_version: str = "article_taxonomy_v1"
     model: str = STAGE3_FIXED_SET_MODEL
     covered_categories: set[str]
     selection_reason: str
@@ -118,7 +118,7 @@ class RegressionArticleFixture(BaseModel):
         explicit_facts_contains: list[str],
         candidate_title: str | None,
         data_dependencies_contains: list[str],
-        backtestability_statuses: list[str],
+        backtestability_statuses: list[BacktestabilityStatus],
         automatic_review_statuses: list[str],
         market_state_status: Literal["explicit", "not_declared"],
         kaipan_dependency: bool,
@@ -208,8 +208,8 @@ class RegressionArticleFixture(BaseModel):
 
     def build_payload(self, *, valid: bool) -> dict:
         payload = {
-            "prompt_version": "article_analysis_v1",
-            "schema_version": "article_analysis_v1",
+            "prompt_version": "article_taxonomy_v1",
+            "schema_version": "article_taxonomy_v1",
             "classification": {
                 "article_type": self._article_type(),
                 "confidence": 0.91,
@@ -285,10 +285,10 @@ class RegressionArticleFixture(BaseModel):
                     "warnings": [],
                 },
             },
-            "rule_extraction": {
-                "prompt_version": "rule_extraction_v1",
-                "schema_version": "rule_v1",
-                "strategy_rules": [self._build_rule_payload(rule) for rule in self.rules],
+            "taxonomy_extraction": {
+                "taxonomy_version": "extraction_taxonomy_v1",
+                "schema_version": "extraction_item_v1",
+                "extraction_items": [self._build_taxonomy_item(rule) for rule in self.rules],
             },
             "explicit_preconditions": {
                 "prompt_version": "explicit_precondition_extraction_v1",
@@ -325,7 +325,7 @@ class RegressionArticleFixture(BaseModel):
 
     def build_repair_payload(self) -> dict:
         return {
-            "prompt_version": "article_analysis_repair_v1",
+            "prompt_version": "article_taxonomy_repair_v1",
             "patched_fields": {"classification.confidence": 0.91},
             "unresolved_errors": [],
             "warnings": [],
@@ -392,6 +392,75 @@ class RegressionArticleFixture(BaseModel):
                 for quote in (rule.evidence_quotes or [rule.title])
             ],
             "source_article_id": str(self.article_id),
+        }
+
+    def _build_taxonomy_item(self, rule: RegressionRuleFixture) -> dict:
+        quote = rule.evidence_quotes[0] if rule.evidence_quotes else rule.title
+        if rule.ambiguous_terms:
+            primary_type = "semantic_experience"
+            payload = {
+                "primary_type": primary_type,
+                "term_or_phrase": rule.ambiguous_terms[0],
+                "source_context": rule.title,
+                "plain_language_interpretation": rule.title,
+                "related_market_state": None,
+                "possible_observable_proxies": list(rule.data_dependencies),
+                "semantic_dictionary_action": "clarify",
+                "ambiguity_level": "high",
+                "not_directly_backtestable": True,
+            }
+        elif rule.backtestability_status != "executable" or rule.missing_fields:
+            primary_type = "rule_candidate"
+            missing = list(rule.missing_fields) or ["strict executable mechanics"]
+            payload = {
+                "primary_type": primary_type,
+                "candidate_rule_summary": rule.title,
+                "known_components": {"condition": rule.title},
+                "missing_fields": missing,
+                "repair_tasks": [f"resolve {item}" for item in missing],
+                "repair_source": "source_text",
+                "repairability": "medium",
+                "instrument_universe_status": "complete",
+                "entry_exit_status": {"entry": "present", "exit": "partial"},
+                "data_dependencies": [{"dataset": item} for item in rule.data_dependencies],
+                "timestamp_availability_risk": [],
+                "ambiguous_terms": [],
+                "not_directly_backtestable": True,
+            }
+        else:
+            # Legacy "executable" fixtures generally contain selection/observation language,
+            # not complete entry/exit/risk/sizing mechanics. Preserve them as research claims.
+            primary_type = "research_hypothesis"
+            payload = {
+                "primary_type": primary_type,
+                "hypothesis_statement": rule.title,
+                "source_experience": quote,
+                "dependent_variables": ["forward_return"],
+                "independent_variables": ["source_claim_indicator"],
+                "candidate_observable_indicators": list(rule.data_dependencies) or ["ohlcv_features"],
+                "required_data": list(rule.data_dependencies) or ["ohlcv_1d"],
+                "validation_method": "event study before any rule design",
+                "timestamp_availability_assumptions": ["all explanatory variables must be frozen before the decision"],
+                "research_status": "proposed",
+                "not_directly_backtestable": True,
+            }
+        return {
+            "primary_type": primary_type,
+            "secondary_tags": ["kaipan"] if any("kaipan" in item.lower() for item in rule.data_dependencies) else [],
+            "taxonomy_payload": payload,
+            "source_evidence": {
+                "quote": quote,
+                "span": None,
+                "section": None,
+                "evidence_kind": "explicit_quote",
+                "rationale": "fixed regression fixture evidence",
+            },
+            "confidence": {
+                "score": 0.83,
+                "level": "high",
+                "rationale": "fixed regression fixture",
+                "requires_human_confirmation": rule.manual_review_required or primary_type == "research_hypothesis",
+            },
         }
 
 

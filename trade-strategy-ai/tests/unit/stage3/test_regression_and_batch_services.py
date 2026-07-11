@@ -11,15 +11,14 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.models.base import Base
 from src.models.blog_article import BlogArticle
+from src.models.extraction_taxonomy import ExtractionItem
 from src.models.job import Job
 from src.models.stage2_canonical import ArticleRevision, ArticleStructure, LifecycleEvent, PromptRun, Rule, RuleCandidate, RuleVersion
 from src.services.stage3_batch_service import Stage3BatchService
 from src.services.stage3_regression_fixtures import (
     RegressionArticleFixture,
     RegressionSemanticAssertions,
-    RegressionSummaryExpectation,
 )
 from src.services.stage3_regression_service import (
     FixedFixtureGateway,
@@ -52,6 +51,7 @@ async def session_factory(tmp_path) -> AsyncIterator[async_sessionmaker[AsyncSes
             ArticleRevision.__table__,
             PromptRun.__table__,
             ArticleStructure.__table__,
+            ExtractionItem.__table__,
             RuleCandidate.__table__,
             Rule.__table__,
             RuleVersion.__table__,
@@ -231,10 +231,11 @@ async def test_regression_service_is_idempotent_on_repeated_runs(session_factory
     async with session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(PromptRun)) == 2
         assert await session.scalar(select(func.count()).select_from(ArticleStructure)) == 1
-        assert await session.scalar(select(func.count()).select_from(RuleCandidate)) == 1
+        assert await session.scalar(select(func.count()).select_from(ExtractionItem)) == 1
+        assert await session.scalar(select(func.count()).select_from(RuleCandidate)) == 0
 
-    assert [name for name, _ in gateway.calls].count("article_analysis_v1") == 2
-    assert [name for name, _ in gateway.calls].count("article_analysis_repair_v1") == 1
+    assert [name for name, _ in gateway.calls].count("article_taxonomy_v1") == 2
+    assert [name for name, _ in gateway.calls].count("article_taxonomy_repair_v1") == 1
 
 
 @pytest.mark.asyncio

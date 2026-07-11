@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.common.stage2_writer_routing import require_canonical_write
-from src.models.stage2_canonical import ArticleStructure, PromptRun, PromptValidationState, RuleCandidate
+from src.models.extraction_taxonomy import ExtractionItem
+from src.models.stage2_canonical import ArticleStructure, PromptRun, PromptValidationState
 
 
 class Stage3PromptRunRepository:
@@ -18,7 +19,7 @@ class Stage3PromptRunRepository:
         model: str,
         input_hash: str,
         retry_count: int,
-    ) -> tuple[PromptRun, ArticleStructure, list[RuleCandidate]] | None:
+    ) -> tuple[PromptRun, ArticleStructure, list[ExtractionItem]] | None:
         stmt = (
             select(PromptRun)
             .where(PromptRun.prompt_name == prompt_name)
@@ -43,14 +44,15 @@ class Stage3PromptRunRepository:
         ).scalars().first()
         if structure is None:
             return None
-        candidates = (
+        items = (
             await session.execute(
-                select(RuleCandidate)
-                .where(RuleCandidate.article_structure_id == structure.article_structure_id)
-                .order_by(RuleCandidate.candidate_index.asc())
+                select(ExtractionItem)
+                .where(ExtractionItem.article_structure_id == structure.article_structure_id)
+                .where(ExtractionItem.prompt_run_id == prompt_run.prompt_run_id)
+                .order_by(ExtractionItem.item_index.asc())
             )
         ).scalars().all()
-        return prompt_run, structure, list(candidates)
+        return prompt_run, structure, list(items)
 
     async def save_run(self, session: AsyncSession, run: PromptRun) -> PromptRun:
         require_canonical_write("article_analysis", "Stage3PromptRunRepository.save_run")
@@ -94,14 +96,14 @@ class Stage3PromptRunRepository:
 
 
 class Stage3ArticleAnalysisRepository:
-    async def save_structure_with_candidates(
+    async def save_structure_with_items(
         self,
         session: AsyncSession,
         *,
         structure: ArticleStructure,
-        candidates: list[RuleCandidate],
-    ) -> tuple[ArticleStructure, list[RuleCandidate]]:
-        require_canonical_write("article_analysis", "Stage3ArticleAnalysisRepository.save_structure_with_candidates")
+        items: list[ExtractionItem],
+    ) -> tuple[ArticleStructure, list[ExtractionItem]]:
+        require_canonical_write("article_analysis", "Stage3ArticleAnalysisRepository.save_structure_with_items")
         existing_structure = (
             await session.execute(
                 select(ArticleStructure).where(ArticleStructure.prompt_run_id == structure.prompt_run_id)
@@ -127,37 +129,22 @@ class Stage3ArticleAnalysisRepository:
                 setattr(existing_structure, field, getattr(structure, field))
             await session.flush()
 
-        saved_candidates: list[RuleCandidate] = []
-        for candidate in candidates:
-            candidate.article_structure_id = existing_structure.article_structure_id
-            existing_candidate = (
+        saved_items: list[ExtractionItem] = []
+        for item in items:
+            item.article_structure_id = existing_structure.article_structure_id
+            existing_item = (
                 await session.execute(
-                    select(RuleCandidate)
-                    .where(RuleCandidate.article_structure_id == existing_structure.article_structure_id)
-                    .where(RuleCandidate.candidate_index == candidate.candidate_index)
+                    select(ExtractionItem)
+                    .where(ExtractionItem.prompt_run_id == item.prompt_run_id)
+                    .where(ExtractionItem.item_index == item.item_index)
                 )
             ).scalars().first()
-            if existing_candidate is None:
-                session.add(candidate)
+            if existing_item is None:
+                session.add(item)
                 await session.flush()
-                saved_candidates.append(candidate)
+                saved_items.append(item)
                 continue
-            for field in (
-                "candidate_fingerprint",
-                "rule_type",
-                "canonical_payload",
-                "evidence_json",
-                "explicit_fields",
-                "inferred_fields",
-                "missing_fields",
-                "data_dependencies",
-                "backtestability_status",
-                "review_state",
-                "quality_status",
-                "created_by",
-                "updated_by",
-            ):
-                setattr(existing_candidate, field, getattr(candidate, field))
-            await session.flush()
-            saved_candidates.append(existing_candidate)
-        return existing_structure, saved_candidates
+            if existing_item.item_fingerprint != item.item_fingerprint:
+                raise ValueError("append-only extraction item conflicts with existing prompt-run index")
+            saved_items.append(existing_item)
+        return existing_structure, saved_items

@@ -12,6 +12,8 @@ from pydantic import BaseModel, ValidationError
 from src.schemas.prompt_outputs import (
     ArticleAnalysisOutput,
     ArticleAnalysisRepairOutput,
+    ArticleTaxonomyOutput,
+    ArticleTaxonomyRepairOutput,
     AuthorMethodProfileBatchOutput,
     AuthorProfileMergeOutput,
     AuthorProfileRevisionOutput,
@@ -72,7 +74,9 @@ def _repo_root() -> Path:
 
 def _build_registry() -> dict[str, PromptSpec]:
     entries = [
-        ("article_analysis_v1", "article_analysis_v1.md", ArticleAnalysisOutput, "article_analysis_v1", "article_analysis_v1", PromptProductionStatus.active),
+        ("article_taxonomy_v1", "article_taxonomy_v1.md", ArticleTaxonomyOutput, "article_taxonomy_v1", "article_taxonomy_v1", PromptProductionStatus.active),
+        ("article_taxonomy_repair_v1", "article_taxonomy_repair_v1.md", ArticleTaxonomyRepairOutput, "article_taxonomy_repair_v1", "article_taxonomy_repair_v1", PromptProductionStatus.conditional),
+        ("article_analysis_v1", "article_analysis_v1.md", ArticleAnalysisOutput, "article_analysis_v1", "article_analysis_v1", PromptProductionStatus.test_special_only),
         ("article_analysis_repair_v1", "article_analysis_repair_v1.md", ArticleAnalysisRepairOutput, "article_analysis_repair_v1", "article_analysis_repair_v1", PromptProductionStatus.conditional),
         ("author_method_profile_batch_v1", "author_method_profile_batch_v1.md", AuthorMethodProfileBatchOutput, "author_method_profile_batch_v1", "author_method_profile_batch_v1", PromptProductionStatus.batch_only),
         ("author_rule_profile_summary_v1", "author_rule_profile_summary_v1.md", AuthorRuleProfileSummaryOutput, "author_rule_profile_summary_v1", "author_rule_profile_summary_v1", PromptProductionStatus.asset_validated),

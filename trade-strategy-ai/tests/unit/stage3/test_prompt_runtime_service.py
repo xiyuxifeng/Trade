@@ -12,6 +12,7 @@ from src.services.stage3_prompt_runtime_service import (
     ArticlePromptInput,
     Stage3PromptRuntimeService,
 )
+from tests.fixtures.taxonomy_samples import article_taxonomy_output
 
 
 @dataclass
@@ -30,8 +31,8 @@ class _FakeArticleStructure:
 
 
 @dataclass
-class _FakeRuleCandidate:
-    rule_candidate_id: UUID
+class _FakeExtractionItem:
+    extraction_item_id: UUID
 
 
 class _FakePromptRunRepository:
@@ -81,20 +82,20 @@ class _FakeArticleRepository:
         self.prompt_runs = prompt_runs
         self.identity = identity
 
-    async def save_structure_with_candidates(self, session, *, structure, candidates):
+    async def save_structure_with_items(self, session, *, structure, items):
         del session
-        self.saved.append((structure, candidates))
+        self.saved.append((structure, items))
         if self.prompt_runs is not None and self.identity is not None and self.prompt_runs.saved_runs:
             latest_run = self.prompt_runs.saved_runs[-1]
             self.prompt_runs.by_identity[(
-                "article_analysis_v1",
-                "article_analysis_v1",
-                "article_analysis_v1",
+                "article_taxonomy_v1",
+                "article_taxonomy_v1",
+                "article_taxonomy_v1",
                 "test-model",
                 self.identity,
                 latest_run.retry_count,
-            )] = (latest_run, structure, candidates)
-        return structure, candidates
+            )] = (latest_run, structure, items)
+        return structure, items
 
 
 class _FakeSessionScope:
@@ -149,6 +150,10 @@ def _article_input() -> ArticlePromptInput:
 
 
 def _valid_article_analysis_payload() -> dict:
+    return article_taxonomy_output(["rule_candidate"])
+
+
+def _legacy_payload_no_longer_used() -> dict:
     return {
         "prompt_version": "article_analysis_v1",
         "schema_version": "article_analysis_v1",
@@ -232,19 +237,21 @@ async def test_runtime_uses_exactly_one_main_call_when_output_is_valid() -> None
 
     result = await service.analyze_article(_article_input())
 
-    assert gateway.calls == ["article_analysis_v1"]
+    assert gateway.calls == ["article_taxonomy_v1"]
     assert result.repair_count == 0
     assert len(article_repo.saved) == 1
-    assert prompt_runs.saved_runs[0].prompt_name == "article_analysis_v1"
+    assert prompt_runs.saved_runs[0].prompt_name == "article_taxonomy_v1"
 
 
 @pytest.mark.asyncio
 async def test_runtime_uses_at_most_one_targeted_repair_call() -> None:
     invalid = _valid_article_analysis_payload()
-    del invalid["rule_extraction"]["strategy_rules"][0]["title"]
+    del invalid["taxonomy_extraction"]["extraction_items"][0]["taxonomy_payload"]["candidate_rule_summary"]
     repaired = {
-        "prompt_version": "article_analysis_repair_v1",
-        "patched_fields": {"rule_extraction.strategy_rules.0.title": "竞价放量突破"},
+        "prompt_version": "article_taxonomy_repair_v1",
+        "patched_fields": {
+            "taxonomy_extraction.extraction_items.0.taxonomy_payload.candidate_rule_summary": "竞价放量突破"
+        },
         "unresolved_errors": [],
         "warnings": [],
     }
@@ -261,11 +268,11 @@ async def test_runtime_uses_at_most_one_targeted_repair_call() -> None:
 
     result = await service.analyze_article(_article_input())
 
-    assert gateway.calls == ["article_analysis_v1", "article_analysis_repair_v1"]
+    assert gateway.calls == ["article_taxonomy_v1", "article_taxonomy_repair_v1"]
     assert result.repair_count == 1
     assert [run.prompt_name for run in prompt_runs.saved_runs] == [
-        "article_analysis_v1",
-        "article_analysis_repair_v1",
+        "article_taxonomy_v1",
+        "article_taxonomy_repair_v1",
     ]
 
 
@@ -274,7 +281,7 @@ async def test_runtime_rejects_second_repair_attempt() -> None:
     invalid = _valid_article_analysis_payload()
     del invalid["classification"]["article_type"]
     unresolved = {
-        "prompt_version": "article_analysis_repair_v1",
+        "prompt_version": "article_taxonomy_repair_v1",
         "patched_fields": {},
         "unresolved_errors": ["classification.article_type"],
         "warnings": [],
@@ -291,7 +298,7 @@ async def test_runtime_rejects_second_repair_attempt() -> None:
     with pytest.raises(PromptRuntimeError):
         await service.analyze_article(_article_input())
 
-    assert gateway.calls == ["article_analysis_v1", "article_analysis_repair_v1"]
+    assert gateway.calls == ["article_taxonomy_v1", "article_taxonomy_repair_v1"]
 
 
 @pytest.mark.asyncio
@@ -299,16 +306,16 @@ async def test_runtime_cache_hit_suppresses_duplicate_provider_call() -> None:
     cached_payload = _valid_article_analysis_payload()
     prompt_runs = _FakePromptRunRepository()
     prompt_runs.by_identity[(
-        "article_analysis_v1",
-        "article_analysis_v1",
-        "article_analysis_v1",
+        "article_taxonomy_v1",
+        "article_taxonomy_v1",
+        "article_taxonomy_v1",
         "test-model",
         "cached-hash",
         0,
     )] = (
-        _FakePromptRun(prompt_run_id=UUID("44444444-4444-4444-4444-444444444444"), prompt_name="article_analysis_v1", retry_count=0, validation_state="valid"),
-        _FakeArticleStructure(schema_version="article_analysis_v1", article_structure_id=UUID("33333333-3333-3333-3333-333333333333"), payload=cached_payload["article_structure"]),
-        [_FakeRuleCandidate(rule_candidate_id=UUID("55555555-5555-5555-5555-555555555555"))],
+        _FakePromptRun(prompt_run_id=UUID("44444444-4444-4444-4444-444444444444"), prompt_name="article_taxonomy_v1", retry_count=0, validation_state="valid"),
+        _FakeArticleStructure(schema_version="article_taxonomy_v1", article_structure_id=UUID("33333333-3333-3333-3333-333333333333"), payload=cached_payload["article_structure"]),
+        [_FakeExtractionItem(extraction_item_id=UUID("55555555-5555-5555-5555-555555555555"))],
     )
     gateway = _FakeGateway([])
     service = Stage3PromptRuntimeService(
@@ -331,16 +338,16 @@ async def test_runtime_cache_reuses_valid_result_even_when_previous_attempt_need
     cached_payload = _valid_article_analysis_payload()
     prompt_runs = _FakePromptRunRepository()
     prompt_runs.by_identity[(
-        "article_analysis_v1",
-        "article_analysis_v1",
-        "article_analysis_v1",
+        "article_taxonomy_v1",
+        "article_taxonomy_v1",
+        "article_taxonomy_v1",
         "test-model",
         "cached-hash",
         1,
     )] = (
-        _FakePromptRun(prompt_run_id=UUID("66666666-6666-6666-6666-666666666666"), prompt_name="article_analysis_v1", retry_count=1, validation_state="valid"),
-        _FakeArticleStructure(schema_version="article_analysis_v1", article_structure_id=UUID("77777777-7777-7777-7777-777777777777"), payload=cached_payload["article_structure"]),
-        [_FakeRuleCandidate(rule_candidate_id=UUID("88888888-8888-8888-8888-888888888888"))],
+        _FakePromptRun(prompt_run_id=UUID("66666666-6666-6666-6666-666666666666"), prompt_name="article_taxonomy_v1", retry_count=1, validation_state="valid"),
+        _FakeArticleStructure(schema_version="article_taxonomy_v1", article_structure_id=UUID("77777777-7777-7777-7777-777777777777"), payload=cached_payload["article_structure"]),
+        [_FakeExtractionItem(extraction_item_id=UUID("88888888-8888-8888-8888-888888888888"))],
     )
     gateway = _FakeGateway([cached_payload])
     article_repo = _FakeArticleRepository()
@@ -379,6 +386,6 @@ async def test_runtime_suppresses_concurrent_duplicate_requests() -> None:
         service.analyze_article(_article_input()),
     )
 
-    assert gateway.calls == ["article_analysis_v1"]
+    assert gateway.calls == ["article_taxonomy_v1"]
     assert len(article_repo.saved) == 1
     assert first.prompt_run_id == second.prompt_run_id

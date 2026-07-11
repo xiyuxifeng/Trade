@@ -121,11 +121,11 @@ class Stage3BatchService:
                 article_revision_id=fixture.article_revision_id,
             )
             processed_revision_ids.add(revision_key)
-            item_states = list(journey.automatic_reviews.values())
+            item_states = list(journey.extraction_items)
             rejected_or_conflicted = [
-                state.status
-                for state in item_states
-                if state.status in {"rejected", "conflict"}
+                str(item.review_state)
+                for item in item_states
+                if str(item.review_state) == "rejected"
             ]
             processed_item_map[revision_key] = {
                 "article_revision_id": revision_key,
@@ -133,7 +133,7 @@ class Stage3BatchService:
                 "prompt_run_id": str(runtime_result.prompt_run_id),
                 "validation_state": runtime_result.validation_state,
                 "prompt_retry_count": runtime_result.prompt_retry_count,
-                "automatic_review_statuses": [state.status for state in item_states],
+                "review_destinations": [str(item.review_destination) for item in item_states],
                 "rejected_or_conflicted": bool(rejected_or_conflicted),
                 "resume_point": revision_key,
             }
@@ -141,12 +141,16 @@ class Stage3BatchService:
             result.success_count += 1
             result.cached_count += int(runtime_result.cache_hit)
             result.repaired_count += runtime_result.repair_count
-            human_attention = any(item.status == "needs_human_review" for item in journey.automatic_reviews.values())
+            human_attention = any(
+                bool((item.confidence or {}).get("requires_human_confirmation"))
+                for item in journey.extraction_items
+            )
             result.human_attention_count += int(human_attention)
             if rejected_or_conflicted:
                 result.rejected_or_conflicted_items.append(revision_key)
-            for review in journey.automatic_reviews.values():
-                auto_review_stats[review.status] = auto_review_stats.get(review.status, 0) + 1
+            for item in journey.extraction_items:
+                destination = str(item.review_destination)
+                auto_review_stats[destination] = auto_review_stats.get(destination, 0) + 1
 
             await self._update_job_checkpoint(
                 job_id=job.id,
@@ -209,8 +213,8 @@ class Stage3BatchService:
                     "limit": limit,
                     "gate_version": STAGE3_FIXED_SET_GATE_VERSION,
                     "model": self._model,
-                    "prompt_version": "article_analysis_v1",
-                    "schema_version": "article_analysis_v1",
+                    "prompt_version": "article_taxonomy_v1",
+                    "schema_version": "article_taxonomy_v1",
                     "concurrency_limit": self._concurrency_limit,
                     "retry_cap": 1,
                 },

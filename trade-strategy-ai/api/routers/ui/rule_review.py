@@ -7,15 +7,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from api.dependencies import CurrentPrincipal, get_current_principal, require_role, verify_api_key
+from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from src.db.session import get_session_factory as async_session_factory
-from src.services.rule_review_service import (
-    ReviewActionResult,
-    ReviewBatchResult,
-    RuleReviewError,
-    RuleReviewService,
-    RuleReviewTransitionBlockedError,
-)
+from src.services.rule_review_service import RuleReviewError, RuleReviewService
 from src.services.stage3_regression_service import Stage3RegressionService
 
 
@@ -100,42 +94,29 @@ async def apply_rule_review_action(
     candidate_id: str,
     request: RuleReviewActionRequest,
     principal: CurrentPrincipal = Depends(require_role("operator")),
-    service: RuleReviewService = Depends(get_rule_review_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
-    try:
-        result: ReviewActionResult = await service.apply_action(
-            candidate_id=candidate_id,
-            action=request.action,  # type: ignore[arg-type]
-            actor_type="human",
-            actor_id=principal.api_key_label or principal.role,
-            reason=request.reason,
-            correlation_id=request.correlation_id,
-            edits=request.edits,
-        )
-    except RuleReviewTransitionBlockedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
-    except RuleReviewError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _serialize(result)
+    del candidate_id, request, principal
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "status": "retired_read_only",
+            "message": "旧 rule_candidates 仅保留为审计证据；请从文章分类抽取结果处理新项目。",
+        },
+    )
 
 
 @router.post("/candidates/batch-actions")
 async def apply_rule_review_batch_action(
     request: RuleReviewBatchRequest,
     principal: CurrentPrincipal = Depends(require_role("operator")),
-    service: RuleReviewService = Depends(get_rule_review_service),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
-    try:
-        result: ReviewBatchResult = await service.apply_batch_action(
-            action=request.action,  # type: ignore[arg-type]
-            actor_type="human",
-            actor_id=principal.api_key_label or principal.role,
-            reason=request.reason,
-            correlation_id=request.correlation_id,
-            candidate_ids=request.candidate_ids,
-        )
-    except RuleReviewTransitionBlockedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"status": "blocked", "message": str(exc)}) from exc
-    return _serialize(result)
+    del request, principal
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "status": "retired_read_only",
+            "message": "旧 rule_candidates 批量写入路径已停用；历史记录保持只读。",
+        },
+    )

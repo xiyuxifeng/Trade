@@ -62,14 +62,14 @@ def test_historical_article_metadata_adapter_does_not_load_legacy_prompt_files(m
     assert contract.provenance.fact_sources[0].source_ref == "article_metadata:v1"
 
 
-def test_fixed_set_v1_payload_projects_to_legacy_reader_shape() -> None:
+def test_taxonomy_payload_projects_metadata_but_not_rules_to_legacy_reader() -> None:
     for fixture in get_stage3_fixed_regression_set():
         raw = fixture.build_payload(valid=True)
 
         compat = _legacy_compat_output_from_article_analysis(raw)
 
-        assert compat["stage3_prompt_name"] == "article_analysis_v1"
-        assert compat["stage3_schema_version"] == "article_analysis_v1"
+        assert compat["stage3_prompt_name"] == "article_taxonomy_v1"
+        assert compat["stage3_schema_version"] == "article_taxonomy_v1"
         assert set(compat) >= {
             "extracted_concepts",
             "trading_symbols",
@@ -79,7 +79,7 @@ def test_fixed_set_v1_payload_projects_to_legacy_reader_shape() -> None:
             "sentiment_score",
             "confidence_score",
         }
-        assert len(compat["strategy_rules"]) == len(fixture.rules)
+        assert compat["strategy_rules"] == []
         assert len(compat["preconditions"]) == len(raw["explicit_preconditions"]["preconditions"])
 
 

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api/http';
-import { getArticleAnalysis, reviewArticleCandidate } from '@/lib/api/article-analysis';
+import { getArticleAnalysis, reviewExtractionItem } from '@/lib/api/article-analysis';
 import { listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listJobDefinitions, listJobs } from '@/lib/api/jobs';
 import { listProfiles } from '@/lib/api/profiles';
@@ -15,6 +15,8 @@ import {
 } from '@/lib/api/pipelines';
 import { renderWithRouter } from '@/test/test-utils';
 import type { PipelineRunResponse } from '@/types/pipeline';
+import type { ArticleAnalysisDetail } from '@/types/article-analysis';
+import type { ArticleListResponse } from '@/types/articles';
 
 import { ResearchAddPage, ResearchArticlesPage, ResearchResultsPage } from './index';
 
@@ -34,7 +36,7 @@ vi.mock('@/lib/api/jobs', () => ({
 
 vi.mock('@/lib/api/article-analysis', () => ({
   getArticleAnalysis: vi.fn(),
-  reviewArticleCandidate: vi.fn(),
+  reviewExtractionItem: vi.fn(),
   runArticleAnalysis: vi.fn(),
 }));
 
@@ -58,7 +60,7 @@ vi.mock('@/lib/api/pipelines', () => ({
 const mockedListArticles = vi.mocked(listArticles);
 const mockedListArticleFilterOptions = vi.mocked(listArticleFilterOptions);
 const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
-const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
+const mockedReviewExtractionItem = vi.mocked(reviewExtractionItem);
 const mockedListJobDefinitions = vi.mocked(listJobDefinitions);
 const mockedListJobs = vi.mocked(listJobs);
 const mockedListProfiles = vi.mocked(listProfiles);
@@ -68,7 +70,7 @@ const mockedGetArticlePipeline = vi.mocked(getArticlePipeline);
 const mockedGetArticlePipelineScheduleStatus = vi.mocked(getArticlePipelineScheduleStatus);
 const mockedToast = vi.mocked(toast);
 
-function buildArticleList() {
+function buildArticleList(): ArticleListResponse {
   return {
     items: [
       {
@@ -191,7 +193,7 @@ function buildJobsList() {
   };
 }
 
-function buildArticleAnalysisDetail() {
+function buildArticleAnalysisDetail(): ArticleAnalysisDetail {
   return {
     status: 'ready' as const,
     warning: null,
@@ -250,6 +252,26 @@ function buildArticleAnalysisDetail() {
       started_at: '2026-05-10T10:00:00Z',
       completed_at: '2026-05-10T10:01:00Z',
     },
+    taxonomy_version: 'extraction_taxonomy_v1',
+    extraction_summary: {
+      total: 1,
+      by_primary_type: { semantic_experience: 1 },
+      by_destination: { semantic_dictionary_review: 1 },
+      by_quality_state: { valid: 1 },
+      by_review_state: { queued: 1 },
+    },
+    extraction_items: [{
+      item_id: 'item-1', item_index: 0, article_id: 'article-1', article_revision_id: 'revision-1',
+      article_structure_id: 'structure-1', prompt_run_id: 'prompt-run-1', primary_type: 'semantic_experience',
+      secondary_tags: [], display_title: '突破语义', display_summary: '需要语义澄清',
+      source_evidence: { quote: '突破' }, taxonomy_payload: { primary_type: 'semantic_experience', term_or_phrase: '突破' },
+      confidence: { score: 0.8 }, quality_state: 'valid', review_destination: 'semantic_dictionary_review',
+      review_state: 'queued',
+      backtest_eligibility: { eligible: false, reason: 'non-rule type', required_next_step: 'semantic_review', blocked_by: ['non_rule_type'] },
+      promotion_eligibility: { eligible: false, reason: 'non-rule type', required_next_step: 'semantic_review', blocked_by: ['non_rule_type'] },
+      provenance: { origin: 'fixture' }, rule_version_id: null,
+      created_at: '2026-05-10T10:01:00Z', updated_at: '2026-05-10T10:01:00Z',
+    }],
     candidates: [
       {
         candidate_id: 'candidate-1',
@@ -288,7 +310,7 @@ function buildArticleAnalysisDetail() {
         },
       },
     ],
-  };
+  } as ArticleAnalysisDetail;
 }
 
 async function expectNoForbiddenTerms() {
@@ -842,17 +864,17 @@ describe('research pages', () => {
     const detail = buildArticleAnalysisDetail();
     mockedListArticles.mockResolvedValue(buildArticleList());
     mockedGetArticleAnalysis.mockResolvedValue(detail);
-    mockedReviewArticleCandidate.mockResolvedValue(detail);
+    mockedReviewExtractionItem.mockResolvedValue(detail);
 
     renderWithRouter([{ path: '/research/results', element: <ResearchResultsPage /> }], ['/research/results']);
 
     expect((await screen.findAllByText('文章分析与审核')).length).toBeGreaterThan(0);
-    await user.click(await screen.findByRole('button', { name: '人工批准为待回测规则' }));
+    await user.click(await screen.findByRole('button', { name: '按当前通道确认' }));
 
     await waitFor(() => {
-      expect(mockedReviewArticleCandidate).toHaveBeenCalledWith('article-1', 'candidate-1', {
-        decision: 'approve',
-        reason: '人工确认后进入待回测。',
+      expect(mockedReviewExtractionItem).toHaveBeenCalledWith('article-1', 'item-1', {
+        decision: 'accept',
+        reason: '已按当前分类通道确认。',
       });
     });
   });

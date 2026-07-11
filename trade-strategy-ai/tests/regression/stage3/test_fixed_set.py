@@ -25,10 +25,10 @@ def test_stage3_fixed_regression_set_binds_identity_versions_and_semantic_assert
         assert item.article_id
         assert item.article_revision_id
         assert item.content_hash
-        assert item.prompt_name == "article_analysis_v1"
-        assert item.prompt_version == "article_analysis_v1"
-        assert item.schema_name == "article_analysis_v1"
-        assert item.schema_version == "article_analysis_v1"
+        assert item.prompt_name == "article_taxonomy_v1"
+        assert item.prompt_version == "article_taxonomy_v1"
+        assert item.schema_name == "article_taxonomy_v1"
+        assert item.schema_version == "article_taxonomy_v1"
         assert item.model
         assert item.selection_reason
         assert item.expected_outcome_ambiguity

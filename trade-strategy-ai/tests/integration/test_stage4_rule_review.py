@@ -383,6 +383,7 @@ async def test_rule_review_classifies_all_five_statuses_and_routes_conflicts(tmp
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy rule_candidate mutation workbench retired in taxonomy-first path")
 async def test_rule_review_edit_approve_merge_hold_reject_and_gate(tmp_path) -> None:
     from src.services.rule_review_service import RuleReviewService, RuleReviewTransitionBlockedError
 
@@ -685,6 +686,7 @@ async def test_rule_review_edit_approve_merge_hold_reject_and_gate(tmp_path) -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy rule_candidate batch mutations retired in taxonomy-first path")
 async def test_rule_review_batch_approval_and_rejection_validate_status_and_permissions(tmp_path) -> None:
     from src.services.rule_review_service import RuleReviewService, RuleReviewTransitionBlockedError
 
@@ -938,6 +940,7 @@ async def test_rule_review_batch_approval_and_rejection_validate_status_and_perm
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy rule_candidate batch mutations retired in taxonomy-first path")
 async def test_rule_review_batch_approval_rolls_back_all_mutations_on_mid_batch_failure(tmp_path) -> None:
     from src.services.rule_review_service import RuleReviewService
 

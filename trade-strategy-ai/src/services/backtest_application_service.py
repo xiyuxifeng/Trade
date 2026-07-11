@@ -10,6 +10,8 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+from src.services.extraction_taxonomy_service import eligibility_for
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.db.repositories.backtest_run_repository import BacktestRunRepository
@@ -280,6 +282,37 @@ class BacktestApplicationService:
             if rule_version is None:
                 reasons.append({"code": "rule_version_unavailable", "message": "所选规则版本不存在或不可用。"})
                 return None, None, [], reasons
+            source_candidate_id = getattr(rule_version, "source_candidate_id", None)
+            source_item_id = getattr(rule_version, "source_extraction_item_id", None)
+            if source_candidate_id is not None and source_item_id is None:
+                reasons.append(
+                    {
+                        "code": "legacy_rule_candidate_source_blocked",
+                        "message": "旧候选规则来源仅作审计证据，不能进入正式回测。",
+                    }
+                )
+            elif source_item_id is None:
+                reasons.append(
+                    {
+                        "code": "extraction_lineage_missing",
+                        "message": "规则版本缺少可验证的严格抽取来源，不能进入正式回测。",
+                    }
+                )
+            else:
+                source_item = await _repo_call(
+                    self.repository,
+                    "get_extraction_item",
+                    session,
+                    extraction_item_id=source_item_id,
+                )
+                admission = eligibility_for(source_item) if source_item is not None else None
+                if admission is None or not admission.eligible:
+                    reasons.append(
+                        {
+                            "code": "extraction_item_not_strictly_eligible",
+                            "message": admission.reason if admission is not None else "抽取来源不可用。",
+                        }
+                    )
             return rule_version, None, [rule_version], reasons
 
         rule_family = await _repo_call(
@@ -293,6 +326,43 @@ class BacktestApplicationService:
             reasons.append({"code": "rule_family_unavailable", "message": "所选规则族不存在或不可用。"})
         elif not members:
             reasons.append({"code": "rule_family_empty", "message": "所选规则族没有可冻结的规则版本。"})
+        else:
+            for member in members:
+                source_candidate_id = getattr(member, "source_candidate_id", None)
+                source_item_id = getattr(member, "source_extraction_item_id", None)
+                if source_candidate_id is not None and source_item_id is None:
+                    reasons.append(
+                        {
+                            "code": "legacy_rule_candidate_source_blocked",
+                            "message": "规则族包含旧候选来源版本，不能进入正式回测。",
+                            "rule_version_id": _id(getattr(member, "rule_version_id", None)),
+                        }
+                    )
+                    continue
+                if source_item_id is None:
+                    reasons.append(
+                        {
+                            "code": "extraction_lineage_missing",
+                            "message": "规则族成员缺少可验证的抽取来源。",
+                            "rule_version_id": _id(getattr(member, "rule_version_id", None)),
+                        }
+                    )
+                    continue
+                source_item = await _repo_call(
+                    self.repository,
+                    "get_extraction_item",
+                    session,
+                    extraction_item_id=source_item_id,
+                )
+                admission = eligibility_for(source_item) if source_item is not None else None
+                if admission is None or not admission.eligible:
+                    reasons.append(
+                        {
+                            "code": "extraction_item_not_strictly_eligible",
+                            "message": admission.reason if admission is not None else "抽取来源不可用。",
+                            "rule_version_id": _id(getattr(member, "rule_version_id", None)),
+                        }
+                    )
         return None, rule_family, members, reasons
 
     async def _dependency_result(self, session: Any, selection: BacktestSelection) -> BacktestDependencyResult:
@@ -1142,7 +1212,8 @@ class BacktestApplicationService:
         if isinstance(run, dict):
             get = run.get
         else:
-            get = lambda key, default=None: getattr(run, key, default)
+            def get(key: str, default: Any = None) -> Any:
+                return getattr(run, key, default)
         status = _value(get("status"))
         return BacktestRunView(
             run_id=str(get("run_id")),

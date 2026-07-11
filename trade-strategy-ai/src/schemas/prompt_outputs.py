@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.schemas.extraction_taxonomy import ExtractionItemDraft
+
 
 def _config(title: str) -> ConfigDict:
     return ConfigDict(title=title, extra="forbid")
@@ -235,10 +237,48 @@ class ArticleAnalysisOutput(VersionedSchemaModel):
         return self
 
 
+class TaxonomyExtractionOutput(VersionedSchemaModel):
+    model_config = _config("extraction_taxonomy_v1")
+
+    taxonomy_version: Literal["extraction_taxonomy_v1"]
+    schema_version: Literal["extraction_item_v1"]
+    extraction_items: list[ExtractionItemDraft] = Field(default_factory=list)
+
+
+class ArticleTaxonomyOutput(VersionedSchemaModel):
+    model_config = _config("article_taxonomy_v1")
+
+    prompt_version: Literal["article_taxonomy_v1"]
+    schema_version: Literal["article_taxonomy_v1"]
+    classification: ClassificationOutput
+    concept_extraction: ConceptExtractionOutput
+    article_structure: ArticleStructureExtractionOutput
+    taxonomy_extraction: TaxonomyExtractionOutput
+    explicit_preconditions: ExplicitPreconditionExtractionOutput
+    quality: AnalysisQualityOutput
+
+    @model_validator(mode="after")
+    def normalize_declared_state(self) -> "ArticleTaxonomyOutput":
+        if self.article_structure.market_state.status != "explicit":
+            self.article_structure.market_state.status = "not_declared"
+        if self.explicit_preconditions.status != "explicit":
+            self.explicit_preconditions.status = "not_declared"
+        return self
+
+
 class ArticleAnalysisRepairOutput(VersionedSchemaModel):
     model_config = _config("article_analysis_repair_v1")
 
     prompt_version: Literal["article_analysis_repair_v1"]
+    patched_fields: dict[str, Any] = Field(default_factory=dict)
+    unresolved_errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ArticleTaxonomyRepairOutput(VersionedSchemaModel):
+    model_config = _config("article_taxonomy_repair_v1")
+
+    prompt_version: Literal["article_taxonomy_repair_v1"]
     patched_fields: dict[str, Any] = Field(default_factory=dict)
     unresolved_errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

@@ -10,7 +10,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.models.base import Base
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import (
     ArticleRevision,
@@ -125,6 +124,7 @@ async def _seed_candidate(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy RuleCandidate governance mutation is retired; taxonomy promotion tests cover deduplication")
 async def test_stage4_governance_reuses_existing_rule_version_for_exact_duplicate(tmp_path) -> None:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage4-rule-governance.db'}")
 

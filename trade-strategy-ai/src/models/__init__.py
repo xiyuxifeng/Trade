@@ -37,6 +37,7 @@ from src.models.user import User, UserSession
 from src.models.config_profile import ConfigProfile
 from src.models.evidence_pack import EvidencePackRecord
 from src.models import stage2_canonical as _stage2_canonical  # noqa: F401
+from src.models import extraction_taxonomy as _extraction_taxonomy  # noqa: F401
 
 __all__ = [
     "OHLCVBar",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import AsyncIterator
 from uuid import UUID, uuid4
 
@@ -194,8 +195,8 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
         revision = type("Revision", (), {"article_revision_id": uuid4(), "content_text": "清洗后正文", "content_hash": "hash-1"})()
         prompt_run = None
         structure = None
-        candidates = []
-        automatic_reviews = {}
+        extraction_items = []
+        eligibilities = {}
         rule_versions = {}
         summary_provenance = type(
             "SummaryProvenance",
@@ -247,11 +248,11 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
     assert payload["article"]["content_hash"] == "hash-1"
     assert payload["summary_provenance"]["source"] == "blog_article_current"
     assert payload["summary_provenance"]["article_revision_id"] == payload["article"]["article_revision_id"]
-    assert payload["candidates"] == []
+    assert payload["extraction_items"] == []
 
 
 @pytest.mark.asyncio
-async def test_operator_can_review_article_candidate_and_viewer_cannot(client: AsyncClient) -> None:
+async def test_operator_can_review_article_extraction_item_and_viewer_cannot(client: AsyncClient) -> None:
     article_id = str(uuid4())
     candidate_id = str(uuid4())
     revision_id = str(uuid4())
@@ -283,10 +284,10 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
             (),
             {
                 "run_id": "run-1",
-                "prompt_name": "article_analysis_v1",
-                "prompt_version": "article_analysis_v1",
-                "schema_name": "article_analysis_v1",
-                "schema_version": "article_analysis_v1",
+                "prompt_name": "article_taxonomy_v1",
+                "prompt_version": "article_taxonomy_v1",
+                "schema_name": "article_taxonomy_v1",
+                "schema_version": "article_taxonomy_v1",
                 "provider": "openai",
                 "model": "gpt-5.4",
                 "validation_state": "valid",
@@ -310,25 +311,39 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
                 "prompt_run_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
             },
         )()
-        candidate = type(
-            "Candidate",
+        extraction_item = type(
+            "ExtractionItem",
             (),
             {
-                "rule_candidate_id": UUID(candidate_id),
-                "candidate_index": 0,
-                "rule_type": "entry",
-                "canonical_payload": {"title": "放量突破介入", "market_state_applicability": {"status": "not_declared"}},
-                "explicit_fields": {"holding_period": "intraday"},
-                "inferred_fields": {"note": "可能需要配合量比"},
-                "missing_fields": {"stop_loss": "unknown"},
-                "evidence_json": {"items": [{"quote": "放量突破介入"}]},
-                "data_dependencies": {"required": ["ohlcv_1d"]},
-                "backtestability_status": "executable",
-                "review_state": "approved",
+                "extraction_item_id": UUID(candidate_id),
+                "item_index": 0,
+                "article_id": UUID(article_id),
+                "article_revision_id": UUID(revision_id),
+                "article_structure_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "prompt_run_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                "primary_type": "executable_rule",
+                "secondary_tags": ["突破"],
+                "taxonomy_payload": {"title": "放量突破介入", "primary_type": "executable_rule"},
+                "source_evidence": {"quote": "放量突破介入"},
+                "confidence": {"overall": 0.95},
+                "quality_state": "valid",
+                "review_destination": "executable_rule_validation",
+                "review_state": "accepted",
+                "provenance": {"taxonomy_version": "extraction_taxonomy_v1"},
+                "taxonomy_version": "extraction_taxonomy_v1",
+                "created_at": datetime(2026, 5, 10, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 10, tzinfo=UTC),
             },
         )()
-        candidates = [candidate]
-        automatic_reviews = {UUID(candidate_id): type("Review", (), {"status": "pending_backtest", "reasons": ["证据完整"], "risk_level": "low"})()}
+        extraction_items = [extraction_item]
+        eligibilities = {
+            UUID(candidate_id): SimpleNamespace(
+                eligible=True,
+                reason="strictly_validated",
+                required_next_step="promote",
+                blocked_by=[],
+            )
+        }
         rule_versions = {
             UUID(candidate_id): type("RuleVersion", (), {"rule_version_id": UUID(rule_version_id), "lifecycle_state": "draft"})()
         }
@@ -352,10 +367,10 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
                 "article_structure_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
                 "article_revision_id": revision_id,
                 "prompt_run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                "prompt_name": "article_analysis_v1",
-                "prompt_version": "article_analysis_v1",
-                "schema_name": "article_analysis_v1",
-                "schema_version": "article_analysis_v1",
+                "prompt_name": "article_taxonomy_v1",
+                "prompt_version": "article_taxonomy_v1",
+                "schema_name": "article_taxonomy_v1",
+                "schema_version": "article_taxonomy_v1",
                 "available": True,
             },
         )()
@@ -364,7 +379,7 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
         def __init__(self) -> None:
             self.calls = []
 
-        async def review_candidate(self, **kwargs):
+        async def review_extraction_item(self, **kwargs):
             self.calls.append(kwargs)
             return _FakeJourney()
 
@@ -379,8 +394,8 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     )
     try:
         response = await client.post(
-            f"/api/ui/v1/article-analysis/articles/{article_id}/candidates/{candidate_id}/review",
-            json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
+            f"/api/ui/v1/article-analysis/articles/{article_id}/extraction-items/{candidate_id}/review",
+            json={"decision": "accept", "reason": "证据充分。", "article_revision_id": revision_id},
         )
     finally:
         app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)
@@ -388,9 +403,9 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
 
     assert response.status_code == 200
     assert fake_service.calls[0]["actor_id"] == "operator-user"
-    assert response.json()["candidates"][0]["human_review"]["formal_rule_created"] is True
-    assert response.json()["candidates"][0]["human_review"]["formal_lifecycle_state"] == "draft"
-    assert response.json()["candidates"][0]["human_review"]["stage3_status"] == "pending_backtest"
+    assert response.json()["extraction_items"][0]["rule_version_id"] == rule_version_id
+    assert response.json()["extraction_items"][0]["review_state"] == "accepted"
+    assert response.json()["extraction_items"][0]["backtest_eligibility"]["eligible"] is True
     assert response.json()["summary_provenance"]["article_revision_id"] == revision_id
     assert response.json()["article_structure_provenance"]["article_revision_id"] == revision_id
     assert response.json()["method_tags"] == ["突破"]
@@ -405,8 +420,8 @@ async def test_operator_can_review_article_candidate_and_viewer_cannot(client: A
     )
     try:
         forbidden = await client.post(
-            f"/api/ui/v1/article-analysis/articles/{article_id}/candidates/{candidate_id}/review",
-            json={"decision": "approve", "reason": "证据充分。", "article_revision_id": revision_id},
+            f"/api/ui/v1/article-analysis/articles/{article_id}/extraction-items/{candidate_id}/review",
+            json={"decision": "accept", "reason": "证据充分。", "article_revision_id": revision_id},
         )
     finally:
         app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)

@@ -1,3 +1,12 @@
+export type PrimaryExtractionType =
+  | 'executable_rule'
+  | 'rule_candidate'
+  | 'research_hypothesis'
+  | 'semantic_experience'
+  | 'risk_control_hint'
+  | 'data_requirement_hint'
+  | 'unusable_noise';
+
 export type ArticleAnalysisTrace = {
   run_id: string | null;
   prompt_name: string | null;
@@ -15,57 +24,36 @@ export type ArticleAnalysisTrace = {
   completed_at: string | null;
 };
 
-export type AutomaticReview = {
-  status: 'pending_backtest' | 'needs_human_review' | 'suggested_reject';
-  reasons: string[];
-  risk_level: 'low' | 'medium' | 'high';
+export type ExtractionEligibility = {
+  eligible: boolean;
+  reason: string;
+  required_next_step: string;
+  blocked_by: string[];
 };
 
-export type HumanReview = {
+export type ArticleExtractionItem = {
+  item_id: string;
+  item_index: number;
+  article_id: string;
+  article_revision_id: string | null;
+  article_structure_id: string;
+  prompt_run_id: string;
+  primary_type: PrimaryExtractionType;
+  secondary_tags: string[];
+  display_title: string;
+  display_summary: string;
+  source_evidence: Record<string, unknown>;
+  taxonomy_payload: Record<string, unknown>;
+  confidence: Record<string, unknown>;
+  quality_state: string;
+  review_destination: string;
   review_state: string;
-  formal_rule_created: boolean;
+  backtest_eligibility: ExtractionEligibility;
+  promotion_eligibility: ExtractionEligibility;
+  provenance: Record<string, unknown>;
   rule_version_id: string | null;
-  formal_lifecycle_state: string | null;
-  stage3_status: string | null;
-};
-
-export type GovernanceMatch = {
-  relation: 'exact_duplicate' | 'parameter_variant' | 'conflict' | 'similar_rule' | 'distinct';
-  rule_version_id: string;
-  rule_id: string;
-  family_id: string | null;
-  title: string;
-  parameter_differences: Record<string, Record<string, unknown>>;
-  conflict_reasons: string[];
-};
-
-export type CandidateGovernance = {
-  algorithm_version: string;
-  exact_fingerprint: string;
-  family_fingerprint: string;
-  family_key: string;
-  exact_duplicate_of_rule_version_id: string | null;
-  eligible_for_formal_version: boolean;
-  eligible_for_backtest: boolean;
-  related_rules: GovernanceMatch[];
-};
-
-export type ArticleAnalysisCandidate = {
-  candidate_id: string;
-  candidate_index: number;
-  title: string;
-  rule_type: string;
-  explicit_facts: Record<string, unknown>;
-  hypotheses: Record<string, unknown>;
-  missing_fields: Record<string, unknown>;
-  evidence: Record<string, unknown>;
-  data_dependencies: Record<string, unknown>;
-  backtestability_status: string;
-  kaipan_dependency: boolean;
-  market_state_declaration_status: string;
-  automatic_review: AutomaticReview;
-  human_review: HumanReview;
-  governance: CandidateGovernance;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ArticleAnalysisArticle = {
@@ -112,24 +100,27 @@ export type ArticleAnalysisDetail = {
   hypotheses: Array<Record<string, unknown>>;
   missing_fields: Record<string, unknown>;
   prompt_trace: ArticleAnalysisTrace;
-  candidates: ArticleAnalysisCandidate[];
+  taxonomy_version: string | null;
+  extraction_summary: {
+    total: number;
+    by_primary_type: Record<string, number>;
+    by_destination: Record<string, number>;
+    by_quality_state: Record<string, number>;
+    by_review_state: Record<string, number>;
+  };
+  extraction_items: ArticleExtractionItem[];
 };
 
-export type RunArticleAnalysisRequest = {
-  article_revision_id?: string | null;
-};
-
-export type ReviewArticleCandidateRequest = {
-  decision: 'approve' | 'reject';
+export type RunArticleAnalysisRequest = { article_revision_id?: string | null };
+export type ReviewExtractionItemRequest = {
+  decision: 'accept' | 'reject';
   reason?: string | null;
   article_revision_id?: string | null;
 };
-
 export type UpdateArticleProcessingStatusRequest = {
   action: 'ignored' | 'manual_review_required';
   note?: string | null;
 };
-
 export type ArticleProcessingStatus = {
   article_id: string;
   processing_status: 'ignored' | 'manual_review_required';

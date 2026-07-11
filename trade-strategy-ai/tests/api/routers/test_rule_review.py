@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
 import pytest
@@ -135,7 +134,7 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_rule_review_router_lists_detail_and_mutations(client: AsyncClient) -> None:
+async def test_rule_review_router_keeps_old_candidates_read_only(client: AsyncClient) -> None:
     listing = await client.get("/api/ui/v1/rule-review/candidates")
     assert listing.status_code == 200
     assert listing.json()["items"][0]["automatic_review"]["status"] == "recommend_pass"
@@ -148,15 +147,15 @@ async def test_rule_review_router_lists_detail_and_mutations(client: AsyncClient
         "/api/ui/v1/rule-review/candidates/candidate-1/actions",
         json={"action": "approve", "reason": "人工确认通过。", "correlation_id": "corr-1"},
     )
-    assert action.status_code == 200
-    assert action.json()["current_lifecycle_state"] == "已批准"
+    assert action.status_code == 410
+    assert action.json()["detail"]["status"] == "retired_read_only"
 
     batch = await client.post(
         "/api/ui/v1/rule-review/candidates/batch-actions",
         json={"action": "approve_low_risk", "reason": "批量通过。", "correlation_id": "corr-batch", "candidate_ids": ["candidate-1"]},
     )
-    assert batch.status_code == 200
-    assert batch.json()["processed_count"] == 1
+    assert batch.status_code == 410
+    assert batch.json()["detail"]["status"] == "retired_read_only"
 
 
 @pytest.mark.asyncio

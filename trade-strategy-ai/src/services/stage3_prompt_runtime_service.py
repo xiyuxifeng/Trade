@@ -25,16 +25,15 @@ from src.llm.runtime import (
     invoke_with_bounded_retry,
 )
 from src.llm.client import from_env_and_config
+from src.schemas.extraction_taxonomy import ExtractionItemDraft
 from src.models.stage2_canonical import (
     ArticleStructure,
-    CandidateReviewState,
     FormalLifecycleState,
     PromptRun,
     PromptValidationState,
     QualityStatus,
-    RuleCandidate,
 )
-from src.services.rule_governance_service import fingerprint_rule_payload
+from src.services.extraction_taxonomy_service import build_extraction_item
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +53,7 @@ class ArticlePromptRuntimeResult:
     repair_count: int
     prompt_run_id: UUID
     article_structure_id: UUID
-    rule_candidate_ids: list[UUID]
+    extraction_item_ids: list[UUID]
     input_hash: str
     validation_state: str
     prompt_retry_count: int
@@ -116,13 +115,13 @@ def _collect_repair_targets(errors: list[dict[str, Any]]) -> list[str]:
 
 def _collect_evidence_from_analysis(payload: dict[str, Any]) -> dict[str, Any]:
     article_structure = payload["article_structure"]
-    rule_extraction = payload["rule_extraction"]
+    taxonomy_extraction = payload["taxonomy_extraction"]
     return {
         "classification": payload["classification"].get("evidence", []),
         "key_claims": [claim.get("evidence", []) for claim in article_structure.get("key_claims", [])],
-        "rule_evidence": [
-            {"rule_key": rule.get("rule_key"), "evidence": rule.get("evidence", [])}
-            for rule in rule_extraction.get("strategy_rules", [])
+        "taxonomy_evidence": [
+            {"primary_type": item.get("primary_type"), "source_evidence": item.get("source_evidence", {})}
+            for item in taxonomy_extraction.get("extraction_items", [])
         ],
     }
 
@@ -131,13 +130,13 @@ def _missing_fields(payload: dict[str, Any]) -> dict[str, Any]:
     missing = {
         "article_structure.market_state": payload["article_structure"]["market_state"].get("status"),
         "explicit_preconditions.status": payload["explicit_preconditions"].get("status"),
-        "rules": [
+        "taxonomy_items": [
             {
-                "rule_key": rule.get("rule_key"),
-                "missing_fields": rule.get("quantification", {}).get("missing_fields", []),
-                "ambiguous_terms": rule.get("quantification", {}).get("ambiguous_terms", []),
+                "primary_type": item.get("primary_type"),
+                "missing_fields": item.get("taxonomy_payload", {}).get("missing_fields", []),
+                "ambiguous_terms": item.get("taxonomy_payload", {}).get("ambiguous_terms", []),
             }
-            for rule in payload["rule_extraction"].get("strategy_rules", [])
+            for item in payload["taxonomy_extraction"].get("extraction_items", [])
         ],
     }
     return missing
@@ -146,18 +145,11 @@ def _missing_fields(payload: dict[str, Any]) -> dict[str, Any]:
 def _inference_fields(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "article_market_state_hypotheses": payload["article_structure"]["market_state"].get("inferred_hypotheses", []),
-        "rule_market_state_hypotheses": [
-            {
-                "rule_key": rule.get("rule_key"),
-                "inferred_hypotheses": rule.get("market_state_applicability", {}).get("inferred_hypotheses", []),
-            }
-            for rule in payload["rule_extraction"].get("strategy_rules", [])
+        "taxonomy_inferred_items": [
+            item for item in payload["taxonomy_extraction"].get("extraction_items", [])
+            if item.get("source_evidence", {}).get("evidence_kind") == "inferred_from_context"
         ],
     }
-
-
-def _fingerprint(payload: dict[str, Any]) -> str:
-    return fingerprint_rule_payload(payload).exact_fingerprint
 
 
 class Stage3PromptRuntimeService:
@@ -184,20 +176,20 @@ class Stage3PromptRuntimeService:
         self._locks: dict[str, Any] = {}
 
     async def analyze_article(self, article_input: ArticlePromptInput) -> ArticlePromptRuntimeResult:
-        main_spec = get_prompt_spec("article_analysis_v1")
+        main_spec = get_prompt_spec("article_taxonomy_v1")
         identity = self._identity_hasher(article_input, main_spec, self._model)
         lock = self._locks.setdefault(identity, asyncio.Lock())
         async with lock:
             async with self._session_scope_factory() as session:
                 cached = await self._load_cached(session, identity=identity)
                 if cached is not None:
-                    prompt_run, structure, candidates = cached
+                    prompt_run, structure, items = cached
                     return ArticlePromptRuntimeResult(
                         cache_hit=True,
                         repair_count=0,
                         prompt_run_id=prompt_run.prompt_run_id,
                         article_structure_id=structure.article_structure_id,
-                        rule_candidate_ids=[candidate.rule_candidate_id for candidate in candidates],
+                        extraction_item_ids=[item.extraction_item_id for item in items],
                         input_hash=identity,
                         validation_state=str(prompt_run.validation_state),
                         prompt_retry_count=int(prompt_run.retry_count or 0),
@@ -213,9 +205,9 @@ class Stage3PromptRuntimeService:
     ):
         return await self._prompt_run_repository.get_cached_result(
             session,
-            prompt_name="article_analysis_v1",
-            prompt_version="article_analysis_v1",
-            schema_version="article_analysis_v1",
+            prompt_name="article_taxonomy_v1",
+            prompt_version="article_taxonomy_v1",
+            schema_version="article_taxonomy_v1",
             model=self._model,
             input_hash=identity,
             retry_count=0,
@@ -228,8 +220,8 @@ class Stage3PromptRuntimeService:
         article_input: ArticlePromptInput,
         identity: str,
     ) -> ArticlePromptRuntimeResult:
-        main_spec = get_prompt_spec("article_analysis_v1")
-        repair_spec = get_prompt_spec("article_analysis_repair_v1")
+        main_spec = get_prompt_spec("article_taxonomy_v1")
+        repair_spec = get_prompt_spec("article_taxonomy_repair_v1")
         article_payload = {
             "article_id": str(article_input.article_id),
             "article_revision_id": str(article_input.article_revision_id),
@@ -296,6 +288,7 @@ class Stage3PromptRuntimeService:
 
         final_payload = validated.model_dump(mode="json")
         structure = ArticleStructure(
+            article_structure_id=uuid4(),
             article_id=article_input.article_id,
             article_revision_id=article_input.article_revision_id,
             prompt_run_id=main_run.prompt_run_id,
@@ -305,42 +298,35 @@ class Stage3PromptRuntimeService:
             missing_fields=_missing_fields(final_payload),
             inference_fields=_inference_fields(final_payload),
             lifecycle_state=FormalLifecycleState.draft,
-            quality_status=QualityStatus.partial,
+            quality_status=QualityStatus.complete,
             created_by=self.service_name,
             updated_by=self.service_name,
         )
-        candidates = [
-            RuleCandidate(
+        drafts = [
+            ExtractionItemDraft.model_validate(item)
+            for item in final_payload["taxonomy_extraction"]["extraction_items"]
+        ]
+        items = [
+            build_extraction_item(
+                draft=draft,
+                article_id=article_input.article_id,
+                article_revision_id=article_input.article_revision_id,
                 article_structure_id=structure.article_structure_id,
-                source_article_id=article_input.article_id,
-                candidate_index=index,
-                candidate_fingerprint=_fingerprint(rule),
-                rule_type=rule["rule_type"],
-                canonical_payload=rule,
-                evidence_json={"evidence": rule.get("evidence", [])},
-                explicit_fields={"market_state": rule.get("market_state_applicability", {}).get("explicit_conditions", [])},
-                inferred_fields={"market_state": rule.get("market_state_applicability", {}).get("inferred_hypotheses", [])},
-                missing_fields={
-                    "missing_fields": rule.get("quantification", {}).get("missing_fields", []),
-                    "ambiguous_terms": rule.get("quantification", {}).get("ambiguous_terms", []),
-                },
-                data_dependencies={"dependencies": rule.get("data_dependencies", [])},
-                backtestability_status=rule.get("quantification", {}).get("status", "not_executable"),
-                review_state=CandidateReviewState.extracted,
-                quality_status=QualityStatus.partial,
+                prompt_run=main_run,
+                item_index=index,
+                source_url=article_input.source_url,
                 created_by=self.service_name,
-                updated_by=self.service_name,
             )
-            for index, rule in enumerate(final_payload["rule_extraction"]["strategy_rules"])
+            for index, draft in enumerate(drafts)
         ]
 
         with canonical_write_scope("article_analysis", self.service_name):
             saved_run = await self._prompt_run_repository.save_run(session, main_run)
             structure.prompt_run_id = saved_run.prompt_run_id
-            saved_structure, saved_candidates = await self._article_analysis_repository.save_structure_with_candidates(
+            saved_structure, saved_items = await self._article_analysis_repository.save_structure_with_items(
                 session,
                 structure=structure,
-                candidates=candidates,
+                items=items,
             )
 
         return ArticlePromptRuntimeResult(
@@ -348,7 +334,7 @@ class Stage3PromptRuntimeService:
             repair_count=repair_count,
             prompt_run_id=saved_run.prompt_run_id,
             article_structure_id=saved_structure.article_structure_id,
-            rule_candidate_ids=[candidate.rule_candidate_id for candidate in saved_candidates],
+            extraction_item_ids=[item.extraction_item_id for item in saved_items],
             input_hash=identity,
             validation_state=str(saved_run.validation_state),
             prompt_retry_count=int(saved_run.retry_count or 0),
@@ -362,7 +348,7 @@ class Stage3PromptRuntimeService:
         previous_result: dict[str, Any],
         validation_error: ValidationError,
     ):
-        repair_spec = get_prompt_spec("article_analysis_repair_v1")
+        repair_spec = get_prompt_spec("article_taxonomy_repair_v1")
         request_json = {
             "article": {
                 "article_id": str(article_input.article_id),
@@ -391,7 +377,7 @@ class Stage3PromptRuntimeService:
             raise PromptRuntimeError("repair returned no targeted fields")
         patched = _apply_patch(previous_result, repair_output.patched_fields)
         try:
-            validated = get_prompt_spec("article_analysis_v1").validate_output(patched)
+            validated = get_prompt_spec("article_taxonomy_v1").validate_output(patched)
         except ValidationError as exc:
             raise PromptRuntimeError("second repair is not allowed") from exc
         return validated, repair_trace, repair_retry_count

@@ -10,8 +10,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { LoadingState, EmptyState, ErrorState, SectionCard } from '@/components/kit';
 import { ApiError } from '@/lib/api/http';
 import { listArticles } from '@/lib/api/articles';
-import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
-import type { ArticleAnalysisCandidate, ArticleAnalysisDetail } from '@/types/article-analysis';
+import { getArticleAnalysis, reviewExtractionItem, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
+import type { ArticleAnalysisDetail, ArticleExtractionItem, PrimaryExtractionType } from '@/types/article-analysis';
 import type { ArticleListResponse } from '@/types/articles';
 
 type ProductNavigationTargets = {
@@ -77,16 +77,21 @@ function formatJsonBlock(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-function automaticReviewLabel(status: ArticleAnalysisCandidate['automatic_review']['status']) {
-  if (status === 'pending_backtest') return '待回测';
-  if (status === 'needs_human_review') return '需要人工确认';
-  return '建议拒绝';
-}
+const typeLabels: Record<PrimaryExtractionType, string> = {
+  executable_rule: '可执行规则',
+  rule_candidate: '待修复规则雏形',
+  research_hypothesis: '研究假设',
+  semantic_experience: '语义经验',
+  risk_control_hint: '风控提示',
+  data_requirement_hint: '数据需求',
+  unusable_noise: '不可用内容',
+};
 
-function automaticReviewVariant(status: ArticleAnalysisCandidate['automatic_review']['status']) {
-  if (status === 'pending_backtest') return 'success' as const;
-  if (status === 'needs_human_review') return 'warning' as const;
-  return 'destructive' as const;
+function itemVariant(item: ArticleExtractionItem) {
+  if (item.quality_state === 'invalid' || item.quality_state === 'rejected') return 'destructive' as const;
+  if (item.primary_type === 'executable_rule' && item.backtest_eligibility.eligible) return 'success' as const;
+  if (item.quality_state === 'partial' || item.quality_state === 'needs_review') return 'warning' as const;
+  return 'info' as const;
 }
 
 function ArticlePageShell({
@@ -189,10 +194,10 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async (payload: { articleId: string; candidateId: string; decision: 'approve' | 'reject' }) =>
-      reviewArticleCandidate(payload.articleId, payload.candidateId, {
+    mutationFn: async (payload: { articleId: string; itemId: string; decision: 'accept' | 'reject' }) =>
+      reviewExtractionItem(payload.articleId, payload.itemId, {
         decision: payload.decision,
-        reason: payload.decision === 'approve' ? '人工确认后进入待回测。' : '人工审核后拒绝该候选规则。',
+        reason: payload.decision === 'accept' ? '已按当前分类通道确认。' : '证据或分类不满足保留要求。',
       }),
     onSuccess: async (detail) => {
       setMessage('人工审核结果已保存。');
@@ -239,7 +244,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
             </p>
             <p className="mt-1 break-all text-[11px] text-slate-500">{selectedArticle.source_url}</p>
           </div>
-          <Badge variant={selectedArticleProcessingStatus === 'ignored' ? 'default' : selectedArticleProcessingStatus === 'manual_review_required' ? 'warning' : 'danger'}>
+          <Badge variant={selectedArticleProcessingStatus === 'ignored' ? 'default' : selectedArticleProcessingStatus === 'manual_review_required' ? 'warning' : 'destructive'}>
             {manualStatusLabel}
           </Badge>
         </div>
@@ -303,7 +308,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
       </div>
     </div>
   ) : detailQuery.isLoading ? (
-    <LoadingState label="正在加载文章分析" description="正在读取当前文章的结构化结果、候选规则和审核状态。" />
+    <LoadingState label="正在加载文章分析" description="正在读取当前文章的结构化结果、分类抽取项和处理状态。" />
   ) : detailQuery.error ? (
     <ArticleErrorState error={detailQuery.error} title="文章分析加载失败" onRetry={() => void detailQuery.refetch()} />
   ) : !detailQuery.data ? (
@@ -403,84 +408,69 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
       </div>
 
       <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-        <p className="text-base font-semibold tracking-tight text-slate-950">候选规则与审核</p>
-        <p className="mt-1 text-xs text-slate-600">自动审核只给出待回测、人工确认或建议拒绝，不会直接创建正式规则。</p>
+        <p className="text-base font-semibold tracking-tight text-slate-950">分类抽取结果</p>
+        <p className="mt-1 text-xs text-slate-600">结果按真实含义进入各自处理通道；只有通过严格校验的可执行规则才能进入规则治理和正式回测。</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(Object.entries(detailQuery.data.extraction_summary.by_primary_type) as Array<[PrimaryExtractionType, number]>).map(([type, count]) => (
+            <Badge key={type} variant="info">{typeLabels[type]} {count}</Badge>
+          ))}
+        </div>
         <div className="mt-4 space-y-4">
-          {detailQuery.data.candidates.length === 0 ? (
-            <EmptyState title="暂无候选规则" description="当前分析结果还没有提取到可展示的候选规则。" />
-          ) : (
-            detailQuery.data.candidates.map((candidate) => (
-              <div key={candidate.candidate_id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{candidate.title}</p>
-                    <p className="mt-1 text-xs text-slate-600">规则类型：{candidate.rule_type}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant={automaticReviewVariant(candidate.automatic_review.status)}>{automaticReviewLabel(candidate.automatic_review.status)}</Badge>
-                    <Badge variant={candidate.human_review.formal_rule_created ? 'success' : 'default'}>
-                      {candidate.human_review.formal_rule_created ? '已创建待回测规则' : '未创建正式规则'}
-                    </Badge>
-                  </div>
+          {detailQuery.data.extraction_items.length === 0 ? (
+            <EmptyState title="暂无分类抽取项" description="当前文章没有可保留的交易语义、规则、假设或提示。" />
+          ) : detailQuery.data.extraction_items.map((item) => (
+            <div key={item.item_id} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">{item.display_title}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{item.display_summary}</p>
                 </div>
-                <div className="mt-3 grid gap-3 text-[11px] text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                  <span>回测状态：{candidate.backtestability_status}</span>
-                  <span>Kaipan 依赖：{candidate.kaipan_dependency ? '是' : '否'}</span>
-                  <span>市场状态声明：{candidate.market_state_declaration_status}</span>
-                  <span>人工审核状态：{candidate.human_review.review_state}</span>
-                </div>
-                <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-medium text-slate-900">自动审核原因</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-6 text-slate-700">
-                      {candidate.automatic_review.reasons.map((reason) => <li key={reason}>{reason}</li>)}
-                    </ul>
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <Button
-                        size="sm"
-                        onClick={() => selectedArticle && reviewMutation.mutate({ articleId: selectedArticle.id, candidateId: candidate.candidate_id, decision: 'approve' })}
-                        disabled={reviewMutation.isPending || candidate.human_review.formal_rule_created}
-                      >
-                        {candidate.human_review.formal_rule_created ? '已进入待回测' : '人工批准为待回测规则'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => selectedArticle && reviewMutation.mutate({ articleId: selectedArticle.id, candidateId: candidate.candidate_id, decision: 'reject' })}
-                        disabled={reviewMutation.isPending}
-                      >
-                        驳回候选规则
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs font-medium text-slate-900">显式事实</p>
-                      <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(candidate.explicit_facts)}</pre>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-slate-900">LLM 假设</p>
-                      <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(candidate.hypotheses)}</pre>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                  <div>
-                    <p className="text-xs font-medium text-slate-900">原文证据</p>
-                    <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(candidate.evidence)}</pre>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-slate-900">数据依赖</p>
-                    <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(candidate.data_dependencies)}</pre>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-slate-900">缺失项</p>
-                    <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(candidate.missing_fields)}</pre>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={itemVariant(item)}>{typeLabels[item.primary_type]}</Badge>
+                  <Badge variant={item.quality_state === 'valid' ? 'success' : 'warning'}>{item.quality_state}</Badge>
+                  <Badge variant="default">{item.review_state}</Badge>
                 </div>
               </div>
-            ))
-          )}
+              <div className="mt-3 grid gap-3 text-[11px] text-slate-600 md:grid-cols-3">
+                <span>处理通道：{item.review_destination}</span>
+                <span>正式回测：{item.backtest_eligibility.eligible ? '可进入下一步' : '不可进入'}</span>
+                <span>正式规则：{item.rule_version_id ? '已建立追溯' : '未创建'}</span>
+              </div>
+              {!item.backtest_eligibility.eligible ? (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {item.backtest_eligibility.reason}；下一步：{item.backtest_eligibility.required_next_step}
+                </div>
+              ) : null}
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-slate-900">原文证据</p>
+                  <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(item.source_evidence)}</pre>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-900">分类内容</p>
+                  <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{formatJsonBlock(item.taxonomy_payload)}</pre>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => selectedArticle && reviewMutation.mutate({ articleId: selectedArticle.id, itemId: item.item_id, decision: 'accept' })}
+                  disabled={reviewMutation.isPending || item.review_state === 'accepted' || item.review_state === 'promoted'}
+                >
+                  按当前通道确认
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => selectedArticle && reviewMutation.mutate({ articleId: selectedArticle.id, itemId: item.item_id, decision: 'reject' })}
+                  disabled={reviewMutation.isPending || item.review_state === 'rejected'}
+                >
+                  拒绝此项
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -496,7 +486,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-base font-semibold tracking-tight text-slate-950">文章列表</p>
-                  <p className="mt-1 text-xs text-slate-600">选择一篇文章后，右侧展示单篇分析和候选规则审核。</p>
+                  <p className="mt-1 text-xs text-slate-600">选择一篇文章后，右侧展示单篇分析和分类抽取结果。</p>
                 </div>
                 <Badge variant="info" className="shrink-0 whitespace-nowrap self-start">{totalCount} 篇</Badge>
               </div>
@@ -555,7 +545,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
                         <p className="mt-1 text-xs text-slate-600">{article.author_name ?? article.author_id ?? '未记录'} · {article.source}</p>
                         <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-700">{article.summary ?? '暂无摘要'}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {failed ? <Badge variant="danger">提取失败</Badge> : null}
+                          {failed ? <Badge variant="destructive">提取失败</Badge> : null}
                           {manualReviewRequired ? <Badge variant="warning">待人工补录</Badge> : null}
                           {ignored ? <Badge variant="default">已忽略</Badge> : null}
                           {article.tags.slice(0, 3).map((tag) => <Badge key={tag} variant="info">{tag}</Badge>)}
@@ -579,7 +569,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-base font-semibold tracking-tight text-slate-950">当前文章详情</p>
-                  <p className="mt-1 text-xs text-slate-600">显示原文、清洗结果、结构化事实、候选规则和人工审核边界。</p>
+                  <p className="mt-1 text-xs text-slate-600">显示原文、清洗结果、结构化事实、分类抽取项和处理边界。</p>
                 </div>
                 <Badge variant={availability === 'ready' ? 'success' : availability === 'partial' ? 'warning' : 'default'}>
                   {availability === 'ready' ? '可审核' : availability === 'partial' ? '部分完成' : '等待处理'}
@@ -603,10 +593,10 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
     return (
       <BusinessPageShell
         title="文章分析与审核"
-        purpose="查看单篇文章的结构化分析结果，并只在人工确认后创建待回测规则。"
+        purpose="查看单篇文章的混合分类抽取结果，并按类型进入正确处理通道。"
         inputDescription="从左侧文章列表选择当前文章。"
-        processingDescription="系统会读取对应内容版本的 PromptRun、ArticleStructure 和 RuleCandidate。"
-        outputDescription="返回原文、清洗内容、显式事实、LLM 假设、候选规则、证据和审核状态。"
+        processingDescription="系统会读取对应内容版本及其分类抽取结果。"
+        outputDescription="返回原文、清洗内容、显式事实、混合分类结果、证据和处理状态。"
         availability={availability}
         showPurposeSection={false}
         nextAction={{ label: '返回文章库', to: navigationTargets?.library ?? '/research/articles' }}
@@ -625,7 +615,7 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
 
   if (articlesQuery.isLoading) {
     return (
-      <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析结果并完成人工审核。" summary="以文章为中心查看分析结果、候选规则和人工审核状态。">
+      <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析与分类结果。" summary="以文章为中心查看抽取类型、原文证据和处理状态。">
         <LoadingState label="正在加载文章分析" description="正在读取文章列表和当前分析状态。" />
       </ArticlePageShell>
     );
@@ -633,14 +623,14 @@ export function ArticleResultsPage({ productMode = false, navigationTargets }: R
 
   if (articlesQuery.error) {
     return (
-      <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析结果并完成人工审核。" summary="以文章为中心查看分析结果、候选规则和人工审核状态。">
+      <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析与分类结果。" summary="以文章为中心查看抽取类型、原文证据和处理状态。">
         <ArticleErrorState error={articlesQuery.error} title="文章分析加载失败" onRetry={() => void articlesQuery.refetch()} />
       </ArticlePageShell>
     );
   }
 
   return (
-    <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析结果并完成人工审核。" summary="以文章为中心查看分析结果、候选规则和人工审核状态。">
+    <ArticlePageShell title="文章分析与审核" description="查看单篇文章的结构化分析与分类结果。" summary="以文章为中心查看抽取类型、原文证据和处理状态。">
       {content}
     </ArticlePageShell>
   );

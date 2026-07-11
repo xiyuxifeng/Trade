@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { act, screen, waitFor } from '@testing-library/react';
 import { ArticleListPage, ArticleQualityPage, ArticleResultsPage, ArticleRunPage, ArticlesPage } from './index';
 import { renderWithRouter } from '@/test/test-utils';
-import { getArticleAnalysis, reviewArticleCandidate, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
+import { getArticleAnalysis, reviewExtractionItem, runArticleAnalysis, updateArticleProcessingStatus } from '@/lib/api/article-analysis';
 import { getArticleQualitySummary, listArticleFilterOptions, listArticles } from '@/lib/api/articles';
 import { listProfiles } from '@/lib/api/profiles';
 import {
@@ -15,6 +15,9 @@ import {
 } from '@/lib/api/pipelines';
 import { toast } from '@/components/ui/toast';
 import type { PipelineDetailResponse } from '@/types/pipeline';
+import type { ArticleAnalysisDetail } from '@/types/article-analysis';
+import type { ArticleListResponse } from '@/types/articles';
+import type { ArticleListQuery } from '@/lib/api/articles';
 
 vi.mock('@/lib/api/articles', () => ({
   getArticleQualitySummary: vi.fn(),
@@ -24,7 +27,7 @@ vi.mock('@/lib/api/articles', () => ({
 
 vi.mock('@/lib/api/article-analysis', () => ({
   getArticleAnalysis: vi.fn(),
-  reviewArticleCandidate: vi.fn(),
+  reviewExtractionItem: vi.fn(),
   runArticleAnalysis: vi.fn(),
   updateArticleProcessingStatus: vi.fn(),
 }));
@@ -47,7 +50,7 @@ vi.mock('@/components/ui/toast', () => ({
 
 const mockedListProfiles = vi.mocked(listProfiles);
 const mockedGetArticleAnalysis = vi.mocked(getArticleAnalysis);
-const mockedReviewArticleCandidate = vi.mocked(reviewArticleCandidate);
+const mockedReviewExtractionItem = vi.mocked(reviewExtractionItem);
 const mockedRunArticleAnalysis = vi.mocked(runArticleAnalysis);
 const mockedUpdateArticleProcessingStatus = vi.mocked(updateArticleProcessingStatus);
 const mockedGetArticleQualitySummary = vi.mocked(getArticleQualitySummary);
@@ -264,7 +267,7 @@ function buildArticlePipelineDetail() {
   } as PipelineDetailResponse;
 }
 
-function buildArticleList() {
+function buildArticleList(): ArticleListResponse {
   return {
     items: [
       {
@@ -309,7 +312,7 @@ function buildArticleFilterOptions() {
   };
 }
 
-function buildArticleAnalysisDetail(articleId: string) {
+function buildArticleAnalysisDetail(articleId: string): ArticleAnalysisDetail {
   return {
     status: 'ready' as const,
     message: null,
@@ -367,6 +370,27 @@ function buildArticleAnalysisDetail(articleId: string) {
       started_at: null,
       completed_at: null,
     },
+    taxonomy_version: 'extraction_taxonomy_v1',
+    extraction_summary: {
+      total: 1,
+      by_primary_type: { semantic_experience: 1 },
+      by_destination: { semantic_dictionary_review: 1 },
+      by_quality_state: { valid: 1 },
+      by_review_state: { queued: 1 },
+    },
+    extraction_items: [{
+      item_id: 'item-1', item_index: 0, article_id: articleId, article_revision_id: 'revision-1',
+      article_structure_id: 'structure-1', prompt_run_id: 'prompt-run-1', primary_type: 'semantic_experience',
+      secondary_tags: [], display_title: '放量', display_summary: '主观成交量语义，需进一步定义',
+      source_evidence: { quote: '放量突破介入' },
+      taxonomy_payload: { primary_type: 'semantic_experience', term_or_phrase: '放量' },
+      confidence: { score: 0.8 }, quality_state: 'valid', review_destination: 'semantic_dictionary_review',
+      review_state: 'queued',
+      backtest_eligibility: { eligible: false, reason: 'semantic_experience is not a formal trading rule', required_next_step: 'semantic_review', blocked_by: ['non_rule_type'] },
+      promotion_eligibility: { eligible: false, reason: 'semantic_experience is not a formal trading rule', required_next_step: 'semantic_review', blocked_by: ['non_rule_type'] },
+      provenance: { origin: 'fixture' }, rule_version_id: null,
+      created_at: '2026-05-11T09:00:00Z', updated_at: '2026-05-11T09:00:00Z',
+    }],
     candidates: [
       {
         candidate_id: 'candidate-1',
@@ -405,7 +429,7 @@ function buildArticleAnalysisDetail(articleId: string) {
         },
       },
     ],
-  };
+  } as ArticleAnalysisDetail;
 }
 
 describe('ArticlesPage', () => {
@@ -629,15 +653,16 @@ describe('ArticlesPage', () => {
     expect((await screen.findAllByText('Article One')).length).toBeGreaterThan(0);
     expect(await screen.findByText('当前文章详情')).toBeInTheDocument();
     expect(await screen.findByText('结构化摘要')).toBeInTheDocument();
-    expect(await screen.findByText('候选规则与审核')).toBeInTheDocument();
-    expect(await screen.findByText('待回测')).toBeInTheDocument();
+    expect(await screen.findByText('分类抽取结果')).toBeInTheDocument();
+    expect(await screen.findByText('语义经验')).toBeInTheDocument();
+    expect(await screen.findByText(/正式回测：不可进入/)).toBeInTheDocument();
     expect(await screen.findByText('原始原文')).toBeInTheDocument();
     expect(await screen.findByText('清洗后内容')).toBeInTheDocument();
   });
 
   it('filters processed and unprocessed articles on the results page', async () => {
     const user = userEvent.setup();
-    mockedListArticles.mockImplementation(async (query?: any) => {
+    mockedListArticles.mockImplementation(async (query?: ArticleListQuery) => {
       const processingStatus = query?.processing_status ?? 'all';
       if (processingStatus === 'processed') {
         return {
@@ -719,7 +744,7 @@ describe('ArticlesPage', () => {
 
   it('shows failed articles in the same results page and supports retry and manual actions', async () => {
     const user = userEvent.setup();
-    mockedListArticles.mockImplementation(async (query?: any) => {
+    mockedListArticles.mockImplementation(async (query?: ArticleListQuery) => {
       const processingStatus = query?.processing_status ?? 'all';
       if (processingStatus === 'failed') {
         return {
@@ -782,29 +807,23 @@ describe('ArticlesPage', () => {
     const user = userEvent.setup();
     mockedListArticles.mockResolvedValue(buildArticleList());
     mockedGetArticleAnalysis.mockImplementation(async (articleId: string) => buildArticleAnalysisDetail(articleId));
-    mockedReviewArticleCandidate.mockResolvedValue({
+    mockedReviewExtractionItem.mockResolvedValue({
       ...buildArticleAnalysisDetail('article-1'),
-      candidates: [{
-        ...buildArticleAnalysisDetail('article-1').candidates[0],
-        human_review: {
-          review_state: 'approved',
-          formal_rule_created: true,
-          rule_version_id: 'rule-version-1',
-          formal_lifecycle_state: 'draft',
-          stage3_status: 'pending_backtest',
-        },
+      extraction_items: [{
+        ...buildArticleAnalysisDetail('article-1').extraction_items[0],
+        review_state: 'accepted',
       }],
     });
 
     renderWithRouter([{ path: '/articles/results', element: <ArticleResultsPage /> }], ['/articles/results']);
 
-    await screen.findByText('候选规则与审核');
-    await user.click(screen.getByRole('button', { name: '人工批准为待回测规则' }));
+    await screen.findByText('分类抽取结果');
+    await user.click(screen.getByRole('button', { name: '按当前通道确认' }));
 
     await waitFor(() => {
-      expect(mockedReviewArticleCandidate).toHaveBeenCalledWith('article-1', 'candidate-1', {
-        decision: 'approve',
-        reason: '人工确认后进入待回测。',
+      expect(mockedReviewExtractionItem).toHaveBeenCalledWith('article-1', 'item-1', {
+        decision: 'accept',
+        reason: '已按当前分类通道确认。',
       });
     });
     expect(await screen.findByText('人工审核结果已保存。')).toBeInTheDocument();

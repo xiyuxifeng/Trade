@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,6 +13,7 @@ from src.services.backtest_application_service import (
     BacktestRunCreateRequest,
     BacktestSelection,
 )
+from tests.fixtures.taxonomy_samples import PAYLOADS
 
 
 def test_formal_backtest_service_does_not_use_legacy_runtime_inputs() -> None:
@@ -40,6 +42,8 @@ class _RuleVersionFact:
     version_no: int
     lifecycle_state: str = "pending_backtest"
     data_dependencies: dict | None = None
+    source_extraction_item_id: UUID = field(default_factory=uuid4)
+    source_candidate_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +133,24 @@ class _FakeRepository:
         if self.rule_version and self.rule_version.rule_version_id == rule_version_id:
             return self.rule_version
         return None
+
+    async def get_extraction_item(self, extraction_item_id: UUID):
+        return SimpleNamespace(
+            extraction_item_id=extraction_item_id,
+            primary_type="executable_rule",
+            taxonomy_payload={"primary_type": "executable_rule", **PAYLOADS["executable_rule"]},
+            source_evidence={
+                "article_id": str(uuid4()),
+                "article_structure_id": str(uuid4()),
+                "prompt_run_id": str(uuid4()),
+                "evidence_kind": "explicit_quote",
+                "rationale": "strict test fixture",
+                "quote": "指数跌破共振日低点立即退出。",
+            },
+            review_destination="executable_rule_validation",
+            quality_state="valid",
+            review_state="accepted",
+        )
 
     async def get_rule_family_with_members(self, rule_family_id: UUID):
         if self.rule_family and self.rule_family.rule_family_id == rule_family_id:

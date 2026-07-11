@@ -7,15 +7,19 @@ from uuid import UUID
 from src.db.repositories.stage3_single_article_repository import Stage3SingleArticleRepository
 from src.llm.runtime import PromptRuntimeError
 from src.models.blog_article import BlogArticle
-from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleCandidate, RuleVersion
-from src.services.article_review_policy import AutomaticReviewResult, determine_automatic_review
-from src.services.rule_governance_service import CandidateGovernanceAssessment, RuleGovernanceService
-from src.services.rule_lifecycle_service import RuleLifecycleService, RuleLifecycleTransitionBlockedError
+from src.models.extraction_taxonomy import ExtractionItem
+from src.models.stage2_canonical import ArticleRevision, ArticleStructure, PromptRun, RuleVersion
+from src.services.extraction_taxonomy_service import (
+    Eligibility,
+    ExtractionTaxonomyError,
+    ExtractionTaxonomyService,
+    eligibility_for,
+)
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
 
 
 JourneyStatus = Literal["ready", "partial", "empty"]
-HumanReviewDecision = Literal["approve", "reject"]
+HumanReviewDecision = Literal["accept", "reject"]
 SummarySource = Literal["article_revision_source_payload", "blog_article_current", "unavailable"]
 
 
@@ -49,10 +53,9 @@ class ArticleJourney:
     revision: ArticleRevision
     prompt_run: PromptRun | None
     structure: ArticleStructure | None
-    candidates: list[RuleCandidate]
-    automatic_reviews: dict[UUID, AutomaticReviewResult]
+    extraction_items: list[ExtractionItem]
+    eligibilities: dict[UUID, Eligibility]
     rule_versions: dict[UUID, RuleVersion]
-    governance_assessments: dict[UUID, CandidateGovernanceAssessment]
     summary_provenance: SummaryProvenance
     article_structure_provenance: ArticleStructureProvenance
     message: str | None = None
@@ -143,7 +146,7 @@ class Stage3SingleArticleService:
         prompt_runtime_service: Stage3PromptRuntimeService | None = None,
         repository: Stage3SingleArticleRepository | None = None,
         regression_service: Any | None = None,
-        governance_service: RuleGovernanceService | None = None,
+        governance_service: Any | None = None,
     ) -> None:
         self._session_scope_factory = session_scope_factory
         self._prompt_runtime_service = prompt_runtime_service or Stage3PromptRuntimeService(
@@ -151,14 +154,8 @@ class Stage3SingleArticleService:
             model="gpt-5.4",
         )
         self._repository = repository or Stage3SingleArticleRepository()
-        self._governance_service = governance_service or RuleGovernanceService(
-            regression_service=regression_service,
-        )
-        self._lifecycle_service = RuleLifecycleService(
-            session_scope_factory=session_scope_factory,
-            regression_service=regression_service,
-            governance_service=self._governance_service,
-        )
+        del regression_service, governance_service
+        self._taxonomy_service = ExtractionTaxonomyService()
 
     async def get_journey(
         self,
@@ -192,44 +189,35 @@ class Stage3SingleArticleService:
                     revision=revision,
                     prompt_run=None,
                     structure=None,
-                    candidates=[],
-                    automatic_reviews={},
+                    extraction_items=[],
+                    eligibilities={},
                     rule_versions={},
-                    governance_assessments={},
                     summary_provenance=resolve_summary_provenance(article=article, revision=revision),
                     article_structure_provenance=build_article_structure_provenance(structure=None, prompt_run=None),
                     message="该文章尚未完成结构化分析。",
                 )
 
-            automatic_reviews = {
-                candidate.rule_candidate_id: determine_automatic_review(candidate)
-                for candidate in candidates
-            }
-            governance_assessments = {
-                candidate.rule_candidate_id: await self._governance_service.assess_candidate(session, candidate=candidate)
-                for candidate in candidates
-            }
+            eligibilities = {item.extraction_item_id: eligibility_for(item) for item in candidates}
             rule_versions = {}
-            for candidate in candidates:
-                rule_version = await self._repository.get_rule_version_by_source_candidate(
+            for item in candidates:
+                rule_version = await self._repository.get_rule_version_by_source_item(
                     session,
-                    candidate_id=candidate.rule_candidate_id,
+                    item_id=item.extraction_item_id,
                 )
                 if rule_version is not None:
-                    rule_versions[candidate.rule_candidate_id] = rule_version
+                    rule_versions[item.extraction_item_id] = rule_version
 
             status: JourneyStatus = "ready" if candidates else "partial"
-            message = None if candidates else "分析已完成，但当前没有候选规则。"
+            message = None if candidates else "分析已完成，但当前没有可保留的分类抽取项。"
             return ArticleJourney(
                 status=status,
                 article=article,
                 revision=revision,
                 prompt_run=prompt_run,
                 structure=structure,
-                candidates=candidates,
-                automatic_reviews=automatic_reviews,
+                extraction_items=candidates,
+                eligibilities=eligibilities,
                 rule_versions=rule_versions,
-                governance_assessments=governance_assessments,
                 summary_provenance=resolve_summary_provenance(article=article, revision=revision),
                 article_structure_provenance=build_article_structure_provenance(structure=structure, prompt_run=prompt_run),
                 message=message,
@@ -273,11 +261,11 @@ class Stage3SingleArticleService:
             article_revision_id=revision.article_revision_id,
         )
 
-    async def review_candidate(
+    async def review_extraction_item(
         self,
         *,
         article_id: UUID,
-        candidate_id: UUID,
+        item_id: UUID,
         decision: HumanReviewDecision,
         actor_id: str,
         reason: str | None,
@@ -304,37 +292,100 @@ class Stage3SingleArticleService:
             if prompt_run is None or structure is None:
                 raise Stage3SingleArticleError("analysis is not ready")
 
-            candidate = await self._repository.get_rule_candidate(
+            item = await self._repository.get_extraction_item(
                 session,
-                candidate_id=candidate_id,
+                item_id=item_id,
                 article_structure_id=structure.article_structure_id,
             )
-            if candidate is None:
-                raise Stage3SingleArticleError("rule candidate not found")
+            if item is None:
+                raise Stage3SingleArticleError("extraction item not found")
 
-            if decision == "approve":
+            if decision == "accept":
                 try:
-                    await self._lifecycle_service.approve_candidate(
-                        candidate_id=candidate.rule_candidate_id,
-                        actor_id=actor_id,
-                        reason=reason,
-                        correlation_id=str(candidate.rule_candidate_id),
-                    )
-                except RuleLifecycleTransitionBlockedError as exc:
+                    await self._taxonomy_service.accept_review(session, item=item, actor_id=actor_id)
+                except ExtractionTaxonomyError as exc:
                     raise Stage3SingleArticleError(str(exc)) from exc
             else:
-                try:
-                    await self._lifecycle_service.reject_candidate(
-                        candidate_id=candidate.rule_candidate_id,
-                        actor_type="human",
-                        actor_id=actor_id,
-                        reason=reason,
-                        correlation_id=str(candidate.rule_candidate_id),
-                    )
-                except RuleLifecycleTransitionBlockedError as exc:
-                    raise Stage3SingleArticleError(str(exc)) from exc
+                await self._taxonomy_service.reject_review(session, item=item, actor_id=actor_id)
+
+            if reason:
+                provenance = dict(item.provenance or {})
+                provenance["review_reason"] = reason
+                item.provenance = provenance
 
         return await self.get_journey(
             article_id=article_id,
             article_revision_id=article_revision_id,
         )
+
+    async def repair_rule_candidate(
+        self,
+        *,
+        article_id: UUID,
+        item_id: UUID,
+        repaired_payload: dict[str, Any],
+        source_quote: str,
+        rationale: str,
+        actor_id: str,
+        article_revision_id: UUID | None = None,
+    ) -> ArticleJourney:
+        async with self._session_scope_factory() as session:
+            revision = await self._repository.get_article_revision(
+                session, article_id=article_id, article_revision_id=article_revision_id
+            )
+            if revision is None:
+                raise Stage3SingleArticleError("article revision not found")
+            _, structure, _ = await self._repository.get_prompt_run_bundle(
+                session, article_id=article_id, article_revision_id=revision.article_revision_id
+            )
+            if structure is None:
+                raise Stage3SingleArticleError("analysis is not ready")
+            item = await self._repository.get_extraction_item(
+                session, item_id=item_id, article_structure_id=structure.article_structure_id
+            )
+            if item is None:
+                raise Stage3SingleArticleError("extraction item not found")
+            try:
+                await self._taxonomy_service.repair_candidate(
+                    session,
+                    item=item,
+                    repaired_payload=repaired_payload,
+                    source_quote=source_quote,
+                    rationale=rationale,
+                    actor_id=actor_id,
+                )
+            except (ExtractionTaxonomyError, ValueError) as exc:
+                raise Stage3SingleArticleError(str(exc)) from exc
+        return await self.get_journey(article_id=article_id, article_revision_id=revision.article_revision_id)
+
+    async def promote_executable_item(
+        self,
+        *,
+        article_id: UUID,
+        item_id: UUID,
+        actor_id: str,
+        article_revision_id: UUID | None = None,
+    ) -> ArticleJourney:
+        async with self._session_scope_factory() as session:
+            revision = await self._repository.get_article_revision(
+                session, article_id=article_id, article_revision_id=article_revision_id
+            )
+            if revision is None:
+                raise Stage3SingleArticleError("article revision not found")
+            _, structure, _ = await self._repository.get_prompt_run_bundle(
+                session, article_id=article_id, article_revision_id=revision.article_revision_id
+            )
+            if structure is None:
+                raise Stage3SingleArticleError("analysis is not ready")
+            item = await self._repository.get_extraction_item(
+                session, item_id=item_id, article_structure_id=structure.article_structure_id
+            )
+            if item is None:
+                raise Stage3SingleArticleError("extraction item not found")
+            try:
+                await self._taxonomy_service.promote_to_rule_version(
+                    session, item=item, actor_id=actor_id
+                )
+            except ExtractionTaxonomyError as exc:
+                raise Stage3SingleArticleError(str(exc)) from exc
+        return await self.get_journey(article_id=article_id, article_revision_id=revision.article_revision_id)

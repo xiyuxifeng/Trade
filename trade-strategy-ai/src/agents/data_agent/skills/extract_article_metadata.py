@@ -157,7 +157,7 @@ async def _normalize_symbols_with_db(symbols: list[str]) -> list[str]:
 
     Returns:
         标准化后的代码列表
-    """
+"""
     if not symbols:
         return []
 
@@ -353,7 +353,8 @@ def _quality_gate(
         passed: bool  — 是否通过
         rejected_fields: list[str]  — 不满足条件的字段名
         quality_score: float  — 综合质量分（0~1）
-    """
+"""
+# ruff: noqa: E402
     normalized_type = _normalize_article_type(article_type)
     rejected: list[str] = []
     quality_factors: list[float] = []
@@ -456,10 +457,10 @@ def _heuristic_extract(article: BlogArticle) -> dict[str, Any]:
 
 
 def _legacy_compat_output_from_article_analysis(raw: dict[str, Any]) -> dict[str, Any]:
-    """Project article_analysis_v1 output into the retired ArticleMetadata shape.
+    """Project stored analysis metadata into the retired read-only shape.
 
-    This compatibility adapter keeps legacy readers working while the formal
-    Stage 3 writer remains PromptRun -> ArticleStructure -> RuleCandidate.
+    Taxonomy items are deliberately not projected as legacy strategy rules;
+    the canonical writer is PromptRun -> ArticleStructure -> ExtractionItem.
     """
     concepts = raw.get("concept_extraction") if isinstance(raw.get("concept_extraction"), dict) else {}
     rules = raw.get("rule_extraction") if isinstance(raw.get("rule_extraction"), dict) else {}
@@ -512,7 +513,7 @@ def _legacy_compat_output_from_article_analysis(raw: dict[str, Any]) -> dict[str
         "comment_insights": [],
         "sentiment_score": (concepts.get("sentiment") or {}).get("score") if isinstance(concepts.get("sentiment"), dict) else 0.0,
         "confidence_score": _compat_confidence(raw, concepts, rules, quality),
-        "stage3_prompt_name": "article_analysis_v1",
+        "stage3_prompt_name": raw.get("prompt_version"),
         "stage3_schema_version": raw.get("schema_version"),
     }
 

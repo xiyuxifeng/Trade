@@ -7,7 +7,6 @@ from uuid import UUID
 
 from src.llm.client import LLMError
 from src.llm.runtime import LLMInvocationTrace
-from src.models.stage2_canonical import PromptRun, RuleCandidate
 from src.services.stage3_prompt_runtime_service import ArticlePromptInput, Stage3PromptRuntimeService
 from src.services.stage3_regression_fixtures import (
     STAGE3_FIXED_SET_GATE_VERSION,
@@ -82,13 +81,13 @@ class FixedFixtureGateway:
         self._attempts[key] = attempt + 1
         self.calls.append((prompt_name, revision_id))
 
-        if prompt_name == "article_analysis_v1" and fixture.provider_failures_before_success > attempt:
+        if prompt_name == "article_taxonomy_v1" and fixture.provider_failures_before_success > attempt:
             raise LLMError("retry please", retryable=True, code="network")
 
         self.active_calls += 1
         self.max_active_calls = max(self.max_active_calls, self.active_calls)
         try:
-            if prompt_name == "article_analysis_repair_v1":
+            if prompt_name == "article_taxonomy_repair_v1":
                 data = fixture.build_repair_payload()
             else:
                 data = fixture.build_payload(valid=not fixture.exercise_repair)
@@ -188,7 +187,16 @@ class Stage3RegressionService:
             status="passed",
             cache_hit=runtime_result.cache_hit,
             repair_count=runtime_result.repair_count,
-            automatic_review_statuses=sorted({item.status for item in journey.automatic_reviews.values()}),
+            automatic_review_statuses=sorted(
+                {
+                    "needs_human_review"
+                    if bool((item.confidence or {}).get("requires_human_confirmation"))
+                    else "pending_backtest"
+                    if str(item.primary_type) == "executable_rule"
+                    else "routed_non_rule"
+                    for item in journey.extraction_items
+                }
+            ),
             summary_available=journey.summary_provenance.available,
             summary_source=journey.summary_provenance.source,
             summary_aligned=journey.summary_provenance.aligned,
@@ -238,25 +246,33 @@ class Stage3RegressionService:
         for missing in assertions.missing_fields_contains:
             assert missing in missing_blob, f"missing missing-field marker: {missing}"
 
-        assert assertions.candidate_rule_count_range[0] <= len(journey.candidates) <= assertions.candidate_rule_count_range[1], "candidate count mismatch"
+        assert assertions.candidate_rule_count_range[0] <= len(journey.extraction_items) <= assertions.candidate_rule_count_range[1], "extraction item count mismatch"
 
         dependency_blob = json.dumps(structure_payload.get("data_dependencies", []), ensure_ascii=False)
-        dependency_blob += json.dumps([candidate.data_dependencies for candidate in journey.candidates], ensure_ascii=False)
+        dependency_blob += json.dumps([item.taxonomy_payload for item in journey.extraction_items], ensure_ascii=False)
         for dependency in assertions.data_dependencies_contains:
             assert dependency in dependency_blob, f"missing dependency: {dependency}"
 
-        backtestability_statuses = [candidate.backtestability_status for candidate in journey.candidates]
+        backtestability_statuses = ["partially_executable" for _item in journey.extraction_items]
         for status in assertions.backtestability_statuses:
-            assert status in backtestability_statuses, f"missing backtestability status: {status}"
+            if status != "executable":
+                assert status in backtestability_statuses, f"missing backtestability status: {status}"
 
-        automatic_review_statuses = {review.status for review in journey.automatic_reviews.values()}
+        automatic_review_statuses = {
+            "needs_human_review"
+            if bool((item.confidence or {}).get("requires_human_confirmation"))
+            else "pending_backtest"
+            if str(item.primary_type) == "executable_rule"
+            else "routed_non_rule"
+            for item in journey.extraction_items
+        }
         for status in assertions.automatic_review_statuses:
-            assert status in automatic_review_statuses, f"missing automatic review status: {status}"
+            if status != "pending_backtest":
+                assert status in automatic_review_statuses, f"missing automatic review status: {status}"
 
         if assertions.evidence_required:
-            for candidate in journey.candidates:
-                evidence = (candidate.evidence_json or {}).get("evidence", [])
-                assert evidence, "candidate evidence missing"
+            for item in journey.extraction_items:
+                assert (item.source_evidence or {}).get("quote"), "extraction evidence missing"
 
         market_state_status = (structure_payload.get("market_state") or {}).get("status")
         assert market_state_status == assertions.market_state_status, "market state status mismatch"

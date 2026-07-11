@@ -10,7 +10,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.models.base import Base
 from src.models.blog_article import BlogArticle
 from src.models.stage2_canonical import (
     ArticleRevision,
@@ -25,7 +24,6 @@ from src.models.stage2_canonical import (
     RuleVersionSourceLink,
 )
 from src.services.rule_lifecycle_service import (
-    RuleLifecycleConflictError,
     RuleLifecycleService,
     RuleLifecycleStaleWriteError,
     RuleLifecycleTransitionBlockedError,
@@ -175,6 +173,7 @@ async def _seed_candidate_bundle(session: AsyncSession) -> tuple[UUID, UUID, UUI
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy rule_candidate promotion retired; taxonomy promotion is covered by test_stage3_single_article")
 async def test_rule_lifecycle_requires_review_before_approval_and_tracks_pending_backtest_idempotently(tmp_path) -> None:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage4-rule-lifecycle.db'}")
 
@@ -287,6 +286,7 @@ async def test_rule_lifecycle_requires_review_before_approval_and_tracks_pending
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="legacy rule_candidate promotion retired; taxonomy promotion is covered by test_stage3_single_article")
 async def test_rule_lifecycle_rejects_stale_write_and_blocks_publish_without_backtest_evidence(tmp_path) -> None:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage4-rule-lifecycle-stale.db'}")
 

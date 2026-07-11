@@ -12,7 +12,7 @@ from src.db.repositories.rule_governance_repository import RuleGovernanceReposit
 from src.models.stage2_canonical import RuleCandidate, RuleVersion
 
 if TYPE_CHECKING:
-    from src.services.stage3_regression_service import RegressionRunResult, Stage3RegressionService
+    pass
 
 
 FINGERPRINT_ALGORITHM_VERSION = "rule-fingerprint-v1"
@@ -336,6 +336,9 @@ class RuleGovernanceService:
         evidence_json: dict[str, Any],
         after_review_snapshot: dict[str, Any],
     ) -> tuple[RuleVersion, CandidateGovernanceAssessment]:
+        raise RuleGovernanceGateError(
+            "legacy rule_candidates are read-only audit evidence; use strict executable extraction promotion"
+        )
         assessment = await self.assess_candidate(session, candidate=candidate)
 
         if assessment.exact_duplicate_of_rule_version_id is not None:

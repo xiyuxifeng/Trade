@@ -1,7 +1,7 @@
 import { fetchRootJson } from './http';
 import type { ArticleFilterOptionsResponse, ArticleListResponse, ArticleQualitySummaryResponse } from '@/types/articles';
 
-type ArticleListQuery = {
+export type ArticleListQuery = {
   page?: number;
   page_size?: number;
   author_id?: string;

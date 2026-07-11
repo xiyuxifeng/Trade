@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { PageAvailability } from '@/components/layout/business-page-shell';
 import { ProductPageAdapter } from '@/components/layout/product-page-adapter';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '@/components/kit';
-import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/http';
-import { getRuleReviewCandidate, listRuleReviewCandidates, submitRuleReviewAction } from '@/lib/api/rule-review';
+import { getRuleReviewCandidate, listRuleReviewCandidates } from '@/lib/api/rule-review';
 import { FormalBacktestResults } from '@/features/backtest/formal-backtest-results';
 import { FormalBacktestWorkbench } from '@/features/backtest/formal-backtest-workbench';
 import { RulePoolPage } from '@/pages/rule-pool';
@@ -44,13 +43,13 @@ export function RulesReviewPage({ availability }: FormalPageProps = {}) {
   if (state) {
     return (
       <ProductPageAdapter
-        title="规则审核工作台"
+        title="历史候选审计"
         queryState={state}
-        purpose="确认文章提取出的候选规则是否可以进入后续验证。"
+        purpose="只读查看旧抽取候选；新内容从文章分类抽取结果进入对应通道。"
         inputDescription="输入来自文章提取结果和当前规则证据。"
         processingDescription="系统读取真实候选规则、证据和审核状态。"
-        outputDescription="输出为已确认的审核决定和后续验证入口。"
-        businessAction={{ label: '开始回测', to: '/rules/backtests' }}
+        outputDescription="输出为不可变历史证据，不提供晋级或回测动作。"
+        businessAction={{ label: '查看分类抽取结果', to: '/research/results' }}
       />
     );
   }
@@ -58,7 +57,6 @@ export function RulesReviewPage({ availability }: FormalPageProps = {}) {
 }
 
 function RulesReviewWorkbench() {
-  const queryClient = useQueryClient();
   const [requireHumanOnly, setRequireHumanOnly] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
 
@@ -85,30 +83,6 @@ function RulesReviewWorkbench() {
     queryFn: () => getRuleReviewCandidate(selectedCandidateId as string),
     enabled: Boolean(selectedCandidateId),
     staleTime: 30_000,
-  });
-
-  const actionMutation = useMutation({
-    mutationFn: async (action: string) => {
-      if (!selectedCandidateId) {
-        throw new Error('未选择候选规则');
-      }
-      const reasonMap: Record<string, string> = {
-        approve: '人工确认通过。',
-        reject: '人工确认驳回。',
-        hold: '人工搁置，等待补充材料。',
-        merge: '人工确认与既有正式规则合并。',
-        edit: '人工修改候选规则。',
-        approve_after_edit: '人工修改后批准。',
-      };
-      return submitRuleReviewAction(selectedCandidateId, {
-        action,
-        reason: reasonMap[action] ?? '人工处理候选规则。',
-        correlation_id: `${action}-${selectedCandidateId}`,
-      });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['rule-review'] });
-    },
   });
 
   const selectedCandidate = detailQuery.data;
@@ -158,8 +132,8 @@ function RulesReviewWorkbench() {
     <main className="page-stack">
       <PageHeader
         kicker="正式入口"
-        title="规则审核工作台"
-        description="查看原文来源、自动审核理由、重复/冲突发现，并在同一入口完成人工处理。"
+        title="历史候选审计"
+        description="旧候选保持只读，用于追溯原文、旧判断和失败模式；不再从此入口晋级。"
       />
 
       <SectionCard
@@ -177,7 +151,7 @@ function RulesReviewWorkbench() {
       </SectionCard>
 
       <section className="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <SectionCard title="候选规则列表" description="按照自动审核结果和当前审核状态排序展示。">
+        <SectionCard title="历史候选列表" description="这些记录仅作审计证据，不代表当前分类结论。">
           <div className="space-y-3">
             {candidateItems.map((item: RuleReviewCandidateListItem) => (
               <button
@@ -199,7 +173,7 @@ function RulesReviewWorkbench() {
           </div>
         </SectionCard>
 
-        <SectionCard title="候选规则详情" description="展示原文摘要、自动判断理由、数据依赖和当前可执行动作。">
+        <SectionCard title="历史候选详情" description="展示原文摘要、旧判断理由和数据缺口；所有写入动作已停用。">
           {detailQuery.isLoading || !selectedCandidate ? (
             <LoadingState label="正在加载候选规则" description="系统正在读取来源证据和审核详情。" />
           ) : (
@@ -266,16 +240,8 @@ function RulesReviewWorkbench() {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                {selectedCandidate.allowed_actions.map((item) => (
-                  <Button
-                    key={item.key}
-                    disabled={actionMutation.isPending}
-                    onClick={() => actionMutation.mutate(item.key)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                历史候选为只读审计证据。请在文章的“分类抽取结果”中处理新项目。
               </div>
             </div>
           )}

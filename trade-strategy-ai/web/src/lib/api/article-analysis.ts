@@ -2,7 +2,7 @@ import { fetchJson } from './http';
 import type {
   ArticleProcessingStatus,
   ArticleAnalysisDetail,
-  ReviewArticleCandidateRequest,
+  ReviewExtractionItemRequest,
   RunArticleAnalysisRequest,
   UpdateArticleProcessingStatusRequest,
 } from '@/types/article-analysis';
@@ -26,9 +26,9 @@ export function runArticleAnalysis(articleId: string, request: RunArticleAnalysi
   });
 }
 
-export function reviewArticleCandidate(articleId: string, candidateId: string, request: ReviewArticleCandidateRequest) {
+export function reviewExtractionItem(articleId: string, itemId: string, request: ReviewExtractionItemRequest) {
   return fetchJson<ArticleAnalysisDetail>(
-    `/article-analysis/articles/${encodeURIComponent(articleId)}/candidates/${encodeURIComponent(candidateId)}/review`,
+    `/article-analysis/articles/${encodeURIComponent(articleId)}/extraction-items/${encodeURIComponent(itemId)}/review`,
     {
       method: 'POST',
       headers: {

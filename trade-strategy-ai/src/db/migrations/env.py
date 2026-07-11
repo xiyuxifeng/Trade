@@ -19,6 +19,7 @@ from src.models import (  # noqa: F401
     data_audit_event,
     backtest_result_run,
     evidence_pack,
+    extraction_taxonomy,
     market_data,
     hot_topics_snapshot,
     ohlcv_bar,

@@ -10,14 +10,15 @@ from api.dependencies import CurrentPrincipal, require_role, verify_api_key
 from api.schemas import (
     ArticleAnalysisDetailResponse,
     ArticleProcessingStatusResponse,
-    ReviewCandidateRequest,
+    PromoteExtractionItemRequest,
+    RepairRuleCandidateRequest,
+    ReviewExtractionItemRequest,
     RunArticleAnalysisRequest,
     UpdateArticleProcessingStatusRequest,
 )
 from src.db.session import get_session_factory as async_session_factory
 from src.models.blog_article import BlogArticle
 from src.services import article_processing_state_service as article_processing_state
-from src.services.rule_governance_service import fingerprint_rule_payload
 from src.services.stage3_regression_service import Stage3RegressionService
 from src.services.stage3_single_article_service import Stage3SingleArticleError, Stage3SingleArticleService
 
@@ -52,14 +53,25 @@ def get_stage3_single_article_service() -> Stage3SingleArticleService:
     )
 
 
-def _bool_contains_kaipan(payload: Any) -> bool:
-    if isinstance(payload, str):
-        return "kaipan" in payload.lower()
-    if isinstance(payload, list):
-        return any(_bool_contains_kaipan(item) for item in payload)
-    if isinstance(payload, dict):
-        return any(_bool_contains_kaipan(item) for item in payload.values())
-    return False
+def _display_fields(item) -> tuple[str, str]:
+    payload = item.taxonomy_payload or {}
+    title = next(
+        (
+            str(payload[key])
+            for key in ("title", "candidate_rule_summary", "hypothesis_statement", "term_or_phrase", "data_name")
+            if payload.get(key)
+        ),
+        str(item.primary_type),
+    )
+    summary = next(
+        (
+            str(payload[key])
+            for key in ("plain_language_interpretation", "risk_action", "data_description", "reason", "source_experience")
+            if payload.get(key)
+        ),
+        title,
+    )
+    return title, summary
 
 
 def _build_article_analysis_response(journey) -> dict[str, Any]:
@@ -69,43 +81,21 @@ def _build_article_analysis_response(journey) -> dict[str, Any]:
     claims = structure_payload.get("key_claims") or []
     explicit_claims = [claim for claim in claims if claim.get("source") == "explicit"]
     inferred_claims = [claim for claim in claims if claim.get("source") != "explicit"]
-    governance_assessments = getattr(journey, "governance_assessments", {}) or {}
-
-    def _governance_payload(candidate) -> dict[str, Any]:
-        assessment = governance_assessments.get(candidate.rule_candidate_id)
-        if assessment is None:
-            fingerprint = fingerprint_rule_payload(candidate.canonical_payload or {})
-            return {
-                "algorithm_version": fingerprint.algorithm_version,
-                "exact_fingerprint": fingerprint.exact_fingerprint,
-                "family_fingerprint": fingerprint.family_fingerprint,
-                "family_key": f"family:{fingerprint.family_fingerprint}",
-                "exact_duplicate_of_rule_version_id": None,
-                "eligible_for_formal_version": True,
-                "eligible_for_backtest": True,
-                "related_rules": [],
-            }
-        return {
-            "algorithm_version": assessment.fingerprint.algorithm_version,
-            "exact_fingerprint": assessment.fingerprint.exact_fingerprint,
-            "family_fingerprint": assessment.fingerprint.family_fingerprint,
-            "family_key": assessment.family_key,
-            "exact_duplicate_of_rule_version_id": assessment.exact_duplicate_of_rule_version_id,
-            "eligible_for_formal_version": assessment.eligible_for_formal_version,
-            "eligible_for_backtest": assessment.eligible_for_backtest,
-            "related_rules": [
-                {
-                    "relation": item.relation,
-                    "rule_version_id": item.rule_version_id,
-                    "rule_id": item.rule_id,
-                    "family_id": item.family_id,
-                    "title": item.title,
-                    "parameter_differences": item.parameter_differences,
-                    "conflict_reasons": item.conflict_reasons,
-                }
-                for item in assessment.related_rules
-            ],
-        }
+    summary = {
+        "total": len(journey.extraction_items),
+        "by_primary_type": {},
+        "by_destination": {},
+        "by_quality_state": {},
+        "by_review_state": {},
+    }
+    for item in journey.extraction_items:
+        for key, value in (
+            ("by_primary_type", str(item.primary_type)),
+            ("by_destination", str(item.review_destination)),
+            ("by_quality_state", str(item.quality_state)),
+            ("by_review_state", str(item.review_state)),
+        ):
+            summary[key][value] = summary[key].get(value, 0) + 1
 
     return ArticleAnalysisDetailResponse(
         status=journey.status,
@@ -164,41 +154,35 @@ def _build_article_analysis_response(journey) -> dict[str, Any]:
             "started_at": prompt_run.started_at if prompt_run is not None else None,
             "completed_at": prompt_run.completed_at if prompt_run is not None else None,
         },
-        candidates=[
+        taxonomy_version=(journey.extraction_items[0].taxonomy_version if journey.extraction_items else None),
+        extraction_summary=summary,
+        extraction_items=[
             {
-                "candidate_id": str(candidate.rule_candidate_id),
-                "candidate_index": candidate.candidate_index,
-                "title": str((candidate.canonical_payload or {}).get("title") or f"candidate-{candidate.candidate_index}"),
-                "rule_type": candidate.rule_type,
-                "explicit_facts": candidate.explicit_fields or {},
-                "hypotheses": candidate.inferred_fields or {},
-                "missing_fields": candidate.missing_fields or {},
-                "evidence": candidate.evidence_json or {},
-                "data_dependencies": candidate.data_dependencies or {},
-                "backtestability_status": candidate.backtestability_status,
-                "kaipan_dependency": _bool_contains_kaipan(candidate.data_dependencies or {}),
-                "market_state_declaration_status": str(
-                    ((candidate.canonical_payload or {}).get("market_state_applicability") or {}).get("status") or "not_declared"
-                ),
-                "automatic_review": {
-                    "status": journey.automatic_reviews[candidate.rule_candidate_id].status,
-                    "reasons": journey.automatic_reviews[candidate.rule_candidate_id].reasons,
-                    "risk_level": journey.automatic_reviews[candidate.rule_candidate_id].risk_level,
-                },
-                "human_review": {
-                    "review_state": str(candidate.review_state),
-                    "formal_rule_created": candidate.rule_candidate_id in journey.rule_versions,
-                    "rule_version_id": str(journey.rule_versions[candidate.rule_candidate_id].rule_version_id)
-                    if candidate.rule_candidate_id in journey.rule_versions
-                    else None,
-                    "formal_lifecycle_state": str(journey.rule_versions[candidate.rule_candidate_id].lifecycle_state)
-                    if candidate.rule_candidate_id in journey.rule_versions
-                    else None,
-                    "stage3_status": "pending_backtest" if candidate.rule_candidate_id in journey.rule_versions else None,
-                },
-                "governance": _governance_payload(candidate),
+                "item_id": str(item.extraction_item_id),
+                "item_index": item.item_index,
+                "article_id": str(item.article_id),
+                "article_revision_id": str(item.article_revision_id) if item.article_revision_id else None,
+                "article_structure_id": str(item.article_structure_id),
+                "prompt_run_id": str(item.prompt_run_id),
+                "primary_type": str(item.primary_type),
+                "secondary_tags": item.secondary_tags or [],
+                "display_title": _display_fields(item)[0],
+                "display_summary": _display_fields(item)[1],
+                "source_evidence": item.source_evidence or {},
+                "taxonomy_payload": item.taxonomy_payload or {},
+                "confidence": item.confidence or {},
+                "quality_state": str(item.quality_state),
+                "review_destination": str(item.review_destination),
+                "review_state": str(item.review_state),
+                "backtest_eligibility": journey.eligibilities[item.extraction_item_id].__dict__,
+                "promotion_eligibility": journey.eligibilities[item.extraction_item_id].__dict__,
+                "provenance": item.provenance or {},
+                "rule_version_id": str(journey.rule_versions[item.extraction_item_id].rule_version_id)
+                if item.extraction_item_id in journey.rule_versions else None,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
             }
-            for candidate in journey.candidates
+            for item in journey.extraction_items
         ],
     ).model_dump(mode="json")
 
@@ -216,6 +200,63 @@ async def get_article_analysis(
         detail = str(exc)
         status_code = status.HTTP_404_NOT_FOUND if "not found" in detail else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=_structured_error("article_analysis_unavailable", detail, "error")) from exc
+    return _build_article_analysis_response(journey)
+
+
+@router.post(
+    "/articles/{article_id}/extraction-items/{item_id}/repair",
+    response_model=ArticleAnalysisDetailResponse,
+)
+async def repair_article_rule_candidate(
+    article_id: UUID,
+    item_id: UUID,
+    request: RepairRuleCandidateRequest,
+    service: Stage3SingleArticleService = Depends(get_stage3_single_article_service),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        journey = await service.repair_rule_candidate(
+            article_id=article_id,
+            item_id=item_id,
+            repaired_payload=request.repaired_payload,
+            source_quote=request.source_quote,
+            rationale=request.rationale,
+            actor_id=str(principal.api_key_label or principal.role),
+            article_revision_id=UUID(request.article_revision_id) if request.article_revision_id else None,
+        )
+    except Stage3SingleArticleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_structured_error("rule_candidate_repair_failed", str(exc), "error"),
+        ) from exc
+    return _build_article_analysis_response(journey)
+
+
+@router.post(
+    "/articles/{article_id}/extraction-items/{item_id}/promote",
+    response_model=ArticleAnalysisDetailResponse,
+)
+async def promote_article_executable_item(
+    article_id: UUID,
+    item_id: UUID,
+    request: PromoteExtractionItemRequest,
+    service: Stage3SingleArticleService = Depends(get_stage3_single_article_service),
+    principal: CurrentPrincipal = Depends(require_role("operator")),
+    _: str = Depends(verify_api_key),
+) -> dict[str, Any]:
+    try:
+        journey = await service.promote_executable_item(
+            article_id=article_id,
+            item_id=item_id,
+            actor_id=str(principal.api_key_label or principal.role),
+            article_revision_id=UUID(request.article_revision_id) if request.article_revision_id else None,
+        )
+    except Stage3SingleArticleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_structured_error("executable_item_promotion_failed", str(exc), "error"),
+        ) from exc
     return _build_article_analysis_response(journey)
 
 
@@ -269,20 +310,20 @@ async def update_article_processing_status(
     return ArticleProcessingStatusResponse.model_validate({"article_id": str(article_id), **record}).model_dump(mode="json")
 
 
-@router.post("/articles/{article_id}/candidates/{candidate_id}/review", response_model=ArticleAnalysisDetailResponse)
-async def review_article_candidate(
+@router.post("/articles/{article_id}/extraction-items/{item_id}/review", response_model=ArticleAnalysisDetailResponse)
+async def review_article_extraction_item(
     article_id: UUID,
-    candidate_id: UUID,
-    request: ReviewCandidateRequest,
+    item_id: UUID,
+    request: ReviewExtractionItemRequest,
     service: Stage3SingleArticleService = Depends(get_stage3_single_article_service),
     principal: CurrentPrincipal = Depends(require_role("operator")),
     _: str = Depends(verify_api_key),
 ) -> dict[str, Any]:
     try:
-        journey = await service.review_candidate(
+        journey = await service.review_extraction_item(
             article_id=article_id,
             article_revision_id=UUID(request.article_revision_id) if request.article_revision_id else None,
-            candidate_id=candidate_id,
+            item_id=item_id,
             decision=request.decision,
             actor_id=str(principal.api_key_label or principal.role),
             reason=request.reason,
@@ -292,6 +333,6 @@ async def review_article_candidate(
         status_code = status.HTTP_404_NOT_FOUND if "not found" in detail else status.HTTP_400_BAD_REQUEST
         raise HTTPException(
             status_code=status_code,
-            detail=_structured_error("article_candidate_review_failed", detail, "error"),
+            detail=_structured_error("extraction_item_review_failed", detail, "error"),
         ) from exc
     return _build_article_analysis_response(journey)

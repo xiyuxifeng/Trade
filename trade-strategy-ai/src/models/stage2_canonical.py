@@ -20,20 +20,18 @@ from sqlalchemy import (
     Text,
     Uuid,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.enums import (
     AuthorProfileKind,
     DailyRuleSelectionState,
     DailyStrategyInstanceState,
-    FactSource,
     FormalLifecycleState,
     PostMarketReviewState,
     ProposalLifecycleState,
     ProposalType,
     QualityStatus,
-    SignalState,
     TradingDayPlanState,
 )
 from src.models.base import Base, TimestampMixin
@@ -420,6 +418,10 @@ class RuleVersion(TimestampMixin, Base):
     source_candidate_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("rule_candidates.rule_candidate_id", name="fk_rv_source_candidate", ondelete="SET NULL"),
+    )
+    source_extraction_item_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("extraction_items.extraction_item_id", name="fk_rv_source_extraction_item", ondelete="RESTRICT"),
     )
     canonical_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     schema_version: Mapped[str] = mapped_column(String(64), nullable=False)

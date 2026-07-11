@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.market_data_snapshot import MarketSnapshot
 from src.models.market_regime_record import MarketRegimeRecord
+from src.models.extraction_taxonomy import ExtractionItem
 from src.models.stage2_canonical import BacktestResult, BacktestRun, DatasetSnapshot, RuleFamily, RuleFamilyMembership, RuleVersion
 
 
@@ -22,6 +23,11 @@ class RuleFamilyFact:
 
 
 class BacktestRunRepository:
+    async def get_extraction_item(
+        self, session: AsyncSession, extraction_item_id: UUID
+    ) -> ExtractionItem | None:
+        return await session.get(ExtractionItem, extraction_item_id)
+
     async def get_rule_version(self, session: AsyncSession, rule_version_id: UUID) -> RuleVersion | None:
         return await session.get(RuleVersion, rule_version_id)
 

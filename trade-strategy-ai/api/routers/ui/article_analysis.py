@@ -276,9 +276,14 @@ async def run_article_analysis(
         )
     except Stage3SingleArticleError as exc:
         detail = str(exc)
+        unavailable = "LLM is not configured" in detail
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_structured_error("article_analysis_failed", detail, "error"),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE if unavailable else status.HTTP_400_BAD_REQUEST,
+            detail=_structured_error(
+                "article_analysis_unavailable" if unavailable else "article_analysis_failed",
+                detail,
+                "unavailable" if unavailable else "error",
+            ),
         ) from exc
     article_processing_state.clear_article_processing_state(str(article_id), path=article_processing_state.PROCESSING_STATE_PATH)
     return _build_article_analysis_response(journey)

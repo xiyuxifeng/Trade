@@ -21,6 +21,7 @@ from api.routers.ui import article_metadata as article_metadata_routes
 from src.models.article_metadata import ArticleMetadata
 from src.models.article_metadata_selection import ArticleMetadataSelection
 from src.models.blog_article import BlogArticle
+from src.services.stage3_single_article_service import Stage3SingleArticleError
 
 SEEDED_ARTICLE_ID: str | None = None
 TEST_SESSION_FACTORY: async_sessionmaker[AsyncSession] | None = None
@@ -249,6 +250,38 @@ async def test_get_article_analysis_returns_truthful_partial_state(client: Async
     assert payload["summary_provenance"]["source"] == "blog_article_current"
     assert payload["summary_provenance"]["article_revision_id"] == payload["article"]["article_revision_id"]
     assert payload["extraction_items"] == []
+
+
+@pytest.mark.asyncio
+async def test_run_article_analysis_reports_missing_llm_configuration_as_unavailable(client: AsyncClient) -> None:
+    assert SEEDED_ARTICLE_ID is not None
+
+    class _FakeService:
+        async def run_analysis(self, **_kwargs):
+            raise Stage3SingleArticleError(
+                "article_taxonomy_v1 invocation failed: LLM is not configured (missing: api_key)"
+            )
+
+    app.dependency_overrides[article_analysis_routes.get_stage3_single_article_service] = lambda: _FakeService()
+    app.dependency_overrides[get_current_principal] = lambda: CurrentPrincipal(
+        role="operator",
+        api_key_label="operator-user",
+        authenticated=True,
+        source="api_key",
+        api_key="operator-key",
+    )
+    try:
+        response = await client.post(
+            f"/api/ui/v1/article-analysis/articles/{SEEDED_ARTICLE_ID}/analysis",
+            json={},
+        )
+    finally:
+        app.dependency_overrides.pop(article_analysis_routes.get_stage3_single_article_service, None)
+        app.dependency_overrides.pop(get_current_principal, None)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "article_analysis_unavailable"
+    assert response.json()["detail"]["status"] == "unavailable"
 
 
 @pytest.mark.asyncio

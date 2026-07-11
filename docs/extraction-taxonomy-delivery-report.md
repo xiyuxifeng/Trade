@@ -123,3 +123,5 @@ After delivery, a real crawl produced 137 `raw_articles` but only 136 `blog_arti
 The repair makes database clean select only unprocessed raw rows that have no matching `BlogArticle` or whose content hash differs, regenerates database-mode validation output, carries `raw_article_id` through clean/validate/store, and marks that exact raw row processed only after a successful store. A standalone process step now rejects an empty pending queue instead of reporting a misleading success.
 
 Live repair evidence: the affected row was stored as a new `BlogArticle` with one revision and one pending taxonomy task (`stored_read_records=1`, `inserted_articles=1`, `generated_tasks=1`, `processed_raw_articles=1`). Its taxonomy invocation is truthfully pending retry because this environment has no configured LLM API key; no extraction item was fabricated. Follow-up tests: `66 passed` across storage, database-pipeline refresh, process prerequisites, taxonomy runtime, single-article, and taxonomy contracts.
+
+The single-article API now maps this server-side missing-LLM condition to `503 article_analysis_unavailable` instead of a misleading client `400`.
